@@ -111,6 +111,15 @@ describe("local-only data stays in the feature's own windows", () => {
     }
   });
 
+  test("confirmed draft entry modules cannot access the clipboard", async () => {
+    for (const file of ["time_entry_commands.rs", "time_entry_submit.rs"]) {
+      const source = await readNative(`src/${file}`);
+      expect(source, file).not.toMatch(
+        /\bclipboard\b|\bwrite_plain_text\b|\bClipboard\w*\b|\barboard\b|\bwrite_text\b|\bset_text\b/u,
+      );
+    }
+  });
+
   test("no capability is granted to a remote origin", async () => {
     for (const { capability, file } of await capabilities()) {
       expect(capability, file).not.toHaveProperty("remote");
@@ -124,13 +133,15 @@ describe("local-only data stays in the feature's own windows", () => {
   test.each(featureCases)(
     "%s commands are granted only to its windows",
     async (_id, feature) => {
-      const prefix = permissionPrefix(feature.commandPrefix);
+      const prefixes = feature.commandOwners.map(({ prefix }) =>
+        permissionPrefix(prefix),
+      );
       const windows = new Set<string>(feature.windows);
       let grants = 0;
       for (const { capability, file } of await capabilities()) {
         const permissions = stringArray(capability["permissions"], file);
         const granted = permissions.filter((permission) =>
-          permission.startsWith(prefix),
+          prefixes.some((prefix) => permission.startsWith(prefix)),
         );
         if (granted.length === 0) {
           continue;
@@ -147,23 +158,23 @@ describe("local-only data stays in the feature's own windows", () => {
   test.each(featureCases)(
     "every %s command requires a verified caller",
     async (_id, feature) => {
-      const module = path.basename(feature.commandModule, ".rs");
       const manifest = await readNative("src/command_manifest.rs");
-      const manifestCommands = [
-        ...manifest.matchAll(new RegExp(`${module}::(\\w+) =>`, "gu")),
-      ].flatMap((match) => (match[1] ? [match[1]] : []));
-      const commands = commandFunctions(
-        await readNative(feature.commandModule),
-      );
-
-      expect(commands.length).toBeGreaterThan(0);
-      expect(commands.map(({ name }) => name).toSorted()).toEqual(
-        manifestCommands.toSorted(),
-      );
       const caller = new RegExp(`\\b_?caller: ${feature.callerType}\\b`, "u");
-      for (const { name, parameters } of commands) {
-        expect(name.startsWith(feature.commandPrefix), name).toBe(true);
-        expect(parameters, name).toMatch(caller);
+      for (const owner of feature.commandOwners) {
+        const module = path.basename(owner.module, ".rs");
+        const manifestCommands = [
+          ...manifest.matchAll(new RegExp(`${module}::(\\w+) =>`, "gu")),
+        ].flatMap((match) => (match[1] ? [match[1]] : []));
+        const commands = commandFunctions(await readNative(owner.module));
+
+        expect(commands.length).toBeGreaterThan(0);
+        expect(commands.map(({ name }) => name).toSorted()).toEqual(
+          manifestCommands.toSorted(),
+        );
+        for (const { name, parameters } of commands) {
+          expect(name.startsWith(owner.prefix), name).toBe(true);
+          expect(parameters, name).toMatch(caller);
+        }
       }
     },
   );
