@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { execFile, execFileSync, spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -193,7 +193,7 @@ export const evaluateTaskBudgets = ({
     "| --- | --- | ---: | ---: | --- |",
     ...rows.map(
       (row) =>
-        `| ${row.taskId} | ${row.cache} | ${row.seconds?.toFixed(3) ?? "—"}s | ${row.budgetSeconds}s | ${row.overBudget ? "OVER BUDGET" : row.status} |`,
+        `| ${row.taskId} | ${row.cache} | ${row.seconds?.toFixed(3) ?? "—"}s | ${row.budgetSeconds}s | ${row.overBudget ? `${row.status}; OVER BUDGET (warning)` : row.status} |`,
     ),
     "",
   ].join("\n");
@@ -267,6 +267,7 @@ type RunBudgetedCheckOptions = {
   command: readonly string[];
   cwd: string;
   timeoutMs: number;
+  stallMs?: number;
   writeStdout: (chunk: string) => void;
   writeStderr: (chunk: string) => void;
   writeSummary: (markdown: string) => void | Promise<void>;
@@ -276,7 +277,133 @@ type RunBudgetedCheckOptions = {
 };
 
 const PROCESS_GROUP_ENV = "CODE_QUALITY_PROCESS_GROUP";
-const EXECUTION_DEADLINE = "Code-quality execution deadline exceeded";
+const TASK_STALL = "Code-quality task stalled";
+// Healthy API lint emitted no output for 196.999521 s. Twice that observed gap
+// rounds up to 400 s; advancing owned CPU time also counts as progress.
+export const TASK_STALL_MS = 400_000;
+
+type TaskProgressWatchdogOptions = {
+  budgetMs: number;
+  stallMs: number;
+  now: () => number;
+  warn: () => void;
+  kill: () => void;
+};
+export const createTaskProgressWatchdog = ({
+  budgetMs,
+  stallMs,
+  now,
+  warn,
+  kill,
+}: TaskProgressWatchdogOptions) => {
+  const started = now();
+  let progressAt = started;
+  let warned = false;
+  let stalled = false;
+  let finished = false;
+  let maxGap = 0;
+  const warning = () => {
+    if (!finished && !warned && now() - started >= budgetMs) {
+      warned = true;
+      warn();
+    }
+  };
+  return {
+    progress: () => {
+      if (finished) {
+        return;
+      }
+      maxGap = Math.max(maxGap, now() - progressAt);
+      progressAt = now();
+    },
+    maximumGapMs: () =>
+      finished ? maxGap : Math.max(maxGap, now() - progressAt),
+    wasStalled: () => stalled,
+    idleMs: () => now() - progressAt,
+    warn: warning,
+    tick: () => {
+      if (finished) {
+        return;
+      }
+      warning();
+      if (!stalled && now() - progressAt >= stallMs) {
+        stalled = true;
+        kill();
+      }
+    },
+    finish: () => {
+      warning();
+      maxGap = Math.max(maxGap, now() - progressAt);
+      finished = true;
+    },
+  };
+};
+
+type ProcessSnapshotOptions = {
+  columns: string;
+  stallMs: number;
+  report: (message: string) => void;
+};
+// Diagnostics obey the same progress rule as checks; ps has no wall-clock kill.
+const processSnapshot = async ({
+  columns,
+  stallMs,
+  report,
+}: ProcessSnapshotOptions) => {
+  const child = spawn("ps", ["-axo", columns], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const startedAt = Date.now();
+  let output = "";
+  const overflow = new AbortController();
+  const watchdog = createTaskProgressWatchdog({
+    budgetMs: 1000,
+    stallMs,
+    now: Date.now,
+    warn: () =>
+      report(
+        `::warning title=task-budget::phase=diagnostic elapsed_ms=${Date.now() - startedAt} budget_ms=1000\n`,
+      ),
+    kill: () => {
+      report(
+        `::error title=task-stall::kind=infra class=task-stall phase=diagnostic elapsed_ms=${Date.now() - startedAt} idle_ms=${watchdog.idleMs()}\n`,
+      );
+      child.kill("SIGKILL");
+    },
+  });
+  const observe = (chunk: Buffer, stdout: boolean) => {
+    if (chunk.byteLength === 0) {
+      return;
+    }
+    watchdog.progress();
+    if (!stdout) {
+      return;
+    }
+    if (output.length + chunk.length > 2 * 1024 * 1024) {
+      overflow.abort();
+      return;
+    }
+    output += chunk.toString();
+  };
+  child.stdout.on("data", (chunk: Buffer) => observe(chunk, true));
+  child.stderr.on("data", (chunk: Buffer) => observe(chunk, false));
+  const timer = setInterval(() => watchdog.tick(), Math.min(1000, stallMs / 2));
+  try {
+    const code = await new Promise<number>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("close", (exitCode) => resolve(exitCode ?? 1));
+    });
+    if (code !== 0 || watchdog.wasStalled() || overflow.signal.aborted) {
+      return invalid(
+        `Process snapshot failed: exit=${code} stalled=${watchdog.wasStalled()} overflow=${overflow.signal.aborted}`,
+      );
+    }
+    return output;
+  } finally {
+    watchdog.finish();
+    clearInterval(timer);
+  }
+};
 
 export const ownedProcessTreeRows = (snapshot: string, group: number) => {
   const rows = snapshot.split(/\r?\n/u).flatMap((line) => {
@@ -353,22 +480,24 @@ type ProcessTreeAtSignalOptions = {
   group: number;
   signal: NodeJS.Signals;
   startedAt: number;
+  stallMs: number;
+  report: (message: string) => void;
 };
-const processTreeAtSignal = ({
+const processTreeAtSignal = async ({
   group,
   signal,
   startedAt,
+  stallMs,
+  report,
 }: ProcessTreeAtSignalOptions) => {
-  const snapshot = Result.try({
-    try: () =>
-      execFileSync("ps", ["-axo", "pid=,ppid=,pgid=,stat=,command="], {
-        timeout: 1000,
-        killSignal: "SIGKILL",
-        maxBuffer: 2 * 1024 * 1024,
-        encoding: "utf-8",
+  const snapshot = await Result.tryPromise(
+    async () =>
+      await processSnapshot({
+        columns: "pid=,ppid=,pgid=,stat=,command=",
+        stallMs,
+        report,
       }),
-    catch: (cause) => cause,
-  });
+  );
   const rows = snapshot.isOk()
     ? ownedProcessTreeRows(snapshot.value, group).join("\n")
     : failureMessage(snapshot.error);
@@ -380,37 +509,24 @@ const PROCESS_GROUP_POLL_MS = 50;
 type AuditExitedGroupOptions = {
   group: number;
   drainUntil: number;
-  deadline: number;
+  stallMs: number;
   report: (diagnostic: string) => void;
   terminate: () => void;
 };
 const auditExitedProcessGroup = async ({
   group,
   drainUntil,
-  deadline,
+  stallMs,
   report,
   terminate,
 }: AuditExitedGroupOptions) => {
   while (true) {
     const groupSnapshot = await Result.tryPromise(
       async () =>
-        await new Promise<string>((resolve, reject) => {
-          execFile(
-            "ps",
-            ["-axo", "pid=,pgid=,stat=,command="],
-            {
-              timeout: Math.max(1, Math.min(1000, deadline - Date.now())),
-              killSignal: "SIGKILL",
-              maxBuffer: 2 * 1024 * 1024,
-            },
-            (error, stdout) => {
-              if (error !== null) {
-                reject(new TaskBudgetInputError({ message: error.message }));
-                return;
-              }
-              resolve(stdout);
-            },
-          );
+        await processSnapshot({
+          columns: "pid=,pgid=,stat=,command=",
+          stallMs,
+          report,
         }),
     );
     if (groupSnapshot.isErr()) {
@@ -424,7 +540,7 @@ const auditExitedProcessGroup = async ({
     if (leftovers.length === 0) {
       return false;
     }
-    const remainingMs = Math.min(drainUntil, deadline) - Date.now();
+    const remainingMs = drainUntil - Date.now();
     if (remainingMs > 0) {
       await Bun.sleep(Math.min(PROCESS_GROUP_POLL_MS, remainingMs));
       continue;
@@ -458,10 +574,195 @@ const signalExitCode = (code: number | null, signal: NodeJS.Signals | null) => {
   return 1;
 };
 
+type SignalOwnedGroupOptions = {
+  signal: NodeJS.Signals;
+  termination: string | undefined;
+  ownsGroup: boolean;
+  child: Pick<ChildProcess, "pid" | "kill">;
+  inspectedSignals: Set<NodeJS.Signals>;
+  pendingDiagnostics: Promise<void>[];
+  startedAt: number;
+  stallMs: number;
+  reportDiagnostic: (message: string) => void;
+};
+const signalOwnedGroup = ({
+  signal,
+  termination,
+  ownsGroup,
+  child,
+  inspectedSignals,
+  pendingDiagnostics,
+  startedAt,
+  stallMs,
+  reportDiagnostic,
+}: SignalOwnedGroupOptions) => {
+  if (
+    termination !== undefined &&
+    ownsGroup &&
+    process.platform !== "win32" &&
+    child.pid !== undefined &&
+    !inspectedSignals.has(signal)
+  ) {
+    inspectedSignals.add(signal);
+    pendingDiagnostics.push(
+      processTreeAtSignal({
+        group: child.pid,
+        signal,
+        startedAt,
+        stallMs,
+        report: reportDiagnostic,
+      }).then(reportDiagnostic),
+    );
+  }
+  const attempt = Result.try({
+    try: () => {
+      if (
+        ownsGroup &&
+        child.pid !== undefined &&
+        process.platform !== "win32"
+      ) {
+        process.kill(-child.pid, signal);
+      } else {
+        child.kill(signal);
+      }
+    },
+    catch: (cause) => cause,
+  });
+  if (
+    attempt.isErr() &&
+    !(record(attempt.error) && attempt.error["code"] === "ESRCH")
+  ) {
+    const diagnostic = `Cannot terminate command group: ${failureMessage(attempt.error)}\n`;
+    reportDiagnostic(diagnostic);
+  }
+};
+
+type TaskMonitorOptions = {
+  budgetMs: number;
+  stallMs: number;
+  startedAt: number;
+  pid: number | undefined;
+  reportDiagnostic: (message: string) => void;
+  terminate: (reason: string) => void;
+};
+const createTaskMonitor = ({
+  budgetMs,
+  stallMs,
+  startedAt,
+  pid,
+  reportDiagnostic,
+  terminate,
+}: TaskMonitorOptions) => {
+  const telemetry = () =>
+    `elapsed_ms=${Date.now() - startedAt} budget_ms=${budgetMs} stall_ms=${stallMs} max_progress_gap_ms=${watchdog.maximumGapMs()}`;
+  const watchdog = createTaskProgressWatchdog({
+    budgetMs,
+    stallMs,
+    now: Date.now,
+    warn: () =>
+      reportDiagnostic(`::warning title=task-budget::${telemetry()}\n`),
+    kill: () => {
+      reportDiagnostic(
+        `::error title=task-stall::kind=infra class=task-stall ${telemetry()} idle_ms=${watchdog.idleMs()}\n`,
+      );
+      terminate(TASK_STALL);
+    },
+  });
+  let previousCpu: string | undefined;
+  let progressProbeWarning = false;
+  let probing: Promise<void> | undefined;
+  const completion = new AbortController();
+  let lastProbe = startedAt;
+  const probeCpu = async () => {
+    const cpuSnapshot = await Result.tryPromise(async () => {
+      const snapshot = await processSnapshot({
+        columns: "pid=,ppid=,pgid=,stat=,time=,command=",
+        stallMs,
+        report: reportDiagnostic,
+      });
+      if (pid === undefined) {
+        return "";
+      }
+      return ownedProcessTreeRows(snapshot, pid)
+        .map((row) => {
+          const fields = row.split(/\s+/u);
+          const processId = fields.at(0);
+          const cpuTime = fields.at(4);
+          if (processId === undefined || cpuTime === undefined) {
+            return invalid("Malformed process CPU snapshot row");
+          }
+          return `${processId}:${cpuTime}`;
+        })
+        .toSorted()
+        .join("|");
+    });
+    if (completion.signal.aborted) {
+      return;
+    }
+    if (cpuSnapshot.isErr()) {
+      // Failed observation cannot prove a CPU stall. Surface it once and use
+      // the job deadline, rather than killing a potentially busy compiler.
+      if (!progressProbeWarning) {
+        progressProbeWarning = true;
+        reportDiagnostic(
+          `::warning title=task-progress-probe::Cannot observe task CPU progress: ${failureMessage(cpuSnapshot.error)}; job deadline remains the outer bound\n`,
+        );
+      }
+      return;
+    }
+    const cpu = cpuSnapshot.value;
+    if (previousCpu !== undefined && cpu !== previousCpu) {
+      watchdog.progress();
+    }
+    previousCpu = cpu;
+    watchdog.tick();
+  };
+  const timer = setInterval(
+    () => {
+      if (completion.signal.aborted || probing !== undefined) {
+        return;
+      }
+      watchdog.warn();
+      if (process.platform === "win32") {
+        watchdog.tick();
+        return;
+      }
+      const probeInterval = Math.min(5000, stallMs / 2);
+      if (watchdog.idleMs() < probeInterval) {
+        watchdog.tick();
+        return;
+      }
+      if (Date.now() - lastProbe < probeInterval) {
+        return;
+      }
+      lastProbe = Date.now();
+      probing = probeCpu().finally(() => {
+        probing = undefined;
+      });
+    },
+    Math.min(1000, stallMs / 2),
+  );
+
+  const stop = () => {
+    completion.abort();
+    clearInterval(timer);
+    watchdog.finish();
+  };
+  return {
+    progress: watchdog.progress,
+    telemetry,
+    stop,
+    settled: async () => {
+      await probing;
+    },
+  };
+};
+
 export const runBudgetedCheck = async ({
   command,
   cwd,
   timeoutMs,
+  stallMs = TASK_STALL_MS,
   writeStdout,
   writeStderr,
   writeSummary,
@@ -473,9 +774,13 @@ export const runBudgetedCheck = async ({
   if (
     executable === undefined ||
     !Number.isFinite(timeoutMs) ||
-    timeoutMs < 0
+    timeoutMs < 0 ||
+    !Number.isFinite(stallMs) ||
+    stallMs <= 0
   ) {
-    return invalid("A command and nonnegative execution deadline are required");
+    return invalid(
+      "A command, nonnegative warning budget and positive stall interval are required",
+    );
   }
   const turbo =
     summary === "tasks" &&
@@ -513,44 +818,19 @@ export const runBudgetedCheck = async ({
     stdio: ["ignore", "pipe", "pipe"],
   });
   const inspectedSignals = new Set<NodeJS.Signals>();
-  const killGroup = (signal: NodeJS.Signals) => {
-    if (
-      termination !== undefined &&
-      ownsGroup &&
-      process.platform !== "win32" &&
-      child.pid !== undefined &&
-      !inspectedSignals.has(signal)
-    ) {
-      inspectedSignals.add(signal);
-      const diagnostic = processTreeAtSignal({
-        group: child.pid,
-        signal,
-        startedAt,
-      });
-      reportDiagnostic(diagnostic);
-    }
-    const attempt = Result.try({
-      try: () => {
-        if (
-          ownsGroup &&
-          child.pid !== undefined &&
-          process.platform !== "win32"
-        ) {
-          process.kill(-child.pid, signal);
-        } else {
-          child.kill(signal);
-        }
-      },
-      catch: (cause) => cause,
+  const pendingDiagnostics: Promise<void>[] = [];
+  const killGroup = (signal: NodeJS.Signals) =>
+    signalOwnedGroup({
+      signal,
+      termination,
+      ownsGroup,
+      child,
+      inspectedSignals,
+      pendingDiagnostics,
+      startedAt,
+      stallMs,
+      reportDiagnostic,
     });
-    if (
-      attempt.isErr() &&
-      !(record(attempt.error) && attempt.error["code"] === "ESRCH")
-    ) {
-      const diagnostic = `Cannot terminate command group: ${failureMessage(attempt.error)}\n`;
-      reportDiagnostic(diagnostic);
-    }
-  };
   const terminate = (reason: string) => {
     if (termination !== undefined) {
       return;
@@ -564,9 +844,19 @@ export const runBudgetedCheck = async ({
   const onInt = () => terminate("Code-quality command interrupted by SIGINT");
   process.on("SIGTERM", onTerm);
   process.on("SIGINT", onInt);
-  const timer = setTimeout(() => terminate(EXECUTION_DEADLINE), timeoutMs);
+  const monitor = createTaskMonitor({
+    budgetMs: timeoutMs,
+    stallMs,
+    startedAt,
+    pid: child.pid,
+    reportDiagnostic,
+    terminate,
+  });
   const tee = (chunk: Buffer, channel: "stdout" | "stderr") => {
     const text = chunk.toString();
+    if (chunk.byteLength > 0) {
+      monitor.progress();
+    }
     output += text;
     tracker.observe(text, channel);
     (channel === "stdout" ? writeStdout : writeStderr)(text);
@@ -596,6 +886,10 @@ export const runBudgetedCheck = async ({
       resolve(127);
     });
     child.on("exit", (code, signal) => {
+      // A real command failure takes precedence over a later cleanup stall.
+      if (signal === null && code !== null && code !== 0) {
+        monitor.stop();
+      }
       resolve(signalExitCode(code, signal));
     });
   });
@@ -621,7 +915,7 @@ export const runBudgetedCheck = async ({
       group: child.pid,
       // Let short-lived descendants finish within the existing termination grace.
       drainUntil: endedAt + graceMs,
-      deadline: Math.min(endedAt + graceMs + 1000, startedAt + timeoutMs),
+      stallMs,
       report: reportDiagnostic,
       terminate: terminateLeftovers,
     });
@@ -634,13 +928,18 @@ export const runBudgetedCheck = async ({
   if (cleanupFailed) {
     killGroup("SIGKILL");
   }
-  clearTimeout(timer);
+  monitor.stop();
+  await monitor.settled();
   if (termination !== undefined) {
     killGroup("SIGKILL");
   }
   if (killTimer !== undefined) {
     clearTimeout(killTimer);
   }
+  await Promise.all(pendingDiagnostics);
+  reportDiagnostic(
+    `Code-quality timing: ${monitor.telemetry()} child_exit=${exitCode}\n`,
+  );
   process.off("SIGTERM", onTerm);
   process.off("SIGINT", onInt);
   const finalExitCode = cleanupFailed && exitCode === 0 ? 1 : exitCode;
@@ -675,7 +974,7 @@ type FinishBudgetedCheckOptions = {
 type BudgetedCheckResult = {
   exitCode: number;
   output: string;
-  outcome: "completed" | "deadline" | "interrupted";
+  outcome: "completed" | "stalled" | "interrupted";
 };
 const finishBudgetedCheck = async ({
   turbo,
@@ -776,10 +1075,15 @@ const finishBudgetedCheck = async ({
     const diagnostic = `${tracker.diagnostics(termination)}\n`;
     output += diagnostic;
     writeStderr(diagnostic);
+    if (termination === TASK_STALL) {
+      const annotation = `::error title=task-stall::kind=infra class=task-stall elapsed_ms=${endedAt - startedAt}\n`;
+      output += annotation;
+      writeStderr(annotation);
+    }
     return {
       exitCode: 124,
       output,
-      outcome: termination === EXECUTION_DEADLINE ? "deadline" : "interrupted",
+      outcome: termination === TASK_STALL ? "stalled" : "interrupted",
     };
   }
   if (!turbo) {
@@ -787,15 +1091,10 @@ const finishBudgetedCheck = async ({
   }
   const checked = await Result.tryPromise(async () => {
     const report = await completedReport();
-    if (report.violations.length > 0) {
-      invalid(
-        report.violations
-          .map(
-            (task) =>
-              `${task.taskId}: ${task.seconds?.toFixed(3) ?? "unknown"}s exceeds ${task.budgetSeconds}s task budget`,
-          )
-          .join("\n"),
-      );
+    for (const task of report.violations) {
+      const warning = `::warning title=task-budget::task=${task.taskId} elapsed_ms=${Math.round((task.seconds ?? 0) * 1000)} budget_ms=${task.budgetSeconds * 1000}; ${task.seconds?.toFixed(3) ?? "unknown"}s exceeds ${task.budgetSeconds}s task budget\n`;
+      output += warning;
+      writeStderr(warning);
     }
   });
   if (checked.isErr()) {
