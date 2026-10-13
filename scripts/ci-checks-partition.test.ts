@@ -10,8 +10,8 @@ import { compareCodeUnit } from "@stll/collation";
 import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
-import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
 
@@ -688,7 +688,9 @@ const legSteps = (
     );
   });
 const actualSteps = legSteps(partitions, partitionIds);
-const lintFixtureCommand = ["bun", ...CUSTOM_LINT_TEST_ARGS].join(" ");
+const lintFixtureCommand = ["bun", ...customLintTestCommand().slice(1)].join(
+  " ",
+);
 const stepFieldsSchema = v.looseObject({
   env: v.optional(v.unknown()),
   if: v.optional(v.string()),
@@ -698,6 +700,32 @@ const stepFields = (step: Step | undefined) =>
   v.parse(stepFieldsSchema, step ?? {});
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
+  const runnerMigrations = {
+    "Test oxlint plugins": {
+      before:
+        "bun test scripts/oxlint-plugin-test-coverage.test.ts\nfind ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test\n",
+      after:
+        "bun test scripts/oxlint-plugin-test-coverage.test.ts\nbun scripts/run-custom-lint-tests.ts\n",
+    },
+    "Test aggregate inventories": {
+      before:
+        "bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts",
+      after:
+        "bun scripts/run-custom-lint-tests.ts scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts",
+    },
+    "Test write contract inventories": {
+      before:
+        "bun test scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
+      after:
+        "bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts",
+    },
+  };
+  const migration = Object.entries(runnerMigrations).find(
+    ([name]) => name === step.name,
+  )?.[1];
+  if (migration !== undefined && fields.run === migration.before) {
+    return Object.assign(step, { run: migration.after });
+  }
   if (
     step.name !== "Documentation source policy rule" ||
     fields.run !== `${lintFixtureCommand}\nbun run check:docs-sources\n`

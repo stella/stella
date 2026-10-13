@@ -2,7 +2,10 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import { validateApiTypecheckProjects } from "./api-typecheck-projects";
+import {
+  missingPreparedApiTypecheckConfigs,
+  validateApiTypecheckProjects,
+} from "./api-typecheck-projects";
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
@@ -53,7 +56,7 @@ const BABEL_TOOLCHAINS = [
 const TYPESCRIPT_TOOLCHAIN = {
   native: "npm:typescript@7.0.2",
   oxlint: "1.87.0",
-  oxlintConfig: "0.12.0",
+  oxlintConfig: "1.0.2",
   tsgolint: "7.0.2003",
   typescript6Compatibility: "6.0.3",
 } as const;
@@ -737,9 +740,16 @@ const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
 export const validateWorkspaceRoot = (
   rootDir: string,
   appBoundaryOptions: AppBoundaryOptions = {},
+  {
+    requirePreparedApiTypecheck = false,
+  }: {
+    requirePreparedApiTypecheck?: boolean;
+  } = {},
 ): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [
-    ...validateApiTypecheckProjects(rootDir),
+    ...validateApiTypecheckProjects(rootDir, {
+      requirePrepared: requirePreparedApiTypecheck,
+    }),
     ...validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions),
     ...validateTurboInstallPins(rootDir),
     ...validateBunCwdRunForm(rootDir),
@@ -824,7 +834,22 @@ export const validateWorkspaceRoot = (
 };
 
 if (import.meta.main) {
-  const issues = validateWorkspaceRoot(process.cwd());
+  // CI runs this as a verification step (STELLA_VERIFY=check) after it has
+  // generated the API typecheck configs; the install-time postinstall has not.
+  const requirePreparedApiTypecheck = process.env["STELLA_VERIFY"] === "check";
+  const unprepared = missingPreparedApiTypecheckConfigs(process.cwd());
+  if (unprepared.length > 0 && !requirePreparedApiTypecheck) {
+    console.log(
+      `Skipping API typecheck ownership: prepared configs are not generated yet (${unprepared.join(", ")}).`,
+    );
+  }
+  const issues = validateWorkspaceRoot(
+    process.cwd(),
+    {},
+    {
+      requirePreparedApiTypecheck,
+    },
+  );
 
   if (issues.length === 0) {
     console.log("Workspace layout OK.");

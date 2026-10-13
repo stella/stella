@@ -1435,6 +1435,8 @@
     "sendPrompt": "Envoyer le message",
     "sendQueuedMessageNow": "Envoyer maintenant",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
+    "signInToChat": "Connectez-vous pour discuter de ce document",
+    "signInToChatAbout": "Connectez-vous pour discuter de",
     "skills": {
       "scope": {
         "private": "Vos compétences",

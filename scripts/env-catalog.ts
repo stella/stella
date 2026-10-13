@@ -594,9 +594,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   STELLA_CLIENT_ADDRESS_FORMAT:
     "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
   STELLA_ORIGIN_VERIFY_SECRET:
-    "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
-  STELLA_FRONTEND_VERIFY_SECRET:
-    "Comma-separated values the frontend edge sends in x-stella-frontend-verify (current, then next during a rotation). From STELLA_TRUSTED_PROXY_CIDRS peers carrying one, the browser's bare address in x-stella-viewer-address is read first; unset, that header is never read.",
+    "Current value the edge sends in x-stella-origin-verify. One value of at least 32 characters; the client address header accepts this or STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS.",
+  STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS:
+    "Optional previous origin value accepted during a rotation. One value of at least 32 characters, stored separately from STELLA_ORIGIN_VERIFY_SECRET.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
@@ -948,9 +948,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
-  STELLA_FRONTEND_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
+  STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_TRUSTED_PROXY_CIDRS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_USAGE_POLICY_SEEDS: ENV_CREDENTIAL_KIND.notCredential,
@@ -1348,8 +1348,14 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Manual regeneration binds the requested PR and checks available job services.
+  "PR_NUMBER",
+  "JOB_SERVICES",
   // Workflow lint resolves the checksum-verified actionlint executable.
   "ACTIONLINT_BIN",
+  // CI verification steps set it; workspace hygiene then requires prepared
+  // API typecheck configs instead of skipping their install-time absence.
+  "STELLA_VERIFY",
   "QUERY_PERF_BASELINE_MODE",
   "QUERY_PERF_BASE_REF",
   "QUERY_PERF_CHANGED_PATHS",
@@ -1535,12 +1541,18 @@ export const TOOLING_ENV_KEYS = new Set([
   "RELEASE_REF",
   "REPO",
   "REPOSITORY",
+  // Main PR-depth status publisher inputs.
+  "RESULTS",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // scripts/retry.sh: `warning` for callers that tolerate the failure.
+  "RETRY_FAILURE_LEVEL",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
+  "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
+  "SHA",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
@@ -1583,6 +1595,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Internal handoff between the code-quality supervisor and its process group.
+  "CODE_QUALITY_PROCESS_GROUP",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",
@@ -1626,6 +1640,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "GITHUB_TOKEN",
   "GH_REPO",
   "GH_TOKEN",
+  // Test seam: the GitHub retry wrapper a status script calls.
+  "GH_RETRY",
   "HOSTNAME",
   "NODE_ENV",
   // Read by the provider SDK; managed request tests verify it cannot enable logging.
