@@ -32,12 +32,15 @@ export function ConsentAccountRows({
   const t = useTranslations();
   return (
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-1 text-sm">
-      <dt className="text-muted-foreground">{t("settings.account.title")}</dt>
-      <dd className="flex min-w-0 flex-wrap items-center justify-between gap-x-3">
+      <dt className="text-muted-foreground self-start sm:self-center">
+        {t("settings.account.title")}
+      </dt>
+      <dd className="flex min-w-0 flex-col items-start gap-x-3 sm:flex-row sm:items-center sm:justify-between">
         <bdi className="min-w-0 break-all">{email}</bdi>
         <Button
-          variant="ghost"
-          className="min-h-11"
+          variant="link"
+          size="xs"
+          className="-ms-2 min-h-11 self-start sm:ms-0 sm:self-auto"
           disabled={disabled}
           onClick={onAccountSwitch}
         >
