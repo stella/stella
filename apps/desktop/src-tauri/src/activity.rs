@@ -256,6 +256,40 @@ pub struct ActivityPendingBatch {
   pub ranges: Vec<Vec<ActivityRange>>,
 }
 
+const MAX_BATCH_ENTRIES: usize = 100;
+const MAX_BATCH_RANGES: usize = 10000;
+const MAX_BATCH_KEY_BYTES: usize = 128;
+
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum BatchReservationError {
+  NotWritable(String),
+  PendingStateUnavailable(String),
+  PendingConflict,
+  InvalidEntries,
+  InvalidKey,
+  InvalidRangeCount,
+  InvalidRange,
+  OverlappingRanges,
+  PersistenceFailed(String),
+}
+
+impl std::fmt::Display for BatchReservationError {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    let message = match self {
+      Self::NotWritable(message)
+      | Self::PendingStateUnavailable(message)
+      | Self::PersistenceFailed(message) => message,
+      Self::PendingConflict => "another activity batch is pending",
+      Self::InvalidEntries => "invalid activity batch entries",
+      Self::InvalidKey => "invalid activity batch key",
+      Self::InvalidRangeCount => "invalid activity batch range count",
+      Self::InvalidRange => "invalid activity range",
+      Self::OverlappingRanges => "overlapping activity ranges",
+    };
+    formatter.write_str(message)
+  }
+}
+
 /// The day a view asks for, with what the window needs to render it.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -391,6 +425,35 @@ pub fn parse_date(raw: &str) -> Result<NaiveDate, String> {
 
 pub fn format_date(date: NaiveDate) -> String {
   date.format(DATE_FORMAT).to_string()
+}
+
+type ActivityInterval = (DateTime<Utc>, DateTime<Utc>);
+
+fn validate_draftable_range(
+  date: NaiveDate,
+  start: &str,
+  end: &str,
+  drafted: &[ActivityInterval],
+) -> Result<ActivityInterval, String> {
+  let start = DateTime::parse_from_rfc3339(start)
+    .map_err(|_| "invalid activity range".to_string())?
+    .with_timezone(&Utc);
+  let end = DateTime::parse_from_rfc3339(end)
+    .map_err(|_| "invalid activity range".to_string())?
+    .with_timezone(&Utc);
+  if start >= end
+    || local_date(start) != date
+    || local_date(end - chrono::Duration::nanoseconds(1)) != date
+  {
+    return Err("invalid activity range".to_string());
+  }
+  if drafted
+    .iter()
+    .any(|(saved_start, saved_end)| start < *saved_end && end > *saved_start)
+  {
+    return Err("activity range already drafted".to_string());
+  }
+  Ok((start, end))
 }
 
 fn local_date(instant: DateTime<Utc>) -> NaiveDate {
@@ -1274,44 +1337,65 @@ impl ActivityManager {
     &mut self,
     date: NaiveDate,
     pending: ActivityPendingBatch,
-  ) -> Result<(), String> {
-    self.require_writable()?;
-    if let Some(saved) = self.pending_for_day(date)? {
+  ) -> Result<(), BatchReservationError> {
+    self
+      .require_writable()
+      .map_err(BatchReservationError::NotWritable)?;
+    if let Some(saved) = self
+      .pending_for_day(date)
+      .map_err(BatchReservationError::PendingStateUnavailable)?
+    {
       return if saved == pending {
         Ok(())
       } else {
-        Err("another activity batch is pending".to_string())
+        Err(BatchReservationError::PendingConflict)
       };
     }
-    let entries = pending.entries.as_array().ok_or("invalid activity batch")?;
+    let entries = pending
+      .entries
+      .as_array()
+      .ok_or(BatchReservationError::InvalidEntries)?;
     if entries.is_empty()
-      || entries.len() > 100
+      || entries.len() > MAX_BATCH_ENTRIES
       || entries.len() != pending.ranges.len()
-      || pending.idempotency_key.is_empty()
-      || pending.idempotency_key.len() > 128
     {
-      return Err("invalid activity batch".to_string());
+      return Err(BatchReservationError::InvalidEntries);
     }
-    let mut intervals = Vec::new();
-    for ranges in &pending.ranges {
-      if ranges.is_empty() || intervals.len() + ranges.len() > 10000 {
-        return Err("invalid activity batch ranges".to_string());
-      }
-      for range in ranges {
-        self.require_draftable_range(date, &range.start, &range.end)?;
-        let start = DateTime::parse_from_rfc3339(&range.start)
-          .map_err(|_| "invalid activity range")?;
-        let end = DateTime::parse_from_rfc3339(&range.end)
-          .map_err(|_| "invalid activity range")?;
-        intervals.push((start, end));
-      }
+    if pending.idempotency_key.is_empty()
+      || pending.idempotency_key.len() > MAX_BATCH_KEY_BYTES
+    {
+      return Err(BatchReservationError::InvalidKey);
+    }
+    let range_count = pending
+      .ranges
+      .iter()
+      .try_fold(0usize, |count, ranges| {
+        if ranges.is_empty() {
+          return None;
+        }
+        count
+          .checked_add(ranges.len())
+          .filter(|count| *count <= MAX_BATCH_RANGES)
+      })
+      .ok_or(BatchReservationError::InvalidRangeCount)?;
+    let drafted = self
+      .drafted_intervals(date)
+      .map_err(BatchReservationError::PendingStateUnavailable)?;
+    let mut intervals = Vec::with_capacity(range_count);
+    for range in pending.ranges.iter().flatten() {
+      intervals.push(
+        validate_draftable_range(date, &range.start, &range.end, &drafted)
+          .map_err(|_| BatchReservationError::InvalidRange)?,
+      );
     }
     intervals.sort_by_key(|(start, _)| *start);
     if intervals.windows(2).any(|pair| pair[0].1 > pair[1].0) {
-      return Err("overlapping activity ranges".to_string());
+      return Err(BatchReservationError::OverlappingRanges);
     }
     if let ActivityPersistence::Encrypted(store) = &self.persistence {
-      store.save_pending(date, Some(&pending))?;
+      store
+        .save_pending(date, Some(&pending))
+        .map_err(BatchReservationError::PersistenceFailed)?;
     } else {
       self.pending_batches.insert(date, pending);
     }
@@ -1424,6 +1508,25 @@ impl ActivityManager {
     Ok(())
   }
 
+  fn drafted_intervals(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Vec<ActivityInterval>, String> {
+    self
+      .drafted_for_day(date)?
+      .iter()
+      .map(|marker| {
+        let start = DateTime::parse_from_rfc3339(&marker.start)
+          .map_err(|_| "invalid drafted activity range".to_string())?
+          .with_timezone(&Utc);
+        let end = DateTime::parse_from_rfc3339(&marker.end)
+          .map_err(|_| "invalid drafted activity range".to_string())?
+          .with_timezone(&Utc);
+        Ok((start, end))
+      })
+      .collect()
+  }
+
   pub(crate) fn require_draftable_range(
     &self,
     date: NaiveDate,
@@ -1431,30 +1534,8 @@ impl ActivityManager {
     end: &str,
   ) -> Result<(), String> {
     self.require_writable()?;
-    let start = DateTime::parse_from_rfc3339(start)
-      .map_err(|_| "invalid activity range")?
-      .with_timezone(&Utc);
-    let end = DateTime::parse_from_rfc3339(end)
-      .map_err(|_| "invalid activity range")?
-      .with_timezone(&Utc);
-    if start >= end
-      || local_date(start) != date
-      || local_date(end - chrono::Duration::nanoseconds(1)) != date
-    {
-      return Err("invalid activity range".to_string());
-    }
-    for marker in self.drafted_for_day(date)? {
-      let saved_start = DateTime::parse_from_rfc3339(&marker.start)
-        .map_err(|_| "invalid drafted activity range")?
-        .with_timezone(&Utc);
-      let saved_end = DateTime::parse_from_rfc3339(&marker.end)
-        .map_err(|_| "invalid drafted activity range")?
-        .with_timezone(&Utc);
-      if start < saved_end && end > saved_start {
-        return Err("activity range already drafted".to_string());
-      }
-    }
-    Ok(())
+    validate_draftable_range(date, start, end, &self.drafted_intervals(date)?)
+      .map(|_| ())
   }
 
   #[cfg(test)]
@@ -2177,6 +2258,137 @@ mod tests {
       .collect()
   }
 
+  fn review_batch() -> ActivityPendingBatch {
+    ActivityPendingBatch {
+      idempotency_key: "review-key".into(),
+      entries: serde_json::json!([{"matterId": "matter"}]),
+      ranges: vec![vec![ActivityRange {
+        start: at(0).to_rfc3339(),
+        end: at(60).to_rfc3339(),
+      }]],
+    }
+  }
+
+  #[test]
+  fn reservation_requires_writable_activity_without_creating_pending_state() {
+    let mut manager = ActivityManager::new();
+    let date = local_date(at(0));
+    assert!(matches!(
+      manager.reserve_batch(date, review_batch()),
+      Err(BatchReservationError::NotWritable(_))
+    ));
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+  }
+
+  #[test]
+  fn reservation_rejects_invalid_entries_without_creating_pending_state() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    let mut pending = review_batch();
+    pending.entries =
+      serde_json::json!(vec![serde_json::json!({}); MAX_BATCH_ENTRIES + 1]);
+    pending.ranges = vec![pending.ranges[0].clone(); MAX_BATCH_ENTRIES + 1];
+    assert_eq!(
+      manager.reserve_batch(date, pending),
+      Err(BatchReservationError::InvalidEntries)
+    );
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+  }
+
+  #[test]
+  fn reservation_rejects_invalid_keys_without_creating_pending_state() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    let mut pending = review_batch();
+    pending.idempotency_key.clear();
+    assert_eq!(
+      manager.reserve_batch(date, pending),
+      Err(BatchReservationError::InvalidKey)
+    );
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+  }
+
+  #[test]
+  fn excessive_range_count_keeps_review_unreserved_and_editable() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    let mut pending = review_batch();
+    pending.ranges = vec![
+      (0..=MAX_BATCH_RANGES)
+        .map(|second| ActivityRange {
+          start: at(second as i64).to_rfc3339(),
+          end: at(second as i64 + 1).to_rfc3339(),
+        })
+        .collect(),
+    ];
+    assert_eq!(pending.ranges[0].len(), MAX_BATCH_RANGES + 1);
+    assert_eq!(
+      manager.reserve_batch(date, pending),
+      Err(BatchReservationError::InvalidRangeCount)
+    );
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+    manager
+      .assign_ranges(
+        date,
+        vec![ActivityManualAssignment {
+          start: at(0).to_rfc3339(),
+          end: at(60).to_rfc3339(),
+          matter_id: "matter".into(),
+          matter: None,
+        }],
+      )
+      .unwrap();
+    manager.reserve_batch(date, review_batch()).unwrap();
+  }
+
+  #[test]
+  fn reservation_rejects_invalid_ranges_without_creating_pending_state() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    let mut pending = review_batch();
+    pending.ranges[0][0].end = pending.ranges[0][0].start.clone();
+    assert_eq!(
+      manager.reserve_batch(date, pending),
+      Err(BatchReservationError::InvalidRange)
+    );
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+  }
+
+  #[test]
+  fn reservation_rejects_overlapping_ranges_without_creating_pending_state() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    let mut pending = review_batch();
+    pending.ranges[0].push(ActivityRange {
+      start: at(30).to_rfc3339(),
+      end: at(90).to_rfc3339(),
+    });
+    assert_eq!(
+      manager.reserve_batch(date, pending),
+      Err(BatchReservationError::OverlappingRanges)
+    );
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+  }
+
+  #[test]
+  fn unreadable_saved_ranges_preserve_pending_state_uncertainty() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    manager.drafted_entries.insert(
+      date,
+      vec![ActivityDraftedEntry {
+        start: "invalid".into(),
+        end: at(60).to_rfc3339(),
+        entry_id: "entry".into(),
+      }],
+    );
+    assert!(matches!(
+      manager.reserve_batch(date, review_batch()),
+      Err(BatchReservationError::PendingStateUnavailable(_))
+    ));
+    assert!(manager.pending_for_day(date).unwrap().is_none());
+  }
+
   #[test]
   fn cancelled_batch_recovery_releases_the_day_for_editing_and_a_new_key() {
     let mut manager = recording_manager();
@@ -2240,7 +2452,10 @@ mod tests {
     manager.reserve_batch(date, pending.clone()).unwrap();
     let mut changed = pending.clone();
     changed.idempotency_key = "other-key".into();
-    assert!(manager.reserve_batch(date, changed).is_err());
+    assert_eq!(
+      manager.reserve_batch(date, changed),
+      Err(BatchReservationError::PendingConflict)
+    );
     assert!(
       manager
         .assign_ranges(

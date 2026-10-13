@@ -50,12 +50,14 @@ type InstallNativeBoundaryOptions = {
   page: Page;
   snapshot?: ActivityDaySnapshot;
   language?: "en" | "ar";
+  batchValidation?: "accept" | "reject-first";
 };
 
 const installNativeBoundary = async ({
   page,
   snapshot = SNAPSHOT,
   language = "en",
+  batchValidation = "accept",
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
   await page.clock.setFixedTime(new Date(`${snapshot.today}T10:00:00Z`));
@@ -64,6 +66,7 @@ const installNativeBoundary = async ({
       snapshot: initialSnapshot,
       changedEvent,
       language: desktopLanguage,
+      batchValidation: validation,
     }) => {
       // Playwright's Date clock does not change native Temporal's clock.
       const nativeTemporal: unknown = Reflect.get(window, "Temporal");
@@ -78,6 +81,7 @@ const installNativeBoundary = async ({
       const invocations: { args: Record<string, unknown>; command: string }[] =
         [];
       let nextCallbackId = 1;
+      let batchAttempts = 0;
       let activitySnapshot = initialSnapshot;
       Reflect.set(window, "__STELLA_TEST_INVOCATIONS__", invocations);
       const emitActivityChanged = () => {
@@ -207,6 +211,15 @@ const installNativeBoundary = async ({
             ] satisfies DesktopTimeEntryMatterCandidate[];
           }
           if (command === "time_entry_submit_batch_confirmed") {
+            batchAttempts += 1;
+            if (validation === "reject-first" && batchAttempts === 1) {
+              throw Object.assign(
+                new Error("Activity range validation failed"),
+                {
+                  type: "rejected",
+                },
+              );
+            }
             return {
               entries: [{ id: "draft-1", matterId: "matter-1" }],
               markerSaved: true,
@@ -242,7 +255,12 @@ const installNativeBoundary = async ({
         unregisterCallback: (id: number) => callbacks.delete(id),
       });
     },
-    { snapshot, changedEvent: ACTIVITY_CHANGED_EVENT, language },
+    {
+      snapshot,
+      changedEvent: ACTIVITY_CHANGED_EVENT,
+      language,
+      batchValidation,
+    },
   );
   await page.goto("/");
   const messages = language === "ar" ? arMessages : enMessages;
@@ -577,6 +595,124 @@ test("more than 100 selected matters keep the review editable until the selectio
   await expect(
     page.getByRole("button", { name: "Create 101 drafts", exact: true }),
   ).toBeDisabled();
+});
+
+test("native validation rejection leaves the review editable and a corrected selection uses a new batch key", async ({
+  page,
+}) => {
+  const finalStart = "2026-10-07T09:30:00Z";
+  const finalEnd = "2026-10-07T09:36:00Z";
+  await installNativeBoundary({
+    page,
+    batchValidation: "reject-first",
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [
+        ...SNAPSHOT.segments,
+        {
+          appIdentifier: "com.example.editor",
+          appName: "Example Editor",
+          matterId: "corrected-matter",
+          start: finalStart,
+          end: finalEnd,
+        },
+      ],
+      manualAssignments: [
+        {
+          start: finalStart,
+          end: finalEnd,
+          matterId: "corrected-matter",
+          matter: {
+            id: "corrected-matter",
+            name: "Corrected matter",
+            reference: null,
+            color: null,
+            clientName: null,
+          },
+        },
+      ],
+    },
+  });
+  await page
+    .getByRole("button", { name: "Create 2 drafts", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.batchFailed,
+  );
+  const include = page.getByRole("checkbox", {
+    name: "Include Example matter",
+    exact: true,
+  });
+  await expect(include).toBeEnabled();
+  await expect(
+    page
+      .getByRole("textbox", { name: enMessages.activity.entryNarrative })
+      .first(),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await include.uncheck();
+  await page
+    .getByRole("button", { name: "Create 1 draft", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  const submitted = await page.evaluate(() => {
+    const calls: unknown = Reflect.get(window, "__STELLA_TEST_INVOCATIONS__");
+    if (!Array.isArray(calls)) {
+      throw new TypeError("Native invocations are missing");
+    }
+    return calls.flatMap((call: unknown) => {
+      if (
+        typeof call !== "object" ||
+        call === null ||
+        !("command" in call) ||
+        call.command !== "time_entry_submit_batch_confirmed"
+      ) {
+        return [];
+      }
+      if (
+        !("args" in call) ||
+        typeof call.args !== "object" ||
+        call.args === null ||
+        !("request" in call.args) ||
+        typeof call.args.request !== "object" ||
+        call.args.request === null ||
+        !("idempotencyKey" in call.args.request) ||
+        typeof call.args.request.idempotencyKey !== "string" ||
+        !("items" in call.args.request) ||
+        !Array.isArray(call.args.request.items)
+      ) {
+        throw new TypeError("Batch request is missing");
+      }
+      return [
+        {
+          key: call.args.request.idempotencyKey,
+          matterIds: call.args.request.items.map((item: unknown) => {
+            if (
+              typeof item !== "object" ||
+              item === null ||
+              !("entry" in item) ||
+              typeof item.entry !== "object" ||
+              item.entry === null ||
+              !("matterId" in item.entry) ||
+              typeof item.entry.matterId !== "string"
+            ) {
+              throw new TypeError("Batch entry is missing");
+            }
+            return item.entry.matterId;
+          }),
+        },
+      ];
+    });
+  });
+  expect(submitted).toHaveLength(2);
+  expect(submitted.at(0)?.matterIds).toEqual(["matter-1", "corrected-matter"]);
+  expect(submitted.at(1)?.matterIds).toEqual(["corrected-matter"]);
+  expect(submitted.at(1)?.key).not.toBe(submitted.at(0)?.key);
 });
 
 test("only an explicit summary copy publishes activity to the clipboard", async ({

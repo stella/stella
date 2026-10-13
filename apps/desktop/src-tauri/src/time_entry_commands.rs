@@ -6,6 +6,7 @@ use crate::{
   account::{self, AccountRequest, AccountState, LinkedAccount},
   activity::{
     self, ActivityAppState, ActivityDraftedEntry, ActivityPendingBatch, ActivityRange,
+    BatchReservationError,
   },
   feature_gate::{DesktopFeature, FeatureGates},
   local_window::ActivityCaller,
@@ -47,6 +48,22 @@ pub enum SubmitError {
   Rejected,
   Uncertain,
 }
+impl From<BatchReservationError> for SubmitError {
+  fn from(error: BatchReservationError) -> Self {
+    match error {
+      BatchReservationError::NotWritable(_)
+      | BatchReservationError::InvalidEntries
+      | BatchReservationError::InvalidKey
+      | BatchReservationError::InvalidRangeCount
+      | BatchReservationError::InvalidRange
+      | BatchReservationError::OverlappingRanges => Self::Rejected,
+      BatchReservationError::PendingStateUnavailable(_)
+      | BatchReservationError::PendingConflict
+      | BatchReservationError::PersistenceFailed(_) => Self::Uncertain,
+    }
+  }
+}
+
 fn validate_confirmation(
   batch: &ConfirmedBatch,
   date: &str,
@@ -156,9 +173,7 @@ pub async fn time_entry_submit_batch_confirmed(
       .map_err(|_| SubmitError::Rejected)?;
     // Persist the exact confirmed request before any outbound I/O. A changed
     // request cannot replace a batch whose response may have been lost.
-    manager
-      .reserve_batch(day, pending)
-      .map_err(|_| SubmitError::Uncertain)?;
+    manager.reserve_batch(day, pending)?;
   };
   let created = match time_entry_submit::submit_batch_with_recovery(&account, &batch)
     .await
@@ -216,6 +231,31 @@ pub async fn time_entry_submit_batch_confirmed(
 mod tests {
   use super::*;
   use std::collections::HashSet;
+
+  #[test]
+  fn reservation_validation_errors_are_rejected() {
+    for error in [
+      BatchReservationError::NotWritable("not writable".into()),
+      BatchReservationError::InvalidEntries,
+      BatchReservationError::InvalidKey,
+      BatchReservationError::InvalidRangeCount,
+      BatchReservationError::InvalidRange,
+      BatchReservationError::OverlappingRanges,
+    ] {
+      assert_eq!(SubmitError::from(error), SubmitError::Rejected);
+    }
+  }
+
+  #[test]
+  fn reservation_state_and_persistence_errors_remain_uncertain() {
+    for error in [
+      BatchReservationError::PendingStateUnavailable("state unavailable".into()),
+      BatchReservationError::PendingConflict,
+      BatchReservationError::PersistenceFailed("persistence failed".into()),
+    ] {
+      assert_eq!(SubmitError::from(error), SubmitError::Uncertain);
+    }
+  }
 
   #[test]
   fn oversized_confirmation_is_rejected_before_reservation() {
