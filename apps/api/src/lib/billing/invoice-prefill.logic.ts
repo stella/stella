@@ -63,6 +63,9 @@ const vatIdCountry = (vatId: string | null): string | null => {
   return /^[A-Z]{2}[0-9A-Z]{2,}$/u.test(compact) ? compact.slice(0, 2) : null;
 };
 
+/** A United Kingdom VAT number, also behind the Northern Ireland XI prefix. */
+const UK_VAT_NUMBER = /^(?:\d{9}|\d{12}|GD\d{3}|HA\d{3})$/u;
+
 /**
  * The number part of each member state's VAT ID, as the VIES service checks
  * its syntax. Only a well-formed VAT ID removes VAT by reverse charge; a
@@ -96,7 +99,7 @@ const EU_VAT_ID_FORMATS: ReadonlyMap<string, RegExp> = new Map([
   ["SE", /^\d{12}$/u],
   ["SI", /^\d{8}$/u],
   ["SK", /^\d{10}$/u],
-  ["XI", /^(?:\d{9}|\d{12}|GD\d{3}|HA\d{3})$/u],
+  ["XI", UK_VAT_NUMBER],
 ]);
 
 /** Whether a VAT ID with a member-state prefix has that state's syntax. */
@@ -104,6 +107,30 @@ export const isWellFormedEuVatId = (vatId: string | null): boolean => {
   const compact = compactVatId(vatId);
   const format = EU_VAT_ID_FORMATS.get(compact.slice(0, 2));
   return format !== undefined && format.test(compact.slice(2));
+};
+
+/**
+ * The number part of business tax IDs outside the EU whose syntax is fixed;
+ * any other country needs at least five characters, four of them digits.
+ */
+const NON_EU_TAX_ID_FORMATS: ReadonlyMap<string, RegExp> = new Map([
+  ["GB", UK_VAT_NUMBER],
+  ["XI", UK_VAT_NUMBER],
+  ["CH", /^E\d{9}(?:MWST|TVA|IVA)?$/u],
+  ["NO", /^\d{9}(?:MVA)?$/u],
+]);
+const GENERIC_TAX_ID_NUMBER = /^(?=(?:\D*\d){4})[0-9A-Z]{5,}$/u;
+
+/**
+ * Whether a prefixed business tax ID from outside the EU looks like one, so
+ * a prefix with arbitrary characters behind it ("GBAB") never takes an
+ * invoice outside the scope of VAT.
+ */
+export const isWellFormedNonEuTaxId = (vatId: string | null): boolean => {
+  const compact = compactVatId(vatId);
+  const format =
+    NON_EU_TAX_ID_FORMATS.get(compact.slice(0, 2)) ?? GENERIC_TAX_ID_NUMBER;
+  return format.test(compact.slice(2));
 };
 
 /**
@@ -217,12 +244,15 @@ export const decideInvoiceVat = ({
   }
   if (!EU_MEMBER_STATES.has(vatCountry)) {
     // Outside the EU, including Northern Ireland for services, the place of
-    // supply is abroad and the service is outside the scope of VAT.
-    return {
-      vatTreatment: "outside_scope",
-      vatRateBps: 0,
-      reason: "outside_scope",
-    };
+    // supply is abroad and the service is outside the scope of VAT, shown by
+    // a well-formed business tax ID.
+    return isWellFormedNonEuTaxId(buyerVatId)
+      ? {
+          vatTreatment: "outside_scope",
+          vatRateBps: 0,
+          reason: "outside_scope",
+        }
+      : domesticVat(standardRateBps, "client_vat_id_invalid");
   }
   // A business client in another member state accounts for the VAT itself
   // (Art. 44/196), shown by a VAT ID with that state's syntax.

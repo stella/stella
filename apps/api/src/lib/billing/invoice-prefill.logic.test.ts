@@ -9,6 +9,7 @@ import {
   euVatPrefix,
   invoiceDueDays,
   isWellFormedEuVatId,
+  isWellFormedNonEuTaxId,
   latestDate,
 } from "./invoice-prefill.logic";
 import type { InvoiceVatReason } from "./invoice-prefill.logic";
@@ -90,6 +91,27 @@ const VAT_CASES: VatCase[] = [
     seller: { vatId: "CZ12345678", vatPayer: true },
     buyerVatId: "DEAB",
     buyerCountry: "DE",
+    expected: ["domestic_vat", 2100, "client_vat_id_invalid"],
+  },
+  {
+    name: "a prefixed tax ID without a business tax ID's syntax outside the EU keeps the standard rate",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "GBAB",
+    buyerCountry: "GB",
+    expected: ["domestic_vat", 2100, "client_vat_id_invalid"],
+  },
+  {
+    name: "a Swiss business tax ID is outside the scope of VAT",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "CHE-123.456.789 MWST",
+    buyerCountry: "CH",
+    expected: ["outside_scope", 0, "outside_scope"],
+  },
+  {
+    name: "a short arbitrary tax ID from another country outside the EU keeps the standard rate",
+    seller: { vatId: "CZ12345678", vatPayer: true },
+    buyerVatId: "USAB12",
+    buyerCountry: "US",
     expected: ["domestic_vat", 2100, "client_vat_id_invalid"],
   },
   {
@@ -175,6 +197,11 @@ describe("invoice VAT decision", () => {
     expect(isWellFormedEuVatId("ATU12345678")).toBe(true);
     expect(isWellFormedEuVatId("AT12345678")).toBe(false);
     expect(isWellFormedEuVatId("US123456789")).toBe(false);
+    expect(isWellFormedNonEuTaxId("GB123456789")).toBe(true);
+    expect(isWellFormedNonEuTaxId("XI123456789")).toBe(true);
+    expect(isWellFormedNonEuTaxId("XIAB")).toBe(false);
+    expect(isWellFormedNonEuTaxId("NO123456789MVA")).toBe(true);
+    expect(isWellFormedNonEuTaxId("US12-3456789")).toBe(true);
     expect(euVatPrefix("GR123456789")).toBeNull();
     expect(euVatPrefix("CZ")).toBeNull();
     expect(euVatPrefix(null)).toBeNull();
