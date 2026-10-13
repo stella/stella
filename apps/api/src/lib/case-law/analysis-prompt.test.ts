@@ -4,11 +4,12 @@ import fc from "fast-check";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
+  ANALYSIS_GUIDELINES,
   analysisInputOf,
   type AnalysisPromptDecision,
+  formatDecisionForPrompt,
+  type PromptBlock,
 } from "./analysis-prompt";
-
-type PromptBlock = { anchorId: string; plainText: string; type: string };
 
 const block = fc.record({
   anchorId: fc.stringMatching(/^[a-z][a-z0-9-]{0,11}$/u),
@@ -155,5 +156,73 @@ describe("analysisInputOf", () => {
       { anchorId: "p-2", plainText: "   \n", type: "paragraph" },
     ];
     expect(fingerprintOf(padded, meta)).toBe(fingerprintOf(input, meta));
+  });
+
+  test("changes when a paragraph gains or changes its court number", () => {
+    fc.assert(
+      fc.property(
+        blocks,
+        decision,
+        fc.integer({ min: 1, max: 999 }),
+        (input, meta, number) => {
+          const [first, ...rest] = input;
+          if (first === undefined) {
+            return;
+          }
+          const numbered = [{ ...first, number }, ...rest];
+          const renumbered = [{ ...first, number: number + 1 }, ...rest];
+          expect(fingerprintOf(numbered, meta)).not.toBe(
+            fingerprintOf(input, meta),
+          );
+          expect(fingerprintOf(renumbered, meta)).not.toBe(
+            fingerprintOf(numbered, meta),
+          );
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+});
+
+// An unnumbered decision shows the model only anchor counters, which count
+// headings too; a citation built from one points at the wrong paragraph.
+test("the guidelines forbid citing a paragraph the court did not number", () => {
+  expect(ANALYSIS_GUIDELINES).toContain(
+    'A\n   paragraph without "(¶ N)" has no court number',
+  );
+  expect(ANALYSIS_GUIDELINES).toContain(
+    "never turn an anchorId into a\n   paragraph number",
+  );
+});
+
+describe("formatDecisionForPrompt", () => {
+  test("shows the court's paragraph number after the anchor", () => {
+    expect(
+      formatDecisionForPrompt([
+        { anchorId: "h-1", plainText: "Odůvodnění:", type: "heading" },
+        {
+          anchorId: "p-2",
+          plainText: "Soud rozhodl.",
+          type: "paragraph",
+          number: 12,
+        },
+        { anchorId: "p-3", plainText: "Poučení.", type: "paragraph" },
+      ]),
+    ).toBe("[h-1] Odůvodnění:\n\n[p-2] (¶ 12) Soud rozhodl.\n\n[p-3] Poučení.");
+  });
+
+  test("prints no number that is not a citable court paragraph number", () => {
+    for (const number of [0, -3, 1.5, Number.NaN]) {
+      expect(
+        formatDecisionForPrompt([
+          { anchorId: "p-1", plainText: "Text.", type: "paragraph", number },
+        ]),
+      ).toBe("[p-1] Text.");
+    }
+    expect(
+      formatDecisionForPrompt([
+        { anchorId: "h-1", plainText: "I.", type: "heading", number: 1 },
+      ]),
+    ).toBe("[h-1] I.");
   });
 });
