@@ -535,6 +535,16 @@
       "createInvoice": "Izveidot rēķinu",
       "dueDate": "Apmaksas termiņš",
       "editInvoice": "Rediģēt rēķinu",
+      "export": {
+        "accounting": "Imports grāmatvedībā",
+        "eBilling": "E-rēķini",
+        "eso9": "ESO9 importa tabula (XLSX)",
+        "exporting": "Gatavo eksportu…",
+        "isdoc": "ISDOC e-rēķins (ABRA Gen u. c.)",
+        "spreadsheets": "Izklājlapas",
+        "xlsx": "Rēķini (XLSX)",
+        "xlsxLines": "Rēķinu rindas (XLSX)"
+      },
       "finalize": "Pabeigt",
       "invoiceDate": "Rēķina datums",
       "invoiceDetail": "Rēķina detaļas",

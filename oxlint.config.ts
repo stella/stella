@@ -468,6 +468,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
   ]),
+  fixtureRuleOverride("require-worker-database-login-posture.fixture.ts", [
+    "require-worker-database-login-posture/require-worker-database-login-posture",
+  ]),
   fixtureRuleOverride("require-audit-on-mutation.fixture.ts", [
     "require-audit-on-mutation/require-audit-on-mutation",
   ]),
@@ -1553,6 +1556,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
+    "./.oxlint-plugins/require-worker-database-login-posture.ts",
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
@@ -1628,6 +1632,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-path-prefix-containment.ts",
     "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
+    "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
@@ -1664,6 +1669,18 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "packages/scripts/src/dev-*.ts",
+        "packages/scripts/src/agent-session.ts",
+        ".oxlint-plugins/__fixtures__/no-ambient-dev-docker.fixture.ts",
+      ],
+      excludeFiles: [
+        "packages/scripts/src/*.test.ts",
+        "packages/scripts/src/dev-docker.ts",
+      ],
+      rules: { "no-ambient-dev-docker/no-ambient-dev-docker": "error" },
+    },
     {
       files: [
         "apps/**/*.{ts,tsx,js,mjs}",
@@ -1974,13 +1991,13 @@ const config = defineConfig({
       },
     },
     {
-      // The comparison's owners: the helper and its web twin, which check
+      // The comparison's owners: the helper and its browser twin, which check
       // eligibility first; the schema's partial unique indexes; the writer's
       // identity lookup and junction report, which place the version being
       // stored; and tests, which build and assert windows by hand.
       files: [
         "apps/api/src/lib/legal-search/legislation-validity-window.ts",
-        "apps/web/src/features/case-law/statute-version.ts",
+        "packages/api-contract/src/statute-version.ts",
         "apps/api/src/db/schema/legislation.ts",
         "apps/api/src/handlers/legislation/ingestion.ts",
         "apps/api/src/**/*.test.ts",
@@ -4334,6 +4351,13 @@ const config = defineConfig({
             systemModules: SYSTEM_AUDIT_MODULES,
           },
         ],
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "require-worker-database-login-posture/require-worker-database-login-posture":
+          "error",
       },
     },
     {

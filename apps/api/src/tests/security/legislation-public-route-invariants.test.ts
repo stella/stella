@@ -4,7 +4,7 @@ import nodePath from "node:path";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
-import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import { isPublicReadBudgetHandler } from "@/api/lib/api-handlers";
 import {
   apiSourceRoot,
   collectApiImports,
@@ -80,13 +80,13 @@ const collectPublicOperationGraph = async (
 };
 
 describe("public legislation route boundary", () => {
-  test("every declared public legislation route uses a public-safe handler", () => {
+  test("every declared public legislation route uses a budgeted public-safe handler", () => {
     const declared = publicLegislationRoute.routes.filter(
       (route) => typeof route.handler === "function",
     );
     expect(
       declared
-        .filter((route) => !isSafePublicHandler(route.handler))
+        .filter((route) => !isPublicReadBudgetHandler(route.handler))
         .map((route) => `${route.method} ${route.path}`),
     ).toEqual([]);
     expect(

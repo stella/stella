@@ -535,6 +535,16 @@
       "createInvoice": "Utwórz fakturę",
       "dueDate": "Termin płatności",
       "editInvoice": "Edytuj fakturę",
+      "export": {
+        "accounting": "Import do księgowości",
+        "eBilling": "E-fakturowanie",
+        "eso9": "Arkusz importu ESO9 (XLSX)",
+        "exporting": "Przygotowywanie eksportu…",
+        "isdoc": "E-faktura ISDOC (ABRA Gen i inne)",
+        "spreadsheets": "Arkusze",
+        "xlsx": "Faktury (XLSX)",
+        "xlsxLines": "Pozycje faktur (XLSX)"
+      },
       "finalize": "Zatwierdź",
       "invoiceDate": "Data wystawienia",
       "invoiceDetail": "Szczegóły faktury",
