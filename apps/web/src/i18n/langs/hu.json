@@ -12,6 +12,29 @@
       "unknownDevice": "Ismeretlen eszköz"
     }
   },
+  "admin": {
+    "ai": "MI",
+    "backToApp": "Vissza az alkalmazáshoz",
+    "billingAndUsage": "Számlázás és használat",
+    "billingProfiles": "Számlázási profilok",
+    "deleteDescription": "Véglegesen törli ezt a szervezetet és az adatait. Ez a művelet nem vonható vissza.",
+    "deleteOrganization": "Szervezet törlése",
+    "deleteTypeToConfirm": "A megerősítéshez írja be: {name}.",
+    "firmSetup": "Iroda beállításai",
+    "general": "Általános",
+    "leaveDescription": "Elveszíti a hozzáférést a szervezet ügyeihez és adataihoz.",
+    "leaveOrganization": "Kilépés a szervezetből",
+    "modelsAndProviders": "Modellek és szolgáltatók",
+    "noPlan": "Nincs aktív csomag",
+    "organizationDeleted": "A szervezet törölve lett.",
+    "organizationId": "Szervezetazonosító",
+    "organizationLeft": "Kilépett a szervezetből.",
+    "overviewDescription": "Kezelje szervezetét, a személyeket és az eszközöket.",
+    "people": "Személyek",
+    "planAndUsage": "Csomag és használat",
+    "title": "Szervezet adminisztrációja",
+    "toolsDescription": "Engedélyezze vagy tiltsa le a beépített eszközöket a szervezet minden tagja számára."
+  },
   "agentClaim": {
     "access": "Megkapott hozzáférés",
     "accessReadSearch": "Olvasási és keresési hozzáférés",

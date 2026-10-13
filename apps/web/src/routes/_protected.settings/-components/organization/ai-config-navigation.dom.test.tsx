@@ -14,7 +14,7 @@ import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
 
 GlobalRegistrator.register({
-  url: "http://localhost:3000/settings/organization",
+  url: "http://localhost:3000/admin",
 });
 const originalFetch = globalThis.fetch;
 const requests: { method: string; url: string; body: string }[] = [];
@@ -237,7 +237,7 @@ const mount = async (
   const root = router.createRootRoute({ component: router.Outlet });
   const settings = router.createRoute({
     getParentRoute: () => root,
-    path: "/settings/organization",
+    path: "/admin",
     component: SettingsRoute,
   });
   const destination = router.createRoute({
@@ -247,7 +247,7 @@ const mount = async (
   });
   const appRouter = router.createRouter({
     history: router.createMemoryHistory({
-      initialEntries: ["/settings/organization"],
+      initialEntries: ["/admin"],
     }),
     isServer: false,
     routeTree: root.addChildren([settings, destination]),
@@ -346,7 +346,7 @@ test("leaving AI provider settings with a dirty key prompts before navigation", 
   });
   expect(await screen.findByRole("alertdialog")).toBeDefined();
   expect(screen.getByText(messages.common.unsavedLeaveConfirm)).toBeDefined();
-  expect(appRouter.state.location.pathname).toBe("/settings/organization");
+  expect(appRouter.state.location.pathname).toBe("/admin");
 });
 
 test("leaving clean AI provider settings proceeds without a prompt", async () => {
@@ -410,7 +410,7 @@ test("cancelling the leave prompt retains the edited key and settings route", as
   await waitFor(() =>
     expect(Object.hasOwn(dialog.dataset, "open")).toBe(false),
   );
-  expect(appRouter.state.location.pathname).toBe("/settings/organization");
+  expect(appRouter.state.location.pathname).toBe("/admin");
   expect(
     providerQueries().getByLabelText(messages.organization.aiConfig.apiKey),
   ).toHaveProperty("value", GOOGLE_KEY);
@@ -992,7 +992,7 @@ test("leaving with an edited decision model prompts before navigation", async ()
     void appRouter.navigate({ to: "/settings" });
   });
   expect(await screen.findByRole("alertdialog")).toBeDefined();
-  expect(appRouter.state.location.pathname).toBe("/settings/organization");
+  expect(appRouter.state.location.pathname).toBe("/admin");
 });
 
 test("page header save reveals Anthropic workspace recovery and preserves the complete error", async () => {
@@ -1329,7 +1329,7 @@ test.each(Object.values(DIRTY_ONLY_SECTIONS))(
       void appRouter.navigate({ to: "/settings" });
     });
     expect(await screen.findByRole("alertdialog")).toBeDefined();
-    expect(appRouter.state.location.pathname).toBe("/settings/organization");
+    expect(appRouter.state.location.pathname).toBe("/admin");
   },
 );
 

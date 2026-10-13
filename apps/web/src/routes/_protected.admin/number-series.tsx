@@ -5,12 +5,10 @@ import { isTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { roleOptions } from "@/lib/auth-queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
-import { SellerProfilesCard } from "@/routes/_protected.settings/-components/organization/seller-profiles-card";
+import { NumberSeriesCard } from "@/routes/_protected.settings/-components/organization/number-series-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
-export const Route = createFileRoute(
-  "/_protected/settings/organization/billing",
-)({
+export const Route = createFileRoute("/_protected/admin/number-series")({
   beforeLoad: async ({ context }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (
@@ -23,21 +21,21 @@ export const Route = createFileRoute(
       })
     ) {
       redirect({
-        to: "/settings/organization/members",
+        to: "/admin/members",
         replace: true,
         throw: true,
       });
     }
   },
-  component: BillingSettingsPage,
+  component: NumberSeriesSettingsPage,
 });
 
-function BillingSettingsPage() {
+function NumberSeriesSettingsPage() {
   const t = useTranslations();
   return (
     <>
-      <SettingsPageHeader title={t("billing.settingsTitle")} />
-      <SellerProfilesCard />
+      <SettingsPageHeader title={t("billing.numberSeries.title")} />
+      <NumberSeriesCard />
     </>
   );
 }

@@ -12,6 +12,29 @@
       "unknownDevice": "Neznámé zařízení"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Zpět do aplikace",
+    "billingAndUsage": "Fakturace a využití",
+    "billingProfiles": "Fakturační profily",
+    "deleteDescription": "Trvale smažete tuto organizaci a její data. Tuto akci nelze vrátit zpět.",
+    "deleteOrganization": "Smazat organizaci",
+    "deleteTypeToConfirm": "Pro potvrzení zadejte {name}.",
+    "firmSetup": "Nastavení kanceláře",
+    "general": "Obecné",
+    "leaveDescription": "Ztratíte přístup ke spisům a datům této organizace.",
+    "leaveOrganization": "Opustit organizaci",
+    "modelsAndProviders": "Modely a poskytovatelé",
+    "noPlan": "Žádný aktivní tarif",
+    "organizationDeleted": "Organizace byla smazána.",
+    "organizationId": "ID organizace",
+    "organizationLeft": "Opustili jste organizaci.",
+    "overviewDescription": "Spravujte organizaci, lidi a nástroje.",
+    "people": "Lidé",
+    "planAndUsage": "Tarif a využití",
+    "title": "Správa organizace",
+    "toolsDescription": "Zapněte nebo vypněte vestavěné nástroje pro všechny v této organizaci."
+  },
   "agentClaim": {
     "access": "Získá přístup",
     "accessReadSearch": "Přístup pro čtení a vyhledávání",

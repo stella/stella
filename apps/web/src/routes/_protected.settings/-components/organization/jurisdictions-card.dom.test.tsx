@@ -7,7 +7,7 @@ import { sleep } from "@stll/concurrency/sleep";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 
 GlobalRegistrator.register({
-  url: "http://localhost:3000/settings/organization",
+  url: "http://localhost:3000/admin",
 });
 
 const ORGANIZATION = "jurisdictions-card-org";

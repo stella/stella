@@ -13,9 +13,7 @@ import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-compo
 import { VatRatesCard } from "@/routes/_protected.settings/-components/organization/vat-rates-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
-export const Route = createFileRoute(
-  "/_protected/settings/organization/vat-rates",
-)({
+export const Route = createFileRoute("/_protected/admin/vat-rates")({
   beforeLoad: async ({ context }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (
@@ -28,7 +26,7 @@ export const Route = createFileRoute(
       })
     ) {
       redirect({
-        to: "/settings/organization/members",
+        to: "/admin/members",
         replace: true,
         throw: true,
       });

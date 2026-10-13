@@ -6,6 +6,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
+import { pageTitle } from "@/lib/page-title";
 import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
@@ -14,7 +15,7 @@ const searchSchema = v.strictObject({
   q: optionalSearchStringSchema(),
 });
 
-export const Route = createFileRoute("/_protected/settings/organization")({
+export const Route = createFileRoute("/_protected/admin")({
   validateSearch: searchSchema,
   beforeLoad: async ({ context, location }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
@@ -25,7 +26,7 @@ export const Route = createFileRoute("/_protected/settings/organization")({
 
     // Start the time-policy query before its child route chunk and loader,
     // alongside shell data; the child loader still owns critical error handling.
-    if (location.pathname === "/settings/organization/time-policy") {
+    if (location.pathname === "/admin/time-policy") {
       detached(
         (async () => {
           if (
@@ -49,9 +50,10 @@ export const Route = createFileRoute("/_protected/settings/organization")({
       );
     }
   },
-  component: OrganizationSettingsLayout,
+  head: () => ({ meta: [{ title: pageTitle("admin.title") }] }),
+  component: AdminLayout,
 });
 
-function OrganizationSettingsLayout() {
+function AdminLayout() {
   return <Outlet />;
 }

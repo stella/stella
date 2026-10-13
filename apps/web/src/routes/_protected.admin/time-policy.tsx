@@ -7,9 +7,7 @@ import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { TimePolicyCard } from "@/routes/_protected.settings/-components/organization/time-policy-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
-export const Route = createFileRoute(
-  "/_protected/settings/organization/time-policy",
-)({
+export const Route = createFileRoute("/_protected/admin/time-policy")({
   beforeLoad: async ({ context }) => {
     if (
       !(await isTimeBillingRouteEnabled(context.queryClient, {
@@ -18,7 +16,7 @@ export const Route = createFileRoute(
       }))
     ) {
       redirect({
-        to: "/settings/organization/members",
+        to: "/admin/members",
         replace: true,
         throw: true,
       });

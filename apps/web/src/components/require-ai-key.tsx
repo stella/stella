@@ -253,10 +253,7 @@ export const RequireAIKey = ({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={openAIKeyDialog}>{t("ai.keyRequired.cta")}</Button>
-          <Button
-            render={<Link to="/settings/organization/ai" />}
-            variant="ghost"
-          >
+          <Button render={<Link to="/admin/ai" />} variant="ghost">
             {t("organization.aiConfig.title")}
           </Button>
         </div>

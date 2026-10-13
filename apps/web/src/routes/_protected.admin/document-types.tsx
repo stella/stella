@@ -4,9 +4,7 @@ import { useTranslations } from "use-intl";
 import { DocumentTypesCard } from "@/routes/_protected.settings/-components/organization/document-types-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
-export const Route = createFileRoute(
-  "/_protected/settings/organization/document-types",
-)({
+export const Route = createFileRoute("/_protected/admin/document-types")({
   component: OrganizationDocumentTypesPage,
 });
 

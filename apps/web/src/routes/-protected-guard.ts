@@ -91,7 +91,7 @@ export const loadProtectedContext = async ({
   const onPrefetchError = (error: unknown) => {
     getAnalytics().captureError(error);
   };
-  if (location.pathname === "/settings/organization/time-policy") {
+  if (location.pathname === "/admin/time-policy") {
     detached(
       (async () => {
         if (

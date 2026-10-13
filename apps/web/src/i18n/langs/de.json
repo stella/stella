@@ -12,6 +12,29 @@
       "unknownDevice": "Unbekanntes Gerät"
     }
   },
+  "admin": {
+    "ai": "KI",
+    "backToApp": "Zurück zur App",
+    "billingAndUsage": "Abrechnung und Nutzung",
+    "billingProfiles": "Abrechnungsprofile",
+    "deleteDescription": "Diese Organisation und ihre Daten werden dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+    "deleteOrganization": "Organisation löschen",
+    "deleteTypeToConfirm": "Geben Sie zur Bestätigung {name} ein.",
+    "firmSetup": "Kanzleieinstellungen",
+    "general": "Allgemein",
+    "leaveDescription": "Sie verlieren den Zugriff auf die Akten und Daten dieser Organisation.",
+    "leaveOrganization": "Organisation verlassen",
+    "modelsAndProviders": "Modelle und Anbieter",
+    "noPlan": "Kein aktiver Tarif",
+    "organizationDeleted": "Die Organisation wurde gelöscht.",
+    "organizationId": "Organisations-ID",
+    "organizationLeft": "Sie haben die Organisation verlassen.",
+    "overviewDescription": "Verwalten Sie Ihre Organisation, Personen und Werkzeuge.",
+    "people": "Personen",
+    "planAndUsage": "Tarif und Nutzung",
+    "title": "Organisationsverwaltung",
+    "toolsDescription": "Aktivieren oder deaktivieren Sie integrierte Werkzeuge für alle in dieser Organisation."
+  },
   "agentClaim": {
     "access": "Erhält Zugriff",
     "accessReadSearch": "Lese- und Suchzugriff",

@@ -43,9 +43,7 @@ import {
   type AuditLogsPageKey,
 } from "@/routes/_protected.settings/-queries/audit-logs";
 
-export const Route = createFileRoute(
-  "/_protected/settings/organization/audit-logs",
-)({
+export const Route = createFileRoute("/_protected/admin/audit-logs")({
   loader: async ({ context }) => {
     await prefetchRouteQuery(
       context.queryClient,

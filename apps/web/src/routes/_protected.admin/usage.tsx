@@ -26,25 +26,23 @@ import { UsagePlansCard } from "@/routes/_protected.settings/-components/organiz
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 import { usagePoliciesOptions } from "@/routes/_protected.settings/-queries/usage-policies";
 
-export const Route = createFileRoute("/_protected/settings/organization/usage")(
-  {
-    component: UsageSettingsPage,
-    loader: async ({ context }) => {
-      // The catalog exists only behind the usage flag; with the flag off
-      // this route must issue exactly the requests it does today (the
-      // route-smoke network baseline pins them).
-      if (env.VITE_FEATURE_USAGE) {
-        await prefetchRouteQuery(
-          context.queryClient,
-          usagePoliciesOptions,
-          (error: unknown) => {
-            getAnalytics().captureError(error);
-          },
-        );
-      }
-    },
+export const Route = createFileRoute("/_protected/admin/usage")({
+  component: UsageSettingsPage,
+  loader: async ({ context }) => {
+    // The catalog exists only behind the usage flag; with the flag off
+    // this route must issue exactly the requests it does today (the
+    // route-smoke network baseline pins them).
+    if (env.VITE_FEATURE_USAGE) {
+      await prefetchRouteQuery(
+        context.queryClient,
+        usagePoliciesOptions,
+        (error: unknown) => {
+          getAnalytics().captureError(error);
+        },
+      );
+    }
   },
-);
+});
 
 function UsageSettingsPage() {
   const t = useTranslations();

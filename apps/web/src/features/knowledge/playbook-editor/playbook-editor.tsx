@@ -1651,7 +1651,7 @@ const PlaybookEditorForm = ({
                 </Select>
                 <Link
                   className="text-muted-foreground hover:text-foreground text-xs"
-                  to="/settings/organization/document-types"
+                  to="/admin/document-types"
                 >
                   {t("knowledge.playbooks.manageTypes")}
                 </Link>

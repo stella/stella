@@ -66,22 +66,22 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
   }),
   staticRoute("/settings/account/profile"),
-  staticRoute("/settings/organization", {
-    expectation: { kind: "redirectsTo", to: "/settings/organization/members" },
-  }),
-  staticRoute("/settings/organization/ai"),
-  staticRoute("/settings/organization/anonymization"),
-  staticRoute("/settings/organization/audit-logs"),
-  staticRoute("/settings/organization/catalogue", {
+  staticRoute("/admin"),
+  staticRoute("/admin/general"),
+  staticRoute("/admin/tools"),
+  staticRoute("/admin/ai"),
+  staticRoute("/admin/anonymization"),
+  staticRoute("/admin/audit-logs"),
+  staticRoute("/admin/catalogue", {
     expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
   }),
-  staticRoute("/settings/organization/document-types"),
-  staticRoute("/settings/organization/matter-numbering"),
-  staticRoute("/settings/organization/billing", {
+  staticRoute("/admin/document-types"),
+  staticRoute("/admin/matter-numbering"),
+  staticRoute("/admin/billing", {
     expectation: { kind: "settles" },
   }),
-  staticRoute("/settings/organization/members"),
-  staticRoute("/settings/organization/usage"),
+  staticRoute("/admin/members"),
+  staticRoute("/admin/usage"),
   staticRoute("/inbox"),
   staticRoute("/workspaces"),
   {
@@ -150,11 +150,11 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
       `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
   },
   staticRoute("/time"),
-  staticRoute("/settings/organization/time-policy"),
-  staticRoute("/settings/organization/vat-rates", {
+  staticRoute("/admin/time-policy"),
+  staticRoute("/admin/vat-rates", {
     expectation: { kind: "settles" },
   }),
-  staticRoute("/settings/organization/number-series", {
+  staticRoute("/admin/number-series", {
     expectation: { kind: "settles" },
   }),
 ];

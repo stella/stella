@@ -321,7 +321,7 @@
     "apps/web/src/routes/_protected.contacts/import.tsx": 1,
     "apps/web/src/routes/_protected.contacts/index.tsx": 5,
     "apps/web/src/routes/_protected.settings/account.profile.tsx": 1,
-    "apps/web/src/routes/_protected.settings/organization.audit-logs.tsx": 1,
+    "apps/web/src/routes/_protected.admin/audit-logs.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx": 1,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx": 2,
     "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel.tsx": 2,

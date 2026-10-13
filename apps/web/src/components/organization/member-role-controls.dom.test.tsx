@@ -13,7 +13,7 @@ import type { Role } from "@/lib/auth-client";
 import { inviteMemberSchema } from "@/lib/organization/role-assignment.logic";
 
 GlobalRegistrator.register({
-  url: "http://localhost:3000/settings/organization/members",
+  url: "http://localhost:3000/admin/members",
 });
 
 const originalFetch = globalThis.fetch;

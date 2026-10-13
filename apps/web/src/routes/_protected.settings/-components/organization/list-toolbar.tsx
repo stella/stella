@@ -16,8 +16,8 @@ import { InviteMemberDialog } from "@/components/organization/invite-member-dial
 import { detached } from "@/lib/detached";
 import { optionalSearchStringSchema } from "@/lib/schema";
 
-const settingsOrgParentRoute = getRouteApi("/_protected/settings/organization");
-const membersRoute = getRouteApi("/_protected/settings/organization/members");
+const adminParentRoute = getRouteApi("/_protected/admin");
+const membersRoute = getRouteApi("/_protected/admin/members");
 
 /**
  * One-shot marker for the value the debounced writer last pushed up, so the
@@ -41,9 +41,8 @@ const normalizeQuery = (value: string): string | undefined =>
 export const OrganizationListToolbar = () => {
   const t = useTranslations();
   // Search lives on the parent route so it survives sub-tab swaps;
-  // navigate must target the leaf so we don't pull the user up to
-  // the parent (which has no index and would render blank).
-  const q = settingsOrgParentRoute.useSearch({ select: (s) => s.q ?? "" });
+  // Navigate to the members page so editing search stays on the list.
+  const q = adminParentRoute.useSearch({ select: (s) => s.q ?? "" });
   const navigate = membersRoute.useNavigate();
   // Local controlled-input value keeps IME composition snappy and
   // prevents flicker between keystrokes; the URL is the source of
@@ -57,7 +56,7 @@ export const OrganizationListToolbar = () => {
     setLastWrittenQuery({ value: normalizeQuery(value) });
     detached(
       navigate({
-        to: "/settings/organization/members",
+        to: "/admin/members",
         search: (prev) => ({ ...prev, q: value || undefined }),
       }),
       "list-toolbar.navigate",

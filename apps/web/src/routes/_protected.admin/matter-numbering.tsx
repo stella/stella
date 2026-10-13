@@ -4,9 +4,7 @@ import { useTranslations } from "use-intl";
 import { MatterNumberingCard } from "@/routes/_protected.settings/-components/organization/matter-numbering-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
-export const Route = createFileRoute(
-  "/_protected/settings/organization/matter-numbering",
-)({
+export const Route = createFileRoute("/_protected/admin/matter-numbering")({
   component: MatterNumberingPage,
 });
 

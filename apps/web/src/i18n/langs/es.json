@@ -12,6 +12,29 @@
       "unknownDevice": "Dispositivo desconocido"
     }
   },
+  "admin": {
+    "ai": "IA",
+    "backToApp": "Volver a la aplicación",
+    "billingAndUsage": "Facturación y uso",
+    "billingProfiles": "Perfiles de facturación",
+    "deleteDescription": "Elimina permanentemente esta organización y sus datos. Esta acción no se puede deshacer.",
+    "deleteOrganization": "Eliminar organización",
+    "deleteTypeToConfirm": "Escribe {name} para confirmar.",
+    "firmSetup": "Configuración del despacho",
+    "general": "Configuración general",
+    "leaveDescription": "Perderás el acceso a los asuntos y datos de esta organización.",
+    "leaveOrganization": "Salir de la organización",
+    "modelsAndProviders": "Modelos y proveedores",
+    "noPlan": "Sin plan activo",
+    "organizationDeleted": "La organización se ha eliminado.",
+    "organizationId": "ID de la organización",
+    "organizationLeft": "Has salido de la organización.",
+    "overviewDescription": "Gestiona tu organización, las personas y las herramientas.",
+    "people": "Personas",
+    "planAndUsage": "Plan y uso",
+    "title": "Administración de la organización",
+    "toolsDescription": "Activa o desactiva las herramientas integradas para todas las personas de esta organización."
+  },
   "agentClaim": {
     "access": "Acceso que obtendrá",
     "accessReadSearch": "Acceso de lectura y búsqueda",

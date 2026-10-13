@@ -12,6 +12,29 @@
       "unknownDevice": "جهاز غير معروف"
     }
   },
+  "admin": {
+    "ai": "الذكاء الاصطناعي",
+    "backToApp": "العودة إلى التطبيق",
+    "billingAndUsage": "الفوترة والاستخدام",
+    "billingProfiles": "ملفات الفوترة",
+    "deleteDescription": "حذف هذه المؤسسة وبياناتها نهائيًا. لا يمكن التراجع عن هذا الإجراء.",
+    "deleteOrganization": "حذف المؤسسة",
+    "deleteTypeToConfirm": "اكتب {name} للتأكيد.",
+    "firmSetup": "إعداد المكتب",
+    "general": "عام",
+    "leaveDescription": "ستفقد الوصول إلى الملفات القانونية والبيانات الخاصة بهذه المؤسسة.",
+    "leaveOrganization": "مغادرة المؤسسة",
+    "modelsAndProviders": "النماذج ومقدمو الخدمات",
+    "noPlan": "لا توجد خطة نشطة",
+    "organizationDeleted": "تم حذف المؤسسة.",
+    "organizationId": "معرّف المؤسسة",
+    "organizationLeft": "لقد غادرت المؤسسة.",
+    "overviewDescription": "إدارة مؤسستك والأشخاص والأدوات.",
+    "people": "الأشخاص",
+    "planAndUsage": "الخطة والاستخدام",
+    "title": "إدارة المؤسسة",
+    "toolsDescription": "تفعيل الأدوات المدمجة أو تعطيلها لجميع الأشخاص في هذه المؤسسة."
+  },
   "agentClaim": {
     "access": "الصلاحيات التي سيحصل عليها",
     "accessReadSearch": "صلاحية القراءة والبحث",

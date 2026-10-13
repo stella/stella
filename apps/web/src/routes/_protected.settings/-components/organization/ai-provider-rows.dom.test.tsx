@@ -7,7 +7,7 @@ import type { ProviderCredentialDraft } from "@/components/ai-config-role-models
 import messages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({
-  url: "http://localhost:3000/settings/organization",
+  url: "http://localhost:3000/admin",
 });
 const { useState } = await import("react");
 const { act, cleanup, fireEvent, render, screen, waitFor } =

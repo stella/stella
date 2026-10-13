@@ -1,5 +1,5 @@
 {
-  "route": "/settings/organization target",
+  "route": "/admin target",
   "reason": "Load professional-use acceptance before protected route data is requested.",
   "budget": {
     "depth": 6,

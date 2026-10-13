@@ -5,10 +5,7 @@ import ts from "typescript";
 const ROUTES_DIRECTORY = path.resolve(import.meta.dirname, "../../src/routes");
 const TIME_BILLING_HOOK = "@/hooks/use-time-billing-preview";
 const MIXED_ROUTE_REASONS = new Map([
-  [
-    "/_protected/settings/organization",
-    "Only the time-policy prefetch is gated.",
-  ],
+  ["/_protected/admin", "Only the time-policy prefetch is gated."],
   [
     "/_protected/workspaces/$workspaceId/$viewId",
     "The overview conditionally prefetches billing alongside unrelated matter data.",

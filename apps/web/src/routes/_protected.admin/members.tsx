@@ -8,7 +8,7 @@ import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { compareByLocale } from "@stll/collation";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { Frame } from "@stll/ui/frame";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -46,11 +46,8 @@ import {
 import { organizationOptions } from "@/lib/organization/queries";
 import { formatMemberDate } from "@/lib/organization/utils";
 import { ensureRouteQueryData } from "@/lib/react-query";
-import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/-components/organization/jurisdictions-card";
 import { OrganizationListToolbar } from "@/routes/_protected.settings/-components/organization/list-toolbar";
 import { RoleCell } from "@/routes/_protected.settings/-components/organization/member-role-cell";
-import { OrganizationProfileCard } from "@/routes/_protected.settings/-components/organization/profile-card";
-import { OrganizationTimeZoneCard } from "@/routes/_protected.settings/-components/organization/time-zone-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 type SortKey = "name" | "role" | "joined";
@@ -109,9 +106,7 @@ const INVITATION_COLUMNS: readonly InvitationColumn[] = [
   { id: "actions", label: null },
 ];
 
-export const Route = createFileRoute(
-  "/_protected/settings/organization/members",
-)({
+export const Route = createFileRoute("/_protected/admin/members")({
   component: Members,
   pendingComponent: MembersPendingComponent,
   loader: async ({ context }) => {
@@ -139,7 +134,7 @@ function Members() {
     select: (ctx) => ctx.user.id,
   });
   const q = useSearch({
-    from: "/_protected/settings/organization",
+    from: "/_protected/admin",
     select: (s) => s.q,
   });
 
@@ -200,27 +195,6 @@ function Members() {
         description={t("settings.organization.membersDescription")}
         title={t("common.members")}
       />
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-          {t("common.profile")}
-        </h2>
-        <OrganizationProfileCard />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-          {t("settings.organization.practiceJurisdictions")}
-        </h2>
-        <OrganizationJurisdictionsCard />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-          {t("settings.organization.timeZone.title")}
-        </h2>
-        <OrganizationTimeZoneCard />
-      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
@@ -553,20 +527,6 @@ const MembersToolbarPlaceholder = () => {
 const NOOP_SORT: Sort = { key: "name", dir: "asc" };
 const noopToggleSort = () => undefined;
 
-// Card placeholder for the profile/jurisdictions sections. The real cards
-// (OrganizationProfileCard, OrganizationJurisdictionsCard) call their own
-// suspense/queries against organizationOptions, so rendering them here would
-// re-suspend the pending shell and fall back to the bare logo. A static
-// skeleton keeps this component fully synchronous.
-const CardSkeletonPlaceholder = () => (
-  <Frame>
-    <FramePanel className="flex flex-col gap-3">
-      <Skeleton className="h-4 w-40" />
-      <Skeleton className="h-9 w-full max-w-sm" />
-    </FramePanel>
-  </Frame>
-);
-
 // Structural skeleton for route-pending: the section headers plus the members
 // table chrome (headers from MEMBER_COLUMNS) with shimmer rows, and the
 // invitations table chrome with a few shimmer rows. Hoisted `function` so the
@@ -580,20 +540,6 @@ function MembersPendingComponent() {
         description={t("settings.organization.membersDescription")}
         title={t("common.members")}
       />
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-          {t("common.profile")}
-        </h2>
-        <CardSkeletonPlaceholder />
-      </section>
-
-      <section className="flex flex-col gap-2">
-        <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-          {t("settings.organization.practiceJurisdictions")}
-        </h2>
-        <CardSkeletonPlaceholder />
-      </section>
 
       <section className="flex flex-col gap-2">
         <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">

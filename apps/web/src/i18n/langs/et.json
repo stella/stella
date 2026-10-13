@@ -12,6 +12,29 @@
       "unknownDevice": "Tundmatu seade"
     }
   },
+  "admin": {
+    "ai": "AI",
+    "backToApp": "Tagasi rakendusse",
+    "billingAndUsage": "Arveldus ja kasutus",
+    "billingProfiles": "Arveldusprofiilid",
+    "deleteDescription": "Kustutage see organisatsioon ja selle andmed jäädavalt. Seda toimingut ei saa tagasi võtta.",
+    "deleteOrganization": "Kustuta organisatsioon",
+    "deleteTypeToConfirm": "Kinnitamiseks sisestage {name}.",
+    "firmSetup": "Büroo seadistamine",
+    "general": "Üldine",
+    "leaveDescription": "Kaotate juurdepääsu selle organisatsiooni toimikutele ja andmetele.",
+    "leaveOrganization": "Lahku organisatsioonist",
+    "modelsAndProviders": "Mudelid ja pakkujad",
+    "noPlan": "Aktiivne pakett puudub",
+    "organizationDeleted": "Organisatsioon on kustutatud.",
+    "organizationId": "Organisatsiooni ID",
+    "organizationLeft": "Olete organisatsioonist lahkunud.",
+    "overviewDescription": "Hallake oma organisatsiooni, inimesi ja tööriistu.",
+    "people": "Inimesed",
+    "planAndUsage": "Pakett ja kasutus",
+    "title": "Organisatsiooni haldus",
+    "toolsDescription": "Lubage või keelake sisseehitatud tööriistad kõigile selles organisatsioonis."
+  },
   "agentClaim": {
     "access": "Saadav juurdepääs",
     "accessReadSearch": "Lugemis- ja otsingujuurdepääs",

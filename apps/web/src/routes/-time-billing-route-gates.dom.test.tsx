@@ -56,8 +56,8 @@ const redirectDestination = (routePath: string) => {
   if (routePath.startsWith("/_protected/workspaces/")) {
     return "/workspaces/$workspaceId";
   }
-  if (routePath.startsWith("/_protected/settings/organization/")) {
-    return "/settings/organization/members";
+  if (routePath.startsWith("/_protected/admin/")) {
+    return "/admin/members";
   }
   return "/workspaces";
 };
