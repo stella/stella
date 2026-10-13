@@ -54,7 +54,6 @@ test("every tracked source, generated output and recipe affects the Windows proo
       root,
       tools,
       profile: "dry-run;nsis",
-      sourceSha: "a".repeat(40),
       workflow: "executed recipe",
     };
     const key = windowsResultKey(options);
@@ -84,9 +83,6 @@ test("every tracked source, generated output and recipe affects the Windows proo
     expect(windowsResultKey({ ...options, profile: "release;nsis" })).not.toBe(
       key,
     );
-    expect(
-      windowsResultKey({ ...options, sourceSha: "b".repeat(40) }),
-    ).not.toBe(key);
     expect(() => windowsResultKey({ ...options, tools: {} })).toThrow(
       "Incomplete Windows build identity",
     );
@@ -102,6 +98,60 @@ const receipt = {
   event: "merge_group",
   conclusion: "success",
 };
+
+test("identical queue and main trees reuse across distinct commits while changed source misses", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "windows-tree-proof-"));
+  const git = (args: string[]) => {
+    const result = Bun.spawnSync(["git", ...args], { cwd: root });
+    expect(result.exitCode).toBe(0);
+    return result.stdout.toString().trim();
+  };
+  const commit = (message: string) =>
+    git([
+      "-c",
+      "user.name=Fixture",
+      "-c",
+      "user.email=fixture@example.invalid",
+      "-c",
+      "commit.gpgsign=false",
+      "commit",
+      "--allow-empty",
+      "-qm",
+      message,
+    ]);
+  try {
+    git(["init", "-q"]);
+    writeFileSync(path.join(root, "input.ts"), "original");
+    git(["add", "input.ts"]);
+    commit("queue");
+    const queueSha = git(["rev-parse", "HEAD"]);
+    const queueTree = git(["rev-parse", "HEAD^{tree}"]);
+    const options = {
+      root,
+      tools,
+      profile: "dry-run;nsis",
+      workflow: "executed recipe",
+    };
+    const queueKey = windowsResultKey(options);
+    const queueReceipt = { ...receipt, inputHash: queueKey };
+    commit("main");
+    expect(git(["rev-parse", "HEAD"])).not.toBe(queueSha);
+    expect(git(["rev-parse", "HEAD^{tree}"])).toBe(queueTree);
+    const mainKey = windowsResultKey(options);
+    expect(mainKey).toBe(queueKey);
+    expect(reusableResultRun(queueReceipt, mainKey, "push")).toBe("123");
+    writeFileSync(path.join(root, "input.ts"), "changed");
+    git(["add", "input.ts"]);
+    commit("changed source");
+    expect(git(["rev-parse", "HEAD^{tree}"])).not.toBe(queueTree);
+    expect(windowsResultKey(options)).not.toBe(queueKey);
+    expect(
+      reusableResultRun(queueReceipt, windowsResultKey(options), "push"),
+    ).toBeUndefined();
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test.skipIf(process.platform === "win32")(
   "the executable boundary runs fully on unreadable keys or receipts and records valid reuse",
@@ -155,12 +205,14 @@ if (args[0] === "run") {
 `,
       );
       chmodSync(gh, 0o755);
+      let queueOutput = "";
       for (const mode of [
         "key-missing",
         "missing",
         "corrupt",
         "api-failure",
         "valid",
+        "valid-main",
       ]) {
         const temporary = path.join(root, mode);
         mkdirSync(temporary);
@@ -184,7 +236,7 @@ if (args[0] === "run") {
               ...process.env,
               PATH: `${bin}${path.delimiter}${process.env["PATH"]}`,
               RUNNER_TEMP: temporary,
-              GITHUB_SHA: "a".repeat(40),
+              GITHUB_SHA: (mode === "valid-main" ? "b" : "a").repeat(40),
               WINDOWS_WORKFLOW_SHA: "b".repeat(40),
               GITHUB_EVENT_NAME: "schedule",
               GITHUB_REPOSITORY: "stella/stella",
@@ -197,7 +249,13 @@ if (args[0] === "run") {
           },
         );
         expect(result.exitCode).toBe(0);
-        if (mode === "valid") {
+        if (mode === "valid" || mode === "valid-main") {
+          const currentOutput = readFileSync(output, "utf-8");
+          if (mode === "valid") {
+            queueOutput = currentOutput;
+          } else {
+            expect(currentOutput).toBe(queueOutput);
+          }
           expect(readFileSync(output, "utf-8")).toContain("reused=true");
           expect(readFileSync(summary, "utf-8")).toMatch(
             /^reused [a-f0-9]{64} from run 123\n$/u,
@@ -331,6 +389,10 @@ test("merge-group proof always builds and never looks up receipts", () => {
       "github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'",
     );
   }
+  expect(
+    steps.find((step) => step.name === "Exercise Windows desktop release build")
+      ?.with?.["release-sha"],
+  ).toBe("0".repeat(40));
   const upload = steps.find(
     (step) => step.name === "Upload successful queue dry-run receipt",
   );

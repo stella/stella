@@ -8075,7 +8075,10 @@ jobs:
         with:
           dry-run: "true"
           target: x86_64-pc-windows-msvc
-          release-sha: ${{ github.sha }}
+          # The embedded SHA labels telemetry only. Dry runs prove compilation
+          # and bundling with fixed metadata so identical queue/main content has
+          # identical build inputs; signed releases embed their release SHA.
+          release-sha: "0000000000000000000000000000000000000000"
           script-path: ${{ github.workspace }}/scripts/desktop-release-step.ts
 
       - name: Upload successful queue dry-run receipt

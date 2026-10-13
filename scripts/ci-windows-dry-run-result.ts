@@ -46,7 +46,6 @@ type WindowsResultKeyOptions = {
   root: string;
   tools: Record<string, string>;
   profile: string;
-  sourceSha: string;
   workflow: string;
 };
 
@@ -54,15 +53,9 @@ export const windowsResultKey = ({
   root,
   tools,
   profile,
-  sourceSha,
   workflow,
 }: WindowsResultKeyOptions) => {
-  if (
-    Object.keys(tools).length === 0 ||
-    !profile ||
-    !workflow ||
-    !/^[a-f0-9]{40}$/u.test(sourceSha)
-  ) {
+  if (Object.keys(tools).length === 0 || !profile || !workflow) {
     throw new WindowsResultError({
       message: "Incomplete Windows build identity",
     });
@@ -70,6 +63,8 @@ export const windowsResultKey = ({
   const resolved = v.parse(resolvedToolsSchema, tools);
   // Include generated files and every tracked recipe/configuration: the desktop
   // build consumes workspace packages as well as its own source tree.
+  // Dry-run CI embeds fixed telemetry metadata, so commit identity is not a
+  // build input. The tracked and executed recipes still cover that stamping.
   return trackedInputHash(root, {
     excluded: new Set(),
     context: {
@@ -82,7 +77,6 @@ export const windowsResultKey = ({
         }),
       ),
       profile,
-      sourceSha,
       workflowHash: generatedFileHash(workflow),
     },
   });
@@ -181,7 +175,6 @@ if (import.meta.main) {
   // This optional CI boundary fails closed: unavailable tools, inventory, API,
   // download or manifest always leave the expensive build enabled.
   try {
-    const sourceSha = process.env["GITHUB_SHA"] ?? "";
     const tools = v.parse(
       resolvedToolsSchema,
       JSON.parse(
@@ -197,7 +190,6 @@ if (import.meta.main) {
     const key = windowsResultKey({
       root,
       tools,
-      sourceSha,
       profile: process.env["WINDOWS_BUILD_PROFILE"] ?? "",
       // Reusable CI can execute a newer recipe than the pinned source checkout.
       workflow: (() => {
