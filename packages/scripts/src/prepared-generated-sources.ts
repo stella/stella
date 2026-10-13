@@ -1,19 +1,16 @@
 import { panic } from "better-result";
-import {
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { lstatSync, mkdirSync, readFileSync, readlinkSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { CI_GENERATED_FILES } from "./generated-files";
+import {
+  generatedInputGit as git,
+  generatedInputTreeHash,
+} from "./generated-input-identity";
 
-const generated = new Set<string>(CI_GENERATED_FILES);
 const hashSchema = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));
 const preparedManifestSchema = v.strictObject({
   sourceSha: v.pipe(v.string(), v.regex(/^[a-f0-9]{40}$/u)),
@@ -25,16 +22,6 @@ const preparedManifestSchema = v.strictObject({
 
 export const generatedFileHash = (bytes: Uint8Array | string) =>
   hashSha256Hex(bytes);
-
-const git = (root: string, args: string[]) => {
-  const result = Bun.spawnSync(["git", ...args], { cwd: root });
-  if (result.exitCode !== 0) {
-    panic(
-      `Generated source input inventory failed: ${result.stderr.toString()}`,
-    );
-  }
-  return result.stdout.toString();
-};
 
 export const generatedInputIdentity = (root: string) => {
   const compiler = v.parse(
@@ -48,9 +35,10 @@ export const generatedInputIdentity = (root: string) => {
   );
   return {
     sourceSha: git(root, ["rev-parse", "HEAD"]).trim(),
-    inputHash: trackedInputHash(root, {
-      excluded: generated,
-      context: { bun: Bun.version, compiler: compiler.version },
+    inputHash: generatedInputTreeHash({
+      root,
+      toolchain: { bun: Bun.version, compiler: compiler.version },
+      generatedOutputs: "exclude",
     }),
     bunVersion: Bun.version,
     compilerVersion: compiler.version,
