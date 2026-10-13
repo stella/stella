@@ -71,9 +71,8 @@ const endpointInspectionContext = async (
   const context = await auth.$context;
   const adapterFailure = () =>
     panic("Endpoint census must not execute adapter operations");
-  // Registration inspection must not reach a database. Replacing the
-  // configured adapter also avoids widening its option-specific generic to
-  // Better Auth's default, invariant adapter type.
+  // Registration inspection must not execute adapter or password operations.
+  // Their option-specific context parameters cannot widen to the SDK's default.
   return {
     ...context,
     adapter: {
@@ -94,6 +93,11 @@ const endpointInspectionContext = async (
       panic("Endpoint census must not execute plugin middleware"),
     hasPlugin: () =>
       panic("Endpoint census must not execute plugin middleware"),
+    password: {
+      ...context.password,
+      checkPassword: async () =>
+        panic("Endpoint census must not execute password verification"),
+    },
   };
 };
 

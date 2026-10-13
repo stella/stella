@@ -86,6 +86,8 @@ export const completeHandoffSession = async ({
             lastSeenAt: now(),
             ...(absoluteDeadline ? { expiresAt: absoluteDeadline } : {}),
           },
+          // Better Auth otherwise replaces expiresAt with its default lifetime.
+          true,
         );
         // Replacing a handoff session transfers ownership and lifetime to this consent.
         if (existing && existing.session["originConsentId"] !== null) {
