@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
 import { appendFileSync, readFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { OxlintConfig } from "oxlint";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 
@@ -43,6 +44,8 @@ const reportedLine = (diagnostic: unknown, code: string): number | null => {
 type LintSingleRuleOptions = {
   /** Test-only wrapper for a plugin factory; production config is unchanged. */
   pluginPath?: string;
+  /** Repository overrides projected onto the rule being exercised. */
+  overrides?: OxlintConfig["overrides"];
   /** Use an oxlint built-in plugin instead of a local JavaScript plugin. */
   builtin?: boolean;
   /** The plugin that carries the rule, when it is not named after it. */
@@ -71,6 +74,7 @@ export const runSingleRule = async (
     builtin = false,
     plugin = ruleName,
     pluginPath,
+    overrides,
     settings,
     fix = false,
     ruleOptions,
@@ -79,7 +83,10 @@ export const runSingleRule = async (
     cwd = "repository",
   }: LintSingleRuleOptions = {},
 ) => {
-  const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
+  // Override globs must use the real cwd when the temporary root is a symlink.
+  const directory = await realpath(
+    await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`)),
+  );
   const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
     const configPath = path.join(directory, "oxlint.json");
@@ -88,6 +95,7 @@ export const runSingleRule = async (
       `${JSON.stringify({
         categories: { correctness: "off" },
         settings,
+        overrides,
         ...(builtin
           ? { plugins: [plugin] }
           : {

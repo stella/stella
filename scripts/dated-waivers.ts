@@ -254,6 +254,42 @@ export const waiverWarnings = (
       `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expires at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
   );
 
+// An elapsed release-age exclusion is the owner's cleanup (dated-waiver-healing
+// opens it), not a defect of whichever change is under review, so the
+// per-change gate annotates it instead of failing every pull request and merge
+// group. Every other elapsed waiver, including a dated test quarantine that
+// still skips its test, keeps failing the gate.
+const isExpired = (entry: DatedWaiver, now: Date): boolean =>
+  Date.parse(expiryInstant(entry.expiresAt)) <= now.getTime();
+
+export const expiredWaiverAnnotations = (
+  entries: readonly DatedWaiver[],
+  now: Date,
+): string[] =>
+  entries
+    .filter(
+      (entry) =>
+        entry.kind === "release-age-exclusion" && isExpired(entry, now),
+    )
+    .map(
+      (entry) =>
+        `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expired at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
+    );
+
+export const expiredWaiverFailures = (
+  entries: readonly DatedWaiver[],
+  now: Date,
+): string[] =>
+  entries
+    .filter(
+      (entry) =>
+        entry.kind !== "release-age-exclusion" && isExpired(entry, now),
+    )
+    .map(
+      (entry) =>
+        `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
+    );
+
 // A dated test quarantine is an adjacent comment on a literal test.skip/it.skip
 // call. The inventory guard blocks at expiry even while the source still skips.
 export const readTestQuarantines = (
@@ -488,18 +524,13 @@ if (import.meta.main) {
   }
   const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath));
   if (check) {
-    const expired = entries.filter(
-      (entry) => Date.parse(expiryInstant(entry.expiresAt)) <= Date.now(),
-    );
-    if (expired.length > 0) {
-      console.error(
-        expired
-          .map(
-            (entry) =>
-              `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
-          )
-          .join("\n"),
-      );
+    const now = new Date();
+    for (const annotation of expiredWaiverAnnotations(entries, now)) {
+      console.log(annotation);
+    }
+    const failures = expiredWaiverFailures(entries, now);
+    if (failures.length > 0) {
+      console.error(failures.join("\n"));
       process.exitCode = 1;
     }
   } else if (process.argv.includes("--due")) {

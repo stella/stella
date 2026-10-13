@@ -5,9 +5,9 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
-  type CorpusIndexGroupNotReadyError,
   readServingCorpusIndexTargetTx,
   type ServingCorpusIndexTarget,
+  type ServingCorpusIndexTargetError,
 } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import {
@@ -183,14 +183,15 @@ const parseTermsBuckets = (
 type CorpusIndexBrowseFacetsDependencies = {
   /**
    * The serving generation and the indexes a read of it reaches, refusing a
-   * scoped read of an unready group (`readServingCorpusIndexTargetTx`).
+   * family with no serving generation or a scoped read of an unready group
+   * (`readServingCorpusIndexTargetTx`).
    */
   readServingTarget: (
     jurisdiction: string | undefined,
   ) => Promise<
     Result<
       Pick<ServingCorpusIndexTarget, "serving" | "route">,
-      CorpusIndexGroupNotReadyError
+      ServingCorpusIndexTargetError
     >
   >;
 };

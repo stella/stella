@@ -8,6 +8,8 @@ import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const WEB_ROOT_PATH = fileURLToPath(new URL("../", import.meta.url));
 const DIST_PATH = path.join(WEB_ROOT_PATH, "dist");
 const CLIENT_DIST_PATH = path.join(DIST_PATH, "client");
@@ -137,7 +139,7 @@ export const assertChunksInjected = async (
     const file = mapFile.slice(0, -".map".length);
     const source = await readFile(file, "utf-8");
     if (!source.includes(CHUNK_ID_MARKER)) {
-      missing.push(path.relative(clientRoot, file));
+      missing.push(repoRelativePath(clientRoot, file));
     }
   }
   if (count === 0) {

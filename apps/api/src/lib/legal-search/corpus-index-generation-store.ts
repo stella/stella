@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -102,11 +102,27 @@ const requireServingCorpusIndexGeneration = (
   };
 };
 
-/** Read the one database-authoritative generation and closed cluster route. */
+/**
+ * The family has no serving generation: nothing has been promoted yet, so
+ * there is no index to search. A state of the deployment, not a defect; every
+ * search answers it as the search index being unavailable.
+ */
+export class CorpusServingGenerationAbsentError extends TaggedError(
+  "CorpusServingGenerationAbsentError",
+)<{ message: string; family: CorpusFamily }> {}
+
+/**
+ * Read the one database-authoritative generation and closed cluster route.
+ * No serving row is an expected state (`CorpusServingGenerationAbsentError`);
+ * more than one, or one naming an undeclared generation, breaks the
+ * activation invariant and panics.
+ */
 export const readServingCorpusIndexGenerationTx = async (
   tx: CorpusIndexGenerationReadTransaction,
   family: CorpusFamily,
-): Promise<ServingCorpusIndexGeneration> => {
+): Promise<
+  Result<ServingCorpusIndexGeneration, CorpusServingGenerationAbsentError>
+> => {
   const rows = await tx
     .select({
       cluster: corpusIndexGenerations.cluster,
@@ -123,13 +139,19 @@ export const readServingCorpusIndexGenerationTx = async (
       ),
     )
     .limit(2);
-  if (rows.length !== 1) {
+  const [row, ...others] = rows;
+  if (row === undefined) {
+    return Result.err(
+      new CorpusServingGenerationAbsentError({
+        message: `No serving corpus generation: ${family}`,
+        family,
+      }),
+    );
+  }
+  if (others.length > 0) {
     return panic(`Expected one serving corpus generation: ${family}`);
   }
-  return requireServingCorpusIndexGeneration(
-    rows.at(0) ?? panic(`Serving corpus generation disappeared: ${family}`),
-    family,
-  );
+  return Result.ok(requireServingCorpusIndexGeneration(row, family));
 };
 
 const requireActiveGenerationTarget = (

@@ -150,6 +150,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/lib/drag-and-drop/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/law-search-history/**/*.{ts,tsx}",
+  "apps/web/src/lib/legal/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
   "apps/web/src/lib/statutes/**/*.ts",
   "apps/web/src/lib/web-search/**/*.{ts,tsx}",
@@ -182,6 +183,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/legal-atlas/src/**/*.ts",
   "packages/mojibake/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
+  "packages/portable-path/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
   "packages/scan-engine/src/**/*.ts",
@@ -202,6 +204,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
+  // TanStack Start's SSR callback consumes Response/rejection, not Result.
+  // This server entry translates renderer errors into framework failures.
+  "apps/web/src/server.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
@@ -501,15 +506,25 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "packages/user-agent/src" },
 ] as const satisfies readonly ResultBoundaryOptOut[];
 
-const resultConventionExcludeGlobs = RESULT_CONVENTION_EXCLUDE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
-const resultConventionSourceGlobs = RESULT_CONVENTION_SOURCE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
+let resultConventionExcludeGlobs: Bun.Glob[] | undefined;
+let resultConventionSourceGlobs: Bun.Glob[] | undefined;
+
+const getResultConventionExcludeGlobs = () => {
+  resultConventionExcludeGlobs ??= RESULT_CONVENTION_EXCLUDE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionExcludeGlobs;
+};
+
+const getResultConventionSourceGlobs = () => {
+  resultConventionSourceGlobs ??= RESULT_CONVENTION_SOURCE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionSourceGlobs;
+};
 
 export const isResultConventionSourceFile = (file: string): boolean =>
-  resultConventionSourceGlobs.some((glob) => glob.match(file));
+  getResultConventionSourceGlobs().some((glob) => glob.match(file));
 
 export const isResultConventionExcludedFile = (file: string): boolean =>
-  resultConventionExcludeGlobs.some((glob) => glob.match(file));
+  getResultConventionExcludeGlobs().some((glob) => glob.match(file));
