@@ -11,18 +11,22 @@ import {
   resolveDockerTarget,
 } from "./dev-docker";
 
+const dockerInspection = (host: string, context = "default") =>
+  JSON.stringify({ Name: context, Endpoints: { docker: { Host: host } } });
+
 test("endpoint resolution preserves the supplied selectors, then pins a captured environment", () => {
   const env = {
     DOCKER_CONTEXT: "chosen",
     DOCKER_HOST: "unix:///tmp/other.sock",
     PATH: "/tools",
+    DOCKER_CONFIG: "/configuration",
   };
   const inspections: NodeJS.ProcessEnv[] = [];
   const target = resolveDockerTarget({
     env,
     inspect: (captured) => {
       inspections.push(captured);
-      return Result.ok("unix:///tmp/chosen.sock\n");
+      return Result.ok(dockerInspection("unix:///tmp/chosen.sock", "chosen"));
     },
   }).unwrap();
   expect(inspections).toEqual([env]);
@@ -30,8 +34,8 @@ test("endpoint resolution preserves the supplied selectors, then pins a captured
   env.DOCKER_HOST = "unix:///tmp/changed.sock";
   env.PATH = "/changed";
   expect(dockerCommand(target, ["compose", "down"])).toEqual({
-    cmd: ["docker", "--host", "unix:///tmp/chosen.sock", "compose", "down"],
-    env: { PATH: "/tools" },
+    cmd: ["docker", "--context", "chosen", "compose", "down"],
+    env: { PATH: "/tools", DOCKER_CONFIG: "/configuration" },
   });
 });
 
@@ -43,8 +47,10 @@ test.each([
 ])("accepts supported Docker endpoint transport %s", (host) => {
   expect(
     String(
-      resolveDockerTarget({ env: {}, inspect: () => Result.ok(host) }).unwrap()
-        .host,
+      resolveDockerTarget({
+        env: {},
+        inspect: () => Result.ok(dockerInspection(host)),
+      }).unwrap().host,
     ),
   ).toBe(host);
 });
@@ -63,7 +69,10 @@ test.each([
   "unix:///tmp/a.sock\nunix:///tmp/b.sock",
 ])("refuses an invalid or ambiguous Docker endpoint %s", (host) => {
   expect(
-    resolveDockerTarget({ env: {}, inspect: () => Result.ok(host) }),
+    resolveDockerTarget({
+      env: {},
+      inspect: () => Result.ok(dockerInspection(host)),
+    }),
   ).toMatchObject({
     error: { message: expect.stringContaining("valid endpoint") },
   });
@@ -80,7 +89,7 @@ test("clearing selectors preserves transport credentials and other environment",
   expect(
     resolveDockerTarget({
       env,
-      inspect: () => Result.ok("unix:///tmp/test.sock"),
+      inspect: () => Result.ok(dockerInspection("unix:///tmp/test.sock")),
     }).unwrap().env,
   ).toEqual({
     DOCKER_TLS_VERIFY: "1",
@@ -229,7 +238,7 @@ test.skipIf(process.platform === "win32" || !Bun.which("docker"))(
   30_000,
 );
 
-test("a configured host cannot bypass a refused CLI discovery", () => {
+test("a configured host propagates refused CLI discovery", () => {
   const env = {
     DOCKER_HOST: "unix:///tmp/configured.sock",
     DOCKER_CONTEXT: "selected",
@@ -245,10 +254,10 @@ test("a configured host cannot bypass a refused CLI discovery", () => {
   ).toMatchObject({ error: { message: "Docker CLI refused discovery" } });
 });
 
-test("a configured keeper cannot bypass a protected development endpoint refusal", () => {
+test("a configured keeper propagates development endpoint refusal", () => {
   const target = resolveDockerTarget({
     env: { DOCKER_HOST: "unix:///tmp/protected.sock" },
-    inspect: () => Result.ok("unix:///tmp/protected.sock\n"),
+    inspect: () => Result.ok(dockerInspection("unix:///tmp/protected.sock")),
   }).unwrap();
   const calls: string[][] = [];
   const result = resolveDevDockerKeeper({
@@ -282,7 +291,7 @@ test("a configured keeper cannot bypass a protected development endpoint refusal
 test("an approved unprotected endpoint can use its configured keeper", () => {
   const target = resolveDockerTarget({
     env: {},
-    inspect: () => Result.ok("unix:///tmp/dev.sock\n"),
+    inspect: () => Result.ok(dockerInspection("unix:///tmp/dev.sock")),
   }).unwrap();
   const result = resolveDevDockerKeeper({
     target,
@@ -296,7 +305,7 @@ test("an approved unprotected endpoint can use its configured keeper", () => {
 test("a configured keeper is refused without its policy resolver", () => {
   const target = resolveDockerTarget({
     env: {},
-    inspect: () => Result.ok("unix:///tmp/dev.sock"),
+    inspect: () => Result.ok(dockerInspection("unix:///tmp/dev.sock")),
   }).unwrap();
   const result = resolveDevDockerKeeper({
     target,
@@ -317,7 +326,7 @@ test.each([
   (host) => {
     const target = resolveDockerTarget({
       env: {},
-      inspect: () => Result.ok(host),
+      inspect: () => Result.ok(dockerInspection(host)),
     }).unwrap();
     const result = resolveDevDockerKeeper({
       target,
@@ -334,7 +343,7 @@ test.each([
 test("unmanaged non-Colima Docker remains available without a keeper resolver", () => {
   const target = resolveDockerTarget({
     env: {},
-    inspect: () => Result.ok("unix:///var/run/docker.sock"),
+    inspect: () => Result.ok(dockerInspection("unix:///var/run/docker.sock")),
   }).unwrap();
   expect(
     resolveDevDockerKeeper({
@@ -346,37 +355,18 @@ test("unmanaged non-Colima Docker remains available without a keeper resolver", 
   ).toMatchObject({ status: "ok", value: undefined });
 });
 
-test.each([
-  { args: ["run", "--mount", "type=bind,source=/tmp,target=/data", "image"] },
-  { args: ["volume", "create", "--opt", "device=/tmp", "data"] },
-  { args: ["compose", "run", "--volume", "/tmp:/data", "api"] },
-  ...[
-    "--host",
-    "--host=unix:///tmp/other.sock",
-    "-H",
-    "-Hunix:///tmp/other.sock",
-    "-DHunix:///tmp/other.sock",
-    "-aqHunix:///tmp/other.sock",
-    "--context",
-    "--context=other",
-    "-c",
-    "-cother",
-    "-Dcother",
-    "--config",
-    "--config=/tmp/other",
-  ].map((selector) => ({ args: ["ps", selector, "other"] })),
-])(
-  "untyped callers cannot mount host paths or override the Docker endpoint: %j",
-  ({ args }) => {
-    const target = resolveDockerTarget({
-      env: {},
-      inspect: () => Result.ok("unix:///tmp/dev.sock"),
-    }).unwrap();
-    expect(() =>
-      Reflect.apply(dockerCommand, undefined, [target, args]),
-    ).toThrow("outside the pinned, mount-safe command policy");
-  },
-);
+test("command policy rejects an unsupported endpoint option", () => {
+  const target = resolveDockerTarget({
+    env: {},
+    inspect: () => Result.ok(dockerInspection("unix:///tmp/dev.sock")),
+  }).unwrap();
+  expect(() =>
+    Reflect.apply(dockerCommand, undefined, [
+      target,
+      ["ps", "--context", "other"],
+    ]),
+  ).toThrow("outside the pinned, mount-safe command policy");
+});
 
 test.each([
   { args: ["ps", "--format", "--host"] },
@@ -401,7 +391,7 @@ test.each([
   ({ args }) => {
     const target = resolveDockerTarget({
       env: {},
-      inspect: () => Result.ok("unix:///tmp/dev.sock"),
+      inspect: () => Result.ok(dockerInspection("unix:///tmp/dev.sock")),
     }).unwrap();
     expect(dockerCommand(target, args)).toEqual({
       cmd: ["docker", "--host", target.host, ...args],

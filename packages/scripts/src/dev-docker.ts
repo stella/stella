@@ -60,7 +60,7 @@ const DOCKER_ENDPOINT_COMMAND = [
   "context",
   "inspect",
   "--format",
-  "{{.Endpoints.docker.Host}}",
+  "{{json .}}",
 ];
 
 const inspectDockerEndpoint = (env: NodeJS.ProcessEnv) =>
@@ -94,16 +94,62 @@ type ResolveDockerTargetOptions = {
   inspect?: typeof inspectDockerEndpoint;
 };
 
+const dockerInspectionSchema = v.object({
+  Name: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.check((name) => name === name.trim() && !/[\r\n\0]/u.test(name)),
+  ),
+  Endpoints: v.object({ docker: v.object({ Host: v.string() }) }),
+});
+
+const parseDockerInspection = (output: string) =>
+  Result.try({
+    try: (): unknown => JSON.parse(output),
+    catch: (cause) =>
+      new DockerEndpointError({
+        message: "Docker endpoint discovery returned invalid metadata.",
+        cause,
+      }),
+  }).andThen((metadata) => {
+    const parsed = v.safeParse(dockerInspectionSchema, metadata);
+    if (!parsed.success) {
+      return Result.err(
+        new DockerEndpointError({
+          message: "Docker endpoint discovery returned invalid metadata.",
+        }),
+      );
+    }
+    return validateDockerHost(parsed.output.Endpoints.docker.Host).map(
+      (host) => ({ host, context: parsed.output.Name }),
+    );
+  });
+
 export const resolveDockerTarget = ({
   env,
   inspect = inspectDockerEndpoint,
 }: ResolveDockerTargetOptions) => {
   const captured = { ...env };
   return inspect(captured)
-    .andThen((output) => validateDockerHost(output.replace(/\n$/u, "")))
-    .map((host) =>
-      Object.freeze({ host, env: Object.freeze(dockerEnvironment(captured)) }),
-    );
+    .andThen(parseDockerInspection)
+    .map(({ host, context }) => {
+      const executionEnv = Object.freeze(dockerEnvironment(captured));
+      // The CLI's synthetic default context carries host/environment transport settings.
+      // Named contexts must keep their own TLS material and SSH configuration.
+      return context === "default"
+        ? Object.freeze({
+            type: "host" as const,
+            context: "default" as const,
+            host,
+            env: executionEnv,
+          })
+        : Object.freeze({
+            type: "context" as const,
+            context,
+            host,
+            env: executionEnv,
+          });
+    });
 };
 
 export type DockerTarget = InferOk<ReturnType<typeof resolveDockerTarget>>;
@@ -199,7 +245,10 @@ export const dockerCommand = (
 ) => {
   assertDockerCommand(args);
   return {
-    cmd: ["docker", "--host", target.host, ...args],
+    cmd:
+      target.type === "context"
+        ? ["docker", "--context", target.context, ...args]
+        : ["docker", "--host", target.host, ...args],
     env: target.env,
   };
 };

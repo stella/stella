@@ -4,6 +4,9 @@ import { describe, expect, test } from "bun:test";
 import { resolveDockerTarget } from "./dev-docker";
 import { dockerKeeperCommand, ensureDockerKeeper } from "./dev-docker-keeper";
 
+const dockerInspection = (host: string, context = "default") =>
+  JSON.stringify({ Name: context, Endpoints: { docker: { Host: host } } });
+
 describe("protected Docker runtime recovery", () => {
   test("a missing runtime is recovered by its keeper without starting Colima", async () => {
     const calls: string[][] = [];
@@ -11,7 +14,10 @@ describe("protected Docker runtime recovery", () => {
     const recovered = await ensureDockerKeeper({
       dockerTarget: resolveDockerTarget({
         env: {},
-        inspect: () => Result.ok("unix:///tmp/test-docker.sock"),
+        inspect: () =>
+          Result.ok(
+            dockerInspection("unix:///tmp/test-docker.sock", "selected"),
+          ),
       }).unwrap(),
       label: "dev.test.docker-keeper",
       run: (command) => {
@@ -27,9 +33,9 @@ describe("protected Docker runtime recovery", () => {
     });
     expect(recovered.isOk()).toBe(true);
     expect(calls).toEqual([
-      ["docker", "--host", "unix:///tmp/test-docker.sock", "info"],
+      ["docker", "--context", "selected", "info"],
       ["launchctl", "kickstart", "system/dev.test.docker-keeper"],
-      ["docker", "--host", "unix:///tmp/test-docker.sock", "info"],
+      ["docker", "--context", "selected", "info"],
     ]);
     expect(calls.some((command) => command.includes("colima"))).toBe(false);
   });
@@ -39,7 +45,8 @@ describe("protected Docker runtime recovery", () => {
     const recovered = await ensureDockerKeeper({
       dockerTarget: resolveDockerTarget({
         env: {},
-        inspect: () => Result.ok("unix:///tmp/test-docker.sock"),
+        inspect: () =>
+          Result.ok(dockerInspection("unix:///tmp/test-docker.sock")),
       }).unwrap(),
       label: "dev.test.docker-keeper",
       run: (command) => {
@@ -61,7 +68,8 @@ describe("protected Docker runtime recovery", () => {
       await ensureDockerKeeper({
         dockerTarget: resolveDockerTarget({
           env: {},
-          inspect: () => Result.ok("unix:///tmp/test-docker.sock"),
+          inspect: () =>
+            Result.ok(dockerInspection("unix:///tmp/test-docker.sock")),
         }).unwrap(),
         label: "dev.test.docker-keeper",
         run: (command) => command.at(0) === "launchctl",
@@ -117,7 +125,8 @@ test("invalid keeper labels are refused before executing a command", async () =>
     await ensureDockerKeeper({
       dockerTarget: resolveDockerTarget({
         env: {},
-        inspect: () => Result.ok("unix:///tmp/test-docker.sock"),
+        inspect: () =>
+          Result.ok(dockerInspection("unix:///tmp/test-docker.sock")),
       }).unwrap(),
       label: "../other-keeper",
       run: () => {
@@ -138,7 +147,8 @@ test("a refused keeper kickstart surfaces the failure", async () => {
     await ensureDockerKeeper({
       dockerTarget: resolveDockerTarget({
         env: {},
-        inspect: () => Result.ok("unix:///tmp/test-docker.sock"),
+        inspect: () =>
+          Result.ok(dockerInspection("unix:///tmp/test-docker.sock")),
       }).unwrap(),
       label: "dev.test.docker-keeper",
       run: () => false,

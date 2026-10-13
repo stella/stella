@@ -6,9 +6,10 @@ container=${1:?Postgres container ID required}
 owner=${2:?Database owner login required}
 database=${3:-stella}
 docker_host=${4:-}
+docker_context=${5:-default}
 if [[ -z "$docker_host" ]]; then
   # Capture bytes before Bash can discard NUL or trailing newlines.
-  docker_bytes=$(command docker context inspect --format '{{.Endpoints.docker.Host}}' | LC_ALL=C od -An -v -t x1)
+  docker_bytes=$(command docker context inspect --format '{{.Name}}{{"\t"}}{{.Endpoints.docker.Host}}' | LC_ALL=C od -An -v -t x1)
   encoded_endpoint=""
   for byte in $docker_bytes; do
     case "$byte" in
@@ -17,8 +18,15 @@ if [[ -z "$docker_host" ]]; then
       *) echo 'Docker endpoint byte capture failed.' >&2; exit 1 ;;
     esac
   done
-  printf -v docker_host '%b' "$encoded_endpoint"
-  docker_host=${docker_host%$'\n'}
+  printf -v docker_record '%b' "$encoded_endpoint"
+  docker_record=${docker_record%$'\n'}
+  [[ "$docker_record" == *$'\t'* ]] || { echo 'Docker endpoint metadata is missing.' >&2; exit 1; }
+  docker_context=${docker_record%%$'\t'*}
+  docker_host=${docker_record#*$'\t'}
+fi
+if [[ -z "$docker_context" || "$docker_context" =~ [[:space:]] ]]; then
+  echo 'Docker endpoint context is invalid.' >&2
+  exit 1
 fi
 if [[ "$docker_host" =~ ^[[:space:]]|[[:space:]]$ || "$docker_host" == *$'\r'* || "$docker_host" == *$'\n'* ]]; then
   echo 'Docker context returned an ambiguous endpoint.' >&2
@@ -35,7 +43,13 @@ elif [[ "$docker_host" == unix:///* && "$docker_host" == */.colima/* ]]; then
   exit 1
 fi
 unset DOCKER_HOST DOCKER_CONTEXT
-docker() { command docker --host "$docker_host" "$@"; }
+docker() {
+  if [[ "$docker_context" != default ]]; then
+    command docker --context "$docker_context" "$@"
+  else
+    command docker --host "$docker_host" "$@"
+  fi
+}
 
 # Derive the complete expectation from the fragment; there is no second list.
 # Only the committed setting syntax (name = scalar) is accepted here.

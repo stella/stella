@@ -143,9 +143,14 @@ describe("Postgres execution and owner parity", () => {
     );
   });
 
-  test.each(["t|t", "t|f", "f|t"])(
-    "demotes a reused owner (%s) once and preserves the database on replay",
-    async (posture) => {
+  test.each([
+    { posture: "t|t", context: "default" },
+    { posture: "t|f", context: "default" },
+    { posture: "f|t", context: "default" },
+    { posture: "t|t", context: "fixture-context" },
+  ])(
+    "demotes a reused owner once and preserves the database on replay: %j",
+    async ({ posture, context }) => {
       const fixture = await mkdtemp(path.join(tmpdir(), "postgres-parity-"));
       try {
         const docker = path.join(fixture, "docker");
@@ -158,7 +163,7 @@ describe("Postgres execution and owner parity", () => {
           docker,
           `#!/usr/bin/env bash
 set -euo pipefail
-[[ "$1" == --host && "$2" == unix:///tmp/test-docker.sock ]] || exit 1
+[[ "$1" == ${context === "default" ? "--host" : "--context"} && "$2" == ${context === "default" ? "unix:///tmp/test-docker.sock" : context} ]] || exit 1
 [[ -z "\${DOCKER_HOST+x}" && -z "\${DOCKER_CONTEXT+x}" ]] || exit 1
 if [[ "$*" == *"SELECT rolsuper, rolbypassrls"* ]]; then
   cat "$PARITY_FIXTURE/posture"
@@ -184,6 +189,7 @@ fi
               "postgres",
               "stella",
               "unix:///tmp/test-docker.sock",
+              context,
             ],
             {
               env: {
@@ -263,6 +269,7 @@ test.each([
         `#!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1" == context && "$2" == inspect ]]; then
+  printf 'default\\t'
   cat "$PARITY_FIXTURE/endpoint"
   exit
 fi

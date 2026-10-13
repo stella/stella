@@ -2801,6 +2801,7 @@ const main = async () => {
           "postgres",
           "stella",
           dockerTarget.host,
+          dockerTarget.context,
         ],
         cwd: gitContext.currentRoot,
         env: dockerTarget.env,
