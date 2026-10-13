@@ -3,6 +3,7 @@ import { SQL, type ReservedSQL } from "bun";
 import { randomBytes } from "node:crypto";
 import {
   existsSync,
+  linkSync,
   lstatSync,
   mkdtempSync,
   mkdirSync,
@@ -102,7 +103,7 @@ export const snapshotSharedTestMigrations = (
   }
 };
 
-const secret = (directory: string, name: string) => {
+export const sharedTestCredential = (directory: string, name: string) => {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   if (!statSync(directory).mode.toString(8).endsWith("00")) {
     throw new SharedTestPostgresError({
@@ -110,16 +111,27 @@ const secret = (directory: string, name: string) => {
     });
   }
   const file = path.join(directory, name);
-  const created = Result.try(() =>
-    writeFileSync(file, randomBytes(32).toString("hex"), {
-      flag: "wx",
-      mode: 0o600,
-    }),
-  );
-  if (created.isErr() && !existsSync(file)) {
-    throw new SharedTestPostgresError({
-      message: "Cannot create shared Postgres credential.",
-    });
+  const temporary = mkdtempSync(path.join(directory, ".credential-"));
+  try {
+    const candidate = path.join(temporary, "value");
+    writeFileSync(candidate, randomBytes(32).toString("hex"), { mode: 0o600 });
+    // A hard link publishes complete contents without replacing another caller's winner.
+    const published = Result.try(() => linkSync(candidate, file));
+    if (
+      published.isErr() &&
+      !(
+        published.error.cause instanceof Error &&
+        "code" in published.error.cause &&
+        published.error.cause.code === "EEXIST"
+      )
+    ) {
+      throw new SharedTestPostgresError({
+        message: "Cannot create shared Postgres credential.",
+        cause: published.error,
+      });
+    }
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
   }
   if (
     !lstatSync(file).isFile() ||
@@ -476,7 +488,7 @@ const run = async () => {
     homedir(),
     ".local/state/stella/shared-test-postgres",
   );
-  const password = secret(state, "owner.password");
+  const password = sharedTestCredential(state, "owner.password");
   const repo = path.resolve(import.meta.dir, "../../..");
   using target = resolveDockerTarget({ env: process.env }).unwrap();
   resolveInstalledDevDockerKeeper(target).unwrap();

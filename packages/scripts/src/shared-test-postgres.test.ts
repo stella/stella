@@ -3,13 +3,17 @@ import {
   mkdtempSync,
   mkdirSync,
   existsSync,
+  readFileSync,
   readdirSync,
   renameSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   sharedTestDatabase,
@@ -32,6 +36,60 @@ test("worktree identities are bounded SQL identifiers and distinguish paths", ()
     expect(database.length).toBeLessThan(63);
   }
   expect(sharedTestDatabase("/work/a")).toBe(sharedTestDatabase("/work/a"));
+});
+
+test("concurrent first-use credential preparation publishes one complete private credential", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-pg-credential-"));
+  const children: ReturnType<typeof Bun.spawn>[] = [];
+  try {
+    const directory = path.join(root, "fresh-state");
+    const script = path.join(root, "prepare.ts");
+    writeFileSync(
+      script,
+      `
+      import { sharedTestCredential } from ${JSON.stringify(path.join(import.meta.dir, "shared-test-postgres.ts"))};
+      import { createHash } from "node:crypto";
+      await Bun.stdin.text();
+      const value = sharedTestCredential(${JSON.stringify(directory)}, "owner.password");
+      console.log(createHash("sha256").update(value).digest("hex"));
+    `,
+    );
+    const processes = Array.from({ length: 4 }, () => {
+      const child = Bun.spawn([process.execPath, script], {
+        stdin: "pipe",
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      children.push(child);
+      return child;
+    });
+    for (const child of processes) {
+      child.stdin.end();
+    }
+    const results = await Promise.all(
+      processes.map(async (child) => ({
+        code: await child.exited,
+        output: await new Response(child.stdout).text(),
+        error: await new Response(child.stderr).text(),
+      })),
+    );
+    const credential = path.join(directory, "owner.password");
+    const value = readFileSync(credential, "utf-8");
+    expect(value).toMatch(/^[a-f0-9]{64}$/u);
+    for (const result of results) {
+      expect(result.error).toBe("");
+      expect(result.code).toBe(0);
+      expect(result.output.trim()).toBe(sha256Hex(value));
+    }
+    expect(readdirSync(directory)).toEqual(["owner.password"]);
+    expect(statSync(credential).mode.toString(8).slice(-3)).toBe("600");
+  } finally {
+    for (const child of children) {
+      child.kill();
+    }
+    await Promise.all(children.map(async (child) => child.exited));
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("a rejected migration snapshot can be retried after an added migration is reverted", () => {
