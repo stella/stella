@@ -149,6 +149,7 @@
     "@shadcn/lint": "catalog:",
     "@stll/collation": "workspace:*",
     "@stll/oxlint-config": "1.0.2",
+    "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/sha256": "workspace:^",
     "@stll/typescript-config": "workspace:^0.0.0",
