@@ -89,6 +89,13 @@ testState.beforeAll(async () => {
     name: "Flow delivery matter",
     reference: "FLOW-DELIVERY",
   });
+  await db.insert(flowRuns).values({
+    id: flowEvent.data.runId,
+    workspaceId,
+    definitionSnapshot: { name: "Flow delivery fixture", steps: [] },
+    triggerSource: { type: "manual", userId: enrolledUserId },
+    status: "running",
+  });
   await db.insert(workspaceMembers).values(
     [enrolledUserId, ungrantedUserId].map((userId) => ({
       id: createSafeId<"workspaceMember">(),

@@ -32,6 +32,7 @@ import type { StartAutomatedFlowRunArgs } from "@/api/lib/flows/start-automated-
 import { recordUploadTriggeredFlowIntents } from "@/api/lib/flows/upload-trigger-recording";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
@@ -108,13 +109,18 @@ const createUpload = async () => {
   await database
     .insert(entities)
     .values({ id: entityId, workspaceId, name: "fixture.pdf" });
-  await database.insert(flowUploadTriggerIntents).values({
-    definitionId,
-    entityId,
-    organizationId,
+  await withOrgScopedFixture({
+    database,
     workspaceId,
-    fileExtension: "pdf",
-    retryAt: NOW,
+    fn: async (fixtureTx) =>
+      await fixtureTx.insert(flowUploadTriggerIntents).values({
+        definitionId,
+        entityId,
+        organizationId,
+        workspaceId,
+        fileExtension: "pdf",
+        retryAt: NOW,
+      }),
   });
   return { entityId, definitionId };
 };
@@ -221,9 +227,14 @@ describe("durable upload-trigger recovery", () => {
 
   test("recording upload intents twice converges and rolls back with document creation", async () => {
     const { entityId, definitionId } = await createUpload();
-    await database
-      .delete(flowUploadTriggerIntents)
-      .where(eq(flowUploadTriggerIntents.entityId, entityId));
+    await withOrgScopedFixture({
+      database,
+      workspaceId,
+      fn: async (fixtureTx) =>
+        await fixtureTx
+          .delete(flowUploadTriggerIntents)
+          .where(eq(flowUploadTriggerIntents.entityId, entityId)),
+    });
     const upload = {
       entityId,
       organizationId,
@@ -376,20 +387,25 @@ describe("upload receipt retention and eligible replay", () => {
         name: "retained.pdf",
       })),
     );
-    await database.insert(flowUploadTriggerIntents).values(
-      receipts.map((receipt) => ({
-        definitionId: receipt.definitionId,
-        entityId: receipt.entityId,
-        organizationId,
-        workspaceId,
-        fileExtension: "pdf",
-        retryAt: NOW,
-        status: "skipped" as const,
-        skipReason: receipt.eligible
-          ? ("trigger_no_longer_matches" as const)
-          : ("definition_disabled" as const),
-      })),
-    );
+    await withOrgScopedFixture({
+      database,
+      workspaceId,
+      fn: async (fixtureTx) =>
+        await fixtureTx.insert(flowUploadTriggerIntents).values(
+          receipts.map((receipt) => ({
+            definitionId: receipt.definitionId,
+            entityId: receipt.entityId,
+            organizationId,
+            workspaceId,
+            fileExtension: "pdf",
+            retryAt: NOW,
+            status: "skipped" as const,
+            skipReason: receipt.eligible
+              ? ("trigger_no_longer_matches" as const)
+              : ("definition_disabled" as const),
+          })),
+        ),
+    });
     const eligible = receipts.at(32) ?? panic("Missing eligible receipt");
     const started: string[] = [];
     const sweep = async () =>
@@ -416,10 +432,15 @@ describe("upload receipt retention and eligible replay", () => {
 
   test("an author removed while awaiting a grant is retained with a typed skip", async () => {
     const { entityId, definitionId } = await createUpload();
-    await database
-      .update(flowUploadTriggerIntents)
-      .set({ status: "awaiting_grant" })
-      .where(eq(flowUploadTriggerIntents.entityId, entityId));
+    await withOrgScopedFixture({
+      database,
+      workspaceId,
+      fn: async (fixtureTx) =>
+        await fixtureTx
+          .update(flowUploadTriggerIntents)
+          .set({ status: "awaiting_grant" })
+          .where(eq(flowUploadTriggerIntents.entityId, entityId)),
+    });
     await database
       .update(flowDefinitions)
       .set({ createdByUserId: null })

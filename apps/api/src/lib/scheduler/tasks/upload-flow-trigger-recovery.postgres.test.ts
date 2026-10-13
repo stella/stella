@@ -5,6 +5,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import { rootDb } from "@/api/db/root";
 import {
   entities,
   featureEnrolments,
@@ -36,6 +37,10 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import {
+  withOrgScopedFixture,
+  withOrgScopedFixtureTransaction,
+} from "@/api/tests/helpers/org-scoped-fixture";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -174,13 +179,18 @@ const uploadFixture = async (db: GatedTestDb) =>
         fileExtensions: ["pdf"],
       },
     });
-    await tx.insert(flowUploadTriggerIntents).values({
-      definitionId,
-      entityId,
-      organizationId,
+    await withOrgScopedFixtureTransaction({
+      tx,
       workspaceId,
-      fileExtension: "pdf",
-      retryAt: NOW,
+      fn: async (fixtureTx) =>
+        await fixtureTx.insert(flowUploadTriggerIntents).values({
+          definitionId,
+          entityId,
+          organizationId,
+          workspaceId,
+          fileExtension: "pdf",
+          retryAt: NOW,
+        }),
     });
     return {
       organizationId,
@@ -249,6 +259,109 @@ const changeTrigger = async ({
 };
 
 describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
+  test("global upload recovery retains other organizations' scheduled sources", async () => {
+    const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+    testState.setConfig("FEATURE_FLOWS", true);
+    try {
+      await withGatedTestClients(
+        databaseUrl ?? panic("Missing PostgreSQL test URL"),
+        async ({ openClient }) => {
+          const { db } = openClient();
+          const a = await uploadFixture(db);
+          const b = await uploadFixture(db);
+          try {
+            await db
+              .update(flowDefinitions)
+              .set({ enabled: false })
+              .where(eq(flowDefinitions.id, a.definitionId));
+            await withOrgScopedFixture({
+              database: db,
+              workspaceId: b.workspaceId,
+              fn: async (tx) =>
+                await tx
+                  .update(flowUploadTriggerIntents)
+                  .set({ retryAt: LATER })
+                  .where(
+                    and(
+                      eq(flowUploadTriggerIntents.definitionId, b.definitionId),
+                      eq(flowUploadTriggerIntents.entityId, b.entityId),
+                    ),
+                  ),
+            });
+            const readB = async () => ({
+              receipt: await db.query.flowUploadTriggerIntents.findFirst({
+                where: {
+                  definitionId: { eq: b.definitionId },
+                  entityId: { eq: b.entityId },
+                },
+              }),
+              definition: await db.query.flowDefinitions.findFirst({
+                where: { id: { eq: b.definitionId } },
+              }),
+              entity: await db.query.entities.findFirst({
+                where: { id: { eq: b.entityId } },
+              }),
+              runs: await db.query.flowRuns.findMany({
+                where: { workspaceId: { eq: b.workspaceId } },
+              }),
+              steps: await db.query.flowRunSteps.findMany({
+                where: { workspaceId: { eq: b.workspaceId } },
+              }),
+              notices: await db.query.notifications.findMany({
+                where: { organizationId: { eq: b.organizationId } },
+              }),
+            });
+            const before = await readB();
+            expect(before.receipt?.status).toBe("pending");
+            expect(before.receipt?.retryAt).toEqual(LATER);
+            expect(
+              (
+                await db.query.flowUploadTriggerIntents.findFirst({
+                  where: {
+                    definitionId: { eq: a.definitionId },
+                    entityId: { eq: a.entityId },
+                  },
+                })
+              )?.status,
+            ).toBe("pending");
+            const outcome = await recoverUploadFlowTriggerIntents({
+              database: rootDb,
+              now: NOW,
+            });
+            expect(outcome.skipped).toBe(1);
+            expect(outcome.settled).toBe(0);
+            const after = await db.query.flowUploadTriggerIntents.findFirst({
+              where: {
+                definitionId: { eq: a.definitionId },
+                entityId: { eq: a.entityId },
+              },
+            });
+            expect(after?.status).toBe("skipped");
+            expect(after?.skipReason).toBe("definition_disabled");
+            expect(
+              await db.$count(
+                flowRuns,
+                eq(flowRuns.definitionId, a.definitionId),
+              ),
+            ).toBe(0);
+            expect(await readB()).toEqual(before);
+          } finally {
+            await db
+              .delete(organization)
+              .where(eq(organization.id, b.organizationId));
+            await db.delete(user).where(eq(user.id, b.userId));
+            await db
+              .delete(organization)
+              .where(eq(organization.id, a.organizationId));
+            await db.delete(user).where(eq(user.id, a.userId));
+          }
+        },
+      );
+    } finally {
+      restore();
+    }
+  });
+
   test("workspace-filtered uploads match UUID receipt columns and parameter inputs", async () => {
     await withGatedTestClients(
       databaseUrl ?? panic("Missing PostgreSQL test URL"),
@@ -366,16 +479,21 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                 name: "parked.pdf",
               })),
             );
-            await db.insert(flowUploadTriggerIntents).values(
-              prefix.map((entityId) => ({
-                entityId,
-                definitionId: fixture.definitionId,
-                organizationId: fixture.organizationId,
-                workspaceId: fixture.otherWorkspaceId,
-                fileExtension: "pdf",
-                retryAt: new Date(NOW.getTime() - 60_000),
-              })),
-            );
+            await withOrgScopedFixture({
+              database: db,
+              workspaceId: fixture.otherWorkspaceId,
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(flowUploadTriggerIntents).values(
+                  prefix.map((entityId) => ({
+                    entityId,
+                    definitionId: fixture.definitionId,
+                    organizationId: fixture.organizationId,
+                    workspaceId: fixture.otherWorkspaceId,
+                    fileExtension: "pdf",
+                    retryAt: new Date(NOW.getTime() - 60_000),
+                  })),
+                ),
+            });
             const started: string[] = [];
             const scoped = await recoverUploadFlowTriggerIntents({
               database: asTestRaw<SchedulerDb>(db),
@@ -387,13 +505,18 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
               },
             });
             expect(scoped.settled).toBe(1);
-            await db.insert(flowUploadTriggerIntents).values({
-              definitionId: fixture.definitionId,
-              entityId: fixture.entityId,
-              organizationId: fixture.organizationId,
+            await withOrgScopedFixture({
+              database: db,
               workspaceId: fixture.workspaceId,
-              fileExtension: "pdf",
-              retryAt: NOW,
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(flowUploadTriggerIntents).values({
+                  definitionId: fixture.definitionId,
+                  entityId: fixture.entityId,
+                  organizationId: fixture.organizationId,
+                  workspaceId: fixture.workspaceId,
+                  fileExtension: "pdf",
+                  retryAt: NOW,
+                }),
             });
             const global = await recoverUploadFlowTriggerIntents({
               database: asTestRaw<SchedulerDb>(db),
@@ -450,12 +573,20 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
               const token = sql`${NOW}::timestamptz - interval '1 second' + interval '123 microseconds'`;
               try {
                 if (featureId === "flows") {
-                  await db
-                    .update(flowUploadTriggerIntents)
-                    .set({ retryAt: token, status: state })
-                    .where(
-                      eq(flowUploadTriggerIntents.entityId, fixture.entityId),
-                    );
+                  await withOrgScopedFixture({
+                    database: db,
+                    workspaceId: fixture.workspaceId,
+                    fn: async (fixtureTx) =>
+                      await fixtureTx
+                        .update(flowUploadTriggerIntents)
+                        .set({ retryAt: token, status: state })
+                        .where(
+                          eq(
+                            flowUploadTriggerIntents.entityId,
+                            fixture.entityId,
+                          ),
+                        ),
+                  });
                   const before = (
                     await db
                       .select({
@@ -486,13 +617,18 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                   ).toBe(0);
                 } else {
                   // Missing sources are terminal, so this reaches receipt claim and dequeue without emission.
-                  await db.insert(pendingScoutEmissions).values({
-                    organizationId: fixture.organizationId,
+                  await withOrgScopedFixture({
+                    database: db,
                     workspaceId: fixture.workspaceId,
-                    sourceKind: "document-review",
-                    sourceId,
-                    status: state,
-                    nextAttemptAt: token,
+                    fn: async (fixtureTx) =>
+                      await fixtureTx.insert(pendingScoutEmissions).values({
+                        organizationId: fixture.organizationId,
+                        workspaceId: fixture.workspaceId,
+                        sourceKind: "document-review",
+                        sourceId,
+                        status: state,
+                        nextAttemptAt: token,
+                      }),
                   });
                   const before = (
                     await db
@@ -554,12 +690,20 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
               const fixture = await uploadFixture(reader.db);
               try {
                 if (featureId === "flows") {
-                  await reader.db
-                    .update(flowUploadTriggerIntents)
-                    .set({ status: state })
-                    .where(
-                      eq(flowUploadTriggerIntents.entityId, fixture.entityId),
-                    );
+                  await withOrgScopedFixture({
+                    database: reader.db,
+                    workspaceId: fixture.workspaceId,
+                    fn: async (fixtureTx) =>
+                      await fixtureTx
+                        .update(flowUploadTriggerIntents)
+                        .set({ status: state })
+                        .where(
+                          eq(
+                            flowUploadTriggerIntents.entityId,
+                            fixture.entityId,
+                          ),
+                        ),
+                  });
                   if (state === "pending") {
                     await reader.db
                       .delete(featureEnrolments)
@@ -571,16 +715,21 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                       );
                   }
                 } else {
-                  await reader.db.insert(pendingScoutEmissions).values({
-                    organizationId: fixture.organizationId,
+                  await withOrgScopedFixture({
+                    database: reader.db,
                     workspaceId: fixture.workspaceId,
-                    sourceId: fixture.entityId,
-                    status: state,
-                    nextAttemptAt: NOW,
-                    sourceKind:
-                      state === "awaiting_grant"
-                        ? "document-review"
-                        : "infosoud-hearing",
+                    fn: async (fixtureTx) =>
+                      await fixtureTx.insert(pendingScoutEmissions).values({
+                        organizationId: fixture.organizationId,
+                        workspaceId: fixture.workspaceId,
+                        sourceId: fixture.entityId,
+                        status: state,
+                        nextAttemptAt: NOW,
+                        sourceKind:
+                          state === "awaiting_grant"
+                            ? "document-review"
+                            : "infosoud-hearing",
+                      }),
                   });
                 }
                 let barriers = 0;
@@ -598,25 +747,35 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                         featureId,
                       });
                       if (featureId === "flows") {
-                        await tx
-                          .update(flowUploadTriggerIntents)
-                          .set({ retryAt: LATER })
-                          .where(
-                            eq(
-                              flowUploadTriggerIntents.entityId,
-                              fixture.entityId,
-                            ),
-                          );
+                        await withOrgScopedFixtureTransaction({
+                          tx,
+                          workspaceId: fixture.workspaceId,
+                          fn: async (fixtureTx) =>
+                            await fixtureTx
+                              .update(flowUploadTriggerIntents)
+                              .set({ retryAt: LATER })
+                              .where(
+                                eq(
+                                  flowUploadTriggerIntents.entityId,
+                                  fixture.entityId,
+                                ),
+                              ),
+                        });
                       } else {
-                        await tx
-                          .update(pendingScoutEmissions)
-                          .set({ nextAttemptAt: LATER })
-                          .where(
-                            eq(
-                              pendingScoutEmissions.sourceId,
-                              fixture.entityId,
-                            ),
-                          );
+                        await withOrgScopedFixtureTransaction({
+                          tx,
+                          workspaceId: fixture.workspaceId,
+                          fn: async (fixtureTx) =>
+                            await fixtureTx
+                              .update(pendingScoutEmissions)
+                              .set({ nextAttemptAt: LATER })
+                              .where(
+                                eq(
+                                  pendingScoutEmissions.sourceId,
+                                  fixture.entityId,
+                                ),
+                              ),
+                        });
                       }
                     });
                   },
@@ -714,12 +873,20 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                       ),
                     );
                 } else {
-                  await tx
-                    .update(flowUploadTriggerIntents)
-                    .set({ retryAt: LATER })
-                    .where(
-                      eq(flowUploadTriggerIntents.entityId, fixture.entityId),
-                    );
+                  await withOrgScopedFixtureTransaction({
+                    tx,
+                    workspaceId: fixture.workspaceId,
+                    fn: async (fixtureTx) =>
+                      await fixtureTx
+                        .update(flowUploadTriggerIntents)
+                        .set({ retryAt: LATER })
+                        .where(
+                          eq(
+                            flowUploadTriggerIntents.entityId,
+                            fixture.entityId,
+                          ),
+                        ),
+                  });
                 }
               });
             let starts = 0;
@@ -815,12 +982,17 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                 userId: fixture.userId,
                 featureId: "signals",
               });
-              await reader.db.insert(pendingScoutEmissions).values({
-                organizationId: fixture.organizationId,
+              await withOrgScopedFixture({
+                database: reader.db,
                 workspaceId: fixture.workspaceId,
-                sourceKind: "infosoud-hearing",
-                sourceId: fixture.entityId,
-                nextAttemptAt: NOW,
+                fn: async (fixtureTx) =>
+                  await fixtureTx.insert(pendingScoutEmissions).values({
+                    organizationId: fixture.organizationId,
+                    workspaceId: fixture.workspaceId,
+                    sourceKind: "infosoud-hearing",
+                    sourceId: fixture.entityId,
+                    nextAttemptAt: NOW,
+                  }),
               });
               const database = receiptRaceDatabase({
                 database: reader.db,
@@ -848,12 +1020,20 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                           ),
                         );
                     } else {
-                      await tx
-                        .update(pendingScoutEmissions)
-                        .set({ nextAttemptAt: LATER })
-                        .where(
-                          eq(pendingScoutEmissions.sourceId, fixture.entityId),
-                        );
+                      await withOrgScopedFixtureTransaction({
+                        tx,
+                        workspaceId: fixture.workspaceId,
+                        fn: async (fixtureTx) =>
+                          await fixtureTx
+                            .update(pendingScoutEmissions)
+                            .set({ nextAttemptAt: LATER })
+                            .where(
+                              eq(
+                                pendingScoutEmissions.sourceId,
+                                fixture.entityId,
+                              ),
+                            ),
+                      });
                     }
                   });
                 },
@@ -1078,32 +1258,42 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                 .update(flowDefinitions)
                 .set({ createdByUserId: null })
                 .where(eq(flowDefinitions.id, authorless.definitionId));
-              await db
-                .update(flowUploadTriggerIntents)
-                .set({
-                  status: "skipped",
-                  skipReason: "definition_disabled",
-                  retryAt: older,
-                })
-                .where(
-                  eq(
-                    flowUploadTriggerIntents.definitionId,
-                    disabled.definitionId,
-                  ),
-                );
-              await db
-                .update(flowUploadTriggerIntents)
-                .set({
-                  status: "skipped",
-                  skipReason: "actor_missing",
-                  retryAt: older,
-                })
-                .where(
-                  eq(
-                    flowUploadTriggerIntents.definitionId,
-                    authorless.definitionId,
-                  ),
-                );
+              await withOrgScopedFixture({
+                database: db,
+                workspaceId: disabled.workspaceId,
+                fn: async (fixtureTx) =>
+                  await fixtureTx
+                    .update(flowUploadTriggerIntents)
+                    .set({
+                      status: "skipped",
+                      skipReason: "definition_disabled",
+                      retryAt: older,
+                    })
+                    .where(
+                      eq(
+                        flowUploadTriggerIntents.definitionId,
+                        disabled.definitionId,
+                      ),
+                    ),
+              });
+              await withOrgScopedFixture({
+                database: db,
+                workspaceId: authorless.workspaceId,
+                fn: async (fixtureTx) =>
+                  await fixtureTx
+                    .update(flowUploadTriggerIntents)
+                    .set({
+                      status: "skipped",
+                      skipReason: "actor_missing",
+                      retryAt: older,
+                    })
+                    .where(
+                      eq(
+                        flowUploadTriggerIntents.definitionId,
+                        authorless.definitionId,
+                      ),
+                    ),
+              });
               const extra = Array.from({ length: 99 }, () => ({
                 id: createSafeId<"entity">(),
                 workspaceId: disabled.workspaceId,
@@ -1111,32 +1301,42 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                 createdBy: disabled.userId,
               }));
               await db.insert(entities).values(extra);
-              await db.insert(flowUploadTriggerIntents).values(
-                extra.map(({ id }) => ({
-                  definitionId: disabled.definitionId,
-                  entityId: id,
-                  organizationId: disabled.organizationId,
-                  workspaceId: disabled.workspaceId,
-                  fileExtension: "pdf",
-                  status: "skipped" as const,
-                  skipReason: "definition_disabled" as const,
-                  retryAt: older,
-                })),
-              );
-              await db
-                .update(flowUploadTriggerIntents)
-                .set({
-                  status,
-                  skipReason:
-                    status === "skipped" ? "definition_disabled" : null,
-                  retryAt: LATER,
-                })
-                .where(
-                  eq(
-                    flowUploadTriggerIntents.definitionId,
-                    eligible.definitionId,
+              await withOrgScopedFixture({
+                database: db,
+                workspaceId: disabled.workspaceId,
+                fn: async (fixtureTx) =>
+                  await fixtureTx.insert(flowUploadTriggerIntents).values(
+                    extra.map(({ id }) => ({
+                      definitionId: disabled.definitionId,
+                      entityId: id,
+                      organizationId: disabled.organizationId,
+                      workspaceId: disabled.workspaceId,
+                      fileExtension: "pdf",
+                      status: "skipped" as const,
+                      skipReason: "definition_disabled" as const,
+                      retryAt: older,
+                    })),
                   ),
-                );
+              });
+              await withOrgScopedFixture({
+                database: db,
+                workspaceId: eligible.workspaceId,
+                fn: async (fixtureTx) =>
+                  await fixtureTx
+                    .update(flowUploadTriggerIntents)
+                    .set({
+                      status,
+                      skipReason:
+                        status === "skipped" ? "definition_disabled" : null,
+                      retryAt: LATER,
+                    })
+                    .where(
+                      eq(
+                        flowUploadTriggerIntents.definitionId,
+                        eligible.definitionId,
+                      ),
+                    ),
+              });
               const retained = async () =>
                 await db
                   .select()
@@ -1251,24 +1451,43 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
               createdBy: blocked.userId,
             }));
             await db.insert(entities).values(extraEntities);
-            await db.insert(flowUploadTriggerIntents).values(
-              extraEntities.map(({ id }) => ({
-                definitionId: blocked.definitionId,
-                entityId: id,
-                organizationId: blocked.organizationId,
-                workspaceId: blocked.workspaceId,
-                fileExtension: "pdf",
-                retryAt: older,
-              })),
-            );
-            await db
-              .update(flowUploadTriggerIntents)
-              .set({ retryAt: older })
-              .where(eq(flowUploadTriggerIntents.entityId, blocked.entityId));
-            await db
-              .update(flowUploadTriggerIntents)
-              .set({ status: "awaiting_grant", retryAt: LATER })
-              .where(eq(flowUploadTriggerIntents.entityId, admitted.entityId));
+            await withOrgScopedFixture({
+              database: db,
+              workspaceId: blocked.workspaceId,
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(flowUploadTriggerIntents).values(
+                  extraEntities.map(({ id }) => ({
+                    definitionId: blocked.definitionId,
+                    entityId: id,
+                    organizationId: blocked.organizationId,
+                    workspaceId: blocked.workspaceId,
+                    fileExtension: "pdf",
+                    retryAt: older,
+                  })),
+                ),
+            });
+            await withOrgScopedFixture({
+              database: db,
+              workspaceId: blocked.workspaceId,
+              fn: async (fixtureTx) =>
+                await fixtureTx
+                  .update(flowUploadTriggerIntents)
+                  .set({ retryAt: older })
+                  .where(
+                    eq(flowUploadTriggerIntents.entityId, blocked.entityId),
+                  ),
+            });
+            await withOrgScopedFixture({
+              database: db,
+              workspaceId: admitted.workspaceId,
+              fn: async (fixtureTx) =>
+                await fixtureTx
+                  .update(flowUploadTriggerIntents)
+                  .set({ status: "awaiting_grant", retryAt: LATER })
+                  .where(
+                    eq(flowUploadTriggerIntents.entityId, admitted.entityId),
+                  ),
+            });
             const started: string[] = [];
             const recover = async (entityId?: typeof blocked.entityId) =>
               await recoverUploadFlowTriggerIntents({
@@ -1374,22 +1593,32 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
           const fixture = await uploadFixture(db);
           const sourceId = createSafeId<"documentReviewRun">();
           try {
-            await db.insert(pendingScoutEmissions).values(
-              Array.from({ length: 100 }, () => ({
-                organizationId: fixture.organizationId,
-                workspaceId: fixture.workspaceId,
-                sourceKind: "infosoud-hearing" as const,
-                sourceId: createSafeId<"entity">(),
-                nextAttemptAt: new Date(NOW.getTime() - 60_000),
-              })),
-            );
-            await db.insert(pendingScoutEmissions).values({
-              organizationId: fixture.organizationId,
+            await withOrgScopedFixture({
+              database: db,
               workspaceId: fixture.workspaceId,
-              sourceKind: "document-review",
-              sourceId,
-              status: "awaiting_grant",
-              nextAttemptAt: NOW,
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(pendingScoutEmissions).values(
+                  Array.from({ length: 100 }, () => ({
+                    organizationId: fixture.organizationId,
+                    workspaceId: fixture.workspaceId,
+                    sourceKind: "infosoud-hearing" as const,
+                    sourceId: createSafeId<"entity">(),
+                    nextAttemptAt: new Date(NOW.getTime() - 60_000),
+                  })),
+                ),
+            });
+            await withOrgScopedFixture({
+              database: db,
+              workspaceId: fixture.workspaceId,
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(pendingScoutEmissions).values({
+                  organizationId: fixture.organizationId,
+                  workspaceId: fixture.workspaceId,
+                  sourceKind: "document-review",
+                  sourceId,
+                  status: "awaiting_grant",
+                  nextAttemptAt: NOW,
+                }),
             });
             await recoverScoutEmission(
               asTestRaw<SchedulerTaskContext>({
@@ -1497,13 +1726,18 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                 expect(enqueued).toEqual([insertedRun.id]);
                 expect(receipts).toEqual([]);
                 // Recreate a still-pending receipt as if the process died after run commit and before settlement.
-                await first.db.insert(flowUploadTriggerIntents).values({
-                  definitionId: f.definitionId,
-                  entityId: f.entityId,
-                  organizationId: f.organizationId,
+                await withOrgScopedFixture({
+                  database: first.db,
                   workspaceId: f.workspaceId,
-                  fileExtension: "pdf",
-                  retryAt: LATER,
+                  fn: async (fixtureTx) =>
+                    await fixtureTx.insert(flowUploadTriggerIntents).values({
+                      definitionId: f.definitionId,
+                      entityId: f.entityId,
+                      organizationId: f.organizationId,
+                      workspaceId: f.workspaceId,
+                      fileExtension: "pdf",
+                      retryAt: LATER,
+                    }),
                 });
                 await recover(LATER);
                 expect(

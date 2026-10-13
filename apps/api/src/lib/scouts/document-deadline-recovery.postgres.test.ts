@@ -3,20 +3,26 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, getColumns, sql } from "drizzle-orm";
 
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { rootDb, Transaction } from "@/api/db/root";
+import { rootDb } from "@/api/db/root";
+import type { Transaction } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entities,
   entityVersions,
+  extractedContent,
   featureEnrolments,
   fields,
   properties,
   pendingScoutEmissions,
+  signals,
+  notifications,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
@@ -32,10 +38,12 @@ import {
   resumeScoutEmissionAfterGrant,
 } from "@/api/lib/scheduler/tasks/scout-emission-recovery";
 import type { SchedulerJob } from "@/api/lib/scheduler/types";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { waitForBlockedPid } from "@/api/tests/helpers/flow-review-gate";
+import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -47,6 +55,7 @@ import {
 } from "./document-deadline-recovery";
 import {
   runDocumentDeadlineScout,
+  settleDocumentDeadlineScoutClaim,
   validateDocumentDeadlineScoutClaim,
 } from "./document-deadlines";
 
@@ -57,7 +66,8 @@ const testState = createTestState({ file: import.meta.path, config: env });
 const databaseUrl = process.env["DATABASE_URL"];
 const OLD = new Date("2020-01-01T00:00:00Z");
 
-const fixture = async (db: GatedTestDb) =>
+type DeadlineFixtureOptions = { pausedSources: number };
+const fixture = async (db: GatedTestDb, options?: DeadlineFixtureOptions) =>
   await db.transaction(async (tx) => {
     const organizationId = mintAuthProviderId<"organization">();
     const admittedUserId = mintAuthProviderId<"user">();
@@ -119,14 +129,16 @@ const fixture = async (db: GatedTestDb) =>
           }) as const satisfies typeof properties.$inferInsert,
       ),
     );
-    const sources = Array.from({ length: 101 }, (_, index) => ({
+    const pausedSources = options?.pausedSources ?? 100;
+    const sources = Array.from({ length: pausedSources + 1 }, (_, index) => ({
       runId: createSafeId<"documentProcessingRun">(),
       entityId: createSafeId<"entity">(),
       entityVersionId: createSafeId<"entityVersion">(),
       fieldId: createSafeId<"field">(),
       sourceFileId: createSafeId<"userFile">(),
-      workspaceId: index < 100 ? pausedWorkspaceId : admittedWorkspaceId,
-      propertyId: index < 100 ? pausedPropertyId : admittedPropertyId,
+      workspaceId:
+        index < pausedSources ? pausedWorkspaceId : admittedWorkspaceId,
+      propertyId: index < pausedSources ? pausedPropertyId : admittedPropertyId,
       updatedAt: new Date(OLD.getTime() + index),
     }));
     await tx.insert(entities).values(
@@ -202,6 +214,337 @@ const fixture = async (db: GatedTestDb) =>
   });
 
 describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
+  test.each(["validation", "settlement"] as const)(
+    "%s deadline owner retains other organizations' fresh sources",
+    async (entry) => {
+      const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+      testState.setConfig("FEATURE_SIGNALS", true);
+      try {
+        await withGatedTestClients(
+          databaseUrl ?? panic("Missing PostgreSQL test URL"),
+          async ({ openClient }) => {
+            const { db } = openClient();
+            const a = await fixture(db, { pausedSources: 0 });
+            const b = await fixture(db, { pausedSources: 0 });
+            const source = a.sources.at(0) ?? panic("Missing admitted source");
+            try {
+              const claimedAt = new Date();
+              await db
+                .update(documentProcessingRuns)
+                .set({
+                  deadlineScoutStatus: "running",
+                  deadlineScoutClaimedAt: claimedAt,
+                  deadlineScoutAttemptCount: 1,
+                })
+                .where(
+                  eq(documentProcessingRuns.organizationId, a.organizationId),
+                );
+              await db
+                .update(documentProcessingRuns)
+                .set({
+                  deadlineScoutStatus: "running",
+                  deadlineScoutClaimedAt: claimedAt,
+                  deadlineScoutAttemptCount: 1,
+                })
+                .where(
+                  eq(documentProcessingRuns.organizationId, b.organizationId),
+                );
+              await db
+                .update(entities)
+                .set({ currentVersionId: source.entityVersionId })
+                .where(eq(entities.id, source.entityId));
+              await db.insert(extractedContent).values({
+                entityId: source.entityId,
+                organizationId: a.organizationId,
+                workspaceId: source.workspaceId,
+                sourceEntityVersionId: source.entityVersionId,
+                sourceFieldId: source.fieldId,
+                sourceFileId: source.sourceFileId,
+                sourceSha256Hex: "a".repeat(64),
+                ocrRunId: source.runId,
+                ocrProcessorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+                ocrPayloadCiphertext: Buffer.from("fixture"),
+                ocrPayloadIv: Buffer.alloc(12),
+                ciphertext: Buffer.from("fixture"),
+                iv: Buffer.alloc(12),
+                charCount: 7,
+              });
+              const claimed =
+                (
+                  await db
+                    .select({
+                      ...getColumns(documentProcessingRuns),
+                      deadlineScoutClaimedAtToken: timestampCasToken(
+                        documentProcessingRuns.deadlineScoutClaimedAt,
+                      ),
+                    })
+                    .from(documentProcessingRuns)
+                    .where(eq(documentProcessingRuns.id, source.runId))
+                ).at(0) ?? panic("Missing deadline claim");
+              const run = {
+                ...claimed,
+                deadlineScoutClaimedAt:
+                  claimed.deadlineScoutClaimedAt ??
+                  panic("Missing deadline claim time"),
+                deadlineScoutClaimedAtToken:
+                  claimed.deadlineScoutClaimedAtToken ??
+                  panic("Missing deadline claim token"),
+              };
+              const readB = async () => ({
+                runs: await db.query.documentProcessingRuns.findMany({
+                  where: { organizationId: { eq: b.organizationId } },
+                }),
+                entities: await db.query.entities.findMany({
+                  where: { workspaceId: { eq: b.admittedWorkspaceId } },
+                }),
+                content: await db.query.extractedContent.findMany({
+                  where: { organizationId: { eq: b.organizationId } },
+                }),
+                signals: await db.query.signals.findMany({
+                  where: { organizationId: { eq: b.organizationId } },
+                }),
+                notices: await db.query.notifications.findMany({
+                  where: { organizationId: { eq: b.organizationId } },
+                }),
+              });
+              const before = await readB();
+              expect(before.runs.at(0)?.deadlineScoutStatus).toBe("running");
+              switch (entry) {
+                case "validation":
+                  expect(
+                    await rootDb.transaction(
+                      async (tx) =>
+                        await validateDocumentDeadlineScoutClaim({
+                          tx,
+                          actorUserId: a.admittedUserId,
+                          run,
+                        }),
+                    ),
+                  ).toBe("current");
+                  break;
+                case "settlement":
+                  expect(
+                    await settleDocumentDeadlineScoutClaim({
+                      db: rootDb,
+                      run,
+                      settlement: { status: "succeeded", errorCode: null },
+                    }),
+                  ).toEqual({ status: "settled" });
+                  expect(
+                    (
+                      await db.query.documentProcessingRuns.findFirst({
+                        where: { id: { eq: source.runId } },
+                      })
+                    )?.deadlineScoutStatus,
+                  ).toBe("succeeded");
+                  break;
+                default:
+                  entry satisfies never;
+              }
+              expect(await readB()).toEqual(before);
+            } finally {
+              await db
+                .delete(organization)
+                .where(eq(organization.id, b.organizationId));
+              await db.delete(user).where(eq(user.id, b.admittedUserId));
+              await db.delete(user).where(eq(user.id, b.pausedUserId));
+              await db
+                .delete(organization)
+                .where(eq(organization.id, a.organizationId));
+              await db.delete(user).where(eq(user.id, a.admittedUserId));
+              await db.delete(user).where(eq(user.id, a.pausedUserId));
+            }
+          },
+        );
+      } finally {
+        restore();
+      }
+    },
+  );
+
+  test.each(["resume", "dispatch", "direct"] as const)(
+    "%s deadline owner preserves the other organization's sources",
+    async (path) => {
+      const previousSignals = env.FEATURE_SIGNALS;
+      const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+      testState.setConfig("FEATURE_SIGNALS", true);
+      try {
+        await withGatedTestClients(
+          databaseUrl ?? panic("Missing PostgreSQL test URL"),
+          async ({ openClient }) => {
+            const { db } = openClient();
+            const a = await fixture(db, { pausedSources: 1 });
+            const b = await fixture(db, { pausedSources: 1 });
+            const source = a.sources.at(-1) ?? panic("Missing admitted source");
+            try {
+              await db.insert(member).values({
+                id: Bun.randomUUIDv7(),
+                organizationId: b.organizationId,
+                userId: a.admittedUserId,
+                role: "member",
+                createdAt: OLD,
+              });
+              await db.insert(workspaceMembers).values({
+                workspaceId: b.admittedWorkspaceId,
+                userId: a.admittedUserId,
+              });
+              await db.insert(featureEnrolments).values({
+                organizationId: b.organizationId,
+                userId: a.admittedUserId,
+                featureId: "signals",
+              });
+              await db
+                .update(documentProcessingRuns)
+                .set({
+                  deadlineScoutStatus: "awaiting_grant",
+                  deadlineScoutErrorCode: "feature_not_granted",
+                })
+                .where(
+                  eq(documentProcessingRuns.organizationId, a.organizationId),
+                );
+              await db
+                .update(documentProcessingRuns)
+                .set({
+                  deadlineScoutStatus:
+                    path === "resume" ? "awaiting_grant" : "not_requested",
+                  deadlineScoutErrorCode:
+                    path === "resume" ? "feature_not_granted" : null,
+                })
+                .where(
+                  eq(documentProcessingRuns.organizationId, b.organizationId),
+                );
+              const read = async (organizationId: typeof a.organizationId) =>
+                await db
+                  .select()
+                  .from(documentProcessingRuns)
+                  .where(
+                    eq(documentProcessingRuns.organizationId, organizationId),
+                  )
+                  .orderBy(documentProcessingRuns.id);
+              const before = await read(b.organizationId);
+              const resume = async (userId: typeof a.admittedUserId) =>
+                await db.transaction(async (tx) => {
+                  await lockFeatureRecoveryAdmission({
+                    tx,
+                    organizationId: a.organizationId,
+                    featureId: "signals",
+                  });
+                  await resumeDocumentDeadlineScoutsAfterGrant({
+                    tx,
+                    organizationId: a.organizationId,
+                    userId,
+                  });
+                });
+              const ownBefore = await read(a.organizationId);
+              await resume(a.pausedUserId);
+              expect(await read(a.organizationId)).toEqual(ownBefore);
+              testState.setConfig("FEATURE_SIGNALS", false);
+              await resume(a.admittedUserId);
+              expect(await read(a.organizationId)).toEqual(ownBefore);
+              testState.setConfig("FEATURE_SIGNALS", true);
+              await db
+                .delete(featureEnrolments)
+                .where(
+                  and(
+                    eq(featureEnrolments.organizationId, a.organizationId),
+                    eq(featureEnrolments.userId, a.admittedUserId),
+                    eq(featureEnrolments.featureId, "signals"),
+                  ),
+                );
+              await resume(a.admittedUserId);
+              expect(await read(a.organizationId)).toEqual(ownBefore);
+              await db.insert(featureEnrolments).values({
+                organizationId: a.organizationId,
+                userId: a.admittedUserId,
+                featureId: "signals",
+              });
+              await resume(a.admittedUserId);
+              expect(
+                (await read(a.organizationId)).find(
+                  ({ id }) => id === source.runId,
+                )?.deadlineScoutStatus,
+              ).toBe("pending");
+              expect(
+                (await read(a.organizationId))
+                  .filter(({ id }) => id !== source.runId)
+                  .map(({ deadlineScoutStatus }) => deadlineScoutStatus),
+              ).toEqual(["awaiting_grant"]);
+              const enqueued: string[] = [];
+              switch (path) {
+                case "resume":
+                  break;
+                case "dispatch":
+                  await recoverDocumentDeadlineScoutDispatches({
+                    database: asTestRaw<typeof rootDb>(db),
+                    enqueueDocumentDeadlineScout: async ({ sourceRunId }) => {
+                      enqueued.push(sourceRunId);
+                    },
+                  });
+                  expect(
+                    enqueued.filter((id) =>
+                      a.sources.some(({ runId }) => runId === id),
+                    ),
+                  ).toEqual([source.runId]);
+                  expect(
+                    enqueued.filter((id) =>
+                      b.sources.some(({ runId }) => runId === id),
+                    ),
+                  ).toEqual([]);
+                  break;
+                case "direct":
+                  await runDocumentDeadlineScout({
+                    db,
+                    sourceRunId: source.runId,
+                    database: markRlsDatabase(db),
+                  });
+                  expect(
+                    (await read(a.organizationId)).find(
+                      ({ id }) => id === source.runId,
+                    )?.deadlineScoutStatus,
+                  ).not.toBe("pending");
+                  break;
+                default:
+                  path satisfies never;
+              }
+              expect(await read(b.organizationId)).toEqual(before);
+              expect(
+                await db.query.pendingScoutEmissions.findMany({
+                  where: { organizationId: { eq: b.organizationId } },
+                }),
+              ).toEqual([]);
+              expect(
+                await db
+                  .select()
+                  .from(signals)
+                  .where(eq(signals.organizationId, b.organizationId)),
+              ).toEqual([]);
+              expect(
+                await db
+                  .select()
+                  .from(notifications)
+                  .where(eq(notifications.organizationId, b.organizationId)),
+              ).toEqual([]);
+            } finally {
+              await db
+                .delete(organization)
+                .where(eq(organization.id, b.organizationId));
+              await db
+                .delete(organization)
+                .where(eq(organization.id, a.organizationId));
+              await db.delete(user).where(eq(user.id, b.admittedUserId));
+              await db.delete(user).where(eq(user.id, b.pausedUserId));
+              await db.delete(user).where(eq(user.id, a.admittedUserId));
+              await db.delete(user).where(eq(user.id, a.pausedUserId));
+            }
+          },
+        );
+      } finally {
+        testState.setConfig("FEATURE_SIGNALS", previousSignals);
+        restore();
+      }
+    },
+  );
+
   test("recipient grant recovery leaves source-less review receipts for periodic repair", async () => {
     const previousSignals = env.FEATURE_SIGNALS;
     const previousReviews = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
@@ -215,13 +558,18 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
           const f = await fixture(client.db);
           const sourceId = createSafeId<"documentReviewRun">();
           try {
-            await client.db.insert(pendingScoutEmissions).values({
-              organizationId: f.organizationId,
+            await withOrgScopedFixture({
+              database: client.db,
               workspaceId: f.admittedWorkspaceId,
-              sourceKind: "document-review",
-              sourceId,
-              status: "awaiting_grant",
-              nextAttemptAt: OLD,
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(pendingScoutEmissions).values({
+                  organizationId: f.organizationId,
+                  workspaceId: f.admittedWorkspaceId,
+                  sourceKind: "document-review",
+                  sourceId,
+                  status: "awaiting_grant",
+                  nextAttemptAt: OLD,
+                }),
             });
             await client.db.transaction(async (tx) => {
               await lockFeatureRecoveryAdmission({

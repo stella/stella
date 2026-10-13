@@ -1,5 +1,6 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
+import { panic } from "better-result";
 import { getTableName, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -637,6 +638,43 @@ const applyStellaTablePrivileges = async (client: PGlite): Promise<void> => {
   await client.exec(statements.join(";\n"));
 };
 
+const applySystemTablePrivileges = async (client: PGlite): Promise<void> => {
+  const { rows } = await client.query<{ tablename: string; cmd: string }>(
+    `SELECT tablename, cmd FROM pg_policies
+      WHERE schemaname = 'public' AND permissive = 'PERMISSIVE'
+        AND $1 = ANY(roles)`,
+    [rlsExports.stellaSystem.name],
+  );
+  for (const { tablename, cmd } of rows) {
+    const privileges = (() => {
+      switch (cmd) {
+        case "SELECT":
+          return "SELECT";
+        case "ALL":
+          return "SELECT, INSERT, UPDATE, DELETE";
+        default:
+          return panic(
+            "System fixture privilege requires a declared policy command",
+            { cmd },
+          );
+      }
+    })();
+    await client.exec(
+      `GRANT ${privileges} ON TABLE ${quoteSqlIdentifier(tablename)} TO ${quoteSqlIdentifier(rlsExports.stellaSystem.name)}`,
+    );
+  }
+  await client.exec(`GRANT USAGE ON SCHEMA public TO ${quoteSqlIdentifier(rlsExports.stellaSystem.name)};
+    GRANT ${quoteSqlIdentifier(rlsExports.stellaSystem.name)} TO CURRENT_USER WITH SET TRUE, INHERIT FALSE`);
+  for (const table of [
+    schema.pendingScoutEmissions,
+    schema.flowUploadTriggerIntents,
+  ]) {
+    await client.exec(
+      `ALTER TABLE ${quoteSqlIdentifier(getTableName(table))} FORCE ROW LEVEL SECURITY`,
+    );
+  }
+};
+
 /**
  * Build a fully provisioned test PGlite from scratch: RLS roles, schema
  * prerequisites, the drizzle schema push, workspace-access objects, and
@@ -650,6 +688,11 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   const pushSchemaDb = drizzle({ client });
 
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
+  await db.execute(
+    sql.raw(
+      `CREATE ROLE ${quoteSqlIdentifier(rlsExports.stellaSystem.name)} NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION`,
+    ),
+  );
   await db.execute(
     sql.raw(
       "CREATE ROLE stella_entity_gate NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOREPLICATION",
@@ -707,6 +750,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteTreeParentGuards(db);
 
   await applyStellaTablePrivileges(client);
+  await applySystemTablePrivileges(client);
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
   }

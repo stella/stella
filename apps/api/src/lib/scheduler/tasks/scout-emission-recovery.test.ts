@@ -34,6 +34,7 @@ import { emitInfoSoudHearingSignals } from "@/api/lib/scouts/infosoud-hearings";
 import type { HearingRecord } from "@/api/lib/scouts/infosoud-hearings.logic";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -84,9 +85,14 @@ testState.beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await db
-    .delete(pendingScoutEmissions)
-    .where(eq(pendingScoutEmissions.organizationId, organizationId));
+  await withOrgScopedFixture({
+    database: db,
+    workspaceId,
+    fn: async (fixtureTx) =>
+      await fixtureTx
+        .delete(pendingScoutEmissions)
+        .where(eq(pendingScoutEmissions.organizationId, organizationId)),
+  });
   await db.delete(signals).where(eq(signals.organizationId, organizationId));
   await db
     .delete(featureEnrolments)
@@ -307,10 +313,15 @@ describe("deferred scout emission recovery", () => {
             ? await seedReview()
             : await seedHearing();
         const retryAt = new Date(initialTime.getTime() + 10 * 60 * 1000);
-        await db
-          .update(pendingScoutEmissions)
-          .set({ nextAttemptAt: retryAt })
-          .where(eq(pendingScoutEmissions.organizationId, organizationId));
+        await withOrgScopedFixture({
+          database: db,
+          workspaceId,
+          fn: async (fixtureTx) =>
+            await fixtureTx
+              .update(pendingScoutEmissions)
+              .set({ nextAttemptAt: retryAt })
+              .where(eq(pendingScoutEmissions.organizationId, organizationId)),
+        });
         await runRecovery(initialTime);
         expect(await pending()).toMatchObject([
           { sourceId, status: "awaiting_grant", nextAttemptAt: retryAt },

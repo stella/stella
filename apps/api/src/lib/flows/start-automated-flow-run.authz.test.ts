@@ -1,3 +1,4 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 /**
  * Authorization gate for automated flow runs: an automated run (schedule /
  * file-upload trigger) executes as the definition's author against a root-scoped
@@ -8,8 +9,6 @@
  * there. Driven against a real (PGlite) database so the real
  * `resolveMemberAuthorization` membership rule runs.
  */
-
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -32,6 +31,7 @@ import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-c
 import type { FlowStep, FlowTrigger } from "@/api/lib/flows/flow-types";
 import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -134,19 +134,24 @@ describe("startAutomatedFlowRun authorization gate", () => {
       workspaceId: authorizedWorkspaceId,
       name: "upload.pdf",
     });
-    const receipt = await testDb
-      .insert(flowUploadTriggerIntents)
-      .values({
-        organizationId,
-        workspaceId: authorizedWorkspaceId,
-        definitionId,
-        entityId,
-        fileExtension: "pdf",
-        retryAt,
-      })
-      .returning({
-        token: timestampCasToken(flowUploadTriggerIntents.retryAt),
-      });
+    const receipt = await withOrgScopedFixture({
+      database: testDb,
+      workspaceId: authorizedWorkspaceId,
+      fn: async (fixtureTx) =>
+        await fixtureTx
+          .insert(flowUploadTriggerIntents)
+          .values({
+            organizationId,
+            workspaceId: authorizedWorkspaceId,
+            definitionId,
+            entityId,
+            fileExtension: "pdf",
+            retryAt,
+          })
+          .returning({
+            token: timestampCasToken(flowUploadTriggerIntents.retryAt),
+          }),
+    });
     uploadTriggerClaimToken = receipt.at(0)?.token;
   });
 

@@ -7,11 +7,13 @@ import {
   SIGNAL_KIND,
   SIGNAL_SEVERITY,
 } from "@stll/api-contract/signals";
+import { WORK_OBLIGATION_STATUS } from "@stll/api-contract/workflow-status";
+import { mapWithConcurrency } from "@stll/concurrency";
 import { withTimeout } from "@stll/concurrency/with-timeout";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import { abortableTx, safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -24,27 +26,49 @@ import {
   properties,
   featureEnrolments,
   pendingScoutEmissions,
+  notifications,
   scoutRuns,
   signals,
   workspaceMembers,
+  workObligations,
   workspaces,
 } from "@/api/db/schema";
+import { markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { DocumentReviewRunBasis } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  findSignalsBackgroundActor,
+  isBackgroundFeatureEnabled,
+  loadBackgroundFeatureActors,
+} from "@/api/lib/feature-access/background";
+import { resumeFeatureAfterGrant } from "@/api/lib/feature-access/grant-recovery";
 import { lockFeatureRecoveryAdmission } from "@/api/lib/feature-access/recovery-admission-lock";
 import { clearMemberAssignments } from "@/api/lib/member-offboarding/member-assignment-offboarding-owner";
+import { logger } from "@/api/lib/observability/logger";
+import { createRootScopedDb } from "@/api/lib/root-scoped-db";
+import { DueSlot } from "@/api/lib/scheduler/due-slot";
+import {
+  RECOVER_SCOUT_EMISSION_TASK,
+  recoverScoutEmission,
+  resumeScoutEmissionAfterGrant,
+} from "@/api/lib/scheduler/tasks/scout-emission-recovery";
+import type { SchedulerJob } from "@/api/lib/scheduler/types";
 import { pauseDocumentDeadlineScoutAfterGrantLoss } from "@/api/lib/scouts/document-deadline-recovery";
 import { settleDocumentDeadlineScoutClaim } from "@/api/lib/scouts/document-deadlines";
+import { runWorkAttentionScout } from "@/api/lib/scouts/work-attention";
 import type { NewSignal } from "@/api/lib/signals/emit";
+import { resumeSignalsAfterGrant } from "@/api/lib/signals/grant-recovery";
 import { runScout } from "@/api/lib/signals/scout";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -52,7 +76,9 @@ import {
   emitDocumentReviewSignal,
   maybeEmitDocumentReviewSignal,
 } from "./document-review";
+import { maybeEmitDocumentReviewSignal as maybeEmitDocumentReviewSignalRecovery } from "./document-review-recovery";
 import { emitInfoSoudHearingSignals } from "./infosoud-hearings";
+import { emitInfoSoudHearingSignals as emitInfoSoudHearingSignalsRecovery } from "./infosoud-hearings-recovery";
 import type { HearingRecord } from "./infosoud-hearings.logic";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -201,6 +227,48 @@ const fixtureFor = async (db: GatedTestDb) => {
 };
 
 type Fixture = Awaited<ReturnType<typeof fixtureFor>>;
+const isResumePath = (path: string) =>
+  path === "scout-resume" ||
+  path === "signals-resume" ||
+  path === "feature-resume";
+const readFixture = async (db: GatedTestDb, fixture: Fixture) => ({
+  entity: await db.query.entities.findFirst({
+    where: { id: { eq: fixture.entityId } },
+  }),
+  obligations: await db
+    .select()
+    .from(workObligations)
+    .where(eq(workObligations.workspaceId, fixture.workspaceId))
+    .orderBy(workObligations.entityId),
+  run: await db.query.documentReviewRuns.findFirst({
+    where: { id: { eq: fixture.runId } },
+  }),
+  findings: await db
+    .select()
+    .from(documentReviewFindings)
+    .where(eq(documentReviewFindings.runId, fixture.runId))
+    .orderBy(documentReviewFindings.id),
+  receipts: await db
+    .select()
+    .from(pendingScoutEmissions)
+    .where(eq(pendingScoutEmissions.organizationId, fixture.organizationId))
+    .orderBy(pendingScoutEmissions.sourceKind, pendingScoutEmissions.sourceId),
+  signals: await db
+    .select()
+    .from(signals)
+    .where(eq(signals.organizationId, fixture.organizationId))
+    .orderBy(signals.id),
+  census: await db
+    .select()
+    .from(scoutRuns)
+    .where(eq(scoutRuns.organizationId, fixture.organizationId))
+    .orderBy(scoutRuns.id),
+  notifications: await db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.organizationId, fixture.organizationId))
+    .orderBy(notifications.id),
+});
 const cleanup = async (db: GatedTestDb, fixture: Fixture) => {
   await db
     .delete(organization)
@@ -248,6 +316,418 @@ const proposedFor = ({ workspaceId, entityId }: Fixture) =>
 describe.skipIf(!enabled)(
   "direct scout admission and receipt ownership (postgres)",
   () => {
+    test.each([
+      "review",
+      "hearing",
+      "scout-resume",
+      "scout-recovery",
+      "signals-resume",
+      "feature-resume",
+      "background",
+      "work-attention",
+    ] as const)(
+      "%s owner preserves the other organization's sources",
+      async (path) => {
+        const previousSignals = env.FEATURE_SIGNALS;
+        const previousScouts = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
+        const restore = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
+        testState.setConfig("FEATURE_SIGNALS", true);
+        testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", true);
+        try {
+          await withGatedTestClients(
+            process.env["DATABASE_URL"] ?? panic("Missing PostgreSQL test URL"),
+            async ({ openClient }) => {
+              const { db } = openClient();
+              const a = await fixtureFor(db);
+              const b = await fixtureFor(db);
+              try {
+                await db.insert(member).values({
+                  id: Bun.randomUUIDv7(),
+                  organizationId: b.organizationId,
+                  userId: a.userId,
+                  role: "member",
+                  createdAt: NOW,
+                });
+                await db
+                  .insert(workspaceMembers)
+                  .values({ workspaceId: b.workspaceId, userId: a.userId });
+                await db.insert(featureEnrolments).values({
+                  organizationId: b.organizationId,
+                  userId: a.userId,
+                  featureId: "signals",
+                });
+                await db
+                  .update(documentReviewRuns)
+                  .set({ requestedBy: a.userId })
+                  .where(eq(documentReviewRuns.id, b.runId));
+                await mapWithConcurrency({
+                  items: [a, b],
+                  limit: 1,
+                  operation: async (f) =>
+                    await withOrgScopedFixture({
+                      database: db,
+                      workspaceId: f.workspaceId,
+                      fn: async (fixtureTx) =>
+                        await fixtureTx.insert(pendingScoutEmissions).values({
+                          organizationId: f.organizationId,
+                          workspaceId: f.workspaceId,
+                          sourceKind: "document-review",
+                          sourceId: f.runId,
+                          status: "awaiting_grant",
+                          nextAttemptAt: NOW,
+                        }),
+                    }),
+                });
+                expect(
+                  await isBackgroundFeatureEnabled({
+                    tx: db,
+                    organizationId: a.organizationId,
+                    userId: a.userId,
+                    featureId: "signals",
+                  }),
+                ).toBe(true);
+                expect(
+                  await isBackgroundFeatureEnabled({
+                    tx: db,
+                    organizationId: b.organizationId,
+                    userId: a.userId,
+                    featureId: "signals",
+                  }),
+                ).toBe(true);
+                if (path === "work-attention" || path === "scout-recovery") {
+                  await db
+                    .delete(featureEnrolments)
+                    .where(
+                      eq(featureEnrolments.organizationId, b.organizationId),
+                    );
+                }
+                if (path === "scout-recovery") {
+                  await db
+                    .update(documentReviewRuns)
+                    .set({ status: "completed", completed: 1 })
+                    .where(eq(documentReviewRuns.id, a.runId));
+                }
+                if (path === "work-attention") {
+                  await db
+                    .update(entities)
+                    .set({ kind: "task" })
+                    .where(
+                      and(
+                        eq(entities.workspaceId, a.workspaceId),
+                        eq(entities.id, a.entityId),
+                      ),
+                    );
+                  await db
+                    .update(entities)
+                    .set({ kind: "task" })
+                    .where(
+                      and(
+                        eq(entities.workspaceId, b.workspaceId),
+                        eq(entities.id, b.entityId),
+                      ),
+                    );
+                  await db.insert(workObligations).values(
+                    [a, b].map(
+                      (f) =>
+                        ({
+                          entityId: f.entityId,
+                          workspaceId: f.workspaceId,
+                          ownerUserId: f.userId,
+                          status:
+                            WORK_OBLIGATION_STATUS.AWAITING_ACKNOWLEDGEMENT,
+                          createdByUserId: f.userId,
+                          createdAt: new Date("2029-01-01T00:00:00Z"),
+                        }) as const satisfies typeof workObligations.$inferInsert,
+                    ),
+                  );
+                }
+                const before = await readFixture(db, b);
+                if (isResumePath(path)) {
+                  const resume = async (userId: SafeId<"user">) => {
+                    if (path === "feature-resume") {
+                      return await resumeFeatureAfterGrant({
+                        organizationId: a.organizationId,
+                        userId,
+                        featureId: "signals",
+                      });
+                    }
+                    if (path === "signals-resume") {
+                      return await resumeSignalsAfterGrant(
+                        { organizationId: a.organizationId, userId },
+                        { database: db },
+                      );
+                    }
+                    await db.transaction(async (tx) => {
+                      await lockFeatureRecoveryAdmission({
+                        tx,
+                        organizationId: a.organizationId,
+                        featureId: "signals",
+                      });
+                      await resumeScoutEmissionAfterGrant({
+                        tx,
+                        organizationId: a.organizationId,
+                        userId,
+                      });
+                    });
+                  };
+                  await db.insert(member).values({
+                    id: Bun.randomUUIDv7(),
+                    organizationId: a.organizationId,
+                    userId: b.userId,
+                    role: "member",
+                    createdAt: NOW,
+                  });
+                  await db
+                    .insert(workspaceMembers)
+                    .values({ workspaceId: a.workspaceId, userId: b.userId });
+                  await db.insert(featureEnrolments).values({
+                    organizationId: a.organizationId,
+                    userId: b.userId,
+                    featureId: "signals",
+                  });
+                  const retained = await readFixture(db, a);
+                  await resume(b.userId);
+                  expect(await readFixture(db, a)).toEqual(retained);
+                  testState.setConfig("FEATURE_SIGNALS", false);
+                  await resume(a.userId);
+                  expect(await readFixture(db, a)).toEqual(retained);
+                  testState.setConfig("FEATURE_SIGNALS", true);
+                  await db
+                    .delete(featureEnrolments)
+                    .where(
+                      and(
+                        eq(featureEnrolments.organizationId, a.organizationId),
+                        eq(featureEnrolments.userId, a.userId),
+                        eq(featureEnrolments.featureId, "signals"),
+                      ),
+                    );
+                  await resume(a.userId);
+                  expect(await readFixture(db, a)).toEqual(retained);
+                  await db.insert(featureEnrolments).values({
+                    organizationId: a.organizationId,
+                    userId: a.userId,
+                    featureId: "signals",
+                  });
+                  const unassignedWorkspaceId = createSafeId<"workspace">();
+                  const unassignedEntityId = createSafeId<"entity">();
+                  const otherRequesterRunId =
+                    createSafeId<"documentReviewRun">();
+                  await db.insert(workspaces).values({
+                    id: unassignedWorkspaceId,
+                    organizationId: a.organizationId,
+                    name: "Unassigned matter",
+                    reference: unassignedWorkspaceId,
+                  });
+                  await db.insert(entities).values({
+                    id: unassignedEntityId,
+                    workspaceId: unassignedWorkspaceId,
+                    name: "Hearing source",
+                    kind: "task",
+                  });
+                  const ownRun = await db.query.documentReviewRuns.findFirst({
+                    where: { id: { eq: a.runId } },
+                  });
+                  if (!ownRun) {
+                    panic("Missing review source");
+                  }
+                  await db.insert(documentReviewRuns).values({
+                    ...ownRun,
+                    id: otherRequesterRunId,
+                    requestedBy: b.userId,
+                  });
+                  await withOrgScopedFixture({
+                    database: db,
+                    workspaceId: unassignedWorkspaceId,
+                    fn: async (fixtureTx) =>
+                      await fixtureTx.insert(pendingScoutEmissions).values({
+                        organizationId: a.organizationId,
+                        workspaceId: unassignedWorkspaceId,
+                        sourceKind: "infosoud-hearing",
+                        sourceId: unassignedEntityId,
+                        status: "awaiting_grant",
+                        nextAttemptAt: NOW,
+                      }),
+                  });
+                  await withOrgScopedFixture({
+                    database: db,
+                    workspaceId: a.workspaceId,
+                    fn: async (fixtureTx) =>
+                      await fixtureTx.insert(pendingScoutEmissions).values({
+                        organizationId: a.organizationId,
+                        workspaceId: a.workspaceId,
+                        sourceKind: "document-review",
+                        sourceId: otherRequesterRunId,
+                        status: "awaiting_grant",
+                        nextAttemptAt: NOW,
+                      }),
+                  });
+                }
+                switch (path) {
+                  case "review":
+                    await db.transaction(async (tx) => {
+                      expect(
+                        await emitDocumentReviewSignal({
+                          tx,
+                          runId: b.runId,
+                          workspaceId: a.workspaceId,
+                        }),
+                      ).toBe("absent");
+                      await maybeEmitDocumentReviewSignal({
+                        tx,
+                        runId: b.runId,
+                        workspaceId: a.workspaceId,
+                      });
+                      await maybeEmitDocumentReviewSignalRecovery({
+                        tx,
+                        runId: b.runId,
+                        workspaceId: a.workspaceId,
+                      });
+                    });
+                    break;
+                  case "hearing":
+                    await db.transaction(
+                      async (tx) =>
+                        await emitInfoSoudHearingSignalsRecovery({
+                          tx,
+                          organizationId: a.organizationId,
+                          workspaceId: a.workspaceId,
+                          inserted: [
+                            { entityId: b.entityId, hearing: HEARING },
+                          ],
+                          now: NOW,
+                        }),
+                    );
+                    break;
+                  case "scout-resume":
+                    await db.transaction(async (tx) => {
+                      await lockFeatureRecoveryAdmission({
+                        tx,
+                        organizationId: a.organizationId,
+                        featureId: "signals",
+                      });
+                      await resumeScoutEmissionAfterGrant({
+                        tx,
+                        organizationId: a.organizationId,
+                        userId: a.userId,
+                      });
+                    });
+                    break;
+                  case "scout-recovery": {
+                    const job = {
+                      id: "signals.scoutRecovery.organization-fixture",
+                      task: RECOVER_SCOUT_EMISSION_TASK,
+                      description: null,
+                      schedule: { type: "interval", everyMs: 60_000 },
+                      payload: null,
+                      enabled: true,
+                      pausedBy: null,
+                      pausedUntil: null,
+                      pauseReason: null,
+                      nextRunAt: NOW,
+                      lastRunAt: null,
+                      lastSuccessAt: null,
+                      lastFailureAt: null,
+                      lastError: null,
+                      lockedAt: NOW,
+                      lockedUntil: null,
+                      lockedBy: "fixture",
+                      createdAt: NOW,
+                      updatedAt: NOW,
+                    } as const satisfies SchedulerJob;
+                    await recoverScoutEmission({
+                      db: asTestRaw<typeof rootDb>(db),
+                      dueAt: DueSlot.of(job),
+                      job,
+                      payload: null,
+                      runId: createSafeId<"schedulerJobRun">(),
+                      scheduleContinuation: () => undefined,
+                      signal: new AbortController().signal,
+                      logger,
+                    });
+                    expect((await readFixture(db, a)).signals).toHaveLength(1);
+                    break;
+                  }
+                  case "signals-resume":
+                    await resumeSignalsAfterGrant(
+                      { organizationId: a.organizationId, userId: a.userId },
+                      { database: db },
+                    );
+                    break;
+                  case "feature-resume":
+                    await resumeFeatureAfterGrant({
+                      organizationId: a.organizationId,
+                      userId: a.userId,
+                      featureId: "signals",
+                    });
+                    break;
+                  case "background":
+                    expect(
+                      await findSignalsBackgroundActor({
+                        tx: db,
+                        organizationId: a.organizationId,
+                        workspaceId: b.workspaceId,
+                      }),
+                    ).toBeNull();
+                    expect(
+                      await loadBackgroundFeatureActors({
+                        tx: db,
+                        featureId: "signals",
+                        principals: [
+                          {
+                            organizationId: a.organizationId,
+                            userId: a.userId,
+                          },
+                        ],
+                      }),
+                    ).toEqual(
+                      new Map([[a.organizationId, new Set([a.userId])]]),
+                    );
+                    break;
+                  case "work-attention":
+                    await runWorkAttentionScout({
+                      cursor: null,
+                      now: NOW,
+                      dependencies: {
+                        db: asTestRaw<typeof rootDb>(db),
+                        createScopedDb: (options) =>
+                          createRootScopedDb(options, markRlsDatabase(db)),
+                      },
+                    });
+                    expect((await readFixture(db, a)).signals).toHaveLength(1);
+                    break;
+                  default:
+                    path satisfies never;
+                }
+                expect(await readFixture(db, b)).toEqual(before);
+                if (isResumePath(path)) {
+                  const ownReceipts = (await readFixture(db, a)).receipts;
+                  expect(
+                    ownReceipts.find(({ sourceId }) => sourceId === a.runId)
+                      ?.status,
+                  ).toBe("pending");
+                  expect(
+                    ownReceipts
+                      .filter(({ sourceId }) => sourceId !== a.runId)
+                      .map(({ status }) => status),
+                  ).toEqual(["awaiting_grant", "awaiting_grant"]);
+                } else if (path === "review" || path === "hearing") {
+                  expect((await readFixture(db, a)).signals).toEqual([]);
+                  expect((await readFixture(db, a)).receipts).toHaveLength(1);
+                }
+              } finally {
+                await cleanup(db, b);
+                await cleanup(db, a);
+              }
+            },
+          );
+        } finally {
+          testState.setConfig("FEATURE_SIGNALS", previousSignals);
+          testState.setConfig("FEATURE_INBOX_DOCUMENT_SCOUTS", previousScouts);
+          restore();
+        }
+      },
+    );
+
     test("review finalization retains its receipt when the requester has no matter admission", async () => {
       const previous = env.FEATURE_SIGNALS;
       const previousScouts = env.FEATURE_INBOX_DOCUMENT_SCOUTS;
@@ -425,10 +905,15 @@ describe.skipIf(!enabled)(
                 ).at(0);
                 expect(retained).toBeDefined();
                 await regrant(writer.db, fixture);
-                await writer.db
-                  .update(pendingScoutEmissions)
-                  .set({ nextAttemptAt: CLAIM })
-                  .where(eq(pendingScoutEmissions.sourceId, sourceId));
+                await withOrgScopedFixture({
+                  database: writer.db,
+                  workspaceId: fixture.workspaceId,
+                  fn: async (fixtureTx) =>
+                    await fixtureTx
+                      .update(pendingScoutEmissions)
+                      .set({ nextAttemptAt: CLAIM })
+                      .where(eq(pendingScoutEmissions.sourceId, sourceId)),
+                });
                 if (source === "review") {
                   await reader.db.transaction(
                     async (tx) =>

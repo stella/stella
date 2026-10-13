@@ -1,11 +1,10 @@
+import { panic } from "better-result";
 /**
  * Cap guard for automated (schedule / file-upload) flow runs. The count and the
  * insert are one atomic statement, so this exercises the SQL shape / semantics
  * without needing real concurrency (PGlite is single-connection): seed rows for
  * a definition, then assert the gated insert either lands or is refused.
  */
-
-import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -42,6 +41,7 @@ import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/
 import { buildFlowRunRows } from "@/api/lib/flows/start-flow-run";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -156,16 +156,21 @@ describe("insertAutomatedFlowRunWithinCap", () => {
           name: "cap-upload.pdf",
         })
         .onConflictDoNothing();
-      await testDb
-        .insert(flowUploadTriggerIntents)
-        .values({
-          definitionId,
-          entityId,
-          workspaceId,
-          organizationId,
-          fileExtension: "pdf",
-        })
-        .onConflictDoNothing();
+      await withOrgScopedFixture({
+        database: testDb,
+        workspaceId,
+        fn: async (fixtureTx) =>
+          await fixtureTx
+            .insert(flowUploadTriggerIntents)
+            .values({
+              definitionId,
+              entityId,
+              workspaceId,
+              organizationId,
+              fileExtension: "pdf",
+            })
+            .onConflictDoNothing(),
+      });
       const receipt = (
         await testDb
           .select({
@@ -498,10 +503,15 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       throw new TypeError("Expected upload receipt");
     }
     const newerRetryAt = new Date(receipt.retryAt.getTime() + 1);
-    await testDb
-      .update(flowUploadTriggerIntents)
-      .set({ retryAt: newerRetryAt })
-      .where(eq(flowUploadTriggerIntents.definitionId, definitionId));
+    await withOrgScopedFixture({
+      database: testDb,
+      workspaceId,
+      fn: async (fixtureTx) =>
+        await fixtureTx
+          .update(flowUploadTriggerIntents)
+          .set({ retryAt: newerRetryAt })
+          .where(eq(flowUploadTriggerIntents.definitionId, definitionId)),
+    });
     let reservations = 0;
     const rows = buildFlowRunRows({
       runId: createSafeId<"flowRun">(),

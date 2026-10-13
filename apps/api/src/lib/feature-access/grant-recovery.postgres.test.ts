@@ -31,6 +31,7 @@ import {
   flowReviewGateFixture,
   waitForBlockedPid,
 } from "@/api/tests/helpers/flow-review-gate";
+import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { createTestState } from "@/api/tests/helpers/test-state";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -94,12 +95,17 @@ if (!databaseUrl || !enabled) {
             fileExtensions: null,
           },
         });
-        await writer.db.insert(flowUploadTriggerIntents).values({
-          definitionId,
-          entityId: f.taskEntityId,
-          organizationId: f.organizationId,
+        await withOrgScopedFixture({
+          database: writer.db,
           workspaceId: f.workspaceId,
-          status: "awaiting_grant",
+          fn: async (fixtureTx) =>
+            await fixtureTx.insert(flowUploadTriggerIntents).values({
+              definitionId,
+              entityId: f.taskEntityId,
+              organizationId: f.organizationId,
+              workspaceId: f.workspaceId,
+              status: "awaiting_grant",
+            }),
         });
         const retained = async () => ({
           flow: await f.read(),
@@ -302,19 +308,29 @@ if (!databaseUrl || !enabled) {
                 fileExtensions: null,
               },
             });
-            await db.insert(flowUploadTriggerIntents).values({
-              definitionId,
-              entityId: f.taskEntityId,
-              organizationId: f.organizationId,
+            await withOrgScopedFixture({
+              database: db,
               workspaceId: f.workspaceId,
-              status: "awaiting_grant",
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(flowUploadTriggerIntents).values({
+                  definitionId,
+                  entityId: f.taskEntityId,
+                  organizationId: f.organizationId,
+                  workspaceId: f.workspaceId,
+                  status: "awaiting_grant",
+                }),
             });
-            await db.insert(pendingScoutEmissions).values({
-              organizationId: f.organizationId,
+            await withOrgScopedFixture({
+              database: db,
               workspaceId: f.workspaceId,
-              sourceKind: "infosoud-hearing",
-              sourceId: f.taskEntityId,
-              status: "awaiting_grant",
+              fn: async (fixtureTx) =>
+                await fixtureTx.insert(pendingScoutEmissions).values({
+                  organizationId: f.organizationId,
+                  workspaceId: f.workspaceId,
+                  sourceKind: "infosoud-hearing",
+                  sourceId: f.taskEntityId,
+                  status: "awaiting_grant",
+                }),
             });
             // Prove this is a live, granted principal before the committed refusal.
             await withAggregateTransaction(db, async (tx) => {
