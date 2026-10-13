@@ -8,6 +8,7 @@
  */
 
 import { statuteGazetteAbbreviation } from "@stll/api-contract/statute-gazette";
+import type { DocumentIdentity } from "@stll/ui/document-identity-badge.logic";
 
 /** `…/eli/<country>/<collection>/<year>/<number>`, optionally with a tail. */
 const ELI_ACT_TAIL_RE =
@@ -16,13 +17,29 @@ const ELI_ACT_TAIL_RE =
 /** The same prefix the API strips for name matching (`legislationTitleName`). */
 const TITLE_NUMBER_PREFIX_RE = /^\d+\/\d{4} [^,]*, /u;
 
+/** The same ELI reader feeds number labels and document identity badges. */
+const statuteIdentityParts = (eli: string | null | undefined) => {
+  const match =
+    eli === null || eli === undefined ? null : ELI_ACT_TAIL_RE.exec(eli);
+  const collection = match?.[1] ?? null;
+  const year = match?.[2] ?? null;
+  const ordinal = match?.[3];
+  const identity = {
+    kind: "statute",
+    number: ordinal === undefined ? null : String(Number(ordinal)),
+    year,
+  } as const satisfies DocumentIdentity;
+  return { collection, identity };
+};
+
+export const statuteDocumentIdentity = (eli: string | null | undefined) =>
+  statuteIdentityParts(eli).identity;
+
 /** `89/2012 Sb.`, or null for an ELI that carries no act number. */
 const statuteActNumber = (eli: string): string | null => {
-  const match = ELI_ACT_TAIL_RE.exec(eli);
-  const collection = match?.[1];
-  const year = match?.[2];
-  const ordinal = match?.[3];
-  if (collection === undefined || year === undefined || ordinal === undefined) {
+  const { collection, identity } = statuteIdentityParts(eli);
+  const { number: ordinal, year } = identity;
+  if (collection === null || year === null || ordinal === null) {
     return null;
   }
   const number = `${String(Number(ordinal))}/${year}`;
