@@ -11,7 +11,7 @@ import { timeEntries } from "@/api/db/schema";
 import {
   selectTimekeeperNames,
   timekeeperIdsOf,
-} from "@/api/handlers/time-entries/timekeeper-names";
+} from "@/api/lib/billing/timekeeper-names";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 

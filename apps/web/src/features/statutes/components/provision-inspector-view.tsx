@@ -6,6 +6,7 @@ import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { pickVersionAt } from "@stll/api-contract/statute-version";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { InfoIcon } from "@stll/ui/icons";
@@ -29,7 +30,6 @@ import { OpenOriginalButton } from "@/components/legal-reader/open-original-butt
 import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
 import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
-import { pickVersionAt } from "@/features/case-law/statute-version";
 import {
   CitingDecisionItem,
   ProvisionCitingDecisions,

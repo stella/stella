@@ -53,7 +53,9 @@ import {
   CASE_LAW_RESULTS_APP,
   CITATION_GRAPH_APP,
   DECISION_READER_APP,
+  STATUTE_TIMELINE_APP,
 } from "./apps/manifest";
+import statuteTimelineAppHtml from "./apps/statute-timeline/generated/app.html.txt" with { type: "text" };
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -145,6 +147,21 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
     read: () => citationGraphAppHtml,
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
+  {
+    uri: STATUTE_TIMELINE_APP.uri,
+    name: "statute-timeline",
+    title: "Provision history",
+    description: "View provision version windows and compare adjacent wording.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => statuteTimelineAppHtml,
     resourceMeta: () => ({
       ui: {
         csp: { connectDomains: [], resourceDomains: [] },

@@ -6,7 +6,6 @@ import { timeEntryAmount, MoneyTotals } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 
 import { timeEntries } from "@/api/db/schema";
-import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import {
   loadTimekeeperNames,
   timeEntryExportConditions,
@@ -15,6 +14,7 @@ import {
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { exportAmountText } from "@/api/lib/billing/export-amount";
 import { LIMITS } from "@/api/lib/limits";
 import { readOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import { PDF_MIME_TYPE } from "@/api/mime-types";

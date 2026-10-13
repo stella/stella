@@ -131,6 +131,10 @@ await Bun.write(
   `${fonts}\n${styles.css}`,
 );
 
+if (Bun.argv.includes("--shared-assets-only")) {
+  process.exit(0);
+}
+
 const MCP_APP_DIRECTORIES = MCP_APPS.map(({ directory }) => directory);
 const MCP_APP_INPUTS = ["app.html"] as const;
 const readerInputGraphs = new Map<string, string[]>();
