@@ -40,9 +40,7 @@ test("shared decision identity preserves the public breadcrumb DOM and court tre
     );
     const shared = renderToStaticMarkup(<DecisionIdentity {...props} />);
     expect(shared).toBe(previous);
-    expect(shared.includes('data-slot="court-badge"')).toBe(
-      courtTier !== undefined,
-    );
+    expect(shared).toContain('data-slot="court-badge"');
   }
 });
 

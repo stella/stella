@@ -27,6 +27,7 @@ import {
   threadInvariantViolationsOf,
   type ThreadInvariantSnapshot,
 } from "@/api/tests/helpers/chat-thread-invariants";
+import { createTestMutantDirectory } from "@/api/tests/helpers/test-mutants";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -141,15 +142,9 @@ test("omitting the real reason predicate fails the same cancelled-outcome assert
   const source = readFileSync(owner, "utf-8");
   const predicate = "storedReason(stored) === expected.reason";
   expect(source.split(predicate)).toHaveLength(2);
-  const token = Bun.randomUUIDv7();
-  const mutant = path.join(
-    import.meta.dir,
-    `chat-thread-invariants-${token}.mutation.ts`,
-  );
-  const runner = path.join(
-    import.meta.dir,
-    `chat-thread-invariants-${token}.assertion.ts`,
-  );
+  const directory = createTestMutantDirectory("chat-thread-invariants-");
+  const mutant = path.join(directory, "mutation.ts");
+  const runner = path.join(directory, "assertion.ts");
   const fixture = reasonCase(reasonCases[0]);
   const assertion = "reason predicate required for cancelled outcome";
   try {
@@ -201,8 +196,7 @@ deepStrictEqual(threadInvariantViolationsOf(snapshot).turnOutcomeMismatches, exp
     expect(omitted.stderr).toContain("AssertionError");
     expect(omitted.stderr).toContain(assertion);
   } finally {
-    rmSync(mutant, { force: true });
-    rmSync(runner, { force: true });
+    rmSync(directory, { recursive: true, force: true });
   }
 }, 30_000);
 

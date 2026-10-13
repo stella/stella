@@ -47,6 +47,8 @@
     "./command": "./src/components/command.tsx",
     "./composer": "./src/components/composer.tsx",
     "./context-menu": "./src/components/context-menu.tsx",
+    "./document-identity-badge": "./src/components/document-identity-badge.tsx",
+    "./document-identity-badge.logic": "./src/components/document-identity-badge.logic.ts",
     "./court-badge": "./src/components/court-badge.tsx",
     "./control-size": "./src/lib/control-size.ts",
     "./copy-button": "./src/components/copy-button.tsx",
