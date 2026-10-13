@@ -77,6 +77,9 @@ export default defineConfig({
       // CI shards this uniform-cost matrix independently from the general suite.
       name: "docked-chat-geometry",
       testMatch: DOCKED_CHAT_GEOMETRY_SPEC,
+      // Each worker owns a distinct fixture world; each case owns its browser
+      // context and HTTP fixtures. Keep other projects on their profile budget.
+      workers: 4,
       use: { ...devices["Desktop Chrome"] },
     },
     {

@@ -13,6 +13,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { readDockedChatHosts } from "../apps/web/e2e/helpers/docked-chat-hosts";
+import playwrightConfig from "../apps/web/e2e/playwright.config";
 import { E2E_SHARD_COUNT } from "./e2e-spec-shards-core";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -20,7 +21,7 @@ type ListedSuite = {
   title: string;
   file: string;
   suites: ListedSuite[];
-  specs: { title: string }[];
+  specs: { title: string; tests: { projectName: string }[] }[];
 };
 type ListedSuiteInput = Omit<ListedSuite, "suites" | "specs"> & {
   suites?: ListedSuiteInput[] | undefined;
@@ -35,14 +36,22 @@ const suiteSchema = v.object({
     ),
     [],
   ),
-  specs: v.optional(v.array(v.object({ title: v.string() })), []),
+  specs: v.optional(
+    v.array(
+      v.object({
+        title: v.string(),
+        tests: v.array(v.object({ projectName: v.string() })),
+      }),
+    ),
+    [],
+  ),
 });
 const reportSchema = v.object({
   suites: v.array(suiteSchema),
   errors: v.array(v.unknown()),
 });
 
-const listGeometry = (args: string[]) => {
+const listCases = (args: string[], specFile?: string) => {
   const reportFileEnv = new Set([
     "PLAYWRIGHT_JSON_OUTPUT_FILE",
     "PLAYWRIGHT_JSON_OUTPUT_NAME",
@@ -78,9 +87,13 @@ const listGeometry = (args: string[]) => {
   const collect = (suites: ListedSuite[], ancestors: string[]) => {
     for (const suite of suites) {
       const titles = [...ancestors, suite.title];
-      if (suite.file.endsWith("docked-chat-geometry.spec.ts")) {
+      if (specFile === undefined || suite.file.endsWith(specFile)) {
         cases.push(
-          ...suite.specs.map(({ title }) => [...titles, title].join(" > ")),
+          ...suite.specs.flatMap(({ title, tests }) =>
+            tests.map(({ projectName }) =>
+              [projectName, ...titles, title].join(" > "),
+            ),
+          ),
         );
       }
       collect(suite.suites, titles);
@@ -89,6 +102,9 @@ const listGeometry = (args: string[]) => {
   collect(report.suites, []);
   return cases;
 };
+
+const listGeometry = (args: string[]) =>
+  listCases(args, "docked-chat-geometry.spec.ts");
 
 const productionShardRun = () => {
   const workflow = v.parse(
@@ -113,6 +129,52 @@ const productionShardRun = () => {
   }
   return run;
 };
+
+test("only the isolated geometry project expands its worker budget", () => {
+  const projects = playwrightConfig.projects ?? [];
+  const geometry = projects.find(({ name }) => name === "docked-chat-geometry");
+  expect(geometry?.workers).toBe(4);
+  expect(productionShardRun()).toContain(
+    `--project=docked-chat-geometry --shard=\${{ matrix.shard }}/${E2E_SHARD_COUNT} --workers=4`,
+  );
+  for (const project of projects) {
+    if (project.name === "docked-chat-geometry") {
+      continue;
+    }
+    expect(project.workers).toBe(
+      project.name === "route-smoke" ? 1 : undefined,
+    );
+  }
+  expect(playwrightConfig.fullyParallel).toBe(true);
+  expect(playwrightConfig.retries).toBe(0);
+});
+
+test("the production phases partition every case exactly once", () => {
+  const run = productionShardRun();
+  const generalProjects =
+    /args=\(([^\n]+)\)/u
+      .exec(run)?.[1]
+      ?.split(" ")
+      .filter((arg) => arg.startsWith("--project=")) ?? [];
+  expect(generalProjects.length).toBeGreaterThan(0);
+  const exclusion = /--grep-invert='([^']+)'/u.exec(run)?.[1];
+  if (exclusion === undefined) {
+    panic("Production general phase is missing its exclusion filter");
+  }
+  const generalArgs = [...generalProjects, `--grep-invert=${exclusion}`];
+  const geometryProjects = ["--project=docked-chat-geometry"];
+  const allCases = [...listCases(generalArgs), ...listCases(geometryProjects)];
+  expect(allCases.length).toBeGreaterThan(0);
+  const partition = Array.from({ length: E2E_SHARD_COUNT }, (_, index) => {
+    const shard = `--shard=${index + 1}/${E2E_SHARD_COUNT}`;
+    return [
+      ...listCases([...generalArgs, shard]),
+      ...listCases([...geometryProjects, shard]),
+    ];
+  }).flat();
+  expect(partition.toSorted()).toEqual(allCases.toSorted());
+  expect(new Set(partition).size).toBe(partition.length);
+}, 60_000);
 
 test("production shards split every geometry viewport evenly without losing hosts", () => {
   const run = productionShardRun();

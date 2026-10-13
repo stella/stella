@@ -6751,7 +6751,7 @@ jobs:
             E2E_OUTPUT_DIR=test-results/geometry \
               PLAYWRIGHT_JSON_OUTPUT_FILE="$GITHUB_WORKSPACE/.cache/playwright-timings/run-geometry-shard.json" \
               bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
-              bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2 || status=$?
+              bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2 --workers=4 || status=$?
           fi
           bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --check ${{ matrix.shard }} "$SECONDS" || status=$?
           exit "$status"
