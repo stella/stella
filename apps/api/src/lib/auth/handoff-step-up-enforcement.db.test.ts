@@ -69,10 +69,27 @@ const endpointInspectionContext = async (
   auth: ReturnType<typeof getAuth>,
 ): Promise<AuthContext> => {
   const context = await auth.$context;
-  // getEndpoints only closes over this context for middleware execution; the
-  // census inspects registration and never invokes those middleware closures.
+  const adapterFailure = () =>
+    panic("Endpoint census must not execute adapter operations");
+  // Registration inspection must not reach a database. Replacing the
+  // configured adapter also avoids widening its option-specific generic to
+  // Better Auth's default, invariant adapter type.
   return {
     ...context,
+    adapter: {
+      id: "endpoint-census",
+      create: async () => adapterFailure(),
+      findOne: async () => adapterFailure(),
+      findMany: async () => adapterFailure(),
+      count: async () => adapterFailure(),
+      update: async () => adapterFailure(),
+      updateMany: async () => adapterFailure(),
+      delete: async () => adapterFailure(),
+      deleteMany: async () => adapterFailure(),
+      consumeOne: async () => adapterFailure(),
+      incrementOne: async () => adapterFailure(),
+      transaction: async () => adapterFailure(),
+    },
     getPlugin: () =>
       panic("Endpoint census must not execute plugin middleware"),
     hasPlugin: () =>

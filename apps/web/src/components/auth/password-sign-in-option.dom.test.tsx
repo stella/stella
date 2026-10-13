@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { SignInMode } from "./sign-in-mode";
 import type { AuthCapabilities } from "./sign-in-panel.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/auth/sign-in" });
@@ -15,7 +16,7 @@ globalThis.fetch = stubFetch(null);
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const router = await import("@tanstack/react-router");
-const { cleanup, fireEvent, render, waitFor } =
+const { cleanup, fireEvent, render, waitFor, within } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -51,7 +52,7 @@ const emailOnly = {
 
 const mount = async (
   capabilities: AuthCapabilities,
-  mode = SIGN_IN_MODE.signIn,
+  mode: SignInMode = SIGN_IN_MODE.signIn,
   events: string[] = [],
 ) => {
   globalThis.fetch = stubFetch(capabilities);
@@ -159,15 +160,25 @@ test("password two-factor sign-in clears the old session before the challenge gu
     { preconnect: () => undefined },
   );
 
-  fireEvent.change(ui.getByPlaceholderText(messages.auth.emailPlaceholder), {
-    target: { value: "member@example.test" },
+  const passwordSubmit = ui.getByRole("button", {
+    name: messages.auth.signInWithPassword,
   });
-  fireEvent.change(ui.getByPlaceholderText(messages.auth.password), {
-    target: { value: "correct horse battery staple" },
-  });
-  fireEvent.click(
-    ui.getByRole("button", { name: messages.auth.signInWithPassword }),
+  const passwordForm = passwordSubmit.closest("form");
+  if (passwordForm === null) {
+    throw new Error("Password sign-in button must belong to its form");
+  }
+  const passwordFields = within(passwordForm);
+  fireEvent.change(
+    passwordFields.getByPlaceholderText(messages.auth.emailPlaceholder),
+    {
+      target: { value: "member@example.test" },
+    },
   );
+  fireEvent.change(
+    passwordFields.getByPlaceholderText(messages.auth.password),
+    { target: { value: "correct horse battery staple" } },
+  );
+  fireEvent.click(passwordSubmit);
 
   await ui.findByTestId("two-factor-challenge");
   expect(client.getQueryData(sessionOptions.queryKey)).toBeNull();

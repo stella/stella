@@ -41,9 +41,9 @@ const hasSensitivePermissions = (permissions: unknown) => {
 
 const isHandoffStepUpRefusal = (value: unknown) =>
   isRecord(value) &&
-  value.code === 403 &&
-  isRecord(value.response) &&
-  value.response.code === MCP_HANDOFF_STEP_UP_REQUIRED;
+  value["code"] === 403 &&
+  isRecord(value["response"]) &&
+  value["response"]["code"] === MCP_HANDOFF_STEP_UP_REQUIRED;
 
 const routeRequiresStepUp = (route: (typeof api.routes)[number]) => {
   const metadata = getSafeHandlerAccessMetadata(route.handler);

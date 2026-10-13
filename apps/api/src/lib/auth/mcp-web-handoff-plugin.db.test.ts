@@ -70,7 +70,7 @@ let service: ReturnType<typeof createWebHandoffService>;
 let auth: ReturnType<typeof makeAuth>;
 let handoffEnabled = true;
 let handoffTextEnabled = true;
-let deliveredEmailOtp: string | undefined;
+const deliveredEmailOtps: string[] = [];
 const fixture = {
   credentialType: "oauth" as const,
   grantedScopes: [...MCP_OAUTH_SCOPES],
@@ -106,7 +106,7 @@ const makeAuth = (
         disableSignUp: true,
         generateOTP: () => "314159",
         sendVerificationOTP: async ({ otp }) => {
-          deliveredEmailOtp = otp;
+          deliveredEmailOtps.push(otp);
         },
       }),
       createMcpWebHandoffPlugin({
@@ -217,10 +217,14 @@ const mint = async (kind: "text" | "click") => {
   }
   return code;
 };
+type RedeemOptions = {
+  confirmation?: "confirmed";
+  cookie?: string;
+  address?: string;
+};
 const redeem = async (
   code: string,
-  confirmation?: "confirmed",
-  cookie?: string,
+  { confirmation, cookie, address }: RedeemOptions = {},
 ) =>
   await auth.handler(
     new Request(`${baseURL}/api/auth/mcp-handoff/redeem`, {
@@ -229,6 +233,7 @@ const redeem = async (
         origin: baseURL,
         "content-type": "application/json",
         ...(cookie ? { cookie } : {}),
+        ...(address ? { [AUTH_CLIENT_ADDRESS_HEADER]: address } : {}),
       },
       body: JSON.stringify({
         code,
@@ -392,7 +397,7 @@ describe("MCP link sign-in", () => {
     handoffTextEnabled = false;
     try {
       expect(await service.inspect(code)).toBeNull();
-      const response = await redeem(code, "confirmed");
+      const response = await redeem(code, { confirmation: "confirmed" });
       expect(
         v.parse(mcpHandoffRedeemResultSchema, await response.json()).status,
       ).toBe("refused");
@@ -409,7 +414,9 @@ describe("MCP link sign-in", () => {
     } finally {
       handoffTextEnabled = true;
     }
-    expect((await redeem(code, "confirmed")).status).toBe(200);
+    expect((await redeem(code, { confirmation: "confirmed" })).status).toBe(
+      200,
+    );
   });
   test("text links request confirmation before creating a session", async () => {
     const code = await mint("text");
@@ -430,7 +437,7 @@ describe("MCP link sign-in", () => {
         ),
       ),
     ).toBe(1);
-    const response = await redeem(code, "confirmed");
+    const response = await redeem(code, { confirmation: "confirmed" });
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(cookieOf(response)).toContain("session_token=");
@@ -448,7 +455,9 @@ describe("MCP link sign-in", () => {
     expect(stored?.handoffAbsoluteExpiresAt?.getTime()).toBeLessThanOrEqual(
       Date.now() + 43_200_000,
     );
-    expect((await redeem(code, "confirmed")).status).toBe(403);
+    expect((await redeem(code, { confirmation: "confirmed" })).status).toBe(
+      403,
+    );
   });
   test("click links create a normal-lifetime session without confirmation", async () => {
     const response = await redeem(await mint("click"));
@@ -527,7 +536,7 @@ describe("MCP link sign-in", () => {
       (await auth.api.getSession({ headers: { cookie: handoffCookie } }))
         ?.session.originConsentId,
     ).toBe(fixture.consentId);
-    deliveredEmailOtp = undefined;
+    deliveredEmailOtps.length = 0;
     const sent = await auth.handler(
       new Request(`${baseURL}/api/auth/email-otp/send-verification-otp`, {
         method: "POST",
@@ -543,6 +552,7 @@ describe("MCP link sign-in", () => {
       }),
     );
     expect(sent.status).toBe(200);
+    const deliveredEmailOtp = deliveredEmailOtps.at(-1);
     expect(deliveredEmailOtp).toBe("314159");
     const completed = await auth.handler(
       new Request(`${baseURL}/api/auth/sign-in/email-otp`, {
@@ -682,12 +692,19 @@ describe("MCP link sign-in", () => {
     expect(normalSession?.session.originConsentId ?? null).toBeNull();
   });
   test.each(
-    MCP_WEB_HANDOFF_KINDS.flatMap((priorKind) =>
-      MCP_WEB_HANDOFF_KINDS.map((nextKind) => [priorKind, nextKind] as const),
+    MCP_WEB_HANDOFF_KINDS.flatMap((priorKind, priorIndex) =>
+      MCP_WEB_HANDOFF_KINDS.map(
+        (nextKind, nextIndex) =>
+          [
+            priorKind,
+            nextKind,
+            `192.0.2.${priorIndex * MCP_WEB_HANDOFF_KINDS.length + nextIndex + 1}`,
+          ] as const,
+      ),
     ),
   )(
     "%s handoff sessions are replaced by %s sessions owned by the next consent",
-    async (priorKind, nextKind) => {
+    async (priorKind, nextKind, address) => {
       const replacementUserId = Bun.randomUUIDv7();
       const replacementFixture = { ...fixture, userId: replacementUserId };
       await db.insert(user).values({
@@ -705,17 +722,30 @@ describe("MCP link sign-in", () => {
       });
       const priorConsentId = Bun.randomUUIDv7();
       const nextConsentId = Bun.randomUUIDv7();
+      const priorClientId = Bun.randomUUIDv7();
+      const nextClientId = Bun.randomUUIDv7();
+      await db.insert(oauthClient).values(
+        [priorClientId, nextClientId].map((clientId) => ({
+          id: clientId,
+          clientId,
+          name: "Connected app",
+          redirectUris: [],
+        })),
+      );
       await db.insert(oauthConsent).values(
-        [priorConsentId, nextConsentId].map((id) => ({
+        [
+          { id: priorConsentId, clientId: priorClientId },
+          { id: nextConsentId, clientId: nextClientId },
+        ].map(({ id, clientId }) => ({
           id,
-          clientId: fixture.clientId,
+          clientId,
           userId: replacementUserId,
           referenceId: fixture.organizationId,
           scopes: [...MCP_OAUTH_SCOPES],
         })),
       );
       const priorCode = await service.mint(
-        { ...replacementFixture, consentId: priorConsentId },
+        { ...replacementFixture, clientId: priorClientId },
         ["/law/example"],
         priorKind,
       );
@@ -723,7 +753,10 @@ describe("MCP link sign-in", () => {
       if (priorCode === null) {
         expect.unreachable("Expected prior handoff code");
       }
-      const priorResponse = await redeem(priorCode, "confirmed");
+      const priorResponse = await redeem(priorCode, {
+        confirmation: "confirmed",
+        address,
+      });
       expect(priorResponse.status).toBe(200);
       const prior = await auth.api.getSession({
         headers: { cookie: cookieOf(priorResponse) },
@@ -734,7 +767,7 @@ describe("MCP link sign-in", () => {
         expect.unreachable("Expected prior handoff session");
       }
       const nextCode = await service.mint(
-        { ...replacementFixture, consentId: nextConsentId },
+        { ...replacementFixture, clientId: nextClientId },
         ["/law/example"],
         nextKind,
       );
@@ -743,11 +776,11 @@ describe("MCP link sign-in", () => {
         expect.unreachable("Expected next handoff code");
       }
       const startedAt = Date.now();
-      const nextResponse = await redeem(
-        nextCode,
-        "confirmed",
-        cookieOf(priorResponse),
-      );
+      const nextResponse = await redeem(nextCode, {
+        confirmation: "confirmed",
+        cookie: cookieOf(priorResponse),
+        address,
+      });
       expect(nextResponse.status).toBe(200);
       const nextCookie = cookieOf(nextResponse);
       const next = await auth.api.getSession({
@@ -778,7 +811,9 @@ describe("MCP link sign-in", () => {
         expect(stored?.handoffAbsoluteExpiresAt?.getTime()).toBeLessThanOrEqual(
           Date.now() + 43_200_000,
         );
-        expect(stored?.expiresAt).toEqual(stored?.handoffAbsoluteExpiresAt);
+        expect(stored?.expiresAt.getTime()).toBe(
+          stored?.handoffAbsoluteExpiresAt?.getTime(),
+        );
       } else {
         expect(stored?.handoffAbsoluteExpiresAt).toBeNull();
         expect(stored?.expiresAt.getTime()).toBeGreaterThan(
@@ -805,7 +840,9 @@ describe("MCP link sign-in", () => {
     },
   );
   test("an incomplete replacement preserves the prior session and unused link", async () => {
-    const priorResponse = await redeem(await mint("click"));
+    const priorResponse = await redeem(await mint("click"), {
+      address: "192.0.2.20",
+    });
     expect(priorResponse.status).toBe(200);
     const priorCookie = cookieOf(priorResponse);
     const prior = await auth.api.getSession({
@@ -832,6 +869,7 @@ describe("MCP link sign-in", () => {
           origin: baseURL,
           "content-type": "application/json",
           cookie: priorCookie,
+          [AUTH_CLIENT_ADDRESS_HEADER]: "192.0.2.20",
         },
         body: JSON.stringify({
           code,
@@ -877,7 +915,7 @@ describe("MCP link sign-in", () => {
       .select({ id: session.id })
       .from(session)
       .where(eq(session.userId, fixture.userId));
-    const response = await redeem(code, undefined, existingCookie);
+    const response = await redeem(code, { cookie: existingCookie });
     expect(response.status).toBe(200);
     expect(cookieOf(response)).toContain("session_token=");
     const retained = await auth.api.getSession({
@@ -949,7 +987,7 @@ describe("MCP link sign-in", () => {
     const code = await mint("click");
     await db.delete(member).where(eq(member.id, "plugin-member"));
     try {
-      const response = await redeem(code, undefined, existingCookie);
+      const response = await redeem(code, { cookie: existingCookie });
       expect(response.status).toBe(403);
       expect(
         v.parse(mcpHandoffRedeemResultSchema, await response.json()),
@@ -1011,7 +1049,7 @@ describe("MCP link sign-in", () => {
     if (!code) {
       throw new TypeError("Expected other-account handoff");
     }
-    const response = await redeem(code, undefined, existingCookie);
+    const response = await redeem(code, { cookie: existingCookie });
     expect(
       v.parse(mcpHandoffRedeemResultSchema, await response.json()).status,
     ).toBe("needs_confirmation");
