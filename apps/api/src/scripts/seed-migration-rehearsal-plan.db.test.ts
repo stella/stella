@@ -10,6 +10,7 @@ import type { RehearsalSeedStep } from "./seed-migration-rehearsal-plan";
 import {
   REHEARSAL_ROWS_PER_DECISION,
   REHEARSAL_SEED_ORDER,
+  REHEARSAL_SEED_TABLES,
   rehearsalPresentTablesStatement,
   rehearsalSeedSteps,
   rehearsalVacuumStatement,
@@ -57,11 +58,9 @@ const applySteps = async (
       await db.execute(sql.raw(step.statement));
       continue;
     }
-    // The current schema holds every registered table.
-    const present = resultRows(
-      await db.execute(sql.raw(rehearsalPresentTablesStatement(step.tables))),
-    ).map((row) => (isRecord(row) ? row["name"] : undefined));
-    expect(new Set(present)).toEqual(new Set(step.tables));
+    if (step.type === "skip") {
+      continue;
+    }
     await db.execute(sql.raw(rehearsalVacuumStatement(step.tables)));
   }
 };
@@ -72,7 +71,7 @@ test("the seed order names every registered high-volume table exactly once", () 
 });
 
 test("the run ends with one vacuum of exactly the tables it seeds", () => {
-  const steps = rehearsalSeedSteps(DECISIONS);
+  const steps = rehearsalSeedSteps(DECISIONS, new Set(REHEARSAL_SEED_TABLES));
   const seeded = steps.flatMap((step) =>
     step.type === "sql" && step.table !== null ? [step.table] : [],
   );
@@ -88,7 +87,10 @@ test("every seeder satisfies the schema and writes its promised rows", async () 
   const client = await createTestPglite();
   const db = drizzle({ client });
 
-  await applySteps(db, rehearsalSeedSteps(DECISIONS));
+  await applySteps(
+    db,
+    rehearsalSeedSteps(DECISIONS, new Set(REHEARSAL_SEED_TABLES)),
+  );
 
   const counts = await Promise.all(
     HIGH_VOLUME_TABLES.map(async (table) => [
@@ -113,11 +115,52 @@ test("every seeder satisfies the schema and writes its promised rows", async () 
   expect(exactStates).toEqual({ count: 0 });
 
   // Rerunnable on a database that already holds the fixtures.
-  await applySteps(db, rehearsalSeedSteps(DECISIONS).slice(0, 2));
+  await applySteps(
+    db,
+    rehearsalSeedSteps(DECISIONS, new Set(REHEARSAL_SEED_TABLES)).slice(0, 2),
+  );
   await client.close();
 }, 120_000);
 
 test("refuses a decision count that is not a positive integer", () => {
-  expect(() => rehearsalSeedSteps(0)).toThrow(/positive integer/u);
-  expect(() => rehearsalSeedSteps(1.5)).toThrow(/positive integer/u);
+  expect(() => rehearsalSeedSteps(0, new Set(REHEARSAL_SEED_TABLES))).toThrow(
+    /positive integer/u,
+  );
+  expect(() => rehearsalSeedSteps(1.5, new Set(REHEARSAL_SEED_TABLES))).toThrow(
+    /positive integer/u,
+  );
 });
+
+test("a table absent from the base schema is skipped while other seeders run", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  try {
+    await db.execute(sql`DROP TABLE case_law_decision_citation_stats`);
+    const rows = resultRows(
+      await db.execute(
+        sql.raw(rehearsalPresentTablesStatement(REHEARSAL_SEED_TABLES)),
+      ),
+    );
+    const present = new Set(
+      rows.flatMap((row) =>
+        isRecord(row) && typeof row["name"] === "string" ? [row["name"]] : [],
+      ),
+    );
+    expect(present.has("case_law_decision_citation_stats")).toBe(false);
+    const steps = rehearsalSeedSteps(DECISIONS, present);
+    expect(steps.filter((step) => step.type === "skip")).toEqual([
+      {
+        type: "skip",
+        table: "case_law_decision_citation_stats",
+        missingTables: ["case_law_decision_citation_stats"],
+      },
+    ]);
+    await applySteps(db, steps);
+    expect(await countRows(db, "case_law_decisions")).toBe(DECISIONS);
+    expect(await countRows(db, "case_law_decision_citation_stats_state")).toBe(
+      DECISIONS,
+    );
+  } finally {
+    await client.close();
+  }
+}, 120_000);

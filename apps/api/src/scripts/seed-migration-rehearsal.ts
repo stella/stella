@@ -20,6 +20,7 @@ import { resolveDatabaseUrl } from "@/api/db-url";
 import type { RehearsalSeedStep } from "@/api/scripts/seed-migration-rehearsal-plan";
 import {
   REHEARSAL_DEFAULT_DECISIONS,
+  REHEARSAL_SEED_TABLES,
   rehearsalPresentTablesStatement,
   rehearsalSeedSteps,
   rehearsalVacuumStatement,
@@ -60,15 +61,14 @@ const applyStep = async (client: SQL, step: RehearsalSeedStep) => {
       }
       return;
     }
-    case "vacuum": {
-      const rows: { name: string }[] = await client.unsafe(
-        rehearsalPresentTablesStatement(step.tables),
+    case "skip": {
+      console.info(
+        `skipped ${step.table}: missing tables ${step.missingTables.join(", ")}`,
       );
-      const present = new Set(rows.map(({ name }) => name));
-      const tables = step.tables.filter((table) => present.has(table));
-      if (tables.length === 0) {
-        panic("No seeded table is present to vacuum");
-      }
+      return;
+    }
+    case "vacuum": {
+      const tables = step.tables;
       await client.unsafe(rehearsalVacuumStatement(tables));
       console.info(
         `vacuumed ${String(tables.length)} tables: ${elapsedSince(stepStartedAt)}`,
@@ -119,7 +119,11 @@ await runScriptWithErrorOutput(async () => {
       // A bound per statement, well above the largest seed on a CI runner:
       // a statement that runs into it is stuck, not slow.
       await client.unsafe(`SET statement_timeout = '${STATEMENT_TIMEOUT}'`);
-      await applyStepAt(client, rehearsalSeedSteps(decisions));
+      const rows: { name: string }[] = await client.unsafe(
+        rehearsalPresentTablesStatement(REHEARSAL_SEED_TABLES),
+      );
+      const presentTables = new Set(rows.map(({ name }) => name));
+      await applyStepAt(client, rehearsalSeedSteps(decisions, presentTables));
       console.info(
         `seeded ${String(decisions)} decisions and their dependents in ${((performance.now() - startedAt) / 1000).toFixed(1)}s`,
       );

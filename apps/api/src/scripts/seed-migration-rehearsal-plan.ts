@@ -143,15 +143,23 @@ const owner = (per: number) => `((g.k - 1) / ${String(per)}) + 1`;
 const other = (decisions: number) =>
   `((g.k::bigint * 7919) % ${String(decisions)}) + 1`;
 
-type Seeder = (decisions: number) => string;
+type RehearsalTable = HighVolumeTable | "case_law_provision_extraction_scopes";
+
+type Seeder = {
+  tables: readonly [RehearsalTable, ...RehearsalTable[]];
+  statements: (decisions: number) => readonly string[];
+};
 
 /**
- * One INSERT per registered table, keyed by the table it fills. Total by
+ * One seeder per registered table, keyed by the table it fills. Total by
  * construction: a table added to the registry without a seeder does not
  * compile.
  */
 export const REHEARSAL_SEEDERS = {
-  case_law_decisions: (decisions) => `
+  case_law_decisions: {
+    tables: ["case_law_decisions"],
+    statements: (decisions) => [
+      `
     INSERT INTO case_law_decisions
       (id, source_id, case_number, citation_key, court, country, language,
        decision_date, metadata, content_hash, projection_epoch)
@@ -171,37 +179,39 @@ export const REHEARSAL_SEEDERS = {
            ${ZERO_DIGEST},
            ${PROJECTION_EPOCH}
     FROM generate_series(1, ${String(decisions)}) AS g(k)`,
-  // Introduced by the pending citation-stats migration. Conditional until the
-  // promoted base schema used by upgrade rehearsals carries it.
-  case_law_decision_citation_stats: () => `
-    DO $rehearsal$
-    BEGIN
-      IF to_regclass('case_law_decision_citation_stats') IS NOT NULL THEN
-        EXECUTE $seed$
-          INSERT INTO case_law_decision_citation_stats
-            (decision_id, direction, related_year, related_country, related_source_id, polarity, count)
-          SELECT d.id, 'incoming', 2024, 'CZE', '${SOURCE_ID}', 'unknown', 1
-          FROM rehearsal_decisions d
-        $seed$;
-      END IF;
-    END
-    $rehearsal$`,
-  case_law_decision_citation_stats_state: () => `
-    DO $rehearsal$
-    BEGIN
-      IF to_regclass('case_law_decision_citation_stats_state') IS NOT NULL THEN
-        EXECUTE $seed$
-          INSERT INTO case_law_decision_citation_stats_state (decision_id, status)
-          SELECT d.id, 'pending' FROM rehearsal_decisions d
-        $seed$;
-      END IF;
-    END
-    $rehearsal$`,
-  case_law_decision_identifiers: () => `
+    ],
+  },
+  case_law_decision_citation_stats: {
+    tables: ["case_law_decision_citation_stats"],
+    statements: () => [
+      `
+    INSERT INTO case_law_decision_citation_stats
+      (decision_id, direction, related_year, related_country, related_source_id, polarity, count)
+    SELECT d.id, 'incoming', 2024, 'CZE', '${SOURCE_ID}', 'unknown', 1
+    FROM rehearsal_decisions d`,
+    ],
+  },
+  case_law_decision_citation_stats_state: {
+    tables: ["case_law_decision_citation_stats_state"],
+    statements: () => [
+      `
+    INSERT INTO case_law_decision_citation_stats_state (decision_id, status)
+    SELECT d.id, 'pending' FROM rehearsal_decisions d`,
+    ],
+  },
+  case_law_decision_identifiers: {
+    tables: ["case_law_decision_identifiers"],
+    statements: () => [
+      `
     INSERT INTO case_law_decision_identifiers (decision_id, type, value, normalized_value)
     SELECT d.id, 'case-number', d.case_number, lower(d.case_number)
     FROM rehearsal_decisions d`,
-  case_law_citations: (decisions) => `
+    ],
+  },
+  case_law_citations: {
+    tables: ["case_law_citations"],
+    statements: (decisions) => [
+      `
     INSERT INTO case_law_citations
       (id, citing_decision_id, cited_decision_id, citation_text, citation_key,
        kind, resolution_status, resolution_attempted_at)
@@ -218,7 +228,12 @@ export const REHEARSAL_SEEDERS = {
     FROM generate_series(1, ${String(decisions * REHEARSAL_ROWS_PER_DECISION.case_law_citations)}) AS g(k)
     JOIN rehearsal_decisions citing ON citing.rn = ${owner(REHEARSAL_ROWS_PER_DECISION.case_law_citations)}
     JOIN rehearsal_decisions cited ON cited.rn = ${other(decisions)}`,
-  case_law_provision_citations: (decisions) => `
+    ],
+  },
+  case_law_provision_citations: {
+    tables: ["case_law_provision_citations"],
+    statements: (decisions) => [
+      `
     INSERT INTO case_law_provision_citations
       (id, decision_id, jurisdiction, work_identifier, work_number, work_year,
        work_collection, unit, section, anchor, sentence_text, span_start,
@@ -239,58 +254,60 @@ export const REHEARSAL_SEEDERS = {
            0.9
     FROM generate_series(1, ${String(decisions * REHEARSAL_ROWS_PER_DECISION.case_law_provision_citations)}) AS g(k)
     JOIN rehearsal_decisions d ON d.rn = ${owner(REHEARSAL_ROWS_PER_DECISION.case_law_provision_citations)}`,
-  // This table is introduced by the pending citation-count migration. Keep
-  // the statement conditional until that migration is part of the promoted
-  // base schema used by upgrade rehearsals.
-  case_law_statute_citation_memberships: (decisions) => `
-    DO $rehearsal$
-    BEGIN
-      IF to_regclass('case_law_statute_citation_memberships') IS NOT NULL THEN
-        EXECUTE $seed$
-          INSERT INTO case_law_statute_citation_memberships
-            (decision_id, source_id, jurisdiction, work_eli, target_type, anchor)
-          SELECT d.id,
-                 '${SOURCE_ID}',
-                 'CZE',
-                 '/cz/act/2012/' || (g.k % 500 + 1),
-                 'provision',
-                 'par_' || (g.k % 3000 + 1)
-          FROM generate_series(1, ${String(decisions * REHEARSAL_ROWS_PER_DECISION.case_law_statute_citation_memberships)}) AS g(k)
-          JOIN rehearsal_decisions d ON d.rn = ${owner(REHEARSAL_ROWS_PER_DECISION.case_law_statute_citation_memberships)}
-        $seed$;
-      END IF;
-    END
-    $rehearsal$`,
-  // Introduced by a pending migration, and written only by its own
-  // functions: activate the seeded decisions' scope, then seed their state
-  // through ensure_case_law_provision_extraction_state. Conditional until the
-  // promoted base schema carries it.
-  case_law_provision_extractions: () => `
-    DO $rehearsal$
-    BEGIN
-      IF to_regclass('case_law_provision_extractions') IS NOT NULL THEN
-        EXECUTE $seed$
-          INSERT INTO case_law_provision_extraction_scopes AS scope
-            (country, language, status, generation)
-          VALUES ('CZE', 'cs', 'active', 1)
-          ON CONFLICT ON CONSTRAINT case_law_provision_extraction_scopes_pkey
-          DO UPDATE SET status = 'active', generation = scope.generation + 1
-          WHERE scope.status <> 'active'
-        $seed$;
-        PERFORM ensure_case_law_provision_extraction_state(
-          ARRAY(SELECT d.id FROM rehearsal_decisions d),
-          'seed'
-        );
-      END IF;
-    END
-    $rehearsal$`,
-  case_law_search_documents: () => `
+    ],
+  },
+  case_law_statute_citation_memberships: {
+    tables: ["case_law_statute_citation_memberships"],
+    statements: (decisions) => [
+      `
+    INSERT INTO case_law_statute_citation_memberships
+      (decision_id, source_id, jurisdiction, work_eli, target_type, anchor)
+    SELECT d.id,
+           '${SOURCE_ID}',
+           'CZE',
+           '/cz/act/2012/' || (g.k % 500 + 1),
+           'provision',
+           'par_' || (g.k % 3000 + 1)
+    FROM generate_series(1, ${String(decisions * REHEARSAL_ROWS_PER_DECISION.case_law_statute_citation_memberships)}) AS g(k)
+    JOIN rehearsal_decisions d ON d.rn = ${owner(REHEARSAL_ROWS_PER_DECISION.case_law_statute_citation_memberships)}`,
+    ],
+  },
+  // The scope upsert and state function both write tables; require both.
+  case_law_provision_extractions: {
+    tables: [
+      "case_law_provision_extractions",
+      "case_law_provision_extraction_scopes",
+    ],
+    statements: () => [
+      `
+    INSERT INTO case_law_provision_extraction_scopes AS scope
+      (country, language, status, generation)
+    VALUES ('CZE', 'cs', 'active', 1)
+    ON CONFLICT ON CONSTRAINT case_law_provision_extraction_scopes_pkey
+    DO UPDATE SET status = 'active', generation = scope.generation + 1
+    WHERE scope.status <> 'active'`,
+      `
+    SELECT ensure_case_law_provision_extraction_state(
+      ARRAY(SELECT d.id FROM rehearsal_decisions d),
+      'seed'
+    )`,
+    ],
+  },
+  case_law_search_documents: {
+    tables: ["case_law_search_documents"],
+    statements: () => [
+      `
     INSERT INTO case_law_search_documents
       (decision_id, title, searchable_text, language, regconfig, preview_generation)
     SELECT d.id, d.case_number, 'Rozsudek ' || d.case_number, 'cs', 'simple',
            '${PREVIEW_GENERATION}'
     FROM rehearsal_decisions d`,
-  case_law_search_document_preview_passages: (decisions) => `
+    ],
+  },
+  case_law_search_document_preview_passages: {
+    tables: ["case_law_search_document_preview_passages"],
+    statements: (decisions) => [
+      `
     INSERT INTO case_law_search_document_preview_passages
       (decision_id, generation, ordinal, content, tsv)
     SELECT d.id,
@@ -300,7 +317,12 @@ export const REHEARSAL_SEEDERS = {
            to_tsvector('simple', 'odstavec ' || g.k || ' odůvodnění rozsudku ' || d.case_number)
     FROM generate_series(1, ${String(decisions * REHEARSAL_ROWS_PER_DECISION.case_law_search_document_preview_passages)}) AS g(k)
     JOIN rehearsal_decisions d ON d.rn = ${owner(REHEARSAL_ROWS_PER_DECISION.case_law_search_document_preview_passages)}`,
-  corpus_index_projection_intents: () => `
+    ],
+  },
+  corpus_index_projection_intents: {
+    tables: ["corpus_index_projection_intents"],
+    statements: () => [
+      `
     INSERT INTO corpus_index_projection_intents
       (id, family, generation, entity_id, epoch, fingerprint, index_id, status,
        lease_token, lease_expires_at)
@@ -308,28 +330,45 @@ export const REHEARSAL_SEEDERS = {
            ${ZERO_DIGEST}, '${CORPUS_INDEX_ID}', 'reserved', gen_random_uuid(),
            now() + interval '1 hour'
     FROM rehearsal_decisions d`,
-  corpus_index_projection_states: () => `
+    ],
+  },
+  corpus_index_projection_states: {
+    tables: ["corpus_index_projection_states"],
+    statements: () => [
+      `
     INSERT INTO corpus_index_projection_states
       (family, generation, entity_id, desired_action, desired_epoch,
        desired_fingerprint, desired_index_id)
     SELECT 'case_law', '${CORPUS_GENERATION}', d.id, 'upsert', ${PROJECTION_EPOCH},
            ${ZERO_DIGEST}, '${CORPUS_INDEX_ID}'
     FROM rehearsal_decisions d`,
-  case_law_index_jobs: () => `
+    ],
+  },
+  case_law_index_jobs: {
+    tables: ["case_law_index_jobs"],
+    statements: () => [
+      `
     INSERT INTO case_law_index_jobs
       (id, decision_id, generation, operation, status, content_hash)
     SELECT gen_random_uuid(), d.id, '${CORPUS_GENERATION}', 'index', 'succeeded',
            ${ZERO_DIGEST}
     FROM rehearsal_decisions d`,
+    ],
+  },
   // The rehearsal seeds no legislation documents, so these are the rows the
   // trail keeps for a whole-index operation, which carry no document. The
   // volume is what a migration meets; the shape of the trail is the same.
-  legislation_index_jobs: () => `
+  legislation_index_jobs: {
+    tables: ["legislation_index_jobs"],
+    statements: () => [
+      `
     INSERT INTO legislation_index_jobs
       (id, document_id, generation, operation, status, content_hash)
     SELECT gen_random_uuid(), NULL, '${LEGISLATION_GENERATION}', 'rebuild',
            'succeeded', ${ZERO_DIGEST}
     FROM rehearsal_decisions d`,
+    ],
+  },
 } as const satisfies Record<HighVolumeTable, Seeder>;
 
 /**
@@ -358,16 +397,23 @@ export const REHEARSAL_SEED_ORDER = [
 
 export type RehearsalSeedStep =
   | { type: "sql"; statement: string; table: HighVolumeTable | null }
+  | {
+      type: "skip";
+      table: HighVolumeTable;
+      missingTables: readonly RehearsalTable[];
+    }
   | { type: "vacuum"; tables: readonly HighVolumeTable[] };
 
-/**
- * One `name` row per given table the schema holds: the seed runs against the
- * promoted release's schema, which need not hold every table this checkout
- * registers yet. `VACUUM` cannot run inside the `DO` block that guards the
- * other conditional statements, so the runner asks first.
- */
+/** All write targets, including those written through a database function. */
+export const REHEARSAL_SEED_TABLES = [
+  ...new Set(
+    Object.values(REHEARSAL_SEEDERS).flatMap(({ tables }) => [...tables]),
+  ),
+];
+
+/** One `name` row per table present in the promoted release's schema. */
 export const rehearsalPresentTablesStatement = (
-  tables: readonly HighVolumeTable[],
+  tables: readonly RehearsalTable[],
 ): string =>
   `SELECT name FROM (VALUES ${tables.map((table) => `('${table}')`).join(", ")}) AS present(name) WHERE to_regclass(name) IS NOT NULL`;
 
@@ -384,6 +430,7 @@ export const rehearsalVacuumStatement = (
  */
 export const rehearsalSeedSteps = (
   decisions: number,
+  presentTables: ReadonlySet<string>,
 ): readonly RehearsalSeedStep[] => {
   assertCount(decisions);
   const [decisionsTable, ...dependents] = REHEARSAL_SEED_ORDER;
@@ -392,20 +439,42 @@ export const rehearsalSeedSteps = (
     statement,
     table: null,
   });
+  const seederSteps = (
+    table: HighVolumeTable,
+  ): readonly RehearsalSeedStep[] => {
+    const seeder = REHEARSAL_SEEDERS[table];
+    const missingTables = seeder.tables.filter(
+      (target) => !presentTables.has(target),
+    );
+    if (missingTables.length > 0) {
+      return [{ type: "skip", table, missingTables }];
+    }
+    const statements = seeder.statements(decisions);
+    return statements.map((statement, index) => ({
+      type: "sql",
+      statement,
+      table: index === statements.length - 1 ? table : null,
+    }));
+  };
+  const decisionSteps = seederSteps(decisionsTable);
+  const dependentSteps = dependents.flatMap(seederSteps);
+  const seeders = [...decisionSteps, ...dependentSteps];
+  const decisionsPresent = presentTables.has(decisionsTable);
+  const seededTables = seeders.flatMap((step) =>
+    step.type === "sql" && step.table !== null ? [step.table] : [],
+  );
   return [
     ...rehearsalFixtureStatements().map(sqlStep),
-    {
-      type: "sql",
-      statement: REHEARSAL_SEEDERS[decisionsTable](decisions),
-      table: decisionsTable,
-    },
-    ...rehearsalDecisionIndexStatements().map(sqlStep),
-    ...dependents.map((table) => ({
-      type: "sql" as const,
-      statement: REHEARSAL_SEEDERS[table](decisions),
-      table,
-    })),
-    sqlStep(rehearsalFutureDatedCohortStatement()),
-    { type: "vacuum", tables: REHEARSAL_SEED_ORDER },
+    ...decisionSteps,
+    ...(decisionsPresent
+      ? rehearsalDecisionIndexStatements().map(sqlStep)
+      : []),
+    ...dependentSteps,
+    ...(decisionsPresent
+      ? [sqlStep(rehearsalFutureDatedCohortStatement())]
+      : []),
+    ...(seededTables.length > 0
+      ? [{ type: "vacuum" as const, tables: seededTables }]
+      : []),
   ];
 };
