@@ -129,9 +129,10 @@ const exerciseWorkflowReuse = async ({
       },
     });
   }
-  const publishCondition = source
-    .match(/ {4}if: (always\(\) && needs\.validate\.result[^\n]+)\n/u)
-    ?.at(1);
+  const publishCondition =
+    / {4}if: (always\(\) && needs\.validate\.result[^\n]+)\n/u
+      .exec(source)
+      ?.at(1);
   expect(publishCondition).toBeDefined();
   const publishes = new Script(publishCondition ?? "false").runInNewContext({
     always: () => true,
@@ -413,7 +414,7 @@ esac
 };
 
 describe("release proof trust boundary", () => {
-  test("accepts identical trees when the same repository verifies the squash parent and PR head", () =>
+  test("accepts identical trees when the same repository verifies the squash parent and PR head", async () =>
     withRepository(({ git, proof, target, verify }) => {
       expect(proof).not.toBe(target);
       const tree = git("rev-parse", `${target}^{tree}`);
@@ -424,7 +425,7 @@ describe("release proof trust boundary", () => {
       expect(result.stdout.toString()).toContain(`proof-sha=${proof}`);
     }));
 
-  test("refuses a one-byte difference even with matching PR metadata", () =>
+  test("refuses a one-byte difference even with matching PR metadata", async () =>
     withRepository(
       ({
         base,
@@ -477,7 +478,7 @@ describe("release proof trust boundary", () => {
     "unmerged PR",
   ] as const)(
     "refuses identical trees with an unverified chain: %s",
-    (failure) =>
+    async (failure) =>
       withRepository(
         ({
           mergedPullRequest,
@@ -514,7 +515,7 @@ describe("release proof trust boundary", () => {
       ),
   );
 
-  test("accepts the recorded tested base when PR metadata predates a rebase", () =>
+  test("accepts the recorded tested base when PR metadata predates a rebase", async () =>
     withRepository(
       ({ mergedPullRequest, proof, publishPullRequests, target, verify }) => {
         publishPullRequests(target, [
@@ -527,18 +528,18 @@ describe("release proof trust boundary", () => {
       },
     ));
 
-  test("refuses a locally present proof absent from the repository API", () =>
+  test("refuses a locally present proof absent from the repository API", async () =>
     withRepository(({ proof, responses, verify }) => {
       rmSync(path.join(responses, proof));
       expect(verify().exitCode).not.toBe(0);
     }));
 
-  test("refuses a proof SHA that does not exist locally", () =>
+  test("refuses a proof SHA that does not exist locally", async () =>
     withRepository(({ target, verify }) => {
       expect(verify(target, "f".repeat(40)).exitCode).not.toBe(0);
     }));
 
-  test("refuses API metadata with a different tree even when local trees match", () =>
+  test("refuses API metadata with a different tree even when local trees match", async () =>
     withRepository(({ proof, responses, verify }) => {
       writeFileSync(
         path.join(responses, proof),
@@ -550,7 +551,7 @@ describe("release proof trust boundary", () => {
       expect(verify().exitCode).not.toBe(0);
     }));
 
-  test("refuses a proof that does not descend from the claimed squash base", () =>
+  test("refuses a proof that does not descend from the claimed squash base", async () =>
     withRepository(
       ({
         commit,
@@ -577,12 +578,12 @@ describe("release proof trust boundary", () => {
       },
     ));
 
-  test("accepts the same SHA on main after repository verification", () =>
+  test("accepts the same SHA on main after repository verification", async () =>
     withRepository(({ target, verify }) => {
       expect(verify(target, target).exitCode).toBe(0);
     }));
 
-  test("accepts an ancestor only while every intervening first-parent tree is identical", () =>
+  test("accepts an ancestor only while every intervening first-parent tree is identical", async () =>
     withRepository(({ commit, git, target, publishCommit, verify }) => {
       git("commit", "--quiet", "--allow-empty", "--message", "unchanged tree");
       const unchanged = git("rev-parse", "HEAD");
@@ -599,7 +600,7 @@ describe("release proof trust boundary", () => {
       expect(verify(reverted, target).exitCode).not.toBe(0);
     }));
 
-  test("accepts an open same-repository release PR only against the tested main tip", () =>
+  test("accepts an open same-repository release PR only against the tested main tip", async () =>
     withRepository(
       ({
         base,
@@ -627,13 +628,13 @@ describe("release proof trust boundary", () => {
 });
 
 describe("release health with reused proof", () => {
-  test("accepts all trusted statuses from a verified tree-identical PR head", () =>
+  test("accepts all trusted statuses from a verified tree-identical PR head", async () =>
     withRepository(({ checkHealth, publishStatuses }) => {
       publishStatuses();
       expect(checkHealth().exitCode).toBe(0);
     }));
 
-  test("discovers and validates the merged release head when target evidence is absent", () =>
+  test("discovers and validates the merged release head when target evidence is absent", async () =>
     withRepository(({ checkHealth, discoverProof, proof, publishStatuses }) => {
       publishStatuses();
       const discovery = discoverProof();
@@ -644,7 +645,7 @@ describe("release health with reused proof", () => {
 
   test.each(["staging/verified", "main/heavy", "main/pr-depth"])(
     "refuses newer failure and pending target %s evidence over a green proof",
-    (context) =>
+    async (context) =>
       withRepository(
         ({
           checkHealth,
@@ -670,7 +671,7 @@ describe("release health with reused proof", () => {
 
   test.each(["staging/verified", "main/heavy", "main/pr-depth"])(
     "refuses missing proof status %s despite an identical verified tree",
-    (context) =>
+    async (context) =>
       withRepository(({ checkHealth, publishStatuses, verify }) => {
         expect(verify().exitCode).toBe(0);
         publishStatuses(context);
@@ -685,7 +686,7 @@ describe("release health with reused proof", () => {
 });
 
 describe("release tag selection with reused proof", () => {
-  test("selects the squash commit using the green tree-identical release head", () =>
+  test("selects the squash commit using the green tree-identical release head", async () =>
     withRepository(({ prepareReleaseTag, proof, publishStatuses, target }) => {
       publishStatuses();
       const result = prepareReleaseTag();
@@ -699,7 +700,7 @@ describe("release tag selection with reused proof", () => {
 describe.each(["main-heavy.yml", "main-pr-depth.yml"])(
   "%s proof reuse",
   (workflow) => {
-    test("runs and publishes fresh evidence for an ordinary squash without release proof", () =>
+    test("runs and publishes fresh evidence for an ordinary squash without release proof", async () =>
       withRepository(async (fixture) => {
         fixture.publishPullRequests(fixture.target, [
           { ...fixture.mergedPullRequest, title: "fix: ordinary change" },
@@ -717,12 +718,12 @@ describe.each(["main-heavy.yml", "main-pr-depth.yml"])(
             workflow,
           });
         expect(output.run).toBeUndefined();
-        expect(selectionOutputs.run).toBe("true");
+        expect(selectionOutputs["run"]).toBe("true");
         expect(output.proof).toBeUndefined();
         expect(publishes).toBe(true);
       }));
 
-    test("reuses a green release VERSION change and suppresses new publication", () =>
+    test("reuses a green release VERSION change and suppresses new publication", async () =>
       withRepository(async (fixture) => {
         fixture.publishStatuses();
         expect(fixture.git("show", `${fixture.base}:VERSION`)).toBe("1.2.2");
@@ -736,7 +737,7 @@ describe.each(["main-heavy.yml", "main-pr-depth.yml"])(
         expect(publishes).toBe(false);
       }));
 
-    test("unchanged ordinary scheduled main skips its already green suite without staging evidence", () =>
+    test("unchanged ordinary scheduled main skips its already green suite without staging evidence", async () =>
       withRepository(async (fixture) => {
         fixture.publishPullRequests(fixture.target, [
           { ...fixture.mergedPullRequest, title: "fix: ordinary change" },
@@ -753,11 +754,11 @@ describe.each(["main-heavy.yml", "main-pr-depth.yml"])(
           });
         expect(output.run).toBeUndefined();
         expect(output.proof).toBeUndefined();
-        expect(selectionOutputs.run).toBe("false");
+        expect(selectionOutputs["run"]).toBe("false");
         expect(publishes).toBe(false);
       }));
 
-    test("identified direct target evidence with invalid run provenance forces fresh suites", () =>
+    test("identified direct target evidence with invalid run provenance forces fresh suites", async () =>
       withRepository(async (fixture) => {
         fixture.publishStatuses();
         writeFileSync(
@@ -777,11 +778,11 @@ describe.each(["main-heavy.yml", "main-pr-depth.yml"])(
           await exerciseWorkflowReuse({ fixture, workflow });
         expect(output.run).toBe("true");
         expect(output.proof).toBeUndefined();
-        expect(selectionOutputs.run).toBe("true");
+        expect(selectionOutputs["run"]).toBe("true");
         expect(publishes).toBe(true);
       }));
 
-    test("a one-byte release tree mismatch forces fresh suites and refuses release gates", () =>
+    test("a one-byte release tree mismatch forces fresh suites and refuses release gates", async () =>
       withRepository(async (fixture) => {
         fixture.publishStatuses();
         fixture.git("checkout", "--quiet", "-B", "main", fixture.base);
@@ -808,7 +809,7 @@ describe.each(["main-heavy.yml", "main-pr-depth.yml"])(
         expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
       }));
 
-    test("an unavailable proof API forces fresh suites without emitting reusable evidence", () =>
+    test("an unavailable proof API forces fresh suites without emitting reusable evidence", async () =>
       withRepository(async (fixture) => {
         rmSync(path.join(fixture.responses, `${fixture.target}-statuses`));
         const { output, publishes, selectionOutputs } =
@@ -817,7 +818,7 @@ describe.each(["main-heavy.yml", "main-pr-depth.yml"])(
             workflow,
           });
         expect(output.run).toBeUndefined();
-        expect(selectionOutputs.run).toBe("true");
+        expect(selectionOutputs["run"]).toBe("true");
         expect(output.proof).toBeUndefined();
         expect(publishes).toBe(true);
       }));
