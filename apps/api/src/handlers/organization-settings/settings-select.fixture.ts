@@ -11,7 +11,7 @@ export const settingsSelectFixture = (
     from: (table: PgTable) => {
       const query = database.select(fields).from(table);
       return Object.assign(query, {
-        execute: () => Promise.resolve(read(query.getSQL())),
+        execute: async () => Promise.resolve(read(query.getSQL())),
       });
     },
   });
