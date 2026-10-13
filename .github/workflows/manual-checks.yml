@@ -18,6 +18,7 @@ on:
           - lint
           - test-files
           - verify-affected
+          - install-cache-benchmark
       target:
         description: Package name or space-separated test paths
         type: string
@@ -35,6 +36,7 @@ env:
 
 jobs:
   check:
+    if: inputs.check != 'install-cache-benchmark'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -144,3 +146,105 @@ jobs:
             exit 1
           fi
           exit "$(cat "$CHECK_EXIT_FILE")"
+
+  install-cache-windows:
+    if: inputs.check == 'install-cache-benchmark'
+    runs-on: windows-latest
+    timeout-minutes: 12
+    strategy:
+      fail-fast: false
+      matrix:
+        global-store: ["0", "1"]
+    env:
+      BUN_INSTALL_GLOBAL_STORE: "${{ matrix.global-store }}"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Bun binary
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - name: Measure scoped install
+        id: install
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 5
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/desktop...","--filter","!stella"]'
+      - name: Report measured phases
+        if: always()
+        env:
+          CACHE_HIT: ${{ steps.install.outputs.cache-hit }}
+          STORE_KEY: ${{ steps.install.outputs.key }}
+          RESTORE_MS: ${{ steps.install.outputs.restore-ms }}
+          INSTALL_MS: ${{ steps.install.outputs.install-ms }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+        run: |
+          bun -e '
+            const ms = (value) => value === undefined || value === "" ? null : Number(value);
+            const result = {os: process.platform, globalStore: process.env.BUN_INSTALL_GLOBAL_STORE, cacheHit: process.env.CACHE_HIT === "true", key: process.env.STORE_KEY, outcome: process.env.INSTALL_OUTCOME, restoreMs: ms(process.env.RESTORE_MS), installMs: ms(process.env.INSTALL_MS)};
+            if ([result.restoreMs, result.installMs].some(value => value !== null && (!Number.isFinite(value) || value < 0))) throw new Error("Invalid phase timing");
+            result.totalMs = result.restoreMs === null || result.installMs === null ? null : result.restoreMs + result.installMs;
+            console.log(JSON.stringify(result));
+            await Bun.write(process.env.RUNNER_TEMP + "/install-measurement.json", JSON.stringify(result, null, 2) + "\n");
+            const file = Bun.file(process.env.GITHUB_STEP_SUMMARY);
+            await Bun.write(file, JSON.stringify(result, null, 2).split("\n").map(line => "    " + line).join("\n") + "\n");
+          '
+      - name: Upload measurement
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: install-measurement-install-cache-windows-${{ matrix.global-store }}
+          path: ${{ runner.temp }}/install-measurement.json
+          if-no-files-found: error
+          retention-days: 7
+
+  install-cache-linux:
+    if: inputs.check == 'install-cache-benchmark'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      BUN_INSTALL_GLOBAL_STORE: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup Bun binary
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - name: Measure scoped install
+        id: install
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+      - name: Report measured phases
+        if: always()
+        env:
+          CACHE_HIT: ${{ steps.install.outputs.cache-hit }}
+          STORE_KEY: ${{ steps.install.outputs.key }}
+          RESTORE_MS: ${{ steps.install.outputs.restore-ms }}
+          INSTALL_MS: ${{ steps.install.outputs.install-ms }}
+          INSTALL_OUTCOME: ${{ steps.install.outcome }}
+        run: |
+          bun -e '
+            const ms = (value) => value === undefined || value === "" ? null : Number(value);
+            const result = {os: process.platform, globalStore: process.env.BUN_INSTALL_GLOBAL_STORE, cacheHit: process.env.CACHE_HIT === "true", key: process.env.STORE_KEY, outcome: process.env.INSTALL_OUTCOME, restoreMs: ms(process.env.RESTORE_MS), installMs: ms(process.env.INSTALL_MS)};
+            if ([result.restoreMs, result.installMs].some(value => value !== null && (!Number.isFinite(value) || value < 0))) throw new Error("Invalid phase timing");
+            result.totalMs = result.restoreMs === null || result.installMs === null ? null : result.restoreMs + result.installMs;
+            console.log(JSON.stringify(result));
+            await Bun.write(process.env.RUNNER_TEMP + "/install-measurement.json", JSON.stringify(result, null, 2) + "\n");
+            const file = Bun.file(process.env.GITHUB_STEP_SUMMARY);
+            await Bun.write(file, JSON.stringify(result, null, 2).split("\n").map(line => "    " + line).join("\n") + "\n");
+          '
+      - name: Upload measurement
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: install-measurement-install-cache-linux-1
+          path: ${{ runner.temp }}/install-measurement.json
+          if-no-files-found: error
+          retention-days: 7
