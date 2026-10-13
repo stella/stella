@@ -1,5 +1,11 @@
 # @stll/start-runtime
 
+## 0.2.1
+
+### Patch Changes
+
+- [#5556](https://github.com/stella/stella/pull/5556) [`fb41fe9`](https://github.com/stella/stella/commit/fb41fe94ba2885f426bcaa65e79ca5b106b205bb) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Normalize module path handling.
+
 ## 0.2.0
 
 ### Minor Changes
