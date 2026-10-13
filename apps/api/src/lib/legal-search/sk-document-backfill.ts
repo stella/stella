@@ -141,6 +141,7 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /** A decision awaiting its document. */
@@ -493,32 +494,46 @@ export const readTransientDecisionDocument = async ({
   fetchDocument,
   signal,
 }: ReadTransientDecisionDocumentOptions): Promise<BackfilledDocument | null> => {
-  if (decision.documentUrl === null) {
+  const { documentUrl } = decision;
+  if (documentUrl === null) {
     return null;
   }
 
-  const fetched = await fetchPdfBytes({
-    documentUrl: decision.documentUrl,
-    fetchDocument,
-    signal,
-  });
-  switch (fetched.type) {
-    case "absent":
-    case "failed":
-      return null;
-    case "too-large":
-      if (fetched.prefix !== null) {
-        assertPdfBody(fetched.prefix);
+  return await withTimeout(
+    async (operationSignal) => {
+      const fetched = await fetchPdfBytes({
+        documentUrl,
+        fetchDocument,
+        signal: operationSignal,
+      });
+      switch (fetched.type) {
+        case "absent":
+        case "failed":
+          return null;
+        case "too-large":
+          if (fetched.prefix !== null) {
+            assertPdfBody(fetched.prefix);
+          }
+          return null;
+        case "document": {
+          const parsed = await parseReadableDocument(decision, fetched.bytes);
+          return parsed.type === "unreadable"
+            ? null
+            : (parsed.document ?? null);
+        }
+        default:
+          fetched satisfies never;
+          return panic(
+            `Unhandled transient document download: ${String(fetched)}`,
+          );
       }
-      return null;
-    case "document": {
-      const parsed = await parseReadableDocument(decision, fetched.bytes);
-      return parsed.type === "unreadable" ? null : (parsed.document ?? null);
-    }
-    default:
-      fetched satisfies never;
-      return panic(`Unhandled transient document download: ${String(fetched)}`);
-  }
+    },
+    {
+      label: "caseLaw.readTransientDecisionDocument",
+      timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+      signal,
+    },
+  );
 };
 
 /**

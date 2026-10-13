@@ -7,14 +7,17 @@
  */
 
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
+
+import { TimeoutError } from "@stll/concurrency/with-timeout";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   DOCUMENT_FETCH_FAILURE,
+  DOCUMENT_FETCH_BUDGET_MS,
   fetchPdfBytes,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
   MAX_DOCUMENT_PDF_BYTES,
@@ -96,6 +99,37 @@ const transientDecision = (): PendingDocument => ({
 });
 
 describe("transient deferred document reads", () => {
+  test("bounds transient work even when it ignores cancellation", async () => {
+    const schedule = spyOn(globalThis, "setTimeout");
+    let operationSignal: AbortSignal | undefined;
+    try {
+      const pending = rejectionOf(
+        readTransientDecisionDocument({
+          decision: transientDecision(),
+          fetchDocument: (target, { signal }) => {
+            expect(target).toBe(PUBLISHER_URL);
+            operationSignal = signal;
+            return new Promise(() => {});
+          },
+          signal: new AbortController().signal,
+        }),
+      );
+      await Promise.resolve();
+      const deadline = schedule.mock.calls.find(
+        ([, delay]) => delay === DOCUMENT_FETCH_BUDGET_MS,
+      );
+      expect(deadline).toBeDefined();
+      if (deadline === undefined) {
+        return panic("transient document deadline was not scheduled");
+      }
+      deadline[0]();
+      expect(await pending).toBeInstanceOf(TimeoutError);
+      expect(operationSignal?.aborted).toBe(true);
+    } finally {
+      schedule.mockRestore();
+    }
+  });
+
   test("returns unavailable for an absent publisher document", async () => {
     const document = await readTransientDecisionDocument({
       decision: transientDecision(),
