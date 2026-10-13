@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { standardVatRateOn } from "@stll/invoicing";
@@ -10,6 +11,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 
 import {
   buyerSnapshotFromContact,
@@ -27,8 +29,8 @@ type ResolveInvoicePrefillOptions = {
   supplyDate: string;
 };
 
-// An organization keeps a handful of rate periods; the newest are kept if
-// this is ever exceeded.
+// An organization keeps a handful of rate periods; a partial list would pick
+// the wrong rate, so exceeding this is a defect, not a page boundary.
 const VAT_RATE_PERIOD_LIMIT = 200;
 
 const SELLER_COLUMNS = {
@@ -96,21 +98,29 @@ export const resolveInvoicePrefill = async (
     .limit(1);
   // Every period is returned so a client can re-resolve the rate when the
   // supply date moves with the selected work.
-  const vatRatePeriods = await tx
-    .select({
-      validFrom: vatRates.validFrom,
-      validTo: vatRates.validTo,
-      rateBps: vatRates.rateBps,
-    })
-    .from(vatRates)
-    .where(
-      and(
-        eq(vatRates.organizationId, organizationId),
-        isNull(vatRates.archivedAt),
-      ),
-    )
-    .orderBy(desc(vatRates.validFrom))
-    .limit(VAT_RATE_PERIOD_LIMIT);
+  const periodRead = await readBounded(
+    tx
+      .select({
+        validFrom: vatRates.validFrom,
+        validTo: vatRates.validTo,
+        rateBps: vatRates.rateBps,
+      })
+      .from(vatRates)
+      .where(
+        and(
+          eq(vatRates.organizationId, organizationId),
+          isNull(vatRates.archivedAt),
+        ),
+      )
+      .orderBy(desc(vatRates.validFrom)),
+    VAT_RATE_PERIOD_LIMIT,
+  );
+  const vatRatePeriods =
+    periodRead.type === "complete"
+      ? periodRead.rows
+      : panic(
+          `An organization keeps more than ${VAT_RATE_PERIOD_LIMIT} VAT rate periods`,
+        );
 
   const buyer =
     matter?.clientName === null || matter?.clientName === undefined
