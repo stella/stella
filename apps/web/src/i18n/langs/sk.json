@@ -1277,6 +1277,11 @@
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
+    "history": {
+      "matterUnavailable": "Tento spis nie je dostupný",
+      "older": "Staršie",
+      "previous7Days": "Predchádzajúcich 7 dní"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
@@ -1439,6 +1444,8 @@
     "sendPrompt": "Odoslať správu",
     "sendQueuedMessageNow": "Odoslať hneď",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
+    "signInToChat": "Prihláste sa a chatujte o tomto dokumente",
+    "signInToChatAbout": "Prihláste sa a chatujte o",
     "skills": {
       "scope": {
         "private": "Vaše AI zručnosti",
@@ -1769,6 +1776,8 @@
     "citations": "Citácie",
     "clauses": "Ustanovenia",
     "clearDate": "Vymazať dátum",
+    "clearFilters": "Vymazať filtre",
+    "clearSearch": "Vymazať hľadanie",
     "close": "Zavrieť",
     "closeAll": "Zavrieť všetko",
     "closeOthers": "Zavrieť ostatné",
@@ -1799,6 +1808,7 @@
       "nextDecade": "Nasledujúce desaťročie",
       "nextMonth": "Nasledujúci mesiac",
       "nextYear": "Nasledujúci rok",
+      "outOfRange": "Vyberte dátum v povolenom rozsahu.",
       "previousDecade": "Predchádzajúce desaťročie",
       "previousMonth": "Predchádzajúci mesiac",
       "previousYear": "Predchádzajúci rok",
@@ -4124,7 +4134,6 @@
     "appsSubtitle": "stella funguje aj mimo prehliadača: v aplikácii pre počítač a vo vašom AI asistentovi. K tomuto nastaveniu sa môžete kedykoľvek neskôr vrátiť.",
     "appsTitle": "Získajte stellu všade",
     "catalogueAlwaysOn": "Vždy zapnuté",
-    "catalogueClearSearch": "Vymazať hľadanie",
     "catalogueCommunityHeading": "Ostatné",
     "catalogueContinueWithCount": "{count, plural, one {Pokračovať s # nástrojom} few {Pokračovať s # nástrojmi} other {Pokračovať s # nástrojmi}}",
     "catalogueDetailAbout": "O nástroji",
@@ -6385,7 +6394,6 @@
         "year": "Rok"
       },
       "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
-      "clearFilters": "Vymazať filtre",
       "copySuffix": "{name} (kópia)",
       "deleteView": "Vymazať zobrazenie",
       "exportCsv": "Exportovať CSV",

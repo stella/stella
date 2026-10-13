@@ -1277,6 +1277,11 @@
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
+    "history": {
+      "matterUnavailable": "Este caso não está disponível",
+      "older": "Mais antigas",
+      "previous7Days": "7 dias anteriores"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {e mais #} many {e mais #} other {e mais #}}"
@@ -1439,6 +1444,8 @@
     "sendPrompt": "Enviar mensagem",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
+    "signInToChat": "Entre para conversar sobre este documento",
+    "signInToChatAbout": "Entre para conversar sobre",
     "skills": {
       "scope": {
         "private": "Suas habilidades de IA",
@@ -1769,6 +1776,8 @@
     "citations": "Citações",
     "clauses": "Cláusulas",
     "clearDate": "Limpar data",
+    "clearFilters": "Limpar filtros",
+    "clearSearch": "Limpar busca",
     "close": "Fechar",
     "closeAll": "Fechar tudo",
     "closeOthers": "Fechar outros",
@@ -1799,6 +1808,7 @@
       "nextDecade": "Próxima década",
       "nextMonth": "Próximo mês",
       "nextYear": "Próximo ano",
+      "outOfRange": "Selecione uma data dentro do intervalo permitido.",
       "previousDecade": "Década anterior",
       "previousMonth": "Mês anterior",
       "previousYear": "Ano anterior",
@@ -4124,7 +4134,6 @@
     "appsSubtitle": "A stella também funciona fora do navegador: no seu computador e no seu assistente de IA. Você pode voltar a esta configuração a qualquer momento.",
     "appsTitle": "Leve a stella para todo lugar",
     "catalogueAlwaysOn": "Sempre ativo",
-    "catalogueClearSearch": "Limpar busca",
     "catalogueCommunityHeading": "Outros",
     "catalogueContinueWithCount": "{count, plural, one {Continuar com # ferramenta} other {Continuar com # ferramentas}}",
     "catalogueDetailAbout": "Sobre",
@@ -6385,7 +6394,6 @@
         "year": "Ano"
       },
       "cannotDeleteRequired": "É necessária pelo menos uma visualização deste tipo",
-      "clearFilters": "Limpar filtros",
       "copySuffix": "{name} (cópia)",
       "deleteView": "Excluir visualização",
       "exportCsv": "Exportar CSV",

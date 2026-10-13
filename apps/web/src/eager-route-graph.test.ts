@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { walkEagerGraph } from "./eager-route-graph.logic";
 
 const SOURCE_ROOT = import.meta.dir;
@@ -63,16 +65,16 @@ describe("eager route graph", () => {
       root,
       entry: "entry.ts",
       forbidden: ["@/feature"],
-      isFile: (file: string) => files.has(nodePath.relative(root, file)),
+      isFile: (file: string) => files.has(repoRelativePath(root, file)),
       readSource: (file: string) => {
-        const source = files.get(nodePath.relative(root, file));
+        const source = files.get(repoRelativePath(root, file));
         assert.ok(source !== undefined, `Missing fixture module ${file}`);
         return source;
       },
     };
     const lazyGraph = walkEagerGraph(options);
     expect(
-      [...lazyGraph.visited].map((file) => nodePath.relative(root, file)),
+      [...lazyGraph.visited].map((file) => repoRelativePath(root, file)),
     ).toEqual(["entry.ts", "bridge/index.ts", "intermediate.tsx"]);
     expect(lazyGraph.violations).toEqual([]);
     expect(files.get("intermediate.tsx")).not.toBe(mutation);

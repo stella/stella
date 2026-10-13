@@ -1280,6 +1280,11 @@ type Messages = {
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
+    "history": {
+      "matterUnavailable": "This matter isn't available";
+      "older": "Older";
+      "previous7Days": "Previous 7 days";
+    };
     "historyContext": {
       "overflow": "+{count, number}";
       "unnamed": "{count, plural, one {and # more} other {and # more}}";
@@ -1442,6 +1447,8 @@ type Messages = {
     "sendPrompt": "Send message";
     "sendQueuedMessageNow": "Send now";
     "sendWithoutAnonymization": "Send without anonymization";
+    "signInToChat": "Sign in to chat about this document";
+    "signInToChatAbout": "Sign in to chat about";
     "skills": {
       "scope": {
         "private": "Your skills";
@@ -1772,6 +1779,8 @@ type Messages = {
     "citations": "Citations";
     "clauses": "Clauses";
     "clearDate": "Clear date";
+    "clearFilters": "Clear filters";
+    "clearSearch": "Clear search";
     "close": "Close";
     "closeAll": "Close all";
     "closeOthers": "Close others";
@@ -1802,6 +1811,7 @@ type Messages = {
       "nextDecade": "Next decade";
       "nextMonth": "Next month";
       "nextYear": "Next year";
+      "outOfRange": "Choose a date within the allowed range.";
       "previousDecade": "Previous decade";
       "previousMonth": "Previous month";
       "previousYear": "Previous year";
@@ -4127,7 +4137,6 @@ type Messages = {
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.";
     "appsTitle": "Get stella everywhere";
     "catalogueAlwaysOn": "Always on";
-    "catalogueClearSearch": "Clear search";
     "catalogueCommunityHeading": "Others";
     "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}";
     "catalogueDetailAbout": "About";
@@ -6388,7 +6397,6 @@ type Messages = {
         "year": "Year";
       };
       "cannotDeleteRequired": "At least one view of this type is required";
-      "clearFilters": "Clear filters";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
       "exportCsv": "Export CSV";

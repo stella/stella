@@ -1277,6 +1277,11 @@
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
+    "history": {
+      "matterUnavailable": "Diese Akte ist nicht verfügbar",
+      "older": "Älter",
+      "previous7Days": "Vorherige 7 Tage"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {und # weiteres} other {und # weitere}}"
@@ -1439,6 +1444,8 @@
     "sendPrompt": "Nachricht senden",
     "sendQueuedMessageNow": "Jetzt senden",
     "sendWithoutAnonymization": "Ohne Anonymisierung senden",
+    "signInToChat": "Melden Sie sich an, um über dieses Dokument zu chatten",
+    "signInToChatAbout": "Anmelden und chatten über",
     "skills": {
       "scope": {
         "private": "Ihre Skills",
@@ -1769,6 +1776,8 @@
     "citations": "Zitierungen",
     "clauses": "Klauseln",
     "clearDate": "Datum löschen",
+    "clearFilters": "Filter löschen",
+    "clearSearch": "Suche löschen",
     "close": "Schließen",
     "closeAll": "Alle schließen",
     "closeOthers": "Andere schließen",
@@ -1799,6 +1808,7 @@
       "nextDecade": "Nächstes Jahrzehnt",
       "nextMonth": "Nächster Monat",
       "nextYear": "Nächstes Jahr",
+      "outOfRange": "Wählen Sie ein Datum im zulässigen Bereich.",
       "previousDecade": "Vorheriges Jahrzehnt",
       "previousMonth": "Vorheriger Monat",
       "previousYear": "Vorheriges Jahr",
@@ -4124,7 +4134,6 @@
     "appsSubtitle": "stella funktioniert auch außerhalb des Browsers: auf Ihrem Desktop und in Ihrem KI-Assistenten. Sie können jederzeit später zu dieser Einrichtung zurückkehren.",
     "appsTitle": "Holen Sie sich stella überall",
     "catalogueAlwaysOn": "Immer aktiv",
-    "catalogueClearSearch": "Suche löschen",
     "catalogueCommunityHeading": "Weitere",
     "catalogueContinueWithCount": "{count, plural, one {Mit # Tool fortfahren} other {Mit # Tools fortfahren}}",
     "catalogueDetailAbout": "Überblick",
@@ -6385,7 +6394,6 @@
         "year": "Jahr"
       },
       "cannotDeleteRequired": "Mindestens eine Ansicht dieses Typs ist erforderlich",
-      "clearFilters": "Filter löschen",
       "copySuffix": "{name} (Kopie)",
       "deleteView": "Ansicht löschen",
       "exportCsv": "CSV exportieren",
