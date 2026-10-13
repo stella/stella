@@ -4288,6 +4288,52 @@ mod tests {
   }
 
   #[test]
+  fn a_newer_day_requires_an_updated_app_and_refuses_every_erasure_mode() {
+    let root = std::env::temp_dir()
+      .join(format!("stella-newer-activity-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([9; 32], root.clone());
+    let date = local_date(at(0));
+    store.save_pending(date, &review_batch()).unwrap();
+    let path = root
+      .join("days")
+      .join(format!("{}.json.enc", format_date(date)));
+    let mut envelope: serde_json::Value =
+      serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    envelope["version"] = serde_json::json!(999);
+    let original = serde_json::to_vec(&envelope).unwrap();
+    std::fs::write(&path, &original).unwrap();
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::Encrypted(store),
+      ActivitySettings::default(),
+      at(0),
+    );
+    let snapshot = manager.day_snapshot(
+      date,
+      at(0),
+      &ActivityCaller::for_account_test(1, "fixture"),
+      0,
+      ActivityDetailsAccess::Ready,
+    );
+    assert_eq!(
+      snapshot.deletion_status,
+      ActivityDeletionStatus::Incompatible
+    );
+    for recovery in [
+      ActivityDeletionRecovery::Preserve,
+      ActivityDeletionRecovery::DiscardMissingKey,
+      ActivityDeletionRecovery::DiscardUnreadable,
+    ] {
+      assert!(matches!(
+        manager.delete_all(recovery),
+        Err(ActivityDeletionError::Incompatible)
+      ));
+    }
+    assert_eq!(std::fs::read(&path).unwrap(), original);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
   fn concurrent_initializers_share_one_key_and_leave_a_decryptable_store() {
     use std::sync::{
       Condvar,
