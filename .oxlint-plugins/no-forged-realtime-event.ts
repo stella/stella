@@ -1,5 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
-import path from "node:path";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import {
   type ScopeContext,
@@ -179,9 +180,10 @@ export default eslintCompatPlugin({
         };
         return {
           before() {
-            const filename = path
-              .relative(context.cwd, filenameForContext(context))
-              .replaceAll("\\", "/");
+            const filename = repoRelativePath(
+              context.cwd,
+              filenameForContext(context),
+            );
             contractOwner = filename === CONTRACT_OWNER;
             brandOwner = contractOwner || filename === CLASSIFIER_OWNER;
           },
