@@ -405,6 +405,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   source: INSPECTED,
   sourceAttribution: INSPECTED,
   sourceUrlStatus: INSPECTED,
+  sourceDefects: INSPECTED,
   specialistAreas: INSPECTED,
   specialType: INSPECTED,
   stage: INSPECTED,
