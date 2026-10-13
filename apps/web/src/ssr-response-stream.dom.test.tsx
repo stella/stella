@@ -1,8 +1,6 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
-
 GlobalRegistrator.register({
   settings: {
     enableJavaScriptEvaluation: true,
@@ -80,8 +78,14 @@ test("SSR deadline forwards React recovery instructions so pending boundaries hy
           renderErrors.push(error);
         },
       });
-      return bindSsrResponseToRequest(router, rendered, renderRequest.signal)
-        .response;
+      if (rendered.isErr()) {
+        throw rendered.error;
+      }
+      return bindSsrResponseToRequest(
+        router,
+        rendered.value,
+        renderRequest.signal,
+      ).response;
     },
     reportError: (error) => streamErrors.push(error),
     lifetimeMs: 100,
@@ -149,20 +153,20 @@ test("SSR renderer releases router state when a component fails before the shell
   const FailingContent = () => {
     throw failure;
   };
-  expect(
-    await rejectionOf(
-      renderSsrResponse({
-        request: new Request("https://stella.test/"),
-        rendererSignal: new AbortController().signal,
-        router,
-        responseHeaders: new Headers(),
-        children: <FailingContent />,
-        reportError: (error) => {
-          errors.push(error);
-        },
-      }),
-    ),
-  ).toBe(failure);
+  const result = await renderSsrResponse({
+    request: new Request("https://stella.test/"),
+    rendererSignal: new AbortController().signal,
+    router,
+    responseHeaders: new Headers(),
+    children: <FailingContent />,
+    reportError: (error) => {
+      errors.push(error);
+    },
+  });
+  expect(result.isErr()).toBe(true);
+  if (result.isErr()) {
+    expect(result.error).toBe(failure);
+  }
   expect(errors).toEqual([failure]);
   expect(router.serverSsr).toBeUndefined();
 });

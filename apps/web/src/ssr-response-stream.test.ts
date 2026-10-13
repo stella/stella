@@ -221,6 +221,8 @@ test("SSR streams finish the shell after a renderer fails during a pending read"
   const pending = reader.read();
   failSource();
   expect(await pending).toEqual({ done: true, value: undefined });
+  // Let detached cancellation rejections settle before counting reports.
+  await Bun.sleep(0);
   expect(errors).toEqual([failure]);
   expect(source.locked).toBe(false);
 });

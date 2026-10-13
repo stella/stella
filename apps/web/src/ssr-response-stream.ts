@@ -168,7 +168,7 @@ export const boundSsrStream = ({
     reader.releaseLock();
   };
 
-  const fail = (error: unknown) => {
+  const fail = (error: unknown, disposeSource = cancelSource) => {
     if (isClosed()) {
       return;
     }
@@ -176,7 +176,7 @@ export const boundSsrStream = ({
     cleanup();
     controller.close();
     abortRenderer(error);
-    cancelSource(error);
+    disposeSource(error);
     reportError(error);
   };
 
@@ -230,7 +230,7 @@ export const boundSsrStream = ({
         return;
       }
       if (read.isErr()) {
-        fail(read.error);
+        fail(read.error, () => reader.releaseLock());
         return;
       }
       if (read.value.done) {

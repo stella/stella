@@ -5,9 +5,10 @@ import { createStartHandler, StartServer } from "@tanstack/react-start/server";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
+import { createSsrErrorReporter } from "@/ssr-error-reporter";
 import { renderSsrResponse } from "@/ssr-renderer";
+import { isSsrDocumentRequest } from "@/ssr-request";
 import { SSR_STATUS_HEADER, ssrStatusFromHeader } from "@/ssr-response-status";
 import { fetchBoundedSsrResponse } from "@/ssr-response-stream";
 
@@ -24,39 +25,32 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
   "Cross-Origin-Embedder-Policy": "credentialless",
 } as const;
 
-const reportSsrError = (error: unknown) => {
-  getAnalytics().captureError(error);
-  // Request URLs and renderer messages can contain reader data.
-  process.stderr.write(
-    `${JSON.stringify({
-      severity: "ERROR",
-      message: "ssr.response_failed",
-      error: error instanceof Error ? error.name : "UnknownError",
-    })}\n`,
-  );
-};
+const reportSsrError = createSsrErrorReporter({
+  captureError: (error) => getAnalytics().captureError(error),
+  writeDiagnostic: (line) => process.stderr.write(line),
+});
 
 export default createServerEntry({
   async fetch(request) {
-    const documentRequest =
-      request.method === "GET" &&
-      (isPublicSsrPath(new URL(request.url).pathname) ||
-        request.headers.get("Accept")?.includes("text/html") === true);
-    const response = documentRequest
+    const response = isSsrDocumentRequest(request)
       ? await fetchBoundedSsrResponse({
           request,
           fetchResponse: async (renderRequest, rendererSignal) =>
             await createStartHandler(
-              defineHandlerCallback(async ({ router, responseHeaders }) =>
-                renderSsrResponse({
+              defineHandlerCallback(async ({ router, responseHeaders }) => {
+                const rendered = await renderSsrResponse({
                   request: renderRequest,
                   rendererSignal,
                   router,
                   responseHeaders,
                   children: createElement(StartServer, { router }),
                   reportError: reportSsrError,
-                }),
-              ),
+                });
+                if (rendered.isErr()) {
+                  throw rendered.error;
+                }
+                return rendered.value;
+              }),
             )(renderRequest),
           reportError: reportSsrError,
         })

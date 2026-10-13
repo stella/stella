@@ -8,6 +8,7 @@ import {
   transformReadableStreamWithRouter,
   waitForRequest,
 } from "@tanstack/react-router/ssr/server";
+import { Result } from "better-result";
 import { isbot } from "isbot";
 
 type SsrRenderOptions = {
@@ -27,32 +28,36 @@ export const renderSsrResponse = async ({
   children,
   reportError,
 }: SsrRenderOptions) => {
-  try {
-    request.signal.throwIfAborted();
-    const stream = await renderToReadableStream(children, {
-      signal: rendererSignal,
-      nonce: router.options.ssr?.nonce,
-      progressiveChunkSize: Number.POSITIVE_INFINITY,
-      onError: reportError,
-    });
-    const responseStream = transformReadableStreamWithRouter(router, stream, {
-      // A rendering deadline leaves the transform alive to forward React's
-      // client-render instructions; a disconnected caller cancels both.
-      signal: request.signal,
-      rendererSafePoint: "script-close",
-    });
-    if (isbot(request.headers.get("User-Agent"))) {
-      await waitForRequest(stream.allReady, rendererSignal);
-    }
-    return createSsrStreamResponse(
-      router,
-      new Response(responseStream, {
-        status: getSsrStatus(router),
-        headers: responseHeaders,
-      }),
-    );
-  } catch (error) {
+  const result = await Result.tryPromise({
+    try: async () => {
+      request.signal.throwIfAborted();
+      const stream = await renderToReadableStream(children, {
+        signal: rendererSignal,
+        nonce: router.options.ssr?.nonce,
+        progressiveChunkSize: Number.POSITIVE_INFINITY,
+        onError: reportError,
+      });
+      const responseStream = transformReadableStreamWithRouter(router, stream, {
+        // A rendering deadline leaves the transform alive to forward React's
+        // client-render instructions; a disconnected caller cancels both.
+        signal: request.signal,
+        rendererSafePoint: "script-close",
+      });
+      if (isbot(request.headers.get("User-Agent"))) {
+        await waitForRequest(stream.allReady, rendererSignal);
+      }
+      return createSsrStreamResponse(
+        router,
+        new Response(responseStream, {
+          status: getSsrStatus(router),
+          headers: responseHeaders,
+        }),
+      );
+    },
+    catch: (error) => error,
+  });
+  if (result.isErr()) {
     router.serverSsr?.cleanup();
-    throw error;
   }
+  return result;
 };
