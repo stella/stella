@@ -3,7 +3,10 @@ import type { OwnershipEntry } from "../ownership-types.ts";
 export default {
   id: "rtf-reader",
   capability: "Decoding RTF control words and bytes",
-  owner: ["apps/api/src/lib/legal-search/parsers/rtf-reader.ts"],
+  owner: [
+    "apps/api/src/lib/legal-search/parsers/rtf-reader.ts",
+    "apps/api/src/lib/legal-search/parsers/rtf-control-vocabulary.ts",
+  ],
   summary:
     "All source parsers consume the shared RTF document reader. The document code-page control stays confined to that reader; fixtures may state it as input.",
   enforcement: {

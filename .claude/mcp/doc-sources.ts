@@ -572,6 +572,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
+      checkedAt: "2026-10-13T00:00:00.000Z",
+      dependency: "isbot",
+      explanation:
+        "https://raw.githubusercontent.com/omrilotan/isbot/main/llms.txt returns 404 and https://isbot.js.org/llms.txt returns 404. Use the canonical README at https://github.com/omrilotan/isbot#readme directly.",
+      expiresAt: "2026-11-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-23T00:00:00.000Z",
       dependency: "hyparquet",
       explanation:
