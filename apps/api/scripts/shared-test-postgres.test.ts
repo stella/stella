@@ -45,7 +45,7 @@ describe.skipIf(process.env["STELLA_RUN_SHARED_POSTGRES_TESTS"] !== "true")(
           symlinkSync(path.join(repo, "apps/api"), path.join(tree, "apps/api"));
         }
         const outputs = await Promise.all(
-          trees.map((tree) => command(tree, "prepare")),
+          trees.map(async (tree) => command(tree, "prepare")),
         );
         const urls = outputs.map((output) => {
           const payload: unknown = JSON.parse(output);
@@ -87,8 +87,8 @@ describe.skipIf(process.env["STELLA_RUN_SHARED_POSTGRES_TESTS"] !== "true")(
             }
           },
         );
-        await Promise.all(trees.map((tree) => command(tree, "drop")));
-        await Promise.all(trees.map((tree) => command(tree, "drop")));
+        await Promise.all(trees.map(async (tree) => command(tree, "drop")));
+        await Promise.all(trees.map(async (tree) => command(tree, "drop")));
         const observerUrl = new URL(
           urls.at(0) ?? panic("Missing observer URL"),
         );
@@ -105,7 +105,7 @@ describe.skipIf(process.env["STELLA_RUN_SHARED_POSTGRES_TESTS"] !== "true")(
           },
         );
       } finally {
-        await Promise.all(trees.map((tree) => command(tree, "drop")));
+        await Promise.all(trees.map(async (tree) => command(tree, "drop")));
         for (const tree of trees) {
           rmSync(tree, { recursive: true, force: true });
         }

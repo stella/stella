@@ -38,7 +38,7 @@ export const sharedTestDatabase = (tree: string) =>
 
 const secret = (directory: string, name: string) => {
   mkdirSync(directory, { recursive: true, mode: 0o700 });
-  if (statSync(directory).mode.toString(8).slice(-2) !== "00") {
+  if (!statSync(directory).mode.toString(8).endsWith("00")) {
     throw new SharedTestPostgresError({
       message: "Shared Postgres state directory must be private.",
     });
@@ -57,7 +57,7 @@ const secret = (directory: string, name: string) => {
   }
   if (
     !lstatSync(file).isFile() ||
-    statSync(file).mode.toString(8).slice(-2) !== "00"
+    !statSync(file).mode.toString(8).endsWith("00")
   ) {
     throw new SharedTestPostgresError({
       message: "Shared Postgres credentials must be private regular files.",
