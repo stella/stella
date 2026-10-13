@@ -3,7 +3,7 @@ import { panic } from "better-result";
 export const trackedMcpGeneratedFiles = (files: readonly string[]) =>
   files.filter(
     (file) =>
-      /^apps\/api\/src\/mcp\/generated\//u.test(file) ||
+      file.startsWith("apps/api/src/mcp/generated/") ||
       /^apps\/api\/src\/mcp\/apps\/[^/]+\/generated\//u.test(file) ||
       /^packages\/mcp-apps\/src\/(?:[^/]+\/)?generated\//u.test(file),
   );

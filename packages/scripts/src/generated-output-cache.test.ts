@@ -17,7 +17,7 @@ test("generation restores exact outputs and invalidates on source changes", asyn
     await mkdir(path.dirname(output), { recursive: true });
     await writeFile(output, await readFile(path.join(root, "input.txt")));
   };
-  const run = () =>
+  const run = async () =>
     withGeneratedOutputCache({
       root,
       name: "fixture",
@@ -58,7 +58,7 @@ test("failed generation never becomes a cache hit", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "generated-cache-failure-"));
   let attempts = 0;
   try {
-    const run = () =>
+    const run = async () =>
       withGeneratedOutputCache({
         root,
         name: "fixture",
