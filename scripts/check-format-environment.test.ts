@@ -5,6 +5,7 @@ import * as v from "valibot";
 import formatterConfig from "../.oxfmtrc.json" with { type: "json" };
 import rootPackage from "../package.json" with { type: "json" };
 import { workflowSchema } from "./check-ci-event-policy";
+import { workflowCiInstallFlags } from "./workflow-steps";
 
 const referencedPackages = (value: unknown): string[] => {
   if (typeof value === "string") {
@@ -55,5 +56,15 @@ test("scan engine installs the formatter owner alongside its workspace", () => {
   const install = workflow.jobs["scan-engine-wasm-drift"]?.steps?.find(
     (step) => step["name"] === "Install dependencies",
   );
-  expect(install?.run).toContain(`--filter ${rootPackage.name}`);
+  if (!install) {
+    throw new TypeError("Missing scan engine install");
+  }
+  expect(workflowCiInstallFlags(install)).toEqual([
+    "--frozen-lockfile",
+    "--ignore-scripts",
+    "--filter",
+    "@stll/scan-engine",
+    "--filter",
+    rootPackage.name,
+  ]);
 });

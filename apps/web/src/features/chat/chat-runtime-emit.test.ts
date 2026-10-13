@@ -14,6 +14,7 @@ import {
 } from "@/features/chat/chat-runtime";
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { chatRefusal } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -205,6 +206,35 @@ describe("chat runtime emits while a response streams", () => {
   });
   afterEach(() => {
     globalThis.fetch = previousFetch;
+  });
+
+  test("the real SDK keeps a refused first send's HTTP status and code in visible state", async () => {
+    globalThis.fetch = Object.assign(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: "validation_error",
+            message: "Private parser details",
+          }),
+          {
+            status: 422,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      { preconnect: previousFetch.preconnect },
+    );
+    const page = openPage();
+    await send(page);
+
+    expect(page.runtime.getSnapshot().status).toBe("error");
+    expect(chatRefusal(page.runtime.getSnapshot().error)).toMatchObject({
+      status: 422,
+      code: "validation_error",
+    });
+    expect(chatRefusal(page.errors.at(0))).toMatchObject({
+      status: 422,
+      code: "validation_error",
+    });
   });
 
   test("tells subscribers once about a burst of chunks", async () => {

@@ -616,10 +616,18 @@ jobs:
 
       - name: Setup Bun for dependency scope
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' || inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
+
+      - name: Check tracked symlink archive targets
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (
+          steps.check.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch'
+          )
+        run: bun scripts/check-tracked-symlinks.ts
 
       - name: Login to GitHub Container Registry for image resolution
         id: registry
@@ -647,7 +655,10 @@ jobs:
       - name: Install heavy planner dependencies
         timeout-minutes: 3
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
+          log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
           NPM_TOKEN: ""
 
@@ -1577,15 +1588,17 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
         id: install
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/agent-engine... --filter stella
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/agent-engine...","--filter","stella"]'
         env:
           NPM_TOKEN: ""
 
@@ -1949,11 +1962,15 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
+
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
       - name: Prepare local check environment
@@ -2054,13 +2071,15 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: "package.json"
-          save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
         id: install
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
       - name: Check changed Markdown consumers
@@ -2151,9 +2170,8 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
@@ -2165,7 +2183,10 @@ jobs:
       - name: Install dependencies
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -2461,9 +2482,8 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
@@ -2475,7 +2495,10 @@ jobs:
       - name: Install dependencies
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -2797,9 +2820,8 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       # The changeset gate for pull requests. It reads only the policy file
@@ -2916,7 +2938,10 @@ jobs:
       - name: Install dependencies
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && steps.standalone_lockfiles.outcome == 'success' && (!(github.event_name != 'workflow_dispatch' && needs.ci-plan.outputs.lockfile_ages_required == 'true') || steps.lockfile_ages.outcome == 'success') }}
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -4112,9 +4137,8 @@ jobs:
           fi
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
@@ -4125,7 +4149,10 @@ jobs:
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -4344,14 +4371,16 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install API script dependencies
-        timeout-minutes: 5
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/api-test-durations.log" --frozen-lockfile --ignore-scripts --filter @stll/api
+        timeout-minutes: 3
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
+          log-file: "${{ runner.temp }}/bun-install/api-test-durations.log"
         env:
           NPM_TOKEN: ""
 
@@ -4552,10 +4581,9 @@ jobs:
       # setup-bun reuses the matching ~/.bun/bin/bun above, avoiding unzip.
       - name: Restore Bun install cache
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
-          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Turbo remote cache
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
@@ -4565,7 +4593,10 @@ jobs:
 
       - name: Install dependencies
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -4712,9 +4743,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Turbo remote cache
         # code-quality runs cacheable workspace and root checks. Restore the
@@ -4725,7 +4756,10 @@ jobs:
           server-port: "0"
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -4849,9 +4883,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Turbo remote cache
         # code-quality runs cacheable workspace and root checks. Restore the
@@ -4862,7 +4896,10 @@ jobs:
           server-port: "0"
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -5310,12 +5347,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -5501,12 +5541,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -5637,12 +5680,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -5751,12 +5797,15 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -5816,12 +5865,15 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the secret to install-time lifecycle scripts. The token is
@@ -6136,12 +6188,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -6231,12 +6286,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/landing... --filter @stll/cli... --filter stella
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -6323,11 +6381,15 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
+
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
       - name: Prepare environment
@@ -6377,12 +6439,15 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -6529,9 +6594,10 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 15m setup + 21m tests + 4m uploads + 2m cancellation/post hooks.
-    # Playwright uses measured p95/max plus the task registry margin.
-    timeout-minutes: 42
+    # Longest leg: 16m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
+    # + 2m cancellation/post hooks. Playwright uses measured p95/max plus the
+    # task registry margin.
+    timeout-minutes: 43
     permissions:
       contents: read
       packages: read
@@ -6555,25 +6621,29 @@ jobs:
 
       - name: Setup Bun
         timeout-minutes: 1
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        id: e2e-budget
         timeout-minutes: 2
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+          installer-budget-ms: "90000"
+        env:
+          NPM_TOKEN: ""
+
+      - name: Resolve e2e shard budget
+        id: e2e-budget
+        timeout-minutes: 1
         run: |
-          bash scripts/retry.sh bun ci --ignore-scripts
           if [[ "${{ matrix.shard }}" != network-baseline ]]; then
             minutes=$(bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --minutes ${{ matrix.shard }})
             echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
           else
             echo "minutes=1" >> "$GITHUB_OUTPUT"
           fi
-        env:
-          NPM_TOKEN: ""
-          # Three attempts and both waits fit inside the step deadline.
-          RETRY_DELAYS_SECONDS: "5 10"
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
@@ -6835,12 +6905,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -6951,12 +7024,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -7209,12 +7285,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/landing... --filter @stll/cli... --filter stella
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
           NPM_TOKEN: ""
 
@@ -7468,12 +7547,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/playwright-tools --filter '!stella'
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/playwright-tools","--filter","!stella"]'
         env:
           NPM_TOKEN: ""
 
@@ -7606,6 +7688,9 @@ jobs:
             packages/portable-path/src/index.ts
             scripts/retry.sh
             scripts/ci-install.ts
+            scripts/ci-install-store.ts
+            packages/sha256/src/bun.ts
+            packages/sha256/src/types.ts
           sparse-checkout-cone-mode: false
 
       - name: Install smoke dependencies
@@ -7918,14 +8003,16 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun with install cache
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
       - name: Install dependencies
         timeout-minutes: 5
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts --filter @stll/desktop... --filter '!stella'
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/desktop...","--filter","!stella"]'
+          log-file: "${{ runner.temp }}/bun-install/desktop-windows-dry-run.log"
         env:
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
@@ -8036,13 +8123,16 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install scripts workspace dependencies
         timeout-minutes: 5
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
+          log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
           # Restored Windows global-store links can omit transitive dependency
           # links. Rebuild the isolated graph locally from cached package files.
@@ -8131,14 +8221,16 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
         timeout-minutes: 3
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scan-engine-wasm.log" --frozen-lockfile --ignore-scripts --filter @stll/scan-engine --filter stella
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scan-engine","--filter","stella"]'
+          log-file: "${{ runner.temp }}/bun-install/scan-engine-wasm.log"
         env:
           NPM_TOKEN: ""
 
@@ -8383,14 +8475,16 @@ jobs:
 
       - name: Setup Bun for the desktop transport smoke
         if: matrix.os == 'macos'
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install desktop transport smoke dependencies
         if: matrix.os == 'macos'
-        run: bash scripts/retry.sh bun ci --ignore-scripts --filter @stll/api
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
         env:
           NPM_TOKEN: ""
 
@@ -8611,14 +8705,16 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun for dated waiver guard
-        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
       - name: Install dated waiver guard dependencies
         timeout-minutes: 3
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/dated-waiver-expiry.log" --frozen-lockfile --ignore-scripts
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+          log-file: "${{ runner.temp }}/bun-install/dated-waiver-expiry.log"
         env:
           NPM_TOKEN: ""
 

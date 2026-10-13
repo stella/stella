@@ -251,9 +251,9 @@ test("changing the measured shard split requires fresh wall-time evidence", () =
 });
 
 test("the workflow publishes computed deadlines and an over-budget shard fails with an annotation", () => {
-  const install = v.parse(
+  const budgetStep = v.parse(
     v.string(),
-    job.steps.find(({ name }) => name === "Install dependencies")?.run,
+    job.steps.find(({ name }) => name === "Resolve e2e shard budget")?.run,
   );
   const outputDirectory = mkdtempSync(
     path.join(tmpdir(), "e2e-budget-output-"),
@@ -266,9 +266,7 @@ test("the workflow publishes computed deadlines and an over-budget shard fails w
         [
           "bash",
           "-euc",
-          install
-            .replace("bash scripts/retry.sh bun ci --ignore-scripts", "true")
-            .replaceAll(`\${{ matrix.shard }}`, () => String(shard)),
+          budgetStep.replaceAll(`\${{ matrix.shard }}`, () => String(shard)),
         ],
         {
           cwd: path.resolve(import.meta.dir, ".."),
