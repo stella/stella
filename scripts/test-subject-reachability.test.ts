@@ -137,6 +137,38 @@ describe("test subject reachability", () => {
     ).toEqual([]);
   });
 
+  test("classifies a directly tested support factory as the real subject", () => {
+    const { root } = fixture("");
+    const helperFile = "apps/example/src/tests/helpers/test-mutants.ts";
+    const testFile = "apps/example/src/tests/helpers/test-mutants.test.ts";
+    mkdirSync(path.dirname(path.join(root, helperFile)), { recursive: true });
+    writeFileSync(
+      path.join(root, helperFile),
+      "export const createTestMutantDirectory = (prefix: string) => prefix;\n",
+    );
+    writeFileSync(
+      path.join(root, testFile),
+      "import { createTestMutantDirectory } from './test-mutants';\ntest('directory', () => expect(createTestMutantDirectory('mutant-')).toBe('mutant-'));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({ repoRoot: root, files: [testFile] }),
+    ).toEqual([]);
+
+    writeFileSync(
+      path.join(root, testFile),
+      "import { createTestMutantDirectory } from './test-mutants';\nconst unused = () => createTestMutantDirectory('mutant-');\ntest('directory', () => expect('stand-in').toBe('stand-in'));\n",
+    );
+    expect(
+      analyzeTestSubjectReachability({ repoRoot: root, files: [testFile] }),
+    ).toEqual([
+      {
+        file: testFile,
+        kind: "no-classified-reachability",
+        attempted: ["source-factory"],
+      },
+    ]);
+  });
+
   test("does not count an imported subject hidden in an uncalled wrapper", () => {
     const input = fixture(
       "import { reduceWidgetState as realReducer } from './widget';\nconst unused = () => realReducer();\nconst reduceWidgetState = () => 'stand-in';\ntest('state', () => reduceWidgetState());\n",
