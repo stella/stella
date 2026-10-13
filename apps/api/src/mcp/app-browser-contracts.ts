@@ -84,3 +84,5 @@ export {
   blocksDecisionOutput as APP_DECISION_BLOCKS_SCHEMA,
   provisionPreviewOutput as APP_PROVISION_PREVIEW_SCHEMA,
 } from "../lib/chat/decision-reader-projections";
+
+export { READ_PROVISION_HISTORY_PROJECTION as APP_PROVISION_HISTORY_SCHEMA } from "../lib/chat/legislation-result-projections";

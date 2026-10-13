@@ -3,6 +3,74 @@ import type * as v from "valibot";
 
 import type { Block } from "@stll/legal-ast/document-ast";
 
+export type ProvisionHistory = {
+  anchor: string;
+  eli: string;
+  items: Array<
+    | {
+        appUrl: string | null;
+        url: string | null;
+        source_url?: string | undefined;
+        documentId: string;
+        resourceName: string;
+        versionValidFrom: string | null;
+        versionValidTo: string | null;
+        expressionKind: "consolidation" | "promulgated" | "unversioned";
+        windowDisposition:
+          | "effective"
+          | "never-in-force"
+          | "invalid-window"
+          | "withdrawn";
+        windowDispositionBasis:
+          | "publisher-flag"
+          | "replaced-same-day"
+          | "zero-length-window"
+          | "reversed"
+          | "missing-start"
+          | "publisher-unlisted"
+          | "listed-not-stored"
+          | "deferred-promulgated"
+          | null;
+        status: "found";
+        text: string;
+        nextTextCursor: string | null;
+        truncated: boolean;
+      }
+    | {
+        appUrl: string | null;
+        url: string | null;
+        source_url?: string | undefined;
+        documentId: string;
+        resourceName: string;
+        versionValidFrom: string | null;
+        versionValidTo: string | null;
+        expressionKind: "consolidation" | "promulgated" | "unversioned";
+        windowDisposition:
+          | "effective"
+          | "never-in-force"
+          | "invalid-window"
+          | "withdrawn";
+        windowDispositionBasis:
+          | "publisher-flag"
+          | "replaced-same-day"
+          | "zero-length-window"
+          | "reversed"
+          | "missing-start"
+          | "publisher-unlisted"
+          | "listed-not-stored"
+          | "deferred-promulgated"
+          | null;
+        message: string;
+        status: "text_withheld";
+      }
+  >;
+  nextCursor: string | null;
+};
+export declare const APP_PROVISION_HISTORY_SCHEMA: v.GenericSchema<
+  unknown,
+  ProvisionHistory
+>;
+
 export type ReaderPage = {
   metadata: {
     decisionId: string;

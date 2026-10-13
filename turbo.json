@@ -1303,6 +1303,7 @@
         "$TURBO_ROOT$/apps/desktop/src/**",
         "$TURBO_ROOT$/apps/landing/public/fonts/CabinetGrotesk-Regular.otf",
         "$TURBO_ROOT$/apps/landing/public/images/gradients/**",
+        "$TURBO_ROOT$/apps/landing/public/robots.txt",
         "$TURBO_ROOT$/oxlint.config.ts"
       ]
     },

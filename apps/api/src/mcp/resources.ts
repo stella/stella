@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract";
 import { MCP_APP_BUNDLES } from "@stll/mcp-apps/bundles";
 import {
+  STATUTE_TIMELINE_APP,
   CASE_LAW_RESULTS_APP,
   DECISION_READER_APP,
 } from "@stll/mcp-apps/manifest";
@@ -132,6 +133,21 @@ const buildProductIdentity = (): string =>
   JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: STATUTE_TIMELINE_APP.uri,
+    name: "statute-timeline",
+    title: "Provision history",
+    description: "View provision version windows and compare adjacent wording.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => MCP_APP_BUNDLES["statute-timeline"],
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: DECISION_READER_APP.uri,
     name: "decision-reader",
