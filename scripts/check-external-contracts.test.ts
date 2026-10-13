@@ -10,6 +10,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { IN_PROCESS_DEPENDENCIES } from "../packages/external-contracts/src/dependency-dispositions";
 import {
   findTotalityProblems,
@@ -18,6 +20,9 @@ import {
 import { EXTERNAL_CONTRACTS } from "../packages/external-contracts/src/registry";
 import type { ExternalContractEntry } from "../packages/external-contracts/src/types";
 import {
+  admittedPinDrift,
+  hasChangedExecutableUsage,
+  REMOVED_PIN,
   checkExternalContracts,
   findDependencyCatalogProblems,
   findShrinkOnlyGrowth,
@@ -117,7 +122,9 @@ test("shared scope needs a refreshed receipt and a runtime-reachable replay impo
       quickwit: {
         ...contract,
         owners: [...contract.owners, { path: sharedOwner, role: "shared" }],
-        fixtures: [{ ...fixture, metadata: path.relative(ROOT, receiptPath) }],
+        fixtures: [
+          { ...fixture, metadata: repoRelativePath(ROOT, receiptPath) },
+        ],
       },
     } as const;
     writeFileSync(receiptPath, JSON.stringify(originalReceipt));
@@ -152,7 +159,7 @@ test("shared scope needs a refreshed receipt and a runtime-reachable replay impo
             ...registry.quickwit.fixtures[0],
             replayFiles: [
               ...fixture.replayFiles,
-              path.relative(ROOT, replayPath),
+              repoRelativePath(ROOT, replayPath),
             ],
           },
         ],
@@ -204,8 +211,8 @@ test("a planted receipt cannot claim an owner outside its replay graph", () => {
         fixtures: [
           {
             ...fixture,
-            metadata: path.relative(ROOT, receiptPath),
-            replayFiles: [path.relative(ROOT, replayPath)],
+            metadata: repoRelativePath(ROOT, receiptPath),
+            replayFiles: [repoRelativePath(ROOT, replayPath)],
           },
         ],
       },
@@ -506,4 +513,69 @@ test("a scoped package sharing an SDK base name is not that SDK", () => {
   for (const key of ["@types/nodemailer", "@ai-sdk/openai", "@types/ioredis"]) {
     expect(lockKeyPackageName(key)).not.toBe(key.split("/").at(-1));
   }
+});
+
+const pinDebt = {
+  id: "example-2026-10-14",
+  system: "example",
+  pins: { sdk: "2", oldPatch: REMOVED_PIN },
+  checkedAt: "2026-10-14T00:00:00.000Z",
+  expiresAt: "2026-10-21T00:00:00.000Z",
+  reason: "Existing pin drift needs replay evidence.",
+};
+
+test("dated drift admits only unchanged pins before its exact deadline", () => {
+  const options = {
+    current: { sdk: "2" },
+    baseline: { sdk: "2" },
+    allowance: pinDebt,
+    now: new Date("2026-10-20T23:59:59.999Z"),
+    usageChanged: false,
+  };
+  expect(admittedPinDrift(options)).toEqual(pinDebt.pins);
+  expect(admittedPinDrift({ ...options, current: { sdk: "3" } })).toEqual({
+    oldPatch: REMOVED_PIN,
+  });
+  expect(admittedPinDrift({ ...options, baseline: { sdk: "1" } })).toEqual({
+    oldPatch: REMOVED_PIN,
+  });
+  expect(admittedPinDrift({ ...options, usageChanged: true })).toEqual({});
+  expect(
+    admittedPinDrift({ ...options, now: new Date(pinDebt.expiresAt) }),
+  ).toEqual({});
+});
+
+test("changed SDK usage invalidates dated debt while comments and deletions do not", () => {
+  const options = {
+    file: "client.ts",
+    baseline: 'import sdk from "vendor"; sdk.send("old");',
+    current: 'import sdk from "vendor"; sdk.send("new");',
+  };
+  expect(hasChangedExecutableUsage(options)).toBe(true);
+  expect(hasChangedExecutableUsage({ ...options, baseline: undefined })).toBe(
+    true,
+  );
+  expect(
+    hasChangedExecutableUsage({
+      ...options,
+      current: `// comment\n${options.baseline}`,
+    }),
+  ).toBe(false);
+  expect(
+    hasChangedExecutableUsage({
+      ...options,
+      current: 'import sdk from "vendor";',
+    }),
+  ).toBe(false);
+});
+
+test("duplicate added SDK calls count as changed usage", () => {
+  const baseline = 'sdk.send("old");';
+  expect(
+    hasChangedExecutableUsage({
+      file: "client.ts",
+      baseline,
+      current: `${baseline} ${baseline}`,
+    }),
+  ).toBe(true);
 });

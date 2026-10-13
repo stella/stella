@@ -265,6 +265,61 @@ describe("changed-file autofix boundary", () => {
     );
   });
 
+  test("every selected generator follows every source-rewriting fixer", async () => {
+    const steps = workflowJobSteps(
+      Bun.YAML.parse(await Bun.file(WORKFLOW_URL).text()),
+      "regenerate-derived-files",
+    );
+    const generatorCommands = GENERATORS.filter(({ autofix }) => autofix).map(
+      ({ write }) => write.join(" "),
+    );
+    const sourceFixer =
+      /\boxlint\b[^\n]*--fix\b|\boxfmt\b|scripts\/fix-[\w-]+\.ts|scripts\/typecheck-coverage\.ts[^\n]*--autofix\b/u;
+    const isGenerator = (run: string) =>
+      /scripts\/autofix-plan\.ts run\b/u.test(run) ||
+      generatorCommands.some((command) => run.includes(command));
+    const violations = (pipeline: typeof steps) => {
+      const fixers = pipeline.flatMap((step, position) =>
+        typeof step["run"] === "string" && sourceFixer.test(step["run"])
+          ? [position]
+          : [],
+      );
+      const generators = pipeline.flatMap((step, position) =>
+        typeof step["run"] === "string" && isGenerator(step["run"])
+          ? [position]
+          : [],
+      );
+      expect(fixers.length).toBeGreaterThan(0);
+      expect(generators.length).toBeGreaterThan(0);
+      return generators.flatMap((generator) =>
+        fixers.filter((fixer) => fixer >= generator),
+      );
+    };
+    expect(violations(steps)).toEqual([]);
+    // Mutate every enumerated producer/fixer pair, including future manifest
+    // generator commands. A new writer must satisfy the same ordering guard.
+    for (const [generator, producer] of steps.entries()) {
+      if (
+        typeof producer["run"] !== "string" ||
+        !isGenerator(producer["run"])
+      ) {
+        continue;
+      }
+      for (const [fixer, writer] of steps.entries()) {
+        if (
+          typeof writer["run"] !== "string" ||
+          !sourceFixer.test(writer["run"])
+        ) {
+          continue;
+        }
+        const mutated = [...steps];
+        mutated[generator] = writer;
+        mutated[fixer] = producer;
+        expect(violations(mutated).length).toBeGreaterThan(0);
+      }
+    }
+  });
+
   test("runs the manifest plan and keeps the generated diff restricted", async () => {
     const job = jobOf(await Bun.file(WORKFLOW_URL).text());
     const ci = await Bun.file(
@@ -396,7 +451,7 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain("needs.regenerate-scope.result == 'success'");
     expect(job).toContain("needs.regenerate-scope.outputs.ready == 'true'");
     expect(job).toContain("github.actor != 'autofix-ci[bot]'");
-    expect(job.slice(generatorStep, fixStep)).toContain(
+    expect(job.slice(generatorStep, restrictionStep)).toContain(
       "if: needs.regenerate-scope.outputs.run == 'true'",
     );
     expect(job).toContain("scripts/autofix-plan.ts plan");
@@ -405,7 +460,8 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain("-ge 3000");
     expect(changedStep).toBeGreaterThan(scopeStep);
     expect(generatorStep).toBeGreaterThan(changedStep);
-    expect(fixStep).toBeGreaterThan(generatorStep);
+    expect(fixStep).toBeGreaterThan(changedStep);
+    expect(generatorStep).toBeGreaterThan(fixStep);
     expect(restrictionStep).toBeGreaterThan(fixStep);
     expect(pushStep).toBeGreaterThan(restrictionStep);
 

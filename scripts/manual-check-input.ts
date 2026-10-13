@@ -4,11 +4,17 @@ import path from "node:path";
 export const MANUAL_CHECKS = [
   "typecheck-repo",
   "typecheck-package",
+  "typecheck-parity",
+  "typecheck-probe",
   "lint",
   "test-files",
   "verify-affected",
 ] as const;
 export type ManualCheck = (typeof MANUAL_CHECKS)[number];
+export const MANUAL_WORKFLOW_CHECKS = [
+  ...MANUAL_CHECKS,
+  "install-cache-benchmark",
+] as const;
 
 const packageNames = (root: string) =>
   ["apps", "packages"].flatMap((directory) =>

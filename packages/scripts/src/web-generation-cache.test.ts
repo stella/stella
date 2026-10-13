@@ -165,6 +165,7 @@ test("web sources generate once across compiler tasks and restore until source i
           "generate:capability-runtime":
             "bun scripts/generate-capability-runtime.ts",
           "gen:web-api-types": apiGenerationCommand,
+          "generate:typecheck-declarations": "bun -e ''",
         },
       }),
     );
@@ -220,6 +221,10 @@ test("web sources generate once across compiler tasks and restore until source i
       JSON.stringify({
         tasks: {
           "@stll/api#generate:capability-runtime": apiTask,
+          "@stll/api#generate:typecheck-declarations": {
+            inputs: ["src/**"],
+            outputs: [],
+          },
           "@stll/web#generate:api-types": tasks["@stll/web#generate:api-types"],
           "@stll/web#generate:route-tree":
             tasks["@stll/web#generate:route-tree"],

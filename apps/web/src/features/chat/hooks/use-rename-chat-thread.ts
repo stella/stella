@@ -19,7 +19,7 @@ import { toSafeId } from "@/lib/safe-id";
  * The one web-side writer for a chat thread's title: PATCHes
  * `/chat/threads/:threadId/title`, optimistically patching the
  * grouped-threads and by-id title caches so every surface that shows the
- * title (sidebar, threads sheet, breadcrumb, overlay card) updates
+ * title (sidebar, chat history, breadcrumb, overlay card) updates
  * immediately, and invalidating them on settle. Shared by every rename
  * affordance so the cache bookkeeping exists exactly once.
  */

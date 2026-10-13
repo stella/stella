@@ -9,9 +9,6 @@
     "no-classified-reachability"
   ],
   "apps/api/src/db/root.test.ts": ["no-classified-reachability"],
-  "apps/api/src/dev/mock-ai-stream-kinds.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/api/src/handlers/chat/recorded-conversations.integration.test.ts": [
     "no-classified-reachability"
   ],
@@ -40,9 +37,6 @@
     "local-export-collision:createMcpClientForConnection",
     "local-export-collision:proxyMcpToolCall"
   ],
-  "apps/api/src/lib/mcp-upstream/tanstack-ai-mcp-timeout.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/api/src/lib/provider-document-adapters.test.ts": [
     "no-classified-reachability"
   ],
@@ -56,26 +50,7 @@
   "apps/api/src/tests/base-environment-boundary.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/api/src/tests/helpers/chat-live-response.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/tests/helpers/chat-turn-outcome.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/tests/helpers/provider-request-transcript.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/tests/helpers/test-pki.test.ts": ["no-classified-reachability"],
-  "apps/api/src/tests/helpers/transaction-recorder.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/tests/query-plans/plan-walker.test.ts": [
-    "no-classified-reachability"
-  ],
   "apps/api/src/tests/security/billing-arrangements.postgres.test.ts": [
-    "no-classified-reachability"
-  ],
-  "apps/api/src/tests/test-database-environment.test.ts": [
     "no-classified-reachability"
   ],
   "apps/api/src/tests/test-path-filters.test.ts": [
@@ -84,7 +59,6 @@
   "apps/desktop/tests/nsis-installer-languages.test.ts": [
     "no-classified-reachability"
   ],
-  "apps/web/scripts/test-run-plan.test.ts": ["no-classified-reachability"],
   "apps/web/src/components/workspaces/table/row-host.test.ts": [
     "no-classified-reachability"
   ],

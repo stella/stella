@@ -1,7 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { getTableName, sql } from "drizzle-orm";
-import type { SQLWrapper } from "drizzle-orm";
+import type { SQL, SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
@@ -21,8 +21,10 @@ import {
   installPgliteDesktopPresenceRls,
   installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
+  installPgliteAccountAuditRls,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatSecretRls,
+  installPgliteReaderAnswerRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
   installPgliteCaseLawObservationFence,
@@ -41,6 +43,7 @@ import {
   installPgliteEntityFeatureGateMaintenance,
   readPglitePublicSanctionsGrants,
   installPgliteStatuteCitationCounts,
+  installPgliteDecisionCitationStats,
   installPgliteTimeEntryTimerSignals,
   installPgliteSanctionsMonitoringTriggers,
   installPgliteTreeParentGuards,
@@ -393,7 +396,9 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_citation_resolution_census_runs",
       "case_law_citation_resolution_progress",
       "case_law_raw_sweeps",
-      "case_law_citation_authority_sweep"
+      "case_law_citation_authority_sweep",
+      "case_law_decision_citation_stats",
+      "case_law_decision_citation_stats_state"
     TO stella_ingestion
   `,
   `
@@ -538,7 +543,10 @@ export const ROLE_GRANT_STATEMENTS = [
   // Alias reader grants land only after the release declaring them optional.
   ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
     .filter(
-      ([relation]) => relation !== getTableName(schema.caseLawDecisionAliases),
+      ([relation]) =>
+        relation !== getTableName(schema.caseLawDecisionAliases) &&
+        relation !== getTableName(schema.caseLawDecisionCitationStats) &&
+        relation !== getTableName(schema.caseLawDecisionCitationStatsState),
     )
     .map(
       ([relation, columns]) => `
@@ -679,6 +687,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteServiceClientCredentialCascade(db);
   await installPgliteStatuteCitationCounts(db);
+  await installPgliteDecisionCitationStats(db);
   await installPgliteLegislationPayloadRevision(db);
   await installPgliteLegislationExpressionIdentity(db);
   await installPgliteProvisionExtractionState(db);
@@ -690,8 +699,10 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteWorkspaceContactCapacity(db);
   await installPgliteListVerificationBudgets(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteAccountAuditRls(db);
   await installPgliteChatMessageRevisionsRls(db);
   await installPgliteChatSecretRls(db);
+  await installPgliteReaderAnswerRls(db);
   await installPgliteSchedulerJobPauseLog(db);
   await installPgliteTreeParentGuards(db);
 
@@ -727,4 +738,21 @@ export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
     extensions: { pg_trgm },
     loadDataDir: Bun.file(snapshotPath),
   });
+};
+
+/** Simulate the later grant release only in suites exercising exact reads. */
+export const grantPgliteDecisionCitationStatsReader = async (db: {
+  execute: (query: SQL) => PromiseLike<unknown>;
+}) => {
+  for (const table of [
+    schema.caseLawDecisionCitationStats,
+    schema.caseLawDecisionCitationStatsState,
+  ] as const) {
+    const relation = getTableName(table);
+    const columns = Object.keys(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION[relation]);
+    await db.execute(
+      sql.raw(`GRANT SELECT (${columns.map(quoteSqlIdentifier).join(", ")})
+      ON TABLE ${quoteSqlIdentifier(relation)} TO stella_public_law_reader`),
+    );
+  }
 };

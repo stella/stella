@@ -136,6 +136,24 @@ to explore the codebase.
 4. Open a pull request against `main`.
 5. Fill in the PR template and link a related issue.
 
+### Reading a CI failure
+
+When CI fails, the `ci-result` check lists every failed step as one
+annotation: job, step, kind (`test`, `typecheck`, `lint`, `ratchet`,
+`policy`, `build` or `other`) and the first error lines with `file:line`.
+Only steps that actually failed are listed. One call fetches them for a
+pull request (replace `123`):
+
+```bash
+gh api graphql -F owner=stella -F repo=stella -F pr=123 -f query='query($owner: String!, $repo: String!, $pr: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { commits(last: 1) { nodes { commit { checkSuites(first: 50) { nodes { checkRuns(first: 1, filterBy: {checkName: "ci-result"}) { nodes { annotations(first: 20) { nodes { annotationLevel path location { start { line } } title message } } } } } } } } } } } }' \
+  --jq '[.. | .annotations? | .nodes? // empty | .[] | select(.annotationLevel == "FAILURE")]'
+```
+
+The same records are in the run's `ci-failures` artifact
+(`gh run download <run-id> -n ci-failures`) and its job summary. A failing
+test step also ends its log with the failing tests and their errors. CI logs
+carry no colour codes.
+
 > In a fresh git worktree run `bun run setup:worktree` once to prepare dependencies.
 > `bun run lint:changed` lints only your
 > changed files in seconds; CI still runs the full `lint`.

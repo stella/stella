@@ -208,6 +208,9 @@ test("the offline baseline reader uses the merge base and preserves absent files
   try {
     git(["init", "--initial-branch=main"]);
     writeFileSync(path.join(directory, "baseline.txt"), "original\n");
+    const patchFile = "patches/@tanstack%2Fai@0.65.1.patch";
+    mkdirSync(path.join(directory, "patches"));
+    writeFileSync(path.join(directory, patchFile), "patch baseline\n");
     git(["add", "."]);
     git([
       "-c",
@@ -243,6 +246,11 @@ test("the offline baseline reader uses the merge base and preserves absent files
     expect(existing.exitCode).toBe(0);
     expect(JSON.parse(existing.stdout.toString())).toEqual({
       baseline: "original\n",
+    });
+    const patch = read(patchFile);
+    expect(patch.exitCode).toBe(0);
+    expect(JSON.parse(patch.stdout.toString())).toEqual({
+      baseline: "patch baseline\n",
     });
     const absent = read("introduced.txt");
     expect(absent.exitCode).toBe(0);

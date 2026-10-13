@@ -56,6 +56,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `chat.decision-threads.get` | read | stella:chat | — | generic invoke → `stella capability chat decision-threads-get` |
 | `chat.export.create` | write | stella:chat | — | generic invoke → `stella capability chat export-create` |
 | `chat.fork.create` | write | stella:chat | — | generic invoke → `stella capability chat fork-create` |
 | `chat.messages.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-list` |
@@ -225,6 +226,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices delete` |
 | `invoices.entries.add` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-add` |
 | `invoices.entries.remove` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-remove` |
+| `invoices.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices export` |
 | `invoices.get` | read | stella:read | FEATURE_TIME_BILLING | covered by `list_invoices` |
 | `invoices.lines.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-create` |
 | `invoices.lines.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-delete` |
@@ -681,9 +683,9 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 25 |
+| auth_plumbing | 27 |
 | billing_ui | 1 |
-| chat_thread_ui | 8 |
+| chat_thread_ui | 11 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
@@ -693,7 +695,7 @@ mechanics, and similar), not gaps in coverage.
 | native_tool_ui | 10 |
 | provider_secret | 33 |
 | public_indexing | 9 |
-| realtime_stream | 6 |
+| realtime_stream | 9 |
 | search_ui | 18 |
 | session_token_exchange | 20 |
 | ui_navigation_state | 14 |

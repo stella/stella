@@ -32,7 +32,8 @@ const validateObjectPath = ({
   }
   if (
     file.includes("..") ||
-    !file.split("/").every((part) => /^[\w][\w.-]*$/u.test(part))
+    /\p{Cc}/u.test(file) ||
+    !file.split("/").every((part) => /^[\w@][\w.@%-]*$/u.test(part))
   ) {
     panic("Invalid offline Git path");
   }

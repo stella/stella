@@ -28,6 +28,10 @@ import type {
 } from "../packages/external-contracts/src/types";
 import { parseBunLockText } from "./bun-lock-text";
 import { readFixtureEvidence } from "./external-contract-evidence";
+import {
+  EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
+  readExternalContractPinAllowances,
+} from "./external-contract-pin-allowances";
 import { readGitBaseline } from "./offline-git-read";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
@@ -35,6 +39,8 @@ import {
 } from "./outbound-transport-census";
 import { isOutboundTransportModule } from "./outbound-transport-ownership";
 import { parseSource } from "./parse-memo";
+
+export const REMOVED_PIN = "<removed>";
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const REGISTRY_PATH = "packages/external-contracts/src/registry.ts";
@@ -108,10 +114,13 @@ const declaredInitializer = (
   );
 };
 
-export const readPin = (root: string, source: PinSource): string => {
+const readPinFromFiles = (
+  source: PinSource,
+  read: (file: string) => string,
+): string => {
   switch (source.type) {
     case "manifest": {
-      const manifest = v.parse(manifestSchema, json(root, source.file));
+      const manifest = v.parse(manifestSchema, JSON.parse(read(source.file)));
       return (
         manifest[source.section][source.package] ??
         panic(`${pinSourceKey(source)}: missing package pin.`)
@@ -120,7 +129,7 @@ export const readPin = (root: string, source: PinSource): string => {
     case "image": {
       const images = v.parse(
         v.array(v.object({ name: v.string(), source: v.string() })),
-        json(root, source.file),
+        JSON.parse(read(source.file)),
       );
       return (
         images.find(({ name }) => name === source.name)?.source ??
@@ -130,7 +139,7 @@ export const readPin = (root: string, source: PinSource): string => {
     case "constant": {
       const initializer = declaredInitializer(
         source.file,
-        readFileSync(path.join(root, source.file), "utf-8"),
+        read(source.file),
         source.name,
       );
       if (!ts.isArrayLiteralExpression(initializer)) {
@@ -150,6 +159,11 @@ export const readPin = (root: string, source: PinSource): string => {
   }
 };
 
+export const readPin = (root: string, source: PinSource): string =>
+  readPinFromFiles(source, (file) =>
+    readFileSync(path.join(root, file), "utf-8"),
+  );
+
 /** The installed package a bun.lock key names: its last `parent/child` segment, where either side may be scoped. */
 export const lockKeyPackageName = (key: string): string => {
   const segments = key.split("/");
@@ -159,21 +173,21 @@ export const lockKeyPackageName = (key: string): string => {
 };
 
 /** Include installed SDK versions and patches: a caret or patch edit can move code without moving its manifest range. */
-export const readCurrentPins = (
-  root: string,
+const readPinsFromFiles = (
   entry: ExternalContractEntry,
+  read: (file: string) => string,
 ): Record<string, string> => {
   const current = Object.fromEntries(
     entry.pinSources.map((source) => [
       pinSourceKey(source),
-      readPin(root, source),
+      readPinFromFiles(source, read),
     ]),
   );
   const lock = v.parse(
     v.object({ packages: objectSchema }),
-    parseBunLockText(readFileSync(path.join(root, "bun.lock"), "utf-8")),
+    parseBunLockText(read("bun.lock")),
   );
-  const manifest = v.parse(manifestSchema, json(root, "package.json"));
+  const manifest = v.parse(manifestSchema, JSON.parse(read("package.json")));
   for (const sdk of entry.sdks) {
     const instances = Object.entries(lock.packages).filter(
       ([key]) => lockKeyPackageName(key) === sdk,
@@ -190,13 +204,19 @@ export const readCurrentPins = (
       if (!key.startsWith(`${sdk}@`)) {
         continue;
       }
-      current[`package.json#patchedDependencies.${key}`] = hash(
-        readFileSync(path.join(root, file)),
-      );
+      current[`package.json#patchedDependencies.${key}`] = hash(read(file));
     }
   }
   return current;
 };
+
+export const readCurrentPins = (
+  root: string,
+  entry: ExternalContractEntry,
+): Record<string, string> =>
+  readPinsFromFiles(entry, (file) =>
+    readFileSync(path.join(root, file), "utf-8"),
+  );
 
 export const readDirectDependencies = (root: string): string[] => {
   const dependencies = new Set<string>();
@@ -305,6 +325,7 @@ type FixtureCheckOptions = {
   system: string;
   fixture: FixtureSet;
   current: Readonly<Record<string, string>>;
+  admittedPins: Readonly<Record<string, string>>;
   owners: readonly string[];
   sdks: readonly string[];
 };
@@ -313,6 +334,7 @@ const checkFixture = ({
   system,
   fixture,
   current,
+  admittedPins,
   owners,
   sdks,
 }: FixtureCheckOptions) => {
@@ -398,7 +420,10 @@ const checkFixture = ({
         system,
         fixture: fixture.path,
         current,
-        characterisedAt: metadata.characterisedAt,
+        characterisedAt: applyAdmittedPinDrift(
+          metadata.characterisedAt,
+          admittedPins,
+        ),
       }),
     );
   }
@@ -433,7 +458,10 @@ const checkFixture = ({
             system,
             fixture: file,
             current,
-            characterisedAt: provenance.characterisedAt,
+            characterisedAt: applyAdmittedPinDrift(
+              provenance.characterisedAt,
+              admittedPins,
+            ),
           }),
         );
         if (
@@ -742,12 +770,94 @@ export const findDependencyCatalogProblems = ({
   return problems;
 };
 
+const applyAdmittedPinDrift = (
+  characterisedAt: Readonly<Record<string, string>>,
+  admitted: Readonly<Record<string, string>>,
+) =>
+  Object.fromEntries([
+    ...Object.entries(characterisedAt).filter(
+      ([key]) => admitted[key] !== REMOVED_PIN,
+    ),
+    ...Object.entries(admitted).filter(([, value]) => value !== REMOVED_PIN),
+  ]);
+
+type ChangedExecutableUsageOptions = {
+  file: string;
+  baseline: string | undefined;
+  current: string;
+};
+
+export const hasChangedExecutableUsage = ({
+  file,
+  baseline,
+  current,
+}: ChangedExecutableUsageOptions): boolean => {
+  if (baseline === undefined) {
+    return true;
+  }
+  const printer = ts.createPrinter({ removeComments: true });
+  const statements = (text: string) => {
+    const source = parseSource({ fileName: file, text });
+    return source.statements
+      .filter(
+        (statement) =>
+          !ts.isTypeAliasDeclaration(statement) &&
+          !ts.isInterfaceDeclaration(statement),
+      )
+      .map((statement) =>
+        printer.printNode(ts.EmitHint.Unspecified, statement, source),
+      );
+  };
+  const previous = new Map<string, number>();
+  for (const statement of statements(baseline)) {
+    previous.set(statement, (previous.get(statement) ?? 0) + 1);
+  }
+  return statements(current).some((statement) => {
+    const remaining = previous.get(statement) ?? 0;
+    if (remaining === 0) {
+      return true;
+    }
+    previous.set(statement, remaining - 1);
+    return false;
+  });
+};
+
+type AdmittedPinDriftOptions = {
+  current: Readonly<Record<string, string>>;
+  baseline: Readonly<Record<string, string>>;
+  allowance: ReturnType<typeof readExternalContractPinAllowances>[number];
+  now: Date;
+  usageChanged: boolean;
+};
+
+/** Dated debt never admits changed pins or changed executable usage. */
+export const admittedPinDrift = ({
+  current,
+  baseline,
+  allowance,
+  now,
+  usageChanged,
+}: AdmittedPinDriftOptions): Record<string, string> => {
+  if (usageChanged || Date.parse(allowance.expiresAt) <= now.getTime()) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(allowance.pins).filter(
+      ([key, value]) =>
+        (current[key] ?? REMOVED_PIN) === value &&
+        (baseline[key] ?? REMOVED_PIN) === value,
+    ),
+  );
+};
+
 type ExternalContractCheckOptions = {
   registry?: Readonly<Record<ExternalSystemId, ExternalContractEntry>>;
   dependencies?: readonly string[];
   inProcess?: Readonly<Record<string, string>>;
   census?: readonly OutboundTransportCensusEntry[];
   sdks?: readonly string[];
+  baseline?: (file: string) => string | undefined;
+  now?: Date;
 };
 
 export const checkExternalContracts = (
@@ -758,6 +868,8 @@ export const checkExternalContracts = (
     inProcess = IN_PROCESS_DEPENDENCIES,
     census = OUTBOUND_TRANSPORT_CENSUS,
     sdks = dependencies.filter((name) => !Object.hasOwn(inProcess, name)),
+    baseline,
+    now = new Date(),
   }: ExternalContractCheckOptions = {},
 ): string[] => {
   const problems = findDependencyCatalogProblems({
@@ -767,6 +879,12 @@ export const checkExternalContracts = (
     census,
     sdks,
   });
+  const allowances = readExternalContractPinAllowances(
+    readFileSync(
+      path.join(ROOT, EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH),
+      "utf-8",
+    ),
+  );
   for (const [system, entry] of Object.entries(registry)) {
     for (const owner of entry.owners) {
       if (!existsSync(path.join(root, owner.path))) {
@@ -774,6 +892,38 @@ export const checkExternalContracts = (
       }
     }
     const current = readCurrentPins(root, entry);
+    const admitted = allowances.find(
+      (allowance) => allowance.system === system,
+    );
+    const baselinePins =
+      baseline === undefined || admitted === undefined
+        ? current
+        : readPinsFromFiles(
+            entry,
+            (file) =>
+              baseline(file) ??
+              panic(`Missing external contract baseline: ${file}`),
+          );
+    const usageChanged =
+      baseline !== undefined &&
+      admitted !== undefined &&
+      entry.owners.some(({ path: file }) =>
+        hasChangedExecutableUsage({
+          file,
+          baseline: baseline(file),
+          current: readFileSync(path.join(root, file), "utf-8"),
+        }),
+      );
+    const admittedPins =
+      admitted === undefined
+        ? {}
+        : admittedPinDrift({
+            current,
+            baseline: baselinePins,
+            allowance: admitted,
+            now,
+            usageChanged,
+          });
     if (entry.status === "uncharacterised") {
       continue;
     }
@@ -785,6 +935,7 @@ export const checkExternalContracts = (
         system,
         fixture,
         current,
+        admittedPins,
         owners: entry.owners.map(({ path: ownerPath }) => ownerPath),
         sdks: entry.sdks,
       });
@@ -840,24 +991,31 @@ export const checkExternalContracts = (
 
 if (import.meta.main) {
   const base = process.env["CHECK_BASE_REF"] ?? "origin/main";
-  const problems = checkExternalContracts(ROOT);
+  const baselineCache = new Map<string, string | undefined>();
+  const baseline = (file: string) => {
+    if (!baselineCache.has(file)) {
+      baselineCache.set(file, readGitBaseline({ root: ROOT, base, file }));
+    }
+    return baselineCache.get(file);
+  };
+  const problems = checkExternalContracts(ROOT, { baseline });
   for (const file of [REGISTRY_PATH]) {
-    const baseline = readGitBaseline({ root: ROOT, base, file });
+    const baselineSource = readGitBaseline({ root: ROOT, base, file });
     // The initial enrollment establishes the set; later changes may only shrink it.
-    if (baseline === undefined) {
+    if (baselineSource === undefined) {
       continue;
     }
     const currentSource = readFileSync(path.join(ROOT, file), "utf-8");
     problems.push(
       ...findUncharacterisedGrowth(
         uncharacterisedFromSource(currentSource),
-        uncharacterisedFromSource(baseline),
+        uncharacterisedFromSource(baselineSource),
       ),
     );
     problems.push(
       ...findShrinkOnlyGrowth({
         current: uncharacterisedScopeFromSource(currentSource),
-        baseline: uncharacterisedScopeFromSource(baseline),
+        baseline: uncharacterisedScopeFromSource(baselineSource),
         label: "Uncharacterised scope",
       }),
     );

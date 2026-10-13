@@ -115,6 +115,63 @@ export const selectRecentWorkspaces = <TWorkspace extends RecentWorkspace>({
   return [...sorted.slice(0, Math.max(limit - 1, 0)), activeWorkspace];
 };
 
+/**
+ * When the reader last chatted in each matter: the newest thread of each
+ * matter group in the merged chat history. Feeds `selectRecentWorkspaces`
+ * wherever recent matters are ranked, so every surface weighs chat the same.
+ */
+export const chatActivityByWorkspace = (groupedThreads: {
+  workspaces: readonly {
+    threads: readonly { updatedAt: string }[];
+    workspaceId: string;
+  }[];
+}): Map<string, string> =>
+  new Map(
+    groupedThreads.workspaces.flatMap((workspace) => {
+      const updatedAt = workspace.threads.at(0)?.updatedAt;
+      return updatedAt ? [[workspace.workspaceId, updatedAt] as const] : [];
+    }),
+  );
+
+/**
+ * A picker's "recent" matters: the pinned ones first, in the reader's pinned
+ * order, then the most recently active of the rest, ranked exactly as the
+ * sidebar ranks them. At most `limit` in all.
+ */
+export const selectPinnedThenRecentWorkspaces = <
+  TWorkspace extends RecentWorkspace,
+>({
+  chatActivityByWorkspaceId,
+  limit,
+  pinnedOrder,
+  workspaces,
+}: {
+  chatActivityByWorkspaceId: ReadonlyMap<string, string>;
+  limit: number;
+  pinnedOrder: readonly string[];
+  workspaces: readonly TWorkspace[];
+}): TWorkspace[] => {
+  const byId = new Map(
+    workspaces.map((workspace) => [workspace.id, workspace]),
+  );
+  const pinned = pinnedOrder
+    .flatMap((id) => {
+      const workspace = byId.get(id);
+      return workspace === undefined ? [] : [workspace];
+    })
+    .slice(0, Math.max(limit, 0));
+  return [
+    ...pinned,
+    ...selectRecentWorkspaces({
+      activeWorkspaceId: undefined,
+      chatActivityByWorkspaceId,
+      limit: limit - pinned.length,
+      pinnedIds: new Set(pinnedOrder),
+      workspaces,
+    }),
+  ];
+};
+
 type MatterActivityPage = {
   items: readonly unknown[];
   nextCursor: string | null;

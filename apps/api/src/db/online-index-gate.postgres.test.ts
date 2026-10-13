@@ -7,7 +7,10 @@ import { defaultConfig, type Signal } from "@stll/db-load-gate/health";
 import type { OnlineIndexConfig } from "../env-online-index";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
-import { withGatedTestClients } from "../tests/gated-test-database";
+import {
+  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
+  withGatedTestClients,
+} from "../tests/gated-test-database";
 import {
   createOnlineIndexGate,
   type OnlineIndexGateOptions,
@@ -183,7 +186,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
         blocker.release();
       }
     },
-    { closeTimeout: 0 },
+    { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
   );
 };
 

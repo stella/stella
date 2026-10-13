@@ -10,6 +10,8 @@ import { isBuiltin } from "node:module";
 import path from "node:path";
 import ts from "typescript";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
 import { parseSource } from "./parse-memo";
 
 const MAX_FILES = 8192;
@@ -23,18 +25,9 @@ const packageIdentity = (specifier: string) => {
   return specifier.startsWith("@") ? parts.slice(0, 2).join("/") : parts.at(0);
 };
 
-const inside = (root: string, file: string) => {
-  const relative = path.relative(root, file);
-  return (
-    relative !== ".." &&
-    !relative.startsWith(`..${path.sep}`) &&
-    !path.isAbsolute(relative)
-  );
-};
-
 const repositorySource = (root: string, file: string) =>
-  inside(root, file) &&
-  !path.relative(root, file).split(path.sep).includes("node_modules");
+  isPathInside(root, file) &&
+  !repoRelativePath(root, file).split("/").includes("node_modules");
 
 const localSpecifier = (specifier: string) =>
   specifier.startsWith(".") ||
@@ -94,7 +87,7 @@ const createEvidenceResolver = ({
     directory: string,
   ): string | undefined => {
     let current = directory;
-    while (inside(repositoryRoot, current)) {
+    while (isPathInside(repositoryRoot, current)) {
       const config = configAt(current);
       if (config !== undefined) {
         for (const [pattern, replacements] of Object.entries(
@@ -179,7 +172,7 @@ const createEvidenceResolver = ({
       return resolutions.get(key);
     }
     let resolved = resolveCandidate(specifier, directory);
-    if (resolved === undefined && inside(repositoryRoot, importer)) {
+    if (resolved === undefined && isPathInside(repositoryRoot, importer)) {
       resolved = aliasResolution(specifier, directory);
     }
     const identity = packageIdentity(specifier);
@@ -239,7 +232,7 @@ const createEvidenceResolver = ({
       workspace === undefined
         ? installedPackageRoot(path.dirname(importer), identity)
         : Result.try(() => realpathSync(workspace)).unwrapOr(undefined);
-    return packageRoot !== undefined && inside(packageRoot, resolved);
+    return packageRoot !== undefined && isPathInside(packageRoot, resolved);
   };
   return { resolveImport, workspaceSpecifier, resolvedPackage };
 };
@@ -419,7 +412,9 @@ export const readFixtureEvidence = ({
     return text;
   };
   const label = (file: string) =>
-    inside(repositoryRoot, file) ? path.relative(repositoryRoot, file) : file;
+    isPathInside(repositoryRoot, file)
+      ? repoRelativePath(repositoryRoot, file)
+      : file;
   const { pending, problems: rootProblems } = readReplayRoots({
     repositoryRoot,
     replayFiles,
@@ -460,7 +455,7 @@ export const readFixtureEvidence = ({
       break;
     }
     if (repositorySource(repositoryRoot, file)) {
-      owners.add(path.relative(repositoryRoot, file));
+      owners.add(repoRelativePath(repositoryRoot, file));
     }
     if (proved()) {
       return { owners, sdks, problems: rootProblems };
@@ -524,7 +519,7 @@ export const readFixtureEvidence = ({
         entry.depth < MAX_DEPTH &&
         repositorySource(repositoryRoot, resolved)
       ) {
-        owners.add(path.relative(repositoryRoot, resolved));
+        owners.add(repoRelativePath(repositoryRoot, resolved));
       }
       pending.push({ file: resolved, depth: entry.depth + 1 });
     };

@@ -73,6 +73,9 @@ env:
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
   DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+  # Plain logs: no ANSI escapes for readers that fetch them as text. Only
+  # FORCE_COLOR: Node warns when NO_COLOR is set beside it.
+  FORCE_COLOR: "0"
 
 jobs:
   ci-plan:
@@ -150,10 +153,12 @@ jobs:
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
       # The job and result gate consume the same event/depth decision.
+      ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
         ${{ steps.completed-depth.outputs.run_required != 'false'
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
+        && steps.changed-files.outputs.ci_browser_scope_required == 'true'
         && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
@@ -161,7 +166,9 @@ jobs:
         && steps.completed-depth.outputs.normal_completion != 'complete'
         && contains(fromJSON(steps.pilot-queue-plan.outputs.queue_jobs || '[]'), 'ci-browser')))
         && 'true' || 'false' }}
-      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_image_inputs_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_api_source_required: ${{ steps.legal-atlas-scope.outputs.api_source_required || 'true' }}
+      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required == 'true' && steps.legal-atlas-scope.outputs.api_source_required != 'false' }}
       legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
@@ -339,8 +346,10 @@ jobs:
           fi
           workflow_version=$(git show "$WORKFLOW_SHA:.github/workflows/ci.yml" | git hash-object --stdin)
           [[ "$workflow_version" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::Unable to identify CI workflow version."; exit 1; }
-          echo "patch_id=$patch_id" >> "$GITHUB_OUTPUT"
-          echo "workflow_version=$workflow_version" >> "$GITHUB_OUTPUT"
+          {
+            echo "patch_id=$patch_id"
+            echo "workflow_version=$workflow_version"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Derive PR-depth jobs
         id: pr-depth-plan
@@ -607,10 +616,18 @@ jobs:
 
       - name: Setup Bun for dependency scope
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' || inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
+
+      - name: Check tracked symlink archive targets
+        if: >-
+          steps.completed-depth.outputs.run_required != 'false'
+          && (
+          steps.check.outputs.trusted == 'true'
+          || github.event_name == 'workflow_dispatch'
+          )
+        run: bun scripts/check-tracked-symlinks.ts
 
       - name: Login to GitHub Container Registry for image resolution
         id: registry
@@ -638,7 +655,10 @@ jobs:
       - name: Install heavy planner dependencies
         timeout-minutes: 3
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
+          log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
           NPM_TOKEN: ""
 
@@ -775,6 +795,7 @@ jobs:
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "desktop_browser_required=true"
+              echo "ci_browser_scope_required=true"
               echo "e2e_core_required=true"
               echo "e2e_production_required=$e2e_production_required"
               echo "e2e_landing_required=true"
@@ -824,6 +845,7 @@ jobs:
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "desktop_browser_required=false"
+              echo "ci_browser_scope_required=false"
               echo "e2e_core_required=false"
               echo "e2e_production_required=false"
               echo "e2e_landing_required=false"
@@ -899,6 +921,10 @@ jobs:
           fi
           if [[ "$package_checks_required" == false ]]; then
             desktop_browser_required=false
+          fi
+          ci_browser_scope_required=$(bun scripts/ci-browser-scope.ts "${changed_files[@]}") || ci_browser_scope_required=true
+          if [[ "$ci_browser_scope_required" != false ]]; then
+            ci_browser_scope_required=true
           fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
@@ -1026,7 +1052,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml)
+              apps/legal-atlas-runner/*|apps/api/*|apps/*/package.json|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|scripts/legal-atlas-image-scope*|scripts/docker-source-closure*|scripts/generated-imports*|scripts/generated-files*|scripts/install-free-ci*|.dockerignore|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
             esac
@@ -1166,6 +1192,7 @@ jobs:
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "desktop_browser_required=$desktop_browser_required"
+            echo "ci_browser_scope_required=$ci_browser_scope_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_production_required=$e2e_production_required"
             echo "e2e_landing_required=$e2e_landing_required"
@@ -1228,6 +1255,26 @@ jobs:
         run: bash scripts/retry.sh timeout --kill-after=10s 120s bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+          # A tolerated failure is a warning, not a failure annotation.
+          RETRY_FAILURE_LEVEL: warning
+
+      - name: Refine Legal Atlas API source scope
+        id: legal-atlas-scope
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
+        run: |
+          changed_files=()
+          while IFS= read -r -d '' file; do
+            changed_files+=("$file")
+          done < "$RUNNER_TEMP/api-test-changed-paths"
+          # An unknown diff is already broad; an empty list must preserve it.
+          required=true
+          if (( ${#changed_files[@]} > 0 )); then
+            required=$(timeout --kill-after=10s 120s bun scripts/legal-atlas-image-scope.ts "${changed_files[@]}") || required=true
+          fi
+          if [[ "$required" != false ]]; then
+            required=true
+          fi
+          echo "api_source_required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Select affected API test files
         id: api-test-selection
@@ -1238,9 +1285,11 @@ jobs:
           API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
         run: |
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
-            echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}' >> "$GITHUB_OUTPUT"
-            echo 'api_test_shards=4' >> "$GITHUB_OUTPUT"
-            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+            {
+              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}'
+              echo 'api_test_shards=4'
+              echo 'api_test_files='
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Select affected Postgres test files
@@ -1259,8 +1308,10 @@ jobs:
             timeout --kill-after=10s 120s bun --cwd=apps/api run generate:capability-runtime &&
             timeout --kill-after=10s 120s bun scripts/ci-postgres-test-plan.ts
           ); then
-            echo 'postgres_test_selection={"mode":"all"}' >> "$GITHUB_OUTPUT"
-            echo 'postgres_selection_reason=Runtime generation or selection unavailable; full suite retained.' >> "$GITHUB_OUTPUT"
+            {
+              echo 'postgres_test_selection={"mode":"all"}'
+              echo 'postgres_selection_reason=Runtime generation or selection unavailable; full suite retained.'
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Summarize Postgres test selection
@@ -1373,9 +1424,11 @@ jobs:
           matrix=$(jq -c .matrix <<< "$plan")
           mode=$(jq -r .status <<< "$plan")
           specs=$(jq -c .specs <<< "$plan")
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          {
+            echo "matrix=$matrix"
+            echo "mode=$mode"
+            echo "specs=$specs"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Plan changed PR e2e shards
         id: e2e-pr-plan
@@ -1399,15 +1452,21 @@ jobs:
             mode=$SELECTED_MODE
             specs=$SELECTED_SPECS
           fi
-          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
-          echo "mode=$mode" >> "$GITHUB_OUTPUT"
-          echo "specs=$specs" >> "$GITHUB_OUTPUT"
+          {
+            echo "matrix=$matrix"
+            echo "mode=$mode"
+            echo "specs=$specs"
+          } >> "$GITHUB_OUTPUT"
           if [[ "$matrix" == '{"shard":[]}' ]]; then
-            echo "selection_required=false" >> "$GITHUB_OUTPUT"
-            echo "required=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "selection_required=false"
+              echo "required=false"
+            } >> "$GITHUB_OUTPUT"
           else
-            echo "selection_required=true" >> "$GITHUB_OUTPUT"
-            echo "required=$E2E_PRODUCTION_REQUIRED" >> "$GITHUB_OUTPUT"
+            {
+              echo "selection_required=true"
+              echo "required=$E2E_PRODUCTION_REQUIRED"
+            } >> "$GITHUB_OUTPUT"
           fi
 
       - name: Plan API test files and shards
@@ -1422,17 +1481,21 @@ jobs:
           SELECTED_SHARDS: ${{ steps.api-test-selection.outputs.api_test_shards }}
         run: |
           if [[ -n "$SELECTED_MATRIX" && -n "$SELECTED_SHARDS" ]]; then
-            echo "ci_tests_matrix=$SELECTED_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "api_test_shards=$SELECTED_SHARDS" >> "$GITHUB_OUTPUT"
+            {
+              echo "ci_tests_matrix=$SELECTED_MATRIX"
+              echo "api_test_shards=$SELECTED_SHARDS"
+            } >> "$GITHUB_OUTPUT"
             {
               echo 'api_test_files<<API_TEST_FILES_END'
               printf '%s\n' "$SELECTED_FILES"
               echo 'API_TEST_FILES_END'
             } >> "$GITHUB_OUTPUT"
           elif [[ "$EVENT_NAME" == pull_request && "$PACKAGE_CHECKS_REQUIRED" != true && "$API_SCOPE_UNKNOWN" != true ]]; then
-            echo 'ci_tests_matrix={"shard":["rest-web"]}' >> "$GITHUB_OUTPUT"
-            echo 'api_test_shards=0' >> "$GITHUB_OUTPUT"
-            echo 'api_test_files=' >> "$GITHUB_OUTPUT"
+            {
+              echo 'ci_tests_matrix={"shard":["rest-web"]}'
+              echo 'api_test_shards=0'
+              echo 'api_test_files='
+            } >> "$GITHUB_OUTPUT"
           else
             bun scripts/api-test-shard-plan.ts >> "$GITHUB_OUTPUT"
             echo 'api_test_files=' >> "$GITHUB_OUTPUT"
@@ -1495,7 +1558,6 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      && inputs.heavy_only != true
       && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false')
       && github.event_name != 'pull_request'
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -1526,15 +1588,17 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
         id: install
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/agent-engine... --filter stella
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/agent-engine...","--filter","stella"]'
         env:
           NPM_TOKEN: ""
 
@@ -1555,6 +1619,7 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -1801,11 +1866,12 @@ jobs:
           filter: blob:none
           persist-credentials: false
 
+      # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
+          no-cache: true
 
       - name: Check parser version guard
         env:
@@ -1896,11 +1962,15 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
+
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
       - name: Prepare local check environment
@@ -1928,6 +1998,7 @@ jobs:
           path: ${{ runner.temp }}/generated-sources/
           retention-days: 1
           if-no-files-found: error
+          include-hidden-files: true
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
@@ -2000,13 +2071,15 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: "package.json"
-          save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
         id: install
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
       - name: Check changed Markdown consumers
@@ -2097,9 +2170,8 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
@@ -2111,7 +2183,10 @@ jobs:
       - name: Install dependencies
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -2407,9 +2482,8 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
@@ -2421,7 +2495,10 @@ jobs:
       - name: Install dependencies
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -2533,6 +2610,12 @@ jobs:
           bun apps/api/scripts/deployment-feature-guard.ts --self-test
           bun apps/api/scripts/deployment-feature-guard.ts --base "$RATCHET_BASE_REF"
 
+      - name: Processed-field backlog guard
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # The case-law processed-field backlog (debts and unrecorded claims)
+        # may only shrink against the measured base.
+        run: bun apps/api/scripts/processed-field-backlog-guard.ts --base "$RATCHET_BASE_REF"
+
       - name: GitHub API command ownership
         env:
           STELLA_VERIFY: check
@@ -2558,6 +2641,10 @@ jobs:
         run: |
           bun test scripts/check-oxlint-rule-coverage.test.ts
           bun scripts/check-oxlint-rule-coverage.ts
+
+      - name: Custom lint test timeout policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
 
       - name: Dated waiver lifecycle guards
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2692,7 +2779,7 @@ jobs:
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
-    # Version-change parity measured 15m; retain 25m for repository checks.
+    # Retain the repository-check budget after moving optional compiler proofs.
     timeout-minutes: 40
     permissions:
       contents: read
@@ -2733,9 +2820,8 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       # The changeset gate for pull requests. It reads only the policy file
@@ -2779,7 +2865,7 @@ jobs:
       - name: Changeset present for published package changes
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@167fb396c6c0f4e07296ad2cd72e6ef15367c776 # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@5764ab66e4df84cfd2e642c7d7e4678261e668f8 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -2852,7 +2938,10 @@ jobs:
       - name: Install dependencies
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && steps.standalone_lockfiles.outcome == 'success' && (!(github.event_name != 'workflow_dispatch' && needs.ci-plan.outputs.lockfile_ages_required == 'true') || steps.lockfile_ages.outcome == 'success') }}
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -2868,90 +2957,11 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
-      - name: Select typecheck parity coverage
-        id: typecheck_parity_gate
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
-        # Compare resolved compiler versions, not dependency ranges or unrelated
-        # lockfile edits. Scheduled and manual proofs always compare both checkers.
-        run: |
-          bun test scripts/typecheck-parity-gate.test.ts
-          bun --eval '
-          import ts from "typescript";
-          const git = (...args) => {
-            const child = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "pipe" });
-            if (child.exitCode !== 0) throw new Error(child.stderr.toString());
-            return child.stdout.toString().trim();
-          };
-          const versions = (ref) => {
-            const manifest = JSON.parse(git("show", `${ref}:package.json`));
-            const parsed = ts.parseConfigFileTextToJson("bun.lock", git("show", `${ref}:bun.lock`));
-            if (parsed.error) throw new Error("Cannot parse compiler lockfile");
-            const packages = parsed.config?.packages;
-            if (!packages || typeof manifest.packageManager !== "string" || !manifest.packageManager.startsWith("bun@")) {
-              throw new Error("Missing Bun or resolved compiler versions");
-            }
-            const compilers = [...new Set(Object.values(packages)
-              .filter(Array.isArray)
-              .map((entry) => entry[0])
-              .filter((pin) => typeof pin === "string" && /^(typescript|@typescript\/native-preview)@/u.test(pin)))].sort();
-            if (compilers.length === 0) throw new Error("Missing resolved TypeScript compiler versions");
-            return JSON.stringify([manifest.packageManager, compilers]);
-          };
-          const forced = ["schedule", "workflow_dispatch"].includes(process.env.EVENT_NAME);
-          const base = process.env.BASE_SHA || (forced ? "" : git("rev-parse", "HEAD^"));
-          const required = forced || versions(base) !== versions("HEAD");
-          console.log(`required=${required}`);
-          ' >> "$GITHUB_OUTPUT"
-
-      - name: Typecheck parity (all checked projects)
-        id: typecheck_parity
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
-        run: |
-          set -o pipefail
-          bun run check:typecheck-parity | tee "$RUNNER_TEMP/typecheck-parity.log"
-
-      - name: Record typecheck parity report
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
-        run: |
-          {
-            cat CLOUD_REPORT.md
-            printf '\n## CI parity output\n\n```text\n'
-            cat "$RUNNER_TEMP/typecheck-parity.log"
-            printf '\n```\n'
-          } > "$RUNNER_TEMP/CLOUD_REPORT.md"
-
-      - name: Upload typecheck parity report
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: typecheck-parity-report
-          path: ${{ runner.temp }}/CLOUD_REPORT.md
-
-      - name: Typecheck command rejects errors
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: |
-          probe=packages/sha256/src/typecheck-command-probe.ts
-          trap 'rm -f "$probe"' EXIT
-          printf 'export const typecheckCommandProbe: number = "wrong";\n' > "$probe"
-          if bun run typecheck --filter=@stll/sha256 --only --force > "$RUNNER_TEMP/typecheck-command-probe.log" 2>&1; then
-            cat "$RUNNER_TEMP/typecheck-command-probe.log"
-            echo "The typecheck command accepted a seeded type error."
-            exit 1
-          fi
-          cat "$RUNNER_TEMP/typecheck-command-probe.log"
-          grep -q 'typecheck-command-probe.ts' "$RUNNER_TEMP/typecheck-command-probe.log"
-          grep -q '2322' "$RUNNER_TEMP/typecheck-command-probe.log"
-          rm "$probe"
-          bun run typecheck --filter=@stll/sha256 --only --force
-
       - name: Test oxlint plugins
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun test scripts/oxlint-plugin-test-coverage.test.ts
-          find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test
+          bun scripts/run-custom-lint-tests.ts
 
       - name: Prepare route network manifest
         id: network_manifest_prepare
@@ -3315,6 +3325,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/ci-generated-sources.test.ts packages/scripts/src/prepared-generated-sources.test.ts
 
+      - name: Windows dry-run receipt contract
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-windows-dry-run-result.test.ts
+
       - name: Test input coverage
         env:
           STELLA_VERIFY: check
@@ -3369,6 +3383,21 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
 
+      - name: Workflow lint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          ACTIONLINT_VERSION: 1.7.12
+        run: |
+          bash scripts/install-actionlint.sh "$ACTIONLINT_VERSION" "$ACTIONLINT_SHA256" "$RUNNER_TEMP"
+          ACTIONLINT_BIN="$RUNNER_TEMP/actionlint" bun scripts/check-actionlint-baseline.ts
+
+      - name: Workflow YAML
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/check-workflow-yaml.test.ts
+          bun scripts/check-workflow-yaml.ts
+
       - name: Module ownership
         env:
           STELLA_VERIFY: check
@@ -3392,6 +3421,18 @@ jobs:
             # Hydrate a partial clone before verification disables Git transport.
             git show "$base:$baseline_path" > /dev/null
           fi
+          # Pin and usage comparisons need local baseline blobs before network denial.
+          bun -e 'import { EXTERNAL_CONTRACTS } from "./packages/external-contracts/src/registry"; const files = new Set(["package.json", "apps/api/package.json", "bun.lock", ...Object.values(EXTERNAL_CONTRACTS).flatMap(entry => [...entry.owners.map(owner => owner.path), ...entry.pinSources.map(source => source.file)]), ...Object.values((await Bun.file("package.json").json()).patchedDependencies)]); console.log([...files].join("\n"));' > "$RUNNER_TEMP/external-contract-baseline-paths"
+          while IFS= read -r file; do
+            if [ -n "$(git ls-tree --name-only "$base" -- "$file")" ]; then
+              git show "$base:$file" > /dev/null
+            fi
+          done < "$RUNNER_TEMP/external-contract-baseline-paths"
+          # A changed patch pin can also reference a patch removed from the head.
+          git ls-tree -r --name-only "$base" -- patches > "$RUNNER_TEMP/external-contract-baseline-patches"
+          while IFS= read -r file; do
+            git show "$base:$file" > /dev/null
+          done < "$RUNNER_TEMP/external-contract-baseline-patches"
           bun --preload ./scripts/offline-network-preload.ts scripts/check-external-contracts.ts --check
           bun test scripts/check-external-contracts.test.ts scripts/external-contract-evidence.test.ts
 
@@ -3400,6 +3441,12 @@ jobs:
         run: |
           bun scripts/outbound-transport-ownership.ts --check
           bun test scripts/outbound-transport-ownership.test.ts
+
+      - name: Document identity ownership
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/document-identity-guard.ts
+          bun test scripts/document-identity-guard.test.ts
 
       - name: Module ownership invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -3819,6 +3866,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/e2e-geometry-shards.test.ts
 
+      - name: Test e2e shard budget
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/e2e-shard-budget.test.ts
+
       - name: Validate CI service image mirror inventory
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: |
@@ -3918,6 +3969,10 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/retry.test.sh
 
+      - name: Test CI failure digest
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-failure-digest.test.ts
+
       - name: Test base image pull script
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/pull-base-images.test.sh
@@ -3977,11 +4032,11 @@ jobs:
 
       - name: Test aggregate inventories
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
+        run: bun scripts/run-custom-lint-tests.ts scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
 
       - name: Test write contract inventories
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts
+        run: bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts
 
       - name: Office fixture metadata
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4113,9 +4168,8 @@ jobs:
           fi
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Turbo remote cache
@@ -4126,7 +4180,10 @@ jobs:
 
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -4214,7 +4271,12 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
+          # On failure the log ends with the failing tests and their errors.
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
+            status=$?
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
+            exit "$status"
+          }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Upload API test timings
@@ -4248,7 +4310,12 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
+          # On failure the log ends with the failing tests and their errors.
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
+            status=$?
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
+            exit "$status"
+          }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Upload test diagnostics
@@ -4335,14 +4402,16 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install API script dependencies
-        timeout-minutes: 5
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/api-test-durations.log" --frozen-lockfile --ignore-scripts --filter @stll/api
+        timeout-minutes: 3
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
+          log-file: "${{ runner.temp }}/bun-install/api-test-durations.log"
         env:
           NPM_TOKEN: ""
 
@@ -4461,6 +4530,18 @@ jobs:
             .github/actions/setup-playwright \
             .github/workflows/ci.yml \
             apps/desktop \
+            apps/web \
+            packages \
+            scripts/ci-service-images.ts \
+            scripts/ci-service-images.json \
+            scripts/ci-browser-scope.ts \
+            scripts/ci-package-scope.ts \
+            scripts/install-free-ci.ts \
+            scripts/retry.sh \
+            scripts/generated-files.ts \
+            bunfig.toml \
+            .npmrc \
+            VERSION \
             apps/web/e2e/playwright.ui-playground.config.ts \
             apps/web/e2e/ui-playground \
             apps/web/package.json \
@@ -4531,10 +4612,9 @@ jobs:
       # setup-bun reuses the matching ~/.bun/bin/bun above, avoiding unzip.
       - name: Restore Bun install cache
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
-          save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Turbo remote cache
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
@@ -4544,7 +4624,10 @@ jobs:
 
       - name: Install dependencies
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -4691,9 +4774,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Turbo remote cache
         # code-quality runs cacheable workspace and root checks. Restore the
@@ -4704,7 +4787,10 @@ jobs:
           server-port: "0"
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -4726,6 +4812,7 @@ jobs:
           cp .env.example .env
 
       - name: Code quality
+        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4827,9 +4914,9 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Turbo remote cache
         # code-quality runs cacheable workspace and root checks. Restore the
@@ -4840,7 +4927,10 @@ jobs:
           server-port: "0"
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -4862,6 +4952,7 @@ jobs:
           cp .env.example .env
 
       - name: Code quality (web)
+        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4903,6 +4994,7 @@ jobs:
           bun scripts/typecheck-coverage.ts
 
       - name: Code quality (rest)
+        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -5071,10 +5163,6 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Configure test Postgres parity
-        run: |
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
       - name: Download planned Postgres test durations
         if: needs.ci-plan.outputs.postgres_test_durations_hash != 'missing'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -5110,6 +5198,10 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+
       - name: Upload failed Bun install logs
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -5125,6 +5217,14 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
+
+      - name: Configure ephemeral Postgres fixture maintenance
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+        # A 1s DDL deadline races the default 1s autovacuum cancellation grace.
+        # Keep cluster defaults for the fresh-database maintenance assertions.
+        run: bun scripts/postgres-test-maintenance.ts
 
       - name: Run Postgres-gated API suites
         id: postgres-tests
@@ -5277,19 +5377,22 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+        env:
+          NPM_TOKEN: ""
+
       - name: Configure test Postgres parity
         run: |
           bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          NPM_TOKEN: ""
 
       - name: Apply migrations to service Postgres
         if: needs.ci-plan.outputs.corpus_suites_required == 'true'
@@ -5468,21 +5571,24 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Configure test Postgres parity
-        run: |
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       # The base image is pulled here, in workflow-owned steps, and the
       # registry credential is discarded before any checked-out script runs:
@@ -5605,12 +5711,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -5719,12 +5828,15 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -5784,12 +5896,15 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the secret to install-time lifecycle scripts. The token is
@@ -5963,7 +6078,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -5978,6 +6093,7 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -6103,12 +6219,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -6198,12 +6317,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/landing... --filter @stll/cli... --filter stella
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
@@ -6290,11 +6412,15 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
+
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
       - name: Prepare environment
@@ -6344,12 +6470,15 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -6496,8 +6625,10 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 15m setup + 13m tests + 4m uploads + 2m cancellation/post hooks.
-    timeout-minutes: 34
+    # Longest leg: 16m setup (incl. 1m budget resolution) + 21m tests + 4m uploads
+    # + 2m cancellation/post hooks. Playwright uses measured p95/max plus the
+    # task registry margin.
+    timeout-minutes: 43
     permissions:
       contents: read
       packages: read
@@ -6521,17 +6652,29 @@ jobs:
 
       - name: Setup Bun
         timeout-minutes: 1
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
         timeout-minutes: 2
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+          installer-budget-ms: "90000"
         env:
           NPM_TOKEN: ""
-          # Three attempts and both waits fit inside the step deadline.
-          RETRY_DELAYS_SECONDS: "5 10"
+
+      - name: Resolve e2e shard budget
+        id: e2e-budget
+        timeout-minutes: 1
+        run: |
+          if [[ "${{ matrix.shard }}" != network-baseline ]]; then
+            minutes=$(bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --minutes ${{ matrix.shard }})
+            echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
+          else
+            echo "minutes=1" >> "$GITHUB_OUTPUT"
+          fi
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
@@ -6589,7 +6732,7 @@ jobs:
           retention-days: 7
 
       - name: Run Playwright shard
-        timeout-minutes: 7
+        timeout-minutes: ${{ fromJSON(steps.e2e-budget.outputs.minutes) }}
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard != 'network-baseline'
@@ -6601,6 +6744,7 @@ jobs:
           E2E_SPECS: ${{ needs.ci-plan.outputs.e2e_production_specs }}
         run: |
           set -euo pipefail
+          SECONDS=0
           case "$E2E_MODE" in
             full)
               args=(--project=chromium --project=heap-growth-canary --shard=${{ matrix.shard }}/2)
@@ -6626,7 +6770,8 @@ jobs:
             bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${args[@]}" || status=$?
           if [[ "$E2E_MODE" == full ]]; then
             # Shard the uniform-cost geometry matrix independently; cheap tests
-            # must not displace its cases onto one shard. Keep the shared 7m cap.
+            # must not displace its cases onto one shard. Both batches share the
+            # measured wall-time budget, including container overhead.
             # Preserve both blob reports, including when geometry fails.
             shopt -s nullglob
             trap 'mkdir -p apps/web/e2e/test-results/blob-report; for report in apps/web/e2e/test-results/geometry/blob-report/*.zip; do cp "$report" apps/web/e2e/test-results/blob-report/; done' EXIT
@@ -6635,6 +6780,7 @@ jobs:
               bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
               bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2 || status=$?
           fi
+          bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --check ${{ matrix.shard }} "$SECONDS" || status=$?
           exit "$status"
 
       # API-owned browser checks (visual sandbox) need the API from this stack
@@ -6790,12 +6936,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -6906,12 +7055,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
 
@@ -7164,12 +7316,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/landing... --filter @stll/cli... --filter stella
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
           NPM_TOKEN: ""
 
@@ -7423,12 +7578,15 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install dependencies
-        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter @stll/playwright-tools --filter '!stella'
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/playwright-tools","--filter","!stella"]'
         env:
           NPM_TOKEN: ""
 
@@ -7543,7 +7701,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -7558,8 +7716,28 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
+            scripts/ci-install.ts
+            scripts/ci-install-store.ts
+            packages/sha256/src/bun.ts
+            packages/sha256/src/types.ts
           sparse-checkout-cone-mode: false
+
+      - name: Install smoke dependencies
+        timeout-minutes: 3
+        run: bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Pull API base images
         env:
@@ -7737,7 +7915,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -7752,6 +7930,7 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -7855,14 +8034,16 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun with install cache
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
       - name: Install dependencies
         timeout-minutes: 5
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/desktop-windows-dry-run.log" --frozen-lockfile --ignore-scripts
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
+          log-file: "${{ runner.temp }}/bun-install/desktop-windows-dry-run.log"
         env:
           BUN_INSTALL_GLOBAL_STORE: "0"
           NPM_TOKEN: ""
@@ -7882,19 +8063,72 @@ jobs:
           toolchain: 1.99.0
           targets: x86_64-pc-windows-msvc
 
+      - name: Resolve Windows build toolchain
+        id: tools
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tools = @{}
+          $tools.bun = (& bun --version) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Bun version unavailable" }
+          $tools.rust = (& rustc -vV) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Rust version unavailable" }
+          $tools.cargo = (& cargo -V) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Cargo version unavailable" }
+          $tools.node = (& node --version) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Node version unavailable" }
+          $tools.tauri = (& bun run --cwd apps/desktop tauri --version) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Tauri version unavailable" }
+          $tools.image = $env:ImageVersion
+          $tools.os = $env:ImageOS
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json) | Select-Object -First 1
+          if (-not $vs) { throw "Visual Studio version unavailable" }
+          $tools.visualStudio = $vs.installationVersion
+          $tools.msvc = (Get-ChildItem "$($vs.installationPath)\VC\Tools\MSVC" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
+          $tools.sdk = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Lib\10.*" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
+          if ($tools.Values | Where-Object { [string]::IsNullOrWhiteSpace($_) }) { throw "Incomplete Windows toolchain" }
+          $tools | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-tools.json" -Encoding utf8
+
+      - name: Look up successful queue dry-run receipt
+        id: receipt
+        if: steps.tools.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WINDOWS_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          WINDOWS_BUILD_PROFILE: dry-run;prod;0.0.0;x86_64-pc-windows-msvc;release;nsis
+        run: bun scripts/ci-windows-dry-run-result.ts
+
       - name: Stamp dry-run metadata
+        if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
         env:
           VERSION: 0.0.0
           CHANNEL: prod
         run: bun scripts/desktop-release-step.ts stamp
 
       - name: Exercise Windows desktop release build
+        if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
         uses: ./.github/actions/desktop-windows-build
         with:
           dry-run: "true"
           target: x86_64-pc-windows-msvc
-          release-sha: ${{ github.sha }}
+          # The embedded SHA labels telemetry only. Dry runs prove compilation
+          # and bundling with fixed metadata so identical queue/main content has
+          # identical build inputs; signed releases embed their release SHA.
+          release-sha: "0000000000000000000000000000000000000000"
           script-path: ${{ github.workspace }}/scripts/desktop-release-step.ts
+
+      - name: Upload successful queue dry-run receipt
+        if: success() && github.event_name == 'merge_group' && steps.receipt.outcome == 'success' && steps.receipt.outputs.key != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
+        with:
+          name: desktop-windows-dry-run-${{ steps.receipt.outputs.key }}
+          path: ${{ runner.temp }}/windows-result/manifest.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
@@ -7973,13 +8207,16 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: package.json
 
       - name: Install scripts workspace dependencies
         timeout-minutes: 5
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
+          log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
           # Restored Windows global-store links can omit transitive dependency
           # links. Rebuild the isolated graph locally from cached package files.
@@ -8068,14 +8305,16 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
         timeout-minutes: 3
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scan-engine-wasm.log" --frozen-lockfile --ignore-scripts --filter @stll/scan-engine --filter stella
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scan-engine","--filter","stella"]'
+          log-file: "${{ runner.temp }}/bun-install/scan-engine-wasm.log"
         env:
           NPM_TOKEN: ""
 
@@ -8320,14 +8559,16 @@ jobs:
 
       - name: Setup Bun for the desktop transport smoke
         if: matrix.os == 'macos'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install desktop transport smoke dependencies
         if: matrix.os == 'macos'
-        run: bash scripts/retry.sh bun ci --ignore-scripts --filter @stll/api
+        uses: $/.github/actions/ci-install
+        timeout-minutes: 3
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
         env:
           NPM_TOKEN: ""
 
@@ -8548,14 +8789,16 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun for dated waiver guard
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
 
       - name: Install dated waiver guard dependencies
         timeout-minutes: 3
-        run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/dated-waiver-expiry.log" --frozen-lockfile --ignore-scripts
+        uses: $/.github/actions/ci-install
+        with:
+          flags: '["--frozen-lockfile","--ignore-scripts"]'
+          log-file: "${{ runner.temp }}/bun-install/dated-waiver-expiry.log"
         env:
           NPM_TOKEN: ""
 
@@ -8688,6 +8931,9 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/retry.sh
+            scripts/ci-failure-digest.ts
+            scripts/fetch-failed-job-logs.sh
+            /package.json
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -8966,10 +9212,10 @@ jobs:
                     else "\($job) (\($result))"
                     end]
                 | join(", ")' <<< "$NEEDS")
-              folded_violations=$(jq -r --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
+              folded_violations=$(jq -r --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
                 . as $needs
                 | [$suites | to_entries[] | .key as $job | .value | to_entries[]
-                  | select(($needs | has($job)) and ($queue != "thin" or ($thin | index($job))) and $plan[.value] == "true") | .key as $suite
+                  | select(($needs | has($job)) and $plan[.value] == "true") | .key as $suite
                   | ($needs[$job].outputs[$suite] // "missing") as $result
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
@@ -8990,7 +9236,9 @@ jobs:
               # A failure stands even when a sibling job was cancelled.
               failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
               if [[ -n "$failed" ]]; then
-                echo "::error::CI checks failed: $failed"
+                # Plain text: the failure digest below annotates each failed
+                # step, and this step's exit is annotated by the runner.
+                echo "CI checks failed: $failed"
                 exit 1
               fi
               # Fast-required jobs must run when their scope is planned;
@@ -9053,6 +9301,44 @@ jobs:
               echo "Not every planned CI job succeeded in this run; recording no completion evidence."
             fi
           fi
+
+      # Failure digest: one record per failed step (job, step, kind, first
+      # error lines with file:line) as annotations on this check run, a job
+      # summary and the `ci-failures` artifact. Failed steps come from the
+      # jobs API, so output a passing step prints on purpose is never listed.
+      # Reporting only: the verdict above is unchanged.
+      - name: Setup Bun for the failure digest
+        if: failure() && steps.outcome.outcome == 'failure'
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: .workflow-tooling/package.json
+
+      - name: Digest failed steps
+        if: failure() && steps.outcome.outcome == 'failure'
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          dir="$RUNNER_TEMP/ci-failures"
+          mkdir -p "$dir/logs"
+          if ! bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" > "$dir/jobs.json"; then
+            echo "Failure digest unavailable: the jobs lookup failed."
+            exit 0
+          fi
+          bash .workflow-tooling/scripts/fetch-failed-job-logs.sh "$REPO" "$dir/jobs.json" "$dir/logs" || echo "Job log download failed; the digest names each job without a log."
+          bun .workflow-tooling/scripts/ci-failure-digest.ts digest --jobs "$dir/jobs.json" --logs "$dir/logs" --json "$dir/ci-failures.json" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload failure digest
+        if: failure() && steps.outcome.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-failures
+          overwrite: true
+          path: ${{ runner.temp }}/ci-failures/ci-failures.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       # Evaluate the variable when this final job starts, after the suites.
       - name: Check out the merge hold rule

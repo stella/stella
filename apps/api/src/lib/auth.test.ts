@@ -2,7 +2,6 @@ import type { HookEndpointContext } from "better-auth";
 import { Result } from "better-result";
 import {
   afterAll,
-  beforeAll,
   describe,
   expect,
   setDefaultTimeout,
@@ -20,6 +19,8 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
+import { createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import {
   AUTHORITATIVE_SESSION_PATHS,
@@ -34,6 +35,7 @@ import {
   NEW_ACCOUNT_OTP_RATE_LIMIT_MODE,
   runEmailOtpRequestOnResponseSchedule,
   resolveMemberAuthorization,
+  resolveWorkspaceMemberAccess,
   resolveAuthoritativeSessionForSensitiveAuthPath,
   resolveWorkspaceRealtimeAudience,
   SESSION_COOKIE_CACHE_MAX_AGE_SECONDS,
@@ -43,8 +45,12 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import { OAUTH_CLIENT_REGISTRATION_PATH } from "@/api/lib/oauth-loopback-registration";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 setDefaultTimeout(120_000);
 
@@ -74,7 +80,7 @@ const clientContactId = toSafeId<"contact">(tid());
 const clientWorkspaceId = workspaceId();
 const memberPersonalWorkspaceId = workspaceId();
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
 
   await testDb.insert(user).values(
@@ -193,6 +199,7 @@ describe("resolveMemberAuthorization", () => {
       emailVerified: expect.any(Boolean),
       userDeleted: false,
       enrolledFeatureIds: [],
+      professionalUse: { status: "required" },
     });
   });
 
@@ -209,10 +216,12 @@ describe("resolveMemberAuthorization", () => {
       emailVerified: expect.any(Boolean),
       userDeleted: false,
       enrolledFeatureIds: [],
+      professionalUse: { status: "required" },
     });
   });
 
   test("reads the caller's own feature enrolments in the same lookup, never another member's", async () => {
+    const restoreMode = setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
     await testDb.insert(featureEnrolments).values([
       {
         organizationId: orgFull,
@@ -227,33 +236,39 @@ describe("resolveMemberAuthorization", () => {
       },
     ]);
     try {
-      const enrolled = await resolveMemberAuthorization(
-        { organizationId: orgFull, userId: memberInFull },
-        testDb,
-      );
-      const enrolledWithWorkspace = await resolveMemberAuthorization(
-        {
-          organizationId: orgFull,
-          userId: memberInFull,
-          workspaceId: memberPersonalWorkspaceId,
-        },
-        testDb,
-      );
-      const other = await resolveMemberAuthorization(
-        { organizationId: orgFull, userId: ownerInFull },
-        testDb,
-      );
-      expect(enrolled?.enrolledFeatureIds).toEqual(["time-billing"]);
-      expect(enrolledWithWorkspace?.enrolledFeatureIds).toEqual([
-        "time-billing",
-      ]);
-      expect(other?.enrolledFeatureIds).toEqual([]);
-      const otherOrganization = await resolveMemberAuthorization(
-        { organizationId: orgFull, userId: loneMemberInFull },
-        testDb,
-      );
-      expect(otherOrganization?.enrolledFeatureIds).toEqual([]);
+      for (const deployed of [false, true]) {
+        testState.setConfig("FEATURE_TIME_BILLING", deployed);
+        const enrolled = await resolveMemberAuthorization(
+          { organizationId: orgFull, userId: memberInFull },
+          testDb,
+        );
+        const enrolledWithWorkspace = await resolveMemberAuthorization(
+          {
+            organizationId: orgFull,
+            userId: memberInFull,
+            workspaceId: memberPersonalWorkspaceId,
+          },
+          testDb,
+        );
+        const other = await resolveMemberAuthorization(
+          { organizationId: orgFull, userId: ownerInFull },
+          testDb,
+        );
+        expect(enrolled?.enrolledFeatureIds).toEqual(
+          deployed ? ["time-billing"] : [],
+        );
+        expect(enrolledWithWorkspace?.enrolledFeatureIds).toEqual(
+          deployed ? ["time-billing"] : [],
+        );
+        expect(other?.enrolledFeatureIds).toEqual([]);
+        const otherOrganization = await resolveMemberAuthorization(
+          { organizationId: orgFull, userId: loneMemberInFull },
+          testDb,
+        );
+        expect(otherOrganization?.enrolledFeatureIds).toEqual([]);
+      }
     } finally {
+      restoreMode();
       await testDb
         .delete(featureEnrolments)
         .where(
@@ -301,6 +316,39 @@ describe("resolveMemberAuthorization", () => {
     expect(memberPersonal?.workspace?.id).toBe(memberPersonalWorkspaceId);
     expect(memberClient?.workspace).toBeNull();
   });
+
+  test.each([
+    {
+      actor: ownerInFull,
+      target: clientWorkspaceId,
+      expected: clientWorkspaceId,
+    },
+    { actor: ownerInFull, target: memberPersonalWorkspaceId, expected: null },
+    {
+      actor: memberInFull,
+      target: memberPersonalWorkspaceId,
+      expected: memberPersonalWorkspaceId,
+    },
+    { actor: memberInFull, target: clientWorkspaceId, expected: null },
+  ])(
+    "worker membership uses the session access rule under RLS: %p",
+    async ({ actor, target, expected }) => {
+      const lookup = {
+        organizationId: orgFull,
+        userId: actor,
+        workspaceId: target,
+      };
+      const session = await resolveMemberAuthorization(lookup, testDb);
+      const workspace = await createScopedDb(
+        testDb,
+        [target],
+        orgFull,
+        actor,
+      )(async (tx) => await resolveWorkspaceMemberAccess(lookup, tx));
+      expect(workspace?.id ?? null).toBe(expected);
+      expect(workspace).toEqual(session?.workspace ?? null);
+    },
+  );
 
   test("organization members with zero workspaces keep their roles", async () => {
     const ownerAuthorization = await resolveMemberAuthorization(
