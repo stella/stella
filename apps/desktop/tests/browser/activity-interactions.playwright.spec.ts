@@ -1056,6 +1056,40 @@ test("stored pending drafts remain visible without billing capability and cannot
   });
 });
 
+test("empty recovery keeps its saved receipt visible until navigating to another day", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      pendingBatch: PENDING_BATCH,
+      deletionStatus: "pending",
+    },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: enMessages.activity.previousDay })
+    .click();
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(
+    page.getByText(enMessages.activity.empty, { exact: true }),
+  ).toBeVisible();
+});
+
 test("a saved draft receipt remains saved while its snapshot refresh is pending", async ({
   page,
 }) => {

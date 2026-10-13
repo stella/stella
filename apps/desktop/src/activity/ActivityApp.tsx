@@ -540,7 +540,7 @@ type DayContentProps = {
   header: React.ReactNode;
   onCommand: RunCommand;
   snapshot: ActivityDaySnapshot;
-  reviewPending: boolean;
+  reviewVisible: boolean;
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 };
 
@@ -548,11 +548,11 @@ const DayContent = ({
   header,
   onCommand,
   snapshot,
-  reviewPending,
+  reviewVisible,
   onReviewStatusChange,
 }: DayContentProps) => {
   const t = useTranslations("activity");
-  if (snapshot.unreadable && !reviewPending) {
+  if (snapshot.unreadable && !reviewVisible) {
     return (
       <>
         {header}
@@ -560,7 +560,7 @@ const DayContent = ({
       </>
     );
   }
-  if (snapshot.segments.length === 0 && !reviewPending) {
+  if (snapshot.segments.length === 0 && !reviewVisible) {
     return (
       <>
         {header}
@@ -1267,9 +1267,11 @@ const ActivityApp = () => {
 
   const { snapshot } = view;
   const reviewPending = reviewUnresolved || snapshot.pendingBatch !== null;
+  const reviewVisible =
+    reviewStatus !== "editing" || snapshot.pendingBatch !== null;
   const deletionDisabled =
     reviewPending || snapshot.deletionStatus !== "available";
-  if (snapshot.persistence === "initializing" && !reviewPending) {
+  if (snapshot.persistence === "initializing" && !reviewVisible) {
     // The store announces itself with a change event once it is open.
     return <main className="bg-background min-h-dvh" />;
   }
@@ -1296,7 +1298,7 @@ const ActivityApp = () => {
       onCommand={runCommand}
     />
   );
-  if (snapshot.persistence === "deletionOnly" && !reviewPending) {
+  if (snapshot.persistence === "deletionOnly" && !reviewVisible) {
     return (
       <ActivityShell>
         <DeletionOnlyNotice
@@ -1311,7 +1313,7 @@ const ActivityApp = () => {
   }
   if (
     snapshot.recordingStatus === "off" &&
-    !reviewPending &&
+    !reviewVisible &&
     snapshot.deletionStatus !== "pending"
   ) {
     return (
@@ -1336,7 +1338,7 @@ const ActivityApp = () => {
     <ActivityShell>
       {errorMessage ? <ErrorLine message={errorMessage} /> : null}
       <DayContent
-        reviewPending={reviewPending}
+        reviewVisible={reviewVisible}
         onReviewStatusChange={onReviewStatusChange}
         header={
           <DayHeader

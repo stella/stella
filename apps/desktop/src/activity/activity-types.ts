@@ -3,7 +3,7 @@ import type {
   DesktopTimeEntryBatch,
 } from "@stll/api-contract/desktop-time-entries";
 
-import activityContract from "../../fixtures/activity-contract.json";
+import activityContract from "../../fixtures/activity-contract.json" with { type: "json" };
 import {
   type ClipboardSourceAppVisual,
   isClipboardSourceAppVisual,
