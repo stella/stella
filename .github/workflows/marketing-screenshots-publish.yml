@@ -1,0 +1,187 @@
+name: Publish marketing screenshots
+
+defaults:
+  run:
+    shell: bash
+
+# Runs from main when a capture run (marketing-screenshots-capture.yml)
+# completes. Nothing from the branch executes here: the branch is checked out
+# only as the parent tree of the commit, and the capture run's PNGs are
+# untrusted data until the validation step accepts them. Only then is the
+# release App token minted. The commit is appended on the head the capture
+# ran on, so a push that landed on the branch in the meantime fails it.
+
+on:
+  workflow_run:
+    workflows: [Capture marketing screenshots]
+    types: [completed]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  publish:
+    if: >-
+      github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.path == '.github/workflows/marketing-screenshots-capture.yml'
+      && github.event.workflow_run.event == 'workflow_dispatch'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Reading the capture run's artifact.
+      actions: read
+      # The push runs on the App token, not GITHUB_TOKEN: a push made with
+      # GITHUB_TOKEN does not re-trigger the PR's checks, so the branch would
+      # sit on a failed marketing check with the fix already committed.
+      contents: read
+      pull-requests: read
+    # The release App key is a secret of this environment alone (main and
+    # v* tags only).
+    environment: release-app
+
+    steps:
+      # API calls only. The branch comes from the run itself, so a capture
+      # run can only ever publish to the branch it ran on. The path and event
+      # checks filter out unrelated runs; they are not a trust boundary.
+      - name: Select the branch
+        id: select
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+            // A refusal fails the run, so a capture that was not published
+            // never finishes green.
+            const refuse = (reason) => core.setFailed(`Not publishing: ${reason}`);
+            if (run.path !== '.github/workflows/marketing-screenshots-capture.yml'
+              || run.event !== 'workflow_dispatch'
+              || run.head_repository?.full_name !== `${owner}/${repo}`) {
+              return refuse('not a dispatched capture run of this repository');
+            }
+            if (!/^[A-Za-z0-9._/-]+$/u.test(run.head_branch ?? '')
+              || run.head_branch.includes('..') || run.head_branch.startsWith('-')
+              || run.head_branch === 'main'
+              || !/^[0-9a-f]{40}$/u.test(run.head_sha ?? '')) {
+              return refuse('the run names no plain branch other than main');
+            }
+            const pulls = await github.paginate(github.rest.pulls.list, {
+              owner, repo, state: 'open', head: `${owner}:${run.head_branch}`, per_page: 100,
+            });
+            const candidates = pulls.filter(pull => pull.head.ref === run.head_branch
+              && pull.head.repo?.full_name === `${owner}/${repo}`);
+            // A capture made for a fork's pull request runs on a branch with
+            // no pull request of its own; its PNGs stay in the artifact.
+            if (candidates.length === 0) {
+              core.notice(`${run.head_branch} has no open pull request; the PNGs stay in the capture run's artifact`);
+              return;
+            }
+            if (candidates.length !== 1) {
+              return refuse(`${run.head_branch} heads more than one open pull request`);
+            }
+            if (candidates[0].head.sha !== run.head_sha) {
+              return refuse(`${run.head_branch} moved since the capture; dispatch the update again`);
+            }
+            const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner, repo, run_id: run.id, name: 'marketing-screenshots',
+            });
+            if (artifacts.length !== 1 || artifacts[0].expired) {
+              return refuse('the capture run has no unexpired marketing-screenshots artifact');
+            }
+            core.setOutput('branch', run.head_branch);
+            core.setOutput('head', run.head_sha);
+            core.setOutput('run', String(run.id));
+
+      - name: Checkout the captured head
+        if: steps.select.outputs.branch != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ steps.select.outputs.head }}
+
+      # Exactly this run's artifact; no other run's artifacts are visible.
+      - name: Download regenerated baselines
+        if: steps.select.outputs.branch != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: marketing-screenshots
+          run-id: ${{ steps.select.outputs.run }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/regenerated-baselines
+
+      - name: Stage validated baselines
+        if: steps.select.outputs.branch != ''
+        env:
+          SOURCE: ${{ runner.temp }}/regenerated-baselines
+          TARGET: apps/landing/public/media/products
+        run: |
+          set -euo pipefail
+          # Only flat, regular PNG files with plain names cross from the
+          # capture job; anything else fails before the token exists.
+          count=0
+          while IFS= read -r -d '' entry; do
+            name="${entry#"$SOURCE"/}"
+            if [[ -L "$entry" || ! -f "$entry" ]]; then
+              echo "::error::Not a regular file: $name"
+              exit 1
+            fi
+            if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*\.png$ ]]; then
+              echo "::error::Unexpected file in the regenerated baselines: $name"
+              exit 1
+            fi
+            if (( $(wc -c < "$entry") > 20000000 )); then
+              echo "::error::Baseline is implausibly large: $name"
+              exit 1
+            fi
+            if [[ "$(head -c 8 "$entry" | LC_ALL=C od -An -tx1 | tr -d ' \n')" != "89504e470d0a1a0a" ]]; then
+              echo "::error::Not a PNG: $name"
+              exit 1
+            fi
+            count=$((count + 1))
+          done < <(find "$SOURCE" -mindepth 1 -print0)
+          if (( count == 0 )); then
+            echo "::error::The capture job uploaded no baselines"
+            exit 1
+          fi
+          # The branch decides what sits at TARGET; it must resolve to the
+          # products directory inside this checkout, not through a symlink.
+          if [[ -L "$TARGET" || ! -d "$TARGET" \
+            || "$(cd -- "$TARGET" && pwd -P)" != "$(pwd -P)/$TARGET" ]]; then
+            echo "::error::$TARGET is not the products directory of this checkout"
+            exit 1
+          fi
+          for entry in "$TARGET"/*.png; do
+            if [[ -L "$entry" ]]; then
+              echo "::error::$entry is a symlink in the branch"
+              exit 1
+            fi
+          done
+          cp -- "$SOURCE"/*.png "$TARGET"/
+
+      - name: Mint App token
+        if: steps.select.outputs.branch != ''
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      # The commit is created through the API so GitHub signs it; the branch
+      # belongs to a person, and a signed-commits rule would otherwise block
+      # their pull request on this one commit. Append mode builds on the
+      # checked-out head and fails if the branch moved since the capture.
+      - name: Push regenerated baselines
+        if: steps.select.outputs.branch != ''
+        uses: stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          mode: append
+          branch: ${{ steps.select.outputs.branch }}
+          paths: apps/landing/public/media/products/*.png
+          commit-message: "chore(landing): regenerate marketing screenshots"
