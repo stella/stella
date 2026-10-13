@@ -146,7 +146,24 @@ describe("chatKeys", () => {
     });
 
     expect(searched.queryKey).not.toEqual(unfiltered.queryKey);
-    expect(searched.queryKey.at(-1)).toBe("Matter B");
+    expect(searched.queryKey.at(-2)).toBe("Matter B");
+  });
+
+  test("isolates a matter-filtered history from the unfiltered list", () => {
+    const activeOrganizationId = "org_test";
+    const userId = "user_test";
+    const unfiltered = groupedChatThreadsOptions({
+      activeOrganizationId,
+      userId,
+    });
+    const inMatter = groupedChatThreadsOptions({
+      activeOrganizationId,
+      userId,
+      workspaceId: "matter_b",
+    });
+
+    expect(inMatter.queryKey).not.toEqual(unfiltered.queryKey);
+    expect(inMatter.queryKey.at(-1)).toBe("matter_b");
   });
 
   test("separates plain chat transports from active DOCX edit transports", () => {

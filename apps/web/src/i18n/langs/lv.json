@@ -535,6 +535,16 @@
       "createInvoice": "Izveidot rēķinu",
       "dueDate": "Apmaksas termiņš",
       "editInvoice": "Rediģēt rēķinu",
+      "export": {
+        "accounting": "Imports grāmatvedībā",
+        "eBilling": "E-rēķini",
+        "eso9": "ESO9 importa tabula (XLSX)",
+        "exporting": "Gatavo eksportu…",
+        "isdoc": "ISDOC e-rēķins (ABRA Gen u. c.)",
+        "spreadsheets": "Izklājlapas",
+        "xlsx": "Rēķini (XLSX)",
+        "xlsxLines": "Rēķinu rindas (XLSX)"
+      },
       "finalize": "Pabeigt",
       "invoiceDate": "Rēķina datums",
       "invoiceDetail": "Rēķina detaļas",
@@ -776,6 +786,9 @@
       "none": "Citējumi vēl nav reģistrēti.",
       "openAtCitation": "Atvērt citāta vietā",
       "openDecision": "Atvērt nolēmumu",
+      "paragraphLabel": "{paragraph}. punkts",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph}. punkts",
       "partialSummary": "Citējumu kopsummas un laika skala ir nepilnīgas.",
       "passageNotFound": "Citējošais fragments tekstā netika atrasts",
       "positiveCount": "{count, plural, zero {# pozitīvu} one {# pozitīvs} other {# pozitīvi}}",
@@ -1270,6 +1283,11 @@
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
+    "history": {
+      "matterUnavailable": "Šī lieta nav pieejama",
+      "older": "Vecākas",
+      "previous7Days": "Iepriekšējās 7 dienas"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, zero {un vēl #} one {un vēl #} other {un vēl #}}"
@@ -1432,6 +1450,8 @@
     "sendPrompt": "Sūtīt ziņojumu",
     "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
+    "signInToChat": "Piesakieties, lai tērzētu par šo dokumentu",
+    "signInToChatAbout": "Piesakieties, lai tērzētu par",
     "skills": {
       "scope": {
         "private": "Jūsu prasmes",
@@ -1762,6 +1782,8 @@
     "citations": "Citējumi",
     "clauses": "Klauzulas",
     "clearDate": "Notīrīt datumu",
+    "clearFilters": "Notīrīt filtrus",
+    "clearSearch": "Notīrīt meklēšanu",
     "close": "Aizvērt",
     "closeAll": "Aizvērt visu",
     "closeOthers": "Aizvērt citus",
@@ -1792,6 +1814,7 @@
       "nextDecade": "Nākamā desmitgade",
       "nextMonth": "Nākamais mēnesis",
       "nextYear": "Nākamais gads",
+      "outOfRange": "Izvēlieties datumu atļautajā diapazonā.",
       "previousDecade": "Iepriekšējā desmitgade",
       "previousMonth": "Iepriekšējais mēnesis",
       "previousYear": "Iepriekšējais gads",
@@ -4117,7 +4140,6 @@
     "appsSubtitle": "stella darbojas arī ārpus pārlūkprogrammas: jūsu datorā un jūsu AI asistentā. Pie šīs iestatīšanas varat atgriezties jebkurā laikā.",
     "appsTitle": "Iegūstiet stella visur",
     "catalogueAlwaysOn": "Vienmēr ieslēgts",
-    "catalogueClearSearch": "Notīrīt meklēšanu",
     "catalogueCommunityHeading": "Citi",
     "catalogueContinueWithCount": "{count, plural, zero {Turpināt ar # rīkiem} one {Turpināt ar # rīku} other {Turpināt ar # rīkiem}}",
     "catalogueDetailAbout": "Par rīku",
@@ -6378,7 +6400,6 @@
         "year": "Gads"
       },
       "cannotDeleteRequired": "Ir nepieciešams vismaz viens šāda veida skats",
-      "clearFilters": "Notīrīt filtrus",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Dzēst skatu",
       "exportCsv": "Eksportēt CSV",

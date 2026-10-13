@@ -1,4 +1,4 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -11,8 +11,6 @@ import {
   ruleCanonicalizer,
 } from "../../scripts/oxlint-rule-ids.ts";
 import { lintSingleRule, runSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(60_000);
 
 const aliases = canonicalDisableRuleIds(config);
 const options = {

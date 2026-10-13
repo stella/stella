@@ -22,6 +22,7 @@ export const ActiveEditBadge = ({
   <TooltipRoot>
     <TooltipTrigger
       className={cn("inline-flex items-center gap-0.5", className)}
+      data-slot="active-edit-badge"
       render={<span />}
     >
       <LockIcon className="text-warning size-3" />

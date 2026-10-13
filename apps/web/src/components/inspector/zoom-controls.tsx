@@ -42,31 +42,32 @@ export const ZoomControls = ({
 }: ZoomControlsProps) => {
   const t = useTranslations();
 
+  // Icon-only buttons: the label names each one, and the tooltip shows it.
   return (
     <>
       <Button
+        aria-label={t("common.zoomOut")}
         disabled={atMin}
         onClick={() => onZoom("out")}
         size="icon-xs"
-        tooltip={t("common.zoomOut")}
         variant="ghost"
       >
         <MinusIcon className="size-3" />
       </Button>
       <Button
+        aria-label={t("common.zoomIn")}
         disabled={atMax}
         onClick={() => onZoom("in")}
         size="icon-xs"
-        tooltip={t("common.zoomIn")}
         variant="ghost"
       >
         <PlusIcon className="size-3" />
       </Button>
       <Button
+        aria-label={t("common.resetZoom")}
         disabled={level === DEFAULT_LEVEL}
         onClick={onReset}
         size="icon-xs"
-        tooltip={t("common.resetZoom")}
         variant="ghost"
       >
         {level > DEFAULT_LEVEL ? (

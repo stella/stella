@@ -6,6 +6,7 @@ import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "../packages/portable-path/src/index";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 
 const root = path.resolve(import.meta.dirname, "..");
@@ -16,7 +17,7 @@ const collect = (directory: string, command: string): void => {
   )) {
     const project = match[1];
     if (project) {
-      projects.add(path.relative(root, path.resolve(directory, project)));
+      projects.add(repoRelativePath(root, path.resolve(directory, project)));
     }
   }
 };
@@ -32,7 +33,13 @@ for (const parent of ["apps", "packages"]) {
       continue;
     }
     const directory = path.join(root, parent, entry.name);
-    collect(directory, manifest(directory).scripts?.["typecheck"] ?? "");
+    for (const [name, command] of Object.entries(
+      manifest(directory).scripts ?? {},
+    )) {
+      if (name === "typecheck" || name.startsWith("typecheck:")) {
+        collect(directory, command);
+      }
+    }
   }
 }
 if (projects.size === 0) {
@@ -41,6 +48,17 @@ if (projects.size === 0) {
 // Match the ordinary task prerequisites before comparing identical inputs.
 for (const [cwd, command] of [
   [root, [process.execPath, "scripts/ci-generated-sources.ts", "prepare"]],
+  [
+    root,
+    [
+      "bunx",
+      "--no-install",
+      "turbo",
+      "run",
+      "generate:typecheck-declarations",
+      "--filter=@stll/api",
+    ],
+  ],
   [
     path.join(root, "apps/extension"),
     ["bunx", "--no-install", "wxt", "prepare"],

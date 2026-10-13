@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
-import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren, plainTextOf } from "@stll/legal-ast/document-ast";
 
 import { parseSkUsDocumentXhtml } from "@/api/handlers/case-law/ingestion/parsers/sk-us";
 import { readGzipJson } from "@/api/lib/gzip-json";
@@ -173,4 +173,163 @@ test("Roman verdict items keep their holding role while reasoning titles enter t
       .filter((block) => block.type === "heading")
       .map((block) => block.plainText),
   ).not.toContain(verdict);
+});
+
+describe("numbered reasoning set without blank lines", () => {
+  const reasoning = (lines: readonly string[]) =>
+    parse(
+      `<html><body><div><span style="font-size: 12px; ">O d ôvod n eni e : <br/><br/>${lines
+        .map((line) => `${line} <br/>`)
+        .join("\n")}<br/></span></div></body></html>`,
+    ).documentAst.blocks.filter(
+      (block) => block.type === "paragraph" && block.role === undefined,
+    );
+
+  test("the court's next number on a new line starts the next paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ sa ústavnou sťažnosťou doručenou ústavnému súdu",
+      "domáha ochrany osobnosti.",
+      "2. Sudca spravodajca oznámil, že sa dozvedel o komunikácii.",
+      "3. Sťažovateľ vzniesol námietku zaujatosti.",
+    ]);
+    expect(
+      blocks.map((block) => [
+        block.type === "paragraph" ? block.number : null,
+        block.plainText,
+      ]),
+    ).toEqual([
+      [
+        1,
+        "Sťažovateľ sa ústavnou sťažnosťou doručenou ústavnému súdu domáha ochrany osobnosti.",
+      ],
+      [2, "Sudca spravodajca oznámil, že sa dozvedel o komunikácii."],
+      [3, "Sťažovateľ vzniesol námietku zaujatosti."],
+    ]);
+    // The inlines read exactly as the text, joined lines included.
+    expect(
+      blocks.map((block) =>
+        block.type === "paragraph" ? plainTextOf(block.inlines) : null,
+      ),
+    ).toEqual(blocks.map((block) => block.plainText));
+  });
+
+  test("a number the court skipped still starts its paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ podal ústavnú sťažnosť.",
+      "3. Sudca spravodajca oznámil námietku.",
+      "4. Námietka nie je dôvodná.",
+    ]);
+    expect(
+      blocks.map((block) => [
+        block.type === "paragraph" ? block.number : null,
+        block.plainText,
+      ]),
+    ).toEqual([
+      [1, "Sťažovateľ podal ústavnú sťažnosť."],
+      [3, "Sudca spravodajca oznámil námietku."],
+      [4, "Námietka nie je dôvodná."],
+    ]);
+  });
+
+  test("a quoted petit's own points do not split the paragraph quoting it", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ navrhuje, aby ústavný súd rozhodol takto:",
+      "„1. Základné právo sťažovateľa podľa čl. 46 ods. 1 ústavy bolo porušené.",
+      "2. Napadnuté uznesenie sa zrušuje.“",
+      "2. Sudca spravodajca oznámil námietku.",
+    ]);
+    expect(blocks.map((block) => block.plainText)).toEqual([
+      "Sťažovateľ navrhuje, aby ústavný súd rozhodol takto: „1. Základné právo sťažovateľa podľa čl. 46 ods. 1 ústavy bolo porušené. 2. Napadnuté uznesenie sa zrušuje.“",
+      "Sudca spravodajca oznámil námietku.",
+    ]);
+  });
+
+  test("a petit point that repeats the court's next number later is not its paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ navrhuje, aby ústavný súd rozhodol takto:",
+      "1. Základné právo sťažovateľa bolo porušené.",
+      "2. Napadnuté uznesenie sa zrušuje.",
+      "2. Sudca spravodajca oznámil námietku.",
+    ]);
+    expect(blocks.map((block) => block.plainText)).toEqual([
+      "Sťažovateľ navrhuje, aby ústavný súd rozhodol takto: 1. Základné právo sťažovateľa bolo porušené. 2. Napadnuté uznesenie sa zrušuje.",
+      "Sudca spravodajca oznámil námietku.",
+    ]);
+  });
+
+  test("a quoted point repeating the court's number later does not merge the court's paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ podal ústavnú sťažnosť.",
+      "2. Sudca spravodajca oznámil námietku.",
+      "3. Sťažovateľ navrhol: „1. Základné právo bolo porušené.",
+      "2. Napadnuté uznesenie sa zrušuje.“",
+      "4. Námietka nie je dôvodná.",
+    ]);
+    expect(
+      blocks.map((block) => [
+        block.type === "paragraph" ? block.number : null,
+        block.plainText,
+      ]),
+    ).toEqual([
+      [1, "Sťažovateľ podal ústavnú sťažnosť."],
+      [2, "Sudca spravodajca oznámil námietku."],
+      [
+        3,
+        "Sťažovateľ navrhol: „1. Základné právo bolo porušené. 2. Napadnuté uznesenie sa zrušuje.“",
+      ],
+      [4, "Námietka nie je dôvodná."],
+    ]);
+  });
+
+  test("a list later in the reasoning repeating the court's number does not merge the court's paragraph", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ podal ústavnú sťažnosť.",
+      "2. Sudca spravodajca oznámil námietku.",
+      "3. Ústavný súd zistil tieto skutočnosti.",
+      "1. Prvá skutočnosť je nesporná.",
+      "2. Druhá skutočnosť je nesporná.",
+      "4. Námietka nie je dôvodná.",
+    ]);
+    expect(
+      blocks.map((block) => [
+        block.type === "paragraph" ? block.number : null,
+        block.plainText,
+      ]),
+    ).toEqual([
+      [1, "Sťažovateľ podal ústavnú sťažnosť."],
+      [2, "Sudca spravodajca oznámil námietku."],
+      [
+        3,
+        "Ústavný súd zistil tieto skutočnosti. 1. Prvá skutočnosť je nesporná. 2. Druhá skutočnosť je nesporná.",
+      ],
+      [4, "Námietka nie je dôvodná."],
+    ]);
+  });
+
+  test("a line ending in an abbreviation's number or a lettered point is not a sentence end", () => {
+    for (const ending of [
+      "podľa § 49 ods. 1",
+      "uvedené pod č. 2",
+      "podľa písm. a)",
+      "rozhodol takto:",
+    ]) {
+      const blocks = reasoning([
+        `1. Sťažovateľ namieta porušenie práva ${ending}`,
+        "2. Februárom sa lehota skončila.",
+      ]);
+      expect({ ending, count: blocks.length }).toEqual({ ending, count: 1 });
+    }
+  });
+
+  test("a date wrapped to the start of a line does not split a sentence", () => {
+    const blocks = reasoning([
+      "1. Sťažovateľ podal ústavnú sťažnosť dňa",
+      "2. februára 2026 a domáha sa ochrany.",
+      "2. Sudca spravodajca oznámil námietku.",
+    ]);
+    expect(blocks.map((block) => block.plainText)).toEqual([
+      "Sťažovateľ podal ústavnú sťažnosť dňa 2. februára 2026 a domáha sa ochrany.",
+      "Sudca spravodajca oznámil námietku.",
+    ]);
+  });
 });

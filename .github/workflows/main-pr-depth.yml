@@ -13,7 +13,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.sha || github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' || !inputs.sha }}
+  # A running check is never cancelled: a later request waits and then skips a
+  # commit that is already green.
+  cancel-in-progress: false
 
 permissions: {}
 
@@ -115,6 +117,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: read
       statuses: write
     steps:
       - name: Checkout GitHub API tooling
@@ -124,24 +127,19 @@ jobs:
           ref: ${{ github.workflow_sha }}
           path: .gh-retry
           persist-credentials: false
-          sparse-checkout: scripts/gh-retry.sh
+          sparse-checkout: |
+            scripts/gh-retry.sh
+            scripts/main-pr-depth-status.sh
           sparse-checkout-cone-mode: false
 
       - name: Publish PR-depth conclusion
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          SHA: ${{ needs.validate.outputs.sha }}
+          # A scheduled run always publishes, even when validation stops early,
+          # because a cancelled earlier run for the same commit defers to it.
+          SHA: ${{ needs.validate.outputs.sha || (github.event_name == 'schedule' && github.sha) || '' }}
           RESULTS: ${{ toJSON(needs) }}
+          RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          state=failure
-          if jq -e 'all(.[]; .result == "success")' <<< "$RESULTS" > /dev/null; then
-            state=success
-          fi
-          if [[ -n "$SHA" ]]; then
-            bash "$GITHUB_WORKSPACE/.gh-retry/scripts/gh-retry.sh" api --method POST "repos/$REPOSITORY/statuses/$SHA" \
-              -f context=main/pr-depth -f state="$state" \
-              -f description="Main PR-depth checks: $state" -f target_url="$RUN_URL"
-          fi
-          [[ "$state" == success ]]
+        run: bash "$GITHUB_WORKSPACE/.gh-retry/scripts/main-pr-depth-status.sh"

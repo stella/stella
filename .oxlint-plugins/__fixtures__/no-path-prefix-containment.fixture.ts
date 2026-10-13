@@ -110,13 +110,6 @@ const _windowsSeparatorBoundary = win32
   .resolve(windowsRoot, candidate)
   .startsWith(`${windowsRoot}${win32.sep}`);
 
-const relativeCandidate = path.relative(resolvedRoot, resolvedCandidate);
-const _relativeBoundary =
-  relativeCandidate !== "" &&
-  relativeCandidate !== ".." &&
-  !relativeCandidate.startsWith(`..${path.sep}`) &&
-  !path.isAbsolute(relativeCandidate);
-
 declare const isPathInside: (
   rootPath: string,
   candidatePath: string,

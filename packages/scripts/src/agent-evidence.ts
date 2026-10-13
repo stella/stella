@@ -1,11 +1,11 @@
+import { panic } from "better-result";
+
 // Which screenshots may leave the machine. `agent:drive` records every
 // capture with its hash and whether the stack held only seeded content before
 // and after it; `agent:attach` uploads a file only when that record says so
 // and the file is byte-for-byte the one captured. Everything else (a desktop
 // capture, a download, an edited image) has no record and is refused.
-
-import { panic } from "better-result";
-import path from "node:path";
+import { isPathInside } from "@stll/portable-path";
 
 export type SealStatus =
   | { status: "fresh" }
@@ -170,8 +170,7 @@ export const verifyAttachment = ({
   fileSha256,
   manifest,
 }: VerifyAttachmentOptions): AttachmentVerdict => {
-  const relative = path.relative(evidenceDir, filePath);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (!isPathInside(evidenceDir, filePath)) {
     return {
       type: "refused",
       reason: `${filePath} is not an agent:drive capture`,

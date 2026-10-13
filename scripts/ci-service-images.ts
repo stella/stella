@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { isPathStrictlyInside } from "../packages/portable-path/src/index";
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import mirrorImages from "./ci-service-images.json" with { type: "json" };
 
@@ -94,7 +95,7 @@ export const collectImageReferences = async (
     visited.add(relative);
     const absolute = path.resolve(root, relative);
     if (
-      !absolute.startsWith(`${path.resolve(root)}${path.sep}`) ||
+      !isPathStrictlyInside(root, absolute) ||
       !existsSync(absolute) ||
       !statSync(absolute).isFile()
     ) {

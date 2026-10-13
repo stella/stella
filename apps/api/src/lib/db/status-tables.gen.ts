@@ -15,6 +15,7 @@ export const STATUS_COLUMNS = {
   caseLawCitationResolutionCensusRuns: ["status"],
   caseLawCitations: ["resolutionStatus"],
   caseLawCorpusUploadIntents: ["status"],
+  caseLawDecisionCitationStatsState: ["status"],
   caseLawDecisionIdentifierBackfills: ["phase"],
   caseLawDecisions: ["corpusMirrorStatus"],
   caseLawIndexJobs: ["status"],

@@ -1,5 +1,6 @@
 import {
   accountExports,
+  caseLawDecisionCitationStatsState,
   desktopEditSessions,
   legalReaderAnswerMessages,
   EU_COMPLETION_STATUSES,
@@ -87,6 +88,14 @@ const ACCOUNT_EXPORT_TRANSITIONS = defineTransitions(
   },
   { terminal: ["failed", "expired"] },
 );
+// Refresh atomically publishes a complete recount; later recounts remain exact.
+const DECISION_CITATION_STATS_TRANSITIONS = defineKeyedTransitions({
+  table: caseLawDecisionCitationStatsState,
+  key: "decisionId",
+  edges: { pending: ["exact"], exact: [] },
+  options: { terminal: ["exact"] },
+});
+
 const READER_ANSWER_MESSAGE_TRANSITIONS = defineScopedTransitions({
   ...READER_ANSWER_TRANSITION_IDENTITIES.READER_ANSWER_MESSAGE_TRANSITIONS,
   table: legalReaderAnswerMessages,
@@ -270,6 +279,7 @@ export const TRANSITIONS = {
   caseLawDecisionIdentifierBackfills: {
     unmanaged: UNMANAGED_REASONS.workerRun,
   },
+  caseLawDecisionCitationStatsState: DECISION_CITATION_STATS_TRANSITIONS,
   caseLawDecisions: { unmanaged: UNMANAGED_REASONS.projection },
   caseLawIndexJobs: { unmanaged: UNMANAGED_REASONS.workerRun },
   caseLawIngestionEvents: { unmanaged: UNMANAGED_REASONS.workerRun },

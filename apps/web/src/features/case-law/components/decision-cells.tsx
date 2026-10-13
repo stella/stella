@@ -18,10 +18,10 @@ import {
   type DecisionHeadnotePreview,
   type TextField,
 } from "@stll/api-contract/case-law-text-field";
-import { CourtName } from "@stll/decision-reader/court-name";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import {
   SEARCH_HIT_DESCENDANT_MARK_CLASS,
@@ -157,6 +157,14 @@ export const CaseNumberCell = ({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-x-2">
+        <DocumentIdentityBadge
+          identity={{
+            kind: "decision",
+            courtAbbreviation: decision.courtAbbreviation,
+            courtTier: decision.courtTier,
+          }}
+          title={`${caseNumber} · ${decision.court}`}
+        />
         <DecisionLink
           className="text-foreground font-medium hover:underline"
           onClick={openDecision.onLinkClick(target)}
@@ -212,11 +220,9 @@ const identityLineValue = (
   switch (field) {
     case "court":
       return (
-        <CourtName
-          abbreviation={decision.courtAbbreviation}
-          court={decision.court}
-          tier={decision.courtTier}
-        />
+        <BidiText as="span" className="truncate" title={decision.court}>
+          {decision.court}
+        </BidiText>
       );
     case "date": {
       const date = formatDecisionDate(decision.decisionDate, format);
