@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Generate `src/packs.gen.ts` from the content repository mounted at
  * `content/`: every `packs/<id>/pack.json` is validated against the content
@@ -9,11 +10,11 @@
  * without the submodule cannot regenerate the manifest, so `--check` reports
  * and passes there; CI checks out submodules and enforces it.
  */
-
-import { panic } from "better-result";
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import { templatePackContentIdentity } from "../src/content-identity";
 import { PUBLIC_PACK_IDS } from "../src/public-packs";
@@ -280,7 +281,7 @@ if (checkOnly) {
     : null;
   if (current !== output) {
     panic(
-      `${path.relative(packageRoot, outputPath)} is out of date; run bun run generate`,
+      `${repoRelativePath(packageRoot, outputPath)} is out of date; run bun run generate`,
     );
   }
 } else {

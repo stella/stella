@@ -128,7 +128,10 @@ const CORPUS_INDEX_MERGE_POLICY = {
   min_level_num_docs: 100_000,
 } as const satisfies CorpusIndexMergePolicy;
 
-/** Final-index merge window and asynchronous-delete settlement bound. */
+/**
+ * Final-index age-based merge window. Each merge output starts a new maturity
+ * clock, so this period does not bound asynchronous-delete settlement.
+ */
 const CORPUS_FINAL_INDEX_MERGE_POLICY = {
   ...CORPUS_INDEX_MERGE_POLICY,
   maturation_period: "4hours",
@@ -154,9 +157,9 @@ export const CORPUS_FINAL_INDEX_INDEXING_DEFAULT = {
  * appends stages one split per commit, and a split that matures before nine
  * siblings join it is never merged again, so a longer commit window stages
  * fewer splits and a longer maturation keeps merging them. Deletes apply to
- * mature splits only, so a superseded revision stays in the index for up to
- * the maturation period: every passage read filters on the revision Postgres
- * records as applied.
+ * mature splits only; repeated merges can restart maturity, so physical
+ * deletion and settlement can exceed the period. Passage reads filter on the
+ * revision Postgres records as applied.
  */
 export const CORPUS_FINAL_INDEX_INDEXING_V8 = {
   commitTimeoutSecs: 600,

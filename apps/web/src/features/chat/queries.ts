@@ -35,6 +35,7 @@ import { chatKeys, getChatRuntimeContextKind } from "./chat-query-contract";
 import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
+  DecisionChatThreadKey,
   ChatThreadOptionsInput,
   ChatThreadTitleKey,
   FileChatThreadKey,
@@ -252,10 +253,12 @@ const fetchGroupedChatThreads = async ({
   cursor,
   search,
   signal,
+  workspaceId,
 }: {
   cursor?: string | undefined;
   search?: string | undefined;
   signal?: AbortSignal | undefined;
+  workspaceId?: string | undefined;
 } = {}) => {
   const response = await api.chat.threads.get({
     ...(signal !== undefined && { fetch: { signal } }),
@@ -263,6 +266,9 @@ const fetchGroupedChatThreads = async ({
       limit: CHAT_THREADS_PAGE_SIZE,
       ...(cursor !== undefined && { cursor }),
       ...(search !== undefined && { search }),
+      ...(workspaceId !== undefined && {
+        workspaceId: toSafeId<"workspace">(workspaceId),
+      }),
     },
   });
 
@@ -757,6 +763,28 @@ export const templateChatThreadOptions = ({
     queryFn: async () => await fetchTemplateChatThread(key),
   });
 
+/**
+ * The reader's own conversation about a decision, found on the server by
+ * the decision it is about; null until the reader has sent a first message.
+ */
+export const decisionChatThreadOptions = ({
+  activeOrganizationId,
+  key,
+}: {
+  activeOrganizationId: string;
+  key: DecisionChatThreadKey;
+}) =>
+  queryOptions({
+    queryKey: chatKeys.decisionThread(activeOrganizationId, key),
+    queryFn: async ({ signal }) => {
+      const response = await api.chat["decision-threads"]({
+        decisionId: key.decisionId,
+      }).get({ fetch: { signal } });
+      const { threadId } = unwrapEden(response);
+      return { threadId: threadId === null ? null : toChatThreadId(threadId) };
+    },
+  });
+
 export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {
   activeOrganizationId: string;
 };
@@ -1003,6 +1031,7 @@ export const groupedChatThreadsOptions = ({
   activeOrganizationId,
   search,
   userId,
+  workspaceId,
 }: GroupedChatThreadsKey) => {
   const normalizedSearch = search?.trim() || undefined;
   return infiniteQueryOptions({
@@ -1010,6 +1039,7 @@ export const groupedChatThreadsOptions = ({
       activeOrganizationId,
       search: normalizedSearch,
       userId,
+      workspaceId,
     }),
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     refetchOnWindowFocus: false,
@@ -1018,6 +1048,7 @@ export const groupedChatThreadsOptions = ({
         cursor: pageParam,
         search: normalizedSearch,
         signal,
+        workspaceId,
       }),
     initialPageParam: stringCursorSeed(),
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
@@ -1100,9 +1131,9 @@ export const chatThreadTitleOptions = ({
     queryFn: async () => await fetchChatThreadTitle(key),
   });
 
-// Match every cached `chatKeys.groupedThreads` entry, whatever org, user and
-// search term it carries: the invalidator cannot reconstruct those ids, so it
-// walks by structural shape instead.
+// Match every cached `chatKeys.groupedThreads` entry, whatever org, user,
+// search term and matter filter it carries: the invalidator cannot reconstruct
+// those ids, so it walks by structural shape instead.
 const matchesGroupedChatThreads = (queryKey: readonly unknown[]): boolean =>
   queryKey.at(0) === "chat" &&
   queryKey.at(3) === "threads" &&

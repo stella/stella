@@ -14,6 +14,7 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { createTestMutantDirectory } from "@/api/tests/helpers/test-mutants";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -184,10 +185,9 @@ test("cached worker results match direct screening and replace changed editions"
 });
 
 test("compiled runtime loads the deployed matcher worker", async () => {
-  const { mkdtempSync, mkdirSync, rmSync, writeFileSync } =
-    await import("node:fs");
+  const { mkdirSync, rmSync, writeFileSync } = await import("node:fs");
   const { default: path } = await import("node:path");
-  const directory = mkdtempSync(path.join(import.meta.dir, ".tmp-matcher-"));
+  const directory = createTestMutantDirectory("matcher-");
   try {
     const workers = path.join(directory, "workers");
     const parent = path.join(directory, "parent");

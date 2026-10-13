@@ -535,6 +535,16 @@
       "createInvoice": "Utwórz fakturę",
       "dueDate": "Termin płatności",
       "editInvoice": "Edytuj fakturę",
+      "export": {
+        "accounting": "Import do księgowości",
+        "eBilling": "E-fakturowanie",
+        "eso9": "Arkusz importu ESO9 (XLSX)",
+        "exporting": "Przygotowywanie eksportu…",
+        "isdoc": "E-faktura ISDOC (ABRA Gen i inne)",
+        "spreadsheets": "Arkusze",
+        "xlsx": "Faktury (XLSX)",
+        "xlsxLines": "Pozycje faktur (XLSX)"
+      },
       "finalize": "Zatwierdź",
       "invoiceDate": "Data wystawienia",
       "invoiceDetail": "Szczegóły faktury",
@@ -776,6 +786,9 @@
       "none": "Nie odnotowano jeszcze żadnych cytowań.",
       "openAtCitation": "Otwórz w miejscu cytowania",
       "openDecision": "Otwórz orzeczenie",
+      "paragraphLabel": "Punkt {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, punkt {paragraph}",
       "partialSummary": "Sumy cytowań i oś czasu są niepełne.",
       "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",
       "positiveCount": "{count, plural, one {# pozytywne} few {# pozytywne} many {# pozytywnych} other {# pozytywnych}}",
@@ -1270,6 +1283,11 @@
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
+    "history": {
+      "matterUnavailable": "Ta sprawa jest niedostępna",
+      "older": "Starsze",
+      "previous7Days": "Poprzednie 7 dni"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
@@ -1432,6 +1450,8 @@
     "sendPrompt": "Wyślij wiadomość",
     "sendQueuedMessageNow": "Wyślij teraz",
     "sendWithoutAnonymization": "Wyślij bez anonimizacji",
+    "signInToChat": "Zaloguj się, aby czatować o tym dokumencie",
+    "signInToChatAbout": "Zaloguj się, aby czatować o",
     "skills": {
       "scope": {
         "private": "Twoje umiejętności AI",
@@ -1762,6 +1782,8 @@
     "citations": "Cytowania",
     "clauses": "Klauzule",
     "clearDate": "Wyczyść datę",
+    "clearFilters": "Wyczyść filtry",
+    "clearSearch": "Wyczyść wyszukiwanie",
     "close": "Zamknij",
     "closeAll": "Zamknij wszystko",
     "closeOthers": "Zamknij pozostałe",
@@ -1792,6 +1814,7 @@
       "nextDecade": "Następna dekada",
       "nextMonth": "Następny miesiąc",
       "nextYear": "Następny rok",
+      "outOfRange": "Wybierz datę z dozwolonego zakresu.",
       "previousDecade": "Poprzednia dekada",
       "previousMonth": "Poprzedni miesiąc",
       "previousYear": "Poprzedni rok",
@@ -4117,7 +4140,6 @@
     "appsSubtitle": "stella działa też poza przeglądarką: na komputerze i w asystencie AI. Do tej konfiguracji możesz wrócić w dowolnym momencie.",
     "appsTitle": "Korzystaj ze stelli wszędzie",
     "catalogueAlwaysOn": "Zawsze włączone",
-    "catalogueClearSearch": "Wyczyść wyszukiwanie",
     "catalogueCommunityHeading": "Pozostałe",
     "catalogueContinueWithCount": "{count, plural, one {Kontynuuj z # narzędziem} few {Kontynuuj z # narzędziami} many {Kontynuuj z # narzędziami} other {Kontynuuj z # narzędziami}}",
     "catalogueDetailAbout": "Opis",
@@ -6378,7 +6400,6 @@
         "year": "Rok"
       },
       "cannotDeleteRequired": "Wymagany jest co najmniej jeden widok tego typu",
-      "clearFilters": "Wyczyść filtry",
       "copySuffix": "{name} (kopia)",
       "deleteView": "Usuń widok",
       "exportCsv": "Eksportuj CSV",

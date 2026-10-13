@@ -21,8 +21,76 @@ const POLICY_EVIDENCE_PATH = "docs/policies/evidence.json";
 const CLI_REGISTRY_SNAPSHOT_PATH =
   "packages/cli/src/generated/registry-snapshot.json";
 
+const ROOT_README_PATH = "README.md";
+
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = ["README.md"];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun scripts/check-marketing-content.ts";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
+
+const isRemoteReference = (reference: string) =>
+  reference.startsWith("//") || /^[a-z][a-z\d+.-]*:/iu.test(reference);
+
+// GitHub reads `#gh-dark-mode-only` style fragments and query strings off an
+// image URL; the file on disk is the path before them.
+const imageFilePath = (reference: string) => {
+  const suffix = reference.search(/[?#]/u);
+  return suffix === -1 ? reference : reference.slice(0, suffix);
+};
+
+// One pass, in document order: `src`, each `srcset` candidate (without its
+// width or density descriptor), inline `![alt](path "title")`, and
+// reference-style `![alt][label]` / `![label]`, which resolve through a
+// `[label]: path` definition (labels match case-insensitively).
+const IMAGE_REFERENCE =
+  /\bsrc="([^"]+)"|\bsrcset="([^"]+)"|!\[([^\]]*)\](?:\(\s*<?([^\s)>]+)|\[([^\]]*)\])?/gu;
+
+const readmeImageReferences = (readme: string): string[] => {
+  const definitions = new Map(
+    [...readme.matchAll(/^ {0,3}\[([^\]]+)\]:[ \t]*<?([^\s>]+)/gmu)].map(
+      (match) => [(match[1] ?? "").toLowerCase(), match[2] ?? ""] as const,
+    ),
+  );
+  return [...readme.matchAll(IMAGE_REFERENCE)].flatMap((match) => {
+    const [, src, srcset, alt, inline, label] = match;
+    if (src !== undefined) {
+      return [src];
+    }
+    if (srcset !== undefined) {
+      return srcset
+        .split(",")
+        .map((candidate) => candidate.trim().split(/\s+/u)[0] ?? "");
+    }
+    if (inline !== undefined) {
+      return [inline];
+    }
+    const key = (label === undefined || label === "" ? alt : label) ?? "";
+    const destination = definitions.get(key.toLowerCase());
+    return destination === undefined ? [] : [destination];
+  });
+};
+
+// The root README's tour embeds the captured product screenshots by
+// repository-relative path; a renamed capture must fail here, not render as
+// a broken image on GitHub.
+export const findMissingReadmeImages = (
+  readme: string,
+  exists: (relativePath: string) => boolean,
+): string[] => {
+  const missing: string[] = [];
+  for (const reference of readmeImageReferences(readme)) {
+    if (reference === "" || isRemoteReference(reference)) {
+      continue;
+    }
+    if (!exists(imageFilePath(reference)) && !missing.includes(reference)) {
+      missing.push(reference);
+    }
+  }
+  return missing;
+};
 
 const getCapabilityIds = (rootDir: string): Set<string> => {
   const catalogPath = nodePath.join(rootDir, CAPABILITY_CATALOG_PATH);
@@ -176,6 +244,16 @@ export const checkMarketingContent = (rootDir: string): string[] => {
     if (!existsSync(heroPath)) {
       errors.push(`${product.slug}: missing captured hero ${product.hero.src}`);
     }
+  }
+
+  const readme = readFileSync(
+    nodePath.join(rootDir, ROOT_README_PATH),
+    "utf-8",
+  );
+  for (const reference of findMissingReadmeImages(readme, (relativePath) =>
+    existsSync(nodePath.join(rootDir, relativePath)),
+  )) {
+    errors.push(`${ROOT_README_PATH}: missing image ${reference}`);
   }
 
   const policyManifest: unknown = JSON.parse(

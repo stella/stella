@@ -15,6 +15,7 @@
  * would repeat a page it had already read.
  */
 
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -23,6 +24,7 @@ import {
   isIssuablePaginationCursor,
 } from "@/api/lib/pagination";
 import { isRecord } from "@/api/lib/type-guards";
+import { windowProvisionText } from "@/api/mcp/provision-text-window";
 import { ALL_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
 /**
@@ -179,6 +181,16 @@ describe("MCP cursor inputs read a made-up cursor as no cursor", () => {
     // it out of the first page is the decoder, not this rule.
     expect(isIssuablePaginationCursor(TRUNCATED_REAL_CURSOR)).toBe(true);
 
+    const window = windowProvisionText({
+      limit: 1,
+      subject: "fixture",
+      text: "long wording",
+    });
+    const truncatedTextCursor =
+      window.type === "window"
+        ? (window.nextTextCursor?.slice(0, -1) ?? panic("Missing text cursor"))
+        : panic("Invalid text cursor fixture");
+
     const dropped: string[] = [];
     for (const { definition, property } of cursorSites) {
       // `search_boe_legislation` is the one exception: the BOE numbers its own
@@ -186,12 +198,16 @@ describe("MCP cursor inputs read a made-up cursor as no cursor", () => {
       if (definition.name === "search_boe_legislation") {
         continue;
       }
+      const cursor =
+        property === "text_cursor"
+          ? truncatedTextCursor
+          : TRUNCATED_REAL_CURSOR;
       const reading = cursorReading(
         definition.inputSchemaSource,
         property,
-        TRUNCATED_REAL_CURSOR,
+        cursor,
       );
-      if (reading !== `value:${JSON.stringify(TRUNCATED_REAL_CURSOR)}`) {
+      if (reading !== `value:${JSON.stringify(cursor)}`) {
         dropped.push(`${definition.name}.${property} (${reading})`);
       }
     }

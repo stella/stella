@@ -2,6 +2,8 @@ import { lstatSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { isPlaywrightTestFile } from "./e2e-spec-shards-core";
 
 const CONFIG_PATH = "apps/web/e2e/playwright.config.ts";
@@ -235,7 +237,10 @@ const setupProjectInputs = ({
       directory,
       testDir && ts.isStringLiteralLike(testDir) ? testDir.text : ".",
     );
-    const relativeDirectory = path.relative(root, realpathSync(testDirectory));
+    const relativeDirectory = repoRelativePath(
+      root,
+      realpathSync(testDirectory),
+    );
     if (
       relativeDirectory.startsWith("../") ||
       path.isAbsolute(relativeDirectory)
@@ -256,7 +261,7 @@ const setupProjectInputs = ({
         lstatSync(absolute).isFile() &&
         predicates.some((matches) => matches(absolute))
       ) {
-        entries.push(path.relative(root, absolute));
+        entries.push(repoRelativePath(root, absolute));
       }
     }
   }
@@ -293,7 +298,7 @@ export const e2eRunnerInputs = (root: string): string[] | undefined => {
     }
     for (const reference of references) {
       const absolute = realpathSync(Bun.resolveSync(reference, directory));
-      const relative = path.relative(root, absolute);
+      const relative = repoRelativePath(root, absolute);
       if (relative.startsWith("../") || relative.includes("node_modules/")) {
         return undefined;
       }

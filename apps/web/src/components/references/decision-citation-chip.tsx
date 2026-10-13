@@ -8,7 +8,7 @@ import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-lin
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { CourtBadge } from "@stll/ui/court-badge";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -35,27 +35,53 @@ type DecisionCitationChipProps = {
   decision: DecisionCitationMetadata;
   passage?: ReactNode;
   presentation?: DecisionCitationPresentation | undefined;
+  /** The court's own number on the cited block; null when it printed none. */
+  paragraphNumber?: number | null | undefined;
   onOpen?: (() => void) | undefined;
 };
 
 const DecisionCitationLabel = ({
   decision,
   presentation,
+  paragraphNumber,
 }: {
   decision: DecisionCitationMetadata;
   presentation: DecisionCitationPresentation;
+  /** The court's number, already in the reader's formatting locale. */
+  paragraphNumber: string | null;
 }) => {
+  const t = useTranslations();
+  const paragraph =
+    paragraphNumber === null ? null : (
+      <span className="whitespace-nowrap">
+        {t("caseLaw.citation.paragraphMark", { paragraph: paragraphNumber })}
+      </span>
+    );
+  const badge = (
+    <DocumentIdentityBadge
+      identity={{
+        kind: "decision",
+        courtAbbreviation: decision.courtShortCode,
+      }}
+    />
+  );
   switch (presentation) {
     case DECISION_CITATION_PRESENTATION.compact:
-      return (
-        <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+      return paragraph === null ? (
+        badge
+      ) : (
+        <span className="inline-flex items-center gap-1">
+          {badge}
+          {paragraph}
+        </span>
       );
     case DECISION_CITATION_PRESENTATION.expanded:
       return (
         <span className="inline-flex items-center gap-1">
           <LandmarkIcon aria-hidden="true" className="size-3 shrink-0" />
-          <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+          {badge}
           <BidiText as="span">{decision.caseNumber}</BidiText>
+          {paragraph}
         </span>
       );
     default:
@@ -71,6 +97,7 @@ export const DecisionCitationChip = ({
   decision,
   passage,
   presentation = DECISION_CITATION_PRESENTATION.compact,
+  paragraphNumber = null,
   onOpen,
 }: DecisionCitationChipProps) => {
   const t = useTranslations();
@@ -81,11 +108,23 @@ export const DecisionCitationChip = ({
   const date =
     formatDecisionDate(decision.decisionDate, format) ??
     t("caseLaw.citation.dateUnavailable");
-  const reference = t("caseLaw.citation.referenceLabel", {
-    court: decision.court,
-    caseNumber: decision.caseNumber,
-    date,
-  });
+  // Formatted once, in the formatting locale, which may differ from the UI
+  // language (an Arabic numbering system, a grouping preference).
+  const paragraph =
+    paragraphNumber === null ? null : format.number(paragraphNumber);
+  const reference =
+    paragraph === null
+      ? t("caseLaw.citation.referenceLabel", {
+          court: decision.court,
+          caseNumber: decision.caseNumber,
+          date,
+        })
+      : t("caseLaw.citation.paragraphReferenceLabel", {
+          court: decision.court,
+          caseNumber: decision.caseNumber,
+          date,
+          paragraph,
+        });
   const links = resolveLegalCitationLinks({
     appUrl: decision.readerUrl,
     sourceUrl: decision.originalUrl,
@@ -129,6 +168,7 @@ export const DecisionCitationChip = ({
         <DecisionCitationLabel
           decision={decision}
           presentation={presentation}
+          paragraphNumber={paragraph}
         />
       </PopoverTrigger>
       <PopoverPanel
@@ -149,6 +189,11 @@ export const DecisionCitationChip = ({
           <BidiText as="span" className="text-sm">
             {decision.caseNumber}
           </BidiText>
+          {paragraph !== null && (
+            <span className="text-sm">
+              {t("caseLaw.citation.paragraphLabel", { paragraph })}
+            </span>
+          )}
           <span className="text-muted-foreground text-xs">{date}</span>
         </div>
         {passage !== undefined && (

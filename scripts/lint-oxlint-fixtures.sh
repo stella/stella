@@ -54,7 +54,7 @@ bun test ./scripts/check-oxlint-plugin-registry.test.ts
 bun test ./scripts/check-oxlint-fixture-counts.test.ts
 # One isolated worker per core: the rule test files share no state, and run
 # serially they dominate this check.
-bun test --parallel ./.oxlint-plugins/__tests__
+bun scripts/run-custom-lint-tests.ts --parallel
 bun scripts/check-desktop-section-sign-glyph.ts
 
 # Directive usage proves each expected hit fires at least once; the count

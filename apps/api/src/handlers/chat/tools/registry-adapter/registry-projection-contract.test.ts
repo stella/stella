@@ -1698,10 +1698,16 @@ const CONTRACT_CORPUS = {
           summary: {
             incoming: { ...noCitations, positive: 1, unclassified: 49 },
             outgoing: { ...noCitations, neutral: 2 },
-            capped: { incoming: false, outgoing: false },
+            precision: {
+              status: "bounded",
+              capped: { incoming: false, outgoing: false },
+            },
             incomingByYear: [],
           },
-          topCiting: [relatedDecision(58, "23 Cdo 200/2021")],
+          topCiting: {
+            precision: "exact",
+            items: [relatedDecision(58, "23 Cdo 200/2021")],
+          },
           cites: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
@@ -1860,6 +1866,7 @@ const CONTRACT_CORPUS = {
             id: toSafeId<"legislationDocument">(uid(72)),
             astS3Key: null,
             documentAst: null,
+            eli: "/eli/cz/sb/2012/89",
             versionValidFrom: "2014-01-01",
             versionValidTo: null,
             expressionKind: "consolidation" as const,
@@ -2470,10 +2477,10 @@ describe("decision text in chat projection", () => {
       summary: {
         incoming: noCitations,
         outgoing: noCitations,
-        capped: { incoming: false, outgoing: false },
+        precision: { status: "exact" },
         incomingByYear: [],
       },
-      topCiting: [],
+      topCiting: { precision: "exact", items: [] },
       cites: [],
       citesMore: false,
     } satisfies Awaited<ReturnType<typeof readGatedDecisionCitationDigest>>);
