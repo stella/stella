@@ -2,9 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   composeTotals,
-  hasBillableItems,
   dueDateFor,
   entryAdjustments,
+  hasBillableItems,
+  includedExpenseIdsOf,
   lastIncludedWorkDate,
   parseHoursInput,
   submitComposedInvoice,
@@ -281,5 +282,14 @@ describe("submitComposedInvoice", () => {
     const attempt = submit({ issue: false, readFails: false });
     expect(await attempt.result).toBe("issued inv-1");
     expect(attempt.calls).toEqual(["create", "read:inv-1"]);
+  });
+});
+
+describe("includedExpenseIdsOf", () => {
+  test("drops a selected expense that a refresh no longer offers", () => {
+    // "x" is still offered; "billed-elsewhere" left the refreshed prefill.
+    expect(
+      includedExpenseIdsOf(expenses, new Set(["x", "billed-elsewhere"])),
+    ).toEqual(["x"]);
   });
 });

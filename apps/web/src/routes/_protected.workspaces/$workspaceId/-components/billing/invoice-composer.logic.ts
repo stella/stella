@@ -120,6 +120,18 @@ export const composeTotals = ({
  * its agreed fee, with or without entries; otherwise at least one included
  * entry or expense.
  */
+/**
+ * The selected expenses that are still offered. A refresh drops an expense
+ * billed elsewhere meanwhile, so its stale selection is never submitted.
+ */
+export const includedExpenseIdsOf = (
+  expenses: readonly ComposerExpense[],
+  includedExpenseIds: ReadonlySet<string>,
+): string[] =>
+  expenses
+    .filter((expense) => includedExpenseIds.has(expense.id))
+    .map((expense) => expense.id);
+
 export const hasBillableItems = ({
   flatFeeAmount,
   includedEntryCount,

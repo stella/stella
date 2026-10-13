@@ -64,6 +64,7 @@ import {
   entryChoice,
   expenseAmount,
   hasBillableItems,
+  includedExpenseIdsOf,
   includedMinutes,
   lastIncludedWorkDate,
   parseHoursInput,
@@ -202,13 +203,14 @@ export const InvoiceComposer = ({
     flatFeeAmount: prefill.flatFeeAmount,
   });
   const dueDate = dueDateFor(invoiceDate, dueDays);
+  const includedExpenses = includedExpenseIdsOf(expenses, includedExpenseIds);
   const includedEntryIds = entries
     .filter((entry) => entryChoice(choices, entry).included)
     .map((entry) => entry.id);
   const hasItems = hasBillableItems({
     flatFeeAmount: prefill.flatFeeAmount,
     includedEntryCount: includedEntryIds.length,
-    includedExpenseCount: includedExpenseIds.size,
+    includedExpenseCount: includedExpenses.length,
   });
 
   const submit = useComposerSubmit({
@@ -262,9 +264,7 @@ export const InvoiceComposer = ({
           ? {}
           : { sellerProfileId: toSafeId<"sellerProfile">(prefill.seller.id) }),
         timeEntryIds: includedEntryIds.map((id) => toSafeId<"timeEntry">(id)),
-        expenseIds: [...includedExpenseIds].map((id) =>
-          toSafeId<"expense">(id),
-        ),
+        expenseIds: includedExpenses.map((id) => toSafeId<"expense">(id)),
         entryAdjustments: entryAdjustments(entries, choices).map(
           (adjustment) => ({
             ...adjustment,
@@ -325,7 +325,7 @@ export const InvoiceComposer = ({
             buyerName={prefill.buyer.buyerName}
             currency={currency}
             dueDate={dueDate}
-            lineCount={includedEntryIds.length + includedExpenseIds.size}
+            lineCount={includedEntryIds.length + includedExpenses.length}
             totals={totals}
           />
         )}
