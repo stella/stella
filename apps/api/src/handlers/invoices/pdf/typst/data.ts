@@ -153,7 +153,6 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
     exempt: l.exempt,
     not_vat_payer: l.nonPayer,
   } satisfies Record<VatTreatment, string>;
-  const numbered = invoice.status !== "draft" && invoice.invoiceNumber !== null;
 
   let qr: string | null = null;
   const payment = buildInvoicePaymentPayload(options);
@@ -169,9 +168,10 @@ export const buildInvoiceTemplateData = (options: RenderInvoicePdfOptions) => {
   const data: InvoiceTemplateData = {
     lang,
     dir: lang === "ar" ? "rtl" : "ltr",
-    title: numbered
-      ? `${titles[invoice.documentType]} ${invoice.invoiceNumber}`
-      : titles[invoice.documentType],
+    title:
+      invoice.status !== "draft" && invoice.invoiceNumber !== null
+        ? `${titles[invoice.documentType]} ${invoice.invoiceNumber}`
+        : titles[invoice.documentType],
     isDraft: invoice.status === "draft",
     draftLabel: l.draft,
     meta: fields([
