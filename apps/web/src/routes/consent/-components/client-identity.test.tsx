@@ -68,7 +68,8 @@ describe("consent client identity", () => {
     expect(markup).toContain(en.consent.unverifiedApp);
     expect(markup).not.toContain("Verified app by");
     expect(markup).not.toContain('data-slot="verified-client-mark"');
-    expect(markup).toContain(">C</div>");
+    expect(markup).toContain('data-slot="unverified-client-mark"');
+    expect(markup).not.toContain(">C</div>");
   });
 
   test("absent identity data makes no verification claim", () => {

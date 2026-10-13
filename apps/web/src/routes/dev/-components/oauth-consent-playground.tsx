@@ -1,0 +1,112 @@
+import { useState } from "react";
+
+import { useTranslations } from "use-intl";
+
+import {
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_OAUTH_PROTOCOL_SCOPES,
+} from "@stll/api-contract";
+import { Button } from "@stll/ui/button";
+
+import type { OAuthConsentInfo } from "@/lib/oauth-provider";
+import { resolveConsentClientIdentity } from "@/routes/consent/-components/client-identity.logic";
+import { ConsentCard } from "@/routes/consent/-components/consent-card";
+import {
+  ConsentAccountRows,
+  ConsentDecisionBar,
+} from "@/routes/consent/-components/consent-controls";
+import { OAuthClientDetails } from "@/routes/consent/-components/oauth-client-details";
+import { ScopeSummary } from "@/routes/consent/-components/scope-summary";
+
+const CLIENTS = {
+  claude: {
+    client_name: "Claude",
+    redirectHosts: ["claude.ai"],
+    clientIdHost: null,
+    unverified: false,
+    verifiedBrand: "claude",
+  },
+  chatgpt: {
+    client_name: "ChatGPT",
+    redirectHosts: ["chatgpt.com"],
+    clientIdHost: null,
+    unverified: false,
+    verifiedBrand: "chatgpt",
+  },
+  unverified: {
+    client_name: "Example connector",
+    redirectHosts: ["connector.example"],
+    clientIdHost: null,
+    unverified: true,
+    verifiedBrand: null,
+  },
+} as const satisfies Record<string, OAuthConsentInfo>;
+
+export const OAuthConsentPlayground = () => {
+  const t = useTranslations();
+  const [info, setInfo] = useState<OAuthConsentInfo>(CLIENTS.claude);
+  const identity = resolveConsentClientIdentity(
+    info,
+    info.client_name ?? t("consent.defaultClientName"),
+  );
+  return (
+    <section className="w-full" data-playground-section="oauth-consent">
+      <div className="flex gap-2 p-2">
+        {Object.values(CLIENTS).map((value) => (
+          <Button
+            key={value.client_name}
+            variant="ghost"
+            onClick={() => {
+              setInfo(value);
+            }}
+          >
+            {value.client_name}
+          </Button>
+        ))}
+      </div>
+      <ConsentCard
+        identity={identity}
+        details={
+          <OAuthClientDetails
+            info={info}
+            clientName={identity.name}
+            redirectUri={null}
+          />
+        }
+        decision={
+          <ConsentDecisionBar
+            allowDisabled={false}
+            hasError={false}
+            isPending={false}
+            onDecide={() => undefined}
+          />
+        }
+      >
+        <ConsentAccountRows
+          activeOrganizationId="fixture"
+          disabled={false}
+          email="test@stella.dev"
+          onAccountSwitch={() => undefined}
+          onOrganizationSwitch={() => undefined}
+          organizationName="Harbrook & Partners"
+          organizations={undefined}
+        />
+        <p className="text-muted-foreground -mt-3 text-sm text-pretty">
+          {t("consent.actingAs", {
+            clientName: identity.name,
+            organizationName: "Harbrook & Partners",
+          })}
+        </p>
+        <ScopeSummary
+          scopes={[
+            ...MCP_DEFAULT_RESOURCE_SCOPES,
+            ...MCP_OAUTH_PROTOCOL_SCOPES,
+          ]}
+        />
+        <p className="text-muted-foreground text-xs text-pretty">
+          {t("consent.connectionDuration")}
+        </p>
+      </ConsentCard>
+    </section>
+  );
+};
