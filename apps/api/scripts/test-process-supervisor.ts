@@ -9,7 +9,8 @@ import {
   testInvocationMemoryLimit,
   watchTestProcessMemory,
 } from "@stll/scripts/src/process-memory";
-import { createWindowsProcessOwnership } from "@stll/scripts/src/windows-process-ownership";
+import { spawnTestProcess } from "@stll/scripts/src/test-process-spawn";
+import type { createWindowsProcessOwnership } from "@stll/scripts/src/windows-process-ownership";
 
 // A measured CI solo batch (254 chat turn tests) took 250.9s. Ten minutes
 // gives it more than twice that headroom, while bounding imports, snapshot
@@ -284,23 +285,18 @@ export class TestProcessSupervisor {
     const logPath = path.join(this.options.directory, `${id}.log`);
     const junitPath = path.join(this.options.directory, `${id}.xml`);
     writeFileSync(logPath, "", { mode: 0o600 });
-    const child = Bun.spawn({
-      cmd: command(junitPath),
-      cwd,
-      env,
-      detached: process.platform !== "win32",
-      stdin: mode === "stream" ? "inherit" : "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
+    const { child, windowsProcesses } = spawnTestProcess({
+      command: command(junitPath),
+      options: {
+        cwd,
+        env,
+        detached: process.platform !== "win32",
+        stdin: mode === "stream" ? "inherit" : "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+      onWarning: (message) => this.diagnose(message),
     });
-    // Register each known runner child immediately at its spawn boundary.
-    const windowsProcesses =
-      process.platform === "win32"
-        ? createWindowsProcessOwnership({
-            rootPid: child.pid,
-            onWarning: (message) => this.diagnose(message),
-          })
-        : undefined;
     const stdout = child.stdout.getReader();
     const stderr = child.stderr.getReader();
     const cancelStreams = () => {

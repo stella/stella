@@ -153,7 +153,7 @@ test("cleanup of an already exited test process does not warn", async () => {
   expect(warnings).toEqual([]);
 });
 
-test("disposing after the test leader exits reaps its surviving long-lived worker", async () => {
+test("disposing after the test leader exits immediately reaps its surviving long-lived worker", async () => {
   const directory = mkdtempSync(path.join(tmpdir(), "stella-orphan-test-"));
   const parent = Bun.spawn(
     [

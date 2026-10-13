@@ -5,25 +5,30 @@ import {
   watchTestProcessMemory,
 } from "../process-memory";
 import { attachTestProcessShutdown } from "../process-shutdown";
+import { spawnTestProcess } from "../test-process-spawn";
 
 const readBytes = await createProcessMemoryReader();
 
-const child = Bun.spawn(
-  [
+const { child, windowsProcesses } = spawnTestProcess({
+  command: [
     process.execPath,
     `${import.meta.dir}/signal-cleanup-child.ts`,
     process.argv.at(2) ?? panic("Missing marker"),
     "leader-exit",
   ],
-  {
+  options: {
     detached: process.platform !== "win32",
     stdin: "pipe",
     stdout: "pipe",
     stderr: "inherit",
   },
-);
+  onWarning: (message) => {
+    process.stderr.write(`${message}\n`);
+  },
+});
 const shutdown = attachTestProcessShutdown({
   child,
+  windowsProcesses,
   termination: process.platform === "win32" ? "process" : "group",
   onWarning: (message) => {
     process.stderr.write(`${message}\n`);
@@ -48,7 +53,6 @@ const watchdog = watchTestProcessMemory({
     process.stderr.write(`${message}\n`);
   },
 });
-await child.stdin.end();
 await child.exited;
 console.log(`${child.pid} ${workerPid}`);
 await Bun.stdin.text();

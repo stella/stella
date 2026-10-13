@@ -304,6 +304,7 @@ try {
 
 type CreateWindowsProcessOwnershipOptions = {
   rootPid: number;
+  rootIdentity?: WindowsProcessIdentity;
   onWarning: (message: string) => void;
   readIdentity?: typeof readWindowsProcessIdentity;
   signalProcesses?: typeof signalWindowsProcesses;
@@ -312,6 +313,7 @@ type CreateWindowsProcessOwnershipOptions = {
 
 export const createWindowsProcessOwnership = ({
   rootPid,
+  rootIdentity,
   onWarning,
   readIdentity = readWindowsProcessIdentity,
   signalProcesses = signalWindowsProcesses,
@@ -328,7 +330,11 @@ export const createWindowsProcessOwnership = ({
       identities.set(pid, read.value);
     }
   };
-  capturePid(rootPid);
+  if (rootIdentity === undefined) {
+    capturePid(rootPid);
+  } else {
+    identities.set(rootPid, rootIdentity);
+  }
   const recordTree = (sample: readonly WindowsProcessIdentity[]) => {
     const root = identities.get(rootPid);
     const sampledRoot = sample.find(({ pid }) => pid === rootPid);

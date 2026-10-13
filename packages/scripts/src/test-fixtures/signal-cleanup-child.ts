@@ -16,10 +16,10 @@ if (process.argv.at(3) === "leaf") {
     [process.execPath, import.meta.path, `${marker}.grandchild`, "leaf"],
     { stdout: "pipe", stderr: "inherit" },
   );
-  await grandchild.stdout.getReader().read();
-  console.log(grandchild.pid);
   if (process.argv.at(3) === "leader-exit") {
-    await Bun.stdin.text();
+    console.log(grandchild.pid);
     process.exit(0);
   }
+  await grandchild.stdout.getReader().read();
+  console.log(grandchild.pid);
 }
