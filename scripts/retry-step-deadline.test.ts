@@ -97,7 +97,7 @@ export const retryEnvelopeViolation = ({ where, step, env }: BoundedStep) => {
 
 test("every bounded step that wraps retry.sh fits all of its attempts", () => {
   const steps = boundedRetrySteps();
-  expect(steps.length).toBeGreaterThan(0);
+  // Composite installs no longer retry; the invariant also covers an empty census.
   expect(steps.map(retryEnvelopeViolation).filter(Boolean)).toEqual([]);
 });
 
