@@ -322,7 +322,7 @@ export const watchTestProcessMemory = ({
     peakBytes = Math.max(peakBytes, totalBytes);
     if (peakBytes > limitBytes || memoryStatus === "limit-exceeded") {
       fail(
-        `Test invocation memory limit exceeded for ${file()} (process tree rooted at PID ${child.pid}): measured peak ${(peakBytes / GIB).toFixed(3)} GiB, cap ${(limitBytes / GIB).toFixed(3)} GiB${memoryStatus === "limit-exceeded" ? "; Windows job rejected an allocation over its hard cap" : ""}`,
+        `Test invocation memory limit exceeded for ${file()} (process tree rooted at PID ${child.pid}): measured ${windowsProcesses === undefined ? "" : "job committed-memory "}peak ${(peakBytes / GIB).toFixed(3)} GiB, cap ${(limitBytes / GIB).toFixed(3)} GiB${memoryStatus === "limit-exceeded" ? "; Windows job rejected an allocation over its hard cap" : ""}`,
       );
     }
   };

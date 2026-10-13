@@ -218,8 +218,11 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       }
       if (process.platform === "win32") {
         expect(watchdog.peakBytes()).toBeGreaterThan(0);
-        expect(watchdog.peakBytes()).toBeLessThanOrEqual(limitBytes);
-        expect(failures.at(0)).toContain("Windows job rejected an allocation");
+        expect(failures.at(0)).toContain("job committed-memory peak");
+        expect(
+          watchdog.peakBytes() > limitBytes ||
+            failures.at(0)?.includes("Windows job rejected an allocation"),
+        ).toBe(true);
       } else {
         expect(watchdog.peakBytes()).toBeGreaterThan(limitBytes);
       }
@@ -239,6 +242,52 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
     }
   }, 15_000);
 }
+
+test.each([900, 1200])(
+  "Windows job limit notification enforces the cap with a reported committed peak of %i bytes",
+  async (peakBytes) => {
+    const failures: string[] = [];
+    let terminations = 0;
+    const watchdog = watchTestProcessMemory({
+      child: {
+        pid: 42,
+        exitCode: null,
+        signalCode: null,
+        exited: Promise.resolve(1),
+        kill: () => {
+          throw new TypeError("Must terminate job");
+        },
+      },
+      windowsProcesses: {
+        readMemory: () => Result.ok({ peakBytes, status: "limit-exceeded" }),
+        signal: () => {
+          terminations += 1;
+          return Result.ok(undefined);
+        },
+      },
+      limitBytes: 1000,
+      readBytes: () => {
+        throw new TypeError("Must not mix process memory into job accounting");
+      },
+      sampleGroup: () => {
+        throw new TypeError("Must not sample a Windows process group");
+      },
+      file: () => "job-counter.test.ts",
+      onFailure: (message) => {
+        failures.push(message);
+      },
+      onWarning: (message) => {
+        throw new TypeError(message);
+      },
+    });
+    await watchdog.stop();
+    expect(watchdog.peakBytes()).toBe(peakBytes);
+    expect(terminations).toBe(1);
+    expect(failures).toHaveLength(1);
+    expect(failures.at(0)).toContain("job committed-memory peak");
+    expect(failures.at(0)).toContain("Windows job rejected an allocation");
+  },
+);
 
 test("group samples retain reparented members, reject malformed rows, and exclude other groups", () => {
   expect([

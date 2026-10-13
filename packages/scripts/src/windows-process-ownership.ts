@@ -227,6 +227,9 @@ export const createWindowsProcessOwnership = (
     ) {
       return Result.err(error("QueryInformationJobObject"));
     }
+    // Use the job's committed-memory counter, never process working sets.
+    // Allocation rejection and limit notifications establish hard-cap behavior;
+    // do not infer it from an upper bound on this historical peak.
     peakBytes = Math.max(
       peakBytes,
       Number(
