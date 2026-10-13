@@ -89,7 +89,10 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
-import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
+import {
+  authRefusalLogPlugin,
+  markAuthRequestRoute,
+} from "@/api/lib/auth/auth-request-observability";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
@@ -1018,33 +1021,6 @@ const socialSignInOutcomePlugin = {
             ),
             provider: socialSignInProvider(ctx.params?.["id"]),
           });
-        }),
-      },
-    ],
-  },
-} satisfies BetterAuthPlugin;
-
-/**
- * Logs each 4xx answer of an auth endpoint by its route pattern and protocol
- * error code (`describeAuthRefusal`), so a failing token refresh is visible
- * apart from every other refused call behind the catch-all auth route.
- */
-const authRefusalLogPlugin = {
-  id: "stella-auth-refusal-log",
-  hooks: {
-    after: [
-      {
-        matcher: () => true,
-        handler: createAuthMiddleware(async (ctx) => {
-          const refusal = describeAuthRefusal({
-            path: ctx.path,
-            returned: ctx.context.returned,
-            body: ctx.body,
-          });
-          if (refusal.type === "refused") {
-            logger.warn("auth.request_refused", refusal.attributes);
-          }
-          await Promise.resolve();
         }),
       },
     ],
@@ -2187,6 +2163,7 @@ export const createAuth = (
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        markAuthRequestRoute(ctx);
         await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
         if (!ctx.path) {
