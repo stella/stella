@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { SQL, type ReservedSQL } from "bun";
 import { randomBytes } from "node:crypto";
 import {
@@ -31,6 +31,21 @@ class SharedTestPostgresError extends TaggedError("SharedTestPostgresError")<{
   message: string;
   cause?: unknown;
 }> {}
+
+export const DOCKER_FAILURE_KIND = {
+  nameConflict: "name_conflict",
+  commandFailed: "command_failed",
+} as const;
+
+export class SharedPostgresDockerError extends TaggedError(
+  "SharedPostgresDockerError",
+)<{
+  message: string;
+  kind: (typeof DOCKER_FAILURE_KIND)[keyof typeof DOCKER_FAILURE_KIND];
+}> {}
+
+const CONTAINER_PUBLICATION_ATTEMPTS = 60;
+const CONTAINER_PUBLICATION_RETRY_MS = 100;
 
 const CONTAINER = "stella-shared-test-postgres";
 const IMAGE = "stella-shared-test-postgres:18";
@@ -170,11 +185,13 @@ type DockerArguments =
 type DockerCommand = (
   args: DockerArguments,
   input?: string,
-) => Result<string, SharedTestPostgresError>;
+) => Result<string, SharedPostgresDockerError>;
 
 type EnsureContainerOptions = {
   docker: DockerCommand;
-  startContainer: (envFile: string) => Result<string, SharedTestPostgresError>;
+  startContainer: (
+    envFile: string,
+  ) => Result<string, SharedPostgresDockerError>;
   state: string;
   password: string;
   repo: string;
@@ -226,19 +243,35 @@ export const ensureContainer = async ({
       );
       const started = startContainer(envFile);
       if (started.isErr()) {
-        const winner = docker([
-          "ps",
-          "-a",
-          "--filter",
-          `name=^/${CONTAINER}$`,
-          "--format",
-          "{{.Names}}",
-        ]);
-        if (winner.isErr()) {
-          return winner;
-        }
-        if (!winner.value) {
-          return started;
+        switch (started.error.kind) {
+          case DOCKER_FAILURE_KIND.commandFailed:
+            return started;
+          case DOCKER_FAILURE_KIND.nameConflict:
+            // Docker reserves the name before it publishes the container in its list.
+            for (let attempt = 0; ; attempt++) {
+              const winner = docker([
+                "ps",
+                "-a",
+                "--filter",
+                `name=^/${CONTAINER}$`,
+                "--format",
+                "{{.Names}}",
+              ]);
+              if (winner.isErr()) {
+                return winner;
+              }
+              if (winner.value) {
+                break;
+              }
+              if (attempt === CONTAINER_PUBLICATION_ATTEMPTS - 1) {
+                return started;
+              }
+              await Bun.sleep(CONTAINER_PUBLICATION_RETRY_MS);
+            }
+            break;
+          default:
+            started.error.kind satisfies never;
+            panic("Unrecognized Docker startup failure");
         }
       }
     } finally {
@@ -327,19 +360,42 @@ export const withSharedTestPostgresConnection = async <T>(
   }
 };
 
-const readDockerResult = (
-  result: Bun.ReadableSyncSubprocess,
-  action: string,
-) => {
-  if (!result.success) {
-    // Docker output may contain credentials; keep the boundary error redacted.
-    return Result.err(
-      new SharedTestPostgresError({
-        message: `Shared Postgres Docker ${action} failed (exit ${result.exitCode}).`,
-      }),
-    );
+type ReadDockerResultOptions = {
+  result: Pick<
+    Bun.ReadableSyncSubprocess,
+    "success" | "exitCode" | "stdout" | "stderr"
+  >;
+  action: string;
+  secretValues: readonly string[];
+};
+
+export const readDockerResult = ({
+  result,
+  action,
+  secretValues,
+}: ReadDockerResultOptions) => {
+  if (result.success) {
+    return Result.ok(result.stdout.toString().trim());
   }
-  return Result.ok(result.stdout.toString().trim());
+  const stderr = result.stderr.toString();
+  const kind =
+    action === "run" &&
+    stderr.includes(`The container name "/${CONTAINER}" is already in use`)
+      ? DOCKER_FAILURE_KIND.nameConflict
+      : DOCKER_FAILURE_KIND.commandFailed;
+  let diagnostic = stderr;
+  // Mask the whole env payload before its contained password, including JSON output.
+  for (const secret of secretValues.toSorted(
+    (left, right) => right.length - left.length,
+  )) {
+    diagnostic = diagnostic.replaceAll(secret, "[redacted]");
+  }
+  return Result.err(
+    new SharedPostgresDockerError({
+      kind,
+      message: `Shared Postgres Docker ${action} failed (exit ${result.exitCode}): ${diagnostic.trim()}`,
+    }),
+  );
 };
 
 const initializeTemplateRegistry = async (session: ReservedSQL) => {
@@ -592,9 +648,14 @@ const run = async () => {
       stdout: "pipe",
       stderr: "pipe",
     });
-    return readDockerResult(result, args[0]);
+    return readDockerResult({
+      result,
+      action: args[0],
+      secretValues: [password],
+    });
   };
   const startContainer = (envFile: string) => {
+    const environment = readFileSync(envFile, "utf-8");
     const result = Bun.spawnSync(
       [
         "docker",
@@ -626,7 +687,11 @@ const run = async () => {
       ],
       { env: target.env, stdout: "pipe", stderr: "pipe" },
     );
-    return readDockerResult(result, "run");
+    return readDockerResult({
+      result,
+      action: "run",
+      secretValues: [environment, JSON.stringify(environment), password],
+    });
   };
   const container = await ensureContainer({
     docker,
