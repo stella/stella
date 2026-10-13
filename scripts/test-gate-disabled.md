@@ -16,6 +16,10 @@ The installed Docker CLI resolution test is skipped on Windows or when
 against Unix socket daemons, so those platform and tool-availability conditions
 are part of the test's existing scope.
 
+The Windows dry-run executable-boundary test is skipped on Windows because it
+creates and executes a shebang fixture. Its executable-boundary assertions run
+on the Unix CI runner; the platform condition is already present in the test.
+
 Dynamic registrations controlled by a managed service gate are exempt regardless
 of whether their title is statically known. Calls to runner utilities such as
 `test.info().outputPath(...)` are not registrations and have no inventory entry.
