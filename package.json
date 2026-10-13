@@ -100,7 +100,7 @@
     "check:knip-exports": "bun scripts/knip-exports-ratchet.ts --check",
     "check:toast-errors": "bun test scripts/toast-error-census.test.ts && bun scripts/toast-error-census.ts",
     "check:design-tokens": "bun scripts/design-tokens-doc.ts --check",
-    "check:module-ownership": "bun test scripts/ownership.test.ts scripts/schema-introspection.test.ts && bun scripts/ownership.ts --check && bun scripts/outbound-transport-ownership.ts --check && bun test scripts/outbound-transport-ownership.test.ts",
+    "check:module-ownership": "bun test scripts/ownership.test.ts scripts/schema-introspection.test.ts && bun scripts/ownership.ts --check && bun scripts/outbound-transport-ownership.ts --check && bun test scripts/outbound-transport-ownership.test.ts scripts/document-identity-guard.test.ts && bun scripts/document-identity-guard.ts",
     "check:standalone-lockfiles": "bun scripts/check-standalone-lockfiles.ts",
     "check:standalone-negated-shell": "bun scripts/check-standalone-negated-shell.ts",
     "check:published-package-lists": "bun scripts/check-published-package-lists.ts --check",
