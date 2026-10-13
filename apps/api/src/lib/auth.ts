@@ -79,6 +79,7 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+import { validateUserLocale } from "@/api/lib/auth-user-locale";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
 import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
@@ -1822,6 +1823,7 @@ export const createAuth = (
                 path: ctx?.path,
               });
               yield* validateTimezoneId(user["timezoneId"]);
+              yield* validateUserLocale(user["locale"]);
               // Email-OTP and some social providers leave `name` blank.
               // The `notNull` schema constraint allows empty strings, which
               // surfaces as a blank "Author" everywhere the user is shown.
@@ -1855,9 +1857,9 @@ export const createAuth = (
         },
         update: {
           before: async (user) => {
-            const data = validateTimezoneId(user["timezoneId"]).andThen(() =>
-              normalizeUserPreferences(ensureDisplayName(user)),
-            );
+            const data = validateTimezoneId(user["timezoneId"])
+              .andThen(() => validateUserLocale(user["locale"]))
+              .andThen(() => normalizeUserPreferences(ensureDisplayName(user)));
             if (Result.isError(data)) {
               throw data.error;
             }

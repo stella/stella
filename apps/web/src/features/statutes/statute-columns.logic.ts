@@ -1,10 +1,11 @@
 import * as v from "valibot";
 
 import type { LegislationListValidity } from "@stll/api-contract/legislation-status";
+import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 
 import {
   NO_COLUMN_SIZING,
-  PUBLIC_LAW_STORED_LAYOUT_ENTRIES,
+  publicLawStoredLayoutEntries,
   publicLawTableLayout,
   publicLawTableLayouts,
 } from "@/components/public-law-table/public-law-table-layout.logic";
@@ -85,9 +86,16 @@ export const DEFAULT_STATUTE_TABLE_LAYOUT: StatuteTableLayout = {
 };
 
 /** What storage holds, per jurisdiction. */
-export const StoredStatuteLayoutSchema = v.record(
-  v.string(),
-  v.object(PUBLIC_LAW_STORED_LAYOUT_ENTRIES),
+export const StoredStatuteLayoutSchema = v.pipe(
+  v.unknown(),
+  v.check(
+    (value) =>
+      typeof value === "object" && value !== null && !Array.isArray(value),
+  ),
+  v.record(
+    v.picklist(PUBLIC_COUNTRIES),
+    v.strictObject(publicLawStoredLayoutEntries(STATUTE_COLUMN_IDS)),
+  ),
 );
 
 /** Every stored arrangement, read once; see `publicLawTableLayouts`. */

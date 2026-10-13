@@ -181,7 +181,10 @@ const RESTRICTED_IMPORT_RULES = {
         ]),
         hit: EXPORT_HIT.binding,
       },
-      owners: [],
+      owners: [
+        "apps/web/src/lib/ssr-api-headers.ts",
+        "apps/web/src/lib/presentation-prefs-server.ts",
+      ],
     },
   ],
   // `<MatterIcon>` always resolves a matter colour (or paints the deliberate

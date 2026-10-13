@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+import { UI_LOCALES } from "@stll/locales";
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import {
@@ -20,6 +21,11 @@ import {
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
 
+const USER_LOCALES = [
+  "en",
+  ...UI_LOCALES.filter((locale) => locale !== "en"),
+] as const;
+
 export const user = pgTable(
   "user",
   {
@@ -28,6 +34,8 @@ export const user = pgTable(
     email: text("email").notNull().unique(),
     emailVerified: boolean("email_verified").default(false).notNull(),
     image: text("image"),
+    // The user's selected UI locale, shared across devices.
+    locale: text("locale", { enum: USER_LOCALES }).default("en").notNull(),
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
     wordEditShortcut: text("word_edit_shortcut"),
@@ -54,6 +62,13 @@ export const user = pgTable(
       .notNull(),
   },
   (table) => [
+    check(
+      "user_locale_supported_check",
+      sql`${table.locale} IN (${sql.join(
+        UI_LOCALES.map((locale) => sql`${locale}`),
+        sql`, `,
+      )})`,
+    ),
     // Keyset pagination over registrations (operator observability)
     // orders by (created_at, id); without this the read is a table scan.
     index("user_createdAt_idx").on(table.createdAt, table.id),
@@ -78,6 +93,7 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   email: "email",
   emailVerified: "email_verified",
   image: "image",
+  locale: "locale",
   timezoneId: "timezone_id",
   preferredName: "preferred_name",
   wordEditShortcut: "word_edit_shortcut",

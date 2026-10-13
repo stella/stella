@@ -4,6 +4,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { getFormattingLocale, getMessageLocale } from "@/i18n/i18n-store";
 import { getSimulateSlowLoadDelayMs } from "@/lib/dev-store";
+import { ssrApiHeaders } from "@/lib/ssr-api-headers";
 
 const FORMATTING_LOCALE_HEADER = "x-stella-formatting-locale";
 
@@ -17,7 +18,11 @@ export const waitForSimulatedApiDelay = async (): Promise<void> => {
 
 export const getApiRequestHeaders = (): Record<string, string> => {
   if (typeof window === "undefined") {
-    return {};
+    return {
+      ...ssrApiHeaders(),
+      "Accept-Language": getMessageLocale(),
+      [FORMATTING_LOCALE_HEADER]: getFormattingLocale(),
+    };
   }
 
   const result: Record<string, string> = {

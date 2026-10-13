@@ -1,0 +1,183 @@
+import type { Page } from "@playwright/test";
+
+import {
+  parsePresentationPrefs,
+  PRESENTATION_PREFS_COOKIE,
+} from "../../src/lib/presentation-prefs";
+import { E2E_API_ORIGIN } from "../helpers/api";
+import { createProfileTestSession } from "../helpers/profile-session";
+import { expect, test } from "../helpers/test";
+
+const sessionLocale = async (page: Page) => {
+  const response = await page.request.get(
+    `${E2E_API_ORIGIN}/api/auth/get-session`,
+  );
+  expect(response.ok()).toBe(true);
+  const session = await response.json();
+  return session?.user?.locale ?? null;
+};
+
+const selectProfileLanguage = async (
+  page: Page,
+  { label, locale }: { label: "Čeština" | "العربية"; locale: "cs" | "ar" },
+) => {
+  await page.locator("#language-select").click();
+  await page.getByRole("option", { name: label, exact: true }).click();
+  await expect.poll(async () => await sessionLocale(page)).toBe(locale);
+};
+
+const presentationPrefs = async (page: Page) => {
+  const cookie = (await page.context().cookies(page.url())).find(
+    (entry) => entry.name === PRESENTATION_PREFS_COOKIE,
+  );
+  return cookie === undefined
+    ? null
+    : parsePresentationPrefs(decodeURIComponent(cookie.value));
+};
+
+test("profile language and collapsed sidebar render in the first HTML response", async ({
+  baseURL,
+  browser,
+  page,
+}) => {
+  const profileSession = await createProfileTestSession({
+    page,
+    label: "first-paint-prefs",
+    webUrl: baseURL ?? "http://localhost:3000",
+  });
+  const route = "/law/cases?country=cze";
+  const webBaseURL = baseURL ?? "http://localhost:3000";
+
+  try {
+    await page.goto("/settings/account/profile", {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page.locator("#language-select")).toBeVisible();
+    await selectProfileLanguage(page, { label: "Čeština", locale: "cs" });
+
+    const sidebar = page.locator('[data-slot="sidebar"]');
+    await expect(sidebar).toBeVisible();
+    if ((await sidebar.getAttribute("data-state")) !== "collapsed") {
+      await page
+        .locator('[data-slot="sidebar-header"]')
+        .getByRole("button")
+        .click();
+    }
+    await expect(sidebar).toHaveAttribute("data-state", "collapsed");
+    await expect
+      .poll(async () => await presentationPrefs(page))
+      .toMatchObject({ sidebarOpen: false });
+
+    const rawResponse = await page.request.get(new URL(route, webBaseURL).href);
+    expect(rawResponse.ok()).toBe(true);
+    const html = await rawResponse.text();
+    expect(html).toMatch(/<html[^>]*\blang="cs"/u);
+    expect(html).toMatch(/<span[^>]*>Právní databáze<\/span>/u);
+    expect(html).toMatch(
+      /(?=[^>]*data-slot="sidebar")(?=[^>]*data-state="collapsed")[^>]*/u,
+    );
+
+    const storageState = await page.context().storageState();
+    const serverContext = await browser.newContext({
+      baseURL: webBaseURL,
+      javaScriptEnabled: false,
+      storageState,
+      viewport: { width: 1280, height: 900 },
+    });
+
+    try {
+      const serverPage = await serverContext.newPage();
+      const response = await serverPage.goto(route, {
+        waitUntil: "domcontentloaded",
+      });
+      if (!response) {
+        throw new Error(
+          "The no-JavaScript page navigation returned no response",
+        );
+      }
+
+      await expect(
+        serverPage
+          .locator('[data-slot="sidebar"]')
+          .getByText("Právní databáze", { exact: true }),
+      ).toHaveCount(1);
+      const serverWidth = await serverPage
+        .locator('[data-slot="sidebar-gap"]')
+        .evaluate((element) => element.getBoundingClientRect().width);
+      expect(serverWidth).toBeGreaterThan(0);
+      expect(serverWidth).toBeLessThan(100);
+
+      await page.addInitScript(() => {
+        const recordSidebarWidth = () => {
+          const sidebarGap = document.querySelector(
+            '[data-slot="sidebar-gap"]',
+          );
+          if (sidebarGap) {
+            performance.mark("sidebar-first-paint-width", {
+              detail: sidebarGap.getBoundingClientRect().width,
+            });
+            return;
+          }
+          requestAnimationFrame(recordSidebarWidth);
+        };
+        requestAnimationFrame(recordSidebarWidth);
+      });
+      await page.setViewportSize({ width: 1280, height: 900 });
+      await page.goto(route, { waitUntil: "domcontentloaded" });
+      await page.reload({ waitUntil: "domcontentloaded" });
+      await expect(page.locator("html")).toHaveAttribute("lang", "cs");
+      await expect(page.locator('[data-slot="sidebar"]')).toHaveAttribute(
+        "data-state",
+        "collapsed",
+      );
+      // Exercise a hydrated handler so server attributes alone cannot satisfy
+      // the final geometry assertion.
+      await page
+        .locator('[data-slot="sidebar-header"]')
+        .getByRole("button")
+        .click();
+      await expect(page.locator('[data-slot="sidebar"]')).toHaveAttribute(
+        "data-state",
+        "expanded",
+      );
+      await page
+        .locator('[data-slot="sidebar-header"]')
+        .getByRole("button")
+        .click();
+      await expect(page.locator('[data-slot="sidebar"]')).toHaveAttribute(
+        "data-state",
+        "collapsed",
+      );
+      const firstPaintWidth = await page.evaluate(() =>
+        performance
+          .getEntriesByName("sidebar-first-paint-width")
+          .map((entry) =>
+            entry instanceof PerformanceMark ? entry.detail : null,
+          )
+          .at(0),
+      );
+      expect(firstPaintWidth).toBe(serverWidth);
+      const hydratedWidth = await page
+        .locator('[data-slot="sidebar-gap"]')
+        .evaluate((element) => element.getBoundingClientRect().width);
+      expect(hydratedWidth).toBe(serverWidth);
+
+      await page.goto("/settings/account/profile", {
+        waitUntil: "domcontentloaded",
+      });
+      await selectProfileLanguage(page, { label: "العربية", locale: "ar" });
+      const rtlResponse = await page.request.get(
+        new URL(route, webBaseURL).href,
+      );
+      expect(rtlResponse.ok()).toBe(true);
+      const rtlHtml = await rtlResponse.text();
+      expect(rtlHtml).toMatch(
+        /<html(?=[^>]*\blang="ar")(?=[^>]*\bdir="rtl")[^>]*>/u,
+      );
+    } finally {
+      await serverContext.close();
+    }
+  } finally {
+    await profileSession.cleanup();
+  }
+});

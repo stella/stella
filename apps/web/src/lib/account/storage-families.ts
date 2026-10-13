@@ -4,7 +4,6 @@ import { mergeLegacyLawHistory } from "@/lib/account/law-history-legacy-merge";
 import {
   DOCX_OUTLINE_DEPTH_STORAGE_KEY,
   LAW_HISTORY_STORAGE_KEY,
-  READER_PROVISION_MODE_STORAGE_KEY,
 } from "@/lib/account/storage-keys";
 
 export type StorageArea = "local" | "session";
@@ -131,13 +130,6 @@ const mergeStringLists = (raw: string, existing: string | null) => {
  * its owner leaves and why.
  */
 export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
-  // A reading preference in the legal reader.
-  {
-    area: "local",
-    prefix: READER_PROVISION_MODE_STORAGE_KEY,
-    owner: "scoped",
-    retention: "kept-for-owner",
-  },
   // The user's preferred heading depth in DOCX outlines.
   {
     area: "local",
@@ -286,17 +278,12 @@ export const USER_STORAGE_FAMILIES: readonly UserStorageFamily[] = [
 ];
 
 export const DEVICE_STORAGE_FAMILIES = [
-  { area: "local", prefix: "stella-ui-theme" },
-  { area: "local", prefix: "stella-ui-palette" },
-  { area: "local", prefix: "sidebar_state" },
   { area: "local", prefix: "document_translation_last_target" },
   { area: "local", prefix: "folio:debug-scroll" },
   { area: "local", prefix: "stella:selfhost-update-dismissed:" },
-  { area: "local", prefix: "stella.templates.density" },
   { area: "local", prefix: "stella-dev" },
   { area: "local", prefix: "stella.session-signal" },
   { area: "local", prefix: "stella:chat-turn-notifications" },
-  { area: "local", prefix: "stella:inspector-pane-width:" },
   { area: "session", prefix: "stella:preload-reload-at" },
   { area: "session", prefix: "stella.devQuickStart.attempt" },
   { area: "session", prefix: "stella.storage-owner" },

@@ -28,3 +28,33 @@ test("allows approved server helpers and unrelated local accessors", async () =>
     ),
   ).toEqual([]);
 });
+
+test("request-boundary owners can read cookies while route modules cannot", async () => {
+  const source =
+    'import { getCookie } from "@tanstack/react-start/server";\ngetCookie("presentation");';
+  expect(
+    await lintSingleRule("confine-server-reads", source, {
+      sourcePath: "apps/web/src/lib/presentation-prefs-server.ts",
+    }),
+  ).toEqual([]);
+  expect(
+    await lintSingleRule("confine-server-reads", source, {
+      sourcePath: "apps/web/src/routes/__root.tsx",
+    }),
+  ).toEqual([1]);
+});
+
+test("the API forwarding boundary can read headers without exposing access to consumers", async () => {
+  const source =
+    'import { getRequestHeader } from "@tanstack/react-start/server";\ngetRequestHeader("cookie");';
+  expect(
+    await lintSingleRule("confine-server-reads", source, {
+      sourcePath: "apps/web/src/lib/ssr-api-headers.ts",
+    }),
+  ).toEqual([]);
+  expect(
+    await lintSingleRule("confine-server-reads", source, {
+      sourcePath: "apps/web/src/lib/api-request-context.ts",
+    }),
+  ).toEqual([1]);
+});

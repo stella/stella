@@ -12,6 +12,8 @@ import {
   type ErrorComponentProps,
 } from "@tanstack/react-router";
 
+import { cn } from "@stll/ui/utils";
+
 import { AppProviders } from "@/app-providers";
 import { ApiVersionMismatchProvider } from "@/components/api-version-mismatch-refresh";
 import {
@@ -19,13 +21,14 @@ import {
   DefaultPendingComponent,
 } from "@/components/route-components";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { loadDocumentPresentation } from "@/i18n/document-presentation";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
+import "@/fonts.css";
 import {
   applyDocumentLanguage,
   pageDocumentLanguage,
   resolveDocumentLanguage,
 } from "@/i18n/page-language";
-import "@/fonts.css";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
@@ -34,8 +37,9 @@ import {
   isPublicKnowledgeCrawlAllowed,
 } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
+import type { PresentationPrefs } from "@/lib/presentation-prefs";
+import { PresentationPrefsProvider } from "@/lib/presentation-prefs-provider";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
-import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
 import { documentResponsePolicyHeaders } from "@/route-response-policy";
@@ -51,11 +55,15 @@ const DevRoot = isDev
 export const Route = createRootRouteWithContext<{
   analyticsValue: AnalyticsValue;
   queryClient: QueryClient;
+  presentationPrefs: PresentationPrefs;
   routeErrorLifecycle: RouteErrorLifecycleController;
 }>()({
-  ssr: ({ location: routeLocation }) => isPublicSsrPath(routeLocation.pathname),
+  ssr: true,
   beforeLoad: async ({ context, location }) => {
     await requireFreshDocument({ queryClient: context.queryClient, location });
+    return {
+      presentationPrefs: await loadDocumentPresentation(context.queryClient),
+    };
   },
   shellComponent: RootDocument,
   component: RootComponent,
@@ -116,6 +124,9 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   const routeErrorLifecycle = Route.useRouteContext({
     select: (context) => context.routeErrorLifecycle,
   });
+  const prefs = Route.useRouteContext({
+    select: (context) => context.presentationPrefs,
+  });
   const interfaceLocale = useI18nStore((s) => s.loadedLang);
   const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
   const documentLanguage = useRouterState({
@@ -127,10 +138,7 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   });
   const dir = getLangDir(interfaceLocale);
 
-  // Hydration keeps the attributes the server (or prepaint-init.js) put on
-  // the element, so later locale loads and navigations are written here.
-  // Until the first locale has loaded, the server markup and the prepaint
-  // guess stand.
+  // Synchronize later language changes and navigations with the document.
   useExternalSyncEffect(() => {
     if (!hasLoadedOnce) {
       return;
@@ -139,14 +147,13 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   }, [dir, hasLoadedOnce, lang]);
 
   return (
-    // prepaint-init.js mutates the html element's class, and for RTL
-    // locales its lang/dir, before React hydrates the document, so the
-    // attribute set never matches the server markup; suppress the
-    // per-element warning rather than letting every SSR page log a
-    // recovered hydration error. The server renders the document's own
-    // language on pages that show one, and the interface locale otherwise;
-    // data-lang-source tells prepaint-init.js to keep a document language.
+    // The system colour scheme alone depends on browser media queries.
     <html
+      className={cn(
+        prefs.theme === "dark" && "dark",
+        prefs.palette !== "neutral" && `palette-${prefs.palette}`,
+      )}
+      data-theme={prefs.theme}
       lang={lang}
       dir={dir}
       data-lang-source={langSource}
@@ -159,7 +166,9 @@ function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
       </head>
       <body>
         <RouteErrorLifecycleProvider controller={routeErrorLifecycle}>
-          {children}
+          <PresentationPrefsProvider initialPrefs={prefs}>
+            {children}
+          </PresentationPrefsProvider>
         </RouteErrorLifecycleProvider>
         <Scripts />
       </body>

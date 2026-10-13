@@ -8,6 +8,7 @@ import {
 } from "@stll/api-contract/professional-use";
 
 import { setFixedBrowserTime } from "../helpers/clock";
+import { setPresentationPrefs } from "../helpers/presentation-prefs";
 import {
   getMarketingAgentThreadId,
   MARKETING_AGENT_FIRST_QUESTION,
@@ -34,11 +35,6 @@ const ANONYMIZED_EXTRACT_FIELD_ID = "e98a6746-dae9-5509-888b-d58bfbca9a33";
 // starts with no active organization, so we set it server-side (below) instead
 // of driving the org-picker UI, which the workspace routes below depend on.
 const MARKETING_ORGANIZATION_ID = "test-org-stella-dev";
-// Duplicated from apps/web/src/consts.ts, exactly as
-// apps/web/public/prepaint-init.js duplicates it: the e2e project has no
-// `@/` path alias. Writing any other key silently leaves the app on its
-// system colour-scheme preference.
-const THEME_STORAGE_KEY = "stella-ui-theme";
 const INSPECTOR_STORAGE_PREFIXES = [
   "stella:inspector-minimized:v1:",
   "stella:inspector-state:v1:",
@@ -199,16 +195,11 @@ test("capture landing product screenshots", async ({
 
   for (const theme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: theme });
-    // Pin the stored theme as well as the media preference. localStorage is
-    // origin-scoped, so this survives the navigations below; both inputs must
-    // agree because prepaint-init.js reads the stored value first and only
-    // falls back to the media query.
-    await page.evaluate(
-      ([storageKey, nextTheme]) => {
-        localStorage.setItem(storageKey, nextTheme);
-      },
-      [THEME_STORAGE_KEY, theme] as const,
-    );
+    await setPresentationPrefs({
+      context: page.context(),
+      url: MARKETING_URLS.webUrl,
+      patch: { theme },
+    });
 
     for (const capture of captures) {
       if (requestedCapture && capture.name !== requestedCapture) {

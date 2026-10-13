@@ -980,10 +980,6 @@
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
-    "id": "apps/web/src/components/inspector/pane-width-storage.ts::INSPECTOR_PANE_SURFACES::domain:[\"matter\",\"public-law\"]::1",
-    "reason": "Existing INSPECTOR_PANE_SURFACES domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/inspector/playbook-facet.tsx::CounterpartyNotePopover::maxLength:2000::1",
     "reason": "Existing CounterpartyNotePopover UI validation or presentation bound; contract migration pending."
   },
@@ -1124,14 +1120,6 @@
     "reason": "Existing INPUT_TYPES domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/components/theme-provider.tsx::PALETTES::domain:[\"nord\",\"neutral\",\"flexoki\"]::1",
-    "reason": "Existing PALETTES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/components/theme-provider.tsx::THEMES::domain:[\"light\",\"dark\",\"system\"]::1",
-    "reason": "Existing THEMES domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/workspaces/cell-metadata-flags.tsx::TINT_PRIORITY::domain:[\"verified\",\"contradiction\",\"follow-up\",\"needs-review\",\"important\"]::1",
     "reason": "Existing TINT_PRIORITY domain; contract ownership pending migration."
   },
@@ -1266,18 +1254,6 @@
   {
     "id": "apps/web/src/features/case-law/components/case-viewer/leading-citations.tsx::LeadingCitations::domain:[\"incoming\",\"outgoing\"]::1",
     "reason": "Existing LeadingCitations domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DECISION_COLUMN_IDS::domain:[\"caseNumber\",\"summary\",\"court\",\"country\",\"date\",\"type\",\"headnote\",\"citedBy\",\"language\"]::1",
-    "reason": "Existing DECISION_COLUMN_IDS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DECISION_IDENTITY_LINE_FIELDS::domain:[\"court\",\"date\",\"type\"]::1",
-    "reason": "Existing DECISION_IDENTITY_LINE_FIELDS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/case-law/decision-columns.logic.ts::DEFAULT_HIDDEN_DECISION_COLUMN_IDS::domain:[\"country\",\"headnote\",\"language\"]::1",
-    "reason": "Existing DEFAULT_HIDDEN_DECISION_COLUMN_IDS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/features/case-law/decision-find.logic.test.ts::<module>::domain:[\"caseNumber\",\"court\",\"headnote\",\"summary\"]::1",
@@ -1686,10 +1662,6 @@
   {
     "id": "apps/web/src/routes/-app-frame.logic.test.ts::<module>::domain:[\"checking\",\"unresolved\",\"none\"]::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
-    "id": "apps/web/src/routes/-protected-pending-skeleton.tsx::NAV_LABEL_WIDTHS::domain:[\"w-14\",\"w-10\",\"w-16\",\"w-20\",\"w-16\"]::1",
-    "reason": "Existing NAV_LABEL_WIDTHS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/routes/-protected-pending-skeleton.tsx::PINNED_ROW_KEYS::domain:[\"a\",\"b\",\"c\"]::1",

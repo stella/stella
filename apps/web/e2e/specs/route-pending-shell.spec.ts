@@ -1,7 +1,9 @@
 import type { Page } from "@playwright/test";
-import "@tanstack/react-router";
 
 import { appShellNavigationLink } from "../helpers/app-shell";
+import "@tanstack/react-router";
+
+import { setPresentationPrefs } from "../helpers/presentation-prefs";
 import { expect, test } from "../helpers/test";
 
 const cases = [
@@ -93,9 +95,15 @@ const expectSingleShell = async (page: Page) => {
 for (const { path, listPath } of cases) {
   test(`${path} keeps one app shell throughout delayed parent and page loaders`, async ({
     page,
+    baseURL,
   }) => {
-    await page.addInitScript(() => {
-      localStorage.setItem("sidebar_state", "expanded");
+    if (baseURL === undefined) {
+      throw new Error("Pending shell requires a base URL");
+    }
+    await setPresentationPrefs({
+      context: page.context(),
+      url: baseURL,
+      patch: { sidebarOpen: true },
     });
     await page.goto("/knowledge", { waitUntil: "commit" });
     await expect(appShellNavigationLink(page, path)).toBeVisible({
