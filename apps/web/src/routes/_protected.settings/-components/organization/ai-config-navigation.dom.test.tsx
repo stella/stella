@@ -467,6 +467,8 @@ test("instruction refetches preserve drafts and compare edits with the latest sa
         userId: "user",
       }),
     );
+    // Refetch resolves before the query observer's scheduled React notification.
+    await sleep(0);
   });
   expect(context.text).toBe(draft);
   replace(original);
@@ -1278,8 +1280,10 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   }
   expect(writes()).toEqual([]);
   expect(
-    screen.queryByRole("button", { name: messages.common.save }),
-  ).toBeNull();
+    screen
+      .getAllByRole("button", { name: messages.common.save })
+      .map((button) => button.hasAttribute("disabled")),
+  ).toEqual([true]);
   expect(
     screen.getAllByRole("button", { name: messages.common.saveChanges }),
   ).toHaveLength(1);
