@@ -18,7 +18,7 @@ import {
   toPersistedChatMessageContentV3,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMention } from "@/api/handlers/chat/types";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
