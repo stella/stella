@@ -49,6 +49,10 @@ const { createCaseLawDecisionPath, createCaseLawDecisionRouteParams } =
 const { SourceChips } = await import("./source-chips");
 const { StreamdownMentionLink } = await import("./streamdown-mention-link");
 const { LegalCitationLink } = await import("./legal-citation-link");
+const { DecisionMainViewAction } =
+  await import("@/features/case-law/components/decision-main-view-action");
+const { registerMainDecisionReader, mainDecisionReaderStore } =
+  await import("@/components/inspector/main-decision-reader");
 const { openCaseLawDecision } = await import("./case-law-open");
 const { messageComponents } =
   await import("@/components/ai-elements/message-response-components");
@@ -71,6 +75,7 @@ afterEach(async () => {
     clients.length = 0;
     useExternalSourceStore.setState({ sourcesByUrl: {} });
     useInspectorTabsStore.setState({ tabs: [], activeId: null });
+    mainDecisionReaderStore.setState({ reader: null });
     globalThis.fetch = idleFetch;
   });
 });
@@ -787,3 +792,62 @@ for (const explicitAnchorId of [undefined, "p-30"]) {
     });
   });
 }
+
+test("maximizing a different decision docks the displaced main reader before navigation", async () => {
+  const side = createCaseDecisionViewTab({
+    decisionId: "019dd47d-f507-7c84-b827-980af11b8981",
+    caseNumber: "SYN 2/2026",
+    country: "CZE",
+    court: "Synthetic Court",
+    language: null,
+    languageAlternates: null,
+    slug: "other-decision",
+  });
+  const store = useInspectorTabsStore.getState();
+  store.openView(side);
+  const openedPassages: string[] = [];
+  registerMainDecisionReader({
+    decisionId: fullDecision.id,
+    openPassage: ({ decisionId }) => {
+      openedPassages.push(decisionId);
+    },
+  });
+  const root = router.createRootRoute({ component: router.Outlet });
+  const decisionRoute = router.createRoute({
+    getParentRoute: () => root,
+    path: "/law/$country/cases/$court/$slug",
+    loader: () => fullDecision,
+    component: () => (
+      <DecisionMainViewAction
+        payload={side.payload}
+        onMoveToMain={() => store.closeTab(side.id)}
+      />
+    ),
+  });
+  const appRouter = router.createRouter({
+    history: router.createMemoryHistory({
+      initialEntries: ["/law/cze/cases/synthetic-court/main-decision"],
+    }),
+    routeTree: root.addChildren([decisionRoute]),
+    isServer: false,
+  });
+  await appRouter.load();
+  render(
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <FormattingProvider locale="en" timeZone="UTC">
+        <router.RouterProvider router={appRouter} />
+      </FormattingProvider>
+    </IntlProvider>,
+  );
+  fireEvent.click(
+    screen.getByRole("link", { name: messages.inspector.swapViews }),
+  );
+  await waitFor(() =>
+    expect(appRouter.state.location.pathname).toEndWith("/other-decision"),
+  );
+  expect(openedPassages).toEqual([]);
+  expect(useInspectorTabsStore.getState().tabs).toHaveLength(1);
+  expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
+    payload: { decisionId: fullDecision.id },
+  });
+});

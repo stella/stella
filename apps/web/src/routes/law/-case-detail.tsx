@@ -159,8 +159,7 @@ export function PublicDecisionViewer({
   const openMainPassage = useLatestCallback(
     ({ anchorId, searchQuery }: CaseDecisionViewPayload) => {
       if (searchQuery !== undefined) {
-        find.setFindQuery(searchQuery);
-        find.openFind();
+        find.openFindAtQuery(searchQuery);
       }
       if (anchorId === undefined) {
         return;

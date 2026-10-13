@@ -10,7 +10,10 @@ import type { SafeId } from "@stll/api-contract/safe-id";
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { decisionParagraphRangePayloads } from "../helpers/decision-paragraph-range-payloads";
 import { installDockedChatHistory } from "../helpers/docked-chat-fixtures";
-import { dockedChatMessagePage } from "../helpers/docked-chat-history";
+import {
+  dockedChatFileThreadPage,
+  dockedChatMessagePage,
+} from "../helpers/docked-chat-history";
 import { installDockedLegalFixtures } from "../helpers/docked-chat-legal-fixtures";
 import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
 import { expect, test } from "../helpers/test";
@@ -85,11 +88,16 @@ test.describe("reader chat decision citations", () => {
         anchorId: "p-28",
         courtParagraphNumber: 48,
       });
-    await page.route("**/v1/chat/decision-threads/*", async (route) => {
-      await route.fulfill({
-        json: { threadId: "019a0000-0000-7000-8000-000000000001" },
-      });
-    });
+    await page.route(
+      (url) =>
+        url.origin === E2E_API_ORIGIN &&
+        url.pathname === `/v1/chat/decision-threads/${decision.id}`,
+      async (route) => {
+        await route.fulfill({
+          json: { threadId: dockedChatFileThreadPage.threadId },
+        });
+      },
+    );
     await page.route("**/v1/chat/threads/*/messages*", async (route) => {
       await route.fulfill({
         json: {
@@ -103,7 +111,7 @@ test.describe("reader chat decision citations", () => {
               },
             ],
           })),
-        },
+        } satisfies typeof dockedChatMessagePage,
       });
     });
     await page.route(
@@ -116,14 +124,36 @@ test.describe("reader chat decision citations", () => {
       },
     );
     await openDecision(page, canonicalPath);
+    const panel = page.locator('[data-slot="inspector"]');
+    const chips = panel.locator('[data-slot="inspector-rail-tab"]');
+    await expect(
+      page
+        .locator(`[data-decision-citation="${decision.id}"]`)
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
+    // The reader suppresses its floating card while this conversation is
+    // visible in the inspector; this scenario starts with the pane closed.
+    const hidePane = panel.getByRole("button", {
+      name: "Hide pane",
+      exact: true,
+    });
+    if (await hidePane.isVisible()) {
+      await hidePane.click();
+    }
+    await expect(
+      panel.getByRole("button", { name: "Show pane", exact: true }),
+    ).toBeVisible();
     const chat = page
       .locator('[data-slot="docked-chat-thread"]:visible')
       .first();
+    await expect(chat).toContainText("Same decision passage");
     await expect(
-      chat.getByText("Same decision passage", { exact: true }),
+      chat.locator(`[data-decision-citation="${decision.id}"]`),
     ).toBeVisible();
-    const panel = page.locator('[data-slot="inspector"]');
-    const chips = panel.locator('[data-slot="inspector-rail-tab"]');
+    await expect(
+      chat.locator(`[data-decision-citation="${otherDecision.id}"]`),
+    ).toBeVisible();
     const chipCount = await chips.count();
     const mainReader = page.locator(".reader-scroll").first();
     const paragraph = mainReader.locator('[data-anchor="p-28"]');
