@@ -15,6 +15,8 @@ on:
         options:
           - typecheck-repo
           - typecheck-package
+          - typecheck-parity
+          - typecheck-probe
           - lint
           - test-files
           - verify-affected
@@ -111,6 +113,8 @@ jobs:
           case "$CHECK_CHECK" in
             typecheck-repo) bun run typecheck --concurrency=1 && bun run typecheck:repo ;;
             typecheck-package) bun --filter "$CHECK_TARGET" typecheck ;;
+            typecheck-parity) bun run check:typecheck-parity ;;
+            typecheck-probe) bash scripts/typecheck-command-probe.sh ;;
             lint) bun run lint ;;
             test-files) bun scripts/run-manual-test-files.ts ;;
             verify-affected) bun run verify ;;
