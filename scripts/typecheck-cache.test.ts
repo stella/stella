@@ -243,7 +243,7 @@ test("native discovery binds multi-project commands and single-workspace lock po
   }
 });
 
-test("CI writes remote task caches only from main", () => {
+test("CI writes task caches only from trusted events", () => {
   const workflow = v.parse(
     v.object({ env: v.object({ TURBO_CACHE: v.string() }) }),
     Bun.YAML.parse(
@@ -251,7 +251,7 @@ test("CI writes remote task caches only from main", () => {
     ),
   );
   expect(workflow.env.TURBO_CACHE).toBe(
-    `\${{ github.ref == 'refs/heads/main' && 'local:rw,remote:rw' || 'local:rw,remote:r' }}`,
+    `\${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'merge_group') && 'local:rw,remote:rw' || 'local:r,remote:r' }}`,
   );
 });
 

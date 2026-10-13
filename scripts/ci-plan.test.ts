@@ -3917,13 +3917,13 @@ test("split service suites preserve their scopes and independent verdicts", () =
   }
 });
 
-test("Bun cache saves are main-only and queue Turbo caches remain readable", () => {
+test("Bun cache saves are main-only and trusted Turbo results remain readable", () => {
   const configured = v.parse(
     v.object({ env: v.record(v.string(), v.string()) }),
     Bun.YAML.parse(workflow),
   );
   expect(configured.env["TURBO_CACHE"]).toBe(
-    `\${{ github.ref == 'refs/heads/main' && 'local:rw,remote:rw' || 'local:rw,remote:r' }}`,
+    `\${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'merge_group') && 'local:rw,remote:rw' || 'local:r,remote:r' }}`,
   );
   const cacheSteps = Object.values(ciJobs)
     .flatMap(
