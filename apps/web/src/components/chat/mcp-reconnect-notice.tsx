@@ -62,7 +62,14 @@ export const McpReconnectNotice = ({ editor }: { editor: Editor | null }) => {
   useQueryViewError(connectorsView);
   const text = useEditorState({
     editor,
-    selector: ({ editor: current }) => current?.getText() ?? "",
+    selector: ({ editor: current }) => {
+      // Tiptap clears its schema on destroy; an unmounted editor can also
+      // retain its document while no longer being usable by this composer.
+      if (!current || current.isDestroyed) {
+        return "";
+      }
+      return current.getText();
+    },
   });
   const [debouncedText] = useDebounce(text ?? "", COMPOSER_MATCH_DELAY_MS);
   const connectors =

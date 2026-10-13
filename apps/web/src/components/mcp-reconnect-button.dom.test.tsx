@@ -29,14 +29,19 @@ const router = await import("@tanstack/react-router");
 const { IntlProvider } = await import("use-intl");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
-const { mcpConnectionsOptions } = await import("@/lib/knowledge/queries");
+const { mcpConnectionsOptions, mcpConnectorsOptions } =
+  await import("@/lib/knowledge/queries");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { default: arabicMessages } = await import("@/i18n/langs/ar.json");
 const { McpReconnectButton } = await import("./mcp-reconnect-button");
-const { McpReconnectNoticeContent } =
+const { McpReconnectNotice, McpReconnectNoticeContent } =
   await import("./chat/mcp-reconnect-notice");
 const { assignUserStorage, releaseUserStorage } =
   await import("@/lib/account/user-scoped-storage");
+const { Editor } = await import("@tiptap/core");
+const { default: Document } = await import("@tiptap/extension-document");
+const { default: Paragraph } = await import("@tiptap/extension-paragraph");
+const { default: Text } = await import("@tiptap/extension-text");
 const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(() => {
@@ -107,6 +112,116 @@ const noticeTree = (
     </QueryClientProvider>
   );
 };
+
+test("composer notice reads only mounted editors across their lifecycle", async () => {
+  const client = new QueryClient({
+    defaultOptions: { queries: { staleTime: Infinity } },
+  });
+  clients.push(client);
+  const connectorId = toSafeId<"mcpConnector">(
+    "00000000-0000-4000-8000-000000000002",
+  );
+  client.setQueryData(mcpConnectionsOptions("org-1", "user-1").queryKey, {
+    connections: [
+      {
+        id: brokenConnection.id,
+        connectorId,
+        connectorSlug: brokenConnection.slug,
+        responseDisposition: "normal",
+        status: "needs_approval",
+        enabled: true,
+        scope: null,
+        expiresAt: null,
+        lastUsedAt: null,
+        createdAt: "2026-01-01T00:00:00Z",
+        updatedAt: "2026-01-01T00:00:00Z",
+      },
+    ],
+  });
+  client.setQueryData(mcpConnectorsOptions("org-1").queryKey, {
+    canManageCustomConnectors: false,
+    nativeTools: [],
+    connectors: [
+      {
+        id: connectorId,
+        slug: brokenConnection.slug,
+        organizationId: null,
+        displayName: brokenConnection.displayName,
+        description: "",
+        url: "https://example.test/mcp",
+        authType: "oauth2",
+        isCurated: false,
+        oauthRequestedScopes: null,
+        allowedTools: null,
+        documentationUrl: null,
+        tokenHelpUrl: null,
+        iconUrl: null,
+        authorizationStatus: "not_required",
+        authorizationReview: null,
+        isRecommended: false,
+        recommendedJurisdictions: [],
+      },
+    ],
+  });
+  const createEditor = (element: HTMLElement | null) =>
+    new Editor({
+      element,
+      extensions: [Document, Paragraph, Text],
+      content: "<p>Example Server</p>",
+    });
+  const unmounted = createEditor(null);
+  const destroyed = createEditor(document.createElement("div"));
+  const mounted = createEditor(document.createElement("div"));
+  expect(unmounted.isInitialized).toBe(false);
+  expect(unmounted.isDestroyed).toBe(true);
+  expect(unmounted.getText()).toBe(brokenConnection.displayName);
+  expect(destroyed.getText()).toBe(brokenConnection.displayName);
+  destroyed.destroy();
+  expect(destroyed.schema).toBeNull();
+  expect(destroyed.isDestroyed).toBe(true);
+  const tree = (editor: InstanceType<typeof Editor> | null) => (
+    <QueryClientProvider client={client}>
+      <AuthenticatedUserProvider
+        user={{
+          activeOrganizationId: "org-1",
+          id: "user-1",
+          email: "user@example.test",
+          image: null,
+          name: "Member",
+          preferredName: null,
+          timezoneId: "UTC",
+          wordEditShortcut: null,
+        }}
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <McpReconnectNotice editor={editor} />
+        </IntlProvider>
+      </AuthenticatedUserProvider>
+    </QueryClientProvider>
+  );
+  try {
+    for (const editor of [null, destroyed, unmounted]) {
+      const view = render(tree(editor));
+      expect(
+        screen.queryByRole("button", {
+          name: messages.chat.mcpReconnect.dismiss,
+        }),
+      ).toBeNull();
+      view.unmount();
+    }
+    render(tree(mounted));
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", {
+          name: messages.chat.mcpReconnect.dismiss,
+        }),
+      ).toBeDefined(),
+    );
+  } finally {
+    unmounted.destroy();
+    mounted.destroy();
+  }
+});
 
 test("approval waiting copy has no reconnect action", () => {
   assignUserStorage("user-1");
