@@ -443,7 +443,9 @@ export const rehearsalSeedSteps = (
     table: HighVolumeTable,
   ): readonly RehearsalSeedStep[] => {
     const seeder = REHEARSAL_SEEDERS[table];
-    const missingTables = seeder.tables.filter(
+    // Every dependent reads the temporary index populated from decisions.
+    const requiredTables = new Set([decisionsTable, ...seeder.tables]);
+    const missingTables = [...requiredTables].filter(
       (target) => !presentTables.has(target),
     );
     if (missingTables.length > 0) {

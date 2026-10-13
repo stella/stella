@@ -73,11 +73,11 @@ for (const absent of REHEARSAL_SEED_TABLES) {
       REHEARSAL_SEED_TABLES.filter((table) => table !== absent),
     );
     const steps = rehearsalSeedSteps(40, present);
-    const skipped = Object.entries(REHEARSAL_SEEDERS).flatMap(
-      ([table, seeder]) =>
-        seeder.tables.some((target) => target === absent)
-          ? [{ type: "skip", table, missingTables: [absent] }]
-          : [],
+    const skipped = REHEARSAL_SEED_ORDER.flatMap((table) =>
+      absent === "case_law_decisions" ||
+      REHEARSAL_SEEDERS[table].tables.some((target) => target === absent)
+        ? [{ type: "skip", table, missingTables: [absent] }]
+        : [],
     );
     expect(steps.filter((step) => step.type === "skip")).toEqual(skipped);
     const kept = REHEARSAL_SEED_ORDER.filter(
@@ -88,7 +88,9 @@ for (const absent of REHEARSAL_SEED_TABLES) {
         step.type === "sql" && step.table !== null ? [step.table] : [],
       ),
     ).toEqual(kept);
-    expect(steps.at(-1)).toEqual({ type: "vacuum", tables: kept });
+    expect(steps.filter((step) => step.type === "vacuum")).toEqual(
+      kept.length > 0 ? [{ type: "vacuum", tables: kept }] : [],
+    );
   });
 }
 
@@ -107,8 +109,25 @@ test("missing all write targets reports every missing table without an empty vac
     type: "skip",
     table: "case_law_provision_extractions",
     missingTables: [
+      "case_law_decisions",
       "case_law_provision_extractions",
       "case_law_provision_extraction_scopes",
     ],
   });
+});
+
+test("absent decisions skips dependent SQL instead of reading a missing temporary index", () => {
+  const steps = rehearsalSeedSteps(
+    40,
+    new Set(
+      REHEARSAL_SEED_TABLES.filter((table) => table !== "case_law_decisions"),
+    ),
+  );
+  expect(steps.filter((step) => step.type === "skip")).toHaveLength(
+    REHEARSAL_SEED_ORDER.length,
+  );
+  const statements = steps.flatMap((step) =>
+    step.type === "sql" ? [step.statement] : [],
+  );
+  expect(statements.join(";\n")).not.toMatch(/rehearsal_decisions/u);
 });
