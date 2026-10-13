@@ -6,7 +6,7 @@ import { IntlProvider } from "use-intl";
 import { LEGISLATION_WINDOW_DISPOSITIONS } from "@stll/api-contract/legislation-expression";
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 
-import type { ProvisionHistory, ProvisionVersion } from "./parse";
+import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
 import { TimelineChart, VersionLabel } from "./presentation";
 
 const historical = {
@@ -37,7 +37,7 @@ describe("version disposition presentation", () => {
       anchor: "article-1",
       items,
       nextCursor: null,
-    } satisfies ProvisionHistory;
+    } satisfies StatuteTimelineHistory;
     const markup = renderToStaticMarkup(
       <IntlProvider locale="en" timeZone="UTC" messages={MCP_APP_MESSAGES.en}>
         {items.map((version) => (

@@ -15,7 +15,7 @@ import type MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import { cn } from "@stll/ui/utils";
 
 import { timelineWindows } from "./model";
-import type { ProvisionHistory, ProvisionVersion } from "./parse";
+import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
 
 type MessageKey = keyof typeof MCP_APP_MESSAGES.en;
 const EXPRESSION_LABELS = {
@@ -57,7 +57,7 @@ export const TimelineChart = ({
   today,
   onSelect,
 }: {
-  history: ProvisionHistory;
+  history: StatuteTimelineHistory;
   today: string;
   onSelect: (documentId: string) => void;
 }) => {

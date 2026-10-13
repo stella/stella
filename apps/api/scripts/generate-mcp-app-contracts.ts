@@ -40,6 +40,8 @@ const built = await Bun.build({
     path.resolve(import.meta.dirname, "../src/mcp/app-browser-contracts.ts"),
   ],
   target: "browser",
+  // Dependency source comments include host-specific cache paths.
+  minify: true,
   external: ["valibot"],
 });
 const artifact = built.outputs.at(0);

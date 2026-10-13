@@ -5,11 +5,11 @@ import { versionCoversDate } from "@stll/api-contract/statute-version";
 import { DAY_IN_MS } from "@stll/time";
 import { diffWords } from "@stll/ui/review-word-diff";
 
-import type { ProvisionHistory, ProvisionVersion } from "./parse";
+import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
 
 export const mergeHistory = (
-  history: ProvisionHistory,
-  page: ProvisionHistory,
+  history: StatuteTimelineHistory,
+  page: StatuteTimelineHistory,
 ) => {
   if (history.eli !== page.eli || history.anchor !== page.anchor) {
     return page;

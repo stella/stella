@@ -469,6 +469,18 @@ jobs:
             [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
           done
 
+      # Generated exports must exist before the compiler can check source fixes.
+      # Regenerate again below because lint may rewrite generator inputs.
+      - name: Prepare selected generated files
+        if: needs.regenerate-scope.outputs.run == 'true'
+        env:
+          STELLA_LOCAL_AUTOFIX: "true"
+          GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
+        run: |
+          if [[ -n "$GENERATOR_IDS" ]]; then
+            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          fi
+
       - name: Fix changed files
         env:
           STELLA_LOCAL_AUTOFIX: "true"

@@ -20,7 +20,7 @@ import {
   versionWording,
 } from "./model";
 import { parseHistory } from "./parse";
-import type { ProvisionHistory, ProvisionVersion } from "./parse";
+import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
 import { TimelineChart, VersionLabel } from "./presentation";
 import "../shared/generated/style.css";
 
@@ -38,7 +38,7 @@ const Timeline = ({
   initial,
   input,
 }: {
-  initial: ProvisionHistory;
+  initial: StatuteTimelineHistory;
   input: Record<string, unknown>;
 }) => {
   const t = useTranslations();

@@ -7,7 +7,7 @@ import {
   timelineWindows,
   versionWording,
 } from "./model";
-import type { ProvisionHistory, ProvisionVersion } from "./parse";
+import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
 import { parseHistory } from "./parse";
 
 type FoundVersion = Extract<ProvisionVersion, { status: "found" }>;
@@ -34,7 +34,7 @@ const DEFAULT_SUBJECT = { eli: "eli:example", anchor: "article-1" };
 const history = (
   items: ProvisionVersion[],
   subject = DEFAULT_SUBJECT,
-): ProvisionHistory => ({
+): StatuteTimelineHistory => ({
   ...subject,
   items,
   nextCursor: null,
@@ -123,7 +123,7 @@ describe("statute timeline model", () => {
         withheldVersion,
       ],
       nextCursor: "cursor-next",
-    } as const satisfies ProvisionHistory;
+    } as const satisfies StatuteTimelineHistory;
 
     const parsed = parseHistory(payload);
     expect(parsed).toEqual(payload);
