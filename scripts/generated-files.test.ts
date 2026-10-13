@@ -344,7 +344,6 @@ test("capability runtime cache manifests cover every file the producer writes", 
       JSON.stringify({
         id: "matters.list",
         featureId: "matters",
-        handler: { importPath: "@/api/handlers/workspaces/list" },
       }),
     );
     await writeFile(

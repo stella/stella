@@ -65,7 +65,10 @@ import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
-import { generateCapabilityRuntime } from "./generate-capability-runtime";
+import {
+  generateCapabilityRuntime,
+  generateCapabilityCatalogRuntime,
+} from "./generate-capability-runtime";
 import {
   type CapabilityDispatchRecord,
   type AccessResolution,
@@ -472,7 +475,6 @@ type CapabilityMcp =
 
 type CapabilityEntry = {
   id: string;
-  handler: { importPath: string; exportName: string | undefined };
   /**
    * Prose from the handler config's `description`, written for the agent
    * deciding whether to call this capability. Carried verbatim into the
@@ -763,7 +765,6 @@ const resolveReadClassification = ({
 };
 
 type BuildCatalogEntryOptions = {
-  handler: CapabilityEntry["handler"];
   id: string;
   /** Handler config's `description`, absent when the handler declares none. */
   description: string | undefined;
@@ -800,7 +801,6 @@ type BuildCatalogEntryOptions = {
  */
 const buildCatalogEntry = ({
   id,
-  handler,
   description,
   kind,
   access,
@@ -818,7 +818,6 @@ const buildCatalogEntry = ({
   transport,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
-  handler,
   ...(description === undefined ? {} : { description }),
   handlerKind: kind,
   access: access.access,
@@ -1513,10 +1512,6 @@ const buildCatalog = async (): Promise<BuildResult> => {
     entries.push(
       buildCatalogEntry({
         id,
-        handler: {
-          importPath: deriveHandlerImportPath(endpoint.file),
-          exportName: endpoint.exportName,
-        },
         description: readDescription(endpoint.config),
         kind: kindResolution.kind,
         access: accessResolution,
@@ -1746,7 +1741,7 @@ export const exportCapabilityCatalog = async (
   if (
     !hasPreparedGeneratedSources(new URL("../../../", import.meta.url).pathname)
   ) {
-    await generateCapabilityRuntime();
+    await generateCapabilityCatalogRuntime();
   }
   const { entries, errors, internalWaiverCounts } = await buildCatalog();
 

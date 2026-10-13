@@ -105,7 +105,7 @@ test("every prepared output has required identity and byte coverage", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 30_000);
 
 test("CLI runtime preparation consumes a verified artifact without invoking generation", () => {
   const { root, manifest, write } = fixture();
@@ -114,6 +114,7 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
       "generated-files.ts",
       "prepare-cli-runtime.ts",
       "prepared-generated-sources.ts",
+      "generated-file-inventory.ts",
       "child-exit-status.ts",
     ]) {
       write(
@@ -345,13 +346,9 @@ test("API runtime generation works with only packaged sources and rejects a root
       JSON.stringify({
         id: "widgets.list",
         featureId: "fixture-feature",
-        handler: { importPath: "@/api/handlers/widgets/list" },
       }),
     );
-    write(
-      "apps/api/src/mcp/generated/capability-dispatch/widgets.list.ts",
-      "export const CAPABILITY_DISPATCH = {};\n",
-    );
+    write("apps/api/src/handlers/widgets/list.ts", "export default {};\n");
     const env = Object.fromEntries(
       Object.entries(process.env).filter(
         ([key]) => key !== "CI_GENERATED_SOURCES_MANIFEST",

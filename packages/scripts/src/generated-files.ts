@@ -44,6 +44,7 @@ export const CI_GENERATION_COMMANDS = [
 export const CAPABILITY_RUNTIME_INPUTS = [
   "apps/api/scripts/generate-capability-runtime.ts",
   "apps/api/scripts/lib/**",
+  "apps/api/src/handlers/**/*.ts",
   "apps/api/src/lib/capability-transport*",
   "packages/cli/capabilities/*.json",
   "packages/cli/src/capability-catalog-data.ts",
