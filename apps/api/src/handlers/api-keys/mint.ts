@@ -4,6 +4,7 @@ import type { Static } from "elysia";
 import * as v from "valibot";
 
 import { getAuth } from "@/api/lib/auth";
+import type { UpdateApiKey } from "@/api/lib/auth/api-key-endpoints";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -533,10 +534,7 @@ export const disableMachineApiKey = async (
     keyId: string;
     ownerUserId: string;
   },
-  updateApiKey: (
-    ...args: Parameters<ReturnType<typeof getAuth>["api"]["updateApiKey"]>
-  ) => ReturnType<ReturnType<typeof getAuth>["api"]["updateApiKey"]> = getAuth()
-    .api.updateApiKey,
+  updateApiKey: UpdateApiKey = getAuth().api.updateApiKey,
 ): Promise<Result<void, HandlerError>> => {
   const updated = await Result.tryPromise({
     try: async () =>

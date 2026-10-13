@@ -87,6 +87,8 @@ type ScheduledBackgroundWorkOptions<T> = {
   actionKind: ConcurrencyOnlyActionKind;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  /** The organization's scope, read for the work's managed model tier. */
+  organizationStateDb: ScopedDb;
   run: (
     signal: AbortSignal,
     modelAdmission: ModelDispatchAdmission,
@@ -103,6 +105,7 @@ export const runScheduledBackgroundWork = async <T>({
   actionKind,
   organizationId,
   userId,
+  organizationStateDb,
   run,
   admission = withActionAdmission,
 }: ScheduledBackgroundWorkOptions<T>): Promise<Result<T, unknown>> =>
@@ -115,6 +118,7 @@ export const runScheduledBackgroundWork = async <T>({
       await admitModelDispatch({
         organizationId,
         actionKind,
+        organizationStateDb,
         signal: leaseSignal,
         run: async (modelAdmission) => await run(leaseSignal, modelAdmission),
       }),
@@ -124,6 +128,8 @@ type BackgroundJobOptions<T> = {
   actionKind: ConcurrencyOnlyActionKind;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  /** The organization's scope, read for the job's managed model tier. */
+  organizationStateDb: ScopedDb;
   job: {
     token?: string;
     attemptsStarted?: number;
@@ -143,6 +149,7 @@ export const runBackgroundJob = async <T>({
   actionKind,
   organizationId,
   userId,
+  organizationStateDb,
   job,
   signal,
   run,
@@ -165,6 +172,7 @@ export const runBackgroundJob = async <T>({
       return await admitModelDispatch({
         organizationId,
         actionKind,
+        organizationStateDb,
         signal: leaseSignal,
         run: async (modelAdmission) =>
           await run(AbortSignal.any([signal, leaseSignal]), modelAdmission),

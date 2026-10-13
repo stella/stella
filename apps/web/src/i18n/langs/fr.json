@@ -535,6 +535,16 @@
       "createInvoice": "Créer une facture",
       "dueDate": "Date d'échéance",
       "editInvoice": "Modifier la facture",
+      "export": {
+        "accounting": "Import comptable",
+        "eBilling": "Facturation électronique",
+        "eso9": "Feuille d'import ESO9 (XLSX)",
+        "exporting": "Préparation de l'export…",
+        "isdoc": "Facture électronique ISDOC (ABRA Gen et autres)",
+        "spreadsheets": "Feuilles de calcul",
+        "xlsx": "Factures (XLSX)",
+        "xlsxLines": "Lignes de facture (XLSX)"
+      },
       "finalize": "Finaliser",
       "invoiceDate": "Date de la facture",
       "invoiceDetail": "Détail de la facture",
@@ -776,6 +786,9 @@
       "none": "Aucune citation enregistrée pour l'instant.",
       "openAtCitation": "Ouvrir à la citation",
       "openDecision": "Ouvrir la décision",
+      "paragraphLabel": "Point {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, point {paragraph}",
       "partialSummary": "Les totaux des citations et la chronologie sont partiels.",
       "passageNotFound": "Le passage citant n'a pas été trouvé dans le texte",
       "positiveCount": "{count, plural, one {# positive} many {# positives} other {# positives}}",
@@ -804,7 +817,7 @@
       "courtCount": "{count, plural, one {# juridiction} other {# juridictions}}",
       "newLast24Hours": "{count} depuis 24 h",
       "newLast7Days": "Nouvelles depuis 7 jours",
-      "unlistedCourts": "{count, plural, one {Juridictions au-delà de la plus grande} other {Juridictions au-delà des # plus grandes}}"
+      "otherCourts": "Autres juridictions"
     },
     "courtTiers": {
       "constitutional": "Juridictions constitutionnelles",
@@ -820,6 +833,7 @@
       "decisionYears": "Années des décisions",
       "description": "Le volume de jurisprudence contenu dans le corpus, par pays et par juridiction, et la fraîcheur de chaque source.",
       "exceedsReportedTotal": "Contient plus que le dernier total annoncé par le diffuseur le {date}",
+      "gapStatusUnknown": "État des lacunes inconnu",
       "generatedAt": "Chiffres au {date}",
       "globeLabel": "Pays dont la jurisprudence figure dans le corpus, sur un globe",
       "healthCurrent": "À jour",
@@ -828,9 +842,12 @@
       "healthStalled": "À l’arrêt",
       "healthUnknown": "Jamais exécuté",
       "inPreparation": "En préparation",
+      "knownGaps": "Lacunes connues",
       "lastSync": "Dernière synchronisation",
+      "noGapsRecorded": "Aucune lacune enregistrée",
       "notCountedYet": "Pas encore décompté",
       "notMeasuredYet": "Pas encore mesuré",
+      "pendingTexts": "Textes en attente",
       "reportedByListing": "Compté à partir de la liste du diffuseur",
       "reportedByOperator": "Saisi manuellement",
       "reportedByPublisher": "Décompte du diffuseur",
@@ -1266,6 +1283,11 @@
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
+    "history": {
+      "matterUnavailable": "Ce dossier n'est pas disponible",
+      "older": "Plus anciennes",
+      "previous7Days": "7 jours précédents"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {et # autre} many {et # autres} other {et # autres}}"
@@ -1428,6 +1450,8 @@
     "sendPrompt": "Envoyer le message",
     "sendQueuedMessageNow": "Envoyer maintenant",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
+    "signInToChat": "Connectez-vous pour discuter de ce document",
+    "signInToChatAbout": "Connectez-vous pour discuter de",
     "skills": {
       "scope": {
         "private": "Vos compétences",
@@ -1758,6 +1782,8 @@
     "citations": "Citations",
     "clauses": "Clauses",
     "clearDate": "Effacer la date",
+    "clearFilters": "Effacer les filtres",
+    "clearSearch": "Effacer la recherche",
     "close": "Fermer",
     "closeAll": "Tout fermer",
     "closeOthers": "Fermer les autres",
@@ -1788,6 +1814,7 @@
       "nextDecade": "Décennie suivante",
       "nextMonth": "Mois suivant",
       "nextYear": "Année suivante",
+      "outOfRange": "Choisissez une date dans la période autorisée.",
       "previousDecade": "Décennie précédente",
       "previousMonth": "Mois précédent",
       "previousYear": "Année précédente",
@@ -4113,7 +4140,6 @@
     "appsSubtitle": "stella fonctionne aussi en dehors du navigateur : sur votre bureau et dans votre assistant IA. Vous pourrez revenir à cette configuration à tout moment.",
     "appsTitle": "Obtenez stella partout",
     "catalogueAlwaysOn": "Toujours actif",
-    "catalogueClearSearch": "Effacer la recherche",
     "catalogueCommunityHeading": "Autres",
     "catalogueContinueWithCount": "{count, plural, one {Continuer avec # outil} other {Continuer avec # outils}}",
     "catalogueDetailAbout": "À propos",
@@ -6374,7 +6400,6 @@
         "year": "Année"
       },
       "cannotDeleteRequired": "Au moins une vue de ce type est requise",
-      "clearFilters": "Effacer les filtres",
       "copySuffix": "{name} (copie)",
       "deleteView": "Supprimer la vue",
       "exportCsv": "Exporter en CSV",

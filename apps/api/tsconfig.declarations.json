@@ -1,0 +1,14 @@
+{
+  "extends": ["./tsconfig.json", "./.cache/typecheck-declarations/roots.json"],
+  "compilerOptions": {
+    "composite": true,
+    "noCheck": true,
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "rootDir": "../..",
+    "outDir": "./.cache/typecheck-declarations",
+    "tsBuildInfoFile": "${configDir}/.cache/tsbuildinfo.declarations.json"
+  },
+  "include": ["../../types/**/*.d.ts"]
+}

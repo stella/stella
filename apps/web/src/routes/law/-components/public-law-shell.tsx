@@ -101,7 +101,9 @@ export function PublicLawBreadcrumbs() {
   return (
     <Breadcrumb className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
       <BreadcrumbList className="min-w-0 flex-1 flex-nowrap gap-1.5 overflow-hidden sm:gap-1.5">
-        <BreadcrumbItem className={cn(trail !== null && "max-sm:hidden")}>
+        <BreadcrumbItem
+          className={cn("min-w-0", trail !== null && "max-sm:hidden")}
+        >
           <Link
             activeOptions={CRUMB_ACTIVE_OPTIONS}
             activeProps={CRUMB_ACTIVE_PROPS}
@@ -114,9 +116,11 @@ export function PublicLawBreadcrumbs() {
         {section === "decisions" && (
           <>
             <BreadcrumbSeparator
-              className={cn(trail !== null && "max-sm:hidden")}
+              className={cn("shrink-0", trail !== null && "max-sm:hidden")}
             />
-            <BreadcrumbItem className={cn(trail !== null && "max-sm:hidden")}>
+            <BreadcrumbItem
+              className={cn("min-w-0", trail !== null && "max-sm:hidden")}
+            >
               <Link
                 activeOptions={CRUMB_ACTIVE_OPTIONS}
                 activeProps={CRUMB_ACTIVE_PROPS}
@@ -131,9 +135,11 @@ export function PublicLawBreadcrumbs() {
         {section === "statutes" && (
           <>
             <BreadcrumbSeparator
-              className={cn(trail !== null && "max-sm:hidden")}
+              className={cn("shrink-0", trail !== null && "max-sm:hidden")}
             />
-            <BreadcrumbItem className={cn(trail !== null && "max-sm:hidden")}>
+            <BreadcrumbItem
+              className={cn("min-w-0", trail !== null && "max-sm:hidden")}
+            >
               <Link
                 activeOptions={CRUMB_ACTIVE_OPTIONS}
                 activeProps={CRUMB_ACTIVE_PROPS}
@@ -149,10 +155,16 @@ export function PublicLawBreadcrumbs() {
         {section === "coverage" && (
           <>
             <BreadcrumbSeparator
-              className={cn(trail !== null && "max-sm:hidden")}
+              className={cn("shrink-0", trail !== null && "max-sm:hidden")}
             />
-            <BreadcrumbItem className={cn(trail !== null && "max-sm:hidden")}>
-              <BreadcrumbPage>{t("caseLaw.coverage.title")}</BreadcrumbPage>
+            <BreadcrumbItem
+              className={cn("min-w-0", trail !== null && "max-sm:hidden")}
+            >
+              <BreadcrumbPage className="min-w-0">
+                <span className="block truncate">
+                  {t("caseLaw.coverage.title")}
+                </span>
+              </BreadcrumbPage>
             </BreadcrumbItem>
           </>
         )}

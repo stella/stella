@@ -1,12 +1,10 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import oxlintConfig from "../../oxlint.config.ts";
 import { DERIVED_ATTRIBUTES } from "../../scripts/derived-attributes.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 const RULE_ID = "no-literal-derived-attribute/no-literal-derived-attribute";

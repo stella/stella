@@ -11,6 +11,9 @@ import { CITATION_DIGEST_TOP_CITING } from "@/api/handlers/case-law/decisions/ci
 import {
   decisionCitationPageQuery,
   decisionCitationSummaryQuery,
+  decisionCitationStatsStateQuery,
+  exactDecisionCitationSummaryQuery,
+  EXACT_CITATION_SUMMARY_MAX_ROWS,
 } from "@/api/handlers/case-law/decisions/citation-graph";
 import { caseLawArrivalsSnapshotQuery } from "@/api/handlers/case-law/decisions/coverage-arrivals";
 import {
@@ -416,6 +419,32 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.citation-summary"],
   },
   {
+    id: "case-law.citation-summary-state",
+    class: "point",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionCitationStatsStateQuery({
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-summary-state"],
+  },
+  {
+    id: "case-law.citation-summary-exact",
+    class: "aggregate",
+    role: "public-law-reader",
+    build: (tx) =>
+      exactDecisionCitationSummaryQuery({
+        limit: EXACT_CITATION_SUMMARY_MAX_ROWS + 1,
+        currentYear: 2026,
+        decisionId: QUERY_PLAN_SAMPLE.caseLaw.decisionId,
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.citation-summary-exact"],
+  },
+  {
     id: "case-law.top-citing-decisions",
     class: "aggregate",
     role: "public-law-reader",
@@ -562,6 +591,11 @@ export const PUBLIC_LAW_PLAN_DISPOSITION = {
   [PUBLIC_LAW_SHARED_QUERY.caseLawCourtActivity]: {
     type: "excluded",
     reason: "Court activity has a date-window-dependent aggregate shape.",
+  },
+  [PUBLIC_LAW_SHARED_QUERY.caseLawCourtCount]: {
+    type: "excluded",
+    reason:
+      "Court count is a cached aggregate over the public-corpus court index.",
   },
   [PUBLIC_LAW_SHARED_QUERY.caseLawCourtWeights]: {
     type: "excluded",

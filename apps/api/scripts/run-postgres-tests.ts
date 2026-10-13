@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { readFileSync } from "node:fs";
+import path from "node:path";
 
+import { loadTestEnv } from "./load-test-env";
+import { spawnPostgresTestProcess } from "./postgres-lock-diagnostics";
 import {
   assertSharedTableDdlIsolated,
   EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
@@ -27,12 +30,15 @@ if (measured === undefined || measured.isErr()) {
 }
 const durations = measured?.unwrapOr({}) ?? {};
 
+loadTestEnv(path.resolve(import.meta.dir, "../.env.test"));
+
 process.exitCode = await runGatedTests({
   requiredEnv: ["DATABASE_URL"],
   script: "test:postgres",
   preload: "./src/tests/setup-postgres.ts",
   selection: process.env["CI_POSTGRES_TEST_SELECTION"],
   exclusiveTestPaths: EXCLUSIVE_SHARED_TABLE_DDL_TEST_PATHS,
+  spawnTestProcess: spawnPostgresTestProcess,
   validateTestPlan: async (apiRoot, files) => {
     await assertSharedTableDdlIsolated(apiRoot, files);
     const shard = parseApiTestShard(shardValue);

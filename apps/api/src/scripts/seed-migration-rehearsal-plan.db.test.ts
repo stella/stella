@@ -105,6 +105,13 @@ test("every seeder satisfies the schema and writes its promised rows", async () 
     ),
   );
 
+  // Synthetic projection buckets exercise migration volume without claiming a recount.
+  const exactStates = resultRows(
+    await db.execute(sql`SELECT count(*)::integer AS count
+      FROM case_law_decision_citation_stats_state WHERE status = 'exact'`),
+  ).at(0);
+  expect(exactStates).toEqual({ count: 0 });
+
   // Rerunnable on a database that already holds the fixtures.
   await applySteps(db, rehearsalSeedSteps(DECISIONS).slice(0, 2));
   await client.close();

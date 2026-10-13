@@ -750,6 +750,13 @@ if (!databaseUrl || !runPostgresTests) {
           "",
         ].join("\r\n"),
       );
+      const expectedAttachments = (await parseInboundMessage(raw))
+        .unwrap()
+        .message.attachments.map(({ fileName }, ordinal) => ({
+          ordinal,
+          filename: fileName,
+        }));
+      expect(expectedAttachments).toHaveLength(2);
       let writes = 0;
       let failSecond = true;
       const persist = createInboundMailPersistence({
@@ -816,11 +823,10 @@ if (!databaseUrl || !runPostgresTests) {
           persist,
         });
       expect((await ingest()).isErr()).toBe(true);
-      expect(
-        await fixtureScoped()(
-          async (tx) => await tx.select().from(correspondenceAttachments),
-        ),
-      ).toMatchObject([{ ordinal: 0, filename: "two.txt" }]);
+      const firstPersisted = await fixtureScoped()(
+        async (tx) => await tx.select().from(correspondenceAttachments),
+      );
+      expect(firstPersisted).toMatchObject(expectedAttachments.slice(0, 1));
       const reordered = encode(
         decode(raw).replace(
           '--parts\r\nContent-Type: text/plain; name=one.txt\r\nContent-Disposition: attachment; filename="one.txt"\r\n\r\nOne\r\n--parts\r\nContent-Type: text/plain; name=two.txt\r\nContent-Disposition: attachment; filename="two.txt"\r\n\r\nTwo',
@@ -848,15 +854,15 @@ if (!databaseUrl || !runPostgresTests) {
         ).isOk(),
       ).toBe(true);
       expect((await ingest()).isOk()).toBe(true);
-      expect(
-        (
-          await fixtureScoped()(
-            async (tx) => await tx.select().from(correspondenceAttachments),
-          )
-        )
-          .map(({ ordinal }) => ordinal)
-          .toSorted((a, b) => a - b),
-      ).toEqual([0, 1]);
+      const completedAttachments = await fixtureScoped()(
+        async (tx) =>
+          await tx
+            .select()
+            .from(correspondenceAttachments)
+            .orderBy(correspondenceAttachments.ordinal),
+      );
+      expect(completedAttachments).toMatchObject(expectedAttachments);
+      expect(completedAttachments.slice(0, 1)).toEqual(firstPersisted);
       expect(
         await db
           .select()

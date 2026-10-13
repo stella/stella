@@ -183,6 +183,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/legal-atlas/src/**/*.ts",
   "packages/mojibake/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
+  "packages/portable-path/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
   "packages/scan-engine/src/**/*.ts",
@@ -502,15 +503,25 @@ export const RESULT_CONVENTION_OPT_OUTS = [
   { reason: "unreviewed", unit: "packages/user-agent/src" },
 ] as const satisfies readonly ResultBoundaryOptOut[];
 
-const resultConventionExcludeGlobs = RESULT_CONVENTION_EXCLUDE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
-const resultConventionSourceGlobs = RESULT_CONVENTION_SOURCE_GLOBS.map(
-  (glob) => new Bun.Glob(glob),
-);
+let resultConventionExcludeGlobs: Bun.Glob[] | undefined;
+let resultConventionSourceGlobs: Bun.Glob[] | undefined;
+
+const getResultConventionExcludeGlobs = () => {
+  resultConventionExcludeGlobs ??= RESULT_CONVENTION_EXCLUDE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionExcludeGlobs;
+};
+
+const getResultConventionSourceGlobs = () => {
+  resultConventionSourceGlobs ??= RESULT_CONVENTION_SOURCE_GLOBS.map(
+    (glob) => new Bun.Glob(glob),
+  );
+  return resultConventionSourceGlobs;
+};
 
 export const isResultConventionSourceFile = (file: string): boolean =>
-  resultConventionSourceGlobs.some((glob) => glob.match(file));
+  getResultConventionSourceGlobs().some((glob) => glob.match(file));
 
 export const isResultConventionExcludedFile = (file: string): boolean =>
-  resultConventionExcludeGlobs.some((glob) => glob.match(file));
+  getResultConventionExcludeGlobs().some((glob) => glob.match(file));

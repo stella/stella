@@ -115,6 +115,7 @@ export const generateThreadRecapText = async ({
     feature: "chat.thread_recap",
     modelRole: "fast",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: workspaceId ? { workspace_id: workspaceId } : {},
     traceId: Bun.randomUUIDv7(),
   });

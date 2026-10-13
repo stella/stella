@@ -10,8 +10,8 @@ import type {
 import {
   isProvisionViewPayload,
   PROVISION_VIEW,
-} from "@/features/statutes/provision-inspector.logic";
-import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector.logic";
+} from "@/features/statutes/provision-inspector-contract";
+import type { ProvisionViewPayload } from "@/features/statutes/provision-inspector-contract";
 import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 
 // The reader registers the kind on load so a tab can be opened (and a synced

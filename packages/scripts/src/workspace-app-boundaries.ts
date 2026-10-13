@@ -4,6 +4,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { withoutTsgoOnlyOptionDiagnostics } from "./tsgo-compiler-options";
 
 const APP_BOUNDARY_LEDGER_PATH = "scripts/app-boundary-exceptions.json";
@@ -73,8 +75,6 @@ type AppBoundaryCollection = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
-
-const toPosixPath = (filePath: string) => filePath.replaceAll(path.sep, "/");
 
 const findFiles = (directoryPath: string): string[] => {
   if (!existsSync(directoryPath)) {
@@ -235,6 +235,11 @@ const readDependencyNames = (packageJson: unknown): string[] => {
   return [...names];
 };
 
+const UNREADABLE_CONFIG_FILE_DIAGNOSTIC_CODE = 5083;
+// Exactly the three configs the API declaration generator writes.
+const GENERATED_API_TYPECHECK_CONFIG =
+  /\/apps\/api\/\.cache\/typecheck-declarations\/(?:roots|src|tests)\.json'/u;
+
 const readTsconfig = (
   tsconfigPath: string,
 ): { aliases: PathAlias[]; diagnostics: string[]; includes: string[] } => {
@@ -254,9 +259,21 @@ const readTsconfig = (
     ...(parsed?.errors ?? []),
   ])
     .filter(({ code }) => code !== NO_TYPESCRIPT_INPUTS_DIAGNOSTIC_CODE)
-    .map((diagnostic) =>
-      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    .map((diagnostic) => ({
+      code: diagnostic.code,
+      message: ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    }))
+    // Generated API typecheck configs carry only file lists, never path
+    // aliases, and do not exist before generation (the install postinstall
+    // runs this check first). The API typecheck validator owns their presence.
+    .filter(
+      ({ code, message }) =>
+        !(
+          code === UNREADABLE_CONFIG_FILE_DIAGNOSTIC_CODE &&
+          GENERATED_API_TYPECHECK_CONFIG.test(message)
+        ),
     )
+    .map(({ message }) => message)
     .filter((message, index, messages) => messages.indexOf(message) === index);
   if (parsed === undefined || diagnostics.length > 0) {
     return {
@@ -332,7 +349,7 @@ const collectAppBoundaryResult = (rootDir: string): AppBoundaryCollection => {
         filePath.endsWith(".json"),
     )) {
       const config = readTsconfig(tsconfigPath);
-      const source = toPosixPath(path.relative(rootDir, tsconfigPath));
+      const source = repoRelativePath(rootDir, tsconfigPath);
       for (const diagnostic of config.diagnostics) {
         issues.push({
           message: `invalid TypeScript configuration: ${diagnostic}`,
@@ -350,7 +367,7 @@ const collectAppBoundaryResult = (rootDir: string): AppBoundaryCollection => {
           edges.push({
             kind: "tsconfig-path",
             source,
-            specifier: `${pattern} -> ${toPosixPath(path.relative(path.dirname(tsconfigPath), targetPath))}`,
+            specifier: `${pattern} -> ${repoRelativePath(path.dirname(tsconfigPath), targetPath)}`,
             target: target.directory,
           });
         }
@@ -375,7 +392,7 @@ const collectAppBoundaryResult = (rootDir: string): AppBoundaryCollection => {
     for (const sourcePath of workspaceFiles.filter((filePath) =>
       SOURCE_FILE_EXTENSIONS.has(path.extname(filePath)),
     )) {
-      const source = toPosixPath(path.relative(rootDir, sourcePath));
+      const source = repoRelativePath(rootDir, sourcePath);
       const importedFiles = ts.preProcessFile(
         readFileSync(sourcePath, "utf-8"),
         true,
