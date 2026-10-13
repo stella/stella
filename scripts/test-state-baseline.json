@@ -634,11 +634,6 @@
     "owner": "ai",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/components/chat/chat-encrypted-refusal.dom.test.tsx": {
-    "count": 3,
-    "owner": "ai",
-    "reason": "Existing environment setup and restoration; migrate through createTestState."
-  },
   "apps/web/src/components/chat/chat-mock-model-badge.test.tsx": {
     "count": 1,
     "owner": "ai",
