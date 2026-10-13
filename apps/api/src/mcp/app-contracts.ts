@@ -1,9 +1,9 @@
 import type * as v from "valibot";
 
-import {
-  LOOKUP_CASE_LAW_PROJECTION,
-  SEARCH_CASE_LAW_PROJECTION,
-} from "../lib/chat/case-law-result-projections";
+import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
+
+import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
+import { READ_PROVISION_HISTORY_PROJECTION } from "../lib/chat/legislation-result-projections";
 import { MCP_APPS } from "./apps/manifest";
 import type { PresentationApp } from "./apps/manifest";
 import {
@@ -32,11 +32,12 @@ type AppManifest = {
 MCP_APPS satisfies readonly AppManifest[];
 
 export const MCP_APP_OUTPUT_SCHEMAS = {
+  read_provision_history: READ_PROVISION_HISTORY_PROJECTION,
   open_case_law_decision: openDecisionOutput,
   read_case_law_decision_blocks: blocksDecisionOutput,
   preview_cited_provision: provisionPreviewOutput,
   search_case_law: SEARCH_CASE_LAW_PROJECTION,
-  lookup_case_law: LOOKUP_CASE_LAW_PROJECTION,
+  resolve_case_law_decision: legalResolveResponseSchema,
 } as const satisfies Record<
   PresentationApp["callableTools"][number],
   v.GenericSchema

@@ -1,31 +1,75 @@
-import { useDeferredValue, useState } from "react";
+import { useMemo, useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Combobox,
+  ComboboxCollection,
   ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxGroupLabel,
   ComboboxInput,
   ComboboxItem,
   ComboboxList,
   ComboboxPopup,
+  useComboboxFilter,
 } from "@stll/ui/combobox";
 import { SearchIcon } from "@stll/ui/icons";
 
-import { selectRecentWorkspaces } from "@/components/app-sidebar.logic";
+import {
+  chatActivityByWorkspace,
+  selectPinnedThenRecentWorkspaces,
+} from "@/components/app-sidebar.logic";
+import { MatterIcon } from "@/components/matter-icon";
+import { MatterOptionLabel } from "@/components/matter-option-label";
+import {
+  groupMatterOptions,
+  isBrowsingMatters,
+  MATTER_OPTION_GROUP,
+  MATTER_PICKER_RECENT_LIMIT,
+} from "@/components/workspaces/matter-combobox.logic";
+import type {
+  MatterOptionGroup,
+  MatterOptionGroupKey,
+} from "@/components/workspaces/matter-combobox.logic";
+import {
+  groupedChatThreadsOptions,
+  mergeGroupedChatThreadPages,
+} from "@/features/chat/queries";
+import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
+import { usePinnedStore } from "@/lib/pinned-store";
+import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 export type MatterOption = {
+  clientName: string | null;
+  color: string | null;
   id: string;
   name: string;
-  clientName: string | null;
 };
 
-const EMPTY_MATTERS: MatterOption[] = [];
+/** A matter from the navigation list, as the combobox offers it. */
+export const toMatterOption = (matter: {
+  client: { displayName: string } | null;
+  color: string | null;
+  id: string;
+  name: string;
+}): MatterOption => ({
+  clientName: matter.client?.displayName ?? null,
+  color: matter.color,
+  id: matter.id,
+  name: matter.name,
+});
+
+const NO_WORKSPACES: readonly never[] = [];
+
+const GROUP_LABEL = {
+  [MATTER_OPTION_GROUP.recent]: "navigation.recents",
+  [MATTER_OPTION_GROUP.all]: "inspector.matterPicker.allMatters",
+} as const satisfies Record<MatterOptionGroupKey, TranslationKey>;
 
 type MatterComboboxProps = {
   /**
@@ -39,7 +83,6 @@ type MatterComboboxProps = {
   id: string;
   onChange: (matter: MatterOption | null) => void;
   value: MatterOption | null;
-  order?: "recent" | "default";
 };
 
 /**
@@ -48,7 +91,11 @@ type MatterComboboxProps = {
  * One control wherever the app asks that question — uploading a document,
  * pinning case law — so the list, the search and the client line read the same
  * everywhere. Filtering is client-side over the navigation list the sidebar
- * already holds, so the popup opens without a round trip.
+ * already holds, so the popup opens without a round trip. Base UI owns the
+ * input text and filters the items it is given, so its empty state appears
+ * only when nothing matches. While browsing, the reader's recent matters
+ * (pinned first, then by activity, as the sidebar ranks them) lead in their
+ * own group; typing collapses the groups into one filtered list.
  */
 export const MatterCombobox = ({
   activeOrganizationId,
@@ -56,75 +103,108 @@ export const MatterCombobox = ({
   id,
   onChange,
   value,
-  order = "default",
 }: MatterComboboxProps) => {
   const t = useTranslations();
-  const [search, setSearch] = useState("");
-  const deferredSearch = useDeferredValue(search);
+  const { contains } = useComboboxFilter({ sensitivity: "base", value });
+  const [query, setQuery] = useState(value?.name ?? "");
+  const pinnedOrder = usePinnedStore((state) => state.pinnedOrder);
   const {
-    data: matters = EMPTY_MATTERS,
+    data: navigation,
     error,
     isPending,
     refetch,
-  } = useQuery({
-    ...workspacesNavigationOptions({
+  } = useQuery(
+    workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
-    select: (data) => {
-      const ordered =
-        order === "recent"
-          ? selectRecentWorkspaces({
-              activeWorkspaceId: undefined,
-              chatActivityByWorkspaceId: new Map(),
-              limit: data.workspaces.length,
-              pinnedIds: new Set(),
-              workspaces: data.workspaces,
-            })
-          : data.workspaces;
-      return ordered.map((matter) => ({
-        clientName: matter.client?.displayName ?? null,
-        id: matter.id,
-        name: matter.name,
-      }));
-    },
-  });
-
-  const term = deferredSearch.trim().toLocaleLowerCase();
-  const filtered = matters.filter(
-    (matter) =>
-      term.length === 0 ||
-      matter.name.toLocaleLowerCase().includes(term) ||
-      matter.clientName?.toLocaleLowerCase().includes(term),
   );
+  // Chat activity only reorders the recent group; without it the group falls
+  // back to matter activity, so its failure is not the picker's to show.
+  const groupedThreadsQuery = useInfiniteQuery(
+    groupedChatThreadsOptions({ activeOrganizationId, userId }),
+  );
+  const groupedThreadsView = useQueryView(groupedThreadsQuery);
+  const chatHistory =
+    groupedThreadsView.type === "items" ? groupedThreadsView.items : undefined;
+  const browsing = isBrowsingMatters({
+    query,
+    selectedName: value?.name ?? null,
+  });
+  // Base UI copies `items` into its own state whenever the prop's identity
+  // changes, so a list rebuilt on every render re-renders the combobox
+  // forever. Memoized on the cached query results (stable references) and
+  // the pinned order, the list changes only when its inputs do.
+  const items = useMemo(() => {
+    // Nothing to offer until the navigation list has loaded.
+    const workspaces =
+      navigation === undefined ? NO_WORKSPACES : navigation.workspaces;
+    const matters = workspaces.map(toMatterOption);
+    if (!browsing) {
+      return matters;
+    }
+    const recentIds = selectPinnedThenRecentWorkspaces({
+      chatActivityByWorkspaceId: chatActivityByWorkspace(
+        mergeGroupedChatThreadPages(chatHistory?.pages),
+      ),
+      limit: MATTER_PICKER_RECENT_LIMIT,
+      pinnedOrder,
+      workspaces,
+    }).map((matter) => matter.id);
+    return groupMatterOptions({ matters, recentIds });
+  }, [browsing, chatHistory, navigation, pinnedOrder]);
 
   return (
     <div className="flex flex-col gap-2">
       <Combobox
+        // A matter matches on its name or its client's, accent- and
+        // case-insensitively. While the input still shows the chosen
+        // matter's name, the filter keeps every matter in view.
+        filter={(matter: MatterOption, search) =>
+          contains(matter, search, matterName) ||
+          contains(matter, search, matterClientName)
+        }
+        isItemEqualToValue={(item, selected) => item.id === selected.id}
+        items={items}
         itemToStringLabel={(matter) => matter.name}
-        onInputValueChange={setSearch}
+        onInputValueChange={setQuery}
         onValueChange={(matter) => onChange(matter)}
         value={value}
       >
         <ComboboxInput
           id={id}
           placeholder={t("common.selectAMatter")}
-          showClear={search.length > 0}
-          startAddon={<SearchIcon />}
-          value={search}
+          showClear={value !== null}
+          startAddon={
+            value === null ? (
+              <SearchIcon />
+            ) : (
+              <MatterIcon matter={{ id: value.id, color: value.color }} />
+            )
+          }
         />
         <ComboboxPopup>
           <ComboboxList>
-            {filtered.map((matter) => (
-              <ComboboxItem key={matter.id} value={matter}>
-                <BidiText className="truncate">{matter.name}</BidiText>
-                {matter.clientName !== null && (
-                  <span className="text-muted-foreground ms-2 truncate text-xs">
-                    <BidiText>{matter.clientName}</BidiText>
-                  </span>
-                )}
-              </ComboboxItem>
-            ))}
+            {(entry: MatterOption | MatterOptionGroup<MatterOption>) =>
+              "items" in entry ? (
+                <ComboboxGroup items={entry.items} key={entry.value}>
+                  <ComboboxGroupLabel>
+                    {t(GROUP_LABEL[entry.value])}
+                  </ComboboxGroupLabel>
+                  <ComboboxCollection>
+                    {(matter: MatterOption) => (
+                      <ComboboxItem key={matter.id} value={matter}>
+                        <MatterOptionLabel matter={matter} />
+                      </ComboboxItem>
+                    )}
+                  </ComboboxCollection>
+                </ComboboxGroup>
+              ) : (
+                <ComboboxItem key={entry.id} value={entry}>
+                  <MatterOptionLabel matter={entry} />
+                </ComboboxItem>
+              )
+            }
           </ComboboxList>
           <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
         </ComboboxPopup>
@@ -147,3 +227,11 @@ export const MatterCombobox = ({
     </div>
   );
 };
+
+function matterName(matter: MatterOption): string {
+  return matter.name;
+}
+
+function matterClientName(matter: MatterOption): string {
+  return matter.clientName ?? "";
+}

@@ -177,6 +177,9 @@
     "packages/permissions": {
       "entry": ["src/index.ts"]
     },
+    "packages/portable-path": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/playwright-tools": {
       "entry": ["src/marketing-config.ts"]
     },
@@ -194,7 +197,12 @@
       "ignore": ["generated/**"]
     },
     "packages/scripts": {
-      "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]
+      // The Postgres lifecycle owner is invoked by scripts/configure-test-postgres.sh.
+      "entry": [
+        "src/i18n-check.ts",
+        "src/i18n-typegen.ts",
+        "src/dev-postgres.ts"
+      ]
     },
     // The three `exports` entry points are derived from package.json, so
     // listing them here only earns a redundancy hint. These are the entries

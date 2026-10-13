@@ -1,0 +1,7 @@
+{
+  "capture": "recorded",
+  "sha256": "f86e5858e04d8a9a6b2d65a1a18f6466c94c233e209921f3b11331bb308cf9bf",
+  "sourceUrl": "https://www.ustavnysud.sk/o/v1/dms/content",
+  "capturedAt": "2026-10-12T07:22:00.000Z",
+  "note": "POST body: {\"highlightText\":\"\",\"documentId\":\"695d557a-08eb-41d2-8cea-2b895f9860e7\",\"docType\":\"USSR_DECISION_MK\"}; III. ÚS 265/2026, the document text as base64 XHTML with \"N.\"-numbered reasoning"
+}

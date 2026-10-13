@@ -3,6 +3,7 @@ import type { MaybePromise } from "bun";
 import nodePath from "node:path";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { sha256Hex } from "@stll/sha256/bun";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 import { walkStaticImportGraph } from "@stll/skills/static-import-graph";
@@ -111,13 +112,6 @@ const isNonTestSource = (file: string): boolean =>
   file.startsWith(`${skillsSourceRoot}${nodePath.sep}`) &&
   !/\.(?:test|spec)\.[cm]?[jt]sx?$/u.test(file);
 
-// The fingerprint hashes these paths, so they must read the same on every OS.
-export const repositoryPath = (
-  from: string,
-  to: string,
-  pathApi: Pick<typeof nodePath, "relative" | "sep"> = nodePath,
-): string => pathApi.relative(from, to).split(pathApi.sep).join("/");
-
 export const pinnedParserInputs = (): string[] =>
   [
     ...walkStaticImportGraph({
@@ -126,7 +120,7 @@ export const pinnedParserInputs = (): string[] =>
         PARSER_ENTRYPOINTS.some(
           (entry) => file === nodePath.join(root, entry),
         ) || isNonTestSource(file),
-    }).map((file) => repositoryPath(root, file)),
+    }).map((file) => repoRelativePath(root, file)),
     "packages/skills/package.json",
   ].toSorted();
 
@@ -164,7 +158,7 @@ export const projectFrontmatter = (
 
 export const assertCompleteGithubContentsListing = ({
   itemCount,
-  repoRelativePath,
+  repoRelativePath: repositoryPath,
 }: {
   itemCount: number;
   repoRelativePath: string;
@@ -173,7 +167,7 @@ export const assertCompleteGithubContentsListing = ({
     return;
   }
   throw new PinnedContentError({
-    message: `GitHub contents listing may be truncated at ${GITHUB_CONTENTS_LISTING_LIMIT} entries for ${repoRelativePath || "<root>"}`,
+    message: `GitHub contents listing may be truncated at ${GITHUB_CONTENTS_LISTING_LIMIT} entries for ${repositoryPath || "<root>"}`,
   });
 };
 type ParserFileReader = (file: string) => Promise<string>;

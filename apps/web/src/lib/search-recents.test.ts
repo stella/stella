@@ -400,3 +400,28 @@ describe("search recents", () => {
     expect(storage.length).toBe(0);
   });
 });
+
+test.each([
+  { kind: "statute", number: "172", year: "2026" },
+  { kind: "decision", courtAbbreviation: "ÚS", courtTier: "constitutional" },
+  { kind: "decision", courtAbbreviation: null },
+] as const)(
+  "recents retain resolved document identity through storage: %j",
+  (documentIdentity) => {
+    const storage = new MemoryStorage();
+    recordRecentFile(
+      {
+        entityId: "file_identity",
+        workspaceId: "matter_identity",
+        workspaceName: "Civil proceeding",
+        title: "Legal instrument",
+        documentIdentity,
+      },
+      scope,
+      storage,
+    );
+    expect(readRecentFiles(scope, storage).at(0)?.documentIdentity).toEqual(
+      documentIdentity,
+    );
+  },
+);

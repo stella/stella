@@ -18,22 +18,14 @@
 import type { SQL } from "drizzle-orm";
 
 import { caseLawDecisions } from "@/api/db/schema";
-import {
-  storedObservationHasDetail,
-  storedObservationHasDetailSqlFor,
-} from "@/api/lib/legal-search/partial-observation-sql";
+import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 
-/** For an aliased decision table: a language sibling, a self-join. */
-export const publishedCaseLawDecisionFor = storedObservationHasDetail;
+export {
+  publishedCaseLawDecisionFor,
+  publishedCaseLawDecisionSqlFor,
+} from "@/api/lib/case-law/published-decisions-sql";
 
 /** For a query selecting from `case_law_decisions` under Drizzle's own name. */
 export const publishedCaseLawDecision: SQL = publishedCaseLawDecisionFor(
   caseLawDecisions.metadata,
 );
-
-/**
- * For a raw statement that aliases the decision table. `alias` must be a code
- * constant, exactly as `redistributableCaseLawSourceSqlFor` requires.
- */
-export const publishedCaseLawDecisionSqlFor = (alias: string): string =>
-  storedObservationHasDetailSqlFor(`${alias}.metadata`);

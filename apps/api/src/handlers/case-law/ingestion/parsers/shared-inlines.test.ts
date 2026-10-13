@@ -3,11 +3,11 @@ import * as cheerio from "cheerio";
 import { readFileSync } from "node:fs";
 
 import type { Inline } from "@stll/legal-ast/document-ast";
+import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
 import {
   ASPOSE_SPACER_GAP,
   inlinesToPlainText,
-  stripInlinePrefix,
   walkInlines,
   type WalkInlinesOptions,
 } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";

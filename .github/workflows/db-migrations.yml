@@ -59,12 +59,13 @@ jobs:
             echo "skipped: no migration change" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      # No install follows, so the shared package cache would only cost time.
       - name: Setup Bun
         if: steps.changes.outputs.required != 'false'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
+          no-cache: true
 
       - name: Login to GitHub Container Registry
         id: registry
@@ -106,7 +107,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -172,13 +173,8 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Test Postgres owner replacement and helper replay
-        run: |
-          bash scripts/configure-test-postgres.integration.sh "${{ job.services.postgres.id }}" stella_owner
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -188,6 +184,11 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Test Postgres owner replacement and helper replay
+        run: |
+          bash scripts/configure-test-postgres.integration.sh "${{ job.services.postgres.id }}" stella_owner
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Apply all migrations to fresh Postgres
         working-directory: apps/api
@@ -329,12 +330,7 @@ jobs:
             bun src/server.ts >"$log_file" 2>&1 &
           api_pid=$!
 
-          # shellcheck disable=SC2329
-          cleanup() {
-            kill "$api_pid" >/dev/null 2>&1 || true
-            wait "$api_pid" >/dev/null 2>&1 || true
-          }
-          trap cleanup EXIT
+          trap 'kill "$api_pid" >/dev/null 2>&1 || true; wait "$api_pid" >/dev/null 2>&1 || true' EXIT
 
           for _ in {1..60}; do
             if curl -fsS http://127.0.0.1:3001/live >/dev/null \

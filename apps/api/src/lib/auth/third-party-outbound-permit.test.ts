@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { isRecord } from "@/api/lib/type-guards";
 
 import { OUTBOUND_PERMIT_GRANT_OWNERS } from "../../../../../scripts/outbound-transport-census";
@@ -22,7 +24,7 @@ const productionSources = (): Map<string, string> => {
   const repoRoot = path.resolve(import.meta.dir, "../../../../..");
   return new Map(
     [...readApiProductionSources(repoRoot)].map(([file, text]) => [
-      path.relative(API_SRC, path.join(repoRoot, file)),
+      repoRelativePath(API_SRC, path.join(repoRoot, file)),
       text,
     ]),
   );
@@ -36,7 +38,7 @@ const productionSources = (): Map<string, string> => {
  */
 const PERMIT_GRANTING_SOURCES = OUTBOUND_PERMIT_GRANT_OWNERS.map(
   ({ path: owner }) =>
-    path.relative(
+    repoRelativePath(
       API_SRC,
       path.resolve(import.meta.dir, "../../../../..", owner),
     ),

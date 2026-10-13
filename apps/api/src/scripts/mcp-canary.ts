@@ -2,6 +2,7 @@
  * Full mode registers a client; frequent mode uses existing client metadata.
  * Staging mints credentials from its smoke session and revokes them each run.
  */
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import {
   CLIENT_CAPABILITIES_META_KEY,
   CLIENT_INFO_META_KEY,
@@ -1388,7 +1389,10 @@ export const runStagingCredentialJourneys = async (
   return results;
 };
 
-const REVIEW_KNOWN_ERROR_CODES: ReadonlySet<string> = new Set(MCP_ERROR_CODES);
+const REVIEW_KNOWN_ERROR_CODES: ReadonlySet<string> = new Set([
+  ...MCP_ERROR_CODES,
+  ...Object.keys(BASE_ERROR_CODES),
+]);
 
 const REVIEW_JOURNEY_SCOPE = [
   "stella:read",
@@ -1448,7 +1452,6 @@ const reviewEnvelopeCode = (body: unknown): string => {
       "invalid_grant",
       "access_denied",
       "account_access_unavailable",
-      "INVALID_EMAIL_OR_PASSWORD",
       "TOO_MANY_REQUESTS",
     ].includes(code)
     ? code

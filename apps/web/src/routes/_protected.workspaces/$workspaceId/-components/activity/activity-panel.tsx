@@ -73,7 +73,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DateRangeFilter } from "@/components/date-range-filter";
 import { DocumentIcon } from "@/components/document-icon";
 import { FileThumbnail } from "@/components/file-thumbnail";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -498,38 +498,14 @@ const ActivityAdvancedFilters = ({
             </ComboboxPopup>
           </Combobox>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1.5">
-            <span
-              className="text-muted-foreground block text-xs font-medium"
-              id="matter-activity-from-label"
-            >
-              {t("workspaces.filters.from")}
-            </span>
-            <DatePickerPopover
-              id="matter-activity-from"
-              labelledBy="matter-activity-from-label"
-              {...(toDate === null ? {} : { maxDate: toDate })}
-              onChange={onFromDateChange}
-              value={fromDate}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <span
-              className="text-muted-foreground block text-xs font-medium"
-              id="matter-activity-to-label"
-            >
-              {t("workspaces.filters.to")}
-            </span>
-            <DatePickerPopover
-              id="matter-activity-to"
-              labelledBy="matter-activity-to-label"
-              {...(fromDate === null ? {} : { minDate: fromDate })}
-              onChange={onToDateChange}
-              value={toDate}
-            />
-          </div>
-        </div>
+        <DateRangeFilter
+          from={fromDate}
+          to={toDate}
+          fromLabel={t("workspaces.filters.from")}
+          toLabel={t("workspaces.filters.to")}
+          onFromChange={onFromDateChange}
+          onToChange={onToDateChange}
+        />
         <Button
           className="w-full"
           disabled={activeFilterCount === 0 && filters.category === "all"}

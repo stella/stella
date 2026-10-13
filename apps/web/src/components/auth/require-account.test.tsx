@@ -74,8 +74,8 @@ describe("account gate", () => {
 });
 
 describe("gated chat composer", () => {
-  test("draws the member's bar, with the same copy, for a visitor", () => {
-    const markup = render(
+  const renderOffer = () =>
+    render(
       <GatedChatComposer
         activeLegal={{
           type: "decision",
@@ -85,27 +85,25 @@ describe("gated chat composer", () => {
       />,
     );
 
-    // The same empty row a member reads, and the same owned pair of controls
-    // the live bar carries.
-    expect(markup).toContain(en.chat.sourcePlaceholderAction);
+  test("offers a visitor sign-in for the document, not a bar that cannot send", () => {
+    const markup = renderOffer();
+
+    expect(markup).toContain(en.chat.signInToChatAbout);
     expect(markup).toContain("21 Cdo 1234/2024");
-    expect(markup).toContain("lucide-plus");
-    expect(markup).toContain("lucide-arrow-up");
+    expect(markup).toContain(en.auth.signIn);
+    // Neither half of the member's bar: no attachment menu, no send.
+    expect(markup).not.toContain("lucide-plus");
+    expect(markup).not.toContain("lucide-arrow-up");
   });
 
-  test("offers the whole bar as one target a screen reader can name", () => {
-    const markup = render(
-      <GatedChatComposer
-        activeLegal={{
-          type: "decision",
-          decisionId: "decision-1",
-          caseNumber: "21 Cdo 1234/2024",
-        }}
-      />,
-    );
+  test("keeps the offer visible to assistive tech", () => {
+    const markup = renderOffer();
 
-    // The loading shell hides itself from assistive tech; a bar that is the
-    // way in must not, and it carries the editor's own sentence as its name.
-    expect(markup).toContain('aria-label="Chat about 21 Cdo 1234/2024"');
+    // The loading shell hides itself; the way in must not.
+    const offerTag = /<div[^>]*data-slot="gated-chat-sign-in"[^>]*>/u.exec(
+      markup,
+    )?.[0];
+    expect(offerTag).toBeDefined();
+    expect(offerTag).not.toContain("aria-hidden");
   });
 });

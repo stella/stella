@@ -6,7 +6,6 @@ import type { ModelRole } from "@stll/ai-catalog";
 import type { AIErrorKind } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatRequestOptions } from "@/api/handlers/chat/chat-request";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -21,6 +20,7 @@ import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { chatRequestOptions } from "@/api/lib/chat/chat-request";
 import {
   chatToolMapToArray,
   type ChatToolMap,
@@ -234,6 +234,7 @@ export const runSubagent = async (
     feature: options.metering.feature,
     modelRole: options.role,
     orgAIConfig: options.orgAIConfig,
+    modelTier: options.admission.modelTier,
     properties: {
       organization_id: options.organizationId,
       ...(options.metering.workspaceId
