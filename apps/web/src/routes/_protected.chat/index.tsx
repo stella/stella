@@ -119,7 +119,7 @@ import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-stack";
-import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 
 export const Route = createFileRoute("/_protected/chat/")({
   loader: ({ context }) => {
@@ -602,7 +602,7 @@ function ChatIndex() {
               </Button>
             }
           />
-          <ThreadsSheet />
+          <ChatHistoryLink />
         </ChromeHeaderActions>
       }
       hero={
@@ -789,11 +789,18 @@ function ChatIndex() {
       </LandingSection>
       <LandingSection
         heading={
-          <ThreadsSheet
-            icon={<HistoryIcon className="size-4" />}
-            label={t("chat.landing.recentChats")}
-            triggerVariant="section"
-          />
+          <Tooltip
+            content={t("chat.landing.openChatHistory")}
+            render={
+              <Link
+                className={LANDING_SECTION_HEADING_CLASS}
+                to="/chat/history"
+              />
+            }
+          >
+            <HistoryIcon className="size-4" />
+            {t("chat.landing.recentChats")}
+          </Tooltip>
         }
       >
         <QueryViewFeedback view={groupedThreadPagesView} />
