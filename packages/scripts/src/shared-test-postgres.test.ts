@@ -1,6 +1,18 @@
 import { expect, test } from "bun:test";
+import {
+  mkdtempSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 
-import { sharedTestDatabase } from "./shared-test-postgres";
+import {
+  sharedTestDatabase,
+  sharedTestMigrationHistory,
+} from "./shared-test-postgres";
 
 test("worktree identities are bounded SQL identifiers and distinguish paths", () => {
   const paths = [
@@ -17,4 +29,57 @@ test("worktree identities are bounded SQL identifiers and distinguish paths", ()
     expect(database.length).toBeLessThan(63);
   }
   expect(sharedTestDatabase("/work/a")).toBe(sharedTestDatabase("/work/a"));
+});
+
+test("migration history identity follows ordered migration names and SQL rather than worker paths", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-pg-history-"));
+  const trees = [path.join(root, "a"), path.join(root, "b")] as const;
+  const migrations = [
+    ["20260101000000_first", "CREATE TABLE first_fixture (id integer);"],
+    ["20260102000000_second", "CREATE TABLE second_fixture (id integer);"],
+  ] as const;
+  try {
+    for (const [index, tree] of trees.entries()) {
+      const ordered = index === 0 ? migrations : migrations.toReversed();
+      for (const [name, sql] of ordered) {
+        const folder = path.join(tree, "apps/api/drizzle", name);
+        mkdirSync(folder, { recursive: true });
+        writeFileSync(path.join(folder, "migration.sql"), sql);
+      }
+    }
+    const [first, second] = trees;
+    const baseline = sharedTestMigrationHistory(first);
+    expect(baseline.folder).toBe(path.join(first, "apps/api/drizzle"));
+    expect(sharedTestMigrationHistory(second).key).toBe(baseline.key);
+    const changedSql = path.join(
+      second,
+      "apps/api/drizzle",
+      migrations[1][0],
+      "migration.sql",
+    );
+    writeFileSync(
+      changedSql,
+      `${migrations[1][1]}\n-- changed committed migration`,
+    );
+    expect(sharedTestMigrationHistory(second).key).not.toBe(baseline.key);
+    writeFileSync(changedSql, migrations[1][1]);
+    expect(sharedTestMigrationHistory(second).key).toBe(baseline.key);
+    renameSync(
+      path.dirname(changedSql),
+      path.join(second, "apps/api/drizzle/20260103000000_renamed"),
+    );
+    expect(sharedTestMigrationHistory(second).key).not.toBe(baseline.key);
+    const appended = path.join(
+      first,
+      "apps/api/drizzle/20260104000000_appended",
+    );
+    mkdirSync(appended);
+    writeFileSync(
+      path.join(appended, "migration.sql"),
+      "CREATE TABLE appended_fixture (id integer);",
+    );
+    expect(sharedTestMigrationHistory(first).key).not.toBe(baseline.key);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

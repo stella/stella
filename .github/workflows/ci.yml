@@ -5233,6 +5233,13 @@ jobs:
         # Keep cluster defaults for the fresh-database maintenance assertions.
         run: bun scripts/postgres-test-maintenance.ts
 
+      - name: Verify shared worker Postgres history and cleanup
+        if: matrix.shard == 1
+        timeout-minutes: 5
+        env:
+          STELLA_RUN_SHARED_POSTGRES_TESTS: "true"
+        run: bun --filter @stll/api test scripts/shared-test-postgres.test.ts
+
       - name: Run Postgres-gated API suites
         id: postgres-tests
         if: needs.ci-plan.outputs.postgres_suites_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))

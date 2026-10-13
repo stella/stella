@@ -425,6 +425,8 @@ const ledgerFingerprint = (rows: readonly LedgerRow[]) =>
     .join(",");
 
 type RunMigrationsOptions = {
+  /** Local test templates replay existing cluster roles without changing source hashes. */
+  readMigrations?: typeof readMigrationFiles;
   connection: ReservedSQL;
   /** The database `connection` belongs to; index builds observe it apart. */
   databaseUrl: string;
@@ -440,6 +442,7 @@ type RunMigrationsOptions = {
 };
 
 export const runMigrations = async ({
+  readMigrations = readMigrationFiles,
   connection,
   databaseUrl,
   migrationsFolder,
@@ -463,7 +466,7 @@ export const runMigrations = async ({
     laneHeld = true;
     await connection.unsafe(restoreTimeout);
 
-    const migrations = readMigrationFiles({ migrationsFolder });
+    const migrations = readMigrations({ migrationsFolder });
     const database = drizzle({ client: connection });
     const preflight = await preflightAndAdopt({
       database,
@@ -513,7 +516,7 @@ export const runMigrations = async ({
     // below, so corpus writers stay drained between them.
     await applyPendingRetryingLockWaits({
       // bun-sql's migrator calls this same function after reading files; passing
-      // the preflight array keeps validation and execution on identical bytes.
+      // the prepared preflight array keeps validation and execution on the same statements.
       apply: async () => {
         await pgCoreMigrate(migrations, database, {
           migrationsFolder,

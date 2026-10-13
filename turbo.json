@@ -1313,7 +1313,10 @@
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/scripts/shared-test-postgres.sh",
-        "$TURBO_ROOT$/docker/postgres/prod-parity.conf",
+        "$TURBO_ROOT$/packages/scripts/src/shared-test-postgres.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-postgres-lock.ts",
+        "$TURBO_ROOT$/packages/scripts/src/dev-docker.ts",
+        "$TURBO_ROOT$/docker/postgres/**",
         "$TURBO_ROOT$/.github/workflows/ai-provider-canary.yml",
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
