@@ -90,7 +90,9 @@ const legacy = async () => {
   const rows: Row[] = [];
   for (const [name, fixture] of Object.entries(FIXTURES)) {
     const cold = await timed(async () => renderInvoicePdf(fixture));
-    const bytes = cold.value.unwrap();
+    const bytes = cold.value.unwrap(
+      "The legacy renderer renders a spike fixture",
+    );
     const warm: number[] = [];
     for (let run = 1; run <= WARM_RUNS; run += 1) {
       warm.push(
@@ -132,7 +134,9 @@ const wasm = async () => {
         createdAt: CREATED_AT,
       });
     const cold = await timed(async () => render());
-    const result = cold.value.unwrap();
+    const result = cold.value.unwrap(
+      "The Typst session renders a spike fixture",
+    );
     const outcome =
       result.status === "rendered"
         ? result
@@ -141,14 +145,18 @@ const wasm = async () => {
     const compile: number[] = [];
     for (let run = 1; run <= WARM_RUNS; run += 1) {
       const next = await timed(async () => render(run));
-      const value = next.value.unwrap();
+      const value = next.value.unwrap(
+        "The Typst session renders a spike fixture",
+      );
       if (value.status === "rendered") {
         compile.push(value.compileMs);
       }
       warm.push(next.ms);
     }
     // Raw Typst output, without PDF/A post-processing, for the size column.
-    const data = buildInvoiceTemplateData(fixture).unwrap();
+    const data = buildInvoiceTemplateData(fixture).unwrap(
+      "A spike fixture builds template data",
+    );
     const raw = await session.render({
       template: await loadDefaultInvoiceTemplate(),
       inputs: { invoice: JSON.stringify(data) },
@@ -208,7 +216,9 @@ const browser = async () => {
   });
   const template = await loadDefaultInvoiceTemplate();
   const data = JSON.stringify(
-    buildInvoiceTemplateData(FIXTURES["1-page"]).unwrap(),
+    buildInvoiceTemplateData(FIXTURES["1-page"]).unwrap(
+      "A spike fixture builds template data",
+    ),
   );
   // Cold: instantiate both modules, load fonts, compile to the vector
   // artifact and render every page to SVG, as a preview pane would.
