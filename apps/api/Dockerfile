@@ -30,7 +30,7 @@ COPY --from=install-inputs /json/ .
 # The cache mount is detached after this layer, so packages must be
 # materialized under /app instead of linked into the global virtual store.
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    BUN_INSTALL_GLOBAL_STORE=0 bun install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
+    BUN_INSTALL_GLOBAL_STORE=0 bun install --filter @stll/api --filter @stll/mcp-apps --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 # Copy source code and compile the API to a Bun binary.
 #
@@ -43,7 +43,14 @@ FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
+# MCP app sources share the web font and translation assets outside the API graph.
+COPY apps/web/src/fonts.css apps/web/src/fonts.css
+COPY apps/web/src/i18n/langs apps/web/src/i18n/langs
+COPY apps/web/public/fonts apps/web/public/fonts
+COPY scripts/generated-artifacts.ts scripts/generated-artifacts.ts
+COPY .oxfmtrc.json .oxfmtrc.json
 RUN bun apps/api/scripts/generate-capability-runtime.ts
+RUN bun --filter @stll/mcp-apps build
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \

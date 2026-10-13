@@ -1,3 +1,4 @@
+import { MCP_APP_BUNDLE_PATHS } from "../packages/mcp-apps/src/bundle-paths";
 import { CI_GENERATED_OUTPUTS } from "../packages/scripts/src/generated-files";
 
 export {
@@ -162,7 +163,7 @@ const GENERATOR_DECLARATIONS = [
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
     autofix: true,
-    after: ["capability-runtime", "mcp-app-bundles"],
+    after: ["capability-runtime", "mcp-app-shared-assets"],
   },
   {
     id: "cli-runtime",
@@ -257,15 +258,13 @@ const GENERATOR_DECLARATIONS = [
     after: ["cli-runtime", "capability-runtime"],
   },
   {
-    id: "mcp-app-bundles",
+    id: "mcp-app-shared-assets",
     outputKind: "committed",
     outputs: [
-      "packages/mcp-apps/src/*/generated/app.html.txt",
       "packages/mcp-apps/src/shared/generated/messages.json",
       "packages/mcp-apps/src/shared/generated/reader-messages.json",
       "packages/mcp-apps/src/shared/generated/reader-inputs.json",
       "packages/mcp-apps/src/shared/generated/style.css",
-      "packages/mcp-apps/src/generated/bundles.ts",
     ],
     inputs: [
       "packages/mcp-apps/src/**",
@@ -287,10 +286,33 @@ const GENERATOR_DECLARATIONS = [
       "packages/fetch/**",
       "bun.lock",
     ],
-    write: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
+    write: ["bun", "--cwd=packages/mcp-apps", "run", "generate:shared-assets"],
     check: null,
     checkedBy: "MCP app package bundles and shared assets guard",
     autofix: true,
+    after: ["mcp-app-contracts"],
+  },
+  {
+    id: "mcp-app-bundles",
+    outputKind: "derived",
+    outputs: MCP_APP_BUNDLE_PATHS,
+    inputs: [
+      "packages/mcp-apps/**",
+      "apps/web/src/fonts.css",
+      "apps/web/public/fonts/**",
+      "apps/web/src/i18n/langs/*.json",
+      "packages/decision-reader/**",
+      "packages/ui/**",
+      "packages/legal-ast/**",
+      "packages/api-contract/**",
+      "packages/locales/**",
+      "packages/fetch/**",
+      "bun.lock",
+    ],
+    write: ["bun", "--cwd=packages/mcp-apps", "run", "build"],
+    check: null,
+    checkedBy: "MCP app package bundles and shared assets guard",
+    autofix: false,
     after: ["mcp-app-contracts"],
   },
   {

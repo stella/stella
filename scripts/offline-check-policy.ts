@@ -234,6 +234,18 @@ export const parseOfflineImportAllowances = (
     };
   });
 };
+const isRelativeTextImport = (
+  specifier: string,
+  attributes: ts.ImportAttributes | undefined,
+) =>
+  specifier.startsWith(".") &&
+  attributes?.elements.some(
+    ({ name, value }) =>
+      name.text === "type" &&
+      ts.isStringLiteralLike(value) &&
+      value.text === "text",
+  ) === true;
+
 const isRawFetchCall = (node: ts.Node): boolean => {
   if (
     ts.isPropertyAccessExpression(node) &&
@@ -405,7 +417,8 @@ export const offlineImportGraphViolations = ({
           ts.isImportDeclaration(node) &&
           node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword
         ) &&
-        !(ts.isExportDeclaration(node) && node.isTypeOnly)
+        !(ts.isExportDeclaration(node) && node.isTypeOnly) &&
+        !isRelativeTextImport(node.moduleSpecifier.text, node.attributes)
       ) {
         follow(node.moduleSpecifier.text);
       }

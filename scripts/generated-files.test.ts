@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
+import { MCP_APP_BUNDLE_PATHS } from "../packages/mcp-apps/src/bundle-paths";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import {
   GENERATORS,
@@ -515,7 +516,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
     ],
     [
       "packages/api-contract/src/mcp-tool.ts",
-      "mcp-app-bundles",
+      "mcp-app-shared-assets",
       "capability-catalog",
     ],
   ] as const;
@@ -818,7 +819,7 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
   const bundle = ciGeneratedStepRun(
     "MCP app package bundles and shared assets guard",
   );
-  const bundleOutputs = generator("mcp-app-bundles")
+  const bundleOutputs = generator("mcp-app-shared-assets")
     .outputs.map((glob) => `"${glob}"`)
     .join(" ");
   expect(bundle).toContain(`git diff --exit-code -- ${bundleOutputs}`);
@@ -968,5 +969,22 @@ test("API compiler input regeneration uses the restricted autofix output contrac
   for (const prerequisite of owner.after) {
     expect(ids).toContain(prerequisite);
     expect(ids.indexOf(prerequisite)).toBeLessThan(ids.indexOf(owner.id));
+  }
+});
+
+test("MCP HTML is derived and never selected for committed autofix output", () => {
+  const bundles = generator("mcp-app-bundles");
+  expect(bundles.outputKind).toBe("derived");
+  expect(bundles.autofix).toBe(false);
+  expect(bundles.outputs).toEqual(MCP_APP_BUNDLE_PATHS);
+  for (const file of MCP_APP_BUNDLE_PATHS) {
+    expect(
+      GENERATORS.filter(({ outputs }) =>
+        outputs.some((glob) => matchesGeneratedGlob(glob, file)),
+      ).map(({ id }) => id),
+    ).toEqual([bundles.id]);
+    expect(
+      Bun.spawnSync(["git", "check-ignore", "--no-index", file]).exitCode,
+    ).toBe(0);
   }
 });

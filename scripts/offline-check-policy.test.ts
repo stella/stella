@@ -381,6 +381,36 @@ test.each([
   },
 );
 
+test("offline closures treat explicit text imports as data and still inspect executable imports", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "offline-text-"));
+  try {
+    const entry = path.join(directory, "check.ts");
+    const input = path.join(directory, "input.ts");
+    writeFileSync(input, "fetch('https://example.invalid');");
+    const options = { entries: [entry], repositoryRoot: directory };
+    writeFileSync(entry, 'import data from "./input.ts";');
+    expect(offlineImportGraphViolations(options).at(0)?.message).toContain(
+      "input.ts: Raw fetch must remain in the snapshot transport owner",
+    );
+    writeFileSync(
+      entry,
+      'import data from "./input.ts" with { type: "text" };',
+    );
+    expect(offlineImportGraphViolations(options)).toEqual([]);
+    rmSync(input);
+    expect(offlineImportGraphViolations(options)).toEqual([]);
+    writeFileSync(
+      entry,
+      'import data from "node:child_process" with { type: "text" };',
+    );
+    expect(offlineImportGraphViolations(options).at(0)?.message).toContain(
+      "node:child_process is forbidden",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("a dynamic module allowance remains exact", () => {
   const source = "await import(target)";
   const directory = mkdtempSync(path.join(tmpdir(), "offline-dynamic-"));

@@ -52,3 +52,6 @@ Dockerfile*
 **/.playwright
 **/mock_files
 **/provenance
+
+# Build MCP app resources in the image from source.
+packages/mcp-apps/src/*/generated/app.html.txt

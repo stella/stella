@@ -1239,12 +1239,20 @@
       ]
     },
     "@stll/api#test:property": {
-      "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
+      "dependsOn": [
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime",
+        "@stll/mcp-apps#build"
+      ],
       "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_DURATIONS_FILE"],
       "cache": false
     },
     "@stll/api#test": {
-      "dependsOn": ["@stll/cli#codegen:runtime", "generate:capability-runtime"],
+      "dependsOn": [
+        "@stll/cli#codegen:runtime",
+        "generate:capability-runtime",
+        "@stll/mcp-apps#build"
+      ],
       "env": ["API_TEST_DURATIONS_HASH", "API_TEST_SHARD", "API_TEST_FILES"],
       // Lane count and diagnostics destinations never change test results;
       // pass them through without entering the cache key.
@@ -1273,7 +1281,29 @@
         "$TURBO_ROOT$/scripts/source-fingerprint-baseline.json"
       ]
     },
+    "@stll/mcp-apps#build": {
+      "dependsOn": ["^transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "!src/*/generated/app.html.txt",
+        "!src/shared/generated/{messages,reader-messages,reader-inputs}.json",
+        "!src/shared/generated/style.css",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/packages/scripts/src/react-compiler-options.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-artifact-format.ts",
+        "$TURBO_ROOT$/scripts/generated-artifacts.ts",
+        "$TURBO_ROOT$/.oxfmtrc.json"
+      ],
+      "outputs": [
+        "src/*/generated/app.html.txt",
+        "src/shared/generated/{messages,reader-messages,reader-inputs}.json",
+        "src/shared/generated/style.css"
+      ]
+    },
     "@stll/mcp-apps#test": {
+      "dependsOn": ["build"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/**",

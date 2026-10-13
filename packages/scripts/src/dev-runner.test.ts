@@ -1514,17 +1514,23 @@ describe("dev env factories", () => {
       skipInstall: true,
     });
 
-    expect(steps).toHaveLength(2);
+    expect(steps).toHaveLength(3);
     expect(steps.at(0)?.cmd.slice(1)).toEqual([
       "run",
       "generate:capability-runtime",
     ]);
-    expect(steps.at(1)?.cmd.slice(1)).toEqual(["run", "db:migrate"]);
+    expect(steps.at(1)?.cmd.slice(1)).toEqual([
+      "--filter",
+      "@stll/mcp-apps",
+      "build",
+    ]);
+    expect(steps.at(1)?.cwd).toBe(rootDir);
+    expect(steps.at(2)?.cmd.slice(1)).toEqual(["run", "db:migrate"]);
     expect(steps.at(0)?.cwd).toBe(path.resolve(rootDir, "apps/api"));
-    expect(steps.at(1)?.env).toMatchObject({
+    expect(steps.at(2)?.env).toMatchObject({
       DATABASE_URL: "postgres://postgres:postgres@localhost:5442/stella",
     });
-    expect(steps.at(1)?.label).toBe("Applying database migrations");
+    expect(steps.at(2)?.label).toBe("Applying database migrations");
   });
 
   test("every API dev mode prepares runtime sources even when installation and migrations are skipped", () => {
@@ -1540,7 +1546,12 @@ describe("dev env factories", () => {
         skipInstall: true,
       });
       expect(steps.map(({ cmd }) => cmd.slice(1))).toEqual(
-        mode === "dev:web" ? [] : [["run", "generate:capability-runtime"]],
+        mode === "dev:web"
+          ? []
+          : [
+              ["run", "generate:capability-runtime"],
+              ["--filter", "@stll/mcp-apps", "build"],
+            ],
       );
     }
   });

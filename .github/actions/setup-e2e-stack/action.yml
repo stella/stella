@@ -131,6 +131,11 @@ runs:
       shell: bash
       run: bun --filter @stll/api generate:capability-runtime
 
+    - name: Build MCP apps
+      if: steps.stack.outputs.status == 'ready'
+      shell: bash
+      run: bun --filter @stll/mcp-apps build
+
     - name: Run database migrations
       if: steps.stack.outputs.status == 'ready'
       # `db:migrate` (not `db:push`) so role bootstrap migrations such as

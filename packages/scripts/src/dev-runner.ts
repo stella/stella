@@ -1834,6 +1834,11 @@ export const buildPreparationSteps = ({
       cwd: path.resolve(rootDir, "apps/api"),
       label: "Preparing API runtime sources",
     });
+    steps.push({
+      cmd: [resolveCommandPath("bun"), "--filter", "@stll/mcp-apps", "build"],
+      cwd: rootDir,
+      label: "Building MCP apps",
+    });
   }
 
   if (!skipDbPush && modeIncludesApi(mode)) {
