@@ -603,6 +603,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/src/i18n/glossary.json",
       "packages/scripts/src/glossary-gen.ts",
       "packages/scripts/src/generated-artifact-format.ts",
+      "packages/text-normalize/src/**",
       ".oxfmtrc.json",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
@@ -738,6 +739,9 @@ const GENERATOR_DECLARATIONS = [
     inputs: [
       "packages/catalogue/entries/**",
       "packages/catalogue/scripts/generate-manifest.ts",
+      "packages/catalogue/scripts/catalogue-filesystem.ts",
+      "packages/catalogue/src/schema.ts",
+      "packages/portable-path/src/**",
     ],
     write: ["bun", "--filter", "@stll/catalogue", "generate"],
     check: [

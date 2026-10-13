@@ -116,6 +116,45 @@ test("generation owners have unique identifiers", () => {
   expect(new Set(ids).size).toBe(ids.length);
 });
 
+test("glossary and catalogue generation inputs cover their runtime import closures", () => {
+  const repoRoot = nodePath.resolve(import.meta.dir, "..");
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  for (const { id, entry } of [
+    { id: "i18n-glossary", entry: "packages/scripts/src/glossary-gen.ts" },
+    {
+      id: "catalogue",
+      entry: "packages/catalogue/scripts/generate-manifest.ts",
+    },
+  ]) {
+    const inputs = generator(id).inputs;
+    const pending = [entry];
+    const visited = new Set<string>();
+    while (pending.length > 0) {
+      const file = pending.pop() ?? panic("Missing import closure entry");
+      if (visited.has(file)) {
+        continue;
+      }
+      visited.add(file);
+      expect(
+        inputs.some((glob) => matchesGeneratedGlob(glob, file)),
+        `${id}: ${file}`,
+      ).toBe(true);
+      for (const { path: specifier } of transpiler.scanImports(
+        readFileSync(nodePath.join(repoRoot, file), "utf-8"),
+      )) {
+        if (!specifier.startsWith(".") && !specifier.startsWith("@stll/")) {
+          continue;
+        }
+        const resolved = Bun.resolveSync(
+          specifier,
+          nodePath.join(repoRoot, nodePath.dirname(file)),
+        );
+        pending.push(repoRelativePath(repoRoot, resolved));
+      }
+    }
+  }
+});
+
 test("pinned facts generation inputs cover the derived parser graph", () => {
   const inputs = generator("catalogue-pinned-facts").inputs;
   const parserInputs = pinnedParserInputs();
