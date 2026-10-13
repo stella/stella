@@ -3,10 +3,10 @@ import { describe, expect, mock, test } from "bun:test";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import { env } from "@/api/env";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/chat/organization-ai-instructions";
 import type { MemberRole } from "@/api/lib/member-roles";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { RESEARCH_ADMIN_TOOL_HANDLERS } from "@/api/mcp/research-admin-tools";

@@ -5,6 +5,7 @@ import { AUDIT_CHANGES_STATUS } from "@stll/api-contract/audit-log";
 import { BOE_SEARCH_PAGE_LIMITS, RELATION_TYPES } from "@stll/boe";
 import { parsePlainDate } from "@stll/time";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import { DOCUMENT_PROCESSING_MODES } from "@/api/db/schema";
 import {
   type AuditLogFilter,
@@ -15,7 +16,6 @@ import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/chat/organization-ai-instructions";
 import {
   MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
   MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,

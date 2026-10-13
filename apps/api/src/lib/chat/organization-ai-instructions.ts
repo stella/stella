@@ -1,7 +1,5 @@
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 
-export const ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH = 3000;
-
 export const buildOrganizationAIInstructionsPrompt = (
   instructions: string,
 ): string => {

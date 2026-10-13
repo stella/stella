@@ -4,12 +4,12 @@ import { describe, expect, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/chat/organization-ai-instructions";
 import {
   hasMemberPermission,
   sessionMemberRole,

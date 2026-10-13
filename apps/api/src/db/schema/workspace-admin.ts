@@ -2,11 +2,11 @@ import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import {
   DEFAULT_MANAGED_AI_RESIDENCY,
   MANAGED_AI_RESIDENCIES,
 } from "@/api/lib/chat/ai-data-policy";
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/chat/organization-ai-instructions";
 import { SANCTIONS_MONITORING_MODES } from "@/api/lib/lists/sanctions/monitoring-vocabulary";
 import { PERSONAL_API_KEY_POLICIES } from "@/api/lib/machine-api-key-config";
 

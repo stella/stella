@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import type { TimeZoneId } from "@stll/time";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import type {
   DocumentProcessingMode,
   PracticeJurisdiction,
@@ -18,7 +19,6 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/chat/organization-ai-instructions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   isFeatureAccessSnapshotForPrincipal,

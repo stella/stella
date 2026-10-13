@@ -12,6 +12,7 @@ import {
 } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   DOCUMENT_PROCESSING_MODE,
@@ -31,7 +32,6 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/chat/organization-ai-instructions";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { validatePattern } from "@/api/lib/matter-reference";
