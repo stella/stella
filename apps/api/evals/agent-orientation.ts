@@ -596,6 +596,21 @@ const SANCTIONS_COMPANY_ID = "26863154";
 
 const TASKS: readonly Task[] = [
   {
+    id: "describe-invoice-export",
+    request:
+      "Describe invoices.export before exporting a matter's invoices for the accountant. Check which formats it accepts and its permissions without invoking it.",
+    mcp: {
+      toolName: "describe_capability",
+      exampleArgs: { capability: "invoices.export" },
+      checkArgs: (args) => field(args, "capability", "invoices.export"),
+    },
+    cli: {
+      kind: "command",
+      path: ["capability", "describe"],
+      flags: { capability: "invoices.export" },
+    },
+  },
+  {
     id: "describe-invoice-pdf",
     request:
       "Describe invoices.pdf.export before attempting to download an invoice PDF. Check its file transport and permissions without invoking it.",

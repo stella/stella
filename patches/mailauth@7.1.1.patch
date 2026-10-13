@@ -1,4 +1,4 @@
-Correct DNS MX and DKIM signing declarations to match mailauth 7.1.0 runtime.
+Correct DNS MX and DKIM signing declarations to match mailauth 7.1.1 runtime.
 Also model the absent alignment on DMARC results without a usable policy.
 Remove when upstream declarations include these runtime shapes.
 
