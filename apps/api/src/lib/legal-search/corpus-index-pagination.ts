@@ -26,7 +26,7 @@ import {
   CORPUS_INDEX_SEARCH_TIMEOUT_MS,
   CorpusIndexError,
   getCorpusIndexClient,
-  isCorpusIndexUnreachable,
+  isCorpusIndexUnavailable,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
   type CorpusProjectionRevision,
@@ -60,12 +60,12 @@ import { LIMITS } from "@/api/lib/limits";
  * retry, which is what 503 says; a 4xx means this module built a request the
  * engine refused, which no retry fixes and 502 reports. Mapping matches
  * `catalogueUpstreamStatus`, the same translation for the skill catalogue.
- * An engine that could not be reached at all answers with the typed
- * `search_index_unavailable` refusal, which every search route and tool maps
- * to the same actionable answer.
+ * An engine that could not be reached at all, or that does not hold the
+ * index, answers with the typed `search_index_unavailable` refusal, which
+ * every search route and tool maps to the same actionable answer.
  */
 const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
-  isCorpusIndexUnreachable(error)
+  isCorpusIndexUnavailable(error)
     ? searchIndexUnavailableError(error)
     : new HandlerError({
         status:

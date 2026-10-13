@@ -331,7 +331,7 @@ describe("parseNssDecisionHtml", () => {
       (leading) => {
         const { documentAst } = parseNssDecisionHtml(
           baseInput(
-            `<html><body><p>Odůvodnění:</p><p>${leading}<b>[31]</b> <b>Body</b>  </p></body></html>`,
+            `<html><body><p>Odůvodnění:</p><p>${leading}<b>[1]</b> <b>Body</b>  </p></body></html>`,
           ),
         );
         const block = documentAst.blocks.find(
@@ -339,6 +339,7 @@ describe("parseNssDecisionHtml", () => {
             candidate.type === "paragraph" && candidate.plainText === "Body",
         );
         expect(block?.plainText).toBe("Body");
+        expect(block).toMatchObject({ number: 1 });
         expect(
           block?.type === "paragraph"
             ? inlinesToPlainText(block.inlines)
@@ -346,7 +347,7 @@ describe("parseNssDecisionHtml", () => {
         ).toBe("Body");
       },
     );
-    test("strips [N] prefix from numbered paragraphs", () => {
+    test("moves the [N] prefix into the paragraph's number", () => {
       const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
@@ -355,6 +356,11 @@ describe("parseNssDecisionHtml", () => {
         (b) => b.type === "paragraph" && /^\[\d+\]/u.test(b.plainText),
       );
       expect(numberedParas.length).toBe(0);
+      expect(
+        documentAst.blocks.flatMap((b) =>
+          b.type === "paragraph" && b.number !== undefined ? [b.number] : [],
+        ),
+      ).toEqual([1, 2]);
 
       // But the content should be preserved
       const stezovatel = documentAst.blocks.find(

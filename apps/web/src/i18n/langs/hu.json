@@ -776,6 +776,9 @@
       "none": "Még nincs rögzített hivatkozás.",
       "openAtCitation": "Megnyitás a hivatkozásnál",
       "openDecision": "Határozat megnyitása",
+      "paragraphLabel": "{paragraph}. pont",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph}. pont",
       "partialSummary": "Az idézettségi összesítések és az idővonal hiányosak.",
       "passageNotFound": "A hivatkozó szövegrész nem található a szövegben",
       "positiveCount": "{count, plural, one {# támogató} other {# támogató}}",
@@ -1437,6 +1440,8 @@
     "sendPrompt": "Üzenet küldése",
     "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
+    "signInToChat": "Jelentkezzen be, hogy erről a dokumentumról csevegjen",
+    "signInToChatAbout": "Jelentkezzen be a csevegéshez:",
     "skills": {
       "scope": {
         "private": "Saját készségek",

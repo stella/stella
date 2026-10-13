@@ -776,6 +776,9 @@
       "none": "Citavimų dar neužfiksuota.",
       "openAtCitation": "Atverti citatos vietoje",
       "openDecision": "Atverti sprendimą",
+      "paragraphLabel": "{paragraph} punktas",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph} punktas",
       "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",
       "passageNotFound": "Cituojanti ištrauka tekste nerasta",
       "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
@@ -1437,6 +1440,8 @@
     "sendPrompt": "Siųsti pranešimą",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
+    "signInToChat": "Prisijunkite, kad galėtumėte kalbėtis apie šį dokumentą",
+    "signInToChatAbout": "Prisijunkite, kad galėtumėte kalbėtis apie",
     "skills": {
       "scope": {
         "private": "Jūsų įgūdžiai",

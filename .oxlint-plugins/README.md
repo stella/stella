@@ -12,6 +12,10 @@ local links in sync. `bash scripts/lint-oxlint-fixtures.sh` proves the positive 
 if a detector stops reporting, its intentionally suppressed fixture becomes an unused
 directive and CI fails.
 
+Run custom rule tests with `bun scripts/run-custom-lint-tests.ts`, or pass test
+paths to select a subset. This runner applies the shared subprocess timeout to
+every file; direct `bun test` uses Bun's shorter default.
+
 "Import X only from its owner module" rules share one table and detector in
 [`restricted-import.ts`](./restricted-import.ts): each row names the modules, the
 restricted exports (or the whole module), the owner files, and the message. The

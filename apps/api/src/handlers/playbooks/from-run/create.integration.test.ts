@@ -29,7 +29,7 @@ import createPlaybookFromRun from "@/api/handlers/playbooks/from-run/create";
 import getPlaybookDefinition from "@/api/handlers/playbooks/get";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ReviewPerspective } from "@/api/lib/document-review/contract";

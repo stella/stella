@@ -138,15 +138,13 @@ const planned = (plan: Record<string, string>, job: string) => {
 // Computed job scopes also depend on changed-file scopes that are not gated
 // directly. Pin their source outputs; unrelated scopes remain unplanned.
 const directScopePattern =
-  /^\$\{\{\s*(steps\.changed-files\.outputs\.[\w-]+_required)\s*\}\}$/u;
+  /^\$\{\{\s*(steps\.[\w-]+\.outputs\.[\w-]+_required)(?:\s*\|\|\s*'[^']*')?\s*\}\}$/u;
 const computedScopeInputs = new Set(
   Object.values(planOutputs)
     .filter((expression) => !directScopePattern.test(expression))
     .flatMap((expression) =>
       [
-        ...expression.matchAll(
-          /\bsteps\.changed-files\.outputs\.[\w-]+_required\b/gu,
-        ),
+        ...expression.matchAll(/\bsteps\.[\w-]+\.outputs\.[\w-]+_required\b/gu),
       ].map(([reference]) => reference),
     ),
 );
@@ -470,8 +468,9 @@ test("a thin-depth skip on any gated code job violates merge-group coverage", ()
     if (!job) {
       panic(`Missing mutation job: ${name}`);
     }
-    const condition = (job.if ?? "true").replace(/^\$\{\{|\}\}$/gu, "");
-    job.if = `\${{ needs.ci-plan.outputs.queue_depth != 'thin' && (${condition}) }}`;
+    const condition = job.if?.trim() ?? "true";
+    const body = /^\$\{\{([\s\S]*)\}\}$/u.exec(condition)?.[1] ?? condition;
+    job.if = `\${{ needs.ci-plan.outputs.queue_depth != 'thin' && (${body}) }}`;
     expect(() => assertMergeGroupCoverage(mutated), name).toThrow(
       `${name}/thin`,
     );

@@ -7,8 +7,8 @@ import {
   resolvePublicCorpusPolicy,
 } from "@/api/public-corpus-policy";
 
+import type { RateLimitOptions } from "./contracts";
 import { scopedRateLimitKey } from "./rate-limit";
-import type { RateLimitOptions } from "./rate-limit";
 import { createRedisRateLimit } from "./redis-context";
 
 export const createPublicCorpusAddressRateLimitOptions = (
