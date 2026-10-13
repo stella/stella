@@ -69,9 +69,9 @@ const OrganizationInstructionsEditor = ({
   const dirty = draft !== saved;
   if (settings.aiInstructions !== serverInstructions) {
     setServerInstructions(settings.aiInstructions);
+    setSaved(settings.aiInstructions);
     if (!dirty) {
       setDraft(settings.aiInstructions);
-      setSaved(settings.aiInstructions);
       setEditorRevision((revision) => revision + 1);
     }
   }

@@ -12,6 +12,7 @@ import { sleep } from "@stll/concurrency/sleep";
 import { getModelOptionsForRole } from "@/components/ai-config-role-models.logic";
 import messages from "@/i18n/langs/en.json";
 import type { OrganizationAIConfig } from "@/lib/organization/ai-config-queries";
+import type { OrganizationSettings } from "@/queries/organization-settings";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/organization",
@@ -31,13 +32,21 @@ let reflectProviderOrder = false;
 const ORGANIZATION = "byok-navigation-fixture";
 let sessionOrganization = ORGANIZATION;
 let auxiliaryFailure: { path: string; message: string } | undefined;
-let organizationSettings = {
+const initialOrganizationSettings = {
   aiInstructions: "",
   aiInstructionsMaxLength: 3000,
   promptCachingEnabled: false,
   documentProcessingMode: "off",
   memoryExtractionEnabled: false,
-};
+} satisfies Pick<
+  OrganizationSettings,
+  | "aiInstructions"
+  | "aiInstructionsMaxLength"
+  | "promptCachingEnabled"
+  | "documentProcessingMode"
+  | "memoryExtractionEnabled"
+>;
+let organizationSettings = { ...initialOrganizationSettings };
 const GOOGLE_KEY = `AIza${"a".repeat(31)}1234`;
 const config = {
   configured: false,
@@ -186,6 +195,8 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { AIConfigForm } = await import("./ai-config-card");
 const { hasUnsavedWork } = await import("@/hooks/use-unsaved-work");
+const { organizationSettingsOptions } =
+  await import("@/queries/organization-settings");
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(() => {
   cleanup();
@@ -197,13 +208,7 @@ afterEach(() => {
   settingsFailure = undefined;
   auxiliaryFailure = undefined;
   sessionOrganization = ORGANIZATION;
-  organizationSettings = {
-    aiInstructions: "",
-    aiInstructionsMaxLength: 3000,
-    promptCachingEnabled: false,
-    documentProcessingMode: "off",
-    memoryExtractionEnabled: false,
-  };
+  organizationSettings = { ...initialOrganizationSettings };
   reflectProviderOrder = false;
   responseConfig = savedConfig;
 });
@@ -404,6 +409,72 @@ test("organization instruction edits block navigation before the editor debounce
   });
   expect(await screen.findByRole("alertdialog")).toBeDefined();
   expect(appRouter.state.location.pathname).toBe("/settings/organization");
+  expect(writes()).toEqual([]);
+});
+
+test("instruction refetches preserve drafts and compare edits with the latest saved instructions", async () => {
+  const original = "Use numbered paragraphs.";
+  const updated = "Use short paragraphs.";
+  const draft = "Use bulleted lists.";
+  organizationSettings = {
+    ...initialOrganizationSettings,
+    aiInstructions: original,
+  };
+  await mount();
+  const save = await screen.findByRole("button", {
+    name: messages.common.save,
+  });
+  await waitFor(() =>
+    expect(document.querySelector(".md-editor")).not.toBeNull(),
+  );
+  const element = document.querySelector(".md-editor");
+  if (!(element instanceof HTMLElement) || !("editContext" in element)) {
+    panic("Expected the mounted instructions EditContext");
+  }
+  const context = element.editContext;
+  if (
+    !(context instanceof EventTarget) ||
+    !("text" in context) ||
+    typeof context.text !== "string"
+  ) {
+    panic("Expected the instructions source");
+  }
+  const replace = (text: string) => {
+    act(() => {
+      context.dispatchEvent(
+        Object.assign(new Event("textupdate"), {
+          text,
+          updateRangeStart: 0,
+          updateRangeEnd:
+            typeof context.text === "string"
+              ? context.text.length
+              : panic("Expected the instructions source"),
+          selectionStart: text.length,
+          selectionEnd: text.length,
+        }),
+      );
+    });
+  };
+  expect(context.text).toBe(original);
+  replace(draft);
+  expect(hasUnsavedWork()).toBe(true);
+  organizationSettings = { ...organizationSettings, aiInstructions: updated };
+  const client = clients.at(-1) ?? panic("Expected the mounted query client");
+  await act(async () => {
+    await client.refetchQueries(
+      organizationSettingsOptions({
+        organizationId: ORGANIZATION,
+        userId: "user",
+      }),
+    );
+  });
+  expect(context.text).toBe(draft);
+  replace(original);
+  expect(hasUnsavedWork()).toBe(true);
+  expect(save).toHaveProperty("disabled", false);
+  replace(updated);
+  expect(hasUnsavedWork()).toBe(false);
+  expect(save).toHaveProperty("disabled", true);
   expect(writes()).toEqual([]);
 });
 
