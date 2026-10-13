@@ -1,9 +1,8 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { CALLER_FEATURE } from "../../apps/web/src/lib/organization/feature-access/surfaces.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
-setDefaultTimeout(20_000);
 const RULE = "require-caller-feature-access";
 const PATH = "apps/web/src/routes/_protected.fixture.tsx";
 const lint = async (source: string) =>

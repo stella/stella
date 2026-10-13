@@ -73,6 +73,9 @@ env:
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled
   DB_LOAD_GATE_BUSY_WINDOWS: "[]"
+  # Plain logs: no ANSI escapes for readers that fetch them as text. Only
+  # FORCE_COLOR: Node warns when NO_COLOR is set beside it.
+  FORCE_COLOR: "0"
 
 jobs:
   ci-plan:
@@ -150,10 +153,12 @@ jobs:
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       desktop_browser_required: ${{ steps.changed-files.outputs.desktop_browser_required }}
       # The job and result gate consume the same event/depth decision.
+      ci_browser_scope_required: ${{ steps.changed-files.outputs.ci_browser_scope_required }}
       ci_browser_required: >-
         ${{ steps.completed-depth.outputs.run_required != 'false'
         && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
         && steps.changed-files.outputs.package_checks_required == 'true'
+        && steps.changed-files.outputs.ci_browser_scope_required == 'true'
         && ((github.event_name == 'pull_request' && steps.changed-files.outputs.desktop_browser_required == 'true')
         || (github.event_name != 'pull_request'
         && steps.depth.outputs.suite_depth == 'full')
@@ -161,7 +166,9 @@ jobs:
         && steps.completed-depth.outputs.normal_completion != 'complete'
         && contains(fromJSON(steps.pilot-queue-plan.outputs.queue_jobs || '[]'), 'ci-browser')))
         && 'true' || 'false' }}
-      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_image_inputs_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_api_source_required: ${{ steps.legal-atlas-scope.outputs.api_source_required || 'true' }}
+      legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required == 'true' && steps.legal-atlas-scope.outputs.api_source_required != 'false' }}
       legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
@@ -609,7 +616,7 @@ jobs:
 
       - name: Setup Bun for dependency scope
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch' || inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -777,6 +784,7 @@ jobs:
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "desktop_browser_required=true"
+              echo "ci_browser_scope_required=true"
               echo "e2e_core_required=true"
               echo "e2e_production_required=$e2e_production_required"
               echo "e2e_landing_required=true"
@@ -826,6 +834,7 @@ jobs:
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "desktop_browser_required=false"
+              echo "ci_browser_scope_required=false"
               echo "e2e_core_required=false"
               echo "e2e_production_required=false"
               echo "e2e_landing_required=false"
@@ -901,6 +910,10 @@ jobs:
           fi
           if [[ "$package_checks_required" == false ]]; then
             desktop_browser_required=false
+          fi
+          ci_browser_scope_required=$(bun scripts/ci-browser-scope.ts "${changed_files[@]}") || ci_browser_scope_required=true
+          if [[ "$ci_browser_scope_required" != false ]]; then
+            ci_browser_scope_required=true
           fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
@@ -1028,7 +1041,7 @@ jobs:
                 ;;
             esac
             case "$file" in
-              apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml)
+              apps/legal-atlas-runner/*|apps/api/*|apps/*/package.json|packages/*|patches/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|scripts/legal-atlas-image-scope*|scripts/docker-source-closure*|scripts/generated-imports*|scripts/generated-files*|scripts/install-free-ci*|.dockerignore|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
                 ;;
             esac
@@ -1168,6 +1181,7 @@ jobs:
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "desktop_browser_required=$desktop_browser_required"
+            echo "ci_browser_scope_required=$ci_browser_scope_required"
             echo "e2e_core_required=$e2e_core_required"
             echo "e2e_production_required=$e2e_production_required"
             echo "e2e_landing_required=$e2e_landing_required"
@@ -1230,6 +1244,26 @@ jobs:
         run: bash scripts/retry.sh timeout --kill-after=10s 120s bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+          # A tolerated failure is a warning, not a failure annotation.
+          RETRY_FAILURE_LEVEL: warning
+
+      - name: Refine Legal Atlas API source scope
+        id: legal-atlas-scope
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success' && steps.changed-files.outputs.legal_atlas_image_required == 'true'
+        run: |
+          changed_files=()
+          while IFS= read -r -d '' file; do
+            changed_files+=("$file")
+          done < "$RUNNER_TEMP/api-test-changed-paths"
+          # An unknown diff is already broad; an empty list must preserve it.
+          required=true
+          if (( ${#changed_files[@]} > 0 )); then
+            required=$(timeout --kill-after=10s 120s bun scripts/legal-atlas-image-scope.ts "${changed_files[@]}") || required=true
+          fi
+          if [[ "$required" != false ]]; then
+            required=true
+          fi
+          echo "api_source_required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Select affected API test files
         id: api-test-selection
@@ -1513,7 +1547,6 @@ jobs:
     needs: ci-plan
     if: >-
       inputs.pr_depth_only != true
-      && inputs.heavy_only != true
       && (github.event_name == 'merge_group' || needs.ci-plan.outputs.run_required != 'false')
       && github.event_name != 'pull_request'
       && (needs.ci-plan.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
@@ -1544,7 +1577,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -1573,6 +1606,7 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -1915,7 +1949,7 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
@@ -2020,7 +2054,7 @@ jobs:
           persist-credentials: false
           submodules: true
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: "package.json"
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -2117,7 +2151,7 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -2427,7 +2461,7 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -2584,6 +2618,10 @@ jobs:
         run: |
           bun test scripts/check-oxlint-rule-coverage.test.ts
           bun scripts/check-oxlint-rule-coverage.ts
+
+      - name: Custom lint test timeout policy
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/check-oxlint-test-timeouts.test.ts scripts/run-custom-lint-tests.test.ts
 
       - name: Dated waiver lifecycle guards
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -2759,7 +2797,7 @@ jobs:
 
       - name: Setup Bun
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -2805,7 +2843,7 @@ jobs:
       - name: Changeset present for published package changes
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request') && steps.policy.outcome == 'success' }}
         # The repository owner publishes this versioned shared contract.
-        uses: stella/.github/.github/actions/changeset-policy@167fb396c6c0f4e07296ad2cd72e6ef15367c776 # v1.8.0
+        uses: stella/.github/.github/actions/changeset-policy@5764ab66e4df84cfd2e642c7d7e4678261e668f8 # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -2977,7 +3015,7 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun test scripts/oxlint-plugin-test-coverage.test.ts
-          find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test
+          bun scripts/run-custom-lint-tests.ts
 
       - name: Prepare route network manifest
         id: network_manifest_prepare
@@ -3427,6 +3465,12 @@ jobs:
           bun scripts/outbound-transport-ownership.ts --check
           bun test scripts/outbound-transport-ownership.test.ts
 
+      - name: Document identity ownership
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun scripts/document-identity-guard.ts
+          bun test scripts/document-identity-guard.test.ts
+
       - name: Module ownership invariants
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         # Invariants the ownership table cannot state itself, such as
@@ -3845,6 +3889,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/e2e-geometry-shards.test.ts
 
+      - name: Test e2e shard budget
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/e2e-shard-budget.test.ts
+
       - name: Validate CI service image mirror inventory
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: |
@@ -3944,6 +3992,10 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/retry.test.sh
 
+      - name: Test CI failure digest
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-failure-digest.test.ts
+
       - name: Test base image pull script
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
         run: bash scripts/pull-base-images.test.sh
@@ -4003,11 +4055,11 @@ jobs:
 
       - name: Test aggregate inventories
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
+        run: bun scripts/run-custom-lint-tests.ts scripts/check-aggregate-locks.test.ts scripts/check-aggregate-mutations.test.ts .oxlint-plugins/__tests__/aggregate-lock-sites.test.ts .oxlint-plugins/__tests__/confine-aggregate-lock.test.ts
 
       - name: Test write contract inventories
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts
+        run: bun scripts/run-custom-lint-tests.ts scripts/check-write-contracts.test.ts .oxlint-plugins/__tests__/require-write-contract.test.ts
 
       - name: Office fixture metadata
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4139,7 +4191,7 @@ jobs:
           fi
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -4240,7 +4292,12 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
+          # On failure the log ends with the failing tests and their errors.
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
+            status=$?
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
+            exit "$status"
+          }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Upload API test timings
@@ -4274,7 +4331,12 @@ jobs:
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output"
+          # On failure the log ends with the failing tests and their errors.
+          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
+            status=$?
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
+            exit "$status"
+          }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
       - name: Upload test diagnostics
@@ -4361,7 +4423,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -4487,6 +4549,18 @@ jobs:
             .github/actions/setup-playwright \
             .github/workflows/ci.yml \
             apps/desktop \
+            apps/web \
+            packages \
+            scripts/ci-service-images.ts \
+            scripts/ci-service-images.json \
+            scripts/ci-browser-scope.ts \
+            scripts/ci-package-scope.ts \
+            scripts/install-free-ci.ts \
+            scripts/retry.sh \
+            scripts/generated-files.ts \
+            bunfig.toml \
+            .npmrc \
+            VERSION \
             apps/web/e2e/playwright.ui-playground.config.ts \
             apps/web/e2e/ui-playground \
             apps/web/package.json \
@@ -4557,7 +4631,7 @@ jobs:
       # setup-bun reuses the matching ~/.bun/bin/bun above, avoiding unzip.
       - name: Restore Bun install cache
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -4717,7 +4791,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4752,6 +4826,7 @@ jobs:
           cp .env.example .env
 
       - name: Code quality
+        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4853,7 +4928,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -4888,6 +4963,7 @@ jobs:
           cp .env.example .env
 
       - name: Code quality (web)
+        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -4929,6 +5005,7 @@ jobs:
           bun scripts/typecheck-coverage.ts
 
       - name: Code quality (rest)
+        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -5097,10 +5174,6 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Configure test Postgres parity
-        run: |
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
       - name: Download planned Postgres test durations
         if: needs.ci-plan.outputs.postgres_test_durations_hash != 'missing'
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -5136,6 +5209,10 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
+
       - name: Upload failed Bun install logs
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -5151,6 +5228,14 @@ jobs:
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
+
+      - name: Configure ephemeral Postgres fixture maintenance
+        working-directory: apps/api
+        env:
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+        # A 1s DDL deadline races the default 1s autovacuum cancellation grace.
+        # Keep cluster defaults for the fresh-database maintenance assertions.
+        run: bun scripts/postgres-test-maintenance.ts
 
       - name: Run Postgres-gated API suites
         id: postgres-tests
@@ -5303,12 +5388,8 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Configure test Postgres parity
-        run: |
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5316,6 +5397,10 @@ jobs:
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       - name: Apply migrations to service Postgres
         if: needs.ci-plan.outputs.corpus_suites_required == 'true'
@@ -5494,12 +5579,8 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
-      - name: Configure test Postgres parity
-        run: |
-          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
-
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5509,6 +5590,10 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Configure test Postgres parity
+        run: |
+          bash scripts/configure-test-postgres.sh "${{ job.services.postgres.id }}" stella_owner
 
       # The base image is pulled here, in workflow-owned steps, and the
       # registry credential is discarded before any checked-out script runs:
@@ -5631,7 +5716,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5745,7 +5830,7 @@ jobs:
           submodules: true
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5810,7 +5895,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -5989,7 +6074,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -6004,6 +6089,7 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -6129,7 +6215,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -6224,7 +6310,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -6316,7 +6402,7 @@ jobs:
           persist-credentials: false
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install dependencies
@@ -6370,7 +6456,7 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -6522,8 +6608,9 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 15m setup + 13m tests + 4m uploads + 2m cancellation/post hooks.
-    timeout-minutes: 34
+    # Longest leg: 15m setup + 21m tests + 4m uploads + 2m cancellation/post hooks.
+    # Playwright uses measured p95/max plus the task registry margin.
+    timeout-minutes: 42
     permissions:
       contents: read
       packages: read
@@ -6547,13 +6634,21 @@ jobs:
 
       - name: Setup Bun
         timeout-minutes: 1
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        id: e2e-budget
         timeout-minutes: 2
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        run: |
+          bash scripts/retry.sh bun ci --ignore-scripts
+          if [[ "${{ matrix.shard }}" != network-baseline ]]; then
+            minutes=$(bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --minutes ${{ matrix.shard }})
+            echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
+          else
+            echo "minutes=1" >> "$GITHUB_OUTPUT"
+          fi
         env:
           NPM_TOKEN: ""
           # Three attempts and both waits fit inside the step deadline.
@@ -6615,7 +6710,7 @@ jobs:
           retention-days: 7
 
       - name: Run Playwright shard
-        timeout-minutes: 7
+        timeout-minutes: ${{ fromJSON(steps.e2e-budget.outputs.minutes) }}
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard != 'network-baseline'
@@ -6627,6 +6722,7 @@ jobs:
           E2E_SPECS: ${{ needs.ci-plan.outputs.e2e_production_specs }}
         run: |
           set -euo pipefail
+          SECONDS=0
           case "$E2E_MODE" in
             full)
               args=(--project=chromium --project=heap-growth-canary --shard=${{ matrix.shard }}/2)
@@ -6652,7 +6748,8 @@ jobs:
             bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${args[@]}" || status=$?
           if [[ "$E2E_MODE" == full ]]; then
             # Shard the uniform-cost geometry matrix independently; cheap tests
-            # must not displace its cases onto one shard. Keep the shared 7m cap.
+            # must not displace its cases onto one shard. Both batches share the
+            # measured wall-time budget, including container overhead.
             # Preserve both blob reports, including when geometry fails.
             shopt -s nullglob
             trap 'mkdir -p apps/web/e2e/test-results/blob-report; for report in apps/web/e2e/test-results/geometry/blob-report/*.zip; do cp "$report" apps/web/e2e/test-results/blob-report/; done' EXIT
@@ -6661,6 +6758,7 @@ jobs:
               bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
               bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2 || status=$?
           fi
+          bun --preload ./scripts/offline-network-preload.ts scripts/e2e-shard-deadline.ts --check ${{ matrix.shard }} "$SECONDS" || status=$?
           exit "$status"
 
       # API-owned browser checks (visual sandbox) need the API from this stack
@@ -6816,7 +6914,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -6932,7 +7030,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -7190,7 +7288,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -7449,7 +7547,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -7569,7 +7667,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -7584,8 +7682,25 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
+            scripts/ci-install.ts
           sparse-checkout-cone-mode: false
+
+      - name: Install smoke dependencies
+        timeout-minutes: 3
+        run: bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Upload failed Bun install logs
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: bun-install-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/bun-install/*.log
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Pull API base images
         env:
@@ -7763,7 +7878,7 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
@@ -7778,6 +7893,7 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -7881,7 +7997,7 @@ jobs:
           ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun with install cache
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -7999,7 +8115,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -8094,7 +8210,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -8346,7 +8462,7 @@ jobs:
 
       - name: Setup Bun for the desktop transport smoke
         if: matrix.os == 'macos'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
@@ -8574,7 +8690,7 @@ jobs:
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun for dated waiver guard
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
@@ -8714,6 +8830,9 @@ jobs:
           sparse-checkout: |
             scripts/gh-retry.sh
             scripts/retry.sh
+            scripts/ci-failure-digest.ts
+            scripts/fetch-failed-job-logs.sh
+            /package.json
           sparse-checkout-cone-mode: false
 
       - name: Preserve GitHub API tooling across source checkouts
@@ -8992,10 +9111,10 @@ jobs:
                     else "\($job) (\($result))"
                     end]
                 | join(", ")' <<< "$NEEDS")
-              folded_violations=$(jq -r --arg queue "${QUEUE_DEPTH:-full}" --argjson thin "${THIN_JOBS:-[]}" --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
+              folded_violations=$(jq -r --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
                 . as $needs
                 | [$suites | to_entries[] | .key as $job | .value | to_entries[]
-                  | select(($needs | has($job)) and ($queue != "thin" or ($thin | index($job))) and $plan[.value] == "true") | .key as $suite
+                  | select(($needs | has($job)) and $plan[.value] == "true") | .key as $suite
                   | ($needs[$job].outputs[$suite] // "missing") as $result
                   | select($result != "success") | "\($suite) (planned, \($result))"]
                 | join(", ")' <<< "$NEEDS")
@@ -9016,7 +9135,9 @@ jobs:
               # A failure stands even when a sibling job was cancelled.
               failed=$(jq -r '[to_entries[] | select(.value.result as $r | ["success", "skipped", "cancelled"] | index($r) | not) | "\(.key) (\(.value.result))"] | join(", ")' <<< "$NEEDS")
               if [[ -n "$failed" ]]; then
-                echo "::error::CI checks failed: $failed"
+                # Plain text: the failure digest below annotates each failed
+                # step, and this step's exit is annotated by the runner.
+                echo "CI checks failed: $failed"
                 exit 1
               fi
               # Fast-required jobs must run when their scope is planned;
@@ -9079,6 +9200,44 @@ jobs:
               echo "Not every planned CI job succeeded in this run; recording no completion evidence."
             fi
           fi
+
+      # Failure digest: one record per failed step (job, step, kind, first
+      # error lines with file:line) as annotations on this check run, a job
+      # summary and the `ci-failures` artifact. Failed steps come from the
+      # jobs API, so output a passing step prints on purpose is never listed.
+      # Reporting only: the verdict above is unchanged.
+      - name: Setup Bun for the failure digest
+        if: failure() && steps.outcome.outcome == 'failure'
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: .workflow-tooling/package.json
+
+      - name: Digest failed steps
+        if: failure() && steps.outcome.outcome == 'failure'
+        timeout-minutes: 5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          dir="$RUNNER_TEMP/ci-failures"
+          mkdir -p "$dir/logs"
+          if ! bash "$GH_RETRY_SCRIPT" api --paginate --slurp "repos/$REPO/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100" > "$dir/jobs.json"; then
+            echo "Failure digest unavailable: the jobs lookup failed."
+            exit 0
+          fi
+          bash .workflow-tooling/scripts/fetch-failed-job-logs.sh "$REPO" "$dir/jobs.json" "$dir/logs" || echo "Job log download failed; the digest names each job without a log."
+          bun .workflow-tooling/scripts/ci-failure-digest.ts digest --jobs "$dir/jobs.json" --logs "$dir/logs" --json "$dir/ci-failures.json" --summary "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload failure digest
+        if: failure() && steps.outcome.outcome == 'failure'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ci-failures
+          overwrite: true
+          path: ${{ runner.temp }}/ci-failures/ci-failures.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       # Evaluate the variable when this final job starts, after the suites.
       - name: Check out the merge hold rule

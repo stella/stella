@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 // Chain-of-custody class guard. A document version is legal evidence: it must
 // never be hard-deleted, and its bytes must stay retained under legal hold.
 // `delete.ts` tombstones the row (sets `deletedAt` + actor) instead of
@@ -194,10 +196,7 @@ describe("delete-version chain-of-custody guard", () => {
     const offenders: string[] = [];
     for (const file of collectSourceFiles(API_SRC)) {
       const lines = readFileSync(file, "utf-8").split("\n");
-      const rel = nodePath
-        .relative(API_SRC, file)
-        .split(nodePath.sep)
-        .join("/");
+      const rel = repoRelativePath(API_SRC, file);
       for (const [index, line] of lines.entries()) {
         if (!RELATIONAL_DEPENDENT_READS.some((p) => line.includes(p))) {
           continue;
@@ -296,14 +295,13 @@ describe("delete-version chain-of-custody guard", () => {
       ],
     };
 
-    const toPosix = (file: string) =>
-      nodePath.relative(API_SRC, file).split(nodePath.sep).join("/");
+    const toRepoPath = (file: string) => repoRelativePath(API_SRC, file);
 
     const uncovered: string[] = [];
     const matchedExceptions = new Set<string>();
 
     for (const file of collectSourceFiles(API_SRC)) {
-      const rel = toPosix(file);
+      const rel = toRepoPath(file);
       const lines = readFileSync(file, "utf-8").split("\n");
       const fileExceptions = REVIEWED_EXCEPTIONS[rel] ?? [];
 
@@ -459,10 +457,7 @@ describe("delete-version chain-of-custody guard", () => {
     const matchedExceptions = new Set<string>();
     for (const file of collectSourceFiles(API_SRC)) {
       const lines = readFileSync(file, "utf-8").split("\n");
-      const rel = nodePath
-        .relative(API_SRC, file)
-        .split(nodePath.sep)
-        .join("/");
+      const rel = repoRelativePath(API_SRC, file);
       for (const [index, line] of lines.entries()) {
         if (!line.includes(".update(entityVersions)")) {
           continue;

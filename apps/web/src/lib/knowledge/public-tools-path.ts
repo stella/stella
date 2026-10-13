@@ -31,6 +31,18 @@ export const publicToolDownloadPath = (
   options?: ToolsPathOptions,
 ): `/${string}` => `${publicToolPath(slug, options)}/download`;
 
+export const isPublicToolDownloadPath = (pathname: string): boolean => {
+  const normalized = pathname.replace(/\/$/u, "");
+  const slug = normalized.split("/").at(-2);
+  if (!slug) {
+    return false;
+  }
+  return (
+    normalized === publicToolDownloadPath(slug, { publicKnowledge: false }) ||
+    normalized === publicToolDownloadPath(slug, { publicKnowledge: true })
+  );
+};
+
 export const publicToolsContributePath = (
   options?: ToolsPathOptions,
 ): `/${string}` => `${publicToolsBasePath(options)}/contribute`;

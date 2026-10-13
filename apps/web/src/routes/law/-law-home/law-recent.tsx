@@ -14,6 +14,7 @@ import {
   AlertDialogClose,
 } from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { HistoryIcon, SearchIcon, XIcon } from "@stll/ui/icons";
 import {
   LANDING_ROW_CLASS,
@@ -29,8 +30,6 @@ import { useRelativeTime } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
-
-import { DocumentIdentityBadge } from "./document-identity-badge";
 
 const FILTER_OPTIONS = {
   all: { value: "all", labelKey: "common.all" },
