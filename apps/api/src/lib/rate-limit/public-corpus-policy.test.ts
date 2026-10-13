@@ -318,7 +318,10 @@ describe("public corpus admission policy", () => {
         `http://localhost${STELLA_API_VERSION_PREFIX}${path}`,
         { method },
       );
-      const budget = runPublicReadRequest(request);
+      const budget = runPublicReadRequest(
+        request,
+        getPublicReadStatementTimeoutMs,
+      );
       expect(budget, route).toBe(PUBLIC_READ_STATEMENT_TIMEOUT_MS[routeClass]);
       expect(budget, route).toBeGreaterThan(0);
     }
