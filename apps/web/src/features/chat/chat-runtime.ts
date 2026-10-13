@@ -156,10 +156,11 @@ export type ChatRuntime = ChatActivitySession & {
   getSnapshot: () => ChatRuntimeSnapshot;
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
+  /** Resolves once the message is appended, without waiting for its stream. */
   startRouteHandoffMessage: (
     message: ChatRouteHandoffMessage,
     options?: ChatSendMessageOptions,
-  ) => ChatRouteHandoffStart;
+  ) => Promise<ChatRouteHandoffStart>;
   /** The user's Stop: the server ends the turn as stopped. */
   stop: () => void;
   /** The page leaves the thread: it closes its own request and asks the
@@ -1156,19 +1157,24 @@ export const createChatRuntime = ({
       client.setMessagesManually(messages);
       setSnapshot({ messages });
     },
-    startRouteHandoffMessage: (message, options) => {
+    startRouteHandoffMessage: async (message, options) => {
       const started = startClientSend(message, options);
-      detached(
-        started.stream.catch(captureRuntimeError),
-        "chat-queries.stream",
-      );
       if (started.status === "not_started") {
+        const outcome = await Result.tryPromise({
+          try: async () => await started.stream,
+          catch: (cause) => captureRuntimeError(cause),
+        });
+        readQueryResult(outcome);
         return readQueryResult(
           Result.err(
             captureRuntimeError(new ChatMessageStartError(message.id)),
           ),
         );
       }
+      detached(
+        started.stream.catch(captureRuntimeError),
+        "chat-queries.stream",
+      );
       return started;
     },
     stop: () => {

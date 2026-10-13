@@ -266,6 +266,32 @@ describe("chat runtime emits while a response streams", () => {
     );
   });
 
+  test("preserves the original preparation rejection during a route handoff", async () => {
+    const failure = new TypeError("Message content could not be read");
+    const page = openPage();
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await page.runtime.startRouteHandoffMessage({
+          get content(): string {
+            throw failure;
+          },
+          id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000001"),
+        }),
+      catch: (error) => error,
+    });
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(findChatRequestError(outcome.error)?.kind).toBe(
+        "preparation_failed",
+      );
+      expect(findChatRequestError(outcome.error)?.cause).toBe(failure);
+    }
+    expect(page.runtime.getSnapshot().messages).toEqual([]);
+    expect(findChatRequestError(page.runtime.getSnapshot().error)?.cause).toBe(
+      failure,
+    );
+  });
+
   test("preserves a failed reader context before sending and recovers on the next send", async () => {
     const failure = new TypeError("Reader context is unavailable");
     let contextReady = false;
@@ -365,6 +391,25 @@ describe("chat runtime emits while a response streams", () => {
     const dropped = await Result.tryPromise({
       try: async () =>
         await sendThreadChatMessage(page.runtime, {
+          content: "A second question",
+          id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000002"),
+        }),
+      catch: (error) => error,
+    });
+    expect(dropped.isErr()).toBe(true);
+    if (dropped.isErr()) {
+      expect(isChatMessageStartError(dropped.error)).toBe(true);
+      expect(findChatRequestError(dropped.error)?.kind).toBe("not_started");
+    }
+    server.close();
+    await sent;
+  });
+
+  test("a concurrent route handoff retains the busy-send classification", async () => {
+    const { page, server, sent } = await openStreamingPage();
+    const dropped = await Result.tryPromise({
+      try: async () =>
+        await page.runtime.startRouteHandoffMessage({
           content: "A second question",
           id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000002"),
         }),
