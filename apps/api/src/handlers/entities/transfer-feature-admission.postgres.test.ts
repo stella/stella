@@ -1,11 +1,12 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import {
   entities,
+  entityVersions,
   featureEnrolments,
   workspaceMembers,
   workspaces,
@@ -72,6 +73,32 @@ describe.skipIf(!enabled)(
                     kind: "folder",
                   },
                 ]);
+                const sourceIds = [
+                  sourceFolderId,
+                  ordinaryFolderId,
+                  targetFolderId,
+                  f.taskEntityId,
+                ];
+                await db.insert(entityVersions).values(
+                  sourceIds.map((entityId) => ({
+                    id: createSafeId<"entityVersion">(),
+                    workspaceId: f.workspaceId,
+                    entityId,
+                    versionNumber: 1,
+                  })),
+                );
+                await db
+                  .update(entities)
+                  .set({ currentVersionId: sql`${entityVersions.id}` })
+                  .from(entityVersions)
+                  .where(
+                    and(
+                      eq(entities.workspaceId, f.workspaceId),
+                      eq(entityVersions.workspaceId, f.workspaceId),
+                      eq(entityVersions.entityId, entities.id),
+                      inArray(entities.id, sourceIds),
+                    ),
+                  );
                 await db
                   .update(entities)
                   .set({ parentId: sourceFolderId })
