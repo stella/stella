@@ -11,7 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-const script = new URL("typecheck-command-probe.sh", import.meta.url).pathname;
+const script = path.join(import.meta.dirname, "typecheck-command-probe.sh");
 const originalSource = "export const original: number = 1;\n";
 
 const runProbe = (selection: "existing" | "unique") => {
