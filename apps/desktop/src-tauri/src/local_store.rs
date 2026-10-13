@@ -31,11 +31,6 @@ struct EncryptedEnvelope {
   version: u8,
 }
 
-#[derive(Deserialize)]
-struct EnvelopeMetadata {
-  version: serde_json::Value,
-}
-
 fn read_envelope(
   path: &Path,
   label: &str,
@@ -49,10 +44,15 @@ fn read_envelope(
       )));
     }
   };
-  let metadata: EnvelopeMetadata = serde_json::from_slice(&raw).map_err(|error| {
+  let metadata: serde_json::Value = serde_json::from_slice(&raw).map_err(|error| {
     EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
   })?;
-  if metadata.version.as_u64() != Some(u64::from(ENVELOPE_VERSION)) {
+  let object = metadata.as_object().ok_or_else(|| {
+    EncryptedReadError::Unreadable(format!("{label} envelope is not an object"))
+  })?;
+  if object.get("version").and_then(serde_json::Value::as_u64)
+    != Some(u64::from(ENVELOPE_VERSION))
+  {
     return Err(EncryptedReadError::Incompatible(format!(
       "{label} store version is unsupported"
     )));
@@ -413,6 +413,49 @@ mod tests {
       Err(EncryptedReadError::Incompatible(_))
     ));
     assert_eq!(fs::read(&path).unwrap(), original);
+    remove_store(&path);
+  }
+
+  #[test]
+  fn object_envelopes_without_a_supported_integer_version_are_incompatible() {
+    let path = unique_path();
+    let file = EncryptedJsonFile::new([7; 32], path.clone(), "fixture");
+    for raw in [
+      r#"{}"#,
+      r#"{"futureCiphertext":"saved"}"#,
+      r#"{"version":null}"#,
+      r#"{"version":"1"}"#,
+      r#"{"version":1.5}"#,
+      r#"{"version":-1}"#,
+      r#"{"version":999}"#,
+    ] {
+      fs::write(&path, raw).unwrap();
+      assert!(
+        matches!(
+          file.load_checked::<serde_json::Value>(),
+          Err(EncryptedReadError::Incompatible(_))
+        ),
+        "{raw}"
+      );
+      assert!(
+        matches!(
+          check_envelope_compatibility(&path, "fixture"),
+          Err(EncryptedReadError::Incompatible(_))
+        ),
+        "{raw}"
+      );
+      assert_eq!(fs::read_to_string(&path).unwrap(), raw);
+    }
+    for raw in ["invalid json", "null", "1", "[]", r#""text""#] {
+      fs::write(&path, raw).unwrap();
+      assert!(
+        matches!(
+          file.load_checked::<serde_json::Value>(),
+          Err(EncryptedReadError::Unreadable(_))
+        ),
+        "{raw}"
+      );
+    }
     remove_store(&path);
   }
 

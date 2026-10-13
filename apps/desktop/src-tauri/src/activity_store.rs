@@ -131,14 +131,14 @@ impl ActivityStore {
               "activity files could not be listed: {error}"
             ))
           })?;
-          if entry
+          if !entry
             .file_type()
             .map_err(|error| {
               EncryptedReadError::Unavailable(format!(
                 "activity file type could not be read: {error}"
               ))
             })?
-            .is_symlink()
+            .is_file()
           {
             continue;
           }
@@ -1338,6 +1338,93 @@ mod tests {
     ));
     assert_eq!(fs::read(&path).unwrap(), original);
     ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn future_root_envelope_survives_confirmed_missing_key_erasure() {
+    let (store, root) = store();
+    store.save_pending(date(1), &pending()).unwrap();
+    let path = root.join("future-store.encrypted");
+    let original = br#"{"version":999,"futureCiphertext":{"data":"saved"}}"#;
+    fs::write(&path, original).unwrap();
+    assert!(matches!(
+      ActivityStore::remove_missing_key_with_lookup(
+        &root,
+        ActivityDeletionRecovery::DiscardMissingKey,
+        || Ok(LocalDataKeyLookup::Missing)
+      ),
+      Err(ActivityDeletionError::Incompatible)
+    ));
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert!(store.day_file(date(1)).path().exists());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn missing_and_noninteger_root_versions_refuse_missing_key_erasure() {
+    for envelope in [
+      serde_json::json!({"futureCiphertext":"saved"}),
+      serde_json::json!({"version":"1"}),
+      serde_json::json!({"version":1.5}),
+      serde_json::json!({"version":null}),
+    ] {
+      let (store, root) = store();
+      store.save_pending(date(1), &pending()).unwrap();
+      let path = root.join("future-store.encrypted");
+      let original = serde_json::to_vec(&envelope).unwrap();
+      fs::write(&path, &original).unwrap();
+      assert!(matches!(
+        ActivityStore::remove_missing_key_with_lookup(
+          &root,
+          ActivityDeletionRecovery::DiscardMissingKey,
+          || Ok(LocalDataKeyLookup::Missing)
+        ),
+        Err(ActivityDeletionError::Incompatible)
+      ));
+      assert_eq!(fs::read(&path).unwrap(), original);
+      assert!(store.day_file(date(1)).path().exists());
+      ActivityStore::remove(&root).unwrap();
+    }
+  }
+
+  #[test]
+  fn root_header_scan_ignores_unrelated_directories() {
+    let (store, root) = store();
+    store.save_pending(date(1), &pending()).unwrap();
+    fs::create_dir(root.join("unrelated")).unwrap();
+    assert_eq!(
+      ActivityStore::check_root_envelope_compatibility(&root),
+      Ok(())
+    );
+    assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending()));
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  #[cfg(unix)]
+  fn missing_key_erasure_preserves_linked_file_and_day_directory_targets() {
+    use std::os::unix::fs::symlink;
+    let (_, root) = store();
+    let (outside_store, outside) = store();
+    outside_store.save_pending(date(1), &pending()).unwrap();
+    let outside_file = outside.join("future-store.encrypted");
+    let original = br#"{"version":999,"futureCiphertext":{"data":"saved"}}"#;
+    fs::write(&outside_file, original).unwrap();
+    let day_path = outside_store.day_file(date(1)).path().to_path_buf();
+    let saved_day = fs::read(&day_path).unwrap();
+    fs::create_dir(&root).unwrap();
+    symlink(&outside_file, root.join("linked.encrypted")).unwrap();
+    symlink(outside.join(DAYS_DIR_NAME), root.join(DAYS_DIR_NAME)).unwrap();
+    ActivityStore::remove_missing_key_with_lookup(
+      &root,
+      ActivityDeletionRecovery::DiscardMissingKey,
+      || Ok(LocalDataKeyLookup::Missing),
+    )
+    .unwrap();
+    assert!(!root.exists());
+    assert_eq!(fs::read(&outside_file).unwrap(), original);
+    assert_eq!(fs::read(&day_path).unwrap(), saved_day);
+    ActivityStore::remove(&outside).unwrap();
   }
 
   #[test]

@@ -4395,6 +4395,44 @@ mod tests {
   }
 
   #[test]
+  fn keyed_initialization_records_with_an_unrelated_root_directory() {
+    let root = std::env::temp_dir()
+      .join(format!("stella-stray-directory-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([9; 32], root.clone());
+    let mut original = recording_manager();
+    original.observe(at(0), active("word"));
+    original.stop(at(5)).unwrap();
+    let date = local_date(at(0));
+    store
+      .save_day(date, original.days.get(&date).unwrap())
+      .unwrap();
+    let unrelated = root.join("unrelated");
+    std::fs::create_dir(&unrelated).unwrap();
+    let contents = unrelated.join("saved.txt");
+    std::fs::write(&contents, b"preserved").unwrap();
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::Encrypted(store.clone()),
+      original.settings.clone(),
+      at(10),
+    );
+    assert_eq!(
+      manager.persistence_status(),
+      ActivityPersistenceStatus::Encrypted
+    );
+    assert!(manager.is_recording());
+    assert_eq!(manager.wall_floor, Some(at(5)));
+    manager.observe(at(10), active("word"));
+    manager.stop(at(15)).unwrap();
+    let saved = store.load_day(date).unwrap();
+    assert_eq!(saved.len(), 2);
+    assert_eq!((saved[0].start, saved[0].end), (at(0), at(5)));
+    assert_eq!((saved[1].start, saved[1].end), (at(10), at(15)));
+    assert_eq!(std::fs::read(&contents).unwrap(), b"preserved");
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
   fn concurrent_initializers_share_one_key_and_leave_a_decryptable_store() {
     use std::sync::{
       Condvar,
