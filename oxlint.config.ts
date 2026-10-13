@@ -268,6 +268,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inline-endpoint-in-routes.fixture.ts", [
     "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes",
   ]),
+  fixtureRuleOverride("no-hand-built-date-range-filter.fixture.tsx", [
+    "no-hand-built-date-range-filter/no-hand-built-date-range-filter",
+  ]),
   fixtureRuleOverride("no-ad-hoc-inline-rename.fixture.tsx", [
     "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename",
   ]),
@@ -1220,6 +1223,7 @@ const config = defineConfig({
     ],
     "no-nanoid/no-nanoid": "error",
     "no-section-sign-glyph/no-section-sign-glyph": "error",
+    "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
@@ -1463,6 +1467,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
@@ -1491,6 +1496,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
+    "./.oxlint-plugins/require-matter-option-label.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
@@ -3483,6 +3489,7 @@ const config = defineConfig({
         "no-direct-error-toast/no-direct-error-toast": "error",
         "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
+        "require-matter-option-label/require-matter-option-label": "error",
         "security-guards/no-unsanitized-href": "error",
         "stella-toast/stella-toast": "error",
       },
@@ -3536,6 +3543,14 @@ const config = defineConfig({
       ],
       rules: {
         "require-matter-affordance/require-matter-affordance": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-matter-option-label.fixture.tsx",
+      ],
+      rules: {
+        "require-matter-option-label/require-matter-option-label": "error",
       },
     },
     {

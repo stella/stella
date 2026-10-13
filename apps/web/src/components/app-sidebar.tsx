@@ -57,6 +57,7 @@ import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import {
+  chatActivityByWorkspace,
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
   resolveEntityActivityDestination,
@@ -268,12 +269,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       ? groupedThreadsView.items.pages
       : undefined,
   );
-  const chatActivityByWorkspaceId = new Map(
-    groupedChatThreads.workspaces.flatMap((workspace) => {
-      const updatedAt = workspace.threads.at(0)?.updatedAt;
-      return updatedAt ? [[workspace.workspaceId, updatedAt] as const] : [];
-    }),
-  );
+  const chatActivityByWorkspaceId = chatActivityByWorkspace(groupedChatThreads);
   const workspaces = workspacesData?.workspaces;
   const guideWorkspaceList = ((): GuideWorkspaceListState => {
     if (workspacesPending) {
