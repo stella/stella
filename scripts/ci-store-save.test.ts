@@ -9,7 +9,11 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { createSaveProgress, runCacheSave } from "./ci-store-save";
+import {
+  CACHE_SAVE_WORKER_FILE,
+  createSaveProgress,
+  runCacheSave,
+} from "./ci-store-save";
 
 const node = Bun.which("node");
 if (node === null) {
@@ -70,6 +74,38 @@ const runFixture = async (source: string) => {
     rmSync(directory, { recursive: true, force: true });
   }
 };
+
+test("the downloaded cache worker runs as an ES module without a package.json", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "cache-save-esm-"));
+  const entry = path.join(directory, CACHE_SAVE_WORKER_FILE);
+  writeFileSync(
+    entry,
+    `
+    import { createRequire } from 'node:module';
+    const require = createRequire(import.meta.url);
+    require('node:fs').writeFileSync('esm-executed', 'yes');
+    console.log('Cache saved with key: fixture');
+  `,
+  );
+  try {
+    expect(
+      await runCacheSave({
+        entry,
+        directory,
+        env: process.env,
+        progress: createSaveProgress(Date.now()),
+        executable: node,
+        stallMs: 1000,
+        pollMs: 25,
+      }),
+    ).toBe("saved");
+    expect(readFileSync(path.join(directory, "esm-executed"), "utf-8")).toBe(
+      "yes",
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 
 test("only increasing byte counters reset stall time, independently of total duration", () => {
   const progress = createSaveProgress(0);

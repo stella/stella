@@ -16,7 +16,8 @@ import { sha256Hex } from "../packages/sha256/src/node.ts";
 // the same pinned implementation as restore without private runner-path assumptions.
 export const CACHE_SAVE_REVISION = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 export const CACHE_SAVE_SHA256 =
-  "9193aa9dbe5025f2bf39802ae241470af35c5e5737fd4bec6e1d6dbaad153bb4";
+  "0d3cf341a79cdc0a8ce5a71103f46174e12cf4f98db46f15b8e604932eefd487";
+export const CACHE_SAVE_WORKER_FILE = "upstream-save.mjs";
 const STALL_MS = 120_000;
 const BUDGET_MS = 60_000;
 const activeChildren = new Set<ChildProcess>();
@@ -200,7 +201,7 @@ const saveStore = async ({ key, store }: SaveStoreOptions) => {
     }
     directory = mkdtempSync(path.join(tmpdir(), "stella-store-save-"));
     const response = await fetch(
-      `https://raw.githubusercontent.com/actions/cache/${CACHE_SAVE_REVISION}/dist/save/index.js`,
+      `https://raw.githubusercontent.com/actions/cache/${CACHE_SAVE_REVISION}/dist/save-only/index.js`,
       { signal: controller.signal },
     );
     if (!response.ok || response.body === null) {
@@ -224,13 +225,18 @@ const saveStore = async ({ key, store }: SaveStoreOptions) => {
     if (sha256Hex(source) !== CACHE_SAVE_SHA256) {
       throw new StoreSaveError("Cache action integrity check failed");
     }
-    const entry = path.join(directory, "upstream-save.cjs");
+    const entry = path.join(directory, CACHE_SAVE_WORKER_FILE);
     writeFileSync(entry, source);
     outcome = await runCacheSave({
       entry,
       directory,
       progress,
-      env: { ...process.env, INPUT_KEY: key, INPUT_PATH: store },
+      env: {
+        ...process.env,
+        INPUT_KEY: key,
+        INPUT_PATH: store,
+        INPUT_ENABLECROSSOSARCHIVE: "false",
+      },
     });
     if (outcome !== "saved") {
       warning(`Cache save outcome: ${outcome}; job work is unaffected.`);
