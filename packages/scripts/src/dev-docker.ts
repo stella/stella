@@ -36,7 +36,9 @@ export class DockerEndpointError extends TaggedError("DockerEndpointError")<{
   cause?: unknown;
 }> {}
 
-const validateDockerHost = (value: string) => {
+const validateDockerHost = (
+  value: string,
+): Result<v.InferOutput<typeof dockerHostSchema>, DockerEndpointError> => {
   const parsed = v.safeParse(dockerHostSchema, value);
   if (!parsed.success) {
     return Result.err(
