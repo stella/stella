@@ -10,7 +10,7 @@ import { isSsrDocumentRequest } from "./ssr-request";
 test("tool downloads bypass the SSR deadline even with document Accept headers", () => {
   for (const publicKnowledge of [false, true]) {
     for (const slug of [
-      "contract-review-anthropic",
+      "contract-review-example",
       "legal-research",
       "translated%20tool",
     ]) {
