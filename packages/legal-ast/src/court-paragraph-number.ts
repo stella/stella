@@ -9,7 +9,10 @@ import type { Block } from "./document-ast.js";
  * stored number that is not a positive whole number is not a citable
  * paragraph and reads as none.
  */
-export const courtParagraphNumber = (block: Block): number | null =>
+export const courtParagraphNumber = (block: {
+  readonly type: string;
+  readonly number?: number | undefined;
+}): number | null =>
   block.type === "paragraph" &&
   block.number !== undefined &&
   Number.isSafeInteger(block.number) &&

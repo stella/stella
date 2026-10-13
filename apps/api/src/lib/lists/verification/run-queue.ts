@@ -54,6 +54,7 @@ import {
   VERIFICATION_MODEL_TASK,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
   checkVerificationDispatchBudget,
   ListVerificationRunCapError,
@@ -414,7 +415,6 @@ type ClaimedRun = {
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
   contentSha256: string;
-  evidence: VerificationEvidence;
 };
 
 /** Conditional `queued -> running`: the loser of a double delivery updates
@@ -446,7 +446,6 @@ const claimRun = async ({
       fileFieldId: legalListVerificationRuns.fileFieldId,
       entityVersionId: legalListVerificationRuns.entityVersionId,
       contentSha256: legalListVerificationRuns.contentSha256,
-      evidence: legalListVerificationRuns.evidence,
     });
   return rows.at(0) ?? null;
 };
@@ -617,7 +616,7 @@ type VerificationExecutionBoundaries = {
 type ExecuteRunArgs = {
   actor: RunActor;
   admission: ModelDispatchAdmission;
-  run: ClaimedRun;
+  run: ClaimedRun & { evidence: VerificationEvidence };
   accessProof: ListVerificationAccessProof;
   grants?: FeatureAccessGrants | undefined;
   execution?: VerificationExecutionBoundaries;
@@ -886,7 +885,21 @@ export const processListVerificationRun = async ({
       return null;
     }
     const claimed = await claimRun({ tx, actor, accessProof: decision.proof });
-    return claimed === null ? null : { run: claimed, proof: decision.proof };
+    if (claimed === null) {
+      return null;
+    }
+    const evidence = await readRunEvidenceForGrading({
+      tx,
+      workspaceId: actor.workspaceId,
+      runId: actor.runId,
+    });
+    return {
+      run: {
+        ...claimed,
+        evidence: evidence ?? panic("Claimed verification run is missing"),
+      },
+      proof: decision.proof,
+    };
   });
   if (claim === null) {
     return;

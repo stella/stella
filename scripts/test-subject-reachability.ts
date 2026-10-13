@@ -4,6 +4,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import { BASELINE_PATHS } from "./baseline-paths.ts";
@@ -220,13 +221,18 @@ const existingSource = (
   specifier: string,
 ): string | undefined =>
   candidatePaths(repoRoot, testFile, specifier).find((candidate) => {
-    const relative = path
-      .relative(repoRoot, candidate)
-      .replaceAll(path.sep, "/");
+    const relative = repoRelativePath(repoRoot, candidate);
     return (
       SOURCE_FILE.test(candidate) &&
       !TEST_FILE.test(candidate) &&
-      !TEST_SUPPORT.test(relative) &&
+      // A support module is a subject when its own colocated test exercises it;
+      // importing unrelated fixtures still does not establish reachability.
+      (!TEST_SUPPORT.test(relative) ||
+        candidate.replace(/\.[cm]?[jt]sx?$/u, "") ===
+          path.resolve(
+            repoRoot,
+            testFile.replace(/\.(?:test|spec)\.[cm]?[jt]sx?$/u, ""),
+          )) &&
       existsSync(candidate) &&
       statSync(candidate).isFile()
     );

@@ -1308,10 +1308,6 @@
     "reason": "Existing QUESTION_COLUMN_ACTIONS domain; contract ownership pending migration."
   },
   {
-    "id": "apps/web/src/features/case-law/statute-version.test.ts::<module>::domain:[\"never-in-force\",\"invalid-window\",\"withdrawn\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
-  },
-  {
     "id": "apps/web/src/features/chat/chat-snapshot-history.test.ts::caseArb::max:2::1",
     "reason": "Local test input domain or bound; retained for fixture coverage."
   },
