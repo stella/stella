@@ -3404,6 +3404,10 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun test scripts/ci-generated-sources.test.ts packages/scripts/src/prepared-generated-sources.test.ts
 
+      - name: Windows dry-run receipt contract
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-windows-dry-run-result.test.ts
+
       - name: Test input coverage
         env:
           STELLA_VERIFY: check
@@ -8090,7 +8094,7 @@ jobs:
         timeout-minutes: 5
         uses: $/.github/actions/ci-install
         with:
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/desktop...","--filter","!stella"]'
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
           log-file: "${{ runner.temp }}/bun-install/desktop-windows-dry-run.log"
         env:
           BUN_INSTALL_GLOBAL_STORE: "0"
@@ -8111,19 +8115,72 @@ jobs:
           toolchain: 1.99.0
           targets: x86_64-pc-windows-msvc
 
+      - name: Resolve Windows build toolchain
+        id: tools
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tools = @{}
+          $tools.bun = (& bun --version) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Bun version unavailable" }
+          $tools.rust = (& rustc -vV) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Rust version unavailable" }
+          $tools.cargo = (& cargo -V) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Cargo version unavailable" }
+          $tools.node = (& node --version) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Node version unavailable" }
+          $tools.tauri = (& bun run --cwd apps/desktop tauri --version) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw "Tauri version unavailable" }
+          $tools.image = $env:ImageVersion
+          $tools.os = $env:ImageOS
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = (& $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json) | Select-Object -First 1
+          if (-not $vs) { throw "Visual Studio version unavailable" }
+          $tools.visualStudio = $vs.installationVersion
+          $tools.msvc = (Get-ChildItem "$($vs.installationPath)\VC\Tools\MSVC" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
+          $tools.sdk = (Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Lib\10.*" -Directory | Sort-Object Name | ForEach-Object Name) -join ','
+          if ($tools.Values | Where-Object { [string]::IsNullOrWhiteSpace($_) }) { throw "Incomplete Windows toolchain" }
+          $tools | ConvertTo-Json | Set-Content "$env:RUNNER_TEMP/windows-tools.json" -Encoding utf8
+
+      - name: Look up successful queue dry-run receipt
+        id: receipt
+        if: steps.tools.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WINDOWS_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          WINDOWS_BUILD_PROFILE: dry-run;prod;0.0.0;x86_64-pc-windows-msvc;release;nsis
+        run: bun scripts/ci-windows-dry-run-result.ts
+
       - name: Stamp dry-run metadata
+        if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
         env:
           VERSION: 0.0.0
           CHANNEL: prod
         run: bun scripts/desktop-release-step.ts stamp
 
       - name: Exercise Windows desktop release build
+        if: github.event_name == 'merge_group' || steps.receipt.outputs.reused != 'true'
         uses: ./.github/actions/desktop-windows-build
         with:
           dry-run: "true"
           target: x86_64-pc-windows-msvc
-          release-sha: ${{ github.sha }}
+          # The embedded SHA labels telemetry only. Dry runs prove compilation
+          # and bundling with fixed metadata so identical queue/main content has
+          # identical build inputs; signed releases embed their release SHA.
+          release-sha: "0000000000000000000000000000000000000000"
           script-path: ${{ github.workspace }}/scripts/desktop-release-step.ts
+
+      - name: Upload successful queue dry-run receipt
+        if: success() && github.event_name == 'merge_group' && steps.receipt.outcome == 'success' && steps.receipt.outputs.key != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
+        with:
+          name: desktop-windows-dry-run-${{ steps.receipt.outputs.key }}
+          path: ${{ runner.temp }}/windows-result/manifest.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
