@@ -18,58 +18,32 @@
  */
 
 import { panic } from "better-result";
-import * as v from "valibot";
 
-import { PUBLIC_LAW_PAGE_SIZES } from "@stll/api-contract/limits";
 import { SEARCH_TOTAL_TYPE, type SearchTotal } from "@stll/api-contract/search";
 
-export type PublicLawPageSize = (typeof PUBLIC_LAW_PAGE_SIZES)[number];
+import {
+  DEFAULT_PUBLIC_LAW_PAGE_SIZE,
+  PUBLIC_LAW_MAX_PAGE,
+  publicLawPageNumber,
+  publicLawPageSearchSchema,
+  publicLawPageSearchValue,
+  publicLawPageSize,
+  publicLawPageSizeSearchSchema,
+  publicLawPageSizeSearchValue,
+} from "./public-law-route-pagination.logic";
+import type { PublicLawPageSize } from "./public-law-route-pagination.logic";
 
-export const DEFAULT_PUBLIC_LAW_PAGE_SIZE = 50 satisfies PublicLawPageSize;
-
-/**
- * How deep a link may reach. Every page beyond the first costs one request the
- * reader has to walk, so a hand-typed or crawled `page=100000` is not a page,
- * it is a request to make a hundred thousand of them.
- */
-export const PUBLIC_LAW_MAX_PAGE = 40;
-
-const isPublicLawPageSize = (value: number): value is PublicLawPageSize =>
-  PUBLIC_LAW_PAGE_SIZES.some((size) => size === value);
-
-/** The size a URL asks for, or the default when it asks for one we do not offer. */
-export const publicLawPageSize = (
-  value: number | undefined,
-): PublicLawPageSize =>
-  value !== undefined && isPublicLawPageSize(value)
-    ? value
-    : DEFAULT_PUBLIC_LAW_PAGE_SIZE;
-
-/**
- * The page a URL asks for; anything that is not one of ours is the first. A
- * list addressed by offset passes its own deepest page; the walked lists keep
- * the walk's depth limit.
- */
-export const publicLawPageNumber = (
-  value: number | undefined,
-  deepestPage = PUBLIC_LAW_MAX_PAGE,
-): number =>
-  value !== undefined &&
-  Number.isInteger(value) &&
-  value >= 1 &&
-  value <= deepestPage
-    ? value
-    : 1;
-
-/** What the URL carries for a page: nothing, when it is the first. */
-export const publicLawPageSearchValue = (page: number): number | undefined =>
-  page <= 1 ? undefined : page;
-
-/** What the URL carries for a size: nothing, when it is the default. */
-export const publicLawPageSizeSearchValue = (
-  pageSize: PublicLawPageSize,
-): PublicLawPageSize | undefined =>
-  pageSize === DEFAULT_PUBLIC_LAW_PAGE_SIZE ? undefined : pageSize;
+export {
+  DEFAULT_PUBLIC_LAW_PAGE_SIZE,
+  PUBLIC_LAW_MAX_PAGE,
+  publicLawPageNumber,
+  publicLawPageSearchSchema,
+  publicLawPageSearchValue,
+  publicLawPageSize,
+  publicLawPageSizeSearchSchema,
+  publicLawPageSizeSearchValue,
+};
+export type { PublicLawPageSize };
 
 /**
  * How many pages of the chain the loader asks for.
@@ -98,7 +72,6 @@ export const reachablePublicLawPage = (
   const deepest = Math.max(walkedPageCount, 1);
   return Math.min(publicLawPageNumber(page), deepest);
 };
-
 /** Which of the walked pages is on screen. */
 export const publicLawPageIndex = (
   page: number,
@@ -348,36 +321,3 @@ export const publicLawNumberedPagerModel = ({
       return panic("Unhandled search total");
   }
 };
-
-/**
- * Which page of the results, and how large a page is, as a route's search
- * schema reads them. Both are dropped from the URL at their default, and both
- * are read leniently: a public link may be typed or crawled, and a page number
- * nobody can reach is the first page, not an error screen.
- */
-export const publicLawPageSearchSchemaUpTo = (deepestPage: number) =>
-  v.fallback(
-    v.optional(
-      v.pipe(
-        v.union([v.number(), v.string()]),
-        v.transform((value) => publicLawPageNumber(Number(value), deepestPage)),
-        v.transform((page) => publicLawPageSearchValue(page)),
-      ),
-    ),
-    undefined,
-  );
-
-/** The page of a list walked by cursor, up to the walk's depth limit. */
-export const publicLawPageSearchSchema =
-  publicLawPageSearchSchemaUpTo(PUBLIC_LAW_MAX_PAGE);
-
-export const publicLawPageSizeSearchSchema = v.fallback(
-  v.optional(
-    v.pipe(
-      v.union([v.number(), v.string()]),
-      v.transform((value) => publicLawPageSize(Number(value))),
-      v.transform((pageSize) => publicLawPageSizeSearchValue(pageSize)),
-    ),
-  ),
-  undefined,
-);

@@ -212,7 +212,7 @@ async fn report(handle: &AppHandle) {
     return;
   };
   let version = handle.package_info().version.to_string();
-  let request = match request(
+  let Ok(request) = request(
     &client,
     &account,
     &Report {
@@ -220,12 +220,9 @@ async fn report(handle: &AppHandle) {
       version: &version,
       protocol: crate::handoff::PROTOCOL_VERSION,
     },
-  ) {
-    Ok(request) => request,
-    Err(_) => {
-      tracing::warn!("desktop presence device proof unavailable");
-      return;
-    }
+  ) else {
+    tracing::warn!("desktop presence device proof unavailable");
+    return;
   };
   let result = request.send().await;
   match result {
@@ -298,8 +295,7 @@ mod tests {
       },
     )
     .unwrap()
-    .build()
-    .unwrap();
+    .build();
     assert_eq!(req.method(), reqwest::Method::POST);
     assert_eq!(
       req.url().as_str(),

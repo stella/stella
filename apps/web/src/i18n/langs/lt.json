@@ -128,6 +128,11 @@
     "orSignInWithEmail": "arba prisijunkite el. paštu",
     "organizationNamePlaceholder": "Mano organizacija",
     "password": "Slaptažodis",
+    "professionalUse": {
+      "description": "Kuriant jūsų paskyrą šis pareiškimas jums nebuvo parodytas. Norėdami tęsti, jį priimkite.",
+      "title": "Patvirtinkite profesinį naudojimą"
+    },
+    "professionalUseStatement": "Sukurdami paskyrą patvirtinate, kad stella naudojatės profesiniais tikslais, ir suprantate, kad stella yra įrankis teisės specialistams ir nepakeičia teisinės konsultacijos.",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
     "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
@@ -727,6 +732,13 @@
         "procedural-history": "Procesinė eiga",
         "reasoning": "Mąstymas"
       },
+      "errors": {
+        "answerIncomplete": "{source, select, organization {Jūsų organizacijos {provider} raktas grąžino neišsamų atsakymą.} other {DI modelis grąžino neišsamų atsakymą.}}",
+        "providerRefused": "{source, select, organization {{provider} atmetė užklausą, pateiktą su jūsų organizacijos raktu. Patikrinkite raktą, jo kvotą ir atsiskaitymą organizacijos nustatymuose.} other {DI teikėjas atmetė užklausą.}}",
+        "providerUnavailable": "{source, select, organization {{provider} šiuo metu nepasiekiamas su jūsų organizacijos raktu.} other {DI teikėjas šiuo metu nepasiekiamas.}}",
+        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}",
+        "unavailable": "Šiam sprendimui DI analizė neprieinama."
+      },
       "generate": "Parengti DI santraukas",
       "holdingAnchor": "Pereiti prie pastraipos",
       "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
@@ -764,6 +776,9 @@
       "none": "Citavimų dar neužfiksuota.",
       "openAtCitation": "Atverti citatos vietoje",
       "openDecision": "Atverti sprendimą",
+      "paragraphLabel": "{paragraph} punktas",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph} punktas",
       "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",
       "passageNotFound": "Cituojanti ištrauka tekste nerasta",
       "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
@@ -792,7 +807,7 @@
       "courtCount": "{count, plural, one {# teismas} few {# teismai} many {# teismo} other {# teismų}}",
       "newLast24Hours": "{count} per pastarąsias 24 val.",
       "newLast7Days": "Nauji per pastarąsias 7 dienas",
-      "unlistedCourts": "{count, plural, one {Teismai už didžiausio ribų} few {Teismai už # didžiausių ribų} other {Teismai už # didžiausių ribų}}"
+      "otherCourts": "Kiti teismai"
     },
     "courtTiers": {
       "constitutional": "Konstituciniai teismai",
@@ -808,6 +823,7 @@
       "decisionYears": "Sprendimų metai",
       "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
       "exceedsReportedTotal": "Turi daugiau, nei paskutinis skelbėjo nurodytas skaičius {date}",
+      "gapStatusUnknown": "Spragų būsena nežinoma",
       "generatedAt": "Duomenys {date}",
       "globeLabel": "Valstybės, kurių teismų praktiką turi korpusas, gaublyje",
       "healthCurrent": "Atnaujinta",
@@ -816,9 +832,12 @@
       "healthStalled": "Sustojęs",
       "healthUnknown": "Niekada nevykdyta",
       "inPreparation": "Rengiama",
+      "knownGaps": "Žinomos spragos",
       "lastSync": "Paskutinis sinchronizavimas",
+      "noGapsRecorded": "Spragų neužregistruota",
       "notCountedYet": "Dar nesuskaičiuota",
       "notMeasuredYet": "Dar neišmatuota",
+      "pendingTexts": "Laukiantys tekstai",
       "reportedByListing": "Suskaičiuota pagal skelbėjo sąrašą",
       "reportedByOperator": "Įvesta rankiniu būdu",
       "reportedByPublisher": "Paties skelbėjo skaičius",
@@ -1082,6 +1101,9 @@
       "toastDescription": "Pokalbis per visą puslapį su išsaugomomis gijomis netrukus pasirodys.",
       "toastTitle": "Pilnas rodinys dar negalimas"
     },
+    "activity": {
+      "review": "Peržiūros atnaujinimas"
+    },
     "aiPrompt": "DI pranešimo laukas",
     "aiThread": "DI pokalbis",
     "analyzingSources": "Analizuojami šaltiniai",
@@ -1251,6 +1273,11 @@
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
+    "history": {
+      "matterUnavailable": "Ši byla nepasiekiama",
+      "older": "Senesni",
+      "previous7Days": "Ankstesnės 7 dienos"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
@@ -1267,6 +1294,9 @@
       "noMatters": "Bylų dar nėra",
       "noRecentChats": "Nėra naujausių pokalbių",
       "noSkills": "Įgūdžių dar nėra",
+      "openAllMatters": "Atidaryti visas bylas",
+      "openChatHistory": "Atidaryti pokalbių istoriją",
+      "openSkillsLibrary": "Atidaryti įgūdžių biblioteką",
       "pinnedMatters": "Prisegtos bylos",
       "recentChats": "Neseniai naudoti pokalbiai",
       "skillEditedBy": "Redagavo {name} · {time}",
@@ -1326,7 +1356,9 @@
     "pastedText": {
       "expand": "Rodyti visą tekstą",
       "fromClipboard": "Įklijuota {count, plural, one {# simbolis} few {# simboliai} other {# simbolių}}",
-      "fromPromptFallback": "Įgūdis"
+      "fromPromptFallback": "Įgūdis",
+      "showInTextField": "Rodyti teksto lauke",
+      "title": "Įklijuotas tekstas"
     },
     "placeholder": "Čia įveskite klausimą, / įgūdžiams, @ kontekstui pridėti",
     "promptImprovementStrategies": {
@@ -1408,6 +1440,8 @@
     "sendPrompt": "Siųsti pranešimą",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
+    "signInToChat": "Prisijunkite, kad galėtumėte kalbėtis apie šį dokumentą",
+    "signInToChatAbout": "Prisijunkite, kad galėtumėte kalbėtis apie",
     "skills": {
       "scope": {
         "private": "Jūsų įgūdžiai",
@@ -1738,6 +1772,8 @@
     "citations": "Citavimai",
     "clauses": "Sąlygos",
     "clearDate": "Išvalyti datą",
+    "clearFilters": "Išvalyti filtrus",
+    "clearSearch": "Išvalyti paiešką",
     "close": "Uždaryti",
     "closeAll": "Uždaryti viską",
     "closeOthers": "Uždaryti kitus",
@@ -1768,6 +1804,7 @@
       "nextDecade": "Kitas dešimtmetis",
       "nextMonth": "Kitas mėnuo",
       "nextYear": "Kiti metai",
+      "outOfRange": "Pasirinkite datą leistiname intervale.",
       "previousDecade": "Ankstesnis dešimtmetis",
       "previousMonth": "Ankstesnis mėnuo",
       "previousYear": "Ankstesni metai",
@@ -1915,6 +1952,7 @@
     "noResults": "Rezultatų nėra",
     "noVersions": "Nėra versijų istorijos",
     "none": "Nėra",
+    "notStated": "Nenurodyta",
     "notes": "Pastabos",
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
@@ -1984,6 +2022,7 @@
     "sort": "Rūšiuoti",
     "source": "Šaltinis",
     "stale": "Pasenusi",
+    "start": "Pradėti",
     "status": "Būsena",
     "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
     "stepProgress": "{current} iš {total}",
@@ -2063,11 +2102,38 @@
     "scopeSkills": "Naudoti jūsų išsaugotus stella įgūdžius",
     "scopeTemplates": "Dokumentų šablonų sąrašas, pildymas ir kūrimas",
     "scopeTemplatesAnonymized": "Peržiūrėti, pildyti ir kurti anonimizuotas jūsų dokumentų šablonų versijas",
+    "sensitiveAccess": "Apima prieigą, kuri gali ištrinti duomenis arba pakeisti jūsų organizaciją",
+    "showAllPermissions": "{count, plural, one {Rodyti # leidimą} few {Rodyti visus # leidimus} many {Rodyti visus # leidimo} other {Rodyti visus # leidimų}}",
     "signedInAs": "Prisijungta kaip <email>{accountEmail}</email>",
+    "summaryAdminRead": "audito žurnalas",
+    "summaryAdminWrite": "organizacijos nariai ir nustatymai, įskaitant jų ištrynimą",
+    "summaryBillingWrite": "laiko įrašai, įskaitant jų ištrynimą",
+    "summaryChat": "pokalbiai, įskaitant jų ištrynimą",
+    "summaryContactsWrite": "kontaktai, įskaitant jų ištrynimą",
+    "summaryDocumentsWrite": "dokumentai, įskaitant jų ištrynimą",
+    "summaryExternalMcps": "prijungti išoriniai įrankiai",
+    "summaryFeedback": "atsiliepimai",
+    "summaryKnowledgeWrite": "sąlygos ir peržiūros vadovai, įskaitant sąlygų ištrynimą",
+    "summaryLawRead": "viešus teisės aktus ir teismų praktiką",
+    "summaryLineChange": "<group>Gali keisti:</group> {items} ({count})",
+    "summaryLineOther": "<group>Taip pat:</group> {items}",
+    "summaryLineRead": "<group>Gali skaityti:</group> {items} ({count})",
+    "summaryMattersWrite": "bylos ir užduotys, įskaitant jų ištrynimą",
+    "summaryOfflineAccess": "nuolatinis prisijungimas",
+    "summaryOnboarding": "praktikos jurisdikcijos",
+    "summaryProfile": "profilis",
+    "summaryRead": "dokumentai, bylos ir kontaktai",
+    "summaryReadAnonymized": "anonimizuoti dokumentai ir bylos",
+    "summarySearch": "paieška",
+    "summarySearchAnonymized": "anonimizuota paieška",
+    "summarySkills": "įgūdžiai, įskaitant jų ištrynimą",
+    "summaryTemplates": "dokumentų šablonai, įskaitant jų ištrynimą",
+    "summaryTemplatesAnonymized": "anonimizuoti dokumentų šablonai",
     "title": "Suteikti prieigą",
     "unverifiedApp": "Nepatvirtinta programėlė",
     "unverifiedExplanation": "stella nepatikrino, kas skelbia šią programą.",
-    "useAnotherAccount": "Naudoti kitą paskyrą"
+    "useAnotherAccount": "Naudoti kitą paskyrą",
+    "verifiedPublisher": "Patvirtinta programa, leidėjas {publisher}"
   },
   "contacts": {
     "alsoPartyIn": "Taip pat dalyvauja kaip šalis {count, plural, one {# kitoje byloje} few {# kitose bylose} other {# kitų bylų}}",
@@ -2771,7 +2837,6 @@
       },
       "selectFlow": "Pasirinkite darbo eigą",
       "sizeConfirmTitle": "Didelės apimties eigos vykdymas",
-      "start": "Pradėti",
       "startFailed": "Nepavyko paleisti darbo eigos.",
       "started": "Darbo eiga paleista",
       "stepProgress": "{current} žingsnis iš {total}",
@@ -2988,8 +3053,7 @@
   "guides": {
     "action": {
       "replay": "Pradėti iš naujo",
-      "skip": "Praleisti",
-      "start": "Pradėti"
+      "skip": "Praleisti"
     },
     "checklist": {
       "progress": "Atlikta {completed} iš {total}"
@@ -3669,6 +3733,10 @@
         "nameMissing": "Neišsaugota: pridėkite pavadinimą",
         "positionsNeedAttention": "Neišsaugota: {count, plural, one {# pozicija reikalauja} few {# pozicijos reikalauja} other {# pozicijų reikalauja}} dėmesio"
       },
+      "buildWithAi": {
+        "description": "Atsakykite į kelis klausimus pokalbyje, o peržiūros vadovas bus išsaugomas eigoje.",
+        "title": "Kurti su DI"
+      },
       "check": "Naudoti tikslią taisyklę vietoje DI",
       "checkHint": "Išmatuojamoms sąlygoms, pavyzdžiui: mokėjimo terminas ≤ 30 dienų.",
       "checkKind": {
@@ -4062,7 +4130,6 @@
     "appsSubtitle": "stella veikia ir už naršyklės ribų: jūsų kompiuteryje ir jūsų DI asistente. Prie šio nustatymo galite bet kada grįžti vėliau.",
     "appsTitle": "Gaukite stella visur",
     "catalogueAlwaysOn": "Visada įjungta",
-    "catalogueClearSearch": "Išvalyti paiešką",
     "catalogueCommunityHeading": "Kiti",
     "catalogueContinueWithCount": "{count, plural, one {Tęsti su # įrankiu} few {Tęsti su # įrankiais} other {Tęsti su # įrankių}}",
     "catalogueDetailAbout": "Apie",
@@ -4119,6 +4186,10 @@
     "aiConfig": {
       "addProvider": "Pridėti teikėją",
       "addProviderFirst": "Pirmiausia pridėkite teikėją",
+      "anthropicKeyDisabled": "Sukurkite aktyvų API raktą Anthropic konsolėje ir pakeiskite šį raktą.",
+      "anthropicNoCredits": "Papildykite API kreditų likutį Anthropic konsolės atsiskaitymo skiltyje ir bandykite dar kartą.",
+      "anthropicOrganizationRestricted": "Paprašykite Anthropic organizacijos administratoriaus suteikti prieigą arba naudokite leidžiamos organizacijos raktą.",
+      "anthropicSubscriptionToken": "Naudokite Anthropic konsolėje sukurtą API raktą, o ne Claude prenumeratos prieigos raktą.",
       "anthropicWorkspaceId": "Darbo srities ID",
       "anthropicWorkspaceRequired": "Šiam Anthropic raktui reikia darbo srities. Įveskite jos ID iš Anthropic konsolės ir išsaugokite dar kartą.",
       "anthropicWorkspaces": "Atidaryti Anthropic darbo sritis",
@@ -4127,7 +4198,9 @@
       "apiKeyPlaceholder": "Įveskite savo API raktą",
       "apiKeySaved": "Išsaugotas raktas {key}",
       "apiKeyUpdatePlaceholder": "Įveskite naują raktą, kad atnaujintumėte",
+      "azureModelNotEnabled": "Patikrinkite, ar modelio diegimas yra pasirinktame Azure ištekliuje ir regione ir ar šis raktas turi prieigą prie jo.",
       "baseUrl": "Bazinis URL",
+      "bedrockModelNotEnabled": "Patikrinkite modelio prieinamumą pasirinktame AWS regione, prieigą prie modelio ir savo IAM teises. Įjunkite modelį arba pasirinkite prieinamą modelį ir bandykite dar kartą.",
       "chooseModelsSubtitle": "Kiekvienai rolei pasirinkite modelį. Kainos atnaujinamos dešinėje.",
       "chooseModelsTitle": "Pasirinkite modelius",
       "configure": "Konfigūruoti",
@@ -4135,11 +4208,16 @@
       "customModelDescription": "Šio modelio ID nėra stella kataloge. Jis bus perduotas pasirinktam teikėjui taip, kaip įvestas.",
       "customModelHint": "Kataloge atitikmens nėra. Įveskite bet kokį modelio ID; pasirinktiniai ID išsaugomi taip, kaip įvesti.",
       "decision": {
+        "dataRegion": "Duomenų regionas",
         "description": "Klausimai su fiksuotais atsakymais (dokumentų kategorijos, citatų poliškumas)",
         "generativeFallback": "Užduočiai naudoja generatyvųjį modelį.",
         "incomplete": "Įveskite sprendimų modelio API raktą ir modelį arba jį pašalinkite.",
         "instanceProvided": "stella jau teikia sprendimų modelį; savo pridėkite tik tada, jei norite naudoti kitą.",
-        "label": "Sprendimų priėmimas"
+        "label": "Sprendimų priėmimas",
+        "regionEu": "Europos Sąjunga",
+        "regionGlobal": "Pasaulinis",
+        "reuseOpenAIKey": "Naudoti mano OpenAI raktą",
+        "separateKey": "Naudoti atskirą raktą"
       },
       "defaultModel": "Numatytasis: {model}",
       "defaultModelOption": "Numatytasis",
@@ -4153,6 +4231,8 @@
       "editProviders": "Redaguoti teikėjus",
       "endpoint": "Galinis taškas",
       "endpointDescription": "Naudokite Azure OpenAI arba Azure Foundry /openai/v1 galinį tašką. stella išsaugo normalizuotą galinį tašką.",
+      "googleApiNotEnabled": "Įjunkite Generative Language API Google Cloud projekte, kuriam priklauso šis raktas, ir bandykite dar kartą.",
+      "googleKeyRestricted": "Patikrinkite šio rakto API, IP adresų ir nukreipiančių svetainių apribojimus Google Cloud. Leiskite reikiamą API ir savo serverio užklausas, tada bandykite dar kartą.",
       "keepSavedKey": "Palikti išsaugotą raktą",
       "keyFormatHint": "Šio rakto formatas neįprastas teikėjui {provider}. Išsaugokite, kad teikėjas jį patikrintų.",
       "modelForRole": "{role} modelis",
@@ -4162,6 +4242,9 @@
       "newApiKey": "Naujas API raktas",
       "newApiKeyDescription": "Išsaugojus pakeitimus jis pakeis išsaugotą raktą.",
       "noModelResults": "Nėra atitinkančių siūlomų modelių",
+      "openaiInsufficientQuota": "Patikrinkite OpenAI projekto biudžetą ir API atsiskaitymo nustatymus. Papildykite kreditų likutį arba padidinkite atitinkamą limitą ir bandykite dar kartą.",
+      "openaiProjectOrganizationMismatch": "Naudokite reikiamo OpenAI projekto ir organizacijos API raktą. Patikrinkite jų prieigos nustatymus ir bandykite dar kartą.",
+      "openrouterNoCredits": "Papildykite kreditų likutį OpenRouter atsiskaitymo skiltyje ir bandykite dar kartą.",
       "overrideRoles": "Pakeisti vaidmenis",
       "overrideRolesDescription": "Pasirinkite, kurie vaidmenys naudoja šį raktą, tada kiekvienam vaidmeniui pasirinkite modelį. Nepasirinkti vaidmenys naudoja platformos numatytuosius nustatymus.",
       "prices": {
@@ -4181,6 +4264,7 @@
       "providerForRole": "{role} teikėjas",
       "providerKeyInvalid": "{provider} atmetė raktą. Prieš išsaugodami patikrinkite.",
       "providerKeyInvalidShort": "Negaliojantis",
+      "providerSetupConsole": "Atidaryti teikėjo nustatymus",
       "providersDescription": "Pridėkite teikėjų prisijungimo duomenis, kuriuos stella turėtų naudoti.",
       "providersPanel": "Teikėjai",
       "removeLastProviderConfirm": "Pašalinti {provider}? Taip pat bus atkurti numatytieji DI modelių pasirinkimai.",
@@ -6058,12 +6142,30 @@
         "addPDF": "Pridėti PDF",
         "applyCrop": "Taikyti apkirpimą",
         "crop": "Apkirpti",
-        "cropBottom": "Apačia",
-        "cropDescription": "{count, plural, one {Nustatykite pasirinkto puslapio apkirpimo paraštes.} few {Nustatykite # pasirinktų puslapių apkirpimo paraštes.} other {Nustatykite # pasirinktų puslapių apkirpimo paraštes.}}",
-        "cropLeft": "Kairė",
-        "cropRight": "Dešinė",
+        "cropAdvanced": "Išplėstiniai nustatymai",
+        "cropBottom": "Apačia (mm)",
+        "cropDescription": "{count, plural, one {Nustatykite pasirinkto puslapio apkirpimo paraštes milimetrais.} few {Nustatykite # pasirinktų puslapių apkirpimo paraštes milimetrais.} other {Nustatykite # pasirinktų puslapių apkirpimo paraštes milimetrais.}}",
+        "cropHandle": "Keisti apkirpimo dydį: {position}",
+        "cropHandleBottom": "apačioje",
+        "cropHandleBottomLeft": "apačioje kairėje",
+        "cropHandleBottomRight": "apačioje dešinėje",
+        "cropHandleLeft": "kairėje",
+        "cropHandleRight": "dešinėje",
+        "cropHandleTop": "viršuje",
+        "cropHandleTopLeft": "viršuje kairėje",
+        "cropHandleTopRight": "viršuje dešinėje",
+        "cropHint": "Vilkite sritį arba jos rankenėles. Rodyklių klavišai keičia apkirpimą po 1 mm, o kartu su Shift — po 10 mm. Visiems pasirinktiems puslapiams taikomos tos pačios paraštės.",
+        "cropLeft": "Kairė (mm)",
+        "cropMove": "Perkelti apkirpimo sritį",
+        "cropNextPage": "Kitas pasirinktas puslapis",
+        "cropPage": "{page, number} puslapis iš {count, number}",
+        "cropPreview": "Apkirpimo peržiūra, {page, number} puslapis",
+        "cropPreviewFailed": "Nepavyko parodyti puslapio peržiūros.",
+        "cropPreviousPage": "Ankstesnis pasirinktas puslapis",
+        "cropRight": "Dešinė (mm)",
         "cropTitle": "Apkirpti puslapius",
-        "cropTop": "Viršus",
+        "cropTooSmall": "Šis puslapis per mažas, kad jį būtų galima apkirpti iki bent 10 mm dydžio.",
+        "cropTop": "Viršus (mm)",
         "delete": "Ištrinti",
         "deselectAll": "Atžymėti visus",
         "discard": "Atmesti",
@@ -6288,7 +6390,6 @@
         "year": "Metai"
       },
       "cannotDeleteRequired": "Reikalingas bent vienas šio tipo rodinys",
-      "clearFilters": "Išvalyti filtrus",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Ištrinti rodinį",
       "exportCsv": "Eksportuoti CSV",

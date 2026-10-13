@@ -6,6 +6,8 @@ import { expect, spyOn, test } from "bun:test";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 
+import type { AppMessageDescriptor } from "../shared/app-error";
+import { appLocale } from "../shared/locale";
 import { createDocumentUploadRuntime } from "./runtime";
 import { DocumentUpload } from "./view";
 
@@ -27,6 +29,54 @@ class UploadHost extends App {
     return await this.response.promise;
   }
 }
+
+type UploadErrorLocaleCase = AppMessageDescriptor & {
+  response: Awaited<ReturnType<App["callServerTool"]>>;
+};
+
+test.each([
+  {
+    response: { isError: true, content: [] },
+    key: "capabilityFailed",
+    values: {
+      capability: DOCUMENT_VERSION_UPLOAD_TRANSPORT.capability.reserve,
+    },
+  },
+  {
+    response: { content: [], structuredContent: {} },
+    key: "invalidUploadReservation",
+    values: undefined,
+  },
+] satisfies UploadErrorLocaleCase[])(
+  "stored upload $key errors follow host locale changes",
+  async ({ response, key, values }) => {
+    const app = new UploadHost({
+      name: "upload-locale-host",
+      version: "1.0.0",
+    });
+    const runtime = createDocumentUploadRuntime(app);
+    app.events.dispatch("hostcontextchanged", { locale: "en" });
+    app.events.dispatch("toolinput", { arguments: { entity_id: "document" } });
+    app.events.dispatch("toolresult", {
+      content: [],
+      structuredContent: { entityId: "document", workspaceId: "matter" },
+    });
+    runtime.selectFile(new File(["payload"], "version.docx"));
+    app.response.resolve(response);
+    await runtime.upload();
+    const english = runtime.getSnapshot().message;
+    expect(english).toBe(appLocale("en").t(key, values));
+    for (const locale of ["cs-CZ", "ar", "en-GB"]) {
+      app.events.dispatch("hostcontextchanged", { locale });
+      const expected = appLocale(locale).t(key, values);
+      if (locale !== "en-GB") {
+        expect(expected).not.toBe(english);
+      }
+      expect(runtime.getSnapshot().message).toBe(expected);
+      expect(runtime.getSnapshot().status).toBe("error");
+    }
+  },
+);
 
 test("document upload stays disabled through host updates and preserves the file for retry", async () => {
   const app = new UploadHost({ name: "upload-host", version: "1.0.0" });
@@ -89,6 +139,12 @@ test("document upload stays disabled through host updates and preserves the file
   });
   expect(screen.getByRole("status").textContent).toBe(
     "Nahrání se nezdařilo: host disconnected",
+  );
+  act(() => {
+    app.events.dispatch("hostcontextchanged", { locale: "ar" });
+  });
+  expect(screen.getByRole("status").textContent).toBe(
+    `${appLocale("ar").t("uploadFailed")}: host disconnected`,
   );
 });
 

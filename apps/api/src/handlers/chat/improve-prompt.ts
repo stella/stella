@@ -18,6 +18,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -82,6 +83,7 @@ const improvePrompt = createSafeRootHandler(
       feature: "chat.improve_prompt",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });

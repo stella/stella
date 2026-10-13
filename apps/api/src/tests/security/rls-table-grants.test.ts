@@ -97,6 +97,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "case_law_statute_citation_memberships",
   "case_law_statute_citation_counts",
   "case_law_statute_citation_count_state",
+  "case_law_decision_citation_stats",
+  "case_law_decision_citation_stats_state",
   // Per-decision provision-citation state and revisions: request code reads
   // them; owner-run database functions and the extraction writers own every
   // mutation.
@@ -199,6 +201,13 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "action_cost_calls",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
+  // Professional-use acceptances are written once at account or
+  // organization creation on the owner connection.
+  "user_professional_use_acceptances",
+  "organization_professional_use_acceptances",
+  // A reader's failed analysis run: written and read only by the owner
+  // connection that runs the analysis.
+  "case_law_analysis_failures",
   "registration_daily_budget",
   "agent_registration",
   "agent_trusted_issuer",
@@ -210,6 +219,7 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "oauth_resource",
   "oauth_client_resource",
   "oauth_client_assertion",
+  "service_oauth_clients",
   // Machine API keys: credential digests plus the permission set each key
   // carries. A tenant-scoped connection must be able to neither read a digest
   // nor widen a key's permissions, so every access goes through better-auth on

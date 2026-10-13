@@ -1,4 +1,4 @@
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 
 type FilterUsableMcpWorkspacesInput = {
   accessibleWorkspaces: readonly AccessibleWorkspace[];

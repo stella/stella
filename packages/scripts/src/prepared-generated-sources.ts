@@ -83,6 +83,23 @@ export const generatedInputIdentity = (root: string) => {
   };
 };
 
+export const requireUnchangedGeneratedInputs = (
+  root: string,
+  before: ReturnType<typeof generatedInputIdentity>,
+) => {
+  const after = generatedInputIdentity(root);
+  if (
+    before.sourceSha !== after.sourceSha ||
+    before.inputHash !== after.inputHash ||
+    before.bunVersion !== after.bunVersion ||
+    before.compilerVersion !== after.compilerVersion
+  ) {
+    panic(
+      "Generation changed tracked source inputs; only canonical outputs may change during preparation",
+    );
+  }
+};
+
 export const validatePreparedManifest = (root: string, raw: unknown) => {
   const manifest = v.parse(preparedManifestSchema, raw);
   const expected = generatedInputIdentity(root);

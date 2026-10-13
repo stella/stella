@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import {
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
   ENTITY_KINDS,
   NUMBER_SERIES_DOCUMENT_TYPES,
   TIME_ENTRY_ACTIVITY_GROUPS,
@@ -89,10 +90,7 @@ import {
   unenumeratedJson,
 } from "./projection-schema";
 
-export {
-  SEARCH_CASE_LAW_PROJECTION,
-  LOOKUP_CASE_LAW_PROJECTION,
-} from "./case-law-result-projections";
+export { SEARCH_CASE_LAW_PROJECTION } from "./case-law-result-projections";
 
 /**
  * Per-tool chat projection schemas, one artifact per projected registry tool.
@@ -1429,6 +1427,35 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
         decisions: v.number(),
         decisionYearFrom: v.nullable(v.number()),
         decisionYearTo: v.nullable(v.number()),
+        sources: v.array(
+          v.strictObject({
+            adapterKey: v.string(),
+            name: v.string(),
+            lastSyncAt: v.nullable(v.string()),
+            decisionYearFrom: v.nullable(v.number()),
+            decisionYearTo: v.nullable(v.number()),
+            pendingTextCount: v.number(),
+            knownGaps: v.variant("type", [
+              projectionBranch(v.strictObject({ type: v.literal("unknown") })),
+              projectionBranch(
+                v.strictObject({ type: v.literal("none-recorded") }),
+              ),
+              projectionBranch(
+                v.strictObject({
+                  type: v.literal("known"),
+                  gaps: v.array(
+                    v.strictObject({
+                      from: v.string(),
+                      to: v.string(),
+                      reason: v.string(),
+                      evidenceRef: v.string(),
+                    }),
+                  ),
+                }),
+              ),
+            ]),
+          }),
+        ),
         courts: v.nullable(
           v.array(
             v.variant("type", [
@@ -1449,7 +1476,8 @@ export const CASE_LAW_COVERAGE_PROJECTION = projectionBranch(
               ),
               projectionBranch(
                 v.strictObject({
-                  type: v.literal("unlisted"),
+                  type: v.literal("other-courts"),
+                  courts: v.nullable(v.number()),
                   decisions: v.number(),
                 }),
               ),
@@ -1485,28 +1513,40 @@ const citationTreatmentCountsProjection = v.strictObject({
   v.OptionalSchema<v.NumberSchema<undefined>, undefined>
 >);
 
+const topCitingItemsProjection = v.array(
+  v.strictObject({
+    url: v.optional(v.string()),
+    caseNumber: v.string(),
+    court: v.string(),
+    date: v.optional(v.string()),
+    decisionId: passthroughId(),
+  }),
+);
+
 // A citing or cited decision as the summary names it: no row ids, and an id
 // only where another tool can act on it.
 const caseLawCitationSummaryProjection = v.strictObject({
   citedBy: v.strictObject({
     // Citing references: a decision citing this one twice counts twice.
     count: v.number(),
-    // The scan behind the count stopped at its cap: the count is a lower
-    // bound, and `top` ranks only the citations it read.
+    // A lower-bound count. Ranking precision is carried independently by top.
     capped: v.optional(v.literal(true)),
     polarity: v.optional(citationTreatmentCountsProjection),
-    top: v.optional(
-      v.array(
+    top: v.variant("precision", [
+      projectionBranch(
         v.strictObject({
-          url: v.optional(v.string()),
-          caseNumber: v.string(),
-          court: v.string(),
-          date: v.optional(v.string()),
-          // Always held: read_case_law_decision takes it.
-          decisionId: passthroughId(),
+          precision: v.literal("exact"),
+          items: topCitingItemsProjection,
         }),
       ),
-    ),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("bounded"),
+          candidateWindow: v.literal(CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT),
+          items: topCitingItemsProjection,
+        }),
+      ),
+    ]),
   }),
   cites: v.strictObject({
     count: v.number(),
@@ -1890,6 +1930,7 @@ export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
           resourceName: passthroughId(),
           status: v.literal(PROVISION_STATUS.found),
           text: v.string(),
+          nextTextCursor: v.nullable(passthroughId()),
           truncated: v.boolean(),
           versionValidFrom: v.nullable(v.string()),
           versionValidTo: v.nullable(v.string()),
@@ -1950,6 +1991,7 @@ export const READ_PROVISION_HISTORY_PROJECTION = v.strictObject({
       projectionBranch(
         v.strictObject({
           ...statuteProvisionVersion,
+          nextTextCursor: v.nullable(passthroughId()),
           status: v.literal(PROVISION_STATUS.found),
           text: v.string(),
           truncated: v.boolean(),

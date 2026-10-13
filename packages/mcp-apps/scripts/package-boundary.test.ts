@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { ts } from "@stll/scripts/src/typescript-program";
 
 import oxlintConfig from "../../../oxlint.config.ts";
@@ -95,7 +96,7 @@ test("MCP app package never imports API code or API environment setup", async ()
       ts.forEachChild(node, visit);
     };
     const inspect = (specifier: string) => {
-      const resolved = path.relative(
+      const resolved = repoRelativePath(
         root,
         path.resolve(path.dirname(filename), specifier),
       );

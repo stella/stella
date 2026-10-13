@@ -14,6 +14,7 @@ import {
 import type { SQL } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Backfill: copy existing canonical text/sections/AST from the Postgres
  * columns into object storage and record the keys + content hash. Run
@@ -69,222 +70,227 @@ import { refreshCorpusS3, refreshS3 } from "@/api/lib/s3";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
-const { ingestionDb } = await enterCaseLawMaintenanceLane();
+await runScriptWithErrorOutput(async () => {
+  const { ingestionDb } = await enterCaseLawMaintenanceLane();
 
-const BATCH_SIZE = 50;
-const CONCURRENCY = 4;
+  const BATCH_SIZE = 50;
+  const CONCURRENCY = 4;
 
-const includeStaleEmpty = process.argv.includes("--include-stale-empty");
+  const includeStaleEmpty = process.argv.includes("--include-stale-empty");
 
-type BackfillRow = {
-  id: SafeId<"caseLawDecision">;
-  country: string;
-  fulltext: string | null;
-  sections: DecisionSection[] | null;
-  documentAst: DocumentAst | EmptyAst | null;
-  contentHash: string | null;
-  textS3Key: string | null;
-  normalizedS3Key: string | null;
-  astS3Key: string | null;
-  updatedAtToken: TimestampCasToken;
-};
+  type BackfillRow = {
+    id: SafeId<"caseLawDecision">;
+    country: string;
+    fulltext: string | null;
+    sections: DecisionSection[] | null;
+    documentAst: DocumentAst | EmptyAst | null;
+    contentHash: string | null;
+    textS3Key: string | null;
+    normalizedS3Key: string | null;
+    astS3Key: string | null;
+    updatedAtToken: TimestampCasToken;
+  };
 
-/** Never written to object storage. */
-const missingCorpusObjects = isNull(caseLawDecisions.textS3Key);
+  /** Never written to object storage. */
+  const missingCorpusObjects = isNull(caseLawDecisions.textS3Key);
 
-/**
- * Written by a metadata-first ingest and never rewritten: the columns
- * hold a document, the keys still point at the empty payload the ingest
- * wrote before the document existed.
- */
-const staleEmptyCorpusObjects = and(
-  isNotNull(caseLawDecisions.textS3Key),
-  isNotNull(caseLawDecisions.fulltext),
-  ne(caseLawDecisions.fulltext, ""),
-  inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
-);
+  /**
+   * Written by a metadata-first ingest and never rewritten: the columns
+   * hold a document, the keys still point at the empty payload the ingest
+   * wrote before the document existed.
+   */
+  const staleEmptyCorpusObjects = and(
+    isNotNull(caseLawDecisions.textS3Key),
+    isNotNull(caseLawDecisions.fulltext),
+    ne(caseLawDecisions.fulltext, ""),
+    inArray(caseLawDecisions.contentHash, [...EMPTY_CORPUS_CONTENT_HASHES]),
+  );
 
-const rowsToBackfill: SQL | undefined = includeStaleEmpty
-  ? or(missingCorpusObjects, staleEmptyCorpusObjects)
-  : missingCorpusObjects;
-const eligibleForBackfill = and(
-  rowsToBackfill,
-  isNull(caseLawDecisions.redactedAt),
-);
-
-await refreshS3();
-await refreshCorpusS3();
-
-console.log(
-  `=== BACKFILL CORPUS STORAGE ===${includeStaleEmpty ? " (including stale empty payloads)" : ""}`,
-);
-
-let lastId: SafeId<"caseLawDecision"> | null = null;
-let written = 0;
-let skipped = 0;
-let failed = 0;
-
-const enqueueBackfillRow = (batch: CorpusPackBatch, row: BackfillRow): void => {
-  const ownerPredicate = and(
-    eq(caseLawDecisions.id, row.id),
+  const rowsToBackfill: SQL | undefined = includeStaleEmpty
+    ? or(missingCorpusObjects, staleEmptyCorpusObjects)
+    : missingCorpusObjects;
+  const eligibleForBackfill = and(
+    rowsToBackfill,
     isNull(caseLawDecisions.redactedAt),
-    sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
-    timestampMatchesCasToken(caseLawDecisions.updatedAt, row.updatedAtToken),
   );
-  batch.enqueue({
-    decisionId: row.id,
-    jurisdiction: row.country,
-    payload: {
-      text: row.fulltext,
-      sections: row.sections,
-      ast: row.documentAst,
-    },
-    stored: storedCorpusWrite(row),
-    settle: async ({ intentId, written: packed }) => {
-      const outcome = await settleReservedCaseLawCorpusUpload({
-        apply: async ({ projectionLock, tx, written: uploaded }) => {
-          // audit: skip — one-time corpus storage repair; derived state
-          const recorded = await tx
-            .update(caseLawDecisions)
-            .set(
-              corpusMirrorColumns({
-                status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
-                written: uploaded,
-              }),
-            )
-            .where(ownerPredicate)
-            .returning({ id: caseLawDecisions.id });
-          if (recorded.length > 0 && projectionLock !== null) {
-            await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
-              lock: projectionLock,
-              subject: { family: "case_law", entityId: row.id },
-            });
-          }
-          return { type: recorded.length > 0 ? "applied" : "superseded" };
-        },
-        decisionId: row.id,
-        intentId,
-        preflight: async (tx) =>
-          Boolean(
-            (
-              await tx
-                .select({ id: caseLawDecisions.id })
-                .from(caseLawDecisions)
-                .where(ownerPredicate)
-                .limit(1)
-            ).at(0),
-          ),
-        scopedDb: ingestionDb,
-        written: packed,
-      });
-      switch (outcome.type) {
-        case "applied":
-          return { type: "settled" };
-        case "superseded":
-        case "intent-reclaimed":
-          // A refused CAS is not success: the row changed under the scan and
-          // still points at its own payload, so nothing was recorded. The
-          // next run of the script sees it again.
-          return { type: "retry" };
-        case "redacted-or-missing":
-          return { type: "redacted-or-missing" };
-        default:
-          outcome satisfies never;
-          return panic(`Unhandled settlement: ${String(outcome)}`);
+
+  await refreshS3();
+  await refreshCorpusS3();
+
+  console.log(
+    `=== BACKFILL CORPUS STORAGE ===${includeStaleEmpty ? " (including stale empty payloads)" : ""}`,
+  );
+
+  let lastId: SafeId<"caseLawDecision"> | null = null;
+  let written = 0;
+  let skipped = 0;
+  let failed = 0;
+
+  const enqueueBackfillRow = (
+    batch: CorpusPackBatch,
+    row: BackfillRow,
+  ): void => {
+    const ownerPredicate = and(
+      eq(caseLawDecisions.id, row.id),
+      isNull(caseLawDecisions.redactedAt),
+      sql`${caseLawDecisions.contentHash} IS NOT DISTINCT FROM ${row.contentHash}`,
+      timestampMatchesCasToken(caseLawDecisions.updatedAt, row.updatedAtToken),
+    );
+    batch.enqueue({
+      decisionId: row.id,
+      jurisdiction: row.country,
+      payload: {
+        text: row.fulltext,
+        sections: row.sections,
+        ast: row.documentAst,
+      },
+      stored: storedCorpusWrite(row),
+      settle: async ({ intentId, written: packed }) => {
+        const outcome = await settleReservedCaseLawCorpusUpload({
+          apply: async ({ projectionLock, tx, written: uploaded }) => {
+            // audit: skip — one-time corpus storage repair; derived state
+            const recorded = await tx
+              .update(caseLawDecisions)
+              .set(
+                corpusMirrorColumns({
+                  status: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+                  written: uploaded,
+                }),
+              )
+              .where(ownerPredicate)
+              .returning({ id: caseLawDecisions.id });
+            if (recorded.length > 0 && projectionLock !== null) {
+              await synchronizeLockedCorpusProjectionDesiredStateTx(tx, {
+                lock: projectionLock,
+                subject: { family: "case_law", entityId: row.id },
+              });
+            }
+            return { type: recorded.length > 0 ? "applied" : "superseded" };
+          },
+          decisionId: row.id,
+          intentId,
+          preflight: async (tx) =>
+            Boolean(
+              (
+                await tx
+                  .select({ id: caseLawDecisions.id })
+                  .from(caseLawDecisions)
+                  .where(ownerPredicate)
+                  .limit(1)
+              ).at(0),
+            ),
+          scopedDb: ingestionDb,
+          written: packed,
+        });
+        switch (outcome.type) {
+          case "applied":
+            return { type: "settled" };
+          case "superseded":
+          case "intent-reclaimed":
+            // A refused CAS is not success: the row changed under the scan and
+            // still points at its own payload, so nothing was recorded. The
+            // next run of the script sees it again.
+            return { type: "retry" };
+          case "redacted-or-missing":
+            return { type: "redacted-or-missing" };
+          default:
+            outcome satisfies never;
+            return panic(`Unhandled settlement: ${String(outcome)}`);
+        }
+      },
+    });
+  };
+
+  const recordOutcome = (
+    decisionId: SafeId<"caseLawDecision">,
+    outcome: CorpusPackBatchOutcome,
+  ): void => {
+    switch (outcome.type) {
+      case "settled":
+        written += 1;
+        return;
+      case "redacted-or-missing":
+      case "busy":
+      case "retry":
+        skipped += 1;
+        return;
+      case "failed":
+        failed += 1;
+        captureError(outcome.error, {
+          decisionId,
+          step: "backfillCorpusStorage",
+        });
+        return;
+      default:
+        outcome satisfies never;
+        return panic(`Unhandled corpus batch outcome: ${String(outcome)}`);
+    }
+  };
+
+  while (true) {
+    // Keyset by id so a row that fails to write (stays null) cannot stall
+    // the scan; re-run the script later to retry the stragglers.
+    const idFilter: SQL | undefined =
+      lastId === null ? undefined : gt(caseLawDecisions.id, lastId);
+    const where = idFilter
+      ? and(eligibleForBackfill, idFilter)
+      : eligibleForBackfill;
+
+    // db-await-in-loop: keyset page per iteration; the page is the batch
+    const rows: BackfillRow[] = await ingestionDb((tx) =>
+      tx
+        .select({
+          id: caseLawDecisions.id,
+          country: caseLawDecisions.country,
+          fulltext: caseLawDecisions.fulltext,
+          sections: caseLawDecisions.sections,
+          documentAst: caseLawDecisions.documentAst,
+          contentHash: caseLawDecisions.contentHash,
+          textS3Key: caseLawDecisions.textS3Key,
+          normalizedS3Key: caseLawDecisions.normalizedS3Key,
+          astS3Key: caseLawDecisions.astS3Key,
+          updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
+        })
+        .from(caseLawDecisions)
+        .where(where)
+        .orderBy(asc(caseLawDecisions.id))
+        .limit(BATCH_SIZE),
+    );
+
+    if (rows.length === 0) {
+      break;
+    }
+
+    for (const chunk of chunkItems(rows, CONCURRENCY)) {
+      // One pack per chunk: the rows hand their payloads to one transfer
+      // instead of three object PUTs each, and every row still settles under
+      // its own fence once that pack is durable.
+      const batch = openCorpusPackBatch({ scopedDb: ingestionDb });
+      for (const row of chunk) {
+        enqueueBackfillRow(batch, row);
       }
-    },
-  });
-};
+      const settled = await batch.flush();
+      if (Result.isError(settled)) {
+        // The batch never reached its per-decision outcomes, so nothing in it
+        // was recorded.
+        failed += chunk.length;
+        captureError(settled.error, { step: "backfillCorpusStorage" });
+        continue;
+      }
+      for (const [decisionId, outcome] of settled.value) {
+        recordOutcome(decisionId, outcome);
+      }
+    }
 
-const recordOutcome = (
-  decisionId: SafeId<"caseLawDecision">,
-  outcome: CorpusPackBatchOutcome,
-): void => {
-  switch (outcome.type) {
-    case "settled":
-      written += 1;
-      return;
-    case "redacted-or-missing":
-    case "busy":
-    case "retry":
-      skipped += 1;
-      return;
-    case "failed":
-      failed += 1;
-      captureError(outcome.error, {
-        decisionId,
-        step: "backfillCorpusStorage",
-      });
-      return;
-    default:
-      outcome satisfies never;
-      return panic(`Unhandled corpus batch outcome: ${String(outcome)}`);
+    lastId = rows.at(-1)?.id ?? lastId;
+    console.log(`  written=${written} skipped=${skipped} failed=${failed}`);
   }
-};
 
-while (true) {
-  // Keyset by id so a row that fails to write (stays null) cannot stall
-  // the scan; re-run the script later to retry the stragglers.
-  const idFilter: SQL | undefined =
-    lastId === null ? undefined : gt(caseLawDecisions.id, lastId);
-  const where = idFilter
-    ? and(eligibleForBackfill, idFilter)
-    : eligibleForBackfill;
-
-  // db-await-in-loop: keyset page per iteration; the page is the batch
-  const rows: BackfillRow[] = await ingestionDb((tx) =>
-    tx
-      .select({
-        id: caseLawDecisions.id,
-        country: caseLawDecisions.country,
-        fulltext: caseLawDecisions.fulltext,
-        sections: caseLawDecisions.sections,
-        documentAst: caseLawDecisions.documentAst,
-        contentHash: caseLawDecisions.contentHash,
-        textS3Key: caseLawDecisions.textS3Key,
-        normalizedS3Key: caseLawDecisions.normalizedS3Key,
-        astS3Key: caseLawDecisions.astS3Key,
-        updatedAtToken: timestampCasToken(caseLawDecisions.updatedAt),
-      })
-      .from(caseLawDecisions)
-      .where(where)
-      .orderBy(asc(caseLawDecisions.id))
-      .limit(BATCH_SIZE),
+  console.log(
+    `Done. Wrote ${written} decisions, skipped ${skipped}, ${failed} failed.`,
   );
 
-  if (rows.length === 0) {
-    break;
-  }
-
-  for (const chunk of chunkItems(rows, CONCURRENCY)) {
-    // One pack per chunk: the rows hand their payloads to one transfer
-    // instead of three object PUTs each, and every row still settles under
-    // its own fence once that pack is durable.
-    const batch = openCorpusPackBatch({ scopedDb: ingestionDb });
-    for (const row of chunk) {
-      enqueueBackfillRow(batch, row);
-    }
-    const settled = await batch.flush();
-    if (Result.isError(settled)) {
-      // The batch never reached its per-decision outcomes, so nothing in it
-      // was recorded.
-      failed += chunk.length;
-      captureError(settled.error, { step: "backfillCorpusStorage" });
-      continue;
-    }
-    for (const [decisionId, outcome] of settled.value) {
-      recordOutcome(decisionId, outcome);
-    }
-  }
-
-  lastId = rows.at(-1)?.id ?? lastId;
-  console.log(`  written=${written} skipped=${skipped} failed=${failed}`);
-}
-
-console.log(
-  `Done. Wrote ${written} decisions, skipped ${skipped}, ${failed} failed.`,
-);
-
-// Non-zero on partial failure: the cutover checklist treats this run as
-// green only when every decision has its corpus objects.
-process.exit(failed === 0 ? 0 : 1);
+  // Non-zero on partial failure: the cutover checklist treats this run as
+  // green only when every decision has its corpus objects.
+  process.exit(failed === 0 ? 0 : 1);
+});

@@ -5,6 +5,7 @@ import type { AnySchema, Context, InputSchema, UnwrapRoute } from "elysia";
 import { ElysiaCustomStatusResponse, status, t } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -18,7 +19,7 @@ import {
 } from "@/api/lib/ai-config-response";
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import { checkRestrictedAccountOperation } from "@/api/lib/auth/review-account";
@@ -29,6 +30,7 @@ import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
 import { resourcesAreVisible } from "@/api/lib/entities/resource-access";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import {
   DatabaseError,
   DatabaseRlsError,
@@ -116,7 +118,10 @@ import {
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
+import { recordWriteContract } from "@/api/lib/write-contract";
+import type { WriteContract } from "@/api/lib/write-contract";
 // Type-only: derive the closed tool-name union from the single MCP registry
 // so `mcp: { type: "tool", name }` typechecks against the real tools. The
 // import is erased at build time and never creates a runtime import cycle
@@ -411,6 +416,7 @@ type ContentDeliveryDisposition = {
 };
 
 export type HandlerConfig = InputSchema &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
@@ -480,12 +486,17 @@ const safeHandlerAccountAccess = new WeakMap<object, AccountAccess>();
 
 const recordSafeHandler = <
   TDefinition extends {
-    config: { accountAccess: AccountAccess };
+    config: WriteContract & {
+      accountAccess: AccountAccess;
+      body?: unknown;
+      description?: string;
+    };
     handler: object;
   },
 >(
   definition: TDefinition,
 ): TDefinition => {
+  recordWriteContract(definition.handler, definition.config);
   safeHandlerAccountAccess.set(
     definition.handler,
     definition.config.accountAccess,
@@ -499,6 +510,7 @@ export const getSafeHandlerAccountAccess = (handler: unknown) =>
     : undefined;
 
 export type SessionHandlerConfig = InputSchema &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
@@ -510,6 +522,8 @@ export type SessionHandlerConfig = InputSchema &
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
   Omit<
     TConfig,
+    | "contract"
+    | "precondition"
     | "permissions"
     | "mcp"
     | "description"
@@ -524,7 +538,13 @@ type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
   UnwrapRoute<
     Omit<
       TConfig,
-      "mcp" | "description" | "access" | "contentDelivery" | "transport"
+      | "contract"
+      | "precondition"
+      | "mcp"
+      | "description"
+      | "access"
+      | "contentDelivery"
+      | "transport"
     >
   >;
 
@@ -625,6 +645,7 @@ type SafeHandlerError =
   | UnhandledException;
 
 type SafeErrorBody = {
+  providerDiagnostic?: ProviderDiagnostic;
   code?: HandlerErrorCode;
   message: string;
   /** Corrective next step for programmatic clients. */
@@ -1132,6 +1153,7 @@ const runAdmittedFiniteHandler = async function* <
         const outcome = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
           actionKind,
+          organizationStateDb: ctx.scopedDb,
           signal,
           run: async (modelAdmission) => {
             const admitted = Object.assign(ctx, {
@@ -1576,6 +1598,9 @@ export const resolveMeteringContext = ({
   const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
     dataClass: "customer",
     organizationId,
+    // Unit metering and the free tier never run together
+    // (`freeTierInvariantViolation`), so a metered organization is standard.
+    modelTier: MANAGED_MODEL_TIER.standard,
   });
   const isByok = modelInfo.keySource === "byok";
   const serviceTier = resolveEffectiveServiceTierForProvider({
@@ -1913,6 +1938,7 @@ export const authorizeHandlerRunSize = async <
 
 const createSafeDirectHandler = <
   TConfig extends InputSchema &
+    WriteContract &
     ContentDeliveryDisposition &
     SandboxAccountAccess,
   TContext extends SafeHandlerLogContext,
@@ -1932,6 +1958,10 @@ const createSafeDirectHandler = <
   });
 
 const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
+  ...(error instanceof ProviderCallError &&
+  error.providerDiagnostic !== undefined
+    ? { providerDiagnostic: error.providerDiagnostic }
+    : {}),
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
   ...(error.hint ? { hint: error.hint } : {}),
@@ -2057,6 +2087,7 @@ export type TokenHandlerConfig = Omit<
   InputSchema,
   "body" | "query" | "params"
 > &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
@@ -2071,7 +2102,15 @@ type TokenHandlerContext<
   TConfig extends TokenHandlerConfig = TokenHandlerConfig,
 > = Context<
   UnwrapRoute<
-    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
+    Omit<
+      TConfig,
+      | "contract"
+      | "precondition"
+      | "mcp"
+      | "description"
+      | "access"
+      | "contentDelivery"
+    >
   >
 >;
 
@@ -2093,6 +2132,7 @@ export const createSafeTokenHandler = <
   createSafeDirectHandler(config, handler);
 
 export type PublicHandlerConfig = InputSchema &
+  WriteContract &
   CapabilityDescription &
   ContentDeliveryDisposition &
   CapabilityAccess &
@@ -2105,7 +2145,15 @@ export type PublicHandlerContext<
   TConfig extends PublicHandlerConfig = PublicHandlerConfig,
 > = Context<
   UnwrapRoute<
-    Omit<TConfig, "mcp" | "description" | "access" | "contentDelivery">
+    Omit<
+      TConfig,
+      | "contract"
+      | "precondition"
+      | "mcp"
+      | "description"
+      | "access"
+      | "contentDelivery"
+    >
   >
 >;
 

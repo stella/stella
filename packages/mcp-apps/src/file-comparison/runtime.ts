@@ -5,11 +5,11 @@ import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
-import { applyUploadHostStyles } from "../shared/bridge";
+import { formatAppError, LocalizedAppError } from "../shared/app-error";
+import { applyUploadHostStyles, parseAppToolPayload } from "../shared/bridge";
 import { appLocale, setAppDocumentLocale } from "../shared/locale";
 import {
   isUploadRecord,
-  parseUploadToolPayload,
   createUploadTranslator,
   connectUploadApp,
   createUploadSubscriptions,
@@ -21,6 +21,8 @@ const UPLOAD_TIMEOUT_MS = 1_800_000;
 class ComparisonAppError extends TaggedError("ComparisonAppError")<{
   message: string;
 }> {}
+
+type ComparisonError = ComparisonAppError | LocalizedAppError;
 
 const comparisonError = (message: string): ComparisonAppError =>
   new ComparisonAppError({ message });
@@ -37,11 +39,6 @@ type UploadSnapshot = {
   status: "idle" | "error" | "success";
   locale: ReturnType<typeof appLocale>;
 };
-
-type AppTranslator = (
-  key: keyof ReturnType<typeof appLocale>["messages"],
-  values?: Record<string, string | number>,
-) => string;
 
 type ComparisonFileInput = { name: string; size: number; sha256_hex: string };
 
@@ -79,19 +76,22 @@ type ComparisonReservation = {
 
 const parsePreparedUpload = (
   value: unknown,
-  t: AppTranslator,
-): Result<PreparedUpload, ComparisonAppError> => {
+): Result<PreparedUpload, ComparisonError> => {
   if (!isUploadRecord(value)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const { headers, url } = value;
   if (typeof url !== "string" || !isUploadRecord(headers)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const headerEntries: [string, string][] = [];
   for (const [key, headerValue] of Object.entries(headers)) {
     if (typeof headerValue !== "string") {
-      return Result.err(comparisonError(t("invalidUploadHeaders")));
+      return Result.err(new LocalizedAppError({ key: "invalidUploadHeaders" }));
     }
     headerEntries.push([key, headerValue]);
   }
@@ -106,24 +106,29 @@ const isComparisonSource = (value: unknown): value is ComparisonSource =>
 
 const parseReservation = (
   value: unknown,
-  t: AppTranslator,
-): Result<ComparisonReservation, ComparisonAppError> => {
+): Result<ComparisonReservation, ComparisonError> => {
   if (!isUploadRecord(value)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const { base, next, target } = value;
   if (!isUploadRecord(next)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
   const { source } = next;
   if (!isComparisonSource(source)) {
-    return Result.err(comparisonError(t("invalidComparisonReservation")));
+    return Result.err(
+      new LocalizedAppError({ key: "invalidComparisonReservation" }),
+    );
   }
-  const parsedBase = parsePreparedUpload(base, t);
+  const parsedBase = parsePreparedUpload(base);
   if (Result.isError(parsedBase)) {
     return Result.err(parsedBase.error);
   }
-  const parsedTarget = parsePreparedUpload(target, t);
+  const parsedTarget = parsePreparedUpload(target);
   if (Result.isError(parsedTarget)) {
     return Result.err(parsedTarget.error);
   }
@@ -145,14 +150,12 @@ type HandOffOptions = {
   app: App;
   next: ComparisonReservation["next"];
   text: string;
-  failureMessage: string;
 };
 const handOffToModel = async ({
   app,
   next,
   text,
-  failureMessage,
-}: HandOffOptions): Promise<Result<HandoffOutcome, ComparisonAppError>> => {
+}: HandOffOptions): Promise<Result<HandoffOutcome, ComparisonError>> => {
   const capabilities = app.getHostCapabilities();
   if (capabilities?.message) {
     const sent = await Result.tryPromise(
@@ -166,7 +169,12 @@ const handOffToModel = async ({
       return Result.err(wrapped(sent.error));
     }
     if (sent.value.isError === true) {
-      return Result.err(comparisonError(failureMessage));
+      return Result.err(
+        new LocalizedAppError({
+          key: "capabilityFailed",
+          values: { capability: FILE_COMPARISON_TRANSPORT.compareToolName },
+        }),
+      );
     }
     return Result.ok("delivered");
   }
@@ -185,12 +193,11 @@ const handOffToModel = async ({
   return Result.ok("unsupported");
 };
 
-type PutFileOptions = { upload: PreparedUpload; file: File; t: AppTranslator };
+type PutFileOptions = { upload: PreparedUpload; file: File };
 const putFile = async ({
   upload,
   file,
-  t,
-}: PutFileOptions): Promise<Result<void, ComparisonAppError>> => {
+}: PutFileOptions): Promise<Result<void, ComparisonError>> => {
   const response = await Result.tryPromise(
     async () =>
       await fetchWithTimeout(upload.url, {
@@ -205,7 +212,10 @@ const putFile = async ({
   }
   if (!response.value.ok) {
     return Result.err(
-      comparisonError(t("storageRejected", { status: response.value.status })),
+      new LocalizedAppError({
+        key: "storageRejected",
+        values: { status: response.value.status },
+      }),
     );
   }
   return Result.ok();
@@ -229,14 +239,19 @@ export const createFileComparisonRuntime = (
     snapshot = { ...snapshot, ...patch };
     notify();
   };
-  const setStatus = (message: string, state: "idle" | "error" | "success") => {
-    publish({ message, status: state });
+  let statusMessage = () => "";
+  const setStatus = (
+    message: () => string,
+    state: "idle" | "error" | "success",
+  ) => {
+    statusMessage = message;
+    publish({ message: statusMessage(), status: state });
   };
 
   const prepareComparison = async (
     base: File,
     target: File,
-  ): Promise<Result<ComparisonReservation, ComparisonAppError>> => {
+  ): Promise<Result<ComparisonReservation, ComparisonError>> => {
     const [baseFile, targetFile] = await Promise.all([
       describeFile(base),
       describeFile(target),
@@ -260,14 +275,20 @@ export const createFileComparisonRuntime = (
     const result = called.value;
     if (result.isError === true) {
       const message = result.content.find((part) => part.type === "text")?.text;
-      return Result.err(comparisonError(message ?? t("capabilityFailed")));
+      return Result.err(
+        message === undefined
+          ? new LocalizedAppError({
+              key: "capabilityFailed",
+              values: { capability: FILE_COMPARISON_TRANSPORT.prepareToolName },
+            })
+          : comparisonError(message),
+      );
     }
-    const payload = parseUploadToolPayload(result);
+    const payload = parseAppToolPayload(result);
     return parseReservation(
       isUploadRecord(payload) && "result" in payload
         ? payload["result"]
         : payload,
-      t,
     );
   };
 
@@ -278,21 +299,24 @@ export const createFileComparisonRuntime = (
       return;
     }
     publish({ uploadPhase: "active" });
-    setStatus(t("preparingUpload"), "idle");
+    setStatus(() => t("preparingUpload"), "idle");
     const reservation = await prepareComparison(base, target);
     if (Result.isError(reservation)) {
-      setStatus(reservation.error.message, "error");
+      setStatus(
+        () => formatAppError(reservation.error, t, "uploadFailed"),
+        "error",
+      );
       return;
     }
 
-    setStatus(t("uploading"), "idle");
+    setStatus(() => t("uploading"), "idle");
     const puts = await Promise.all([
-      putFile({ upload: reservation.value.base, file: base, t }),
-      putFile({ upload: reservation.value.target, file: target, t }),
+      putFile({ upload: reservation.value.base, file: base }),
+      putFile({ upload: reservation.value.target, file: target }),
     ]);
     for (const put of puts) {
       if (Result.isError(put)) {
-        setStatus(put.error.message, "error");
+        setStatus(() => formatAppError(put.error, t, "uploadFailed"), "error");
         return;
       }
     }
@@ -303,24 +327,32 @@ export const createFileComparisonRuntime = (
     const { next } = reservation.value;
     // The bytes are already staged, so a failed handoff still has to leave the
     // user able to ask for the redline themselves.
-    const ask = t("askForRedline", { source: JSON.stringify(next.source) });
     const outcome = await handOffToModel({
       app,
       next,
-      failureMessage: t("capabilityFailed"),
-      text: `Both files are uploaded. Call ${FILE_COMPARISON_TRANSPORT.compareToolName} with source ${JSON.stringify(next.source)}.`,
+      text: t("redlineHandoff", {
+        tool: FILE_COMPARISON_TRANSPORT.compareToolName,
+        source: JSON.stringify(next.source),
+      }),
     });
     if (Result.isError(outcome)) {
       setStatus(
-        t("handoffFailed", { message: outcome.error.message, ask }),
+        () =>
+          t("redlineStartFailed", {
+            message: formatAppError(outcome.error, t, "uploadFailed"),
+            ask: t("askRedline", { source: JSON.stringify(next.source) }),
+          }),
         "error",
       );
       return;
     }
     setStatus(
-      outcome.value === "delivered"
-        ? t("redlineNext")
-        : t("uploadedAsk", { ask }),
+      () =>
+        outcome.value === "delivered"
+          ? t("redlineNext")
+          : t("redlineAsk", {
+              ask: t("askRedline", { source: JSON.stringify(next.source) }),
+            }),
       "success",
     );
   };
@@ -328,7 +360,7 @@ export const createFileComparisonRuntime = (
   const applyHostContext = (context: ReturnType<App["getHostContext"]>) => {
     locale = appLocale(context?.locale);
     setAppDocumentLocale(context?.locale, t("comparisonTitle"));
-    publish({ locale });
+    publish({ locale, message: statusMessage() });
     applyUploadHostStyles(context);
   };
   app.addEventListener("hostcontextchanged", applyHostContext);
@@ -349,14 +381,14 @@ export const createFileComparisonRuntime = (
         return;
       }
       publish({ base });
-      setStatus("", "idle");
+      setStatus(() => "", "idle");
     },
     selectTarget: (target: File) => {
       if (snapshot.uploadPhase === "active") {
         return;
       }
       publish({ target });
-      setStatus("", "idle");
+      setStatus(() => "", "idle");
     },
     upload: async () => {
       if (snapshot.uploadPhase === "active") {
@@ -364,7 +396,10 @@ export const createFileComparisonRuntime = (
       }
       const uploaded = await Result.tryPromise(uploadSelectedFiles);
       if (Result.isError(uploaded)) {
-        setStatus(uploaded.error.message, "error");
+        setStatus(
+          () => formatAppError(uploaded.error, t, "uploadFailed"),
+          "error",
+        );
       }
       publish({ uploadPhase: "idle" });
     },
@@ -372,7 +407,7 @@ export const createFileComparisonRuntime = (
       await connectUploadApp({
         app,
         onContext: applyHostContext,
-        onError: (message) => setStatus(message, "error"),
+        onError: (message) => setStatus(() => message, "error"),
       }),
   };
 };

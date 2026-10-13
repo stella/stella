@@ -6,6 +6,7 @@ import {
 
 const updateDailyTarget = createSafeRootHandler(
   {
+    contract: "patch",
     description:
       "Set the signed-in user's daily time target in the active organization. Pass minutes from 1 to 1440, or null to clear the target. Read time-entries.me.list for the target and remaining minutes for a work date.",
     permissions: { timeEntry: ["create"] },

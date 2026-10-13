@@ -54,7 +54,7 @@ const EXPECTED_SITES: Record<string, string> = {
     "encryption",
   "src/handlers/entities/from-legal-source/create.ts:createEntityFromBuffer:0":
     "serverBuiltFileEncryption()",
-  "src/handlers/entities/publish-folio-collab-version.ts:writeFileVersion:0":
+  "src/lib/entity-versions/publish-folio-collab-checkpoint.ts:writeFileVersion:0":
     "PUBLISHED_FILE_ENCRYPTION",
   "src/handlers/entities/upload.ts:fileContentWithMintedObject:0": "encryption",
   "src/handlers/entities/versions/upload.ts:createEntityVersionFromBuffer:0":

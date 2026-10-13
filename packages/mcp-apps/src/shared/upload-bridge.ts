@@ -1,6 +1,5 @@
 import type { App } from "@modelcontextprotocol/ext-apps";
 import { Result } from "better-result";
-import { createTranslator } from "use-intl";
 
 import { createDetached } from "@stll/errors";
 
@@ -13,33 +12,11 @@ export const isUploadRecord = (
 ): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-export const parseUploadToolPayload = (
-  result: Awaited<ReturnType<App["callServerTool"]>>,
-): unknown => {
-  if (result.structuredContent !== undefined) {
-    return result.structuredContent;
-  }
-  const text = result.content.find((part) => part.type === "text")?.text;
-  if (text === undefined) {
-    return undefined;
-  }
-  const parsed = Result.try((): unknown => JSON.parse(text));
-  return Result.isError(parsed) ? undefined : parsed.value;
-};
-
 // Host changes update the locale read by the translator without rebuilding the upload controller.
 export const createUploadTranslator =
   (getLocale: () => UploadLocale) =>
-  (
-    key: keyof UploadLocale["messages"],
-    values?: Record<string, string | number>,
-  ) => {
-    const locale = getLocale();
-    return createTranslator({
-      locale: locale.formattingLocale,
-      messages: locale.messages,
-    })(key, values);
-  };
+  (...args: Parameters<UploadLocale["t"]>) =>
+    getLocale().t(...args);
 
 type ConnectUploadAppOptions = {
   app: App;
@@ -79,7 +56,7 @@ export const createUploadSubscriptions = () => {
 type BindUploadSdkErrorsOptions = {
   app: App;
   getLabel: () => string;
-  onError: (message: string) => void;
+  onError: (message: () => string) => void;
 };
 export const bindUploadSdkErrors = ({
   app,
@@ -87,12 +64,14 @@ export const bindUploadSdkErrors = ({
   onError,
 }: BindUploadSdkErrorsOptions) => {
   const reportError: NonNullable<typeof app.onerror> = ({ message }) => {
-    onError(`${getLabel()}: ${message}`);
+    onError(() => `${getLabel()}: ${message}`);
   };
   // SDK Protocol exposes an error callback, not a DOM error event.
   Object.assign(app, { onerror: reportError } satisfies Pick<App, "onerror">);
   return createDetached((error) => {
-    const message = error instanceof Error ? error.message : getLabel();
-    onError(`${getLabel()}: ${message}`);
+    onError(() => {
+      const message = error instanceof Error ? error.message : getLabel();
+      return `${getLabel()}: ${message}`;
+    });
   });
 };

@@ -12,6 +12,20 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "page-crop": {
+    load: async () => {
+      const { PageCropPlayground } =
+        await import("./-components/page-crop-playground");
+      return { default: PageCropPlayground };
+    },
+  },
+  "chat-long-paste": {
+    load: async () => {
+      const { ChatLongPastePlayground } =
+        await import("./-components/chat-long-paste-playground");
+      return { default: ChatLongPastePlayground };
+    },
+  },
   "chat-history-decision": {
     load: async () => {
       const { ChatHistoryDecisionPlayground } =

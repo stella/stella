@@ -26,6 +26,7 @@ const requestBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "realtime_stream" },
@@ -128,6 +129,7 @@ const autocompleteStream = createSafeRootHandler(
       startExecutionAdmission({
         organizationId: session.activeOrganizationId,
         userId: user.id,
+        organizationStateDb: scopedDb,
         mode: "concurrency-only",
         actionKind: AUTOCOMPLETE_ACTION_KIND,
       }),

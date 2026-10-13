@@ -126,7 +126,10 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
     detail:
       `${READ_STATUTE_PROVISIONS} with \`items\`, up to ` +
       `${LIMITS.legislationProvisionBatchMax} entries of ` +
-      "{ eli, anchor } plus an optional `as_of` and `language`. An `anchor` " +
+      "{ eli, anchor } plus optional `language` and either `as_of` or " +
+      "`document_id`, never both. `document_id` reads the exact consolidation " +
+      "whose `documentId` came from provision history, including a version " +
+      "without a usable start date. An `anchor` " +
       `is the publisher's own, and the \`outline\` from ${READ_STATUTE} is ` +
       "where the provision anchors come from (`par_1729`): they are not " +
       "derivable from a section number, so do not spell one yourself. A " +
@@ -139,7 +142,9 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       "and the rest carry a `message` saying what to change, so resend only " +
       "the entries the reply names. Provision text is cut at " +
       `${LIMITS.legislationProvisionTextChars} characters with ` +
-      "`truncated` set. Prefer one batched call over one call per provision.",
+      "`truncated` set; when `nextTextCursor` is present, pass it as " +
+      "`text_cursor` on the same entry and concatenate the text windows until " +
+      "it is null. Prefer one batched call over one call per provision.",
   },
   {
     title: "Follow one provision across amendments",
@@ -157,7 +162,10 @@ const WORKFLOW_STEPS: readonly ReferenceSection[] = [
       `${LIMITS.legislationProvisionHistoryPageSizeDefault} versions per ` +
       "page and takes at most " +
       `${LIMITS.legislationProvisionHistoryPageSizeMax}; pass the returned ` +
-      "`nextCursor` back as `cursor` for older windows.",
+      "`nextCursor` back as `cursor` for older windows. Each long item also " +
+      "returns `nextTextCursor`; pass it as " +
+      "`text_cursor` with the same `eli`, `anchor`, and original `cursor`, then " +
+      "concatenate windows until it is null.",
   },
 ];
 

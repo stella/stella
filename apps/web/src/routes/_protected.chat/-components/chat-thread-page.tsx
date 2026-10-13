@@ -49,6 +49,7 @@ import { UsageFallbackNotice } from "@/components/usage/usage-fallback-notice";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { env } from "@/env";
+import { ChatActiveSkillLabel } from "@/features/chat/components/chat-active-skill-label";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
@@ -62,6 +63,10 @@ import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
+import {
+  resolveThreadActiveSkill,
+  useThreadActiveSkill,
+} from "@/features/chat/thread-active-skill-store";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -93,9 +98,9 @@ import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
+import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
-import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 
 // The composer block publishes its live height on this element, the
 // transcript's nearest shared ancestor (see `observeComposerBlock`).
@@ -169,23 +174,29 @@ export const ChatThreadPage = ({
     ),
   );
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
+  const cachedSkill = useThreadActiveSkill(threadRef);
 
   // A thread can be opened (e.g. via "Move to main" from the inspector)
   // before its first message has reached the server, so the row may not
   // exist yet. The fetch handles missing threads gracefully; the row is
   // created on first send.
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: { allowMissingThread: true },
+  });
+  const { data } = useSuspenseQuery(threadQueryOptions);
+  const activeSkill = resolveThreadActiveSkill(data, cachedSkill);
+  const getActiveSkill = useLatestCallback(() => activeSkill);
+  // The skill is known only after the read above, and the cache key never
+  // depends on it, so this context addresses the same entry the page reads.
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
     getContextMatterIds,
     getSendMode,
+    ...(activeSkill ? { getActiveSkill } : {}),
   };
-  const threadQueryOptions = chatThreadOptions({
-    activeOrganizationId,
-    key: threadRef,
-    context: chatThreadContext,
-  });
-  const { data } = useSuspenseQuery(threadQueryOptions);
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -229,6 +240,7 @@ export const ChatThreadPage = ({
   });
 
   const {
+    activitySession,
     error,
     messages,
     refreshAnswers,
@@ -244,6 +256,7 @@ export const ChatThreadPage = ({
     stop,
     leave,
     isGenerating,
+    reconnecting,
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
@@ -610,7 +623,7 @@ export const ChatThreadPage = ({
                   </Button>
                 }
               />
-              <ThreadsSheet />
+              <ChatHistoryLink />
               <NewChatButton
                 hasMessages={messages.length > 0}
                 threadRef={threadRef}
@@ -649,7 +662,16 @@ export const ChatThreadPage = ({
                     </div>
                   ) : (
                     <>
+                      {reconnecting && (
+                        <p
+                          role="status"
+                          className="text-muted-foreground px-4 text-sm"
+                        >
+                          {t("common.reconnecting")}
+                        </p>
+                      )}
                       <ChatThreadMessages
+                        activitySession={activitySession}
                         onAnswerEdited={refreshAnswers}
                         answerRewriteAvailability={
                           data.usedAnonymization ? "anonymized" : "available"
@@ -807,17 +829,22 @@ export const ChatThreadPage = ({
                           selectModel: modelSelection.selectModel,
                         }}
                         leadingContext={
-                          <ChatMatterPicker
-                            matterIds={selectedContextMatterIds}
-                            onChange={(matterIds) =>
-                              setContextMatterIds(
-                                resolveChatContextMatterIds(
-                                  threadRef,
-                                  matterIds,
-                                ),
-                              )
-                            }
-                          />
+                          <>
+                            {activeSkill && (
+                              <ChatActiveSkillLabel skill={activeSkill} />
+                            )}
+                            <ChatMatterPicker
+                              matterIds={selectedContextMatterIds}
+                              onChange={(matterIds) =>
+                                setContextMatterIds(
+                                  resolveChatContextMatterIds(
+                                    threadRef,
+                                    matterIds,
+                                  ),
+                                )
+                              }
+                            />
+                          </>
                         }
                         onNewThread={
                           messages.length > 0 ? startNewThread : null

@@ -1,8 +1,9 @@
 import { panic, Result } from "better-result";
 import { appendFileSync, readFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { OxlintConfig } from "oxlint";
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, "../..");
 
@@ -41,6 +42,10 @@ const reportedLine = (diagnostic: unknown, code: string): number | null => {
 };
 
 type LintSingleRuleOptions = {
+  /** Test-only wrapper for a plugin factory; production config is unchanged. */
+  pluginPath?: string;
+  /** Repository overrides projected onto the rule being exercised. */
+  overrides?: OxlintConfig["overrides"];
   /** Use an oxlint built-in plugin instead of a local JavaScript plugin. */
   builtin?: boolean;
   /** The plugin that carries the rule, when it is not named after it. */
@@ -68,6 +73,8 @@ export const runSingleRule = async (
   {
     builtin = false,
     plugin = ruleName,
+    pluginPath,
+    overrides,
     settings,
     fix = false,
     ruleOptions,
@@ -76,27 +83,32 @@ export const runSingleRule = async (
     cwd = "repository",
   }: LintSingleRuleOptions = {},
 ) => {
-  const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
+  // Override globs must use the real cwd when the temporary root is a symlink.
+  const directory = await realpath(
+    await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`)),
+  );
   const options = ruleOptionsForRoot?.(directory) ?? ruleOptions;
   const lintResult = await Result.tryPromise(async () => {
-    const configPath = path.join(directory, "oxlint.config.ts");
+    const configPath = path.join(directory, "oxlint.json");
     await Bun.write(
       configPath,
-      `export default ${JSON.stringify({
+      `${JSON.stringify({
         categories: { correctness: "off" },
         settings,
+        overrides,
         ...(builtin
           ? { plugins: [plugin] }
           : {
               jsPlugins: [
-                path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
+                pluginPath ??
+                  path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
               ],
             }),
         rules: {
           [`${plugin}/${ruleName}`]:
             options === undefined ? "error" : ["error", options],
         },
-      })};\n`,
+      })}\n`,
     );
     const sourceFile = path.join(directory, sourcePath);
     await Bun.write(sourceFile, source);
@@ -208,16 +220,16 @@ export const lintRuleAcrossFiles = async (
   const directory = await mkdtemp(path.join(tmpdir(), `stella-${ruleName}-`));
   const names = Object.keys(files).toSorted();
   const lintResult = await Result.tryPromise(async () => {
-    const configPath = path.join(directory, "oxlint.config.ts");
+    const configPath = path.join(directory, "oxlint.json");
     await Bun.write(
       configPath,
-      `export default ${JSON.stringify({
+      `${JSON.stringify({
         categories: { correctness: "off" },
         jsPlugins: [
           path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
         ],
         rules: { [`${plugin}/${ruleName}`]: "error" },
-      })};\n`,
+      })}\n`,
     );
     for (const name of names) {
       await Bun.write(path.join(directory, name), files[name] ?? "");

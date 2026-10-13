@@ -6,6 +6,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   analyzeSqlPerf,
   isBaselinedSqlPerfKind,
@@ -13,7 +15,7 @@ import {
 import baselineCounts from "./sql-perf-baseline.json" with { type: "json" };
 import { filenameForContext } from "./utils.ts";
 
-const ROOT = path.resolve(import.meta.dir, "..");
+const ROOT = path.resolve(import.meta.dirname, "..");
 const baseline = new Map(Object.entries(baselineCounts));
 
 const message = (shape: string) =>
@@ -44,9 +46,7 @@ export default eslintCompatPlugin({
         return {
           Program() {
             const filename = filenameForContext(context);
-            const relative = path
-              .relative(ROOT, path.resolve(filename))
-              .replaceAll("\\", "/");
+            const relative = repoRelativePath(ROOT, path.resolve(filename));
             const { hits, commentErrors } = analyzeSqlPerf(
               context.sourceCode.text,
               relative,

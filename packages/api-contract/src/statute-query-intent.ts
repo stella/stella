@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import { foldToAscii } from "@stll/text-normalize";
+import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
 
 import {
   STATUTE_ALIASES,
@@ -45,7 +45,10 @@ export type StatuteQueryIntent =
  * lower-case, runs of any whitespace collapsed to one space.
  */
 export const foldStatuteQuery = (raw: string): string =>
-  foldToAscii(raw.normalize("NFKC")).toLowerCase().replace(/\s+/gu, " ").trim();
+  foldToAscii(normalizeUnicode(raw, "NFKC"))
+    .toLowerCase()
+    .replace(/\s+/gu, " ")
+    .trim();
 
 /** `Sb.`, `Z. z.`, `Ú.l. I` → `sb`, `zz`, `ul`: dots, spaces and series dropped. */
 const canonicalCollectionAbbreviation = (suffix: string): string =>
@@ -289,7 +292,7 @@ export const readStatuteQueryReferences = (
   raw: string,
 ): StatuteQueryReference[] => {
   const folded = foldStatuteQuery(raw);
-  const casePreserved = foldToAscii(raw.normalize("NFKC"))
+  const casePreserved = foldToAscii(normalizeUnicode(raw, "NFKC"))
     .replace(/\s+/gu, " ")
     .trim();
   const wholeQuery = parseStatuteQuery(country, raw);

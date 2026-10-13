@@ -2,7 +2,10 @@ import assert from "node:assert";
 import { readdirSync } from "node:fs";
 import path from "node:path";
 
-export const E2E_SHARD_COUNT = 2;
+import { E2E_SHARD_COUNT } from "../apps/web/e2e/shard-count";
+import { repoRelativePath } from "../packages/portable-path/src/index";
+
+export { E2E_SHARD_COUNT } from "../apps/web/e2e/shard-count";
 const SPEC_ROOT = "apps/web/e2e/specs";
 
 // Playwright's default `testMatch`: every `.spec` and `.test` script file.
@@ -34,7 +37,7 @@ const walk = (directory: string): string[] => {
 
 export const listE2eSpecs = (root = process.cwd()): string[] =>
   walk(path.join(root, SPEC_ROOT))
-    .map((file) => path.relative(root, file))
+    .map((file) => repoRelativePath(root, file))
     .toSorted(compareCodeUnit);
 
 export const allE2eShards = (): number[] =>

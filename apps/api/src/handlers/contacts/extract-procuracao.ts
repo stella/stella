@@ -83,6 +83,7 @@ const buildPrompt = (documentText: string): string =>
   `Document (procuração):\n---\n${documentText}\n---`;
 
 const config = {
+  contract: "patch",
   actionAdmission: {
     type: "handler",
     actionKind: "contacts.extract-power-of-attorney",
@@ -284,6 +285,7 @@ const extractProcuracao = createSafeRootHandler(
         feature: "contacts.extractProcuracao",
         modelRole: "fast",
         orgAIConfig,
+        modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
         properties: { organization_id: organizationId },
         traceId: Bun.randomUUIDv7(),
       });

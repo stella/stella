@@ -21,10 +21,12 @@ import type {
   readGatedDecisionWithDocument,
   readsSharedPublicLawCorpus,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
+import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
+import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import type {
   resolveStatuteExpression,
   resolveStatuteWorkVersion,
@@ -52,9 +54,10 @@ import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/ano
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -92,7 +95,10 @@ import type {
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
 import type { renameStoredTemplate } from "@/api/lib/templates/rename-template";
-import type { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
+import type {
+  decideTemplateConditions,
+  templateDecideConditionsLogic,
+} from "@/api/lib/templates/template-decide-conditions";
 import type {
   describeStoredTemplate,
   fillStoredTemplateDocx,
@@ -165,7 +171,9 @@ export type McpRequestContext = {
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
-    lookupDecisionsByIdentity?: typeof lookupDecisionsByIdentity;
+    admitLawRead?: typeof admitLawRead;
+    resolveDecision?: typeof resolveDecision;
+    resolveLawCitation?: typeof resolveLawCitation;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
     readDecisionReaderSource?: typeof readDecisionReaderSource;
     readProvisionPreviewHandler?: typeof readProvisionPreviewHandler;
@@ -195,6 +203,7 @@ export type McpRequestContext = {
     loadAnonymizationAllowlistCanonicalsByWorkspace?: typeof loadAnonymizationAllowlistCanonicalsByWorkspace;
     loadAnonymizationGazetteerEntriesByWorkspace?: typeof loadAnonymizationGazetteerEntriesByWorkspace;
     templateDecideConditionsLogic?: typeof templateDecideConditionsLogic;
+    decideTemplateConditions?: typeof decideTemplateConditions;
     fillStoredTemplateDocx?: typeof fillStoredTemplateDocx;
     fillStoredTemplateWithText?: typeof fillStoredTemplateWithText;
     fillStoredTemplateWithTextStrict?: typeof fillStoredTemplateWithTextStrict;
@@ -377,7 +386,7 @@ export const resolveMcpSessionContext = async (
   }: {
     clientIp?: string | null;
     request: Request;
-    resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
+    resolveAuthorization?: ResolveCredentialMemberAuthorization;
     checkAccountOperation?: typeof checkDemoAccountOperation;
     checkAccountOrganization?: typeof checkReviewAccountOrganization;
   },

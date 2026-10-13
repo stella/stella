@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
+import { MCP_MODES } from "@/api/mcp/constants";
 import {
   getMcpInstructions,
   MCP_INSTRUCTIONS,
+  MCP_INSTRUCTIONS_ADVANCED_MAX_CHARS,
   MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS,
   MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS,
   MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS,
@@ -43,6 +45,7 @@ describe("MCP server instructions", async () => {
           setRuntimeModeForTesting({ mode: RUNTIME_MODE.strict });
           const instructions = await import("./src/mcp/instructions");
           const budgets = {
+            advanced: instructions.MCP_INSTRUCTIONS_ADVANCED_MAX_CHARS,
             default: instructions.MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS,
             documents: instructions.MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS,
             anonymized: instructions.MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS,
@@ -85,7 +88,13 @@ describe("MCP server instructions", async () => {
     );
   });
 
-  test("anonymized instructions stay within the tighter budget", async () => {
+  test("advanced instructions stay within the character budget", () => {
+    expect(MCP_INSTRUCTIONS.advanced.length).toBeLessThanOrEqual(
+      MCP_INSTRUCTIONS_ADVANCED_MAX_CHARS,
+    );
+  });
+
+  test("anonymized instructions stay within the tighter budget", () => {
     expect(MCP_INSTRUCTIONS.anonymized.length).toBeLessThanOrEqual(
       MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS,
     );
@@ -104,6 +113,10 @@ describe("MCP server instructions", async () => {
   });
 
   test("all surfaces are non-empty and selected by mode", async () => {
+    expect(MCP_INSTRUCTIONS.advanced.length).toBeGreaterThan(0);
+    expect(await getMcpInstructions("advanced")).toBe(
+      MCP_INSTRUCTIONS.advanced,
+    );
     expect(MCP_INSTRUCTIONS.default.length).toBeGreaterThan(0);
     expect(MCP_INSTRUCTIONS.anonymized.length).toBeGreaterThan(0);
     expect(MCP_INSTRUCTIONS.documents.length).toBeGreaterThan(0);
@@ -127,7 +140,7 @@ describe("MCP server instructions", async () => {
   });
 
   test("names every reference resource served on each surface", async () => {
-    for (const mode of ["default", "documents", "anonymized", "law"] as const) {
+    for (const mode of MCP_MODES) {
       const instructions = await getMcpInstructions(mode);
       for (const { name } of await listMcpResources(mode)) {
         expect(instructions).toContain(name);

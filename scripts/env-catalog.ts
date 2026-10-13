@@ -10,6 +10,7 @@ import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion"
 import { envOnlineIndexServerSchema } from "../apps/api/src/env-online-index";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
+import { rateLimitBudgetEnvSchema } from "../apps/api/src/lib/rate-limit/budget-config-schema";
 import { envCollabServerSchema } from "../apps/collab/src/env-schema";
 import { envWebClientSchema } from "../apps/web/src/env-schema";
 
@@ -60,6 +61,7 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  ...Object.keys(rateLimitBudgetEnvSchema),
   "LIST_VERIFICATION_ACTIVE_RUNS_MAX",
   "LIST_VERIFICATION_DAILY_STARTS_MAX",
   "UNUSED_CLIENT_RETENTION_DAYS",
@@ -88,7 +90,6 @@ const INTERNAL_SERVER_KEYS = new Set([
   "AGENT_SANDBOX_IMAGE",
   "AGENT_SANDBOX_MCP_URL",
   "AGENT_SANDBOX_RUNS_ENABLED",
-  "CHAT_RUN_LOG_SHADOW",
   "AI_MODEL_CHAT",
   "AI_MODEL_FAST",
   "AI_MODEL_PDF",
@@ -288,7 +289,29 @@ const EXAMPLE_VALUES: Record<string, string> = {
   VITE_PUBLIC_APP_URL: "http://localhost:3000",
 };
 
+const requestBudgetUnitDescription = (name: string): string => {
+  if (name.endsWith("_MS")) {
+    return "milliseconds (1000–604800000)";
+  }
+  if (name.endsWith("_WINDOW_SECONDS")) {
+    return "seconds (1–604800)";
+  }
+  if (name.endsWith("_MAX_CONCURRENT")) {
+    return "concurrent requests (1–10000)";
+  }
+  return "requests per window (1–1000000)";
+};
+
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  ...Object.fromEntries(
+    Object.keys(rateLimitBudgetEnvSchema).map((name) => {
+      const unit = requestBudgetUnitDescription(name);
+      return [
+        name,
+        `Request budget ${name.replace("RATE_LIMIT_", "").toLowerCase().replaceAll("_", " ")}; ${unit}. Defaults are defined by the validated API schema.`,
+      ];
+    }),
+  ),
   APP_REVIEW_ACCOUNT_EMAIL:
     "Restricted review account allowed password sign-in. Set together with APP_REVIEW_ORGANIZATION_ID.",
   APP_REVIEW_ORGANIZATION_ID:
@@ -342,8 +365,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Container-reachable MCP endpoint used by isolated agent runs.",
   AGENT_SANDBOX_RUNS_ENABLED:
     "Enable explicit agent-mode chat requests for this deployment.",
-  CHAT_RUN_LOG_SHADOW:
-    "Record chat stream chunks for measurement. Defaults on in local development/test and off in production.",
   BETTER_AUTH_SECRET:
     "HMAC secret used to sign Better Auth sessions. Use at least 32 characters; rotation logs everyone out.",
   BETTER_AUTH_URL:
@@ -573,9 +594,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   STELLA_CLIENT_ADDRESS_FORMAT:
     "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
   STELLA_ORIGIN_VERIFY_SECRET:
-    "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
-  STELLA_FRONTEND_VERIFY_SECRET:
-    "Comma-separated values the frontend edge sends in x-stella-frontend-verify (current, then next during a rotation). From STELLA_TRUSTED_PROXY_CIDRS peers carrying one, the browser's bare address in x-stella-viewer-address is read first; unset, that header is never read.",
+    "Current value the edge sends in x-stella-origin-verify. One value of at least 32 characters; the client address header accepts this or STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS.",
+  STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS:
+    "Optional previous origin value accepted during a rotation. One value of at least 32 characters, stored separately from STELLA_ORIGIN_VERIFY_SECRET.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
@@ -667,7 +688,14 @@ type EnvCatalogName =
   | keyof typeof euCompletionTickServerSchema
   | keyof typeof envWebClientSchema;
 
+// Budget keys are one non-credential group derived from the schema. The total
+// explicit map continues to classify every key outside that group.
 export const ENV_CREDENTIAL_CLASSIFICATION = {
+  ...Object.fromEntries(
+    Object.keys(rateLimitBudgetEnvSchema).map(
+      (name) => [name, ENV_CREDENTIAL_KIND.notCredential] as const,
+    ),
+  ),
   LIST_VERIFICATION_ACTIVE_RUNS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   LIST_VERIFICATION_DAILY_STARTS_MAX: ENV_CREDENTIAL_KIND.notCredential,
   ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY:
@@ -722,7 +750,6 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   CASE_LAW_EU_COMPLETION_MAX_ROWS: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_EU_COMPLETION_MODE: ENV_CREDENTIAL_KIND.notCredential,
   CASE_LAW_DATABASE_URL: ENV_CREDENTIAL_KIND.notCredential,
-  CHAT_RUN_LOG_SHADOW: ENV_CREDENTIAL_KIND.notCredential,
   COMPANIES_HOUSE_API_KEY: ENV_CREDENTIAL_KIND.credential,
   CONTENT_ENCRYPTION_KEY: ENV_CREDENTIAL_KIND.credential,
   CORPUS_INDEX_Q09_ENDPOINT: ENV_CREDENTIAL_KIND.notCredential,
@@ -921,9 +948,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
-  STELLA_FRONTEND_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
+  STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_TRUSTED_PROXY_CIDRS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_USAGE_POLICY_SEEDS: ENV_CREDENTIAL_KIND.notCredential,
@@ -970,7 +997,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   WEB_FETCH_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   WEB_SEARCH_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
 } as const satisfies Record<
-  EnvCatalogName,
+  Exclude<EnvCatalogName, keyof typeof rateLimitBudgetEnvSchema>,
   (typeof ENV_CREDENTIAL_KIND)[keyof typeof ENV_CREDENTIAL_KIND]
 >;
 
@@ -1031,6 +1058,9 @@ const humanizeEnvName = (name: string) => {
 };
 
 const sectionFor = (name: string) => {
+  if (Object.hasOwn(rateLimitBudgetEnvSchema, name)) {
+    return "Request budgets";
+  }
   if (
     /^(DATABASE|DB_|ONLINE_INDEX_|STELLA_WORKER|SKIP_MIGRATION)/u.test(name)
   ) {
@@ -1318,11 +1348,25 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Manual regeneration binds the requested PR and checks available job services.
+  "PR_NUMBER",
+  "JOB_SERVICES",
+  // Workflow lint resolves the checksum-verified actionlint executable.
+  "ACTIONLINT_BIN",
+  // CI verification steps set it; workspace hygiene then requires prepared
+  // API typecheck configs instead of skipping their install-time absence.
+  "STELLA_VERIFY",
+  "QUERY_PERF_BASELINE_MODE",
+  "QUERY_PERF_BASE_REF",
+  "QUERY_PERF_CHANGED_PATHS",
+  "QUERY_PERF_SCOPE_UNKNOWN",
   // CI image resolution and smoke tooling; product defaults remain upstream.
   "CI_IMAGE_MIRROR_ENABLED",
   "CI_PLAYWRIGHT_IMAGE",
   "POSTGRES_IMAGE",
   "REDIS_IMAGE",
+  // The scan engine drift check builds into a scratch directory and compares it.
+  "SCAN_ENGINE_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
   "CHECK_EXIT_FILE",
@@ -1344,6 +1388,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "FOLDED_SUITES",
   // CI steps export the GitHub API retry helper's path after installing it.
   "GH_RETRY_SCRIPT",
+  // Dated-waiver healing: the private repository its fix tasks go to, and
+  // the merge hold that keeps it from arming removals.
+  "DATED_WAIVER_FIX_REPO",
+  "MERGE_HOLD",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -1389,6 +1437,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CANARY_SERVER_URL",
   "CANARY_SIGNING_SECRET",
   "CANARY_STATE_PATH",
+  // Desktop release stamping receives these values from its workflow steps.
+  "CHANNEL",
   "CHAT_SAVED_STATE_WRITE",
   "CHAT_TRANSCRIPTS_WRITE",
   // Exact-base CI rehearsal: loopback URL for the separate disposable clean cluster.
@@ -1491,12 +1541,18 @@ export const TOOLING_ENV_KEYS = new Set([
   "RELEASE_REF",
   "REPO",
   "REPOSITORY",
+  // Main PR-depth status publisher inputs.
+  "RESULTS",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // scripts/retry.sh: `warning` for callers that tolerate the failure.
+  "RETRY_FAILURE_LEVEL",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
+  "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
+  "SHA",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
@@ -1524,6 +1580,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
+  "STELLA_RUN_QUERY_PERF_TESTS",
   "STELLA_RUN_VALKEY_TESTS",
   "STELLA_SEED_ID_NAMESPACE",
   "STELLA_SEED_ORG_ID",
@@ -1538,7 +1595,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Internal handoff between the code-quality supervisor and its process group.
+  "CODE_QUALITY_PROCESS_GROUP",
+  // CI installer budget selected from restored package-cache contents.
+  "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",
+  "CI_POSTGRES_TEST_SHARD",
+  "POSTGRES_TEST_DURATIONS_FILE",
   "POSTGRES_JUNIT_FILE",
   "CHANGED_MARKDOWN",
   "TURBO_HASH",
@@ -1547,6 +1610,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "TURN_OUTCOME_SHARD",
   "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
+  "VERSION",
   // Release dependency-audit gate: a reasoned waiver and the remediation branch.
   "WAIVE_DEPENDENCY_AUDIT",
   "WAIVER_REASON",
@@ -1576,6 +1640,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "GITHUB_TOKEN",
   "GH_REPO",
   "GH_TOKEN",
+  // Test seam: the GitHub retry wrapper a status script calls.
+  "GH_RETRY",
   "HOSTNAME",
   "NODE_ENV",
   // Read by the provider SDK; managed request tests verify it cannot enable logging.

@@ -21,6 +21,7 @@ import { memberAIAccessError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   authorizeHandlerRunSize,
+  configuredModelAdmission,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -53,6 +54,7 @@ import type { Position } from "@/api/lib/workflow/playbook-positions";
 import { findDuplicatePositionSourceId } from "@/api/lib/workflow/playbook-positions-validation";
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "document-reviews.start" },
   description:
     "Start an asynchronous review of one document against a confirmed list of positions. Returns a run ID to poll.",
@@ -94,6 +96,7 @@ const createDocumentReviewRun = createSafeHandler(
   async function* ({
     body,
     memberRole,
+    modelAdmission,
     orgAIConfig,
     orgAIConfigStatus,
     recordAuditEvent,
@@ -300,6 +303,7 @@ const createDocumentReviewRun = createSafeHandler(
     const reviewModel = getTanStackTextModelInfoForRole("pdf", orgAIConfig, {
       dataClass: "customer",
       organizationId,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
     });
     const inputBytes =
       selection.value.target.fileSizeBytes +

@@ -150,6 +150,7 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import { blendedRankSql } from "@/api/lib/legal-search/authority-sql";
 import {
+  caseLawCorpusAppliedRevision,
   caseLawCorpusDocumentCanRecur,
   currentCaseLawCorpusProjection,
 } from "@/api/lib/legal-search/case-law-corpus-projection";
@@ -169,7 +170,11 @@ import {
   courtPartitionsForCourtFilter,
   type CorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
-import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import {
+  readServingCorpusIndexTargetTx,
+  type ServingCorpusIndexTargetError,
+} from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import { requireCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import type {
   CorpusIndexScanReport,
   CorpusIndexScanTransport,
@@ -184,6 +189,7 @@ import {
   type CaseLawCorpusQueryFields,
   requireCaseLawDecisionCountField,
 } from "@/api/lib/legal-search/corpus-index-read-contract";
+import type { CorpusProjectionRevision } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   type CorpusFacetQuery,
   type CorpusSearchFacetName,
@@ -245,10 +251,9 @@ import type {
   RankedHit,
   ScoredCandidate,
 } from "@/api/lib/legal-search/rerank";
+import { searchIndexUnavailableResponse } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
-import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
@@ -257,12 +262,6 @@ import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limit
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
 
 import { projectCaseLawSearchResponse } from "./search-response";
-
-/** A scoped search reached an index group that is not attested yet. */
-const corpusIndexGroupNotReady = failureSink({
-  event: "case_law.search.index_group_not_ready",
-  expected: [],
-});
 
 const toNullableString = (x: unknown): string | null => {
   if (x === null || x === undefined) {
@@ -1359,6 +1358,9 @@ export const candidateDecisionRowsStatement = (
       // A directory court is ranked by its id, not by its name.
       courtId: caseLawDecisions.courtId,
       languageGroupKey: caseLawDecisions.languageGroupKey,
+      // The copy a page's snippet and anchor are read from.
+      appliedRevision:
+        caseLawCorpusAppliedRevision(generation).as("applied_revision"),
       canRecur:
         sql<boolean>`CASE WHEN ${caseLawCorpusDocumentCanRecur(generation)}
         THEN true ELSE EXISTS (
@@ -1415,6 +1417,9 @@ export const pageDecisionRowsStatement = (
       sourceDescriptor: caseLawSources.descriptor,
       headnote: columns.headnote.as("headnote"),
       keywords: columns.keywords.as("keywords"),
+      // Compared with the revision the page's passages were read from.
+      appliedRevision:
+        caseLawCorpusAppliedRevision(generation).as("applied_revision"),
       // The hit carries every identifier the publisher supplied; a list row
       // does not, so this one column is the search's own.
       identifiers: sql<unknown>`coalesce((
@@ -1666,9 +1671,11 @@ export const rehydrateCaseLawCandidates = async ({
   }
 
   const byId = new Map<string, CandidateDecisionRow>();
+  const revisionById = new Map<string, CorpusProjectionRevision>();
   for (const [id, row] of hydrated) {
-    if (row !== null) {
+    if (row !== null && row.appliedRevision !== null) {
       byId.set(id, row);
+      revisionById.set(id, row.appliedRevision);
     }
   }
   const authorityById = new Map<string, number>();
@@ -1704,6 +1711,10 @@ export const rehydrateCaseLawCandidates = async ({
   // be carried through the scan.
   return {
     context: null,
+    revisionById,
+    rehydratedCandidateCount: candidates.filter((candidate) =>
+      byId.has(candidate.id),
+    ).length,
     ranked: representatives.filter((hit) => {
       const token = groupTokenById.get(hit.id);
       if (token === undefined) {
@@ -1858,6 +1869,8 @@ type DecisionHitsPageOptions = {
    */
   passageCountById: ReadonlyMap<string, number>;
   snippetById: ReadonlyMap<string, string>;
+  /** The revision each decision's snippet and anchor were read from. */
+  snippetRevisionById: ReadonlyMap<string, CorpusProjectionRevision>;
   headnotePresentation: SearchDecisionsBody["headnotePresentation"];
   total: SearchTotal;
 };
@@ -1873,6 +1886,7 @@ export const decisionHitsPage = ({
   pageRanked,
   passageCountById,
   snippetById,
+  snippetRevisionById,
   headnotePresentation,
   total,
 }: DecisionHitsPageOptions) => {
@@ -1881,6 +1895,12 @@ export const decisionHitsPage = ({
     if (!row) {
       return [];
     }
+    // A decision refreshed between the candidate read and this one holds a
+    // newer revision than its passages were read from; its excerpt is
+    // withheld rather than shown from the earlier copy.
+    const snippetRevision = snippetRevisionById.get(hit.id);
+    const passageIsCurrent =
+      snippetRevision !== undefined && snippetRevision === row.appliedRevision;
 
     const presentation = courtPresentation(courtWeights, {
       country: row.country,
@@ -1919,12 +1939,12 @@ export const decisionHitsPage = ({
           keywords: row.keywords,
           maxChars: decisionHeadnoteMaxChars(headnotePresentation),
         }),
-        headline: snippetById.get(hit.id) ?? null,
+        headline: passageIsCurrent ? (snippetById.get(hit.id) ?? null) : null,
         // Additive: the anchor of the passage the snippet came from, so a
         // result can open the decision scrolled to what matched. Null on a
         // document-granular generation, on unanchored fallback passages, and
         // on a decision the entry named outright.
-        anchorId: anchorIdById.get(hit.id) ?? null,
+        anchorId: passageIsCurrent ? (anchorIdById.get(hit.id) ?? null) : null,
         citationCount: row.citationCount,
         // The blend's own input, reported beside the result it ranked.
         citationAuthority: hit.citationAuthority,
@@ -1995,6 +2015,7 @@ type ReadCaseLawSearchFacetsOptions = {
   indexId: string;
   /** Null when the request has no query the facets could be counted under. */
   queryFor: CorpusFacetQuery | null;
+  readSourceRegistry: typeof readCaseLawSourceRegistry;
   /** Where each aggregation came from, once the engine read has settled. */
   recordCacheOutcome: (outcome: CorpusAggregateCacheOutcome) => void;
   timeDbRead: TimeDbRead;
@@ -2025,6 +2046,7 @@ const readCaseLawSearchFacets = async ({
   decisionCountField,
   indexId,
   queryFor,
+  readSourceRegistry,
   recordCacheOutcome,
   timeDbRead,
   totalQuery,
@@ -2043,9 +2065,7 @@ const readCaseLawSearchFacets = async ({
   // no facets rather than facets that might still advertise a revoked source.
   // The same read carries the display names, so labelling the buckets costs no
   // further round trip once the counts are back.
-  const registry = await timeDbRead(
-    async () => await readCaseLawSourceRegistry(),
-  );
+  const registry = await timeDbRead(async () => await readSourceRegistry());
   if (Result.isError(registry)) {
     logger.warn("case_law.search_facets.unavailable", {
       "error.type": errorTag(registry.error),
@@ -2142,7 +2162,7 @@ const readCaseLawSearchFacets = async ({
 const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
   switch (sort) {
     case "relevance":
-      return { type: "scored", fields: ["document_id"] };
+      return { type: "scored" };
     case "newest":
       return NATIVE_SCAN_TRANSPORT;
     default:
@@ -2154,6 +2174,8 @@ const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
 type SearchCorpusIndexDependencies = {
   readServingTarget?: () => ReturnType<typeof readServingCorpusIndexTargetTx>;
   configuredVariant?: CorpusIndexQueryVariant;
+  loadCourtWeights?: typeof loadPublicCourtWeights;
+  readSourceRegistry?: typeof readCaseLawSourceRegistry;
 };
 
 type CorpusIndexRequestConfigurationOptions = {
@@ -2173,6 +2195,9 @@ const corpusIndexRequestConfiguration = ({
   sort: body.sort ?? DEFAULT_SEARCH_SORT,
   configuredVariant:
     dependencies.configuredVariant ?? envBase.CORPUS_INDEX_QUERY_VARIANT,
+  loadCourtWeights: dependencies.loadCourtWeights ?? loadPublicCourtWeights,
+  readSourceRegistry:
+    dependencies.readSourceRegistry ?? readCaseLawSourceRegistry,
   readServingTarget:
     dependencies.readServingTarget ??
     (async () =>
@@ -2184,6 +2209,22 @@ const corpusIndexRequestConfiguration = ({
           }),
       )),
 });
+
+/**
+ * The answer to a serving-target read that reaches no index. No serving
+ * generation is the search index being unavailable, so it answers the typed
+ * retryable 503 every REST route and MCP tool resolves.
+ */
+const servingTargetRefusal = (failure: ServingCorpusIndexTargetError) => {
+  switch (failure._tag) {
+    case "CorpusServingGenerationAbsentError":
+    case "CorpusIndexGroupNotReadyError":
+      return searchIndexUnavailableResponse(failure);
+    default:
+      failure satisfies never;
+      return panic(`Unhandled serving target failure: ${String(failure)}`);
+  }
+};
 
 const cursorMatchesCorpusReadTarget = (
   cursor: CorpusSearchCursor | null,
@@ -2197,18 +2238,62 @@ type SearchCorpusIndexDecisionsOptions = {
   dependencies?: SearchCorpusIndexDependencies;
 };
 
+type ReportMissingSearchSnippetsOptions = {
+  ranked: readonly RankedHit[];
+  servedIds: ReadonlySet<string>;
+  snippetById: ReadonlyMap<string, string>;
+};
+
+export const reportMissingSearchSnippets = ({
+  ranked,
+  servedIds,
+  snippetById,
+}: ReportMissingSearchSnippetsOptions): void => {
+  reportCaseLawIncompleteAnswer({
+    surface: "search",
+    reason: "snippet_missing",
+    count: ranked.filter(({ id }) => servedIds.has(id) && !snippetById.has(id))
+      .length,
+  });
+};
+
+type CountDroppedIdentityCandidatesOptions = {
+  candidateCount: number;
+  rehydratedCandidateCount: number;
+  offset: number;
+  limit: number;
+};
+
+/** Page shortfall from candidate rehydration, before the language-group fold. */
+export const countDroppedIdentityCandidates = ({
+  candidateCount,
+  rehydratedCandidateCount,
+  offset,
+  limit,
+}: CountDroppedIdentityCandidatesOptions): number => {
+  const inWindow = (count: number) =>
+    Math.max(0, Math.min(offset + limit, count) - offset);
+  return inWindow(candidateCount) - inWindow(rehydratedCandidateCount);
+};
+
 export const searchCorpusIndexDecisions = async ({
   body,
   caseLawDb,
   observer,
   dependencies = {},
 }: SearchCorpusIndexDecisionsOptions) => {
-  const { readServingTarget, configuredVariant, limit, sort } =
-    corpusIndexRequestConfiguration({
-      body,
-      caseLawDb,
-      dependencies,
-    });
+  const {
+    readServingTarget,
+    configuredVariant,
+    limit,
+    loadCourtWeights,
+    readSourceRegistry,
+    sort,
+  } = corpusIndexRequestConfiguration({
+    body,
+    caseLawDb,
+    dependencies,
+  });
   const startedAt = performance.now();
   // Only the first page of a result set describes it (its total, its facets,
   // the decisions a reference pins above it); a page reached by cursor or by
@@ -2279,8 +2364,7 @@ export const searchCorpusIndexDecisions = async ({
     readServingTarget,
   );
   if (Result.isError(target)) {
-    observeFailure(target.error, { sink: corpusIndexGroupNotReady });
-    return status(503, { message: "Search is temporarily unavailable" });
+    return servingTargetRefusal(target.error);
   }
   const { serving, route, contract } = target.value;
   const rankingMode = corpusQueryRankingMode({
@@ -2306,7 +2390,7 @@ export const searchCorpusIndexDecisions = async ({
   // loader caches for a minute, but the ranking must see one registry across a
   // whole page. The timer brackets the query rather than the call, so a
   // request served from the cache reports no read instead of a phantom one.
-  const courtWeights = await loadPublicCourtWeights({
+  const courtWeights = await loadCourtWeights({
     onRead: async (run) =>
       await dbTimer.time(CASE_LAW_SEARCH_DB_READ.courtWeights, run),
   });
@@ -2375,6 +2459,16 @@ export const searchCorpusIndexDecisions = async ({
         offset,
         ranked: identityRanking.ranked,
       });
+      reportCaseLawIncompleteAnswer({
+        surface: "search",
+        reason: "identity_row_dropped",
+        count: countDroppedIdentityCandidates({
+          candidateCount: ids.length,
+          rehydratedCandidateCount: identityRanking.rehydratedCandidateCount,
+          offset,
+          limit,
+        }),
+      });
       if (identityRole === "pin") {
         pinned = identityRanking.ranked.slice(0, limit);
       } else if (identityAnswer.type === "answer") {
@@ -2406,6 +2500,7 @@ export const searchCorpusIndexDecisions = async ({
           pageRanked: identityPage,
           passageCountById: new Map(),
           snippetById: new Map(),
+          snippetRevisionById: new Map(),
           headnotePresentation: body.headnotePresentation,
           // The decisions the lookup found, not the ones this page holds: a
           // docket naming more decisions than fit a page still reports how
@@ -2522,6 +2617,8 @@ export const searchCorpusIndexDecisions = async ({
     scanTransport: caseLawScanTransport(sort),
     rankingMode,
     snippetFields: ["text"],
+    projectionRevisionField: requireCorpusIndexManifest("case_law", generation)
+      .projection.projectionRevisionField,
     extractId: (hit) => {
       const id = hit["document_id"];
       return typeof id === "string" && isUuid(id) ? id : null;
@@ -2563,6 +2660,7 @@ export const searchCorpusIndexDecisions = async ({
         decisionCountField,
         indexId,
         queryFor: facetQueries(),
+        readSourceRegistry,
         recordCacheOutcome: (outcome) => {
           facetCache = outcome;
         },
@@ -2577,7 +2675,8 @@ export const searchCorpusIndexDecisions = async ({
   const [searchPage, facetsAndTotal] = await Promise.all([pageRead, facetRead]);
   scanAndFacetsMs = performance.now() - concurrentStartedAt;
 
-  const { anchorIdById, passageCountById, scan, snippetById } = searchPage;
+  const { anchorIdById, passageCountById, revisionById, scan, snippetById } =
+    searchPage;
   const pageRanked = withPinnedDecisions({
     pinned,
     pinnedIds,
@@ -2620,6 +2719,7 @@ export const searchCorpusIndexDecisions = async ({
     pageRanked,
     passageCountById,
     snippetById,
+    snippetRevisionById: revisionById,
     headnotePresentation: body.headnotePresentation,
     total: facetsAndTotal?.total ?? SEARCH_TOTAL_NOT_COUNTED,
   });
@@ -2630,12 +2730,10 @@ export const searchCorpusIndexDecisions = async ({
     reason: "rehydration_row_dropped",
     count: dispositions.excluded + dispositions.drift,
   });
-  reportCaseLawIncompleteAnswer({
-    surface: "search",
-    reason: "snippet_missing",
-    count: searchPage.pageRanked.filter(
-      ({ id }) => servedIds.has(id) && !snippetById.has(id),
-    ).length,
+  reportMissingSearchSnippets({
+    ranked: searchPage.pageRanked,
+    servedIds,
+    snippetById,
   });
   reportCaseLawIncompleteAnswer({
     surface: "search",

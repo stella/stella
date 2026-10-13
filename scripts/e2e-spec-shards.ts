@@ -17,6 +17,7 @@ import {
 export { E2E_SHARD_COUNT, listE2eSpecs } from "./e2e-spec-shards-core";
 // Runner configuration and global setup load every spec without being imported.
 const E2E_RUNNER_ROOT = "apps/web/e2e/";
+const GEOMETRY_SPEC_PATH = "apps/web/e2e/specs/docked-chat-geometry.spec.ts";
 
 type E2eSpecSelection =
   | { status: "all" }
@@ -112,7 +113,12 @@ export const selectedE2ePlan = (
   root = process.cwd(),
 ) => {
   const selection = selectE2eSpecPlan(changedFiles, root);
-  if (selection.status === "all") {
+  // The growing geometry matrix needs both independently balanced CI shards,
+  // including when a PR changes only the spec or one of its fixture helpers.
+  if (
+    selection.status === "all" ||
+    selection.specs.includes(GEOMETRY_SPEC_PATH)
+  ) {
     return { status: "full", matrix: allE2eMatrix(), specs: [] } as const;
   }
   // The dedicated network leg owns route smoke; the general run excludes it.

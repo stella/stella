@@ -33,6 +33,7 @@ const rewriteSkillResourceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "skills.rewrite-resource" },
   description:
     "Rewrite one file of an agent skill with the model, from a free-text " +
@@ -121,6 +122,7 @@ const rewriteSkillResource = createSafeRootHandler(
       feature: "skills.rewrite_resource",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });

@@ -66,55 +66,6 @@ export declare const APP_DECISION_BLOCKS_SCHEMA: v.GenericSchema<
   ReaderPage
 >;
 
-export type LookupResults =
-  | {
-      message: string;
-      hint: string;
-    }
-  | {
-      items: Array<
-        | {
-            decisionId: string;
-            court: string;
-            courtAbbreviation: string | null;
-            decisionDate: string | null;
-            caseNumber: string;
-            ecli: string | null;
-            appUrl: string | null;
-            source_url?: string | undefined;
-            status: "found";
-          }
-        | {
-            status: "ambiguous";
-            message: string;
-            candidates: Array<{
-              decisionId: string;
-              court: string;
-              courtAbbreviation: string | null;
-              decisionDate: string | null;
-              caseNumber: string;
-              ecli: string | null;
-              appUrl: string | null;
-              source_url?: string | undefined;
-            }>;
-          }
-        | {
-            status: "incomplete_identifier";
-            message: string;
-          }
-        | {
-            status: "not_found";
-            message: string;
-            hint: string;
-          }
-        | {
-            status: "lookup_failed";
-            message: string;
-          }
-      >;
-    };
-export declare const APP_LOOKUP_SCHEMA: v.GenericSchema<unknown, LookupResults>;
-
 export type OpenDecision =
   | {
       status: "available";
@@ -219,6 +170,83 @@ export type ProvisionPreview = {
 export declare const APP_PROVISION_PREVIEW_SCHEMA: v.GenericSchema<
   unknown,
   ProvisionPreview
+>;
+
+export type ResolveResults =
+  | {
+      status: "resolved";
+      document:
+        | {
+            kind: "decision";
+            decisionId: string;
+            identifier: string;
+            country: string;
+            caseNumber: string;
+            ecli: string | null;
+            court: string;
+            decisionDate: string | null;
+            readerUrl: string;
+            text:
+              | {
+                  status: "readable";
+                  blocks: unknown[];
+                  extent:
+                    | {
+                        type: "complete";
+                      }
+                    | {
+                        type: "partial";
+                        returnedChars: number;
+                        totalChars: number;
+                      };
+                }
+              | {
+                  status: "withheld";
+                  reason: "licence";
+                }
+              | {
+                  status: "unavailable";
+                };
+          }
+        | {
+            kind: "provision";
+            documentId: string;
+            eli: string;
+            country: string;
+            title: string;
+            section: string;
+            readerUrl: string;
+            inForce: {
+              from: string | null;
+              to: string | null;
+            };
+            versionStatus: "current" | "outdated";
+            blocks: unknown[];
+          };
+    }
+  | {
+      status: "not_found";
+      reason: "unknown_document" | "unknown_section" | "no_exact_identity";
+    }
+  | {
+      status: "ambiguous";
+      candidates: Array<{
+        decisionId: string;
+        identifier: string;
+        label: string;
+        readerUrl: string;
+      }>;
+    }
+  | {
+      status: "incomplete_identifier";
+      missing: string[];
+    }
+  | {
+      status: "country_unavailable";
+    };
+export declare const APP_RESOLVE_SCHEMA: v.GenericSchema<
+  unknown,
+  ResolveResults
 >;
 
 export type SearchResults =

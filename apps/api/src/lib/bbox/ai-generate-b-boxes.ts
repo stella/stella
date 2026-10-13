@@ -64,6 +64,7 @@ export const generateBBoxData = async ({
     modelRole: "pdf",
     organizationId,
     orgAIConfig: orgAIConfig ?? null,
+    modelTier: admission.modelTier,
     properties: {
       justification_id: justificationId,
       organization_id: organizationId,

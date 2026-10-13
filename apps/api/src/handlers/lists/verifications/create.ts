@@ -14,6 +14,7 @@ import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import {
   ACCOUNT_ACCESS,
   authorizeHandlerRunSize,
+  configuredModelAdmission,
   createSafeHandler,
 } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -43,6 +44,7 @@ const bodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   // The run is queued here; its worker takes a background slot.
   actionAdmission: { type: "handler", actionKind: "list-verification.start" },
   description:
@@ -102,12 +104,6 @@ const markVerificationEnqueueFailed = async (
   options: MarkVerificationEnqueueFailedOptions,
 ) =>
   await options.safeDb(async (tx) => {
-    await options.recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
-      resourceId: options.runId,
-      metadata: { status: "failed", errorCode: "enqueue_failed" },
-    });
     await tx
       .update(legalListVerificationRuns)
       .set({
@@ -121,12 +117,19 @@ const markVerificationEnqueueFailed = async (
           eq(legalListVerificationRuns.workspaceId, options.workspaceId),
         ),
       );
+    await options.recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.LEGAL_LIST_VERIFICATION,
+      resourceId: options.runId,
+      metadata: { status: "failed", errorCode: "enqueue_failed" },
+    });
   });
 
 const createVerification = createSafeHandler(
   config,
   async function* ({
     body,
+    modelAdmission,
     orgAIConfig,
     orgAIConfigStatus,
     recordAuditEvent,
@@ -200,7 +203,11 @@ const createVerification = createSafeHandler(
     const model = getTanStackTextModelInfoForRole(
       VERIFICATION_MODEL_ROLE,
       orgAIConfig,
-      { dataClass: "customer", organizationId },
+      {
+        dataClass: "customer",
+        organizationId,
+        modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
+      },
     );
     const authorization = yield* Result.await(
       authorizeHandlerRunSize({

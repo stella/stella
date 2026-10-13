@@ -1,4 +1,4 @@
-import { RUN_CANCEL_REASON } from "@tanstack/ai";
+import { memoryStream, RUN_CANCEL_REASON } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -8,6 +8,7 @@ import {
   CHAT_CONTINUATION_REJECTED_ERROR_CODE,
   CHAT_TURN_NOT_OWNED_ERROR_CODE,
 } from "@stll/api-contract";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -178,6 +179,7 @@ const COMPLETED_CALL = {
   output: { templates: [] },
   state: "complete",
   type: "tool-call",
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
 } satisfies ChatPart;
 const CLIENT_CALL = {
   arguments: JSON.stringify({ name: "NDA", source: "@title NDA" }),
@@ -186,6 +188,7 @@ const CLIENT_CALL = {
   name: "create-document",
   state: "input-complete",
   type: "tool-call",
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
 } satisfies ChatPart;
 const APPROVAL_CALL = {
   approval: { id: "call-delete", needsApproval: true },
@@ -195,6 +198,7 @@ const APPROVAL_CALL = {
   name: "mcp__external__delete",
   state: "approval-requested",
   type: "tool-call",
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
 } satisfies ChatPart;
 
 const seedAwaitingTurn = async () => {
@@ -365,7 +369,10 @@ const produceUntilCut = ({
       };
     });
   };
-  const response = run.produce(output());
+  const response = run.produce(
+    output(),
+    memoryStream({ runId: Bun.randomUUIDv7() }),
+  );
   return { response, run };
 };
 
@@ -423,6 +430,7 @@ describe("stopping a chat turn", () => {
         name: CLIENT_CALL.name,
         state: "error",
         type: "tool-call",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       },
     ]);
     expect((await readTurn(turnId)).status).toBe("cancelled");

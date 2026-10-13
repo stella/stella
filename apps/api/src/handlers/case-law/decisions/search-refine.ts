@@ -40,6 +40,7 @@ const CASE_LAW_REFINE_TIMEOUT_MS = 20_000;
 const REFINE_FAILED_MESSAGE = "Failed to improve search query";
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "case-law.search-refine" },
   description:
     "Rewrite a case-law search into the words court decisions of the " +
@@ -118,6 +119,7 @@ const refineCaseLawSearch = createSafeRootHandler(
       feature: "case-law.search.refine",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId, jurisdiction: country },
       traceId: Bun.randomUUIDv7(),
     });

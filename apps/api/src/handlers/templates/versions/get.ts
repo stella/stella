@@ -14,6 +14,7 @@ const getTemplateVersionParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   contentDelivery: { type: "audited" },
   description:
     "Read one stored template version: its number, field count, creation " +

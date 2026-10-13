@@ -1,10 +1,8 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(20_000);
 
 describe.serial("audit detail read ownership", () => {
   const entry = OWNERSHIP.find(({ id }) => id === "audit-detail-read");
@@ -771,4 +769,22 @@ describe.serial("checked operation ownership", () => {
       }
     });
   }
+});
+
+test("RTF code-page decoding stays in the document reader", async () => {
+  const entry = OWNERSHIP.find(({ id }) => id === "rtf-reader");
+  const source = 'const control = "ansicpg";';
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ruleOptions: { entries: [entry] },
+      sourcePath:
+        "apps/api/src/handlers/case-law/ingestion/parsers/second-reader.ts",
+    }),
+  ).toEqual([1]);
+  expect(
+    await lintSingleRule("confine-owner", source, {
+      ruleOptions: { entries: [entry] },
+      sourcePath: "apps/api/src/lib/legal-search/parsers/rtf-reader.ts",
+    }),
+  ).toEqual([]);
 });

@@ -16,6 +16,14 @@ export type NoLlmsTxtExclusion = {
 };
 
 export const DOC_SOURCES = {
+  AGUI: {
+    dependencies: ["@ag-ui/core"],
+    url: "https://docs.ag-ui.com/llms.txt",
+  },
+  Zod: {
+    dependencies: ["zod"],
+    url: "https://zod.dev/llms.txt",
+  },
   Anthropic: {
     dependencies: ["@anthropic-ai/sdk"],
     url: "https://platform.claude.com/llms.txt",
@@ -379,6 +387,14 @@ export const DOC_SOURCE_EXCLUSIONS = [
 ]
   .map(noLlmsTxt)
   .concat(
+    {
+      checkedAt: "2026-10-11T00:00:00.000Z",
+      dependency: "shell-quote",
+      explanation:
+        "https://raw.githubusercontent.com/ljharb/shell-quote/main/llms.txt returns 404. Use the canonical package README at https://github.com/ljharb/shell-quote#readme directly.",
+      expiresAt: "2026-11-10T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
     {
       checkedAt: "2026-10-07T00:00:00.000Z",
       dependency: "@gdp-ts/core",

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
+
 import { chatRefsWrittenIn } from "@/api/handlers/chat/chat-refs-shown";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { ChatPart } from "@/api/handlers/chat/types";
@@ -12,6 +17,26 @@ import {
 const SERVER_TOOL = "execute_typescript";
 
 describe("the parts of an assistant message that may hold shown refs", () => {
+  test("recorded ownership determines which call output contains server refs", () => {
+    const parts = (["client", "server"] as const).map(
+      (executor) =>
+        ({
+          type: "tool-call",
+          id: executor,
+          name: SERVER_TOOL,
+          arguments: "{}",
+          input: {},
+          state: "complete",
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: executor },
+          output: { logs: [], result: { id: executor }, success: true },
+        }) as const satisfies ChatPart,
+    );
+    expect(
+      chatRefsWrittenIn({ isServerTool: isServerChatToolCall, parts }),
+    ).toEqual({
+      values: [{}, {}, { logs: [], result: { id: "server" }, success: true }],
+    });
+  });
   test("are what the model wrote and a server tool's output, never an answer a user wrote", () => {
     const text = { content: "Two documents", type: "text" } satisfies ChatPart;
     const script = {
@@ -48,7 +73,7 @@ describe("the parts of an assistant message that may hold shown refs", () => {
 
     expect(
       chatRefsWrittenIn({
-        isServerTool: (name) => name === SERVER_TOOL,
+        isServerTool: ({ name }) => name === SERVER_TOOL,
         parts,
       }),
     ).toEqual({ values: [text, script, listed, {}] });

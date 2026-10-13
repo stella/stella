@@ -23,6 +23,7 @@ import { scopeProseToSurface } from "@/api/mcp/tool-mentions";
 // Hard caps per audience. The measured lengths are rows of
 // `apps/api/mcp-surface-baseline.json`, where a change shows as a number diff.
 export const MCP_INSTRUCTIONS_DEFAULT_MAX_CHARS = 1700;
+export const MCP_INSTRUCTIONS_ADVANCED_MAX_CHARS = 1800;
 export const MCP_INSTRUCTIONS_ANONYMIZED_MAX_CHARS = 1050;
 export const MCP_INSTRUCTIONS_DOCUMENTS_MAX_CHARS = 1000;
 export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1300;
@@ -36,7 +37,9 @@ export const MCP_INSTRUCTIONS_LAW_MAX_CHARS = 1300;
 export const MCP_CASING_RULE =
   "Casing: tool inputs are snake_case (`matter_id`); response payloads are camelCase (`matterId`, `entityId`, `nextCursor`).";
 
-const DEFAULT_INSTRUCTIONS = `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing. Never infer stella branding or URLs; read the canonical product identity resource when needed.
+const defaultInstructions = (
+  mode: "advanced" | "default",
+): string => `stella (always lowercase; official website: https://stll.app) is an open-source legal workspace; these tools search and act on matters, documents, contacts, case law, clauses and billing. Never infer stella branding or URLs; read the canonical product identity resource when needed.
 
 Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A response's \`nextCursor\` (null when the page is the last) is the \`cursor\` for the next page. Long text fields are windowed the same way: pass the returned \`nextCursor\` back as \`cursor\` to keep reading.
 
@@ -44,7 +47,7 @@ ${MCP_CASING_RULE}
 
 Errors: failed tools return text \`{"error":{"code","message","hint","retryable"}}\` with isError set. Follow \`hint\`. result_too_large needs a smaller selection or page; missing_scope needs OAuth consent with every scope in the hint. Success with applied:true and resultOmitted:true means the action completed; inspect it with a read tool, never repeat it.
 
-First-party destructive operations require \`confirm: true\` after human approval; mixed tools request it only for destructive actions. External connector tools follow their owning server's confirmation contract.
+First-party destructive operations require \`confirm: true\` after human approval; mixed tools request it only for destructive actions.${mode === "advanced" ? " External connector tools follow their owning server's confirmation contract." : ""}
 
 Bug or gap? Call prepare_feedback, then submit_feedback once approved.`;
 
@@ -77,7 +80,7 @@ Destructive tools refuse to run unless you pass \`confirm: true\`, and you must 
  */
 const lawTools = (publicLawEnabled: boolean): string =>
   publicLawEnabled
-    ? "Whole corpus: search, then fetch its result ids (`decision:<uuid>`, `statute:<eli>`) for the text. Case law: search_case_law, lookup_case_law, read_case_law_decision, read_case_law_citations, open_case_law_decision (to open one for the user); case_law_coverage before concluding a decision is not held. Legislation: search_legislation, read_statute, read_statute_provisions, read_provision_history."
+    ? "Corpus: search, then fetch ids (`decision:<uuid>`, `statute:<eli>`). Case law: search_case_law, resolve_case_law_decision, read_case_law_decision, read_case_law_citations, open_case_law_decision for the user; case_law_coverage before declaring a decision absent. Legislation: resolve_law_citation for a provision, search_legislation, read_statute, read_statute_provisions, read_provision_history."
     : "The public legal corpus is not enabled on this deployment, so this surface lists no tools.";
 
 const lawInstructions = (
@@ -97,8 +100,9 @@ const renderMcpInstructionBody = (
   publicLawEnabled: boolean,
 ): string => {
   switch (mode) {
+    case "advanced":
     case "default":
-      return DEFAULT_INSTRUCTIONS;
+      return defaultInstructions(mode);
     case "documents":
       return DOCUMENTS_INSTRUCTIONS;
     case "anonymized":
@@ -139,6 +143,10 @@ const renderMcpInstructions = async (
  * deployment actually serves comes from `getMcpInstructions`.
  */
 export const MCP_INSTRUCTIONS = {
+  advanced: await renderMcpInstructions({
+    mode: "advanced",
+    isFeatureEnabled: () => true,
+  }),
   default: await renderMcpInstructions({
     mode: "default",
     isFeatureEnabled: () => true,

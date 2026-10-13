@@ -7,20 +7,20 @@ export {
 } from "../packages/scripts/src/generated-files";
 
 type GeneratorCheck =
-  | { check: readonly string[]; checkedBy?: never; unchecked?: never }
+  | { check: readonly string[]; checkedBy?: string; unchecked?: never }
   | { check: null; checkedBy: string; unchecked?: never }
   | { check: null; checkedBy?: never; unchecked: string };
 
 export type Generator = {
   id: string;
-  outputKind: "committed" | "derived";
   outputs: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
   autofix: boolean;
   after: readonly string[];
-} & GeneratorCheck;
+} & GeneratorCheck &
+  ({ outputKind: "committed" } | { outputKind: "derived" });
 
 const MODEL_CATALOG_INPUTS = [
   ".github/workflows/ci.yml",
@@ -37,7 +37,22 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-rates-gen.ts",
 ] as const;
 
-export const GENERATORS = [
+const GENERATOR_DECLARATIONS = [
+  {
+    id: "bun-toolchain",
+    outputKind: "committed",
+    outputs: ["scripts/bun-toolchain.gen.json"],
+    inputs: [
+      "package.json",
+      "scripts/generate-bun-toolchain.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    write: ["bun", "scripts/generate-bun-toolchain.ts", "--write"],
+    check: ["bun", "scripts/generate-bun-toolchain.ts"],
+    autofix: true,
+    after: [],
+  },
   {
     id: "status-tables",
     outputKind: "committed",
@@ -211,7 +226,6 @@ export const GENERATORS = [
       "apps/api/src/mcp/decision-reader-contract.ts",
       "apps/api/src/mcp/valibot-tool-definition.ts",
       "apps/api/src/lib/chat/*projection*.ts",
-      "apps/api/src/lib/case-law/decision-lookup-vocabulary.ts",
       "apps/api/src/lib/case-law/search-warnings.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
       "apps/api/src/lib/json-schema/**",
@@ -225,6 +239,37 @@ export const GENERATORS = [
     checkedBy: "MCP app package bundles and shared assets guard",
     autofix: true,
     after: [],
+  },
+  {
+    id: "api-typecheck-projects",
+    outputKind: "committed",
+    outputs: [
+      "apps/api/tsconfig.declarations.json",
+      "apps/api/tsconfig.src.json",
+      "apps/api/tsconfig.tests.json",
+      "turbo.json",
+    ],
+    inputs: [
+      "apps/api/**",
+      "apps/*/tsconfig*.json",
+      "packages/**/*.ts",
+      "packages/**/*.tsx",
+      "packages/**/tsconfig*.json",
+      "{apps,packages}/*/package.json",
+      "scripts/**/*.ts",
+      "tsconfig*.json",
+      "types/**",
+      "package.json",
+      "bunfig.toml",
+      ".npmrc",
+      "bun.lock",
+      "patches/**",
+    ],
+    write: ["bun", "packages/scripts/src/api-typecheck-regenerate.ts"],
+    check: ["bun", "scripts/typecheck-coverage.ts"],
+    checkedBy: "Typecheck coverage",
+    autofix: true,
+    after: ["cli-runtime", "capability-runtime"],
   },
   {
     id: "mcp-app-bundles",
@@ -262,6 +307,34 @@ export const GENERATORS = [
     checkedBy: "MCP app package bundles and shared assets guard",
     autofix: true,
     after: ["mcp-app-contracts"],
+  },
+  {
+    id: "scan-engine-fixtures",
+    outputKind: "committed",
+    outputs: ["packages/scan-engine/fixtures/*.pgm"],
+    inputs: ["packages/scan-engine/scripts/generate-fixtures.ts"],
+    write: ["bun", "--cwd=packages/scan-engine", "run", "generate:fixtures"],
+    check: ["bun", "--cwd=packages/scan-engine", "run", "check:fixtures"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "scan-engine-wasm",
+    outputKind: "committed",
+    outputs: ["packages/scan-engine/generated/*"],
+    inputs: [
+      "packages/scan-engine/Cargo.lock",
+      "packages/scan-engine/Cargo.toml",
+      "packages/scan-engine/rust-toolchain.toml",
+      "packages/scan-engine/scripts/build-wasm.sh",
+      "packages/scan-engine/scripts/wasm-toolchain.sh",
+      "packages/scan-engine/src/*.rs",
+    ],
+    write: ["bun", "--cwd=packages/scan-engine", "run", "build:wasm"],
+    check: ["bash", "packages/scan-engine/scripts/test-wasm-offline.sh"],
+    checkedBy: "Check generated WebAssembly from a fresh Cargo cache",
+    autofix: false,
+    after: [],
   },
   {
     id: "visual-sandbox-bundle",
@@ -539,6 +612,8 @@ export const GENERATORS = [
     inputs: [
       "apps/web/src/i18n/glossary.json",
       "packages/scripts/src/glossary-gen.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      ".oxfmtrc.json",
     ],
     write: ["bun", "packages/scripts/src/glossary-gen.ts", "apps/web/src/i18n"],
     check: [
@@ -836,6 +911,10 @@ export const GENERATORS = [
   },
 ] as const satisfies readonly Generator[];
 
+export const GENERATORS: readonly (Generator & {
+  id: (typeof GENERATOR_DECLARATIONS)[number]["id"];
+})[] = GENERATOR_DECLARATIONS;
+
 export const GUARD_A_EXCLUSIONS = [
   {
     glob: "provenance/**/THIRD-PARTY-NOTICES*.txt",
@@ -893,7 +972,7 @@ const outputFeedsInput = (output: string, input: string) =>
   matchesGeneratedGlob(output, globWitness(input));
 
 export const generatorsForFiles = (files: readonly string[]) => {
-  const selected = new Set(
+  const selected = new Set<string>(
     GENERATORS.filter(
       (generator) =>
         generator.autofix &&

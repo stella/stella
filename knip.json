@@ -124,7 +124,8 @@
         "src/**/*.astro",
         "src/content.config.ts",
         "src/pages/**/*.ts",
-        "astro.config.*"
+        "astro.config.*",
+        "e2e/**/*.ts"
       ],
       // Tailwind scans workspace-ui through the CSS @source directive.
       "ignoreDependencies": ["@tailwindcss/postcss", "@stll/workspace-ui"]
@@ -181,6 +182,12 @@
     "packages/permissions": {
       "entry": ["src/index.ts"]
     },
+    "packages/portable-path": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/playwright-tools": {
+      "entry": ["src/marketing-config.ts"]
+    },
     "packages/redis-config": {
       "entry": ["src/connection.ts", "src/**/*.test.ts"]
     },
@@ -189,6 +196,10 @@
     },
     "packages/sanctions": {
       "entry": ["src/index.ts", "src/**/*.test.ts", "scripts/evaluate.ts"]
+    },
+    "packages/scan-engine": {
+      "entry": ["src/scan-engine.ts", "src/**/*.test.ts"],
+      "ignore": ["generated/**"]
     },
     "packages/scripts": {
       "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]

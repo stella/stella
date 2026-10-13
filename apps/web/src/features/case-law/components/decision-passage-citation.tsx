@@ -50,6 +50,7 @@ export const DecisionPassageCitation = ({
           originalUrl: decision.sourceUrl ?? null,
         }}
         passage={citation.excerpt}
+        paragraphNumber={citation.courtParagraphNumber}
         onOpen={() => onOpen(citation.anchorId)}
       />
     </>

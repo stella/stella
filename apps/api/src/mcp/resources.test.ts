@@ -98,16 +98,18 @@ const TEMPLATE_REFERENCE_URIS: ReadonlySet<string> = new Set([
 
 describe("MCP resources", () => {
   test("lists and reads shipped skill guidance where its required tools are listed", async () => {
+    const authoringUris = [
+      PRODUCT_IDENTITY_URI,
+      MARKER_REFERENCE_URI,
+      FIELD_REFERENCE_URI,
+      WORKFLOW_REFERENCE_URI,
+      LEGISLATION_WORKFLOW_REFERENCE_URI,
+      FEEDBACK_WORKFLOW_REFERENCE_URI,
+      PLAYBOOK_SKILL_URI,
+    ] as const;
     const expectedByMode = {
-      default: [
-        PRODUCT_IDENTITY_URI,
-        MARKER_REFERENCE_URI,
-        FIELD_REFERENCE_URI,
-        WORKFLOW_REFERENCE_URI,
-        LEGISLATION_WORKFLOW_REFERENCE_URI,
-        FEEDBACK_WORKFLOW_REFERENCE_URI,
-        PLAYBOOK_SKILL_URI,
-      ],
+      advanced: authoringUris,
+      default: authoringUris,
       anonymized: [PRODUCT_IDENTITY_URI, LEGISLATION_WORKFLOW_REFERENCE_URI],
       documents: [PRODUCT_IDENTITY_URI],
       law: [PRODUCT_IDENTITY_URI, LEGISLATION_WORKFLOW_REFERENCE_URI],
@@ -420,6 +422,9 @@ describe("MCP resources", () => {
     expect(content.text).toContain("`par_1729`");
     expect(content.text).toContain("`text_withheld`");
     expect(content.text).toContain("`textWithheldReason`");
+    expect(content.text).toContain("`documentId`");
+    expect(content.text).toContain("`nextTextCursor`");
+    expect(content.text).toContain("`text_cursor`");
     // Applicability takes both fields, and a promulgated entry never applied.
     expect(content.text).toContain(
       "only when both hold: `windowDisposition` is `effective` and " +
@@ -485,7 +490,7 @@ describe("MCP resources", () => {
         resources.some(({ uri }) => uri === LEGISLATION_WORKFLOW_REFERENCE_URI),
       )
       .map(({ mode }) => mode);
-    expect(servingModes).toEqual(["default", "anonymized", "law"]);
+    expect(servingModes).toEqual(["advanced", "default", "anonymized", "law"]);
 
     for (const mode of servingModes) {
       const listed = new Set(

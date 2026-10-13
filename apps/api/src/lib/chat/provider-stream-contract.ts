@@ -78,16 +78,34 @@ const OUTPUT_CEILING_REASON = "max_output_tokens";
 // These upstream variants use string-literal discriminants rather than
 // EventType members. Named, checked literals keep Oxlint's exhaustiveness
 // analysis aligned with the SDK union.
+const ACTIVITY_SNAPSHOT_STREAM_CHUNK_TYPE =
+  "ACTIVITY_SNAPSHOT" satisfies StreamChunk["type"];
+const ACTIVITY_DELTA_STREAM_CHUNK_TYPE =
+  "ACTIVITY_DELTA" satisfies StreamChunk["type"];
 const CUSTOM_STREAM_CHUNK_TYPE = "CUSTOM" satisfies StreamChunk["type"];
 const TOOL_CALL_END_STREAM_CHUNK_TYPE =
   "TOOL_CALL_END" satisfies StreamChunk["type"];
 const TOOL_CALL_START_STREAM_CHUNK_TYPE =
   "TOOL_CALL_START" satisfies StreamChunk["type"];
 
+/**
+ * Whether a run error's `code` and `message` say the response stopped at the
+ * output ceiling. Read from the fields, so the same verdict holds for the
+ * stream event and for the `Error` the structured-output engine rebuilds from
+ * it (which keeps both).
+ */
+export const isOutputCeilingStopReport = ({
+  code,
+  message,
+}: {
+  code?: unknown;
+  message?: unknown;
+}): boolean =>
+  code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
+  (code === INCOMPLETE_RESPONSE_CODE && message === OUTPUT_CEILING_REASON);
+
 const isOutputCeilingStop = (chunk: RunErrorChunk): boolean =>
-  chunk.code === TRUNCATED_AT_OUTPUT_CEILING_CODE ||
-  (chunk.code === INCOMPLETE_RESPONSE_CODE &&
-    chunk.message === OUTPUT_CEILING_REASON);
+  isOutputCeilingStopReport(chunk);
 
 /**
  * A response cut off at the output ceiling, read as a `length` finish.
@@ -148,6 +166,13 @@ export const readOutputCeilingStopAsLength = async function* (
         }
         continue;
       }
+      case ACTIVITY_SNAPSHOT_STREAM_CHUNK_TYPE:
+      case ACTIVITY_DELTA_STREAM_CHUNK_TYPE: {
+        // Activity is browser-visible turn data, even while the terminal
+        // output-ceiling report is held until the provider stops.
+        yield chunk;
+        continue;
+      }
       case EventType.TEXT_MESSAGE_START:
       case EventType.TEXT_MESSAGE_CONTENT:
       case EventType.TEXT_MESSAGE_END:
@@ -170,8 +195,6 @@ export const readOutputCeilingStopAsLength = async function* (
       case EventType.REASONING_MESSAGE_CHUNK:
       case EventType.TEXT_MESSAGE_CHUNK:
       case EventType.TOOL_CALL_CHUNK:
-      case EventType.ACTIVITY_SNAPSHOT:
-      case EventType.ACTIVITY_DELTA:
       case EventType.RAW:
       case EventType.SUBAGENT_STARTED:
       case EventType.SUBAGENT_FINISHED:

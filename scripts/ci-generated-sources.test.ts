@@ -79,11 +79,16 @@ const assertHandoff = (source: Workflow) => {
     ({ name }) => name === "Upload generated sources",
   );
   expect(upload?.uses).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}$/u);
+  expect(
+    upload?.with?.["include-hidden-files"],
+    "generated compiler configs must be uploaded",
+  ).toBe(true);
   expect(upload?.with).toEqual({
     name: `generated-sources-\${{ steps.generate.outputs.input_hash }}`,
     path: `\${{ runner.temp }}/generated-sources/`,
     "retention-days": 1,
     "if-no-files-found": "error",
+    "include-hidden-files": true,
   });
   const gate = source.jobs["ci-result"];
   expect(gate?.needs).toContain("ci-generated-sources");
@@ -286,6 +291,26 @@ test("every generated-source consumer restores the same-run artifact before chec
   assertHandoff(workflow);
 });
 
+test("generated-source uploads include ignored compiler configs", () => {
+  for (const value of [undefined, false]) {
+    const mutated = structuredClone(workflow);
+    const upload = mutated.jobs["ci-generated-sources"]?.steps.find(
+      ({ name }) => name === "Upload generated sources",
+    );
+    if (!upload?.with) {
+      panic("Missing generated source upload fixture");
+    }
+    if (value === undefined) {
+      delete upload.with["include-hidden-files"];
+    } else {
+      upload.with["include-hidden-files"] = value;
+    }
+    expect(() => assertHandoff(mutated)).toThrow(
+      "generated compiler configs must be uploaded",
+    );
+  }
+});
+
 test("the documentation job consumes Markdown without generated-source hydration", () => {
   const job = workflow.jobs["ci-checks-docs"];
   expect(job?.needs).toBe("ci-plan");
@@ -433,6 +458,47 @@ const generationCommandViolations = (command: readonly string[]) => {
   if (binary !== "bun" || target === undefined) {
     return ["Expected Bun generator command"];
   }
+  if (target === "node_modules/turbo/bin/turbo") {
+    const filter = extra.at(0);
+    const packageName = filter?.match(/^--filter=(@stll\/([a-z-]+))$/u);
+    const workspace = packageName?.at(1);
+    const directory = packageName?.at(2);
+    if (
+      action !== "run" ||
+      script === undefined ||
+      extra.length !== 1 ||
+      workspace === undefined ||
+      directory === undefined ||
+      !existsSync(new URL(`../${target}`, import.meta.url))
+    ) {
+      return ["Expected rooted Turbo launcher and one explicit workspace task"];
+    }
+    const config = v.parse(
+      v.object({ tasks: v.record(v.string(), v.unknown()) }),
+      Bun.JSONC.parse(
+        readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+      ),
+    );
+    if (!Object.hasOwn(config.tasks, `${workspace}#${script}`)) {
+      return ["Turbo owner task does not exist"];
+    }
+    const manifestPath = ["apps", "packages"]
+      .map(
+        (scope) =>
+          new URL(`../${scope}/${directory}/package.json`, import.meta.url),
+      )
+      .find((filename) => existsSync(filename));
+    if (manifestPath === undefined) {
+      return ["Workspace package does not exist"];
+    }
+    const owner = v.parse(
+      v.object({ name: v.string(), scripts: v.record(v.string(), v.string()) }),
+      JSON.parse(readFileSync(manifestPath, "utf-8")),
+    );
+    return owner.name === workspace && Object.hasOwn(owner.scripts, script)
+      ? []
+      : ["Turbo owner package script does not exist"];
+  }
   if (!target.startsWith("--cwd=")) {
     return command.length === 2 &&
       existsSync(new URL(`../${target}`, import.meta.url))
@@ -462,6 +528,36 @@ const generationCommandViolations = (command: readonly string[]) => {
 test("every preparation command resolves a real generator file or package script", () => {
   for (const command of CI_GENERATION_COMMANDS) {
     expect(generationCommandViolations(command), command.join(" ")).toEqual([]);
+  }
+  for (const command of [
+    [
+      "bun",
+      "node_modules/turbo/bin/turbo",
+      "run",
+      "missing-task",
+      "--filter=@stll/web",
+    ],
+    ["bun", "node_modules/turbo/bin/turbo", "run", "generate:api-types"],
+    [
+      "bun",
+      "node_modules/turbo/bin/turbo",
+      "run",
+      "generate:api-types",
+      "--filter=@stll/missing",
+    ],
+    [
+      "bun",
+      "node_modules/turbo/bin/turbo",
+      "run",
+      "generate:api-types",
+      "--filter=@stll/web",
+      "--filter=@stll/api",
+    ],
+    ["bun", "exec", "turbo", "run", "generate:api-types", "--filter=@stll/web"],
+  ]) {
+    expect(generationCommandViolations(command), command.join(" ")).not.toEqual(
+      [],
+    );
   }
   const producer = readFileSync(
     new URL("ci-generated-sources.ts", import.meta.url),
@@ -537,7 +633,6 @@ test("API boot entry points prepare capability runtime sources before starting",
     "dev",
     "test",
     "test:property",
-    "typecheck",
     "lint",
     "lint:fix",
   ]) {
@@ -563,6 +658,24 @@ test("API boot entry points prepare capability runtime sources before starting",
     Bun.JSONC.parse(
       readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
     ),
+  );
+  expect(api.scripts["typecheck"]).toBe(
+    "bun ../../packages/scripts/src/api-typecheck.ts",
+  );
+  for (const command of ["lint", "lint:fix"]) {
+    const script =
+      api.scripts[command] ?? panic(`Missing API ${command} script`);
+    const emission = script.indexOf(
+      "turbo run generate:typecheck-declarations --filter=@stll/api",
+    );
+    expect(emission).toBeGreaterThanOrEqual(0);
+    expect(script.indexOf("bun --bun oxlint")).toBeGreaterThan(emission);
+  }
+  expect(turbo.tasks["@stll/api#typecheck"]?.dependsOn).toContain(
+    "typecheck:src",
+  );
+  expect(turbo.tasks["@stll/api#typecheck:src"]?.dependsOn).toContain(
+    "generate:capability-runtime",
   );
   expect(turbo.tasks["@stll/web#generate:api-types"]?.dependsOn).toContain(
     "@stll/api#generate:capability-runtime",

@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Store reviewed citation polarities and apply them to the current citation
  * rows.
@@ -32,9 +33,10 @@
  *   # store and apply
  *   bun run src/scripts/apply-reviewed-citation-labels.ts --file labels.json --results results.jsonl --apply
  */
-
-import { Result } from "better-result";
 import * as v from "valibot";
+
+import { printError } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 
 import {
   enterCaseLawMaintenanceLane,
@@ -65,74 +67,74 @@ const apply = readApplyFlag(USAGE);
 const file = requiredFlagValue({ name: "file", usage: USAGE });
 const resultsPath = requiredFlagValue({ name: "results", usage: USAGE });
 
-const raw = await Result.tryPromise(
-  async (): Promise<unknown> => await Bun.file(file).json(),
-);
-if (raw.isErr()) {
-  console.error(`Could not read JSON from ${file}: ${raw.error.message}`);
-  process.exit(1);
-}
-const parsed = v.safeParse(reviewedCitationLabelsFileSchema, raw.value);
-if (!parsed.success) {
-  console.error(`${file} is not a valid list of reviewed labels:`);
-  for (const issue of parsed.issues) {
-    console.error(`  ${v.getDotPath(issue) ?? "(root)"}: ${issue.message}`);
+await runScriptWithErrorOutput(async () => {
+  const raw = await Result.tryPromise(
+    async (): Promise<unknown> => await Bun.file(file).json(),
+  );
+  if (raw.isErr()) {
+    printError(`Could not read JSON from ${file}:`, raw.error);
+    process.exit(1);
   }
-  process.exit(1);
-}
+  const parsed = v.safeParse(reviewedCitationLabelsFileSchema, raw.value);
+  if (!parsed.success) {
+    console.error(`${file} is not a valid list of reviewed labels:`);
+    for (const issue of parsed.issues) {
+      console.error(`  ${v.getDotPath(issue) ?? "(root)"}: ${issue.message}`);
+    }
+    process.exit(1);
+  }
 
-// A report run only reads, so it takes no lane and cannot block a writer.
-const { rootDb } = apply
-  ? await enterCaseLawMaintenanceLane()
-  : await openCaseLawReadOnlySession();
+  // A report run only reads, so it takes no lane and cannot block a writer.
+  const { rootDb } = apply
+    ? await enterCaseLawMaintenanceLane()
+    : await openCaseLawReadOnlySession();
 
-const recordPlan = async () => {
-  const planned = await planReviewedCitationLabels(
-    rootDb.transaction.bind(rootDb),
-    parsed.output,
-  );
-  const written = await Result.tryPromise(
-    async () =>
-      await Bun.write(
-        resultsPath,
-        reviewedLabelResultLines(planned.rows, "plan"),
-      ),
-  );
-  if (written.isErr()) {
-    console.error(
-      `Could not write results to ${resultsPath}: ${written.error.message}`,
+  const recordPlan = async () => {
+    const planned = await planReviewedCitationLabels(
+      rootDb.transaction.bind(rootDb),
+      parsed.output,
     );
-    process.exit(1);
+    const written = await Result.tryPromise(
+      async () =>
+        await Bun.write(
+          resultsPath,
+          reviewedLabelResultLines(planned.rows, "plan"),
+        ),
+    );
+    if (written.isErr()) {
+      printError(`Could not write results to ${resultsPath}:`, written.error);
+      process.exit(1);
+    }
+    return planned;
+  };
+
+  const recordApplication = async () => {
+    const applied = await applyReviewedCitationLabels({
+      transact: rootDb.transaction.bind(rootDb),
+      input: parsed.output,
+      resultsPath,
+    });
+    if (applied.isErr()) {
+      printError(applied.error);
+      process.exit(1);
+    }
+    return applied.value;
+  };
+
+  const outcome = apply ? await recordApplication() : await recordPlan();
+
+  const { summary } = outcome;
+  const verb = outcome.type === "applied" ? "" : "would be ";
+  console.info(
+    `Entries: ${summary.applied} ${verb}applied, ${summary.unmatched} ${verb}stored without a current citation row, ${summary.unchanged} unchanged, ${summary["refused-precedence"]} refused by precedence, ${summary.invalid} invalid.`,
+  );
+  console.info(
+    `Citation rows ${verb}relabelled: ${outcome.type === "applied" ? outcome.relabelled : summary.citationRows}.`,
+  );
+  console.info(`Results: ${resultsPath}`);
+  if (outcome.type === "planned") {
+    console.info("Report only. Re-run with --apply to write.");
   }
-  return planned;
-};
 
-const recordApplication = async () => {
-  const applied = await applyReviewedCitationLabels({
-    transact: rootDb.transaction.bind(rootDb),
-    input: parsed.output,
-    resultsPath,
-  });
-  if (applied.isErr()) {
-    console.error(applied.error.message);
-    process.exit(1);
-  }
-  return applied.value;
-};
-
-const outcome = apply ? await recordApplication() : await recordPlan();
-
-const { summary } = outcome;
-const verb = outcome.type === "applied" ? "" : "would be ";
-console.info(
-  `Entries: ${summary.applied} ${verb}applied, ${summary.unmatched} ${verb}stored without a current citation row, ${summary.unchanged} unchanged, ${summary["refused-precedence"]} refused by precedence, ${summary.invalid} invalid.`,
-);
-console.info(
-  `Citation rows ${verb}relabelled: ${outcome.type === "applied" ? outcome.relabelled : summary.citationRows}.`,
-);
-console.info(`Results: ${resultsPath}`);
-if (outcome.type === "planned") {
-  console.info("Report only. Re-run with --apply to write.");
-}
-
-process.exit(summary[REVIEWED_LABEL_OUTCOME.INVALID] > 0 ? 1 : 0);
+  process.exit(summary[REVIEWED_LABEL_OUTCOME.INVALID] > 0 ? 1 : 0);
+});

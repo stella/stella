@@ -1,5 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import formatterConfig from "../.oxfmtrc.json" with { type: "json" };
 import rootPackage from "../package.json" with { type: "json" };
@@ -46,10 +49,10 @@ const workspaceFormatCommandErrors = () => {
     })) {
       const manifestPath = path.join(REPO_ROOT, relativeManifestPath);
       const formatCommand = readFormatCommand(manifestPath);
-      const relativeRunnerPath = path
-        .relative(path.dirname(manifestPath), FORMAT_RUNNER_PATH)
-        .split(path.sep)
-        .join("/");
+      const relativeRunnerPath = repoRelativePath(
+        path.dirname(manifestPath),
+        FORMAT_RUNNER_PATH,
+      );
       const expectedFormatRunner = `bun ${relativeRunnerPath}`;
       if (typeof formatCommand !== "string") {
         errors.push(
@@ -81,6 +84,13 @@ export const requireFormatterEnvironment = () => {
   if (!existsSync(tailwindStylesheet)) {
     errors.push(
       "Formatter dependencies are incomplete. Run `bun install --frozen-lockfile` before formatting.",
+    );
+  } else if (
+    realpathSync(tailwindStylesheet) !==
+    realpathSync(fileURLToPath(import.meta.resolve("tailwindcss/theme.css")))
+  ) {
+    errors.push(
+      "Formatter stylesheet must resolve from the root Tailwind dependency.",
     );
   }
 

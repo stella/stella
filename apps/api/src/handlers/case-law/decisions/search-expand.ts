@@ -145,6 +145,7 @@ const settledAnswer = (alternatives: LegalAlternatives): ExpansionAnswer => ({
 });
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "case-law.search-expand" },
   description:
     "Propose legal-vocabulary alternatives for a case-law search's words: " +
@@ -261,6 +262,7 @@ const expandCaseLawSearch = createSafeRootHandler(
       feature: "case-law.search.expand",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId, jurisdiction: country },
       traceId: Bun.randomUUIDv7(),
     });

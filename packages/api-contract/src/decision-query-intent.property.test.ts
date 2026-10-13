@@ -8,6 +8,7 @@ import {
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { DECISION_DOCKET_GRAMMARS } from "./decision-docket-grammar";
 import {
@@ -161,7 +162,7 @@ test(
             for (const entry of [
               `rozsudek podle ${docket} o náhradě škody`,
               `uznesenie podľa ${docket} o náhrade škody`,
-              `nález ${docket.normalize("NFD")}`,
+              `nález ${normalizeUnicode(docket, "NFD")}`,
             ]) {
               const embedded = parseDecisionQuery(entry, options);
               expect(embedded).toEqual({ ...standalone, embeddedIn: entry });
