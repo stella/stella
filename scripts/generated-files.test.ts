@@ -12,9 +12,11 @@ import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capabili
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
 import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
+import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
 import {
   GENERATORS,
   CI_GENERATED_FILES,
+  CI_GENERATED_OUTPUTS,
   allowedOutputs,
   GUARD_A_EXCLUSIONS,
   generatorsForFiles,
@@ -297,7 +299,11 @@ test("capability shard additions are registered and feed CLI generation", () => 
 });
 
 test("derived runtime outputs have one owner and stay ignored when regenerated", () => {
-  for (const id of ["capability-runtime", "cli-runtime"] as const) {
+  for (const id of [
+    "capability-runtime",
+    "cli-runtime",
+    "mcp-app-bundles",
+  ] as const) {
     const outputs = generator(id).outputs;
     for (const output of outputs) {
       expect(
@@ -335,20 +341,40 @@ test("capability runtime cache manifests cover every file the producer writes", 
     await mkdir(catalog, { recursive: true });
     await writeFile(
       nodePath.join(catalog, "matters.list.json"),
-      JSON.stringify({ id: "matters.list", featureId: "matters" }),
+      JSON.stringify({
+        id: "matters.list",
+        featureId: "matters",
+        handler: { importPath: "@/api/handlers/workspaces/list" },
+      }),
     );
     await writeFile(
       nodePath.join(generated, "capability-dispatch/matters.list.ts"),
       "export const CAPABILITY_DISPATCH = {};\n",
     );
+    await mkdir(nodePath.join(fixture, "apps/api/src/handlers/workspaces"), {
+      recursive: true,
+    });
+    await writeFile(
+      nodePath.join(fixture, "apps/api/src/handlers/workspaces/list.ts"),
+      "export default {};\n",
+    );
     await generateCapabilityRuntime(pathToFileURL(`${fixture}/`));
+    expect(ciGeneratedFiles(fixture)).toContain(
+      "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
+    );
+    const generatedCatalog = await import(
+      nodePath.join(generated, "capability-catalog.ts")
+    );
+    expect(generatedCatalog.default).toEqual([
+      { id: "matters.list", featureId: "matters" },
+    ]);
     const outputs = (await readdir(generated))
       .filter((file) => file.endsWith(".ts"))
       .map((file) => `src/mcp/generated/${file}`)
       .toSorted();
     expect(outputs.length).toBeGreaterThan(0);
     expect(outputs.map((file) => `apps/api/${file}`)).toEqual(
-      generator("capability-runtime").outputs.toSorted(),
+      [...CI_GENERATED_OUTPUTS.capabilityRuntime].toSorted(),
     );
     const config = v.parse(
       v.object({
@@ -370,7 +396,9 @@ test("capability runtime cache manifests cover every file the producer writes", 
         "typecheck:src",
       );
       expect(
-        tasks["@stll/api#generate:capability-runtime"]?.outputs?.toSorted(),
+        tasks["@stll/api#generate:capability-runtime"]?.outputs
+          ?.filter((output) => !output.includes("**"))
+          .toSorted(),
       ).toEqual(outputs);
       for (const output of outputs) {
         expect(tasks["@stll/api#typecheck:src"]?.dependsOn).toContain(
@@ -380,6 +408,12 @@ test("capability runtime cache manifests cover every file the producer writes", 
           `!$TURBO_ROOT$/apps/api/${output}`,
         );
       }
+      expect(tasks["@stll/api#generate:capability-runtime"]?.outputs).toContain(
+        "src/mcp/generated/capability-dispatch/**",
+      );
+      expect(tasks["@stll/api#generate:capability-runtime"]?.outputs).toContain(
+        "src/mcp/apps/*/generated/**",
+      );
     };
     assertOutputs(config.tasks);
     for (const output of outputs) {
@@ -855,11 +889,10 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))
       .toSorted(),
   );
-  const bundle = ciGeneratedStepRun("MCP App bundle and shared assets guard");
-  const bundleOutputs = generator("mcp-app-bundles")
-    .outputs.map((glob) => `"${glob}"`)
-    .join(" ");
-  expect(bundle).toContain(`git diff --exit-code -- ${bundleOutputs}`);
+  expect(generator("mcp-app-bundles").outputKind).toBe("derived");
+  expect(
+    ciGeneratedStepRun("MCP App bundle and shared assets guard"),
+  ).toContain("bun scripts/check-mcp-generated-tracking.ts");
 });
 
 test("route tree has one derived owner and a cache producer for every consumer", () => {

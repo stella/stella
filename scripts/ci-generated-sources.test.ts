@@ -685,9 +685,9 @@ test("API boot entry points prepare capability runtime sources before starting",
     "utf-8",
   );
   expect(
-    docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
+    docker.indexOf("bun --cwd=apps/api run generate:capability-runtime"),
   ).toBeGreaterThanOrEqual(0);
   expect(
-    docker.indexOf("RUN bun apps/api/scripts/generate-capability-runtime.ts"),
+    docker.indexOf("bun --cwd=apps/api run generate:capability-runtime"),
   ).toBeLessThan(docker.indexOf("RUN bun build"));
 });

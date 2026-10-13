@@ -92,3 +92,9 @@ packages/cli/src/generated/tool-annotations.ts
 
 # Derived TanStack route tree, restored by the web generation task.
 apps/web/src/routeTree.gen.ts
+
+# MCP runtime and browser bundles are built before use.
+apps/api/src/mcp/generated/
+apps/api/src/mcp/apps/*/generated/
+packages/mcp-apps/src/*/generated/
+packages/mcp-apps/src/generated/

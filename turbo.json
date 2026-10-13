@@ -714,18 +714,20 @@
     "generate:capability-runtime": {},
     "@stll/api#generate:capability-runtime": {
       "inputs": [
-        "scripts/generate-capability-runtime.ts",
-        "src/mcp/generated/capability-dispatch/**",
-        "$TURBO_ROOT$/packages/cli/capabilities/**",
-        "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts",
-        "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
-        "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
-        "$TURBO_ROOT$/scripts/generated-files.ts"
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/fonts.css",
+        "$TURBO_ROOT$/apps/web/public/fonts/**",
+        "$TURBO_ROOT$/scripts/generated-files.ts",
+        "$TURBO_ROOT$/scripts/prepare-mcp-apps.ts"
       ],
       "outputs": [
         "src/mcp/generated/capability-dispatch.ts",
         "src/mcp/generated/capability-catalog.ts",
-        "src/mcp/generated/capability-feature-bindings.ts"
+        "src/mcp/generated/capability-feature-bindings.ts",
+        "src/mcp/generated/capability-dispatch/**",
+        "src/mcp/apps/*/generated/**"
       ]
     },
     "@stll/api#build": {

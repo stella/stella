@@ -323,6 +323,9 @@ test("API runtime generation works with only packaged sources and rejects a root
       "packages/cli/src/capability-catalog-data.ts",
       "packages/scripts/src/prepared-generated-sources.ts",
       "packages/scripts/src/generated-files.ts",
+      "packages/scripts/src/generated-file-inventory.ts",
+      "packages/scripts/src/generated-output-cache.ts",
+      "packages/scripts/src/generation-lock.ts",
     ]) {
       write(
         file,
@@ -333,9 +336,17 @@ test("API runtime generation works with only packaged sources and rejects a root
       new URL("../../../node_modules", import.meta.url).pathname,
       path.join(root, "node_modules"),
     );
+    symlinkSync(
+      new URL("../../../apps/api/scripts/lib", import.meta.url).pathname,
+      path.join(root, "apps/api/scripts/lib"),
+    );
     write(
       "packages/cli/capabilities/widgets.list.json",
-      JSON.stringify({ id: "widgets.list", featureId: "fixture-feature" }),
+      JSON.stringify({
+        id: "widgets.list",
+        featureId: "fixture-feature",
+        handler: { importPath: "@/api/handlers/widgets/list" },
+      }),
     );
     write(
       "apps/api/src/mcp/generated/capability-dispatch/widgets.list.ts",
@@ -377,7 +388,7 @@ test("API runtime generation works with only packaged sources and rejects a root
     const owner = "packages/scripts/src/prepared-generated-sources.ts";
     const source = readFileSync(path.join(root, owner), "utf-8");
     const mutated = source.replace(
-      'from "./generated-files"',
+      'from "./generated-file-inventory"',
       'from "../../../scripts/generated-files"',
     );
     expect(mutated).not.toBe(source);

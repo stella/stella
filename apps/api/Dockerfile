@@ -43,7 +43,11 @@ FROM deps AS builder
 ARG TARGETARCH
 ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
-RUN bun apps/api/scripts/generate-capability-runtime.ts
+# Browser generators need the frontend source, locale catalogues and fonts.
+COPY --from=install-inputs /app/apps/web/ /app/apps/web/
+COPY --from=install-inputs /app/scripts/ /app/scripts/
+RUN --mount=type=cache,target=/app/.cache/generated-output \
+    NODE_ENV=development STELLA_LOCAL_DEV=1 bun --cwd=apps/api run generate:capability-runtime
 # Build the server unminified: `bun build --minify` can break Elysia's AOT
 # handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \

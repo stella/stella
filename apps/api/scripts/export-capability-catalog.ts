@@ -35,8 +35,6 @@
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
 import { panic, Result } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 
 import { printError } from "@stll/errors";
@@ -125,56 +123,12 @@ import { assertFeatureAccessDeclarations } from "./lib/feature-access-declaratio
 
 const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
 
-const DISPATCH_PATH = path.resolve(
-  REPO_ROOT,
-  "apps/api/src/mcp/generated/capability-dispatch",
-);
-
 // Generated capability-coverage table: one section per domain plus the
 // permanent internal-waiver summary, drift-guarded alongside the JSON/dispatch
 // artifacts above (see `serializeCoverageDoc`).
 const COVERAGE_DOC_INPUT = "docs/capability-coverage.md";
 export const CI_MARKDOWN_READER_INPUTS = [COVERAGE_DOC_INPUT];
 const COVERAGE_DOC_PATH = path.resolve(REPO_ROOT, COVERAGE_DOC_INPUT);
-
-const OXFMT_BIN = path.resolve(REPO_ROOT, "node_modules/.bin/oxfmt");
-const OXFMT_CONFIG = path.resolve(REPO_ROOT, ".oxfmtrc.json");
-
-/**
- * Format a generated TS module with the repo's oxfmt config before it is
- * written or drift-compared, mirroring how the CLI codegen runs oxfmt over its
- * generated modules. Formatting through the real formatter (instead of hand-
- * matching its wrapping style) keeps the committed artifact byte-identical to
- * what CI's `oxfmt --check` expects, so the `--check` drift guard and the
- * format gate can never disagree. The temp file lives outside the repo so no
- * ignore rules apply to it.
- */
-const formatGeneratedArtifacts = async (
-  artifacts: ReadonlyMap<string, string>,
-): Promise<Map<string, string>> => {
-  const dir = await mkdtemp(path.join(os.tmpdir(), "capability-artifact-"));
-  try {
-    for (const [fileName, raw] of artifacts) {
-      await Bun.write(path.join(dir, fileName), raw);
-    }
-    const proc = Bun.spawnSync([OXFMT_BIN, "-c", OXFMT_CONFIG, dir], {
-      stderr: "pipe",
-      stdout: "pipe",
-    });
-    if (proc.exitCode !== 0) {
-      return panic(
-        `export-capability-catalog: oxfmt failed: ${proc.stderr.toString()}`,
-      );
-    }
-    const formatted = new Map<string, string>();
-    for (const fileName of artifacts.keys()) {
-      formatted.set(fileName, await Bun.file(path.join(dir, fileName)).text());
-    }
-    return formatted;
-  } finally {
-    await rm(dir, { force: true, recursive: true });
-  }
-};
 
 /**
  * MCP OAuth WRITE/consent scope per capability domain (the first id segment).
@@ -518,6 +472,7 @@ type CapabilityMcp =
 
 type CapabilityEntry = {
   id: string;
+  handler: { importPath: string; exportName: string | undefined };
   /**
    * Prose from the handler config's `description`, written for the agent
    * deciding whether to call this capability. Carried verbatim into the
@@ -808,6 +763,7 @@ const resolveReadClassification = ({
 };
 
 type BuildCatalogEntryOptions = {
+  handler: CapabilityEntry["handler"];
   id: string;
   /** Handler config's `description`, absent when the handler declares none. */
   description: string | undefined;
@@ -844,6 +800,7 @@ type BuildCatalogEntryOptions = {
  */
 const buildCatalogEntry = ({
   id,
+  handler,
   description,
   kind,
   access,
@@ -861,6 +818,7 @@ const buildCatalogEntry = ({
   transport,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
+  handler,
   ...(description === undefined ? {} : { description }),
   handlerKind: kind,
   access: access.access,
@@ -1555,6 +1513,10 @@ const buildCatalog = async (): Promise<BuildResult> => {
     entries.push(
       buildCatalogEntry({
         id,
+        handler: {
+          importPath: deriveHandlerImportPath(endpoint.file),
+          exportName: endpoint.exportName,
+        },
         description: readDescription(endpoint.config),
         kind: kindResolution.kind,
         access: accessResolution,
@@ -1786,8 +1748,7 @@ export const exportCapabilityCatalog = async (
   ) {
     await generateCapabilityRuntime();
   }
-  const { entries, dispatchRecords, errors, internalWaiverCounts } =
-    await buildCatalog();
+  const { entries, errors, internalWaiverCounts } = await buildCatalog();
 
   if (errors.length > 0) {
     printErrors(errors);
@@ -1801,15 +1762,6 @@ export const exportCapabilityCatalog = async (
       serializeCapabilityShard(entry),
     ]),
   );
-  const dispatchShards = await formatGeneratedArtifacts(
-    new Map(
-      dispatchRecords.map((record) => [
-        `${record.id}.ts`,
-        serializeDispatchModule([record]),
-      ]),
-    ),
-  );
-
   const { cliCommandPathById, errors: pathErrors } =
     await computeCliCommandPaths(serialized);
   // Reachability agreement, asserted in BOTH directions over the real generated
@@ -1864,37 +1816,25 @@ export const exportCapabilityCatalog = async (
     shards: catalogShards,
     mode,
   });
-  const dispatchDrift = await syncCapabilityShards({
-    directory: DISPATCH_PATH,
-    shards: dispatchShards,
-    mode,
-  });
   if (!checkMode) {
     await generateCapabilityRuntime();
     await Bun.write(COVERAGE_DOC_PATH, doc);
     process.stderr.write(
-      `export-capability-catalog: wrote ${entries.length} capability and dispatch shards\n`,
+      `export-capability-catalog: wrote ${entries.length} capability shards\n`,
     );
     return 0;
   }
   const committedDoc = await Bun.file(COVERAGE_DOC_PATH)
     .text()
     .catch(() => null);
-  if (
-    catalogDrift.length === 0 &&
-    dispatchDrift.length === 0 &&
-    committedDoc === doc
-  ) {
+  if (catalogDrift.length === 0 && committedDoc === doc) {
     console.log(
-      `export-capability-catalog: OK. ${entries.length} capability and dispatch shards are up to date.`,
+      `export-capability-catalog: OK. ${entries.length} capability shards are up to date.`,
     );
     return 0;
   }
   for (const file of catalogDrift) {
     console.error(`Capability shard drift: ${file}`);
-  }
-  for (const file of dispatchDrift) {
-    console.error(`Dispatch shard drift: ${file}`);
   }
   if (committedDoc !== doc) {
     console.error("Capability coverage doc drift");

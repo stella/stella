@@ -1,4 +1,7 @@
-import { CI_GENERATED_OUTPUTS } from "../packages/scripts/src/generated-files";
+import {
+  CI_GENERATED_OUTPUTS,
+  CAPABILITY_RUNTIME_INPUTS,
+} from "../packages/scripts/src/generated-files";
 
 export {
   CI_GENERATED_OUTPUTS,
@@ -122,11 +125,7 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "capability-catalog",
     outputKind: "committed",
-    outputs: [
-      "packages/cli/capabilities/**",
-      "apps/api/src/mcp/generated/capability-dispatch/*.ts",
-      "docs/capability-coverage.md",
-    ],
+    outputs: ["packages/cli/capabilities/**", "docs/capability-coverage.md"],
     inputs: [
       "apps/api/src/**",
       "apps/api/src/handlers/**",
@@ -147,13 +146,11 @@ const GENERATOR_DECLARATIONS = [
   {
     id: "capability-runtime",
     outputKind: "derived",
-    outputs: CI_GENERATED_OUTPUTS.capabilityRuntime,
-    inputs: [
-      "packages/cli/capabilities/**",
+    outputs: [
+      ...CI_GENERATED_OUTPUTS.capabilityRuntime,
       "apps/api/src/mcp/generated/capability-dispatch/*.ts",
-      "apps/api/scripts/generate-capability-runtime.ts",
-      "packages/cli/src/capability-catalog-data.ts",
     ],
+    inputs: CAPABILITY_RUNTIME_INPUTS,
     write: ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
     check: null,
     checkedBy: "CLI sharded registry and derived runtime guard",
@@ -263,7 +260,7 @@ const GENERATOR_DECLARATIONS = [
   },
   {
     id: "mcp-app-bundles",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: [
       "apps/api/src/mcp/apps/*/generated/app.html.txt",
       "apps/api/src/mcp/apps/shared/generated/*",

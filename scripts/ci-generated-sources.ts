@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { ciGeneratedFiles } from "../packages/scripts/src/generated-file-inventory";
 import {
   generatedFileHash,
   generatedInputIdentity,
@@ -10,7 +11,7 @@ import {
   restorePreparedGeneratedSources,
   hasPreparedGeneratedSources,
 } from "../packages/scripts/src/prepared-generated-sources";
-import { CI_GENERATED_FILES, CI_GENERATION_COMMANDS } from "./generated-files";
+import { CI_GENERATION_COMMANDS } from "./generated-files";
 
 const root = new URL("../", import.meta.url).pathname;
 
@@ -36,7 +37,7 @@ if (mode === "produce") {
   generate();
   requireUnchangedGeneratedInputs(root, identity);
   const files = Object.fromEntries(
-    CI_GENERATED_FILES.map((file) => {
+    ciGeneratedFiles(root).map((file) => {
       const bytes = readFileSync(path.join(root, file));
       const output = path.join(destination, "files", file);
       mkdirSync(path.dirname(output), { recursive: true });

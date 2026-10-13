@@ -11,9 +11,8 @@ import * as v from "valibot";
 
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import { CI_GENERATED_FILES } from "./generated-files";
+import { ciGeneratedFiles } from "./generated-file-inventory";
 
-const generated = new Set<string>(CI_GENERATED_FILES);
 const hashSchema = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));
 const preparedManifestSchema = v.strictObject({
   sourceSha: v.pipe(v.string(), v.regex(/^[a-f0-9]{40}$/u)),
@@ -46,6 +45,7 @@ export const generatedInputIdentity = (root: string) => {
       ),
     ),
   );
+  const generated = new Set<string>(ciGeneratedFiles(root));
   const hash = createSha256();
   hash.update(JSON.stringify({ bun: Bun.version, compiler: compiler.version }));
   // The full tracked input tree is conservative: generated outputs never hash
@@ -112,8 +112,8 @@ export const validatePreparedManifest = (root: string, raw: unknown) => {
     panic("Generated source artifact does not match this source and toolchain");
   }
   if (
-    Object.keys(manifest.files).length !== CI_GENERATED_FILES.length ||
-    CI_GENERATED_FILES.some((file) => !Object.hasOwn(manifest.files, file))
+    Object.keys(manifest.files).length !== ciGeneratedFiles(root).length ||
+    ciGeneratedFiles(root).some((file) => !Object.hasOwn(manifest.files, file))
   ) {
     panic("Generated source artifact has an incomplete output inventory");
   }
@@ -125,7 +125,7 @@ export const preparedManifestPath = (root: string) =>
 
 export const verifyPreparedGeneratedFiles = (root: string, raw: unknown) => {
   const manifest = validatePreparedManifest(root, raw);
-  for (const file of CI_GENERATED_FILES) {
+  for (const file of ciGeneratedFiles(root)) {
     if (
       generatedFileHash(readFileSync(path.join(root, file))) !==
       manifest.files[file]
@@ -161,7 +161,7 @@ export const restorePreparedGeneratedSources = (
   );
   // Validate every byte before writing any output; only the canonical inventory
   // can name a destination in the checkout.
-  const files = CI_GENERATED_FILES.map((file) => {
+  const files = ciGeneratedFiles(root).map((file) => {
     const bytes = readFileSync(path.join(source, "files", file));
     if (generatedFileHash(bytes) !== manifest.files[file]) {
       panic(`Generated source artifact differs: ${file}`);

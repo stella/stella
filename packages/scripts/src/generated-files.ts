@@ -21,7 +21,7 @@ export const CI_GENERATED_OUTPUTS = {
 export const CI_GENERATED_FILES = Object.values(CI_GENERATED_OUTPUTS).flat();
 
 export const CI_GENERATION_COMMANDS = [
-  ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
+  ["bun", "--cwd=apps/api", "run", "generate:capability-runtime"],
   ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
   ["bun", "--cwd=apps/web", "run", "typegen"],
   ["bun", "--cwd=apps/web", "run", "generate:route-tree"],
@@ -39,4 +39,19 @@ export const CI_GENERATION_COMMANDS = [
     "generate:typecheck-declarations",
     "--filter=@stll/api",
   ],
+] as const;
+
+export const CAPABILITY_RUNTIME_INPUTS = [
+  "apps/api/scripts/generate-capability-runtime.ts",
+  "apps/api/scripts/lib/**",
+  "apps/api/src/lib/capability-transport*",
+  "packages/cli/capabilities/*.json",
+  "packages/cli/src/capability-catalog-data.ts",
+  "packages/scripts/src/*.ts",
+  "packages/api-contract/src/**",
+  "packages/collation/src/**",
+  "packages/sha256/src/**",
+  "packages/runtime-mode/src/**",
+  "bun.lock",
+  "package.json",
 ] as const;

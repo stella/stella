@@ -158,6 +158,7 @@ const buildMcpApp = async ({
     plugins: [inlineReaderFonts],
     entrypoints: [path.join(appRoot, input)],
     minify: true,
+    define: { "process.env.NODE_ENV": '"production"' },
     target: "browser",
   });
   if (!result.success) {
@@ -255,4 +256,9 @@ const readerGraphs = Object.fromEntries(
 await Bun.write(
   path.join(generatedRoot, "reader-inputs.json"),
   `${JSON.stringify(readerGraphs, null, 2)}\n`,
+);
+
+await Bun.write(
+  path.join(generatedRoot, "style.css.d.ts"),
+  "declare const styles: string;\nexport default styles;\n",
 );
