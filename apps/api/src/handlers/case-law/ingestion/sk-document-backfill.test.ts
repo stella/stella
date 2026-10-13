@@ -120,7 +120,7 @@ describe("transient deferred document reads", () => {
       );
       expect(deadline).toBeDefined();
       if (deadline === undefined) {
-        return panic("transient document deadline was not scheduled");
+        panic("transient document deadline was not scheduled");
       }
       deadline[0]();
       expect(await pending).toBeInstanceOf(TimeoutError);
