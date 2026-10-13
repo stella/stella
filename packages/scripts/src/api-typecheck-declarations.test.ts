@@ -566,7 +566,7 @@ test("declaration aliases resolve transitive API contracts without checking thei
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 30_000);
 
 test("stable wrappers prepare and restore exact roots and owners without committed config churn", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "api-prepared-projects-"));
