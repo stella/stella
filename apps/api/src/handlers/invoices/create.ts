@@ -834,6 +834,16 @@ const createDraftInvoice = async (
     return Result.err(defaults.error);
   }
   const { prefill, taxableSupplyDate, dueDate } = defaults.value;
+  if (prefill?.vat.reason === "no_vat_rate") {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "vat_rate_missing",
+        message: `No VAT rate is in force on the supply date ${taxableSupplyDate}`,
+        hint: "Add a VAT rate covering the supply date in billing settings, then create the invoice again.",
+      }),
+    );
+  }
   const adjusted = await applyEntryAdjustments(tx, {
     actorUserId,
     workspaceId,

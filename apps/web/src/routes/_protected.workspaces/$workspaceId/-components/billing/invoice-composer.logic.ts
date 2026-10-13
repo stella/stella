@@ -252,34 +252,35 @@ export const vatOnSupplyDate = <TReason extends string>(
 };
 
 /**
- * Creates the draft at most once, then issues it when asked and reads it
- * back. `draftId` is the draft an earlier attempt already created: a retry
- * after a failed issue or read continues with that draft instead of creating
- * a second invoice, which matters for a flat fee where no claimed entry would
- * refuse the duplicate.
+ * Creates the draft, then issues it when asked and reads it back. Once the
+ * draft exists the composer is done with it: a failed issue or read returns
+ * `savedDraft` instead of failing, so the person opens the saved draft rather
+ * than submitting the composer again, which would create a second invoice or
+ * leave later edits unsaved.
  */
-export const submitComposedInvoice = async <TInvoice>({
-  draftId,
+export const submitComposedInvoice = async <
+  TCreated extends { id: string },
+  TInvoice,
+>({
   issue,
   create,
-  onCreated,
   finalize,
   read,
+  savedDraft,
 }: {
-  draftId: string | null;
   issue: boolean;
-  create: () => Promise<{ id: string }>;
-  onCreated: (id: string) => void;
+  create: () => Promise<TCreated>;
   finalize: (id: string) => Promise<void>;
   read: (id: string) => Promise<TInvoice>;
+  savedDraft: (created: TCreated, error: unknown) => TInvoice;
 }): Promise<TInvoice> => {
-  let id = draftId;
-  if (id === null) {
-    id = (await create()).id;
-    onCreated(id);
+  const created = await create();
+  try {
+    if (issue) {
+      await finalize(created.id);
+    }
+    return await read(created.id);
+  } catch (error) {
+    return savedDraft(created, error);
   }
-  if (issue) {
-    await finalize(id);
-  }
-  return read(id);
 };

@@ -1,7 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { rejectionOf } from "@stll/property-testing/rejection";
-
 import {
   composeTotals,
   hasBillableItems,
@@ -238,18 +236,19 @@ describe("VAT for the selected work", () => {
 });
 
 describe("submitComposedInvoice", () => {
-  const submit = (draftId: string | null, readFails: boolean) => {
+  const submit = ({
+    issue,
+    readFails,
+  }: {
+    issue: boolean;
+    readFails: boolean;
+  }) => {
     const calls: string[] = [];
-    let created: string | null = null;
     const result = submitComposedInvoice({
-      draftId,
-      issue: true,
+      issue,
       create: async () => {
         calls.push("create");
         return { id: "inv-1" };
-      },
-      onCreated: (id) => {
-        created = id;
       },
       finalize: async (id) => {
         calls.push(`finalize:${id}`);
@@ -259,25 +258,28 @@ describe("submitComposedInvoice", () => {
         if (readFails) {
           throw new Error("read failed");
         }
-        return id;
+        return `issued ${id}`;
       },
+      savedDraft: (created) => `draft ${created.id}`,
     });
-    return { calls, result, created: () => created };
+    return { calls, result };
   };
 
-  test("a retry after a failed read continues with the created draft", async () => {
-    const first = submit(null, true);
-    expect(await rejectionOf(first.result)).toBeInstanceOf(Error);
-    expect(first.created()).toBe("inv-1");
-
-    const retry = submit(first.created(), false);
-    expect(await retry.result).toBe("inv-1");
-    expect(retry.calls).toEqual(["finalize:inv-1", "read:inv-1"]);
+  test("creates, issues and reads the invoice back", async () => {
+    const attempt = submit({ issue: true, readFails: false });
+    expect(await attempt.result).toBe("issued inv-1");
+    expect(attempt.calls).toEqual(["create", "finalize:inv-1", "read:inv-1"]);
   });
 
-  test("a first attempt creates the draft once", async () => {
-    const attempt = submit(null, false);
-    expect(await attempt.result).toBe("inv-1");
+  test("a failed read after the draft was saved ends on that draft instead of failing", async () => {
+    const attempt = submit({ issue: true, readFails: true });
+    expect(await attempt.result).toBe("draft inv-1");
     expect(attempt.calls).toEqual(["create", "finalize:inv-1", "read:inv-1"]);
+  });
+
+  test("saving a draft does not issue it", async () => {
+    const attempt = submit({ issue: false, readFails: false });
+    expect(await attempt.result).toBe("issued inv-1");
+    expect(attempt.calls).toEqual(["create", "read:inv-1"]);
   });
 });

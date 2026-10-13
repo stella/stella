@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -326,6 +326,7 @@ export const InvoiceComposer = ({
       </div>
       <ComposerFooter
         currency={currency}
+        canSave={hasItems && vat.reason !== "no_vat_rate"}
         hasItems={hasItems}
         onSave={send}
         onStep={setStep}
@@ -341,9 +342,8 @@ type CreateInvoiceBody = Parameters<ReturnType<typeof api.invoices>["put"]>[0];
 
 /**
  * Creates the draft and, when asked, issues it. A refused issue keeps the
- * saved draft and says why, so nothing the person composed is lost. A retry
- * after a failed issue or read reuses the saved draft instead of creating
- * another one.
+ * saved draft and says why, so nothing the person composed is lost; so
+ * does an issue or read that fails after the draft was saved.
  */
 const useComposerSubmit = ({
   workspaceId,
@@ -354,8 +354,6 @@ const useComposerSubmit = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  // The draft an earlier attempt created; a retry continues with it.
-  const draftId = useRef<string | null>(null);
   return useMutation({
     mutationFn: async ({
       issue,
@@ -367,13 +365,9 @@ const useComposerSubmit = ({
       const invoices = api.invoices({
         workspaceId: toSafeId<"workspace">(workspaceId),
       });
-      const invoice = await submitComposedInvoice({
-        draftId: draftId.current,
+      return await submitComposedInvoice({
         issue,
         create: async () => unwrapEden(await invoices.put(body)),
-        onCreated: (id) => {
-          draftId.current = id;
-        },
         finalize: async (id) => {
           const finalized = await invoices({
             invoiceId: toSafeId<"invoice">(id),
@@ -385,16 +379,31 @@ const useComposerSubmit = ({
             );
           }
         },
-        read: (id) => queryClient.query(invoiceByIdOptions(workspaceId, id)),
+        read: async (id): Promise<IssuedInvoice> => {
+          const invoice = await queryClient.query(
+            invoiceByIdOptions(workspaceId, id),
+          );
+          return {
+            id: invoice.id,
+            invoiceNumber: invoice.invoiceNumber,
+            issued: invoice.status !== "draft",
+            totalAmount: invoice.totalAmount,
+            currency: invoice.currency,
+            dueDate: invoice.dueDate,
+          };
+        },
+        savedDraft: (created, error) => {
+          notifyUserError(error, t("billing.invoiceComposer.issueFailed"));
+          return {
+            id: created.id,
+            invoiceNumber: null,
+            issued: false,
+            totalAmount: created.totalAmount,
+            currency: body.currency,
+            dueDate: body.dueDate ?? null,
+          };
+        },
       });
-      return {
-        id: invoice.id,
-        invoiceNumber: invoice.invoiceNumber,
-        issued: invoice.status !== "draft",
-        totalAmount: invoice.totalAmount,
-        currency: invoice.currency,
-        dueDate: invoice.dueDate,
-      };
     },
     onSuccess: (invoice) => {
       for (const queryKey of [
@@ -975,6 +984,8 @@ type ComposerFooterProps = {
   totals: InvoiceTotals | null;
   currency: string;
   hasItems: boolean;
+  /** False while nothing is billable or no VAT rate is in force. */
+  canSave: boolean;
   pending: boolean;
   onStep: (step: ComposerStep) => void;
   onSave: (issue: boolean) => void;
@@ -985,6 +996,7 @@ const ComposerFooter = ({
   totals,
   currency,
   hasItems,
+  canSave,
   pending,
   onStep,
   onSave,
@@ -1017,13 +1029,13 @@ const ComposerFooter = ({
       {next === undefined ? (
         <>
           <Button
-            disabled={!hasItems || pending}
+            disabled={!canSave || pending}
             onClick={() => onSave(false)}
             variant="outline"
           >
             {t("billing.invoiceComposer.saveDraft")}
           </Button>
-          <Button disabled={!hasItems || pending} onClick={() => onSave(true)}>
+          <Button disabled={!canSave || pending} onClick={() => onSave(true)}>
             {t("billing.invoiceComposer.issueInvoice")}
           </Button>
         </>

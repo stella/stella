@@ -632,4 +632,22 @@ describe("invoice create with expenses and billed-time changes", () => {
       totalAmount: 453_750,
     });
   });
+
+  test("a VAT payer without a rate in force on the supply date cannot create an invoice", async () => {
+    await seedSeller("CZ12345678");
+    await setClient("CZ87654321");
+    const entry = await seedEntry("2026-09-02");
+
+    const refused = await create({
+      timeEntryIds: [entry],
+      taxableSupplyDate: "2026-09-02",
+    });
+    expect(refused).toMatchObject({
+      code: 409,
+      response: { code: "vat_rate_missing" },
+    });
+    expect(
+      await db.query.timeEntries.findFirst({ where: { id: { eq: entry } } }),
+    ).toMatchObject({ status: "approved", invoiceId: null });
+  });
 });
