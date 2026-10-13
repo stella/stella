@@ -7,11 +7,11 @@ import {
   listDecisionFacetsHandler,
   listDecisionFacetsQuerySchema,
 } from "@/api/handlers/case-law/decisions/facets";
+import { readDecisionQuerySchema } from "@/api/handlers/case-law/decisions/get";
 import {
-  readDecisionHandler,
-  readDecisionQuerySchema,
-} from "@/api/handlers/case-law/decisions/get";
-import { hydrateDeferredDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
+  hydrateDeferredDocument,
+  prepareDecisionDocumentRead,
+} from "@/api/handlers/case-law/decisions/get-deferred-document";
 import {
   listLatestDecisionsHandler,
   listLatestDecisionsQuerySchema,
@@ -246,13 +246,18 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
   caseLawDb: caseLawPublicReadDb,
   locate: ({ params: { decisionId } }) => ({ kind: "id", id: decisionId }),
   read: async (subject, { query: { citationsCursor } }) =>
-    await readDecisionHandler({ subject, citationsCursor }),
+    await prepareDecisionDocumentRead({ subject, citationsCursor }),
   // Unauthenticated: hydrates when a slot is free, but never persists
   // demand — see `recordDemand`. Runs after the gated transaction closes.
   followUp: async (read) => {
-    const hydrated = await hydrateDeferredDocument(read, false, {
-      type: "on-demand",
-      permit: grantThirdPartyOutboundPermit(),
+    const hydrated = await hydrateDeferredDocument({
+      prepared: read,
+      caseLawDb: caseLawPublicReadDb,
+      recordDemand: false,
+      documentHydration: {
+        type: "on-demand",
+        permit: grantThirdPartyOutboundPermit(),
+      },
     });
     return "documentPending" in hydrated
       ? projectDecisionReader(hydrated)
@@ -286,11 +291,16 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
       : { kind: "slug", country: countryRead.country, slug, language };
   },
   read: async (subject, { query: { citationsCursor } }) =>
-    await readDecisionHandler({ subject, citationsCursor }),
+    await prepareDecisionDocumentRead({ subject, citationsCursor }),
   followUp: async (read) => {
-    const hydrated = await hydrateDeferredDocument(read, false, {
-      type: "on-demand",
-      permit: grantThirdPartyOutboundPermit(),
+    const hydrated = await hydrateDeferredDocument({
+      prepared: read,
+      caseLawDb: caseLawPublicReadDb,
+      recordDemand: false,
+      documentHydration: {
+        type: "on-demand",
+        permit: grantThirdPartyOutboundPermit(),
+      },
     });
     return "documentPending" in hydrated
       ? projectDecisionReader(hydrated)

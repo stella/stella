@@ -26,11 +26,11 @@ import {
   selectCitationPolarity,
 } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { CompiledRule } from "@/api/handlers/case-law/polarity/rule-engine";
-import { citationTextRevisionFence } from "@/api/handlers/case-law/polarity/text-revision";
-import type { CitationTextRevision } from "@/api/handlers/case-law/polarity/text-revision";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import type { CitedPart } from "@/api/lib/case-law/citation-vocabulary";
+import { citationTextRevisionFence } from "@/api/lib/case-law/text-revision";
+import type { CitationTextRevision } from "@/api/lib/case-law/text-revision";
 import { numericColumnParam } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";

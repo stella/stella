@@ -22,12 +22,19 @@ export const DECISION_TEXT_WITHHELD_REASON = {
 export type DecisionTextWithheldReason =
   (typeof DECISION_TEXT_WITHHELD_REASON)[keyof typeof DECISION_TEXT_WITHHELD_REASON];
 
-// parser-output-unchanged: Citation text eligibility reasons describe read-time failures; parsers do not emit them.
-export const CITATION_TEXT_INCOMPLETE_REASONS = [
-  "absent_ast",
+// parser-output-unchanged: Decision completion reasons describe read-time availability; parsers do not emit them.
+export const DECISION_TEXT_INCOMPLETE_REASONS = [
   "gate_failed",
   "text_changed",
   "missing_text",
+] as const;
+export type DecisionTextIncompleteReason =
+  (typeof DECISION_TEXT_INCOMPLETE_REASONS)[number];
+
+// parser-output-unchanged: Citation text eligibility reasons describe read-time failures; parsers do not emit them.
+export const CITATION_TEXT_INCOMPLETE_REASONS = [
+  "absent_ast",
+  ...DECISION_TEXT_INCOMPLETE_REASONS,
 ] as const;
 export type CitationTextIncompleteReason =
   (typeof CITATION_TEXT_INCOMPLETE_REASONS)[number];
@@ -52,6 +59,8 @@ export const TEXT_ABSENCE_REASONS = [
   "parse_failed",
   "publisher_placeholder",
   "redistribution_withheld",
+  "missing_text",
+  "text_changed",
 ] as const;
 
 export type TextAbsenceReason = (typeof TEXT_ABSENCE_REASONS)[number];
@@ -61,6 +70,8 @@ export const TEXT_ABSENCE_REASON = {
   PARSE_FAILED: "parse_failed",
   PUBLISHER_PLACEHOLDER: "publisher_placeholder",
   REDISTRIBUTION_WITHHELD: "redistribution_withheld",
+  MISSING_TEXT: "missing_text",
+  TEXT_CHANGED: "text_changed",
 } as const satisfies Record<Uppercase<TextAbsenceReason>, TextAbsenceReason>;
 
 export type TextField =

@@ -1,7 +1,7 @@
 /**
  * Complete document processors for adapters whose manifests declare a
  * `deferred` document stage. Each owns validation, parsing, telemetry and
- * persistence, so both the read-through and drain use the source's policy.
+ * persistence for the drain. Transient readers use the same source fetch policy.
  *
  * Kept apart from `adapter-registry.ts` so the public read path reaches
  * only the deferred adapters, not every adapter module.
@@ -14,9 +14,12 @@ import {
 } from "@/api/lib/legal-search/adapter-manifest";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
+  type BackfilledDocument,
   type DecisionDocumentOutcome,
   type FetchDecisionDocumentOptions,
+  type PendingDocument,
   fetchDecisionDocument,
+  readTransientDecisionDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 
 type DeferredDocumentProcessor = (
@@ -33,6 +36,21 @@ export const DEFERRED_DOCUMENT_PROCESSORS = {
   DeferredDocumentAdapterKey,
   DeferredDocumentProcessor
 >;
+
+type DeferredDocumentReader = (options: {
+  decision: PendingDocument;
+  signal: AbortSignal;
+}) => Promise<BackfilledDocument | null>;
+
+/** Transient readers share fetch policy, without the queue's persistence. */
+export const DEFERRED_DOCUMENT_READERS = {
+  [ADAPTER_KEYS.SK_COURTS]: async ({ decision, signal }) =>
+    await readTransientDecisionDocument({
+      decision,
+      fetchDocument: skCourtsDocumentFetch,
+      signal,
+    }),
+} as const satisfies Record<DeferredDocumentAdapterKey, DeferredDocumentReader>;
 
 /** One drain per deferred-stage adapter, in manifest order. */
 export const listDeferredDocumentDrains = () =>

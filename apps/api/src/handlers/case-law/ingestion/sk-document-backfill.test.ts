@@ -7,13 +7,17 @@
  */
 
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
+import { TimeoutError } from "@stll/concurrency/with-timeout";
+
+import { createSafeId } from "@/api/lib/branded-types";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   DOCUMENT_FETCH_FAILURE,
+  DOCUMENT_FETCH_BUDGET_MS,
   fetchPdfBytes,
   MAX_DOCUMENT_FETCH_ATTEMPTS,
   MAX_DOCUMENT_PDF_BYTES,
@@ -22,8 +26,10 @@ import {
   type PdfFetchResult,
   remainingDocumentOrder,
   remainingDocumentPredicate,
+  readTransientDecisionDocument,
   requestedDocumentOrder,
   requestedDocumentPredicate,
+  type PendingDocument,
 } from "@/api/lib/legal-search/sk-document-backfill";
 import { readOfResponse } from "@/api/tests/helpers/publisher-read";
 
@@ -80,6 +86,74 @@ const download = async (
     fetchDocument: async () => readOfResponse(await respond()),
     signal: new AbortController().signal,
   });
+
+const transientDecision = (): PendingDocument => ({
+  id: createSafeId<"caseLawDecision">(),
+  caseNumber: "1T/1/2026",
+  ecli: null,
+  court: "Okresný súd",
+  country: "SVK",
+  decisionDate: null,
+  decisionType: null,
+  documentUrl: PUBLISHER_URL,
+});
+
+describe("transient deferred document reads", () => {
+  test("bounds transient work even when it ignores cancellation", async () => {
+    const schedule = spyOn(globalThis, "setTimeout");
+    let operationSignal: AbortSignal | undefined;
+    try {
+      const pending = rejectionOf(
+        readTransientDecisionDocument({
+          decision: transientDecision(),
+          fetchDocument: async (target, { signal }) => {
+            expect(target.href).toBe(PUBLISHER_URL);
+            operationSignal = signal;
+            return new Promise(() => {});
+          },
+          signal: new AbortController().signal,
+        }),
+      );
+      await Promise.resolve();
+      const deadline = schedule.mock.calls.find(
+        ([, delay]) => delay === DOCUMENT_FETCH_BUDGET_MS,
+      );
+      expect(deadline).toBeDefined();
+      if (deadline === undefined) {
+        panic("transient document deadline was not scheduled");
+      }
+      deadline[0]();
+      expect(await pending).toBeInstanceOf(TimeoutError);
+      expect(operationSignal?.aborted).toBe(true);
+    } finally {
+      schedule.mockRestore();
+    }
+  });
+
+  test("returns unavailable for an absent publisher document", async () => {
+    const document = await readTransientDecisionDocument({
+      decision: transientDecision(),
+      fetchDocument: async () =>
+        readOfResponse(new Response(null, { status: 404 })),
+      signal: new AbortController().signal,
+    });
+
+    expect(document).toBeNull();
+  });
+
+  test("returns unavailable when the PDF parser cannot read the publisher body", async () => {
+    const document = await readTransientDecisionDocument({
+      decision: transientDecision(),
+      fetchDocument: async () =>
+        readOfResponse(
+          new Response(new TextEncoder().encode("%PDF-1.7 not a pdf")),
+        ),
+      signal: new AbortController().signal,
+    });
+
+    expect(document).toBeNull();
+  });
+});
 
 /**
  * What the promise rejected with; a resolution comes back wrapped so it can

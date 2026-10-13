@@ -34,8 +34,18 @@ import {
 } from "@/api/db/schema";
 import type { DecisionCitationRow } from "@/api/handlers/case-law/decisions/citation-graph";
 import { listDecisionCitationsHandler } from "@/api/handlers/case-law/decisions/citation-graph";
-import { citationTextRevisionFingerprintSql } from "@/api/handlers/case-law/polarity/text-revision";
-import { captureError } from "@/api/lib/analytics/capture";
+import type {
+  DecisionTextCompletionReadError,
+  DecisionTextCompletionSnapshot,
+} from "@/api/handlers/case-law/decisions/text-completion";
+import {
+  checkDecisionTextCompletion,
+  decisionTextCompletionColumns,
+  decisionTextCompletionGate,
+  decisionTextCompletionOf,
+  readDecisionTextCompletions,
+  readDecisionTextCompletionSafely,
+} from "@/api/handlers/case-law/decisions/text-completion";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
@@ -51,15 +61,13 @@ import { GRAPH_DIRECTION } from "@/api/lib/case-law/citation-vocabulary";
 import { readDecisionAnalysisAst } from "@/api/lib/case-law/decision-analysis";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
-import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
-import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { readCorpusTombstones } from "@/api/lib/legal-search/corpus-reads";
-import { decisionTextWithheldReason } from "@/api/lib/legal-search/corpus-source";
-import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
 import type { CorpusTombstoneReader } from "@/api/lib/legal-search/corpus-tombstones";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   CITATION_POLARITY_EVIDENCE_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -142,44 +150,6 @@ type PassageSourcePointer = {
   textEligibilityFingerprint: string;
 };
 
-type PassageTextEligibility = {
-  published: boolean;
-  redistributable: boolean;
-  textRevisionFingerprint: string;
-  descriptor: CorpusSourceDescriptor | null;
-};
-
-/** Both phases bind the text revision and source disposition to the publication gate. */
-const passageTextEligibility = ({
-  published,
-  redistributable,
-  textRevisionFingerprint,
-  descriptor,
-}: PassageTextEligibility) => ({
-  textEligibilityFingerprint: JSON.stringify([
-    published,
-    textRevisionFingerprint,
-    redistributable,
-    decisionTextWithheldReason(descriptor),
-  ]),
-  textWithheldReason: decisionTextWithheldReason(descriptor),
-});
-
-const passageTextEligibilityColumns = {
-  published: sql<boolean>`${publishedCaseLawDecision}`,
-  redistributable: sql<boolean>`${redistributableCaseLawSourceFor(caseLawSources.descriptor)}`,
-  textRevisionFingerprint: citationTextRevisionFingerprintSql({
-    contentHash: caseLawDecisions.contentHash,
-    sections: caseLawDecisions.sections,
-  }),
-  descriptor: caseLawSources.descriptor,
-};
-
-const passageTextEligibilityGate = and(
-  publishedCaseLawDecision,
-  redistributableCaseLawSourceFor(caseLawSources.descriptor),
-);
-
 const readPassageSourcePointers = async (
   tx: CaseLawPublicReadTransaction,
   ids: readonly SafeId<"caseLawDecision">[],
@@ -192,12 +162,12 @@ const readPassageSourcePointers = async (
       id: caseLawDecisions.id,
       astS3Key: caseLawDecisions.astS3Key,
       contentHash: caseLawDecisions.contentHash,
-      ...passageTextEligibilityColumns,
+      ...decisionTextCompletionColumns,
     })
     .from(caseLawDecisions)
     .innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId))
     .where(
-      and(inArray(caseLawDecisions.id, [...ids]), passageTextEligibilityGate),
+      and(inArray(caseLawDecisions.id, [...ids]), decisionTextCompletionGate),
     );
   // The same split the decision read makes: redistribution decides whether a
   // citation may be listed at all, derived AI whether its text may travel
@@ -206,14 +176,16 @@ const readPassageSourcePointers = async (
     ({
       published,
       redistributable,
+      documentUrl,
       descriptor,
       textRevisionFingerprint,
       ...row
     }) => ({
       ...row,
-      textEligibilityFingerprint: passageTextEligibility({
+      textEligibilityFingerprint: decisionTextCompletionOf({
         published,
         redistributable,
+        documentUrl,
         descriptor,
         textRevisionFingerprint,
       }).textEligibilityFingerprint,
@@ -231,10 +203,8 @@ const readPassageSourcePointers = async (
  * polarity classifier read, which is what lets a passage be anchored to the
  * mention the treatment came from.
  */
-type DecisionTextColumns = {
+type DecisionTextColumns = DecisionTextCompletionSnapshot & {
   contentHash: string | null;
-  textEligibilityFingerprint: string;
-  textWithheldReason: DecisionTextWithheldReason | null;
   documentAst: unknown;
   sections: DecisionSection[] | null;
 };
@@ -250,7 +220,7 @@ const readDecisionTextColumns = async (
           id: caseLawDecisions.id,
           documentAst: caseLawDecisions.documentAst,
           contentHash: caseLawDecisions.contentHash,
-          ...passageTextEligibilityColumns,
+          ...decisionTextCompletionColumns,
           sections: caseLawDecisions.sections,
         })
         .from(caseLawDecisions)
@@ -261,7 +231,7 @@ const readDecisionTextColumns = async (
         .where(
           and(
             inArray(caseLawDecisions.id, [...ids]),
-            passageTextEligibilityGate,
+            decisionTextCompletionGate,
           ),
         ),
   );
@@ -271,6 +241,7 @@ const readDecisionTextColumns = async (
         id,
         published,
         redistributable,
+        documentUrl,
         descriptor,
         textRevisionFingerprint,
         ...columns
@@ -279,9 +250,10 @@ const readDecisionTextColumns = async (
           String(id),
           {
             ...columns,
-            ...passageTextEligibility({
+            ...decisionTextCompletionOf({
               published,
               redistributable,
+              documentUrl,
               descriptor,
               textRevisionFingerprint,
             }),
@@ -363,11 +335,40 @@ export class CitationTextGateError extends TaggedError(
   cause?: unknown;
 }> {}
 
+const citationTextReadFailure = failureSink({
+  event: "case_law.citation_passage.text_gate",
+  expected: [],
+});
+const citationTextCompletionFailure = failureSink({
+  event: "case_law.citation_passage.post_read_gate",
+  expected: [],
+});
+
+const observeCitationTextGateFailure = (
+  error: CitationTextGateError | DecisionTextCompletionReadError,
+  stage: "read" | "completion",
+) => {
+  switch (stage) {
+    case "read":
+      observeFailure(error, { sink: citationTextReadFailure });
+      break;
+    case "completion":
+      observeFailure(error, { sink: citationTextCompletionFailure });
+      break;
+    default:
+      stage satisfies never;
+      panic("Unhandled citation text failure stage");
+  }
+};
+
 export type CitationDecisionText =
   | { type: "eligible"; ast: DocumentAst; sections: DecisionSection[] | null }
   | { type: "withheld"; reason: DecisionTextWithheldReason }
   | { type: "absent-ast" }
-  | { type: "gate-failed"; error: CitationTextGateError };
+  | {
+      type: "gate-failed";
+      error: CitationTextGateError | DecisionTextCompletionReadError;
+    };
 
 type ReadCitationDecisionTextOptions = {
   pointer: PassageSourcePointer;
@@ -383,20 +384,29 @@ export const readCitationDecisionText = async ({
   readAst = readDecisionAnalysisAst,
   readTombstones = readCorpusTombstones,
 }: ReadCitationDecisionTextOptions): Promise<CitationDecisionText> => {
-  if (columns !== undefined && columns.textWithheldReason !== null) {
-    return { type: "withheld", reason: columns.textWithheldReason };
+  const completion = checkDecisionTextCompletion(
+    pointer.textEligibilityFingerprint,
+    columns,
+  );
+  switch (completion.type) {
+    case "withheld":
+      return { type: "withheld", reason: completion.reason };
+    case "incomplete":
+      return {
+        type: "gate-failed",
+        error: new CitationTextGateError({
+          message: "Citation decision text is missing or changed",
+          reason: completion.reason,
+        }),
+      };
+    case "eligible":
+      break;
+    default:
+      completion satisfies never;
+      return panic("Unhandled text completion disposition");
   }
-  if (
-    columns === undefined ||
-    columns.textEligibilityFingerprint !== pointer.textEligibilityFingerprint
-  ) {
-    return {
-      type: "gate-failed",
-      error: new CitationTextGateError({
-        message: "Citation decision text is missing or changed",
-        reason: columns === undefined ? "missing_text" : "text_changed",
-      }),
-    };
+  if (columns === undefined) {
+    return panic("Eligible text completion has no columns");
   }
   // Check denial before the AST reader can recover an object read with its
   // database copy. The reader only fetches this pointer's AST location.
@@ -465,26 +475,52 @@ const sectionTextAt = (
  * read costs its rows every text field, never the page: the decision identity
  * and treatment metadata remain available with an explicit incomplete reason.
  */
-const readDecisionTextByDecision = async (
-  caseLawDb: CaseLawPublicReadDb,
-  pointers: readonly PassageSourcePointer[],
-): Promise<Map<string, CitationDecisionText>> => {
+type ReadDecisionTextByDecisionOptions = {
+  caseLawDb: CaseLawPublicReadDb;
+  pointers: readonly PassageSourcePointer[];
+  readColumns?: typeof readDecisionTextColumns;
+  readCurrentCompletions?: (
+    caseLawDb: CaseLawPublicReadDb,
+    ids: readonly SafeId<"caseLawDecision">[],
+  ) => Promise<Map<string, DecisionTextCompletionSnapshot>>;
+  readAst?: typeof readDecisionAnalysisAst;
+  readTombstones?: CorpusTombstoneReader;
+};
+
+/** Resolve documents in bounded batches, then recheck their source and revision. */
+export const readDecisionTextByDecision = async ({
+  caseLawDb,
+  pointers,
+  readColumns = readDecisionTextColumns,
+  readCurrentCompletions,
+  readAst = readDecisionAnalysisAst,
+  readTombstones = readCorpusTombstones,
+}: ReadDecisionTextByDecisionOptions): Promise<
+  Map<string, CitationDecisionText>
+> => {
+  const readCurrent =
+    readCurrentCompletions ??
+    (async (
+      db: CaseLawPublicReadDb,
+      ids: readonly SafeId<"caseLawDecision">[],
+    ) => await db(async (tx) => await readDecisionTextCompletions(tx, ids)));
   const textByDecision = new Map<string, CitationDecisionText>();
+  if (pointers.length === 0) {
+    return textByDecision;
+  }
   for (const group of chunkItems(pointers, PASSAGE_AST_GROUP_SIZE)) {
-    const columns = await readDecisionTextColumns(
-      caseLawDb,
-      group.map((pointer) => pointer.id),
-    );
+    const ids = group.map((pointer) => pointer.id);
+    const columns = await readColumns(caseLawDb, ids);
     const entries = await Promise.all(
       group.map(async (pointer) => {
         const text = await readCitationDecisionText({
           pointer,
           columns: columns.get(String(pointer.id)),
+          readAst,
+          readTombstones,
         });
         if (text.type === "gate-failed") {
-          captureError(text.error, {
-            step: "case_law.citation_passage.text_gate",
-          });
+          observeCitationTextGateFailure(text.error, "read");
         }
         return { id: pointer.id, text };
       }),
@@ -492,6 +528,57 @@ const readDecisionTextByDecision = async (
     for (const entry of entries) {
       textByDecision.set(String(entry.id), entry.text);
     }
+  }
+  const currentCompletions = await readDecisionTextCompletionSafely(
+    async () =>
+      await readCurrent(
+        caseLawDb,
+        pointers.map(({ id }) => id),
+      ),
+  );
+  if (Result.isError(currentCompletions)) {
+    for (const pointer of pointers) {
+      textByDecision.set(String(pointer.id), {
+        type: "gate-failed",
+        error: currentCompletions.error,
+      });
+    }
+    return textByDecision;
+  }
+  for (const pointer of pointers) {
+    const readText = textByDecision.get(String(pointer.id));
+    if (readText === undefined) {
+      return panic("Citation source pointer has no document result");
+    }
+    const completion = checkDecisionTextCompletion(
+      pointer.textEligibilityFingerprint,
+      currentCompletions.value.get(String(pointer.id)),
+    );
+    let text: CitationDecisionText;
+    switch (completion.type) {
+      case "eligible":
+        text = readText;
+        break;
+      case "withheld":
+        text = { type: "withheld", reason: completion.reason };
+        break;
+      case "incomplete":
+        text = {
+          type: "gate-failed",
+          error: new CitationTextGateError({
+            message: "Citation decision text changed during its read",
+            reason: completion.reason,
+          }),
+        };
+        break;
+      default:
+        completion satisfies never;
+        return panic("Unhandled post-read text completion state");
+    }
+    if (text.type === "gate-failed" && readText.type !== "gate-failed") {
+      observeCitationTextGateFailure(text.error, "completion");
+    }
+    textByDecision.set(String(pointer.id), text);
   }
   return textByDecision;
 };
@@ -610,20 +697,22 @@ type PreparedDecisionCitations = Awaited<
 type CompleteDecisionCitationsOptions = {
   caseLawDb: CaseLawPublicReadDb;
   prepared: PreparedDecisionCitations;
+  readText?: typeof readDecisionTextByDecision;
 };
 
 /** Resolve both display passages and exact classifier windows through one text owner. */
 export const completeDecisionCitations = async ({
   caseLawDb,
   prepared: gated,
+  readText = readDecisionTextByDecision,
 }: CompleteDecisionCitationsOptions): Promise<DecisionCitationsRead> => {
   if (gated.type === "invalid_cursor") {
     return gated;
   }
-  const textByDecision = await readDecisionTextByDecision(
+  const textByDecision = await readText({
     caseLawDb,
-    gated.sources,
-  );
+    pointers: gated.sources,
+  });
   const evidenceByCitation = new Map(
     gated.evidence.type === "ready"
       ? gated.evidence.rows.map((row) => [String(row.id), row] as const)

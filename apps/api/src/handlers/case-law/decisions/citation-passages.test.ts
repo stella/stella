@@ -1,16 +1,21 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  completeDecisionCitations,
   citationPassageIn,
   citationTextFields,
+  readDecisionTextByDecision,
   readCitationDecisionText,
   polarityExcerptIn,
 } from "@/api/handlers/case-law/decisions/citation-passages";
+import type { DecisionTextCompletionSnapshot } from "@/api/handlers/case-law/decisions/text-completion";
 import { createSafeId } from "@/api/lib/branded-types";
+import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 
 const astOf = (
@@ -238,8 +243,10 @@ test("a text-eligibility failure returns no citation text and an incomplete reas
       textEligibilityFingerprint: "synthetic-revision",
     },
     columns: {
+      textIncompleteReason: null,
       textWithheldReason: null,
       contentHash: "synthetic-hash",
+      textRevisionFingerprint: "synthetic-revision-content",
       textEligibilityFingerprint: "synthetic-revision",
       documentAst: ast,
       sections: [
@@ -262,6 +269,323 @@ test("a text-eligibility failure returns no citation text and an incomplete reas
     passage: null,
     evidenceExcerpt: null,
     textIncompleteReason: "gate_failed",
+  });
+});
+
+const citationFieldsAfterCompletionChangesDuringAstRead = async (
+  currentAfterRead: DecisionTextCompletionSnapshot,
+) => {
+  const id = createSafeId<"caseLawDecision">();
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
+  const pointer = {
+    id,
+    astS3Key: "synthetic/ast",
+    contentHash: "synthetic-hash",
+    textEligibilityFingerprint: "eligible-revision",
+  };
+  const eligible = {
+    textEligibilityFingerprint: pointer.textEligibilityFingerprint,
+    textWithheldReason: null,
+    textIncompleteReason: null,
+    textRevisionFingerprint: "synthetic-revision",
+  };
+  let current: DecisionTextCompletionSnapshot = eligible;
+  const textByDecision = await readDecisionTextByDecision({
+    caseLawDb: caseLawPublicReadDb,
+    pointers: [pointer],
+    readColumns: async () =>
+      new Map([
+        [
+          String(id),
+          {
+            ...eligible,
+            contentHash: pointer.contentHash,
+            documentAst: ast,
+            sections: [
+              { index: 0, text: paragraph, type: "argumentation", title: null },
+            ],
+          },
+        ],
+      ]),
+    readAst: async () => {
+      current = currentAfterRead;
+      return ast;
+    },
+    readTombstones: async () => new Set(),
+    readCurrentCompletions: async () => new Map([[String(id), current]]),
+  });
+
+  const text = textByDecision.get(String(id));
+  const fields = citationTextFields({
+    text,
+    textWithheldReason: text?.type === "withheld" ? text.reason : null,
+    citationText,
+    sectionIndex: 0,
+    evidenceWindows: [{ start: 0, end: paragraph.length }],
+  });
+  return fields;
+};
+
+test("a descriptor change during the AST read suppresses citation text and excerpts", async () => {
+  expect(
+    await citationFieldsAfterCompletionChangesDuringAstRead({
+      textEligibilityFingerprint: "withheld-revision",
+      textWithheldReason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
+      textIncompleteReason: null,
+      textRevisionFingerprint: "synthetic-revision",
+    }),
+  ).toEqual({
+    citationText: null,
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: null,
+  });
+});
+
+test("a text revision change during the AST read suppresses citation text and excerpts", async () => {
+  expect(
+    await citationFieldsAfterCompletionChangesDuringAstRead({
+      textEligibilityFingerprint: "changed-text-revision",
+      textWithheldReason: null,
+      textIncompleteReason: null,
+      textRevisionFingerprint: "changed-revision",
+    }),
+  ).toEqual({
+    citationText: null,
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: "text_changed",
+  });
+});
+
+test("an unchanged completion during the AST read retains citation text and excerpts", async () => {
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const fields = await citationFieldsAfterCompletionChangesDuringAstRead({
+    textEligibilityFingerprint: "eligible-revision",
+    textWithheldReason: null,
+    textIncompleteReason: null,
+    textRevisionFingerprint: "synthetic-revision",
+  });
+  expect(fields).toEqual({
+    citationText,
+    passage: {
+      anchorId: "p1",
+      text: paragraph,
+      truncated: false,
+      mention: "sole",
+    },
+    evidenceExcerpt: paragraph,
+    textIncompleteReason: null,
+  });
+});
+
+test("a later AST batch changes the first decision before the page completion", async () => {
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
+  const pointer = () => ({
+    id: createSafeId<"caseLawDecision">(),
+    astS3Key: "synthetic/ast",
+    contentHash: "synthetic-hash",
+    textEligibilityFingerprint: "eligible-revision",
+  });
+  const first = pointer();
+  const last = pointer();
+  const pointers = [
+    first,
+    ...Array.from(
+      { length: LIMITS.caseLawCitationPassageConcurrency - 1 },
+      pointer,
+    ),
+    last,
+  ];
+  const eligible = {
+    textEligibilityFingerprint: "eligible-revision",
+    textWithheldReason: null,
+    textIncompleteReason: null,
+    textRevisionFingerprint: "synthetic-revision",
+  };
+  let firstCompletion: DecisionTextCompletionSnapshot = eligible;
+  let astReads = 0;
+  const completions: { ids: readonly string[]; astReads: number }[] = [];
+  const textByDecision = await readDecisionTextByDecision({
+    caseLawDb: caseLawPublicReadDb,
+    pointers,
+    readColumns: async (_db, ids) =>
+      new Map(
+        ids.map((id) => [
+          String(id),
+          {
+            ...eligible,
+            contentHash: "synthetic-hash",
+            documentAst: ast,
+            sections: null,
+          },
+        ]),
+      ),
+    readAst: async (source) => {
+      astReads += 1;
+      if (source.id === last.id) {
+        firstCompletion = {
+          textEligibilityFingerprint: "withheld-revision",
+          textWithheldReason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
+          textIncompleteReason: null,
+          textRevisionFingerprint: "synthetic-revision",
+        };
+      }
+      return ast;
+    },
+    readTombstones: async () => new Set(),
+    readCurrentCompletions: async (_db, ids) => {
+      completions.push({ ids, astReads });
+      return new Map(
+        ids.map((id) => [
+          String(id),
+          id === first.id ? firstCompletion : eligible,
+        ]),
+      );
+    },
+  });
+  const text = textByDecision.get(String(first.id));
+  expect(text).toEqual({
+    type: "withheld",
+    reason: DECISION_TEXT_WITHHELD_REASON.SOURCE_LICENCE,
+  });
+  expect(
+    citationTextFields({
+      text,
+      textWithheldReason: text?.type === "withheld" ? text.reason : null,
+      citationText,
+      sectionIndex: 0,
+      evidenceWindows: [{ start: 0, end: paragraph.length }],
+    }),
+  ).toEqual({
+    citationText: null,
+    passage: null,
+    evidenceExcerpt: null,
+    textIncompleteReason: null,
+  });
+  for (const other of pointers.slice(1)) {
+    expect(textByDecision.get(String(other.id))?.type).toBe("eligible");
+  }
+  expect(completions).toEqual([
+    { ids: pointers.map(({ id }) => id), astReads: pointers.length },
+  ]);
+});
+
+test("a completion read failure retains citation metadata with gate_failed", async () => {
+  const decisionId = createSafeId<"caseLawDecision">();
+  const citationId = createSafeId<"caseLawCitation">();
+  const ruleId = createSafeId<"caseLawPolarityRule">();
+  const citationText = "21 Cdo 500/2019";
+  const paragraph = `Synthetic reasoning in ${citationText}.`;
+  const ast = astOf([{ anchorId: "p1", text: paragraph }]);
+  const pointer = {
+    id: decisionId,
+    astS3Key: "synthetic/ast",
+    contentHash: "synthetic-hash",
+    textEligibilityFingerprint: "eligible-revision",
+  };
+  let astReads = 0;
+  const result = await completeDecisionCitations({
+    caseLawDb: caseLawPublicReadDb,
+    prepared: {
+      type: "page",
+      direction: "cites",
+      resolvedDecisionId: decisionId,
+      sources: [pointer],
+      page: {
+        items: [
+          {
+            id: citationId,
+            citationText,
+            sectionIndex: 0,
+            treatment: "mixed",
+            decision: null,
+          },
+        ],
+        limit: 1,
+        nextCursor: "next-page",
+      },
+      evidence: {
+        type: "ready",
+        rows: [
+          {
+            id: citationId,
+            source: "rule",
+            ruleId,
+            classifierVersion: "synthetic-version",
+            evidenceWindows: [{ start: 0, end: paragraph.length }],
+            citedPart: "majority",
+          },
+        ],
+      },
+    },
+    readText: async (options) =>
+      await readDecisionTextByDecision({
+        ...options,
+        readColumns: async () =>
+          new Map([
+            [
+              String(decisionId),
+              {
+                textEligibilityFingerprint: pointer.textEligibilityFingerprint,
+                textRevisionFingerprint: "synthetic-revision",
+                textIncompleteReason: null,
+                textWithheldReason: null,
+                contentHash: pointer.contentHash,
+                documentAst: ast,
+                sections: [
+                  {
+                    index: 0,
+                    text: paragraph,
+                    type: "argumentation",
+                    title: null,
+                  },
+                ],
+              },
+            ],
+          ]),
+        readAst: async () => {
+          astReads += 1;
+          return ast;
+        },
+        readTombstones: async () => new Set(),
+        readCurrentCompletions: async () =>
+          await Promise.reject(
+            new TypeError("Synthetic completion read failure"),
+          ),
+      }),
+  });
+  expect(astReads).toBe(1);
+  expect(result).toEqual({
+    type: "page",
+    page: {
+      nextCursor: "next-page",
+      items: [
+        {
+          id: citationId,
+          citationText: null,
+          sectionIndex: 0,
+          treatment: "mixed",
+          decision: null,
+          evidenceIncompleteReason: null,
+          citedPart: "majority",
+          polarityEvidence: {
+            source: "rule",
+            ruleId,
+            classifierVersion: "synthetic-version",
+            excerpt: null,
+          },
+          textIncompleteReason: "gate_failed",
+          textWithheldReason: null,
+          passage: null,
+        },
+      ],
+    },
   });
 });
 

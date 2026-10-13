@@ -21,6 +21,7 @@ import {
 } from "@/api/handlers/case-law/decisions/citations";
 import { DECISION_NOT_FOUND } from "@/api/handlers/case-law/decisions/public-subject";
 import { readServedDecisionAst } from "@/api/handlers/case-law/decisions/served-ast";
+import { decisionTextCompletionReasons } from "@/api/handlers/case-law/decisions/text-completion";
 import { DECISION_JUDGE_ROLE_RANK } from "@/api/handlers/case-law/judges/consts";
 import { judgePortraitPath } from "@/api/handlers/case-law/judges/portrait";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -508,6 +509,7 @@ export const readDecisionHandler = definePublicLawSharedQuery(
     });
 
     return {
+      ...decisionTextCompletionReasons({ type: "eligible" }),
       documentPending,
       hasDocument: decision.hasDocument,
       documentReadFailed,

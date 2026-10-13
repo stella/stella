@@ -66,6 +66,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
+import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/text-revision";
 import type { CorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorTag } from "@/api/lib/errors/error-tag";
@@ -140,6 +141,7 @@ import {
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
+import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /** A decision awaiting its document. */
@@ -478,6 +480,60 @@ export const parsePendingDocument = async (
     documentAst: sanitized.documentAst,
     sections: segmentDecision(fulltext),
   };
+};
+
+type ReadTransientDecisionDocumentOptions = {
+  decision: PendingDocument;
+  fetchDocument: SkDocumentFetch;
+  signal: AbortSignal;
+};
+
+/** Read a deferred document for one response without claiming or persisting it. */
+export const readTransientDecisionDocument = async ({
+  decision,
+  fetchDocument,
+  signal,
+}: ReadTransientDecisionDocumentOptions): Promise<BackfilledDocument | null> => {
+  const { documentUrl } = decision;
+  if (documentUrl === null) {
+    return null;
+  }
+
+  return await withTimeout(
+    async (operationSignal) => {
+      const fetched = await fetchPdfBytes({
+        documentUrl,
+        fetchDocument,
+        signal: operationSignal,
+      });
+      switch (fetched.type) {
+        case "absent":
+        case "failed":
+          return null;
+        case "too-large":
+          if (fetched.prefix !== null) {
+            assertPdfBody(fetched.prefix);
+          }
+          return null;
+        case "document": {
+          const parsed = await parseReadableDocument(decision, fetched.bytes);
+          return parsed.type === "unreadable"
+            ? null
+            : (parsed.document ?? null);
+        }
+        default:
+          fetched satisfies never;
+          return panic(
+            `Unhandled transient document download: ${String(fetched)}`,
+          );
+      }
+    },
+    {
+      label: "caseLaw.readTransientDecisionDocument",
+      timeoutMs: DOCUMENT_FETCH_BUDGET_MS,
+      signal,
+    },
+  );
 };
 
 /**
@@ -1301,16 +1357,34 @@ const writeFetchBookkeeping = async (
  * is kept: the queue orders by it, and refreshing the timestamp on every
  * view would send a popular decision to the back of its own tier.
  */
-export const recordDocumentFetchRequest = async (
-  decisionId: SafeId<"caseLawDecision">,
-  scopedDb: ScopedDb,
-): Promise<void> => {
+export type DocumentFetchRequest = {
+  decisionId: SafeId<"caseLawDecision">;
+  /** The document revision and URL observed by the reader. */
+  textRevisionFingerprint: string;
+  documentUrl: string | null;
+};
+
+type RecordDocumentFetchRequestOptions = DocumentFetchRequest & {
+  scopedDb: ScopedDb;
+};
+
+export const recordDocumentFetchRequest = async ({
+  decisionId,
+  textRevisionFingerprint,
+  documentUrl,
+  scopedDb,
+}: RecordDocumentFetchRequestOptions): Promise<void> => {
   await scopedDb(
     async (tx) =>
       await writeFetchBookkeeping(tx, {
         set: { documentFetchRequestedAt: sql`now()` },
         where: and(
           eq(caseLawDecisions.id, decisionId),
+          sql`${citationTextRevisionFingerprintSql({
+            contentHash: caseLawDecisions.contentHash,
+            sections: caseLawDecisions.sections,
+          })} = ${textRevisionFingerprint}`,
+          sql`${caseLawDecisions.documentUrl} IS NOT DISTINCT FROM ${documentUrl}`,
           isNull(caseLawDecisions.redactedAt),
           isNull(caseLawDecisions.documentFetchRequestedAt),
         ),
@@ -1709,6 +1783,29 @@ type ParseFetchedDocumentResult =
   /** The source moved mid-fetch, so these bytes judge nothing. */
   | { type: "superseded" };
 
+type ReadableDocumentParse =
+  | { type: "parsed"; document: BackfilledDocument | undefined }
+  | { type: "unreadable"; error: unknown };
+
+/** Reader and worker share the same PDF validation and parse-failure classification. */
+const parseReadableDocument = async (
+  decision: PendingDocument,
+  bytes: Uint8Array,
+): Promise<ReadableDocumentParse> => {
+  assertPdfBody(bytes);
+  const parsed = await Result.tryPromise({
+    try: async () => await parsePendingDocument(decision, bytes),
+    catch: (error) => error,
+  });
+  if (Result.isOk(parsed)) {
+    return { type: "parsed", document: parsed.value };
+  }
+  if (isUnreadablePdfError(parsed.error)) {
+    return { type: "unreadable", error: parsed.error };
+  }
+  throw parsed.error;
+};
+
 /**
  * Parse a download, parking the decision when libpdf reports that these
  * bytes are a PDF it cannot read: the one parse failure known to belong to
@@ -1723,16 +1820,9 @@ const parseFetchedDocument = async ({
   decision,
   fence,
 }: ParseFetchedDocumentOptions): Promise<ParseFetchedDocumentResult> => {
-  assertPdfBody(bytes);
-  const parsed = await Result.tryPromise({
-    try: async () => await parsePendingDocument(decision, bytes),
-    catch: (error) => error,
-  });
-  if (Result.isOk(parsed)) {
-    return { type: "parsed", document: parsed.value };
-  }
-  if (!isUnreadablePdfError(parsed.error)) {
-    throw parsed.error;
+  const parsed = await parseReadableDocument(decision, bytes);
+  if (parsed.type === "parsed") {
+    return parsed;
   }
   const parked = await parkDocumentFetchOwned({
     decision,

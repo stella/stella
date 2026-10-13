@@ -17,7 +17,7 @@ import {
 } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
-const FENCE_MODULE = "apps/api/src/handlers/case-law/polarity/text-revision";
+const FENCE_MODULE = "apps/api/src/lib/case-law/text-revision";
 const GRAPH_MODULE =
   "apps/api/src/handlers/case-law/citation-graph-transaction";
 const FENCES = new Set([
