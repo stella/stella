@@ -257,6 +257,10 @@ export const InvoiceComposer = ({
           ? {}
           : { expectedTotalAmount: totals.grossAmountMinor }),
         currency,
+        // The seller the person reviewed, even if the default changes meanwhile.
+        ...(prefill.seller === null
+          ? {}
+          : { sellerProfileId: toSafeId<"sellerProfile">(prefill.seller.id) }),
         timeEntryIds: includedEntryIds.map((id) => toSafeId<"timeEntry">(id)),
         expenseIds: [...includedExpenseIds].map((id) =>
           toSafeId<"expense">(id),

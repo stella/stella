@@ -633,6 +633,30 @@ describe("invoice create with expenses and billed-time changes", () => {
     });
   });
 
+  test("the reviewed seller stays on the invoice when the default changes before create", async () => {
+    const reviewed = await seedSeller("CZ12345678");
+    await seedVatRates();
+    await setClient("CZ87654321");
+    const entry = await seedEntry("2026-09-02");
+
+    const prefill = await prefillInvoice.handler(
+      context(prefillInvoice.handler, {}),
+    );
+    expect(prefill).toMatchObject({ seller: { id: reviewed } });
+
+    // Another profile becomes the default while the composer is open.
+    await db
+      .update(sellerProfiles)
+      .set({ isDefault: false })
+      .where(eq(sellerProfiles.id, reviewed));
+    await seedSeller("CZ87654320");
+
+    const id = createdId(
+      await create({ timeEntryIds: [entry], sellerProfileId: reviewed }),
+    );
+    expect(await readInvoice(id)).toMatchObject({ sellerProfileId: reviewed });
+  });
+
   test("a VAT payer without a rate in force on the supply date cannot create an invoice", async () => {
     await seedSeller("CZ12345678");
     await setClient("CZ87654321");
