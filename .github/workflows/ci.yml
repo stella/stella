@@ -38,6 +38,10 @@ on:
       sha:
         type: string
         default: ""
+      task_cache_producer:
+        description: Validated main ancestry from the scheduled caller.
+        type: string
+        default: read-only
     secrets:
       DOCKERHUB_USERNAME:
         required: false
@@ -67,9 +71,10 @@ concurrency:
 permissions: {}
 
 env:
-  # Only successful tasks on main pushes and merge groups publish results.
-  # PRs read proven results; they cannot populate either task cache.
-  TURBO_CACHE: ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'merge_group') && 'local:rw,remote:rw' || 'local:r,remote:r' }}
+  # Successful tasks from trusted runs publish shared results. Scheduled main
+  # producers supply validated ancestry and match the immutable event SHA.
+  # PRs may reuse local results within a job; shared storage stays read-only.
+  TURBO_CACHE: ${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'merge_group' || (github.event_name == 'schedule' && github.ref == 'refs/heads/main' && inputs.task_cache_producer == 'validated-main' && inputs.heavy_only == true && inputs.sha == github.sha)) && 'local:rw,remote:rw' || 'local:rw,remote:r' }}
   # Disposable non-RDS databases: online index builds in migrate must not wait
   # on EBS metrics or a wall-clock busy window.
   DB_LOAD_GATE_EBS_SIGNAL: disabled

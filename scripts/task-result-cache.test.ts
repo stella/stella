@@ -11,6 +11,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { checkTestInputCoverage } from "./check-test-input-coverage";
+import { contextFromNested, evaluate } from "./github-expression";
 
 const root = path.resolve(import.meta.dirname, "..");
 const configuration = v.parse(
@@ -52,7 +53,7 @@ const workflow = v.parse(
 
 test("every CI task cache uses stable GitHub storage and trusted writes", () => {
   expect(workflow.env["TURBO_CACHE"]).toBe(
-    `\${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'merge_group') && 'local:rw,remote:rw' || 'local:r,remote:r' }}`,
+    `\${{ ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'merge_group' || (github.event_name == 'schedule' && github.ref == 'refs/heads/main' && inputs.task_cache_producer == 'validated-main' && inputs.heavy_only == true && inputs.sha == github.sha)) && 'local:rw,remote:rw' || 'local:rw,remote:r' }}`,
   );
   const adapters = Object.values(workflow.jobs)
     .flatMap(({ steps }) => steps)
@@ -63,6 +64,89 @@ test("every CI task cache uses stable GitHub storage and trusted writes", () => 
     expect(adapter.with?.["use-relative-cache-path"]).toBe("true");
     expect(adapter.with?.["cache-prefix"]).toBe("task-results-v1_");
   }
+});
+
+test("shared writes require a trusted event and a validated scheduled main identity", () => {
+  const expression = workflow.env["TURBO_CACHE"];
+  expect(expression).toBeDefined();
+  const sha = "a".repeat(40);
+  for (const event of [
+    "push",
+    "merge_group",
+    "schedule",
+    "pull_request",
+    "pull_request_target",
+    "workflow_dispatch",
+    "workflow_run",
+  ]) {
+    for (const ref of [
+      "refs/heads/main",
+      "refs/heads/feature",
+      "refs/pull/1/merge",
+    ]) {
+      for (const producer of ["read-only", "validated-main"]) {
+        for (const heavyOnly of [false, true]) {
+          for (const requestedSha of ["", sha, "b".repeat(40)]) {
+            const mode = evaluate(
+              expression ?? "",
+              contextFromNested({
+                github: { event_name: event, ref, sha },
+                inputs: {
+                  task_cache_producer: producer,
+                  heavy_only: heavyOnly,
+                  sha: requestedSha,
+                },
+              }),
+            );
+            const trusted =
+              event === "merge_group" ||
+              (event === "push" && ref === "refs/heads/main") ||
+              (event === "schedule" &&
+                ref === "refs/heads/main" &&
+                producer === "validated-main" &&
+                heavyOnly &&
+                requestedSha === sha);
+            expect(
+              mode,
+              JSON.stringify({ event, ref, producer, heavyOnly, requestedSha }),
+            ).toBe(trusted ? "local:rw,remote:rw" : "local:rw,remote:r");
+          }
+        }
+      }
+    }
+  }
+});
+
+test("the scheduled caller forwards its ancestry receipt after validation succeeds", () => {
+  const caller = v.parse(
+    v.object({
+      jobs: v.object({
+        validate: v.object({ outputs: v.record(v.string(), v.string()) }),
+        suites: v.object({
+          needs: v.string(),
+          if: v.string(),
+          with: v.record(v.string(), v.unknown()),
+        }),
+      }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        path.join(root, ".github/workflows/main-heavy.yml"),
+        "utf-8",
+      ),
+    ),
+  );
+  expect(caller.jobs.suites.needs).toBe("validate");
+  expect(caller.jobs.suites.if).toContain("needs.validate.result == 'success'");
+  expect(caller.jobs.validate.outputs["task_cache_producer"]).toBe(
+    `\${{ steps.ancestor.outputs.task_cache_producer }}`,
+  );
+  expect(caller.jobs.suites.with["task_cache_producer"]).toBe(
+    `\${{ needs.validate.outputs.task_cache_producer }}`,
+  );
+  expect(caller.jobs.suites.with["sha"]).toBe(
+    `\${{ needs.validate.outputs.sha }}`,
+  );
 });
 
 const missingTestClosure = (tasks: typeof configuration.tasks) =>
@@ -344,16 +428,22 @@ for (const task of ["typecheck", "lint", "test"]) {
       }
       expect((await run([])).code).toBe(0);
       expect(uploads).toBe(1);
-      const replay = await run([], { TURBO_CACHE: "local:r,remote:r" });
+      const replay = await run([], { TURBO_CACHE: "local:rw,remote:r" });
       expect(replay.code).toBe(0);
       expect(replay.stdout).toContain("cache hit");
       expect(replay.stdout).toContain("fixture proven result");
       expect(uploads).toBe(1);
       write("packages/example/source.ts", "changed success");
       // Match the PR workflow policy without a CLI override.
-      const readonly = await run([], { TURBO_CACHE: "local:r,remote:r" });
+      const readonly = await run([], { TURBO_CACHE: "local:rw,remote:r" });
       expect(readonly.code).toBe(0);
       expect(readonly.stdout).toContain("cache miss");
+      expect(uploads).toBe(1);
+      // The shared backend contains only the original input hash. This hit
+      // must come from the first PR invocation's ephemeral local result.
+      const localReplay = await run([], { TURBO_CACHE: "local:rw,remote:r" });
+      expect(localReplay.code).toBe(0);
+      expect(localReplay.stdout).toContain("cache hit");
       expect(uploads).toBe(1);
       write("packages/example/source.ts", "failure");
       for (let attempt = 0; attempt < 2; attempt += 1) {

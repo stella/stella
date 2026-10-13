@@ -47,6 +47,7 @@ jobs:
       actions: write
     outputs:
       sha: ${{ steps.ancestor.outputs.sha }}
+      task_cache_producer: ${{ steps.ancestor.outputs.task_cache_producer }}
       run: ${{ steps.selection.outputs.run }}
     steps:
       - name: Check release candidate
@@ -160,6 +161,7 @@ jobs:
             exit 1
           fi
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "task_cache_producer=validated-main" >> "$GITHUB_OUTPUT"
 
   suites:
     if: needs.validate.result == 'success' && needs.validate.outputs.run == 'true'
@@ -178,6 +180,7 @@ jobs:
       depth: full
       heavy_only: true
       sha: ${{ needs.validate.outputs.sha }}
+      task_cache_producer: ${{ needs.validate.outputs.task_cache_producer }}
     secrets:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
