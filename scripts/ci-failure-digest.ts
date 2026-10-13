@@ -118,7 +118,11 @@ const shortPath = (value: string): string =>
   repositoryPath(value) ??
   value.replaceAll("\\", "/").replace(WORKSPACE_PREFIX, "");
 
-type LogLine = { readonly text: string; readonly scope: string };
+type LogLine = {
+  readonly text: string;
+  readonly scope: string;
+  readonly annotation?: "error" | "continuation";
+};
 
 /**
  * Every pattern sees at most this many characters of a line, so one
@@ -156,10 +160,11 @@ const logLines = (rawLines: readonly string[]): LogLine[] =>
       .replaceAll("%0A", "\n")
       .replaceAll("%0D", "\r")
       .replaceAll("%25", "%");
-    return [
-      line,
-      ...message.split("\n").map((text) => ({ text, scope: line.scope })),
-    ];
+    return message.split("\n").map((text, index) => ({
+      text,
+      scope: line.scope,
+      annotation: index === 0 ? ("error" as const) : ("continuation" as const),
+    }));
   });
 
 // ---------------------------------------------------------------------------
@@ -568,13 +573,13 @@ const closingLines = (lines: readonly LogLine[]): FailureLine[] => {
   const window = lines
     .filter(({ text }) => !isNoise(text))
     .slice(-TAIL_WINDOW)
-    .map(({ text, scope }) => {
-      if (!text.startsWith(ERROR_COMMAND)) {
+    .map(({ text, scope, annotation }) => {
+      if (!text.startsWith(ERROR_COMMAND) && annotation !== "error") {
         return { text, scope, command: false };
       }
       // An error command anchors only with its own message: an empty one
       // (a runtime echoing a stack) or a retry summary does not.
-      const message = text.slice(ERROR_COMMAND.length);
+      const message = withoutErrorCommand(text);
       const anchors =
         message.trim() !== "" &&
         !isStackFrame(message) &&
@@ -668,10 +673,11 @@ export const failureLines = (
     () => tscLines(lines),
     () => oxlintLines(lines),
     () => {
-      const markers = lines.flatMap(({ text, scope }) => {
+      const markers = lines.flatMap(({ text, scope, annotation }) => {
         const trimmed = text.trimStart();
         if (
-          !/^(?:error:|::error(?: |::)|##\[error\])/iu.test(trimmed) ||
+          (annotation !== "error" &&
+            !/^(?:error:|::error(?: |::)|##\[error\])/iu.test(trimmed)) ||
           isRetrySummary(trimmed)
         ) {
           return [];
@@ -695,6 +701,24 @@ export const failureLines = (
         ];
       });
       const generic = genericLines(lines);
+      const window = lines.slice(-TAIL_WINDOW);
+      const terminal = window.findLastIndex(({ text, annotation }) => {
+        const message = withoutErrorCommand(text);
+        return (
+          annotation !== "continuation" &&
+          !isRetrySummary(message) &&
+          !/^error: script ".*" exited with code \d+$/u.test(message) &&
+          !isStackFrame(message) &&
+          (annotation === "error" || ANCHOR.test(message))
+        );
+      });
+      if (terminal !== -1) {
+        return [
+          ...closingLines(window.slice(terminal)),
+          ...generic,
+          ...markers,
+        ];
+      }
       if (generic.length > 0) {
         return [...generic, ...markers];
       }

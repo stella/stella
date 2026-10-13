@@ -1052,8 +1052,8 @@ test("located diagnostics do not suppress other explicit errors", () => {
       "::error::assertion failed",
     ]).map(({ message }) => message),
   ).toEqual([
-    "scripts/check.ts:9: error: located diagnostic",
     "assertion failed",
+    "scripts/check.ts:9: error: located diagnostic",
   ]);
 });
 
@@ -1066,4 +1066,43 @@ test("a detailed Playwright summary beats longer progress noise", () => {
       "Error: waterfall assertion failed",
     ]).at(0)?.message,
   ).toContain("waterfall assertion failed");
+});
+
+test("terminal verdicts lead earlier negative-fixture annotations", () => {
+  for (const padding of [0, 10, 100]) {
+    const lines = failureLines([
+      ...Array.from(
+        { length: 8 },
+        (_, index) => `::error::deliberate fixture ${index}`,
+      ),
+      "PASS negative fixtures",
+      ...Array.from({ length: padding }, () => "timing notice"),
+      "Validation failed: committed manifest differs",
+      "regenerate the manifest",
+      "##[error]Process completed with exit code 1.",
+    ]);
+    expect(lines.at(0)?.message).toBe(
+      "Validation failed: committed manifest differs",
+    );
+    expect(lines.at(1)?.message).toBe("regenerate the manifest");
+    expect(lines.length).toBeLessThanOrEqual(MAX_LINES_PER_STEP);
+  }
+});
+
+test("generic multiline annotations count only decoded diagnostics", () => {
+  expect(failureLines(["::error::first%0Asecond"])).toEqual([
+    { message: "first" },
+    { message: "second" },
+  ]);
+  for (const length of [2, MAX_LINES_PER_STEP, MAX_LINES_PER_STEP + 2]) {
+    const messages = Array.from(
+      { length },
+      (_, index) => `diagnostic ${index}`,
+    );
+    expect(
+      failureLines([`::error::${messages.join("%0A")}`]).map(
+        ({ message }) => message,
+      ),
+    ).toEqual(messages.slice(0, MAX_LINES_PER_STEP));
+  }
 });
