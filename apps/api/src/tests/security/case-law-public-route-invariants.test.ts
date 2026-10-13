@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
-import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import { isPublicReadBudgetHandler } from "@/api/lib/api-handlers";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -492,7 +493,7 @@ describe("public case-law route boundary", () => {
     expect(block).not.toContain("permissions:");
   });
 
-  test("public read handlers use the public-safe handler factory", () => {
+  test("public read handlers use the budgeted public-safe handler factory", () => {
     // Was a grep for nine `const x = createSafePublicHandler` lines, which
     // could not see a tenth route or a handler renamed around it. The factory
     // now stamps what it produces, so the census covers every mounted route
@@ -506,7 +507,7 @@ describe("public case-law route boundary", () => {
       (route) => typeof route.handler === "function",
     );
     const ungoverned = declared
-      .filter((route) => !isSafePublicHandler(route.handler))
+      .filter((route) => !isPublicReadBudgetHandler(route.handler))
       .map((route) => `${route.method} ${route.path}`);
 
     expect(ungoverned).toEqual([]);
@@ -805,7 +806,7 @@ describe("public case-law route boundary", () => {
       [...modules].map(async (modulePath) => {
         const source = await Bun.file(modulePath).text();
         if (DECISION_TABLE_MENTION.test(source)) {
-          readers.set(nodePath.relative(repoRoot, modulePath), source);
+          readers.set(repoRelativePath(repoRoot, modulePath), source);
         }
       }),
     );
