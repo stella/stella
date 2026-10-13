@@ -243,7 +243,7 @@ describe("presentation actions normalize raw model input before transport", () =
           eli: "89/2012 Sb.",
           limit: 50,
           cursor: "next-timeline-page",
-          anchor: null,
+          anchor: "par_1",
         },
       },
       app: {
@@ -258,20 +258,21 @@ describe("presentation actions normalize raw model input before transport", () =
       eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
       limit: 20,
       cursor: "next-timeline-page",
+      anchor: "par_1",
     });
   });
 });
 
-test("a locally refused filter preserves its editable results and never enters loading", async () => {
+test("a locally refused filter preserves its page input and leaves Next working without entering loading", async () => {
   const page = { results: ["existing decision"] };
   const states: string[] = [];
-  let calls = 0;
+  const calls: Record<string, unknown>[] = [];
   const bridge = createPresentationBridge({
     manifest: CASE_LAW_RESULTS_APP,
     parse: () => page,
     host: {
-      callServerTool: async () => {
-        calls += 1;
+      callServerTool: async ({ arguments: arguments_ }) => {
+        calls.push(arguments_);
         return { content: [], structuredContent: {} };
       },
       addEventListener: () => {},
@@ -289,13 +290,17 @@ test("a locally refused filter preserves its editable results and never enters l
     name: "search_case_law",
     arguments: { queries: ["dismissal"], country: "CZE" },
   });
+  const previousInput = bridge.getSnapshot().input;
+  const previousTool = bridge.getSnapshot().tool;
   bridge.subscribe(() => states.push(bridge.getSnapshot().result.status));
   await bridge.call({
     name: "search_case_law",
-    arguments: { queries: ["dismissal"], country: "CZE", limit: "many" },
+    arguments: { queries: ["x".repeat(501)], country: "CZE" },
   });
-  expect(calls).toBe(1);
+  expect(calls).toHaveLength(1);
   expect(states).toEqual(["error"]);
+  expect(bridge.getSnapshot().input).toBe(previousInput);
+  expect(bridge.getSnapshot().tool).toBe(previousTool);
   const result = bridge.getSnapshot().result;
   expect(result.status).toBe("error");
   if (result.status !== "error") {
@@ -303,4 +308,13 @@ test("a locally refused filter preserves its editable results and never enters l
   }
   expect(result.previous).toEqual({ status: "ready", view: page });
   expect(result.failure.type).toBe("invalid_arguments");
+  await bridge.call({
+    name: "search_case_law",
+    arguments: { ...bridge.getSnapshot().input, cursor: "existing-page-next" },
+  });
+  expect(calls).toEqual([
+    { queries: ["dismissal"], country: "CZE" },
+    { queries: ["dismissal"], country: "CZE", cursor: "existing-page-next" },
+  ]);
+  expect(bridge.getSnapshot().result.status).toBe("ready");
 });

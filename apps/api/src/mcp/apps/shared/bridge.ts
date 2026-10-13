@@ -426,13 +426,6 @@ export const createPresentationBridge = <View>({
     });
   };
   const call = async (request: ReadCall): Promise<void> => {
-    lastCall = request;
-    snapshot = {
-      context: snapshot.context,
-      input: request.arguments,
-      tool: request.name,
-      result: snapshot.result,
-    };
     const currentGeneration = ++generation;
     const called = await requestPresentationTool({
       app,

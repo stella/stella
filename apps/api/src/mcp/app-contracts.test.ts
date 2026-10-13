@@ -740,7 +740,7 @@ test("every presentation app shares the server input normalization for repaired 
       arguments: {
         eli: "89/2012 Sb.",
         limit: 50,
-        anchor: null,
+        anchor: "par_1",
         cursor: null,
         language: null,
       },
