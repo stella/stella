@@ -22,6 +22,7 @@ import {
   findDependencyCatalogProblems,
   findShrinkOnlyGrowth,
   inProcessFromSource,
+  lockKeyPackageName,
   uncharacterisedScopeFromSource,
   readDirectDependencies,
   readCurrentPins,
@@ -486,4 +487,23 @@ test("new in-process dependencies require reasons and stay in the closed depende
     "Dependency @stll/new-local: classify it",
   );
   expect(unclassified.join("\n")).toContain("SDK @stll/new-local maps to 0");
+});
+
+test.each([
+  ["nodemailer", "nodemailer"],
+  ["@types/nodemailer", "@types/nodemailer"],
+  ["@ai-sdk/openai", "@ai-sdk/openai"],
+  ["openai", "openai"],
+  ["some-parent/openai", "openai"],
+  ["@scope/parent/openai", "openai"],
+  ["some-parent/@ai-sdk/openai", "@ai-sdk/openai"],
+  ["@scope/parent/@types/ioredis", "@types/ioredis"],
+])("bun.lock key %s names package %s", (key, name) => {
+  expect(lockKeyPackageName(key)).toBe(name);
+});
+
+test("a scoped package sharing an SDK base name is not that SDK", () => {
+  for (const key of ["@types/nodemailer", "@ai-sdk/openai", "@types/ioredis"]) {
+    expect(lockKeyPackageName(key)).not.toBe(key.split("/").at(-1));
+  }
 });

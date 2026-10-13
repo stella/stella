@@ -150,6 +150,14 @@ export const readPin = (root: string, source: PinSource): string => {
   }
 };
 
+/** The installed package a bun.lock key names: its last `parent/child` segment, where either side may be scoped. */
+export const lockKeyPackageName = (key: string): string => {
+  const segments = key.split("/");
+  const last = segments.at(-1) ?? key;
+  const scope = segments.at(-2);
+  return scope?.startsWith("@") === true ? `${scope}/${last}` : last;
+};
+
 /** Include installed SDK versions and patches: a caret or patch edit can move code without moving its manifest range. */
 export const readCurrentPins = (
   root: string,
@@ -168,7 +176,7 @@ export const readCurrentPins = (
   const manifest = v.parse(manifestSchema, json(root, "package.json"));
   for (const sdk of entry.sdks) {
     const instances = Object.entries(lock.packages).filter(
-      ([key]) => key === sdk || key.endsWith(`/${sdk}`),
+      ([key]) => lockKeyPackageName(key) === sdk,
     );
     if (instances.length === 0) {
       panic(`${sdk}: no installed SDK pin in bun.lock.`);
