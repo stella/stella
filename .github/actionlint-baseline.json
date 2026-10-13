@@ -1,11 +1,5 @@
 [
   {
-    "count": 1,
-    "filepath": ".github/workflows/ci.yml",
-    "kind": "shellcheck",
-    "message": "shellcheck reported issue in this script: SC2016:info:2:12: Expressions don't expand in single quotes, use double quotes for that"
-  },
-  {
     "count": 3,
     "filepath": ".github/workflows/ci.yml",
     "kind": "syntax-check",

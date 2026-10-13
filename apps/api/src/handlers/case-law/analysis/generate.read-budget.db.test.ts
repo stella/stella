@@ -19,12 +19,13 @@ import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst, ParagraphBlock } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
-import { createScopedDb } from "@/api/db/scoped";
+import { createMembershipScopedDb } from "@/api/db/scoped";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   ORG_AI_CONFIG_STATUS,
   type OrgAIConfigStatus,
 } from "@/api/lib/ai-config-loader-core";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { analysisSentinel } from "@/api/lib/case-law/stored-analysis";
@@ -32,6 +33,7 @@ import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { executeRowsScopedDb } from "@/api/tests/helpers/pglite-rows-scoped-db";
 import {
@@ -92,12 +94,22 @@ const availableAIConfig = {
 describe("answering a stored or in-flight analysis", () => {
   let db: TestDatabase;
   let countedDb: TestDatabase;
+  let featureAccessSnapshot: FeatureAccessSnapshot;
   let sourceId: SafeId<"caseLawSource">;
   let counter = 0;
 
   beforeAll(async () => {
     db = await getTestDb();
     countedDb = withQueryLogger(db, queryCountLogger);
+    // Auth resolves feature facts before lending the request its database scope.
+    featureAccessSnapshot = await db.transaction(
+      async (tx) =>
+        await resolveFeatureAccessSnapshot({
+          tx,
+          organizationId: ORGANIZATION_ID,
+          userId: USER_ID,
+        }),
+    );
     const [source] = await db
       .insert(caseLawSources)
       .values({
@@ -116,7 +128,14 @@ describe("answering a stored or in-flight analysis", () => {
   });
 
   const scopedDbOf = (database: TestDatabase) =>
-    executeRowsScopedDb(createScopedDb(database, [], ORGANIZATION_ID, USER_ID));
+    executeRowsScopedDb(
+      createMembershipScopedDb(database, {
+        organizationId: ORGANIZATION_ID,
+        userId: USER_ID,
+        serverValidatedWorkspaceIds: [],
+        featureAccessSnapshot,
+      }),
+    );
 
   /** A decision whose stored analysis is built over its own current input. */
   const insertDecision = async (
