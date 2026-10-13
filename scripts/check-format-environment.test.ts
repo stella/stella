@@ -55,5 +55,5 @@ test("scan engine installs the formatter owner alongside its workspace", () => {
   const install = workflow.jobs["scan-engine-wasm-drift"]?.steps?.find(
     (step) => step["name"] === "Install dependencies",
   );
-  expect(install?.["run"]).toContain(`--filter ${rootPackage.name}`);
+  expect(install?.run).toContain(`--filter ${rootPackage.name}`);
 });
