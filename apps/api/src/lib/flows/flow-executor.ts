@@ -1639,7 +1639,7 @@ const pauseAtReviewGate = async ({
         const reviewTaskEntityId =
           stepRows.at(0)?.reviewTaskEntityId ??
           (await raiseReviewTask({
-            scopedTx,
+            tx: scopedTx,
             run,
             stepDef,
             actorUserId,
@@ -2179,10 +2179,10 @@ export const resolveFlowReviewGate = async (
           organizationId,
           workspaceId,
           runId,
-          reviewTaskEntityId,
+          ...(reviewTaskEntityId === undefined ? {} : { reviewTaskEntityId }),
           userId,
         });
-        if (Result.isError(validated)) {
+        if (validated.isErr()) {
           return validated;
         }
         const { run, step, scope } = validated.value;
@@ -2218,7 +2218,7 @@ export const resolveFlowReviewGate = async (
               // Either decision fulfils the task the gate raised; the decision
               // itself lives on the step.
               await settleReviewTask({
-                scopedTx,
+                tx: scopedTx,
                 taskEntityId: step.reviewTaskEntityId,
                 workspaceId,
                 actorUserId: userId,

@@ -616,7 +616,7 @@ const copyToWorkspaceHandler = async function* ({
       access: "write",
     });
     if (admission.isErr()) {
-      return admission;
+      return Result.err(admission.error);
     }
     const copyResult = await copyEntities({
       organizationId,

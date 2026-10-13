@@ -261,7 +261,7 @@ const duplicateEntityHandler = async function* ({
         access: "write",
       });
       if (admission.isErr()) {
-        return admission;
+        return Result.err(admission.error);
       }
       return await copyEntities({
         organizationId,

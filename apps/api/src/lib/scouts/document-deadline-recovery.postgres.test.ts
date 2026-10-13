@@ -303,9 +303,11 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
                 signals: await db.query.signals.findMany({
                   where: { organizationId: { eq: b.organizationId } },
                 }),
-                notices: await db.query.notifications.findMany({
-                  where: { organizationId: { eq: b.organizationId } },
-                }),
+                notices: await db
+                  .select()
+                  .from(notifications)
+                  .where(eq(notifications.organizationId, b.organizationId))
+                  .orderBy(notifications.id),
               });
               const before = await readB();
               expect(before.runs.at(0)?.deadlineScoutStatus).toBe("running");
@@ -508,9 +510,13 @@ describe.skipIf(!enabled)("deadline admission recovery (postgres)", () => {
               }
               expect(await read(b.organizationId)).toEqual(before);
               expect(
-                await db.query.pendingScoutEmissions.findMany({
-                  where: { organizationId: { eq: b.organizationId } },
-                }),
+                await db
+                  .select()
+                  .from(pendingScoutEmissions)
+                  .where(
+                    eq(pendingScoutEmissions.organizationId, b.organizationId),
+                  )
+                  .orderBy(pendingScoutEmissions.sourceId),
               ).toEqual([]);
               expect(
                 await db

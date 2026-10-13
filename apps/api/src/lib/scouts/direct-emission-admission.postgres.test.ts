@@ -240,9 +240,13 @@ const readFixture = async (db: GatedTestDb, fixture: Fixture) => ({
     .from(workObligations)
     .where(eq(workObligations.workspaceId, fixture.workspaceId))
     .orderBy(workObligations.entityId),
-  run: await db.query.documentReviewRuns.findFirst({
-    where: { id: { eq: fixture.runId } },
-  }),
+  run: (
+    await db
+      .select()
+      .from(documentReviewRuns)
+      .where(eq(documentReviewRuns.id, fixture.runId))
+      .limit(1)
+  ).at(0),
   findings: await db
     .select()
     .from(documentReviewFindings)
@@ -524,9 +528,13 @@ describe.skipIf(!enabled)(
                     name: "Hearing source",
                     kind: "task",
                   });
-                  const ownRun = await db.query.documentReviewRuns.findFirst({
-                    where: { id: { eq: a.runId } },
-                  });
+                  const ownRun = (
+                    await db
+                      .select()
+                      .from(documentReviewRuns)
+                      .where(eq(documentReviewRuns.id, a.runId))
+                      .limit(1)
+                  ).at(0);
                   if (!ownRun) {
                     panic("Missing review source");
                   }
@@ -755,9 +763,11 @@ describe.skipIf(!enabled)(
                   eq(featureEnrolments.organizationId, fixture.organizationId),
                 ),
               ).toBe(1);
-              const before = await db.query.documentReviewFindings.findMany({
-                where: { runId: { eq: fixture.runId } },
-              });
+              const before = await db
+                .select()
+                .from(documentReviewFindings)
+                .where(eq(documentReviewFindings.runId, fixture.runId))
+                .orderBy(documentReviewFindings.id);
               expect(before).toHaveLength(1);
               const completed = await db.transaction(
                 async (tx) =>
@@ -776,14 +786,18 @@ describe.skipIf(!enabled)(
                 ),
               ).toBe(0);
               expect(
-                await db.query.pendingScoutEmissions.findMany({
-                  where: { sourceId: { eq: fixture.runId } },
-                }),
+                await db
+                  .select()
+                  .from(pendingScoutEmissions)
+                  .where(eq(pendingScoutEmissions.sourceId, fixture.runId))
+                  .orderBy(pendingScoutEmissions.sourceId),
               ).toHaveLength(1);
               expect(
-                await db.query.documentReviewFindings.findMany({
-                  where: { runId: { eq: fixture.runId } },
-                }),
+                await db
+                  .select()
+                  .from(documentReviewFindings)
+                  .where(eq(documentReviewFindings.runId, fixture.runId))
+                  .orderBy(documentReviewFindings.id),
               ).toEqual(before);
             } finally {
               await cleanup(db, fixture);

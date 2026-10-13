@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, asc, eq, getTableName, gt, sql } from "drizzle-orm";
+import { and, asc, eq, getTableName, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
@@ -62,7 +62,7 @@ const cleanupSignalTable = async ({
         .where(
           and(
             eq(table.organizationId, organizationId),
-            cursor === undefined ? undefined : gt(table.id, cursor),
+            cursor === undefined ? undefined : sql`${table.id} > ${cursor}`,
           ),
         )
         .orderBy(asc(table.id)),

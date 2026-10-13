@@ -86,6 +86,9 @@ export const emitDocumentReviewSignal = async ({
   ) {
     return "paused";
   }
+  if (run.requestedBy === null) {
+    return "paused";
+  }
   const admitted = await tx
     .select({ id: documentReviewRuns.id })
     .from(documentReviewRuns)

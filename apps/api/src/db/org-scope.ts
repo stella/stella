@@ -22,11 +22,11 @@ export type OrgScope = {
 export class OrgScopeRowAbsent extends TaggedError("OrgScopeRowAbsent")<{
   message: string;
   table: keyof typeof ORG_SCOPE_TABLES;
-}>() {}
+}> {}
 
 export class OrgScopeMismatch extends TaggedError("OrgScopeMismatch")<{
   message: string;
-}>() {}
+}> {}
 
 type OrgScopeReference = { table: keyof typeof ORG_SCOPE_TABLES; where: SQL };
 

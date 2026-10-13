@@ -7,9 +7,10 @@ import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import type { EntityReferenceClassification } from "./entity-feature-policies";
 import { entityFeaturePolicies } from "./entity-feature-policies";
-import { INGESTION_ROLE_NAME, SYSTEM_RLS_ROLE_NAME } from "./role-names";
+import { INGESTION_ROLE_NAME } from "./role-names";
 
 export const stella = p.pgRole("stella").existing();
+export const SYSTEM_RLS_ROLE_NAME = "stella_system";
 export const stellaSystem = p.pgRole(SYSTEM_RLS_ROLE_NAME).existing();
 
 // Narrow write role used only by the case-law ingestion daemon.

@@ -76,7 +76,7 @@ afterAll(async () => {
 
 for (const flowsEnabled of [false, true]) {
   test(`the workflow route admits ${String(flowsEnabled)} and smoke follows its disabled destination`, async () => {
-    const beforeLoad = await readBeforeLoad(
+    const { beforeLoad } = await readRouteAdmission(
       "./_protected.workspaces/$workspaceId/workflows",
     );
     const queryClient = new QueryClient({

@@ -380,10 +380,7 @@ export const settleDocumentDeadlineScoutClaim = async ({
           attemptRefund,
           where: sql`${and(
             eq(documentProcessingRuns.id, run.id),
-            eq(
-              documentProcessingRuns.organizationId,
-              proof.value.organizationId,
-            ),
+            eq(documentProcessingRuns.organizationId, scope.organizationId),
             eq(documentProcessingRuns.deadlineScoutStatus, "running"),
             timestampMatchesCasToken(
               documentProcessingRuns.deadlineScoutClaimedAt,

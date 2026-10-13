@@ -668,7 +668,7 @@ export const reconcileOrphanedFlowRuns = async (
     const batch = await readOrphanFlowRunPage({
       database,
       cursor,
-      principal,
+      ...(principal === undefined ? {} : { principal }),
       stalledBefore,
       batchSize,
     });

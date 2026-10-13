@@ -38,15 +38,14 @@ export const transferEligibilityOptions = ({
       ids,
     ],
     queryFn: async ({ signal }) => {
-      const endpoint = api.entities({
-        workspaceId: toSafeId<"workspace">(workspaceId),
-      });
+      const matter = { workspaceId: toSafeId<"workspace">(workspaceId) };
+      const request = api.entities(matter)["transfer-eligibility"].post;
       const results = await mapWithConcurrency({
         items: chunk(ids, DEFAULT_ENTITY_WINDOW_SIZE),
         limit: TRANSFER_ELIGIBILITY_CONCURRENCY,
         operation: async (batch) =>
           unwrapEden(
-            await endpoint["transfer-eligibility"].post(
+            await request(
               { entityIds: batch.map((id) => toSafeId<"entity">(id)) },
               { fetch: { signal } },
             ),

@@ -17,6 +17,22 @@ $role$;
 --> statement-breakpoint
 GRANT USAGE ON SCHEMA public TO stella_system;
 --> statement-breakpoint
+GRANT SELECT ON TABLE
+  public."organization", public."member", public."document_review_findings", public."feature_enrolments"
+TO stella_system;
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+  public."contacts", public."workspaces", public."workspace_members", public."entities",
+  public."entity_versions", public."fields", public."task_assignees", public."desktop_edit_sessions",
+  public."desktop_edit_handoffs", public."flow_definitions", public."flow_runs", public."flow_run_steps",
+  public."flow_upload_trigger_intents", public."signals", public."signal_events", public."scout_runs",
+  public."pending_scout_emissions", public."document_processing_runs", public."document_review_runs", public."notifications",
+  public."work_obligations", public."pdf_signing_sessions", public."work_obligation_events", public."time_entries",
+  public."search_projection_repair_queue", public."search_history_entries", public."search_history_owners", public."search_history_tombstones",
+  public."mcp_user_connections", public."mcp_oauth_state", public."sharepoint_connections", public."sharepoint_oauth_state",
+  public."invitation"
+TO stella_system;
+--> statement-breakpoint
 -- stella-migration-safety: reviewed grant-privileges - The login may select a NOLOGIN, NOBYPASSRLS organization-scoped system role for row-proven owner work.
 GRANT stella_system TO CURRENT_USER WITH SET TRUE, INHERIT FALSE;
 --> statement-breakpoint
@@ -64,10 +80,8 @@ BEGIN
     END IF;
     scope_expression := format('%s = nullif(current_setting(''app.organization_id'', true), '''') AND %s', org_expression, matter_expression);
     IF target.access_mode = 'read' THEN
-      EXECUTE format('GRANT SELECT ON TABLE public.%I TO stella_system', target.table_name);
       command := format('CREATE POLICY organization_system_access ON public.%I FOR SELECT TO stella_system USING (%s)', target.table_name, scope_expression);
     ELSE
-      EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.%I TO stella_system', target.table_name);
       command := format('CREATE POLICY organization_system_access ON public.%I FOR ALL TO stella_system USING (%s) WITH CHECK (%s)', target.table_name, scope_expression, scope_expression);
     END IF;
     EXECUTE command;

@@ -146,13 +146,13 @@ const featureAccessSnapshotSchema = v.object({
     v.array(v.pipe(v.string(), v.regex(MCP_TOOL_NAME_PATTERN))),
     v.maxLength(MAX_TOOLS),
   ),
-  conditionalInputs: v.optional(
+  conditionalInputs: v.exactOptional(
     v.record(
       v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
       v.strictObject({
-        body: v.optional(v.record(v.string(), v.unknown())),
-        params: v.optional(v.record(v.string(), v.unknown())),
-        query: v.optional(v.record(v.string(), v.unknown())),
+        body: v.exactOptional(v.record(v.string(), v.unknown())),
+        params: v.exactOptional(v.record(v.string(), v.unknown())),
+        query: v.exactOptional(v.record(v.string(), v.unknown())),
       }),
     ),
   ),

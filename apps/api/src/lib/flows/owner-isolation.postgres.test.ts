@@ -133,9 +133,11 @@ describe.skipIf(!enabled)(
             run: await db.query.flowRuns.findFirst({
               where: { id: { eq: b.runId } },
             }),
-            notices: await db.query.notifications.findMany({
-              where: { organizationId: { eq: b.organizationId } },
-            }),
+            notices: await db
+              .select()
+              .from(notifications)
+              .where(eq(notifications.organizationId, b.organizationId))
+              .orderBy(notifications.id),
           });
           const before = await read();
           expect(before.run?.status).toBe("completed");
@@ -242,12 +244,18 @@ describe.skipIf(!enabled)(
             }
             const readB = async () => ({
               source: await b.read(),
-              receipts: await db.query.flowUploadTriggerIntents.findMany({
-                where: { organizationId: { eq: b.organizationId } },
-              }),
-              notices: await db.query.notifications.findMany({
-                where: { organizationId: { eq: b.organizationId } },
-              }),
+              receipts: await db
+                .select()
+                .from(flowUploadTriggerIntents)
+                .where(
+                  eq(flowUploadTriggerIntents.organizationId, b.organizationId),
+                )
+                .orderBy(flowUploadTriggerIntents.entityId),
+              notices: await db
+                .select()
+                .from(notifications)
+                .where(eq(notifications.organizationId, b.organizationId))
+                .orderBy(notifications.id),
             });
             const before = await readB();
             const enqueued: { runId: string; stepIndex: number }[] = [];
@@ -356,9 +364,11 @@ describe.skipIf(!enabled)(
           }
           const readB = async () => ({
             source: await b.read(),
-            notices: await db.query.notifications.findMany({
-              where: { organizationId: { eq: b.organizationId } },
-            }),
+            notices: await db
+              .select()
+              .from(notifications)
+              .where(eq(notifications.organizationId, b.organizationId))
+              .orderBy(notifications.id),
           });
           const before = await readB();
           await reconcileOrphanedFlowRuns(
@@ -543,9 +553,13 @@ describe.skipIf(!enabled)(
           });
           const readB = async () => ({
             source: await b.read(),
-            receipts: await db.query.flowUploadTriggerIntents.findMany({
-              where: { organizationId: { eq: b.organizationId } },
-            }),
+            receipts: await db
+              .select()
+              .from(flowUploadTriggerIntents)
+              .where(
+                eq(flowUploadTriggerIntents.organizationId, b.organizationId),
+              )
+              .orderBy(flowUploadTriggerIntents.entityId),
           });
           const before = await readB();
           await withAggregateTransaction(
@@ -775,15 +789,21 @@ describe.skipIf(!enabled)(
               definition: await db.query.flowDefinitions.findFirst({
                 where: { id: { eq: definitionId } },
               }),
-              receipts: await db.query.flowUploadTriggerIntents.findMany({
-                where: { organizationId: { eq: b.organizationId } },
-              }),
+              receipts: await db
+                .select()
+                .from(flowUploadTriggerIntents)
+                .where(
+                  eq(flowUploadTriggerIntents.organizationId, b.organizationId),
+                )
+                .orderBy(flowUploadTriggerIntents.entityId),
               runs: await db.query.flowRuns.findMany({
                 where: { definitionId: { eq: definitionId } },
               }),
-              notices: await db.query.notifications.findMany({
-                where: { organizationId: { eq: b.organizationId } },
-              }),
+              notices: await db
+                .select()
+                .from(notifications)
+                .where(eq(notifications.organizationId, b.organizationId))
+                .orderBy(notifications.id),
             });
             const before = await readB();
             const dispatch =
@@ -835,9 +855,11 @@ describe.skipIf(!enabled)(
             .where(eq(flowRuns.id, b.runId));
           const readB = async () => ({
             source: await b.read(),
-            notices: await db.query.notifications.findMany({
-              where: { organizationId: { eq: b.organizationId } },
-            }),
+            notices: await db
+              .select()
+              .from(notifications)
+              .where(eq(notifications.organizationId, b.organizationId))
+              .orderBy(notifications.id),
           });
           const before = await readB();
           expect(before.source.run?.status).toBe("completed");
@@ -967,18 +989,28 @@ describe.skipIf(!enabled)(
           });
           const readB = async () => ({
             source: await b.read(),
-            receipts: await db.query.flowUploadTriggerIntents.findMany({
-              where: { organizationId: { eq: b.organizationId } },
-            }),
-            grants: await db.query.featureEnrolments.findMany({
-              where: {
-                organizationId: { eq: b.organizationId },
-                userId: { eq: a.userId },
-              },
-            }),
-            notices: await db.query.notifications.findMany({
-              where: { organizationId: { eq: b.organizationId } },
-            }),
+            receipts: await db
+              .select()
+              .from(flowUploadTriggerIntents)
+              .where(
+                eq(flowUploadTriggerIntents.organizationId, b.organizationId),
+              )
+              .orderBy(flowUploadTriggerIntents.entityId),
+            grants: await db
+              .select()
+              .from(featureEnrolments)
+              .where(
+                and(
+                  eq(featureEnrolments.organizationId, b.organizationId),
+                  eq(featureEnrolments.userId, a.userId),
+                ),
+              )
+              .orderBy(featureEnrolments.featureId),
+            notices: await db
+              .select()
+              .from(notifications)
+              .where(eq(notifications.organizationId, b.organizationId))
+              .orderBy(notifications.id),
           });
           const before = await readB();
           expect(
@@ -992,13 +1024,17 @@ describe.skipIf(!enabled)(
           expect(await readB()).toEqual(before);
           expect(
             (
-              await db.query.flowUploadTriggerIntents.findFirst({
-                where: {
-                  definitionId: { eq: aDefinitionId },
-                  entityId: { eq: a.taskEntityId },
-                },
-              })
-            )?.status,
+              await db
+                .select()
+                .from(flowUploadTriggerIntents)
+                .where(
+                  and(
+                    eq(flowUploadTriggerIntents.definitionId, aDefinitionId),
+                    eq(flowUploadTriggerIntents.entityId, a.taskEntityId),
+                  ),
+                )
+                .limit(1)
+            ).at(0)?.status,
           ).toBe("pending");
         } finally {
           restoreRuntime();

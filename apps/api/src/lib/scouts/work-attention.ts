@@ -17,6 +17,7 @@ import {
   withOrgScope,
 } from "@/api/db/org-scope";
 import type { rootDb, Transaction } from "@/api/db/root";
+import { abortTransaction } from "@/api/db/safe-db";
 import {
   entities,
   featureEnrolments,
@@ -505,14 +506,14 @@ export const runWorkAttentionScout = async ({
               where: eq(workspaces.id, workspaceId),
             });
             if (Result.isError(proof)) {
-              throw proof.error;
+              abortTransaction(proof.error);
             }
             const agreement = assertCallerOrg(
               proof.value,
               batch.organizationId,
             );
             if (Result.isError(agreement)) {
-              throw agreement.error;
+              abortTransaction(agreement.error);
             }
             return proof.value;
           },
@@ -522,7 +523,7 @@ export const runWorkAttentionScout = async ({
         for (const proof of proofs.slice(1)) {
           const combined = combineOrgScopes(scope, proof);
           if (Result.isError(combined)) {
-            throw combined.error;
+            abortTransaction(combined.error);
           }
           scope = combined.value;
         }

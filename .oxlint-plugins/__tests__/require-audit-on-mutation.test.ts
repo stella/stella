@@ -347,7 +347,7 @@ describe("audit directive placement", () => {
           "};",
         ].join("\n"),
       ),
-    ).toEqual([7]);
+    ).toEqual([8]);
   });
 
   test("one directive covers only the first mutation when calls share a line", async () => {

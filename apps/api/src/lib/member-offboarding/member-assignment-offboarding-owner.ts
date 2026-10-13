@@ -691,7 +691,7 @@ const clearMemberTakeovers = async ({
           and(
             cursor === undefined
               ? undefined
-              : gt(desktopEditSessions.id, cursor),
+              : sql`${desktopEditSessions.id} > ${cursor}`,
             inArray(desktopEditSessions.workspaceId, scopedWorkspaces),
             eq(desktopEditSessions.takeoverRequestedBy, userId),
             eq(desktopEditSessions.status, "open"),
@@ -808,7 +808,7 @@ const expireMemberHandoffs = async ({
           and(
             cursor === undefined
               ? undefined
-              : gt(desktopEditHandoffs.id, cursor),
+              : sql`${desktopEditHandoffs.id} > ${cursor}`,
             inArray(desktopEditHandoffs.workspaceId, scopedWorkspaces),
             eq(desktopEditHandoffs.createdBy, userId),
             sql`${desktopEditHandoffs.expiresAt} > ${now}`,
@@ -2134,7 +2134,9 @@ const clearRemovedMemberMatterLeads = async ({
         .from(workspaces)
         .where(
           and(
-            cursor === undefined ? undefined : gt(workspaces.id, cursor),
+            cursor === undefined
+              ? undefined
+              : sql`${workspaces.id} > ${cursor}`,
             eq(workspaces.organizationId, scope.organizationId),
             eq(workspaces.leadUserId, userId),
           ),
@@ -2217,7 +2219,9 @@ const removeDepartingMemberMatterMemberships = async ({
         .from(workspaceMembers)
         .where(
           and(
-            cursor === undefined ? undefined : gt(workspaceMembers.id, cursor),
+            cursor === undefined
+              ? undefined
+              : sql`${workspaceMembers.id} > ${cursor}`,
             eq(workspaceMembers.userId, userId),
             inArray(
               workspaceMembers.workspaceId,
@@ -2497,7 +2501,10 @@ export const removeOrganizationMemberInTransaction = async (
   if (source === undefined) {
     abortTransaction(removalBusy());
   }
-  await tryLockMemberFeatureAdmission(tx, source.organizationId);
+  const sourceOrganizationId = brandPersistedOrganizationId(
+    source.organizationId,
+  );
+  await tryLockMemberFeatureAdmission(tx, sourceOrganizationId);
   const timerClose = await closeRemovedMemberActiveTimer({
     organizationId,
     tx,
@@ -2505,13 +2512,13 @@ export const removeOrganizationMemberInTransaction = async (
     lockWorkspaces: async (transaction) => {
       await lockOrganizationCleanupWorkspaces({
         tx: transaction,
-        organizationId: source.organizationId,
+        organizationId: sourceOrganizationId,
         userId,
         reassignTo,
       });
       const scope = await proveOrgScope(transaction, {
         table: "member",
-        where: sql`${and(eq(member.id, memberId), eq(member.organizationId, source.organizationId), eq(member.userId, userId))}`,
+        where: sql`${and(eq(member.id, memberId), eq(member.organizationId, sourceOrganizationId), eq(member.userId, userId))}`,
       });
       if (
         scope.isErr() ||
@@ -2528,7 +2535,7 @@ export const removeOrganizationMemberInTransaction = async (
     table: "member",
     where: sql`${and(
       eq(member.id, memberId),
-      eq(member.organizationId, source.organizationId),
+      eq(member.organizationId, sourceOrganizationId),
       eq(member.userId, userId),
     )}`,
   });

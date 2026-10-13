@@ -2040,7 +2040,7 @@ type OrgScopeSourceOptions = {
 class AggregateScopeSourceBusy extends TaggedError("AggregateScopeSourceBusy")<{
   message: string;
   cause: unknown;
-}>() {}
+}> {}
 
 /** Pin ownership without adding a blocking upgrade to the caller's resource chain. */
 export const lockOrgScopeSource = async ({
@@ -2086,12 +2086,14 @@ export const lockOrgScopeSource = async ({
   });
   if (Result.isError(result)) {
     if (getPgErrorCode(result.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
-      throw new AggregateScopeSourceBusy({
-        message: "Scope source is in use",
-        cause: result.error,
-      });
+      return abortTransaction(
+        new AggregateScopeSourceBusy({
+          message: "Scope source is in use",
+          cause: result.error,
+        }),
+      );
     }
-    throw result.error;
+    return abortTransaction(result.error);
   }
   return result.value;
 };
