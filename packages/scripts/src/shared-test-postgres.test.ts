@@ -73,7 +73,7 @@ test("container startup removes its private credential file on success and failu
       expect(listings).toBe(1);
       expect(result.isOk()).toBe(outcome === "success");
       expect(existsSync(envFile)).toBe(false);
-      expect(readdirSync(state)).toEqual([]);
+      expect(readdirSync(state)).toEqual(["container.lock"]);
     } finally {
       rmSync(state, { recursive: true, force: true });
     }
@@ -125,8 +125,56 @@ test("a name-conflict loser waits until Docker publishes the winning container",
     });
     expect(result.unwrap()).toBe("ready");
     expect(listings).toBe(3);
-    expect(readdirSync(state)).toEqual([]);
+    expect(readdirSync(state)).toEqual(["container.lock"]);
   } finally {
+    rmSync(state, { recursive: true, force: true });
+  }
+});
+
+test("concurrent cold provisioning callers create exactly one container", async () => {
+  const state = mkdtempSync(
+    path.join(tmpdir(), "stella-pg-concurrent-container-"),
+  );
+  let runs = 0;
+  let published = false;
+  let publish: ReturnType<typeof setTimeout> | undefined;
+  const docker = (args: readonly string[]) => {
+    if (args.at(0) === "ps") {
+      return Result.ok(published ? "stella-shared-test-postgres" : "");
+    }
+    return Result.ok(args.at(0) === "inspect" ? "true" : "");
+  };
+  const startContainer = () => {
+    runs++;
+    if (runs === 1) {
+      publish = setTimeout(() => {
+        published = true;
+      }, 20);
+    }
+    return Result.ok("started");
+  };
+  try {
+    const results = await Promise.all(
+      Array.from(
+        { length: 8 },
+        async () =>
+          await ensureContainer({
+            docker,
+            startContainer,
+            state,
+            password: "fixture",
+            repo: state,
+            action: "prepare",
+          }),
+      ),
+    );
+    expect(results.map((result) => result.unwrap())).toEqual(
+      Array.from({ length: 8 }, () => "ready"),
+    );
+    expect(runs).toBe(1);
+    expect(readdirSync(state)).toEqual(["container.lock"]);
+  } finally {
+    clearTimeout(publish);
     rmSync(state, { recursive: true, force: true });
   }
 });

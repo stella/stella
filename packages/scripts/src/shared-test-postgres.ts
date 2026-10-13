@@ -26,6 +26,7 @@ import {
   resolveInstalledDevDockerKeeper,
 } from "./dev-docker";
 import { withSharedPostgresLock } from "./dev-postgres-lock";
+import { withGenerationLock } from "./generation-lock";
 
 class SharedTestPostgresError extends TaggedError("SharedTestPostgresError")<{
   message: string;
@@ -44,6 +45,7 @@ export class SharedPostgresDockerError extends TaggedError(
   kind: (typeof DOCKER_FAILURE_KIND)[keyof typeof DOCKER_FAILURE_KIND];
 }> {}
 
+const CONTAINER_CREATION_LOCK_TIMEOUT_MS = 5 * 60_000;
 const CONTAINER_PUBLICATION_ATTEMPTS = 60;
 const CONTAINER_PUBLICATION_RETRY_MS = 100;
 
@@ -198,7 +200,7 @@ type EnsureContainerOptions = {
   action: "prepare" | "drop" | "gc";
 };
 
-export const ensureContainer = async ({
+const ensureContainerUnlocked = async ({
   docker,
   startContainer,
   state,
@@ -341,6 +343,24 @@ export const ensureContainer = async ({
     return configured;
   }
   return Result.ok("ready" as const);
+};
+
+export const ensureContainer = async (options: EnsureContainerOptions) => {
+  // SQLite owns release on process death; never unlink its stable lock inode.
+  const locked = await withGenerationLock({
+    lockPath: path.join(options.state, "container.lock"),
+    waitTimeoutMs: CONTAINER_CREATION_LOCK_TIMEOUT_MS,
+    run: () => ensureContainerUnlocked(options),
+  });
+  return locked
+    .mapError(
+      (cause) =>
+        new SharedTestPostgresError({
+          message: "Cannot acquire shared Postgres container creation lock.",
+          cause,
+        }),
+    )
+    .andThen((result) => result);
 };
 
 export const withSharedTestPostgresConnection = async <T>(

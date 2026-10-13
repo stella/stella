@@ -58,6 +58,7 @@ describe.skipIf(process.env["STELLA_RUN_SHARED_POSTGRES_TESTS"] !== "true")(
           "packages/scripts/src/shared-test-postgres.ts",
           "packages/scripts/src/dev-postgres-lock.ts",
           "packages/scripts/src/dev-docker.ts",
+          "packages/scripts/src/generation-lock.ts",
         ]) {
           const target = path.join(canonical, relative);
           mkdirSync(path.dirname(target), { recursive: true });
