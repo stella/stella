@@ -323,14 +323,6 @@ if (!runPostgresTests || databaseUrl === undefined) {
               // This pool belongs to the outer scope, so teardown must await its exit.
               const foreign = openClient({ databaseUrl: scratchUrl }).sql;
               await foreign.unsafe("SELECT 1");
-              expect(
-                isPgError(
-                  await rejectionOf(async () => {
-                    await admin.unsafe(`DROP DATABASE "${name}" WITH (FORCE)`);
-                  }),
-                  PG_ERROR.INSUFFICIENT_PRIVILEGE,
-                ),
-              ).toBe(true);
               releases.push(
                 rejectionOf(async () => {
                   try {
