@@ -8,7 +8,7 @@ import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-lin
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { CourtBadge } from "@stll/ui/court-badge";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -57,13 +57,21 @@ const DecisionCitationLabel = ({
         {t("caseLaw.citation.paragraphMark", { paragraph: paragraphNumber })}
       </span>
     );
+  const badge = (
+    <DocumentIdentityBadge
+      identity={{
+        kind: "decision",
+        courtAbbreviation: decision.courtShortCode,
+      }}
+    />
+  );
   switch (presentation) {
     case DECISION_CITATION_PRESENTATION.compact:
       return paragraph === null ? (
-        <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+        badge
       ) : (
         <span className="inline-flex items-center gap-1">
-          <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+          {badge}
           {paragraph}
         </span>
       );
@@ -71,7 +79,7 @@ const DecisionCitationLabel = ({
       return (
         <span className="inline-flex items-center gap-1">
           <LandmarkIcon aria-hidden="true" className="size-3 shrink-0" />
-          <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+          {badge}
           <BidiText as="span">{decision.caseNumber}</BidiText>
           {paragraph}
         </span>

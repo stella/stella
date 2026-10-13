@@ -108,6 +108,8 @@ describe("readInvoiceDocumentLines", () => {
         grossAmountMinor: cents(605_000),
         vatRateBps: 2100,
         vatTreatment: "domestic_vat",
+        timeEntryId: null,
+        expenseId: null,
       },
       {
         description: "Court fee",
@@ -119,6 +121,8 @@ describe("readInvoiceDocumentLines", () => {
         grossAmountMinor: cents(30_000),
         vatRateBps: 0,
         vatTreatment: "domestic_vat",
+        timeEntryId: null,
+        expenseId: null,
       },
     ]);
     expect(document.totals).toEqual(
@@ -197,6 +201,14 @@ describe("readInvoiceDocumentLines", () => {
       cents(450_000),
       cents(11_000),
     ]);
+    // Lines the read adds keep the entry they bill.
+    expect(
+      document.lines.map((line) => [line.timeEntryId, line.expenseId]),
+    ).toEqual([
+      [linedTimeEntryId, null],
+      [timeEntryId, null],
+      [null, expenseId],
+    ]);
     expect(document.totals).toEqual(readInvoiceTotals(legacy).unwrap());
   });
 
@@ -218,6 +230,8 @@ describe("readInvoiceDocumentLines", () => {
         grossAmountMinor: cents(12_345),
         vatRateBps: 0,
         vatTreatment: "domestic_vat",
+        timeEntryId: null,
+        expenseId: null,
       },
     ]);
   });

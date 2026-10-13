@@ -3,6 +3,8 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const E2E_ROOT = path.resolve(import.meta.dirname, "..");
 const READINESS_LIFECYCLES = new Set(["commit", "domcontentloaded"]);
 // Every `page.*` call that starts a navigation, mapped to the argument index
@@ -63,7 +65,7 @@ const navigationViolations = async (filePath: string): Promise<string[]> => {
           node.getStart(sourceFile),
         );
         violations.push(
-          `${path.relative(E2E_ROOT, filePath)}:${line + 1} uses ${
+          `${repoRelativePath(E2E_ROOT, filePath)}:${line + 1} uses ${
             node.expression.name.text
           } without waitUntil: "commit" or "domcontentloaded"`,
         );
