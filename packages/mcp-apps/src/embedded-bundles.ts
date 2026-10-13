@@ -1,0 +1,12 @@
+import app2 from "./case-law-results/generated/app.html.txt" with { type: "text" };
+import app3 from "./decision-reader/generated/app.html.txt" with { type: "text" };
+import app0 from "./document-upload/generated/app.html.txt" with { type: "text" };
+import app1 from "./file-comparison/generated/app.html.txt" with { type: "text" };
+import type { MCP_APPS } from "./manifest";
+
+export const MCP_APP_BUNDLES = {
+  "document-upload": app0,
+  "file-comparison": app1,
+  "case-law-results": app2,
+  "decision-reader": app3,
+} as const satisfies Record<(typeof MCP_APPS)[number]["directory"], string>;

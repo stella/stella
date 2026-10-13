@@ -13,19 +13,21 @@
     "./resource-uri": "./src/resource-uri.ts",
     "./shared/contracts": "./src/shared/generated/contracts.js",
     "./document-upload/upload-target": "./src/document-upload/upload-target.ts",
-    "./bundles": "./src/generated/bundles.ts",
+    "./bundles": "./src/bundles.ts",
     "./case-law-results/model": "./src/case-law-results/model.ts",
     "./case-law-results/parse": "./src/case-law-results/parse.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "test": "bun test",
+    "test": "([ -n \"$TURBO_HASH\" ] || bun run build) && bun test",
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts' --include='*.test.tsx')",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json && bun check --no-pretty --all --project=src/shared/generated/tsconfig.json",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/mcp-apps",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/mcp-apps",
     "format": "bun ../../scripts/run-oxfmt.ts .",
-    "build": "bun scripts/build-mcp-apps.ts"
+    "build": "bun scripts/build-mcp-apps.ts",
+    "prepack": "bun run build",
+    "generate:shared-assets": "bun scripts/build-mcp-apps.ts --shared-assets"
   },
   "dependencies": {
     "@base-ui/react": "catalog:",
@@ -61,6 +63,7 @@
     "domhandler": "^6.0.1",
     "fast-check": "catalog:",
     "oxc-transform-react": "catalog:",
+    "oxfmt": "catalog:",
     "postcss": "catalog:",
     "tailwindcss": "catalog:"
   }
