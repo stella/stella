@@ -55,7 +55,12 @@ runs:
         # Later host and container steps must resolve the same global-store links.
         echo "BUN_INSTALL_CACHE_DIR=$BUN_INSTALL_CACHE_DIR" >> "$GITHUB_ENV"
         if [[ "$CACHE_HIT" == true ]]; then
-          bun scripts/ci-install-store.ts verify "$STORE_KEY"
+          # An archive under an immutable key cannot be replaced, so a failed
+          # verification falls back to a cold frozen install instead of failing.
+          if ! bun scripts/ci-install-store.ts verify "$STORE_KEY"; then
+            echo "::warning title=install-store-invalid::Restored install store $STORE_KEY failed verification; installing cold."
+            rm -rf "$BUN_INSTALL_CACHE_DIR"
+          fi
         fi
         end=$(bun -e 'console.log(Date.now())')
         echo "milliseconds=$((end - START_MS))" >> "$GITHUB_OUTPUT"

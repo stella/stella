@@ -387,8 +387,11 @@ test("the ci-install composite restores and saves only the exact sealed cache", 
   const verifyRun = v.parse(v.string(), verify["run"]);
   expect(verifyRun).toContain('if [[ "$CACHE_HIT" == true ]]; then');
   expect(verifyRun).toContain(
-    'bun scripts/ci-install-store.ts verify "$STORE_KEY"',
+    'if ! bun scripts/ci-install-store.ts verify "$STORE_KEY"; then',
   );
+  // An invalid archive under an immutable key falls back to a cold install.
+  expect(verifyRun).toContain("title=install-store-invalid");
+  expect(verifyRun).toContain('rm -rf "$BUN_INSTALL_CACHE_DIR"');
   expect(verifyRun).toContain(
     'echo "milliseconds=$((end - START_MS))" >> "$GITHUB_OUTPUT"',
   );
