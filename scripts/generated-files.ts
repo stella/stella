@@ -13,14 +13,14 @@ type GeneratorCheck =
 
 export type Generator = {
   id: string;
-  outputKind: "committed" | "derived";
   outputs: readonly string[];
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
   autofix: boolean;
   after: readonly string[];
-} & GeneratorCheck;
+} & GeneratorCheck &
+  ({ outputKind: "committed" } | { outputKind: "derived" });
 
 const MODEL_CATALOG_INPUTS = [
   ".github/workflows/ci.yml",
@@ -37,7 +37,39 @@ const MODEL_CATALOG_INPUTS = [
   "packages/scripts/src/model-catalog-rates-gen.ts",
 ] as const;
 
-export const GENERATORS = [
+const GENERATOR_DECLARATIONS = [
+  {
+    id: "cloud-setup",
+    outputKind: "committed",
+    outputs: [".agents/cloud-setup.sh"],
+    inputs: [
+      "stll-toolchain.json",
+      ".node-version",
+      "package.json",
+      "bun.lock",
+      "scripts/generate-cloud-setup.ts",
+      "scripts/generated-artifacts.ts",
+    ],
+    write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
+    check: ["bun", "scripts/generate-cloud-setup.ts"],
+    autofix: true,
+    after: [],
+  },
+  {
+    id: "bun-toolchain",
+    outputKind: "committed",
+    outputs: ["scripts/bun-toolchain.gen.json"],
+    inputs: [
+      "package.json",
+      "scripts/generate-bun-toolchain.ts",
+      "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+    ],
+    write: ["bun", "scripts/generate-bun-toolchain.ts", "--write"],
+    check: ["bun", "scripts/generate-bun-toolchain.ts"],
+    autofix: true,
+    after: [],
+  },
   {
     id: "status-tables",
     outputKind: "committed",
@@ -150,7 +182,11 @@ export const GENERATORS = [
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
+      "apps/api/src/lib/chat/legislation-result-projections.ts",
+      "apps/api/src/lib/chat/projection-fields.ts",
+      "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "packages/api-contract/src/case-law-court-year.ts",
+      "packages/api-contract/src/statute-version.ts",
       "packages/api-contract/src/mcp-tool-name.ts",
       "packages/api-contract/src/mcp-capability-executors.ts",
       ".oxfmtrc.json",
@@ -241,6 +277,8 @@ export const GENERATORS = [
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
+      "apps/api/src/lib/chat/legislation-result-projections.ts",
+      "apps/api/src/lib/legal-search/legislation-provision-vocabulary.ts",
       "packages/api-contract/src/case-law-court-year.ts",
       "apps/api/src/lib/chat/projection-fields.ts",
       "apps/web/src/fonts.css",
@@ -863,6 +901,10 @@ export const GENERATORS = [
   },
 ] as const satisfies readonly Generator[];
 
+export const GENERATORS: readonly (Generator & {
+  id: (typeof GENERATOR_DECLARATIONS)[number]["id"];
+})[] = GENERATOR_DECLARATIONS;
+
 export const GUARD_A_EXCLUSIONS = [
   {
     glob: "provenance/**/THIRD-PARTY-NOTICES*.txt",
@@ -920,7 +962,7 @@ const outputFeedsInput = (output: string, input: string) =>
   matchesGeneratedGlob(output, globWitness(input));
 
 export const generatorsForFiles = (files: readonly string[]) => {
-  const selected = new Set(
+  const selected = new Set<string>(
     GENERATORS.filter(
       (generator) =>
         generator.autofix &&

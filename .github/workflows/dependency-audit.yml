@@ -52,14 +52,15 @@ jobs:
 
       - name: Setup Bun
         if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"
 
       - name: Install dependencies
         if: github.event_name != 'pull_request' || steps.lockfile.outputs.changed == 'true'
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        # The audit reads bun.lock; its scripts import root workspace packages only.
+        run: bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts --filter stella
         env:
           NPM_TOKEN: ""
 
@@ -106,7 +107,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           bun-version-file: "package.json"
           save: ${{ github.ref == 'refs/heads/main' }}

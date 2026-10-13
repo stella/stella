@@ -88,6 +88,7 @@
     "./review-author-avatar": "./src/review/review-author-avatar.tsx",
     "./review-comment-card": "./src/review/review-comment-card.tsx",
     "./review-decision-actions": "./src/review/review-decision-actions.tsx",
+    "./review-word-diff": "./src/review/review-word-diff.ts",
     "./review-diff-text": "./src/review/review-diff-text.tsx",
     "./review-out-of-date-notice": "./src/review/review-out-of-date-notice.tsx",
     "./review-severity-dot": "./src/review/review-severity-dot.tsx",
@@ -185,7 +186,8 @@
     "./file-picker": "./src/lib/file-picker.ts",
     "./lib/overlay-layer": "./src/lib/overlay-layer.ts",
     "./lib/utils": "./src/lib/utils.ts",
-    "./lib/week": "./src/lib/week.ts"
+    "./lib/week": "./src/lib/week.ts",
+    "./date-range-filter": "./src/components/date-range-filter.tsx"
   },
   "publishConfig": {
     "access": "public"

@@ -9,7 +9,10 @@ import { cn } from "@stll/ui/utils";
 import type { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
 import { VIEWER_OVERLAY_BAR_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { decisionYear, formatYear } from "@/features/case-law/citation-format";
-import { totalCitations } from "@/features/case-law/citation-treatment";
+import {
+  citationSummaryIsCapped,
+  totalCitations,
+} from "@/features/case-law/citation-treatment";
 import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
 import { lastNegativeYear } from "@/features/case-law/components/citation-timeline.logic";
 import {
@@ -83,7 +86,7 @@ export const CitationHeader = ({
     return null;
   }
   const total = totalCitations(summary.incoming);
-  if (total === 0 && !summary.capped.incoming) {
+  if (total === 0 && !citationSummaryIsCapped(summary, "incoming")) {
     return null;
   }
 
@@ -99,13 +102,13 @@ export const CitationHeader = ({
   const lastNegative = lastNegativeYear(summary.incomingByYear);
 
   const summaryText = [
-    summary.capped.incoming
+    citationSummaryIsCapped(summary, "incoming")
       ? t("caseLaw.citation.citedAtLeast", { count: format.number(total) })
       : t("caseLaw.citation.citedSummary", { count: total }),
-    !summary.capped.incoming && negative > 0
+    !citationSummaryIsCapped(summary, "incoming") && negative > 0
       ? t("caseLaw.citation.negativeCount", { count: negative })
       : null,
-    summary.capped.incoming || lastNegative === null
+    citationSummaryIsCapped(summary, "incoming") || lastNegative === null
       ? null
       : t("caseLaw.citation.lastNegative", {
           year: formatYear(format, lastNegative),
