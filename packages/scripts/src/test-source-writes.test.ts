@@ -10,6 +10,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   sourceWriteExceptionIssues,
   validateSourceWriteExceptions,
@@ -280,7 +282,7 @@ const inspectSourceWrites = (source: string, file: string) => {
           const base = /^(?:apps|packages)\//u.test(value)
             ? repositoryRoot
             : packageRoot;
-          const relative = path.relative(
+          const relative = repoRelativePath(
             repositoryRoot,
             path.resolve(base, value),
           );
