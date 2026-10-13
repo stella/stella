@@ -669,7 +669,7 @@ export const reconcileOrphanedFlowRuns = async (
       database,
       cursor,
       ...(principal === undefined ? {} : { principal }),
-      stalledBefore,
+      ...(stalledBefore === undefined ? {} : { stalledBefore }),
       batchSize,
     });
 

@@ -33,8 +33,13 @@ export const featureEnrolmentsOptions = ({
       ),
   });
 
+type FeatureEnrolmentQueryOptions = { enabled?: boolean };
+
 /** The endpoint lists only self-serve features offered by this deployment. */
-export const useFeatureEnrolment = (featureId: SelfServeFeatureId) => {
+export const useFeatureEnrolment = (
+  featureId: SelfServeFeatureId,
+  { enabled = true }: FeatureEnrolmentQueryOptions = {},
+) => {
   const user = useAuthenticatedUser();
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -42,7 +47,7 @@ export const useFeatureEnrolment = (featureId: SelfServeFeatureId) => {
     userId: user.id,
     organizationId: user.activeOrganizationId,
   });
-  const view = useQueryView(useQuery(options));
+  const view = useQueryView(useQuery({ ...options, enabled }));
   const mutation = useMutation({
     mutationKey: options.queryKey,
     mutationFn: async (enrolled: boolean) => {

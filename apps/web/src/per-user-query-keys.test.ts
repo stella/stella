@@ -956,7 +956,7 @@ const readScanDeclarations = (ast: ts.SourceFile) => {
       const functionScoped =
         ts.isVariableDeclarationList(variableList) &&
         variableList.flags % (ts.NodeFlags.BlockScoped + 1) ===
-          ts.NodeFlags.None;
+          Number(ts.NodeFlags.None);
       for (const name of readScanBindingNames(node.name)) {
         add(name, node.parent, functionScoped);
       }
@@ -1062,7 +1062,7 @@ const calledReadScanAliases = (
         declaration.initializer !== undefined &&
         ts.isVariableDeclarationList(declaration.parent) &&
         declaration.parent.flags % (ts.NodeFlags.BlockScoped + 1) ===
-          ts.NodeFlags.Const &&
+          Number(ts.NodeFlags.Const) &&
         (ts.isPropertyAccessExpression(declaration.initializer) ||
           ts.isElementAccessExpression(declaration.initializer))
       ) {

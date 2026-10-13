@@ -207,6 +207,7 @@ import {
   legalListVerificationReadReceipts,
   legalListVerificationRuns,
   legalLists,
+  legalReaderAnnotations,
   legalReaderAnswerMessages,
   legalReaderAnswers,
   legislationDocuments,
@@ -1405,6 +1406,13 @@ export const ORG_SCOPE_TABLES = {
     organizationId: sql`${documentTypes.organizationId}`,
     workspaceId: sql`NULL::uuid`,
     rowId: sql`${documentTypes.id}::text`,
+  },
+  legalReaderAnnotations: {
+    identityKind: "primary-key",
+    table: legalReaderAnnotations,
+    organizationId: sql`${legalReaderAnnotations.organizationId}`,
+    workspaceId: sql`NULL::uuid`,
+    rowId: sql`${legalReaderAnnotations.id}::text`,
   },
   legalReaderAnswers: {
     identityKind: "primary-key",

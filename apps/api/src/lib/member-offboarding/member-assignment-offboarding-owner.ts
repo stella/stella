@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, eq, gt, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -52,6 +53,7 @@ import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifa
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockOpenSigningPage } from "@/api/lib/db/aggregate-lock";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { FLOW_RUN_TRANSITIONS_V1 } from "@/api/lib/db/flow-run-transition-spec";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { TRANSITIONS } from "@/api/lib/db/transition-specs";
@@ -2295,6 +2297,9 @@ const removeDepartingMemberMatterMemberships = async ({
   await removePage(undefined);
 };
 
+const removedMemberCount = (result: unknown): number =>
+  v.parse(v.object({ count: v.number() }), executedRows(result).at(0)).count;
+
 const clearRemovedMemberOrganizationState = async ({
   tx,
   scope,
@@ -2306,141 +2311,138 @@ const clearRemovedMemberOrganizationState = async ({
     scope,
     actor: { type: "system" },
     fn: async (scopedTx) => {
-      const searchHistoryTombstonesCount =
-        (
-          await scopedTx.execute<{ count: number }>(
-            sql`WITH removed AS (${scopedTx
-              .delete(searchHistoryTombstones)
-              .where(
-                and(
-                  eq(
-                    searchHistoryTombstones.organizationId,
-                    scope.organizationId,
-                  ),
-                  eq(searchHistoryTombstones.userId, userId),
+      const searchHistoryTombstonesCount = removedMemberCount(
+        await scopedTx.execute(
+          sql`WITH removed AS (${scopedTx
+            .delete(searchHistoryTombstones)
+            .where(
+              and(
+                eq(
+                  searchHistoryTombstones.organizationId,
+                  scope.organizationId,
                 ),
-              )
-              .returning({
-                changed: sql`1`,
-              })}) SELECT count(*)::integer AS count FROM removed`,
-          )
-        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
-      const searchHistoryOwnersCount =
-        (
-          await scopedTx.execute<{ count: number }>(
-            sql`WITH removed AS (${scopedTx
-              .delete(searchHistoryOwners)
-              .where(
-                and(
-                  eq(searchHistoryOwners.organizationId, scope.organizationId),
-                  eq(searchHistoryOwners.userId, userId),
-                ),
-              )
-              .returning({
-                changed: sql`1`,
-              })}) SELECT count(*)::integer AS count FROM removed`,
-          )
-        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
-      const searchHistoryEntriesCount =
-        (
-          await scopedTx.execute<{ count: number }>(
-            sql`WITH removed AS (${scopedTx
-              .delete(searchHistoryEntries)
-              .where(
-                and(
-                  eq(searchHistoryEntries.organizationId, scope.organizationId),
-                  eq(searchHistoryEntries.userId, userId),
-                ),
-              )
-              .returning({
-                changed: sql`1`,
-              })}) SELECT count(*)::integer AS count FROM removed`,
-          )
-        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
-      const mcpUserConnectionsCount =
-        (
-          await scopedTx.execute<{ count: number }>(
-            sql`WITH removed AS (${scopedTx
-              .delete(mcpUserConnections)
-              .where(
-                and(
-                  eq(mcpUserConnections.organizationId, scope.organizationId),
-                  eq(mcpUserConnections.userId, userId),
-                ),
-              )
-              .returning({
-                changed: sql`1`,
-              })}) SELECT count(*)::integer AS count FROM removed`,
-          )
-        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
-      const sharepointConnectionsCount =
-        (
-          await scopedTx.execute<{ count: number }>(
-            sql`WITH removed AS (${scopedTx
-              .delete(sharepointConnections)
-              .where(
-                and(
-                  eq(
-                    sharepointConnections.organizationId,
-                    scope.organizationId,
-                  ),
-                  eq(sharepointConnections.userId, userId),
-                ),
-              )
-              .returning({
-                changed: sql`1`,
-              })}) SELECT count(*)::integer AS count FROM removed`,
-          )
-        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
-      const mcpOAuthStateCount =
-        (
-          await scopedTx.execute<{ count: number }>(
-            sql`WITH removed AS (${scopedTx
-              .delete(mcpOAuthState)
-              .where(
-                and(
-                  eq(mcpOAuthState.organizationId, scope.organizationId),
-                  eq(mcpOAuthState.userId, userId),
-                ),
-              )
-              .returning({
-                changed: sql`1`,
-              })}) SELECT count(*)::integer AS count FROM removed`,
-          )
-        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
-      const sharepointOAuthStateCount =
-        (
-          await scopedTx.execute<{ count: number }>(
-            sql`WITH removed AS (${scopedTx
-              .delete(sharepointOAuthState)
-              .where(
-                and(
-                  eq(sharepointOAuthState.organizationId, scope.organizationId),
-                  eq(sharepointOAuthState.userId, userId),
-                ),
-              )
-              .returning({
-                changed: sql`1`,
-              })}) SELECT count(*)::integer AS count FROM removed`,
-          )
-        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
-      const invitationCount =
-        (
-          await scopedTx.execute<{ count: number }>(
-            sql`WITH removed AS (${scopedTx
-              .delete(invitation)
-              .where(
-                and(
-                  eq(invitation.organizationId, scope.organizationId),
-                  eq(invitation.inviterId, userId),
-                  eq(invitation.status, "pending"),
-                ),
-              )
-              .returning({
-                changed: sql`1`,
-              })}) SELECT count(*)::integer AS count FROM removed`,
-          )
-        ).at(0)?.count ?? panic("Removed member cleanup count is absent");
+                eq(searchHistoryTombstones.userId, userId),
+              ),
+            )
+            .returning({
+              changed: sql`1`,
+            })
+            .getSQL()}) SELECT count(*)::integer AS count FROM removed`,
+        ),
+      );
+      const searchHistoryOwnersCount = removedMemberCount(
+        await scopedTx.execute(
+          sql`WITH removed AS (${scopedTx
+            .delete(searchHistoryOwners)
+            .where(
+              and(
+                eq(searchHistoryOwners.organizationId, scope.organizationId),
+                eq(searchHistoryOwners.userId, userId),
+              ),
+            )
+            .returning({
+              changed: sql`1`,
+            })
+            .getSQL()}) SELECT count(*)::integer AS count FROM removed`,
+        ),
+      );
+      const searchHistoryEntriesCount = removedMemberCount(
+        await scopedTx.execute(
+          sql`WITH removed AS (${scopedTx
+            .delete(searchHistoryEntries)
+            .where(
+              and(
+                eq(searchHistoryEntries.organizationId, scope.organizationId),
+                eq(searchHistoryEntries.userId, userId),
+              ),
+            )
+            .returning({
+              changed: sql`1`,
+            })
+            .getSQL()}) SELECT count(*)::integer AS count FROM removed`,
+        ),
+      );
+      const mcpUserConnectionsCount = removedMemberCount(
+        await scopedTx.execute(
+          sql`WITH removed AS (${scopedTx
+            .delete(mcpUserConnections)
+            .where(
+              and(
+                eq(mcpUserConnections.organizationId, scope.organizationId),
+                eq(mcpUserConnections.userId, userId),
+              ),
+            )
+            .returning({
+              changed: sql`1`,
+            })
+            .getSQL()}) SELECT count(*)::integer AS count FROM removed`,
+        ),
+      );
+      const sharepointConnectionsCount = removedMemberCount(
+        await scopedTx.execute(
+          sql`WITH removed AS (${scopedTx
+            .delete(sharepointConnections)
+            .where(
+              and(
+                eq(sharepointConnections.organizationId, scope.organizationId),
+                eq(sharepointConnections.userId, userId),
+              ),
+            )
+            .returning({
+              changed: sql`1`,
+            })
+            .getSQL()}) SELECT count(*)::integer AS count FROM removed`,
+        ),
+      );
+      const mcpOAuthStateCount = removedMemberCount(
+        await scopedTx.execute(
+          sql`WITH removed AS (${scopedTx
+            .delete(mcpOAuthState)
+            .where(
+              and(
+                eq(mcpOAuthState.organizationId, scope.organizationId),
+                eq(mcpOAuthState.userId, userId),
+              ),
+            )
+            .returning({
+              changed: sql`1`,
+            })
+            .getSQL()}) SELECT count(*)::integer AS count FROM removed`,
+        ),
+      );
+      const sharepointOAuthStateCount = removedMemberCount(
+        await scopedTx.execute(
+          sql`WITH removed AS (${scopedTx
+            .delete(sharepointOAuthState)
+            .where(
+              and(
+                eq(sharepointOAuthState.organizationId, scope.organizationId),
+                eq(sharepointOAuthState.userId, userId),
+              ),
+            )
+            .returning({
+              changed: sql`1`,
+            })
+            .getSQL()}) SELECT count(*)::integer AS count FROM removed`,
+        ),
+      );
+      const invitationCount = removedMemberCount(
+        await scopedTx.execute(
+          sql`WITH removed AS (${scopedTx
+            .delete(invitation)
+            .where(
+              and(
+                eq(invitation.organizationId, scope.organizationId),
+                eq(invitation.inviterId, userId),
+                eq(invitation.status, "pending"),
+              ),
+            )
+            .returning({
+              changed: sql`1`,
+            })
+            .getSQL()}) SELECT count(*)::integer AS count FROM removed`,
+        ),
+      );
       return {
         searchHistoryTombstones: searchHistoryTombstonesCount,
         searchHistoryOwners: searchHistoryOwnersCount,

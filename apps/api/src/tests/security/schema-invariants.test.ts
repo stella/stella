@@ -5,8 +5,9 @@ import type { SQL } from "drizzle-orm";
 import { PgDialect, PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import ts from "typescript";
+
+import { repoRelativePath } from "@stll/portable-path";
 
 import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
@@ -14,6 +15,7 @@ import {
   GLOBAL_SCOPE_TABLES,
   ORG_SCOPE_TABLES,
 } from "@/api/db/org-scope-registry";
+import * as rlsSchema from "@/api/db/rls";
 import * as schema from "@/api/db/schema";
 import { SCOPED_NATIVE_EXTRACTION_ENQUEUE } from "@/api/db/schema";
 import {
@@ -277,7 +279,7 @@ test("organization scope classification contains only schema metadata calls", ()
   inspect(source);
 });
 
-test("every migration RLS table has one explicit scope classification and resolver metadata", async () => {
+test("every migration RLS table has one explicit scope classification and resolver metadata", () => {
   const migrationSchema =
     drizzleConfig.schema ?? panic("Migration schema configuration is empty");
   const entries =
@@ -293,9 +295,17 @@ test("every migration RLS table has one explicit scope classification and resolv
       files.add(path.join(apiRoot, file));
     }
   }
+  const schemaModules = {
+    "src/db/schema.ts": schema,
+    "src/db/auth-schema.ts": authSchema,
+    "src/db/agent-auth-schema.ts": agentAuthSchema,
+    "src/db/rls.ts": rlsSchema,
+  };
+  expect(
+    [...files].map((file) => repoRelativePath(apiRoot, file)).toSorted(),
+  ).toEqual(Object.keys(schemaModules).toSorted());
   const tables = new Set<string>();
-  for (const file of files) {
-    const module = await import(pathToFileURL(file).href);
+  for (const module of Object.values(schemaModules)) {
     for (const value of Object.values(module)) {
       if (!isPgTable(value)) {
         continue;

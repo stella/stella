@@ -138,6 +138,7 @@ export const fileFlowRunCompletionNotice = async (
       aggregate: "run",
       id: { id: notice.runId, workspaceId: notice.workspaceId },
       mode: "update",
+      lockConfig: { of: flowRuns },
       tx,
       select: (queryTx) =>
         queryTx

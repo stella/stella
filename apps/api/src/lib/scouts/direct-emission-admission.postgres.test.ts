@@ -528,6 +528,10 @@ describe.skipIf(!enabled)(
                     name: "Hearing source",
                     kind: "task",
                   });
+                  await db
+                    .update(documentReviewRuns)
+                    .set({ status: "completed", completed: 1 })
+                    .where(eq(documentReviewRuns.id, a.runId));
                   const ownRun = (
                     await db
                       .select()

@@ -1,6 +1,6 @@
 {
   "metric": "no-db-await-in-loop-suppressions",
   "file": "apps/api/src/lib/member-offboarding/member-assignment-offboarding-owner.ts",
-  "delta": 27,
+  "delta": 21,
   "reason": "Relocates bounded cleanup sequences behind the void operational facade. Counted pages preserve read-transition-audit dependencies; matter, membership, workflow and exchange locks retain their deterministic order. Nonblocking feature-admission acquisitions serialize removal with recovery without waiting on the inverse membership order. Independent source reads and tenant audit inserts remain batched."
 }

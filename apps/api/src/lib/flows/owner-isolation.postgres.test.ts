@@ -52,7 +52,10 @@ import {
 } from "@/api/lib/scheduler/tasks/flow-run";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { mintAuthProviderIdValue } from "@/api/tests/helpers/auth-provider-id";
+import {
+  mintAuthProviderId,
+  mintAuthProviderIdValue,
+} from "@/api/tests/helpers/auth-provider-id";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { createTestState } from "@/api/tests/helpers/test-state";
@@ -1200,11 +1203,24 @@ describe.skipIf(!enabled)(
           intermediate: false,
           initialRunStatus: "pending",
         });
+        const remainingOwnerUserId = mintAuthProviderId<"user">();
         const restoreRuntime = setRuntimeModeForTesting({
           mode: RUNTIME_MODE.strict,
         });
         testState.setConfig("FEATURE_FLOWS", true);
         try {
+          await db.insert(user).values({
+            id: remainingOwnerUserId,
+            name: "Remaining owner",
+            email: `${remainingOwnerUserId}@example.test`,
+          });
+          await db.insert(member).values({
+            id: mintAuthProviderIdValue(),
+            organizationId: a.organizationId,
+            userId: remainingOwnerUserId,
+            role: "owner",
+            createdAt: new Date(),
+          });
           const before = await b.read();
           expect((await a.read()).run?.status).toBe("pending");
           await db.delete(user).where(eq(user.id, a.userId));
@@ -1238,6 +1254,7 @@ describe.skipIf(!enabled)(
           restoreRuntime();
           await b.cleanup();
           await a.cleanup();
+          await db.delete(user).where(eq(user.id, remainingOwnerUserId));
         }
       });
     });

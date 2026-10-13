@@ -374,7 +374,8 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
         },
         {
           type: "operational",
-          module: "apps/api/src/lib/member-assignment-offboarding.ts",
+          module:
+            "apps/api/src/lib/member-offboarding/member-assignment-offboarding.ts",
           effects: ["cleanup"],
           owners: [
             {

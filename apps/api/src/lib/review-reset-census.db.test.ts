@@ -63,14 +63,45 @@ describe.skipIf(!enabled)("review reset policy census", () => {
       const columns = await client<{ table: string; name: string }[]>`
         SELECT table_name AS table, column_name AS name FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
+      const systemPrivileges = await client<
+        { table: string; privilege: string }[]
+      >`
+        SELECT relation.relname AS table, grants.privilege_type AS privilege
+        FROM pg_class relation
+        JOIN pg_namespace namespace ON namespace.oid = relation.relnamespace
+        CROSS JOIN LATERAL aclexplode(relation.relacl) grants
+        JOIN pg_roles grantee ON grantee.oid = grants.grantee
+        WHERE namespace.nspname = 'public' AND grantee.rolname = 'stella_system'
+          AND relation.relname = ANY(${`{${REVIEW_RESET_CLEARED_TABLES.join(",")}}`})`;
+      const rowIds = new Map(
+        REVIEW_RESET_CLEARED_TABLES.map((table) => [
+          table,
+          new Map(
+            workspaceIds.map((workspaceId) => [
+              workspaceId,
+              Bun.randomUUIDv7(),
+            ]),
+          ),
+        ]),
+      );
+      const ownershipColumns = new Set([
+        "id",
+        "organization_id",
+        "workspace_id",
+        "user_id",
+        "created_by",
+        "owner_user_id",
+        "actor_user_id",
+        "signal_id",
+      ]);
       const forced = await client<
         { name: string }[]
       >`SELECT relname AS name FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relforcerowsecurity`;
       const forcedNames = new Set(forced.map(({ name }) => name));
       await client.unsafe(`CREATE SCHEMA ${schema}; CREATE ROLE ${owner} NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT;
         GRANT ${owner} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE;
-        GRANT stella TO ${owner} WITH INHERIT FALSE, SET TRUE;
-        GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${owner}; GRANT USAGE ON SCHEMA ${schema} TO stella;
+        GRANT stella, stella_system TO ${owner} WITH INHERIT FALSE, SET TRUE;
+        GRANT USAGE, CREATE ON SCHEMA ${schema} TO ${owner}; GRANT USAGE ON SCHEMA ${schema} TO stella, stella_system;
         SET search_path TO ${schema}, public`);
       try {
         await client.unsafe(`CREATE TABLE system_audit_runs (LIKE public.system_audit_runs INCLUDING ALL);
@@ -89,6 +120,14 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           await client.unsafe(
             `CREATE TABLE ${table} (LIKE public.${table}); ALTER TABLE ${table} OWNER TO ${owner}; GRANT SELECT, INSERT, UPDATE, DELETE ON ${table} TO stella`,
           );
+          const privileges = systemPrivileges
+            .filter((grant) => grant.table === name)
+            .map((grant) => grant.privilege);
+          if (privileges.length > 0) {
+            await client.unsafe(
+              `GRANT ${privileges.join(", ")} ON ${table} TO stella_system`,
+            );
+          }
           const tableColumns = columns
             .filter((column) => column.table === name)
             .map(({ name: column }) => column);
@@ -96,7 +135,7 @@ describe.skipIf(!enabled)("review reset policy census", () => {
             tableColumns
               .map(
                 (column) =>
-                  `ALTER TABLE ${table} ALTER COLUMN ${identifier(column)} DROP NOT NULL, ALTER COLUMN ${identifier(column)} DROP DEFAULT`,
+                  `ALTER TABLE ${table} ALTER COLUMN ${identifier(column)} ${ownershipColumns.has(column) ? "DROP DEFAULT" : `DROP NOT NULL, ALTER COLUMN ${identifier(column)} DROP DEFAULT`}`,
               )
               .join("; "),
           );
@@ -140,6 +179,8 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           const seedColumns = [
             "organization_id",
             ...[
+              "id",
+              "signal_id",
               "user_id",
               "created_by",
               "owner_user_id",
@@ -151,6 +192,16 @@ describe.skipIf(!enabled)("review reset policy census", () => {
           for (const workspaceId of workspaceIds) {
             const values = seedColumns.map((column) => {
               switch (column) {
+                case "id":
+                  return (
+                    rowIds.get(name)?.get(workspaceId) ??
+                    panic("Census row identity required")
+                  );
+                case "signal_id":
+                  return (
+                    rowIds.get("signals")?.get(workspaceId) ??
+                    panic("Census signal parent required")
+                  );
                 case "organization_id":
                   return organizationId;
                 case "workspace_id":

@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { flowDefinitions } from "@/api/db/schema";
@@ -20,6 +22,56 @@ const organizationId = mintAuthProviderId<"organization">();
 const userId = mintAuthProviderId<"user">();
 const workspaceId = createSafeId<"workspace">();
 const definitionId = createSafeId<"flowDefinition">();
+const executeManualFixtureQuery = async (query: SQL) => {
+  const text = new PgDialect().sqlToQuery(query).sql;
+  if (text.includes('AS "organizationId"')) {
+    const isDefinition = text.includes('"flow_definitions"');
+    return [
+      {
+        organizationId,
+        workspaceId: isDefinition ? null : workspaceId,
+        id: isDefinition ? definitionId : workspaceId,
+      },
+    ];
+  }
+  return [{ key1: 1, key2: 1, acquired: true }];
+};
+
+const manualFixtureRows = (projection: Record<string, unknown>) => {
+  if ("role" in projection) {
+    return [
+      {
+        role: "stella",
+        organizationId,
+        userId,
+        workspaceIds: workspaceId,
+        workspaceAccessMode: "explicit",
+        featureIds: '["flows"]',
+      },
+    ];
+  }
+  if ("email" in projection) {
+    return [{ email: "flow@example.test", emailVerified: true }];
+  }
+  if ("organizationId" in projection && !("featureId" in projection)) {
+    return [{ organizationId }];
+  }
+  return [{ featureId: "flows", organizationId, userId }];
+};
+
+const selectManualFixtureRows = (projection: Record<string, unknown>) => {
+  const rows = Promise.resolve(manualFixtureRows(projection));
+  // Resolving the existing promise preserves its query methods at every chain link.
+  const resolveRows = Promise.resolve.bind(Promise, rows);
+  Object.assign(rows, {
+    innerJoin: resolveRows,
+    where: resolveRows,
+    for: resolveRows,
+    limit: resolveRows,
+  });
+  return { from: resolveRows };
+};
+
 const definition = {
   id: definitionId,
   name: "Review document",
@@ -134,19 +186,8 @@ describe("flow kickoff acceptance", () => {
       async (run) =>
         await run(
           asTestRaw({
-            execute: async () => [{ key1: 1, key2: 1, acquired: true }],
-            select: (projection: Record<string, unknown>) => {
-              const chain = {
-                from: () => chain,
-                innerJoin: () => chain,
-                where: () => chain,
-                limit: async () =>
-                  "email" in projection
-                    ? [{ email: "flow@example.test", emailVerified: true }]
-                    : [{ featureId: "flows", organizationId, userId }],
-              };
-              return chain;
-            },
+            execute: executeManualFixtureQuery,
+            select: selectManualFixtureRows,
             query: {
               flowDefinitions: {
                 findFirst: async () =>
@@ -222,19 +263,8 @@ describe("flow kickoff acceptance", () => {
       const safeDb = safeDbFromScoped(async (run) => {
         const result = await run(
           asTestRaw({
-            execute: async () => [{ key1: 1, key2: 1, acquired: true }],
-            select: (projection: Record<string, unknown>) => {
-              const chain = {
-                from: () => chain,
-                innerJoin: () => chain,
-                where: () => chain,
-                limit: async () =>
-                  "email" in projection
-                    ? [{ email: "flow@example.test", emailVerified: true }]
-                    : [{ featureId: "flows", organizationId, userId }],
-              };
-              return chain;
-            },
+            execute: executeManualFixtureQuery,
+            select: selectManualFixtureRows,
             query: { flowDefinitions: { findFirst: async () => definition } },
             insert: () => ({
               values: async () => {

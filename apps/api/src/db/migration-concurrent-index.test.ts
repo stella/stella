@@ -52,6 +52,11 @@ const ENTITY_FEATURE_GATE_MIGRATION =
 // Fingerprinting the complete statement makes comments, quoting tricks, and
 // dynamically assembled commands unable to bypass migration safety checks.
 const APPROVED_PROCEDURAL_STATEMENTS = new Set([
+  // Declares and verifies the system role posture; changes no data or budgets.
+  "20261013190100_org_scoped_system_work/migration.sql:cf1a6e436f77c9af756cc6bf2114787f14680e6badf8b42bba963c6b1fe82e82",
+  // Applies scoped policies to the finite table inventory under the declared
+  // 1s lock and 10s statement budgets; identifiers use format %I.
+  "20261013190100_org_scoped_system_work/migration.sql:3978845086a022b597f24611e9f3f2c510eacc7031c4a5a589c797f3895e5218",
   // Renames legacy resource paths in stable order with collision checks and
   // transaction-local snapshots. Static writes retain the 1s lock and 30s
   // statement budgets; a timeout rolls back the entire cutover.

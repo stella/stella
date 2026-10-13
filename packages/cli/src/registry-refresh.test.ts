@@ -34,7 +34,7 @@ if (capabilityCatalog === null) {
 }
 const gatedCapabilityIds = new Set(
   capabilityCatalog
-    .filter((entry) => entry.featureAccess === "required")
+    .filter((entry) => entry.featureAccess !== undefined)
     .map(({ id }) => id),
 );
 const admittedFeatures = {

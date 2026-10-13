@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import type { SQL } from "drizzle-orm";
 
-import type { ORG_SCOPE_TABLES } from "@/api/db/org-scope-registry";
+import { ORG_SCOPE_TABLES } from "@/api/db/org-scope-registry";
 import type { Transaction } from "@/api/db/root";
 import { runScopedOwnerWorkInTransaction } from "@/api/db/scoped";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -35,7 +35,11 @@ export const proveOrgScope = async (
   tx: Pick<Transaction, "select" | "execute">,
   ref: OrgScopeReference,
 ): Promise<Result<OrgScope, OrgScopeRowAbsent>> => {
-  const row = await lockOrgScopeSource({ tx, ...ref });
+  const row = await lockOrgScopeSource({
+    tx,
+    source: ORG_SCOPE_TABLES[ref.table],
+    where: ref.where,
+  });
   if (row === undefined) {
     return Result.err(
       new OrgScopeRowAbsent({

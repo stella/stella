@@ -53,7 +53,7 @@ import { executeFlowStep } from "@/api/lib/flows/flow-executor";
 import {
   tryLockMemberCleanupWorkspace,
   removeOrganizationMemberInTransaction,
-} from "@/api/lib/member-assignment-offboarding";
+} from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,

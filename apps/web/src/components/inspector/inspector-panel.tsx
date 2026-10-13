@@ -106,15 +106,20 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   const canUpdateEntity = usePermissions({ entity: ["update"] });
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const signalsEnabled = useNavigationFeatureEnabled("signals");
-  const { feature: signalsFeature, view: signalsEnrolmentView } =
-    useFeatureEnrolment("signals");
-  const signalsAvailable = signalsEnabled && signalsFeature?.enrolled === true;
   const { tabs: storedTabs, activeId } = useInspectorTabsStore(
     useShallow((s) => ({
       tabs: s.tabs,
       activeId: s.activeId,
     })),
   );
+  const hasSignalTab = storedTabs.some(
+    (tab) => tab.type === "view" && tab.viewType === INBOX_SIGNAL_VIEW,
+  );
+  const { feature: signalsFeature, view: signalsEnrolmentView } =
+    useFeatureEnrolment("signals", {
+      enabled: signalsEnabled && hasSignalTab,
+    });
+  const signalsAvailable = signalsEnabled && signalsFeature?.enrolled === true;
   const tabs = useMemo(
     () =>
       storedTabs.filter(

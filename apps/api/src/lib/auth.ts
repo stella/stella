@@ -210,7 +210,7 @@ import {
   LIMITS,
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
-import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { isMemberRole } from "@/api/lib/member-roles";
 import {
   mapMembershipInvariantError,

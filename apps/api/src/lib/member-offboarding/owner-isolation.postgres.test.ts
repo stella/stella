@@ -148,7 +148,10 @@ describe.skipIf(!enabled)(
               });
               await db
                 .update(workObligations)
-                .set({ ownerUserId: departingUserId })
+                .set({
+                  ownerUserId: departingUserId,
+                  acknowledgedByUserId: departingUserId,
+                })
                 .where(eq(workObligations.entityId, fixture.taskEntityId));
               await db
                 .update(flowRuns)

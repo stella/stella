@@ -19,7 +19,7 @@ import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { verifyAndDeleteUser } from "@/api/lib/delete-account";
-import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 import { isPgConstraintError, isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,

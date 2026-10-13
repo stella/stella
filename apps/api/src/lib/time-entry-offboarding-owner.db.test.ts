@@ -197,7 +197,7 @@ describe.skipIf(!enabled)(
             )
               .map(
                 (name) =>
-                  `CREATE TABLE ${schema}.${name} (id uuid, organization_id text); ALTER TABLE ${schema}.${name} OWNER TO ${ownerRole}`,
+                  `CREATE TABLE ${schema}.${name} (id uuid, organization_id text${name === "signal_events" ? ", signal_id uuid" : ""}); ALTER TABLE ${schema}.${name} OWNER TO ${ownerRole}`,
               )
               .join("; "),
           );

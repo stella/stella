@@ -393,6 +393,12 @@ if (!databaseUrl || !enabled) {
             });
           });
           expect(
+            await db.query.schedulerJobs.findFirst({
+              where: { id: { eq: jobId } },
+            }),
+          ).toEqual(changed);
+          await repairFlowScheduleTriggers({ database: db });
+          expect(
             await db.$count(schedulerJobs, eq(schedulerJobs.id, jobId)),
           ).toBe(0);
         } finally {

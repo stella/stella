@@ -14,6 +14,7 @@ import {
   flowRunSteps,
   flowUploadTriggerIntents,
   pendingScoutEmissions,
+  notifications,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -289,12 +290,18 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                   ),
             });
             const readB = async () => ({
-              receipt: await db.query.flowUploadTriggerIntents.findFirst({
-                where: {
-                  definitionId: { eq: b.definitionId },
-                  entityId: { eq: b.entityId },
-                },
-              }),
+              receipt: (
+                await db
+                  .select()
+                  .from(flowUploadTriggerIntents)
+                  .where(
+                    and(
+                      eq(flowUploadTriggerIntents.definitionId, b.definitionId),
+                      eq(flowUploadTriggerIntents.entityId, b.entityId),
+                    ),
+                  )
+                  .limit(1)
+              ).at(0),
               definition: await db.query.flowDefinitions.findFirst({
                 where: { id: { eq: b.definitionId } },
               }),
@@ -307,22 +314,28 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
               steps: await db.query.flowRunSteps.findMany({
                 where: { workspaceId: { eq: b.workspaceId } },
               }),
-              notices: await db.query.notifications.findMany({
-                where: { organizationId: { eq: b.organizationId } },
-              }),
+              notices: await db
+                .select()
+                .from(notifications)
+                .where(eq(notifications.organizationId, b.organizationId))
+                .orderBy(notifications.id),
             });
             const before = await readB();
             expect(before.receipt?.status).toBe("pending");
             expect(before.receipt?.retryAt).toEqual(LATER);
             expect(
               (
-                await db.query.flowUploadTriggerIntents.findFirst({
-                  where: {
-                    definitionId: { eq: a.definitionId },
-                    entityId: { eq: a.entityId },
-                  },
-                })
-              )?.status,
+                await db
+                  .select()
+                  .from(flowUploadTriggerIntents)
+                  .where(
+                    and(
+                      eq(flowUploadTriggerIntents.definitionId, a.definitionId),
+                      eq(flowUploadTriggerIntents.entityId, a.entityId),
+                    ),
+                  )
+                  .limit(1)
+              ).at(0)?.status,
             ).toBe("pending");
             const outcome = await recoverUploadFlowTriggerIntents({
               database: rootDb,
@@ -330,12 +343,18 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
             });
             expect(outcome.skipped).toBe(1);
             expect(outcome.settled).toBe(0);
-            const after = await db.query.flowUploadTriggerIntents.findFirst({
-              where: {
-                definitionId: { eq: a.definitionId },
-                entityId: { eq: a.entityId },
-              },
-            });
+            const after = (
+              await db
+                .select()
+                .from(flowUploadTriggerIntents)
+                .where(
+                  and(
+                    eq(flowUploadTriggerIntents.definitionId, a.definitionId),
+                    eq(flowUploadTriggerIntents.entityId, a.entityId),
+                  ),
+                )
+                .limit(1)
+            ).at(0);
             expect(after?.status).toBe("skipped");
             expect(after?.skipReason).toBe("definition_disabled");
             expect(
@@ -1349,15 +1368,23 @@ describe.skipIf(!enabled)("upload trigger commit admission (postgres)", () => {
                     asc(flowUploadTriggerIntents.entityId),
                   );
               if (status === "skipped") {
-                await db.execute(sql`WITH seeded AS (
+                await db.execute(sql`
                   INSERT INTO ${entities} (id, workspace_id, name, kind, created_by)
                   SELECT gen_random_uuid(), ${disabled.workspaceId}, 'Retained upload', 'document', ${disabled.userId}
-                  FROM generate_series(1, 10000)
-                  RETURNING id
-                )
-                INSERT INTO ${flowUploadTriggerIntents}
-                  (definition_id, entity_id, organization_id, workspace_id, file_extension, status, retry_at)
-                SELECT ${disabled.definitionId}, id, ${disabled.organizationId}, ${disabled.workspaceId}, 'pdf', 'awaiting_grant', ${older}::timestamptz FROM seeded`);
+                  FROM generate_series(1, 10000)`);
+                await withOrgScopedFixture({
+                  database: db,
+                  workspaceId: disabled.workspaceId,
+                  fn: async (fixtureTx) =>
+                    await fixtureTx.execute(sql`
+                      INSERT INTO ${flowUploadTriggerIntents}
+                        (definition_id, entity_id, organization_id, workspace_id, file_extension, status, retry_at)
+                      SELECT ${disabled.definitionId}, ${entities.id}, ${workspaces.organizationId}, ${entities.workspaceId}, 'pdf', 'awaiting_grant', ${older}::timestamptz
+                      FROM ${entities}
+                      JOIN ${workspaces} ON ${workspaces.id} = ${entities.workspaceId}
+                      WHERE ${entities.workspaceId} = ${disabled.workspaceId}
+                        AND ${entities.name} = 'Retained upload'`),
+                });
                 await db.execute(sql`ANALYZE ${flowDefinitions}`);
                 await db.execute(sql`ANALYZE ${flowUploadTriggerIntents}`);
                 const query = uploadTriggerGrantRepairQuery({

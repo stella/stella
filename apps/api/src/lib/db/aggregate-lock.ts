@@ -21,7 +21,6 @@ import * as v from "valibot";
 import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
-import { ORG_SCOPE_TABLES } from "@/api/db/org-scope-registry";
 import type { Transaction } from "@/api/db/root";
 import type { pendingScoutEmissions } from "@/api/db/schema";
 import {
@@ -2031,9 +2030,17 @@ export const withDecisionCitationStatsLocks = async ({
   `);
 };
 
+const scopeSourceRow = v.object({
+  organizationId: v.pipe(v.string(), v.transform(brandPersistedOrganizationId)),
+  workspaceId: v.nullable(
+    v.pipe(v.string(), v.transform(brandPersistedWorkspaceId)),
+  ),
+  id: v.string(),
+});
+
 type OrgScopeSourceOptions = {
   tx: Pick<Transaction, "select" | "execute">;
-  table: keyof typeof ORG_SCOPE_TABLES;
+  source: { table: PgTable; organizationId: SQL; workspaceId: SQL; rowId: SQL };
   where: SQL;
 };
 
@@ -2045,30 +2052,23 @@ class AggregateScopeSourceBusy extends TaggedError("AggregateScopeSourceBusy")<{
 /** Pin ownership without adding a blocking upgrade to the caller's resource chain. */
 export const lockOrgScopeSource = async ({
   tx,
-  table,
+  source,
   where,
 }: OrgScopeSourceOptions) => {
-  const source = ORG_SCOPE_TABLES[table];
   const tableName = getTableName(source.table);
   const sourceMode =
     tableName === "workspaces" ? sql`KEY SHARE` : sql`NO KEY UPDATE`;
   const result = await Result.tryPromise(async () => {
-    const row = (
-      await tx.execute<{
-        organizationId: SafeId<"organization"> | null;
-        workspaceId: SafeId<"workspace"> | null;
-        id: string;
-      }>(sql`SELECT ${source.organizationId} AS "organizationId",
+    const rawRow = executedRows(
+      await tx.execute(sql`SELECT ${source.organizationId} AS "organizationId",
         ${source.workspaceId} AS "workspaceId", ${source.rowId} AS id
       FROM ${source.table} WHERE ${where} LIMIT 1
-      FOR ${sourceMode} OF ${sql.identifier(tableName)} NOWAIT`)
+      FOR ${sourceMode} OF ${sql.identifier(tableName)} NOWAIT`),
     ).at(0);
-    if (row === undefined) {
+    if (rawRow === undefined) {
       return undefined;
     }
-    if (row.organizationId === null) {
-      return panic("Scope source has no organization");
-    }
+    const row = v.parse(scopeSourceRow, rawRow);
     if (row.workspaceId !== null) {
       const matter = (
         await tx
@@ -2082,7 +2082,7 @@ export const lockOrgScopeSource = async ({
         return panic("Scope source and matter organization must agree");
       }
     }
-    return { ...row, organizationId: row.organizationId };
+    return row;
   });
   if (Result.isError(result)) {
     if (getPgErrorCode(result.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {

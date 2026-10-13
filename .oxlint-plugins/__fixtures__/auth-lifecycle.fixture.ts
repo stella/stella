@@ -11,7 +11,7 @@ import {
   removeOrganizationMemberWithAuthArtifacts as removeMember,
   revokeOrganizationMemberAuthArtifacts,
 } from "@/api/lib/auth-artifacts";
-import { removeOrganizationMemberInTransaction } from "@/api/lib/member-assignment-offboarding";
+import { removeOrganizationMemberInTransaction } from "@/api/lib/member-offboarding/member-assignment-offboarding";
 
 declare const db: {
   delete: (table: unknown) => unknown;

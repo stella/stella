@@ -173,6 +173,10 @@ const PUBLIC_DECISION_PREDICATE_TOKENS = [
 const DECISION_TABLE_MENTION = /caseLawDecisions|case_law_decisions/u;
 
 const PUBLIC_DECISION_READ_GATES = {
+  "apps/api/src/db/org-scope-registry.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Classifies table ownership with schema metadata; issues no query.",
+  },
   "apps/api/src/db/rls.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Declares the roles and policies; issues no query.",

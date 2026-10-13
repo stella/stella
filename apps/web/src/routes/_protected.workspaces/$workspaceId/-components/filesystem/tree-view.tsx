@@ -745,7 +745,13 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     monitorForElements({
       canMonitor: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
       onDragStart: ({ source }) => {
-        setDraggedEntityIds(getDragEntityIds(source.data) ?? []);
+        const entityIds = getDragEntityIds(source.data);
+        if (entityIds === null) {
+          setDraggedEntityIds([]);
+          setIsDragActive(false);
+          return;
+        }
+        setDraggedEntityIds(entityIds);
         const entities = source.data["entities"];
         const parentId = source.data["parentId"];
         const hasNested = isDragEntityList(entities)
