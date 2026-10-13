@@ -39,7 +39,10 @@ import {
 } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import { auditLogs } from "@/api/db/schema";
-import { mcpWebHandoff } from "@/api/db/schema/mcp-web-handoff";
+import {
+  mcpWebHandoff,
+  MCP_WEB_HANDOFF_KINDS,
+} from "@/api/db/schema/mcp-web-handoff";
 import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
 import { createMcpWebHandoffPlugin } from "@/api/lib/auth";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
@@ -677,6 +680,178 @@ describe("MCP link sign-in", () => {
     });
     expect(normalSession?.user.id).toBe(fixture.userId);
     expect(normalSession?.session.originConsentId ?? null).toBeNull();
+  });
+  test.each(
+    MCP_WEB_HANDOFF_KINDS.flatMap((priorKind) =>
+      MCP_WEB_HANDOFF_KINDS.map((nextKind) => [priorKind, nextKind] as const),
+    ),
+  )(
+    "%s handoff sessions are replaced by %s sessions owned by the next consent",
+    async (priorKind, nextKind) => {
+      const replacementUserId = Bun.randomUUIDv7();
+      const replacementFixture = { ...fixture, userId: replacementUserId };
+      await db.insert(user).values({
+        id: replacementUserId,
+        name: "Account",
+        email: `handoff-${replacementUserId}@example.test`,
+        emailVerified: true,
+      });
+      await db.insert(member).values({
+        id: Bun.randomUUIDv7(),
+        userId: replacementUserId,
+        organizationId: fixture.organizationId,
+        role: "owner",
+        createdAt: new Date(),
+      });
+      const priorConsentId = Bun.randomUUIDv7();
+      const nextConsentId = Bun.randomUUIDv7();
+      await db.insert(oauthConsent).values(
+        [priorConsentId, nextConsentId].map((id) => ({
+          id,
+          clientId: fixture.clientId,
+          userId: replacementUserId,
+          referenceId: fixture.organizationId,
+          scopes: [...MCP_OAUTH_SCOPES],
+        })),
+      );
+      const priorCode = await service.mint(
+        { ...replacementFixture, consentId: priorConsentId },
+        ["/law/example"],
+        priorKind,
+      );
+      expect(priorCode).not.toBeNull();
+      if (priorCode === null) {
+        expect.unreachable("Expected prior handoff code");
+      }
+      const priorResponse = await redeem(priorCode, "confirmed");
+      expect(priorResponse.status).toBe(200);
+      const prior = await auth.api.getSession({
+        headers: { cookie: cookieOf(priorResponse) },
+        query: { disableCookieCache: true },
+      });
+      expect(prior?.session.originConsentId).toBe(priorConsentId);
+      if (prior === null) {
+        expect.unreachable("Expected prior handoff session");
+      }
+      const nextCode = await service.mint(
+        { ...replacementFixture, consentId: nextConsentId },
+        ["/law/example"],
+        nextKind,
+      );
+      expect(nextCode).not.toBeNull();
+      if (nextCode === null) {
+        expect.unreachable("Expected next handoff code");
+      }
+      const startedAt = Date.now();
+      const nextResponse = await redeem(
+        nextCode,
+        "confirmed",
+        cookieOf(priorResponse),
+      );
+      expect(nextResponse.status).toBe(200);
+      const nextCookie = cookieOf(nextResponse);
+      const next = await auth.api.getSession({
+        headers: { cookie: nextCookie },
+        query: { disableCookieCache: true },
+      });
+      expect(next).not.toBeNull();
+      if (next === null) {
+        expect.unreachable("Expected next handoff session");
+      }
+      expect(next.session.id).not.toBe(prior.session.id);
+      expect(next.session.token).not.toBe(prior.session.token);
+      expect(next.session.originConsentId).toBe(nextConsentId);
+      expect((await service.inspect(nextCode))?.handoff.consumedSessionId).toBe(
+        next.session.id,
+      );
+      expect(await db.$count(session, eq(session.id, prior.session.id))).toBe(
+        0,
+      );
+      const stored = (
+        await db.select().from(session).where(eq(session.id, next.session.id))
+      ).at(0);
+      expect(stored).toBeDefined();
+      if (nextKind === "text") {
+        expect(
+          stored?.handoffAbsoluteExpiresAt?.getTime(),
+        ).toBeGreaterThanOrEqual(startedAt + 43_200_000);
+        expect(stored?.handoffAbsoluteExpiresAt?.getTime()).toBeLessThanOrEqual(
+          Date.now() + 43_200_000,
+        );
+        expect(stored?.expiresAt).toEqual(stored?.handoffAbsoluteExpiresAt);
+      } else {
+        expect(stored?.handoffAbsoluteExpiresAt).toBeNull();
+        expect(stored?.expiresAt.getTime()).toBeGreaterThan(
+          Date.now() + 43_200_000,
+        );
+      }
+      await db.delete(oauthConsent).where(eq(oauthConsent.id, priorConsentId));
+      expect(
+        (
+          await auth.api.getSession({
+            headers: { cookie: nextCookie },
+            query: { disableCookieCache: true },
+          })
+        )?.session.id,
+      ).toBe(next.session.id);
+      await db.delete(oauthConsent).where(eq(oauthConsent.id, nextConsentId));
+      expect(await db.$count(session, eq(session.id, next.session.id))).toBe(0);
+      expect(
+        await auth.api.getSession({
+          headers: { cookie: nextCookie },
+          query: { disableCookieCache: true },
+        }),
+      ).toBeNull();
+    },
+  );
+  test("an incomplete replacement preserves the prior session and unused link", async () => {
+    const priorResponse = await redeem(await mint("click"));
+    expect(priorResponse.status).toBe(200);
+    const priorCookie = cookieOf(priorResponse);
+    const prior = await auth.api.getSession({
+      headers: { cookie: priorCookie },
+      query: { disableCookieCache: true },
+    });
+    expect(prior).not.toBeNull();
+    if (prior === null) {
+      expect.unreachable("Expected prior handoff session");
+    }
+    const incompleteAuth = makeAuth();
+    const context = await incompleteAuth.$context;
+    const deleteSession = context.internalAdapter.deleteSession;
+    context.internalAdapter.deleteSession = async (token) => {
+      await deleteSession(token);
+      throw new TypeError("Session replacement unavailable");
+    };
+    const code = await mint("text");
+    const before = await db.$count(session);
+    const response = await incompleteAuth.handler(
+      new Request(`${baseURL}/api/auth/mcp-handoff/redeem`, {
+        method: "POST",
+        headers: {
+          origin: baseURL,
+          "content-type": "application/json",
+          cookie: priorCookie,
+        },
+        body: JSON.stringify({
+          code,
+          path: "/law/example",
+          confirmation: "confirmed",
+        }),
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(response.headers.getSetCookie()).toEqual([]);
+    expect(await db.$count(session)).toBe(before);
+    expect((await service.inspect(code))?.handoff.consumedAt).toBeNull();
+    expect(
+      (
+        await auth.api.getSession({
+          headers: { cookie: priorCookie },
+          query: { disableCookieCache: true },
+        })
+      )?.session.id,
+    ).toBe(prior.session.id);
   });
   test("a same-account browser switches to the link organization while keeping its session", async () => {
     const signedIn = await auth.api.signInEmail({

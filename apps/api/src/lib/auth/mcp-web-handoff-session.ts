@@ -41,7 +41,10 @@ export const completeHandoffSession = async ({
   const completion = await Result.tryPromise(
     async () =>
       await runWithAdapter(adapter, async () => {
-        if (existing?.user.id === completionContext.userId) {
+        if (
+          existing?.user.id === completionContext.userId &&
+          existing.session["originConsentId"] === null
+        ) {
           const updated = await ctx.context.internalAdapter.updateSession(
             existing.session.token,
             { activeOrganizationId: completionContext.organizationId },
@@ -84,6 +87,12 @@ export const completeHandoffSession = async ({
             ...(absoluteDeadline ? { expiresAt: absoluteDeadline } : {}),
           },
         );
+        // Replacing a handoff session transfers ownership and lifetime to this consent.
+        if (existing && existing.session["originConsentId"] !== null) {
+          await ctx.context.internalAdapter.deleteSession(
+            existing.session.token,
+          );
+        }
         await setSessionCookie(ctx, { session: created, user: account });
         return Result.ok(created.id);
       }),
