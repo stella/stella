@@ -3286,7 +3286,10 @@ const createRequestWorkspaceAccess = ({
     Promise<AccessibleWorkspace | null>
   >();
   if (initialWorkspaceId) {
-    workspaceAccessPromises.set(initialWorkspaceId, Promise.resolve(workspace));
+    workspaceAccessPromises.set(
+      initialWorkspaceId,
+      Promise.resolve(initialWorkspace),
+    );
   }
   const getWorkspaceAccess = async (
     workspaceId: SafeId<"workspace">,
