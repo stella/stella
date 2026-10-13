@@ -284,5 +284,70 @@
       }
     ]
   },
-  "retainedApiTaskDefaults": ["@stll/api#generate:capability-runtime"]
+  "retainedApiTaskDefaults": ["@stll/api#generate:capability-runtime"],
+  "e2eProductionShards": {
+    "measurementNotes": "Successful Run Playwright shard step wall times from the 29 most recent completed merge-group CI runs sampled on 2026-10-13. Include successful jobs in cancelled workflows; exclude skipped, failed and cancelled steps and jobs. Nearest-rank empirical p50/p95: shard 1 = 363/381 seconds (5 samples), shard 2 = 402/409 seconds (4 samples). Sparse samples are not a population estimate. The existing task-budget policy applies: max(1.5 x p95, 2 x largest sample) + 30 seconds, rounded up to whole minutes for Actions. Both sequential general and geometry batches, container startup and teardown are included. Job 115091890434 timed out and is excluded from successful measurements. Keep the two-shard split and concurrency: increasing the watchdog does not lengthen passing runs. Changes to the measured invocation require fresh samples; elapsed wall time is checked against the budget before the 30-second cleanup margin.",
+    "samples": [
+      {
+        "runId": 38338932363,
+        "jobId": 115106312135,
+        "shard": 1,
+        "seconds": 269
+      },
+      {
+        "runId": 38338932363,
+        "jobId": 115106312158,
+        "shard": 2,
+        "seconds": 337
+      },
+      {
+        "runId": 38340008557,
+        "jobId": 115109297267,
+        "shard": 1,
+        "seconds": 363
+      },
+      {
+        "runId": 38340008557,
+        "jobId": 115109297303,
+        "shard": 2,
+        "seconds": 402
+      },
+      {
+        "runId": 38334060078,
+        "jobId": 115091088110,
+        "shard": 1,
+        "seconds": 335
+      },
+      {
+        "runId": 38334060078,
+        "jobId": 115091088151,
+        "shard": 2,
+        "seconds": 409
+      },
+      {
+        "runId": 38334058981,
+        "jobId": 115091890321,
+        "shard": 1,
+        "seconds": 381
+      },
+      {
+        "runId": 38338931769,
+        "jobId": 115106042303,
+        "shard": 1,
+        "seconds": 368
+      },
+      {
+        "runId": 38338931769,
+        "jobId": 115106042337,
+        "shard": 2,
+        "seconds": 405
+      }
+    ],
+    "planFiles": [
+      "apps/web/e2e/playwright.config.ts",
+      "apps/web/e2e/execution-profile.ts",
+      "apps/web/e2e/shard-count.ts"
+    ],
+    "planSha256": "c274fef14860f7dfc3e7031487b55c7a52b072774e8113745054d9dd901b7819"
+  }
 }

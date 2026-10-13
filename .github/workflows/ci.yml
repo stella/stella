@@ -3881,7 +3881,7 @@ jobs:
 
       - name: Test geometry shard plan
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/e2e-geometry-shards.test.ts
+        run: bun test scripts/e2e-geometry-shards.test.ts scripts/e2e-shard-budget.test.ts
 
       - name: Validate CI service image mirror inventory
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' }}
@@ -6597,8 +6597,9 @@ jobs:
       )
       )
     runs-on: ubuntu-latest
-    # Longest leg: 15m setup + 13m tests + 4m uploads + 2m cancellation/post hooks.
-    timeout-minutes: 34
+    # Longest leg: 15m setup + 21m tests + 4m uploads + 2m cancellation/post hooks.
+    # Playwright uses measured p95/max plus the task registry margin.
+    timeout-minutes: 42
     permissions:
       contents: read
       packages: read
@@ -6627,8 +6628,16 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
+        id: e2e-budget
         timeout-minutes: 2
-        run: bash scripts/retry.sh bun ci --ignore-scripts
+        run: |
+          bash scripts/retry.sh bun ci --ignore-scripts
+          if [[ "${{ matrix.shard }}" != network-baseline ]]; then
+            minutes=$(bun scripts/e2e-shard-deadline.ts --minutes ${{ matrix.shard }})
+            echo "minutes=$minutes" >> "$GITHUB_OUTPUT"
+          else
+            echo "minutes=1" >> "$GITHUB_OUTPUT"
+          fi
         env:
           NPM_TOKEN: ""
           # Three attempts and both waits fit inside the step deadline.
@@ -6690,7 +6699,7 @@ jobs:
           retention-days: 7
 
       - name: Run Playwright shard
-        timeout-minutes: 7
+        timeout-minutes: ${{ fromJSON(steps.e2e-budget.outputs.minutes) }}
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard != 'network-baseline'
@@ -6702,6 +6711,7 @@ jobs:
           E2E_SPECS: ${{ needs.ci-plan.outputs.e2e_production_specs }}
         run: |
           set -euo pipefail
+          SECONDS=0
           case "$E2E_MODE" in
             full)
               args=(--project=chromium --project=heap-growth-canary --shard=${{ matrix.shard }}/2)
@@ -6727,7 +6737,8 @@ jobs:
             bun --filter @stll/web test:e2e -- --grep-invert='route-smoke' "${args[@]}" || status=$?
           if [[ "$E2E_MODE" == full ]]; then
             # Shard the uniform-cost geometry matrix independently; cheap tests
-            # must not displace its cases onto one shard. Keep the shared 7m cap.
+            # must not displace its cases onto one shard. Both batches share the
+            # measured wall-time budget, including container overhead.
             # Preserve both blob reports, including when geometry fails.
             shopt -s nullglob
             trap 'mkdir -p apps/web/e2e/test-results/blob-report; for report in apps/web/e2e/test-results/geometry/blob-report/*.zip; do cp "$report" apps/web/e2e/test-results/blob-report/; done' EXIT
@@ -6736,6 +6747,7 @@ jobs:
               bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" \
               bun --filter @stll/web test:e2e -- --project=docked-chat-geometry --shard=${{ matrix.shard }}/2 || status=$?
           fi
+          bun scripts/e2e-shard-deadline.ts --check ${{ matrix.shard }} "$SECONDS" || status=$?
           exit "$status"
 
       # API-owned browser checks (visual sandbox) need the API from this stack

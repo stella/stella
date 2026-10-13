@@ -3,8 +3,15 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
+import { createSha256 } from "@stll/sha256/node";
+
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
-import { allE2eMatrix } from "./e2e-spec-shards-core";
+import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
+import {
+  measuredShardBudget,
+  shardBudgetViolation,
+} from "./e2e-shard-deadline";
+import { allE2eMatrix, E2E_SHARD_COUNT } from "./e2e-spec-shards-core";
 import { evaluate } from "./github-expression";
 import { lexShell } from "./install-free-ci";
 
@@ -15,7 +22,7 @@ const jobSchema = v.object({
       name: v.string(),
       if: v.optional(v.string()),
       run: v.optional(v.string()),
-      "timeout-minutes": v.optional(v.number()),
+      "timeout-minutes": v.optional(v.union([v.number(), v.string()])),
     }),
   ),
 });
@@ -35,6 +42,22 @@ const job = {
   steps: parsedJob.steps,
 };
 
+const deadlineMinutes = (deadline: number | string, shard: number | string) =>
+  typeof deadline === "number"
+    ? deadline
+    : v.parse(
+        v.number(),
+        evaluate(deadline, {
+          values: {
+            "steps.e2e-budget.outputs.minutes": String(
+              typeof shard === "number"
+                ? measuredShardBudget(shard).minutes
+                : 1,
+            ),
+          },
+        }),
+      );
+
 const budgetViolations = (candidate: typeof job) => {
   const violations: string[] = [];
   for (const shard of candidate.strategy.matrix.shard) {
@@ -45,7 +68,7 @@ const budgetViolations = (candidate: typeof job) => {
         continue;
       }
       const deadline = step["timeout-minutes"];
-      if (deadline === undefined || deadline <= 0) {
+      if (deadline === undefined || deadlineMinutes(deadline, shard) <= 0) {
         violations.push(`${step.name} needs an independent deadline`);
         continue;
       }
@@ -70,7 +93,7 @@ const budgetViolations = (candidate: typeof job) => {
             });
       expect(typeof active, step.name).toBe("boolean");
       if (active === true) {
-        total += deadline;
+        total += deadlineMinutes(deadline, shard);
       }
     }
     if (candidate["timeout-minutes"] < total + 2) {
@@ -117,6 +140,9 @@ test("every shard Playwright deadline exceeds its configured test timeout and st
         continue;
       }
       const filterIndex = event.words.indexOf("--filter");
+      if (filterIndex === -1) {
+        continue;
+      }
       const workspace = v.parse(v.string(), event.words.at(filterIndex + 1));
       const script = v.parse(v.string(), event.words.at(filterIndex + 2));
       const directory = path.resolve(
@@ -155,7 +181,11 @@ test("every shard Playwright deadline exceeds its configured test timeout and st
           (project) => project.timeout ?? options.timeout,
         ),
       );
-      const deadline = v.parse(v.number(), step["timeout-minutes"]) * 60_000;
+      const deadline =
+        deadlineMinutes(
+          v.parse(v.union([v.number(), v.string()]), step["timeout-minutes"]),
+          1,
+        ) * 60_000;
       expect(deadline, step.name).toBeGreaterThan(
         testTimeout + STARTUP_MARGIN_MS,
       );
@@ -163,4 +193,94 @@ test("every shard Playwright deadline exceeds its configured test timeout and st
     }
   }
   expect(checked).toBeGreaterThan(0);
+});
+
+test("measured wall-time budgets cover every shard and retain the existing sparse-sample margin", () => {
+  expect(
+    [
+      ...new Set(
+        configuredBudgets.e2eProductionShards.samples.map(({ shard }) => shard),
+      ),
+    ].toSorted(),
+  ).toEqual(allE2eMatrix().shard.filter((shard) => typeof shard === "number"));
+  const step = job.steps.find(({ name }) => name === "Run Playwright shard");
+  expect(step?.["timeout-minutes"]).toBe(
+    `\${{ fromJSON(steps.e2e-budget.outputs.minutes) }}`,
+  );
+  for (let shard = 1; shard <= E2E_SHARD_COUNT; shard++) {
+    const budget = measuredShardBudget(shard);
+    const samples = configuredBudgets.e2eProductionShards.samples.filter(
+      (sample) => sample.shard === shard,
+    );
+    expect(budget.seconds).toBeGreaterThanOrEqual(budget.p95 * 1.5);
+    for (const sample of samples) {
+      expect(budget.seconds).toBeGreaterThanOrEqual(sample.seconds * 2);
+    }
+    expect(budget.minutes * 60).toBeGreaterThanOrEqual(budget.seconds + 30);
+    expect(shardBudgetViolation(shard, budget.seconds)).toBeUndefined();
+    expect(shardBudgetViolation(shard, budget.seconds + 1)).toContain(
+      "exceeding its measured",
+    );
+  }
+});
+
+test("changing the measured shard split requires fresh wall-time evidence", () => {
+  const run = v.parse(
+    v.string(),
+    job.steps.find(({ name }) => name === "Run Playwright shard")?.run,
+  );
+  const fingerprint = (command: string) => {
+    const hash = createSha256().update(command);
+    for (const file of configuredBudgets.e2eProductionShards.planFiles) {
+      hash.update(readFileSync(new URL(`../${file}`, import.meta.url)));
+    }
+    return hash.digest("hex");
+  };
+  expect(
+    fingerprint(run),
+    "Remeasure the current split before updating its fingerprint",
+  ).toBe(configuredBudgets.e2eProductionShards.planSha256);
+  expect(fingerprint(run.replaceAll("/2", "/3"))).not.toBe(
+    configuredBudgets.e2eProductionShards.planSha256,
+  );
+  expect(run).toContain(
+    `bun scripts/e2e-shard-deadline.ts --check \${{ matrix.shard }} "$SECONDS"`,
+  );
+  expect(run).toContain("SECONDS=0");
+});
+
+test("the workflow publishes computed deadlines and an over-budget shard fails with an annotation", () => {
+  const install = v.parse(
+    v.string(),
+    job.steps.find(({ name }) => name === "Install dependencies")?.run,
+  );
+  for (const shard of allE2eMatrix().shard) {
+    const result = Bun.spawnSync(
+      [
+        "bash",
+        "-euc",
+        install
+          .replace("bash scripts/retry.sh bun ci --ignore-scripts", "true")
+          .replaceAll(`\${{ matrix.shard }}`, () => String(shard)),
+      ],
+      {
+        cwd: path.resolve(import.meta.dir, ".."),
+        env: { ...process.env, GITHUB_OUTPUT: "/dev/stdout" },
+      },
+    );
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    expect(result.stdout.toString().trim()).toBe(
+      `minutes=${typeof shard === "number" ? measuredShardBudget(shard).minutes : 1}`,
+    );
+  }
+  const result = Bun.spawnSync([
+    process.execPath,
+    path.join(import.meta.dir, "e2e-shard-deadline.ts"),
+    "--check",
+    "2",
+    String(measuredShardBudget(2).seconds + 1),
+  ]);
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toContain("::error::Shard 2");
+  expect(result.stderr.toString()).toContain("exceeding its measured");
 });
