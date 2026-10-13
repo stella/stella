@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const lint = async (
@@ -92,7 +94,7 @@ describe.serial("no-direct-field-write", () => {
 
     const reports: Record<string, number[]> = {};
     for (const file of modules) {
-      const relative = path.relative(root, file);
+      const relative = repoRelativePath(root, file);
       const lines = await lintSingleRule(
         "no-direct-field-write",
         readFileSync(file, "utf-8"),

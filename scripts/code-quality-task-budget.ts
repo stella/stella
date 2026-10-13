@@ -363,6 +363,7 @@ const processTreeAtSignal = ({
     try: () =>
       execFileSync("ps", ["-axo", "pid=,ppid=,pgid=,stat=,command="], {
         timeout: 1000,
+        killSignal: "SIGKILL",
         maxBuffer: 2 * 1024 * 1024,
         encoding: "utf-8",
       }),
@@ -374,54 +375,71 @@ const processTreeAtSignal = ({
   return `Command process tree at ${signal}: elapsed=${Date.now() - startedAt}ms pgid=${group}\nPID PPID PGID STATE COMMAND\n${rows || "No remaining group members"}\n`;
 };
 
+const PROCESS_GROUP_POLL_MS = 50;
+
 type AuditExitedGroupOptions = {
   group: number;
+  drainUntil: number;
+  deadline: number;
   report: (diagnostic: string) => void;
   terminate: () => void;
 };
 const auditExitedProcessGroup = async ({
   group,
+  drainUntil,
+  deadline,
   report,
   terminate,
 }: AuditExitedGroupOptions) => {
-  const groupSnapshot = await Result.tryPromise(
-    async () =>
-      await new Promise<string>((resolve, reject) => {
-        execFile(
-          "ps",
-          ["-axo", "pid=,pgid=,stat=,command="],
-          { timeout: 1000, maxBuffer: 2 * 1024 * 1024 },
-          (error, stdout) => {
-            if (error !== null) {
-              reject(new TaskBudgetInputError({ message: error.message }));
-              return;
-            }
-            resolve(stdout);
-          },
-        );
-      }),
-  );
-  if (groupSnapshot.isErr()) {
+  while (true) {
+    const groupSnapshot = await Result.tryPromise(
+      async () =>
+        await new Promise<string>((resolve, reject) => {
+          execFile(
+            "ps",
+            ["-axo", "pid=,pgid=,stat=,command="],
+            {
+              timeout: Math.max(1, Math.min(1000, deadline - Date.now())),
+              killSignal: "SIGKILL",
+              maxBuffer: 2 * 1024 * 1024,
+            },
+            (error, stdout) => {
+              if (error !== null) {
+                reject(new TaskBudgetInputError({ message: error.message }));
+                return;
+              }
+              resolve(stdout);
+            },
+          );
+        }),
+    );
+    if (groupSnapshot.isErr()) {
+      report(
+        `Cannot inspect owned process group ${group}: ${failureMessage(groupSnapshot.error)}\n`,
+      );
+      terminate();
+      return true;
+    }
+    const leftovers = ownedProcessGroupMembers(groupSnapshot.value, group);
+    if (leftovers.length === 0) {
+      return false;
+    }
+    const remainingMs = Math.min(drainUntil, deadline) - Date.now();
+    if (remainingMs > 0) {
+      await Bun.sleep(Math.min(PROCESS_GROUP_POLL_MS, remainingMs));
+      continue;
+    }
     report(
-      `Cannot inspect owned process group ${group}: ${failureMessage(groupSnapshot.error)}\n`,
+      leftovers
+        .map(
+          ({ pid, command: processCommand }) =>
+            `Owned process remained after leader exit: pid=${pid} pgid=${group} command=${processCommand}\n`,
+        )
+        .join(""),
     );
     terminate();
     return true;
   }
-  const leftovers = ownedProcessGroupMembers(groupSnapshot.value, group);
-  if (leftovers.length === 0) {
-    return false;
-  }
-  report(
-    leftovers
-      .map(
-        ({ pid, command: processCommand }) =>
-          `Owned process remained after leader exit: pid=${pid} pgid=${group} command=${processCommand}\n`,
-      )
-      .join(""),
-  );
-  terminate();
-  return true;
 };
 
 const signalExitCode = (code: number | null, signal: NodeJS.Signals | null) => {
@@ -582,18 +600,8 @@ export const runBudgetedCheck = async ({
     });
   });
   const endedAt = Date.now();
-  if (ownsGroup && child.pid !== undefined && process.platform !== "win32") {
-    cleanupFailed = await auditExitedProcessGroup({
-      group: child.pid,
-      report: reportDiagnostic,
-      terminate: terminateLeftovers,
-    });
-  }
-  if (cleanupGrace !== undefined) {
-    await cleanupGrace;
-  }
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
-  await Promise.race([
+  const pipesDrained = Promise.race([
     closed,
     new Promise<void>((resolve) => {
       drainTimer = setTimeout(() => {
@@ -607,10 +615,22 @@ export const runBudgetedCheck = async ({
         resolve();
       }, graceMs + 1000);
     }),
-  ]);
-  if (drainTimer !== undefined) {
-    clearTimeout(drainTimer);
+  ]).finally(() => clearTimeout(drainTimer));
+  if (ownsGroup && child.pid !== undefined && process.platform !== "win32") {
+    const groupCleanupFailed = await auditExitedProcessGroup({
+      group: child.pid,
+      // Let short-lived descendants finish within the existing termination grace.
+      drainUntil: endedAt + graceMs,
+      deadline: Math.min(endedAt + graceMs + 1000, startedAt + timeoutMs),
+      report: reportDiagnostic,
+      terminate: terminateLeftovers,
+    });
+    cleanupFailed = groupCleanupFailed || cleanupFailed;
   }
+  if (cleanupGrace !== undefined) {
+    await cleanupGrace;
+  }
+  await pipesDrained;
   if (cleanupFailed) {
     killGroup("SIGKILL");
   }
