@@ -8,6 +8,7 @@ import ts from "typescript";
 import { IntlProvider } from "use-intl";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { repoRelativePath } from "@stll/portable-path";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
 import {
@@ -213,9 +214,7 @@ const sourceCensus = (sources: ReadonlyMap<string, string>) => {
       if (resolved === undefined) {
         continue;
       }
-      const target = path
-        .relative(sourceRoot, resolved)
-        .replaceAll(path.sep, "/");
+      const target = repoRelativePath(sourceRoot, resolved);
       dependencies.add(target);
       const exports = new Set<string>();
       switch (target) {

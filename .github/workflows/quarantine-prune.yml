@@ -46,7 +46,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -110,7 +110,7 @@ jobs:
       - name: Open or update the removal PR
         id: removal-pr
         if: steps.prune.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr

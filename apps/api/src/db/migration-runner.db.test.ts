@@ -55,6 +55,7 @@ const ALTER_LOCK_PROBE =
   "SET lock_timeout = '100ms';--> statement-breakpoint\n" +
   "ALTER TABLE lock_probe ADD COLUMN reissued boolean;";
 const CORPUS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
+const SCRATCH_TEARDOWN_TIMEOUT_MS = 30_000;
 const ONLINE_COMPLETE = {
   type: "complete",
 } as const satisfies OnlineMigrationOutcome;
@@ -128,25 +129,28 @@ type Scratch = {
   ) => ReturnType<typeof runMigrations>;
 };
 
-const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
+const withScratch = async <T>(
+  work: (scratch: Scratch) => Promise<T>,
+  adminClient?: SQL,
+) => {
   if (databaseUrl === undefined) {
     throw new Error(
       "DATABASE_URL is required for migration runner database tests",
     );
   }
-  await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-    const admin = openClient().sql;
+  return await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    const admin = adminClient ?? openClient().sql;
     const name = `stella_runner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
     await admin.unsafe(`CREATE DATABASE "${name}"`);
     try {
       const url = new URL(databaseUrl);
       url.pathname = `/${name}`;
       const scratchUrl = url.toString();
-      await withGatedTestClients(
+      return await withGatedTestClients(
         scratchUrl,
         async ({ openClient: openScratchClient }) => {
           const observer = openScratchClient().sql;
-          await work({
+          return await work({
             scratchUrl,
             observer,
             openClient: () => openScratchClient().sql,
@@ -171,6 +175,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
         },
       );
     } finally {
+      // Normal DROP waits for owned sessions to exit without requiring signal privileges.
       await admin.unsafe(`DROP DATABASE "${name}"`);
     }
   });
@@ -275,6 +280,101 @@ if (!runPostgresTests || databaseUrl === undefined) {
   });
 } else {
   describe("migration runner PostgreSQL contract", () => {
+    test(
+      "scratch teardown waits for backend exit without signal privileges",
+      async () => {
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const admin = openClient().sql;
+          const monitor = openClient().sql;
+          const ownerRole = `runner_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+          const databases: string[] = [];
+          const releases: Promise<unknown>[] = [];
+          await admin.unsafe(
+            `CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS NOINHERIT CREATEDB`,
+          );
+          try {
+            await admin.unsafe(
+              `GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT FALSE, SET TRUE`,
+            );
+            await admin.unsafe(`SET ROLE ${ownerRole}`);
+            const authority = (
+              await admin.unsafe(
+                `SELECT current_user AS caller,
+                      pg_has_role(current_user, session_user, 'USAGE') AS "maySignalLogin",
+                      pg_has_role(current_user, 'pg_signal_backend', 'USAGE') AS "maySignalAny"`,
+              )
+            ).at(0);
+            expect(authority).toMatchObject({
+              caller: ownerRole,
+              maySignalLogin: false,
+              maySignalAny: false,
+            });
+            const pid = (
+              await admin.unsafe<{ pid: number }[]>(
+                "SELECT pg_backend_pid() AS pid",
+              )
+            ).at(0)?.pid;
+            if (pid === undefined) {
+              throw new Error("Expected restricted owner's backend pid");
+            }
+            const dropped = await withScratch(async ({ scratchUrl }) => {
+              const name = new URL(scratchUrl).pathname.slice(1);
+              databases.push(name);
+              // This pool belongs to the outer scope, so teardown must await its exit.
+              const foreign = openClient({ databaseUrl: scratchUrl }).sql;
+              await foreign.unsafe("SELECT 1");
+              releases.push(
+                rejectionOf(async () => {
+                  try {
+                    const deadline = Date.now() + 5000;
+                    while (Date.now() < deadline) {
+                      const executing = (
+                        await monitor.unsafe<{ executing: boolean }[]>(
+                          `SELECT EXISTS (
+                           SELECT 1 FROM pg_stat_activity
+                           WHERE pid = $1 AND state = 'active' AND query = $2
+                         ) AS executing`,
+                          [pid, `DROP DATABASE "${name}"`],
+                        )
+                      ).at(0)?.executing;
+                      if (executing === true) {
+                        return;
+                      }
+                      await Bun.sleep(10);
+                    }
+                    throw new Error(
+                      "Scratch teardown never waited for the backend to exit",
+                    );
+                  } finally {
+                    await foreign.close();
+                  }
+                }),
+              );
+              return name;
+            }, admin);
+            expect(releases).toHaveLength(1);
+            expect(await releases.at(0)).toBeNull();
+            expect(
+              (
+                await admin.unsafe<{ absent: boolean }[]>(
+                  "SELECT NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = $1) AS absent",
+                  [dropped],
+                )
+              ).at(0)?.absent,
+            ).toBe(true);
+          } finally {
+            await Promise.all(releases);
+            await admin.unsafe("RESET ROLE");
+            for (const name of databases) {
+              await admin.unsafe(`DROP DATABASE IF EXISTS "${name}"`);
+            }
+            await admin.unsafe(`DROP ROLE ${ownerRole}`);
+          }
+        });
+      },
+      SCRATCH_TEARDOWN_TIMEOUT_MS,
+    );
+
     test("rejects corrupted history before a pending statement runs", async () => {
       await withBundle(
         [{ name: A, sql: CREATE_PROBE }],

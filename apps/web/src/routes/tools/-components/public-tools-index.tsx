@@ -207,7 +207,7 @@ export function PublicToolsIndex({
             {query.length > 0 && (
               <InputGroupAddon align="inline-end">
                 <Button
-                  aria-label={t("onboarding.catalogueClearSearch")}
+                  aria-label={t("common.clearSearch")}
                   onClick={() => setQuery("")}
                   size="icon-sm"
                   type="button"
