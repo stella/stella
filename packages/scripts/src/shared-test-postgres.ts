@@ -354,7 +354,7 @@ export const ensureContainer = async (options: EnsureContainerOptions) => {
   const locked = await withGenerationLock<EnsureContainerResult>({
     lockPath: path.join(options.state, "container.lock"),
     waitTimeoutMs: CONTAINER_CREATION_LOCK_TIMEOUT_MS,
-    run: () => ensureContainerUnlocked(options),
+    run: async () => ensureContainerUnlocked(options),
   });
   if (locked.isErr()) {
     return Result.err(
