@@ -31,6 +31,22 @@ struct EncryptedEnvelope {
   version: u8,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub enum EncryptedReadError {
+  Unavailable(String),
+  Unreadable(String),
+}
+
+impl std::fmt::Display for EncryptedReadError {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Unavailable(message) | Self::Unreadable(message) => {
+        formatter.write_str(message)
+      }
+    }
+  }
+}
+
 /// One JSON value encrypted under a store key. `associated_data` binds the
 /// ciphertext to its purpose (for example the day a file holds), so a file
 /// moved to another name fails to decrypt instead of reading as that name.
@@ -68,28 +84,48 @@ impl EncryptedJsonFile {
   }
 
   pub fn load<T: DeserializeOwned>(&self) -> Result<Option<T>, String> {
+    self.load_checked().map_err(|error| error.to_string())
+  }
+
+  pub fn load_checked<T: DeserializeOwned>(
+    &self,
+  ) -> Result<Option<T>, EncryptedReadError> {
     let label = self.label;
-    let raw = match fs::read_to_string(&self.path) {
+    let raw = match fs::read(&self.path) {
       Ok(raw) => raw,
       Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-      Err(error) => return Err(format!("{label} store read failed: {error}")),
+      Err(error) => {
+        return Err(EncryptedReadError::Unavailable(format!(
+          "{label} store read failed: {error}"
+        )));
+      }
     };
-    let envelope: EncryptedEnvelope = serde_json::from_str(&raw)
-      .map_err(|error| format!("{label} envelope is invalid: {error}"))?;
+    let envelope: EncryptedEnvelope =
+      serde_json::from_slice(&raw).map_err(|error| {
+        EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
+      })?;
     if envelope.version != ENVELOPE_VERSION {
-      return Err(format!("{label} store version is unsupported"));
+      return Err(EncryptedReadError::Unreadable(format!(
+        "{label} store version is unsupported"
+      )));
     }
-    let nonce = hex::decode(envelope.nonce)
-      .map_err(|error| format!("{label} nonce is invalid: {error}"))?;
+    let nonce = hex::decode(envelope.nonce).map_err(|error| {
+      EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
+    })?;
     if nonce.len() != NONCE_BYTES {
-      return Err(format!("{label} nonce has an invalid length"));
+      return Err(EncryptedReadError::Unreadable(format!(
+        "{label} nonce has an invalid length"
+      )));
     }
-    let nonce = Nonce::try_from(nonce.as_slice())
-      .map_err(|_| format!("{label} nonce has an invalid length"))?;
-    let ciphertext = hex::decode(envelope.ciphertext)
-      .map_err(|error| format!("{label} ciphertext is invalid: {error}"))?;
+    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|_| {
+      EncryptedReadError::Unreadable(format!("{label} nonce has an invalid length"))
+    })?;
+    let ciphertext = hex::decode(envelope.ciphertext).map_err(|error| {
+      EncryptedReadError::Unreadable(format!("{label} ciphertext is invalid: {error}"))
+    })?;
     let plaintext = self
-      .cipher()?
+      .cipher()
+      .map_err(EncryptedReadError::Unavailable)?
       .decrypt(
         &nonce,
         Payload {
@@ -97,10 +133,14 @@ impl EncryptedJsonFile {
           aad: &self.associated_data,
         },
       )
-      .map_err(|_| format!("{label} store could not be decrypted"))?;
+      .map_err(|_| {
+        EncryptedReadError::Unreadable(format!("{label} store could not be decrypted"))
+      })?;
     serde_json::from_slice(&plaintext)
       .map(Some)
-      .map_err(|error| format!("{label} store is invalid: {error}"))
+      .map_err(|error| {
+        EncryptedReadError::Unreadable(format!("{label} store is invalid: {error}"))
+      })
   }
 
   pub fn persist<T: Serialize>(&self, value: &T) -> Result<(), String> {
@@ -277,6 +317,30 @@ mod tests {
     std::env::temp_dir()
       .join(format!("stella-local-store-{}", uuid::Uuid::new_v4()))
       .join("store.json")
+  }
+
+  #[test]
+  fn checked_reads_distinguish_unreadable_envelopes_from_unavailable_storage() {
+    let path = unique_path();
+    let file = EncryptedJsonFile::new([9; 32], path.clone(), "fixture");
+    file.persist(&serde_json::json!({ "saved": true })).unwrap();
+    let wrong_key = EncryptedJsonFile::new([8; 32], path.clone(), "fixture");
+    assert!(matches!(
+      wrong_key.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Unreadable(_))
+    ));
+    fs::write(&path, b"malformed envelope").unwrap();
+    assert!(matches!(
+      file.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Unreadable(_))
+    ));
+    fs::remove_file(&path).unwrap();
+    fs::create_dir(&path).unwrap();
+    assert!(matches!(
+      file.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Unavailable(_))
+    ));
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
   }
 
   fn remove_store(path: &Path) {

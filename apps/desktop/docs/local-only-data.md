@@ -78,9 +78,14 @@ day count and a Delete action with confirmation. It never shows their dates,
 identity or content. Counting needs no key or decryption. Deletion reads each
 inactive account's existing key and refuses the operation if a draft batch
 remains unresolved or the keychain lookup fails, before removing any files.
-A definitely missing key requires a separate confirmation that pending-draft
-recovery will be lost before unreadable activity can be erased.
-It preserves the current account and settings. Namespace identity changed before
+Inactive history with missing keys or unreadable files requires a separate
+confirmation that pending recovery may be lost; drafts may already exist.
+The operation rechecks keys and readable pending batches before deletion, removes
+missing-key account roots, and preserves the current account. Current-account
+unreadable recovery removes only files that remain unreadable after a live recheck,
+preserving readable history and pending batches. A transient read error never
+authorizes erasure. When time billing is unavailable, a stored batch can be
+discarded locally after confirming the same possible loss of draft recovery. Namespace identity changed before
 release, so there is no migration or read of old unnamespaced stores.
 
 An app exclusion asks whether to keep or delete its past segments. Both choices

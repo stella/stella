@@ -74,6 +74,7 @@ export type ActivityDaySnapshot = {
   draftedEntries: { start: string; end: string; entryId: string }[];
   timeBillingEnabled: boolean;
   earliestDate: string;
+  latestDate: string;
   excludedApps: ActivityAppExclusion[];
   captureDetails: boolean;
   appNameOnlyApps: ActivityAppExclusion[];
@@ -258,6 +259,7 @@ export const isActivityDaySnapshot = (
     date,
     today,
     earliestDate,
+    latestDate,
     unreadable,
     timeBillingEnabled,
     deletionStatus,
@@ -278,6 +280,7 @@ export const isActivityDaySnapshot = (
     typeof date === "string" &&
     typeof today === "string" &&
     typeof earliestDate === "string" &&
+    typeof latestDate === "string" &&
     typeof unreadable === "boolean" &&
     typeof timeBillingEnabled === "boolean" &&
     typeof deletionStatus === "string" &&

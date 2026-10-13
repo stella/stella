@@ -14,6 +14,15 @@ import type {
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
+import {
+  Dialog,
+  DialogPopup,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from "@stll/ui/dialog";
 import { CopyIcon, LockKeyholeIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 import { MatterIcon } from "@stll/ui/matter-icon";
@@ -62,6 +71,7 @@ type Submission =
   | { type: "editing" }
   | { type: "submitting"; idempotencyKey: string; items: BatchItem[] }
   | { type: "retry"; idempotencyKey: string; items: BatchItem[] }
+  | { type: "discarding"; idempotencyKey: string; items: BatchItem[] }
   | { type: "saved"; count: number };
 export type ActivityReviewStatus = Submission["type"];
 type Range = { startMs: number; endMs: number };
@@ -106,7 +116,7 @@ const useReviewSubmission = ({
   pendingBatch,
   onReviewStatusChange,
 }: ReviewSubmissionOptions) => {
-  const durablePendingSeen = useRef(pendingBatch !== null);
+  const durablePendingKey = useRef(pendingBatch?.idempotencyKey ?? null);
   const [submission, setSubmission] = useState<Submission>(() => {
     const pending = pendingBatch;
     if (!pending) {
@@ -127,17 +137,23 @@ const useReviewSubmission = ({
   };
   useEffect(() => {
     if (pendingBatch !== null) {
-      durablePendingSeen.current = true;
+      durablePendingKey.current = pendingBatch.idempotencyKey;
     }
     if (
       pendingBatch === null &&
-      durablePendingSeen.current &&
-      submission.type === "retry"
+      submission.type === "retry" &&
+      durablePendingKey.current === submission.idempotencyKey
     ) {
-      durablePendingSeen.current = false;
+      durablePendingKey.current = null;
       setSubmission({ type: "editing" });
       onReviewStatusChange("editing");
       return;
+    }
+    if (
+      pendingBatch === null &&
+      (submission.type === "editing" || submission.type === "saved")
+    ) {
+      durablePendingKey.current = null;
     }
     onReviewStatusChange(submission.type);
   }, [onReviewStatusChange, pendingBatch, submission]);
@@ -169,6 +185,9 @@ export const ActivityDayReview = ({
   const [errorMessage, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [leaveOut, setLeaveOut] = useState(false);
+  const [discardPrompt, setDiscardPrompt] = useState<"closed" | "confirming">(
+    "closed",
+  );
   const sending = useRef(false);
   const matters = candidates.type === "ready" ? candidates.matters : [];
   const day = matchDay({
@@ -220,20 +239,6 @@ export const ActivityDayReview = ({
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
-  const activeMs = day.segments.reduce(
-    (sum, segment) => sum + segment.endMs - segment.startMs,
-    0,
-  );
-  const matchedMs = day.segments.reduce(
-    (sum, segment) =>
-      sum + (segment.matter ? segment.endMs - segment.startMs : 0),
-    0,
-  );
-  const draftedMs = day.segments.reduce(
-    (sum, segment) =>
-      sum + (segment.drafted ? segment.endMs - segment.startMs : 0),
-    0,
-  );
   const timelineSegments = withAwaySegments(day.segments, t("awayNotCounted"));
   const assign = (ranges: readonly Range[], matter: DesktopMatter) => {
     setError(null);
@@ -341,25 +346,48 @@ export const ActivityDayReview = ({
         sending.current = false;
       });
   };
+  const discardPending = () => {
+    if (
+      submission.type !== "retry" ||
+      snapshot.timeBillingEnabled ||
+      snapshot.unreadable ||
+      snapshot.pendingBatch?.idempotencyKey !== submission.idempotencyKey ||
+      sending.current
+    ) {
+      return;
+    }
+    const pending = submission;
+    sending.current = true;
+    setDiscardPrompt("closed");
+    setError(null);
+    updateSubmission({
+      type: "discarding",
+      idempotencyKey: pending.idempotencyKey,
+      items: pending.items,
+    });
+    invoke("time_entry_discard_pending_batch_confirmed", {
+      date: snapshot.date,
+      idempotencyKey: pending.idempotencyKey,
+    })
+      .then(() => {
+        updateSubmission({ type: "editing" });
+        return undefined;
+      })
+      .catch(() => {
+        updateSubmission({
+          type: "retry",
+          idempotencyKey: pending.idempotencyKey,
+          items: pending.items,
+        });
+        setError(t("errorUpdate"));
+      })
+      .finally(() => {
+        sending.current = false;
+      });
+  };
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex flex-wrap items-center gap-5">
-        {header}
-        <div className="ms-auto flex flex-wrap gap-6 tabular-nums">
-          {[
-            { label: t("activeLabel"), ms: activeMs },
-            { label: t("matchedToMatters"), ms: matchedMs },
-            { label: t("draftedLabel"), ms: draftedMs },
-          ].map(({ label, ms }) => (
-            <div key={label}>
-              <b className="block text-base font-semibold">
-                {t("hours", { hours: hours(ms / 3_600_000) })}
-              </b>
-              <span className="text-muted-foreground text-xs">{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
+      <DayReviewMetrics header={header} segments={day.segments} />
       <ActivityTimeline
         disabled={!editable || !snapshot.timeBillingEnabled}
         segments={timelineSegments}
@@ -389,26 +417,15 @@ export const ActivityDayReview = ({
         onLeaveOut={() => setLeaveOut(true)}
         assign={assign}
       />
-      {errorMessage ? (
-        <p role="alert" className="text-destructive text-sm">
-          {errorMessage}
-        </p>
-      ) : null}
-      {!snapshot.timeBillingEnabled && submission.type === "retry" ? (
-        <p role="status" className="text-muted-foreground text-sm">
-          {t("batchUnavailable")}
-        </p>
-      ) : null}
-      {editable && selectionExceedsLimit ? (
-        <p role="alert" className="text-destructive text-sm">
-          {t("batchLimitExceeded", { limit: DESKTOP_ACTIVITY_REVIEW_LIMIT })}
-        </p>
-      ) : null}
-      {submission.type === "saved" ? (
-        <p role="status" className="text-sm">
-          {t("batchCreated", { count: submission.count })}
-        </p>
-      ) : null}
+      <ReviewSubmissionFeedback
+        snapshot={snapshot}
+        submission={submission}
+        errorMessage={errorMessage}
+        selectionExceedsLimit={selectionExceedsLimit}
+        discardPrompt={discardPrompt}
+        onDiscardPromptChange={setDiscardPrompt}
+        discardPending={discardPending}
+      />
       <ReviewBar
         selected={selected}
         eligibleCount={eligible.length}
@@ -434,6 +451,147 @@ export const ActivityDayReview = ({
         }
       />
     </div>
+  );
+};
+
+type DayReviewMetricsProps = {
+  header: ReactNode;
+  segments: readonly MatchedSegment[];
+};
+
+const DayReviewMetrics = ({ header, segments }: DayReviewMetricsProps) => {
+  const t = useTranslations("activity");
+  const format = useFormatter();
+  const hours = (value: number) =>
+    format.number(value, {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+  const activeMs = segments.reduce(
+    (sum, segment) => sum + segment.endMs - segment.startMs,
+    0,
+  );
+  const matchedMs = segments.reduce(
+    (sum, segment) =>
+      sum + (segment.matter ? segment.endMs - segment.startMs : 0),
+    0,
+  );
+  const draftedMs = segments.reduce(
+    (sum, segment) =>
+      sum + (segment.drafted ? segment.endMs - segment.startMs : 0),
+    0,
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-5">
+      {header}
+      <div className="ms-auto flex flex-wrap gap-6 tabular-nums">
+        {[
+          { label: t("activeLabel"), ms: activeMs },
+          { label: t("matchedToMatters"), ms: matchedMs },
+          { label: t("draftedLabel"), ms: draftedMs },
+        ].map(({ label, ms }) => (
+          <div key={label}>
+            <b className="block text-base font-semibold">
+              {t("hours", { hours: hours(ms / 3_600_000) })}
+            </b>
+            <span className="text-muted-foreground text-xs">{label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+type ReviewSubmissionFeedbackProps = {
+  snapshot: ActivityDaySnapshot;
+  submission: Submission;
+  errorMessage: string | null;
+  selectionExceedsLimit: boolean;
+  discardPrompt: "closed" | "confirming";
+  onDiscardPromptChange: (prompt: "closed" | "confirming") => void;
+  discardPending: () => void;
+};
+
+const ReviewSubmissionFeedback = ({
+  snapshot,
+  submission,
+  errorMessage,
+  selectionExceedsLimit,
+  discardPrompt,
+  onDiscardPromptChange,
+  discardPending,
+}: ReviewSubmissionFeedbackProps) => {
+  const t = useTranslations("activity");
+  return (
+    <>
+      {errorMessage ? (
+        <p role="alert" className="text-destructive text-sm">
+          {errorMessage}
+        </p>
+      ) : null}
+      {!snapshot.timeBillingEnabled && submission.type === "retry" ? (
+        <p role="status" className="text-muted-foreground text-sm">
+          {t("batchUnavailable")}
+        </p>
+      ) : null}
+      {!snapshot.timeBillingEnabled &&
+      !snapshot.unreadable &&
+      submission.type === "retry" &&
+      snapshot.pendingBatch?.idempotencyKey === submission.idempotencyKey ? (
+        <div>
+          <Button
+            variant="outline"
+            onClick={() => onDiscardPromptChange("confirming")}
+          >
+            {t("discardPendingRecovery")}
+          </Button>
+        </div>
+      ) : null}
+      <Dialog
+        open={discardPrompt === "confirming"}
+        onOpenChange={(open) =>
+          onDiscardPromptChange(open ? "confirming" : "closed")
+        }
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>{t("discardPendingRecovery")}</DialogTitle>
+            <DialogDescription>
+              {t("discardPendingConfirmation")}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              {t("cancel")}
+            </DialogClose>
+            <Button
+              variant="destructive"
+              disabled={
+                snapshot.timeBillingEnabled ||
+                snapshot.unreadable ||
+                submission.type !== "retry" ||
+                snapshot.pendingBatch?.idempotencyKey !==
+                  submission.idempotencyKey
+              }
+              onClick={discardPending}
+            >
+              {t("delete")}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
+      {(submission.type === "editing" || submission.type === "saved") &&
+      selectionExceedsLimit ? (
+        <p role="alert" className="text-destructive text-sm">
+          {t("batchLimitExceeded", { limit: DESKTOP_ACTIVITY_REVIEW_LIMIT })}
+        </p>
+      ) : null}
+      {submission.type === "saved" ? (
+        <p role="status" className="text-sm">
+          {t("batchCreated", { count: submission.count })}
+        </p>
+      ) : null}
+    </>
   );
 };
 
@@ -490,6 +648,7 @@ const ReviewBar = ({
   const disabled =
     !snapshot.timeBillingEnabled ||
     submission.type === "submitting" ||
+    submission.type === "discarding" ||
     (submission.type !== "retry" && (selected.length === 0 || !valid));
   return (
     <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center gap-3 border-t px-6 py-3">

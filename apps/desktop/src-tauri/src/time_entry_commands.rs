@@ -18,7 +18,8 @@ use crate::{
 const REFUSAL: &str = "draft time entry is unavailable";
 // Serialize confirmation through receipt persistence. A concurrent retry must
 // not race the first request's definitive rejection or successful receipt.
-static BATCH_CONFIRMATION: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+pub(crate) static BATCH_CONFIRMATION: tokio::sync::Mutex<()> =
+  tokio::sync::Mutex::const_new(());
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -88,6 +89,21 @@ fn require_account(
       .is_none_or(|(_, namespace)| namespace != &account.local_data_namespace())
   {
     return Err(REFUSAL.to_string());
+  }
+  Ok(())
+}
+
+fn require_local_discard(
+  caller: &ActivityCaller,
+  gates: &FeatureGates,
+) -> Result<(), String> {
+  let binding = gates
+    .account_binding(DesktopFeature::ActivityTimeline)
+    .ok_or(REFUSAL)?;
+  if gates.is_enabled(DesktopFeature::TimeBilling)
+    || Some(&binding) != caller.account_binding()
+  {
+    return Err(REFUSAL.into());
   }
   Ok(())
 }
@@ -227,6 +243,27 @@ pub async fn time_entry_submit_batch_confirmed(
   })
 }
 
+#[tauri::command]
+pub async fn time_entry_discard_pending_batch_confirmed(
+  caller: ActivityCaller,
+  app: AppHandle,
+  state: State<'_, ActivityAppState>,
+  gates: State<'_, FeatureGates>,
+  date: String,
+  idempotency_key: String,
+) -> Result<(), String> {
+  let _confirmation = BATCH_CONFIRMATION.lock().await;
+  caller.require_current(&app)?;
+  require_local_discard(&caller, &gates)?;
+  let date = activity::parse_date(&date)?;
+  let mut manager = state.lock().map_err(|_| REFUSAL.to_string())?;
+  manager.require_caller(&caller)?;
+  manager.cancel_pending_batch(date, &idempotency_key)?;
+  drop(manager);
+  let _ = app.emit(activity::CHANGED_EVENT, ());
+  Ok(())
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -306,6 +343,7 @@ mod tests {
       ]),
     ] {
       let both = features.len() == 2;
+      let discard = features == HashSet::from([DesktopFeature::ActivityTimeline]);
       gates
         .install(
           generation,
@@ -315,12 +353,14 @@ mod tests {
         )
         .unwrap();
       assert_eq!(require_account(&caller, &gates, &account).is_ok(), both);
+      assert_eq!(require_local_discard(&caller, &gates).is_ok(), discard);
     }
     let mut other = account.clone();
     other.identity.user_id = "other_user".into();
     assert!(require_account(&caller, &gates, &other).is_err());
     gates.invalidate();
     assert!(require_account(&caller, &gates, &account).is_err());
+    assert!(require_local_discard(&caller, &gates).is_err());
     gates.finish_account_change();
     gates
       .install(
@@ -334,5 +374,6 @@ mod tests {
       )
       .unwrap();
     assert!(require_account(&caller, &gates, &account).is_err());
+    assert!(require_local_discard(&caller, &gates).is_err());
   }
 }

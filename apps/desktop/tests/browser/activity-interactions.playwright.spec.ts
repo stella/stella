@@ -23,6 +23,7 @@ const SNAPSHOT = {
   deletionStatus: "available",
   timeBillingEnabled: true,
   earliestDate: "2026-10-01",
+  latestDate: "2026-10-07",
   excludedApps: [],
   otherAccountHistoryDays: 0,
   captureDetails: false,
@@ -65,15 +66,17 @@ const PENDING_BATCH = {
 type InstallNativeBoundaryOptions = {
   page: Page;
   snapshot?: ActivityDaySnapshot;
+  additionalSnapshots?: ActivityDaySnapshot[];
   language?: "en" | "ar";
   batchValidation?: "accept" | "reject-first" | "hold-first";
   batchReceipt?: "save" | "fail-first" | "keep-pending";
-  historyDeletion?: "available" | "keyMissing";
+  historyDeletion?: "available" | "keyMissing" | "unreadable" | "mixed";
 };
 
 const installNativeBoundary = async ({
   page,
   snapshot = SNAPSHOT,
+  additionalSnapshots = [],
   language = "en",
   batchValidation = "accept",
   batchReceipt = "save",
@@ -84,6 +87,7 @@ const installNativeBoundary = async ({
   await page.addInitScript(
     ({
       snapshot: initialSnapshot,
+      additionalSnapshots: otherDays,
       changedEvent,
       language: desktopLanguage,
       batchValidation: validation,
@@ -139,20 +143,44 @@ const installNativeBoundary = async ({
         invoke: async (command: string, args: Record<string, unknown> = {}) => {
           invocations.push({ args, command });
           if (command === "activity_get_day") {
+            const daySnapshot =
+              otherDays.find((day) => day.date === args["date"]) ??
+              activitySnapshot;
             return {
-              ...activitySnapshot,
+              ...daySnapshot,
               date: args["date"] ?? activitySnapshot.date,
             };
           }
+          if (
+            command === "activity_delete_all" &&
+            args["recovery"] === "discardUnreadable" &&
+            activitySnapshot.unreadable
+          ) {
+            activitySnapshot = {
+              ...activitySnapshot,
+              segments: [],
+              pendingBatch: null,
+              unreadable: false,
+              deletionStatus: "available",
+            };
+            emitActivityChanged();
+            return undefined;
+          }
           if (command === "activity_delete_other_account_history") {
             if (
-              historyState === "keyMissing" &&
+              args["recovery"] !== "preserve" &&
+              args["recovery"] !== "discardUnrecoverable"
+            ) {
+              throw new TypeError("Unsupported history recovery mode");
+            }
+            if (
+              historyState !== "available" &&
               args["recovery"] === "preserve"
             ) {
               throw Object.assign(
                 new Error("Activity history key is missing"),
                 {
-                  type: "keyMissing",
+                  type: historyState === "mixed" ? "keyMissing" : historyState,
                 },
               );
             }
@@ -251,6 +279,22 @@ const installNativeBoundary = async ({
               },
             ] satisfies DesktopTimeEntryMatterCandidate[];
           }
+          if (command === "time_entry_discard_pending_batch_confirmed") {
+            if (
+              activitySnapshot.timeBillingEnabled ||
+              activitySnapshot.pendingBatch?.idempotencyKey !==
+                args["idempotencyKey"]
+            ) {
+              throw new TypeError("Pending discard is unavailable");
+            }
+            activitySnapshot = {
+              ...activitySnapshot,
+              pendingBatch: null,
+              deletionStatus: "available",
+            };
+            emitActivityChanged();
+            return undefined;
+          }
           if (command === "time_entry_submit_batch_confirmed") {
             batchAttempts += 1;
             if (validation === "hold-first" && batchAttempts === 1) {
@@ -322,6 +366,7 @@ const installNativeBoundary = async ({
     },
     {
       snapshot,
+      additionalSnapshots,
       changedEvent: ACTIVITY_CHANGED_EVENT,
       language,
       batchValidation,
@@ -334,9 +379,13 @@ const installNativeBoundary = async ({
   if (snapshot.persistence === "deletionOnly") {
     await expect(
       page.getByText(
-        snapshot.deletionStatus === "keyMissing"
-          ? messages.activity.deletionOnly
-          : messages.activity.errorRead,
+        {
+          keyMissing: messages.activity.deletionOnly,
+          unreadable: messages.activity.unreadableEraseNotice,
+          available: messages.activity.errorRead,
+          pending: messages.activity.errorRead,
+          unavailable: messages.activity.errorRead,
+        }[snapshot.deletionStatus],
       ),
     ).toBeVisible();
   } else if (
@@ -1198,7 +1247,7 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
       .getByRole("button", { name: enMessages.activity.delete, exact: true })
       .click();
     await expect(page.getByRole("dialog")).toContainText(
-      enMessages.activity.missingKeyEraseConfirmation,
+      enMessages.activity.unrecoverableOtherHistoryConfirmation,
     );
     expect(await invocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
@@ -1209,7 +1258,7 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
     );
     expect(await invocations(page)).not.toContainEqual({
       command: "activity_delete_other_account_history",
-      args: { recovery: "discardMissingKey" },
+      args: { recovery: "discardUnrecoverable" },
     });
     await page
       .getByRole("dialog")
@@ -1217,10 +1266,381 @@ for (const currentKeyStatus of ["available", "keyMissing"] as const) {
       .click();
     expect(await invocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
-      args: { recovery: "discardMissingKey" },
+      args: { recovery: "discardUnrecoverable" },
     });
   });
 }
+
+test("billing-disabled pending recovery can be discarded locally only after confirmation", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      pendingBatch: PENDING_BATCH,
+      timeBillingEnabled: false,
+      deletionStatus: "pending",
+    },
+  });
+  const discard = page.getByRole("button", {
+    name: enMessages.activity.discardPendingRecovery,
+    exact: true,
+  });
+  await discard.click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.discardPendingConfirmation,
+  );
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({
+      command: "time_entry_discard_pending_batch_confirmed",
+    }),
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.cancel, exact: true })
+    .click();
+  await expect(discard).toBeVisible();
+  await discard.click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.empty, { exact: true }),
+  ).toBeVisible();
+  expect(await invocations(page)).toContainEqual({
+    command: "time_entry_discard_pending_batch_confirmed",
+    args: { date: SNAPSHOT.date, idempotencyKey: PENDING_BATCH.idempotencyKey },
+  });
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
+  );
+});
+
+test("pending drafts dated after today remain reachable after the clock moves backward", async ({
+  page,
+}) => {
+  const futureDate = "2026-10-08";
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      latestDate: futureDate,
+      deletionStatus: "pending",
+    },
+    additionalSnapshots: [
+      {
+        ...SNAPSHOT,
+        date: futureDate,
+        latestDate: futureDate,
+        segments: [],
+        deletionStatus: "pending",
+        pendingBatch: {
+          ...PENDING_BATCH,
+          entries: PENDING_BATCH.entries.map((entry) => ({
+            ...entry,
+            dateWorked: futureDate,
+          })),
+        },
+      },
+    ],
+  });
+  const next = page.getByRole("button", { name: enMessages.activity.nextDay });
+  await expect(next).toBeEnabled();
+  await next.click();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toBeEnabled();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_get_day",
+    args: { date: futureDate },
+  });
+  await expect(next).toBeDisabled();
+});
+
+test("discarding an old recovery key cannot unlock a later uncertain batch", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchValidation: "hold-first",
+    snapshot: {
+      ...SNAPSHOT,
+      pendingBatch: PENDING_BATCH,
+      timeBillingEnabled: false,
+      deletionStatus: "pending",
+    },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.discardPendingRecovery,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page.evaluate((next) => {
+    const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+    if (typeof update !== "function") {
+      throw new TypeError("Snapshot control is missing");
+    }
+    update(next);
+  }, SNAPSHOT);
+  await page
+    .getByRole("button", { name: "Create 1 draft", exact: true })
+    .click();
+  await page.evaluate(() => {
+    const reject = Reflect.get(window, "__STELLA_TEST_REJECT_BATCH__");
+    if (typeof reject !== "function") {
+      throw new TypeError("Pending batch control is missing");
+    }
+    reject();
+  });
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.batchFailed,
+  );
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
+  ).toBeDisabled();
+  expect(await invocations(page)).toContainEqual(
+    expect.objectContaining({
+      command: "time_entry_submit_batch_confirmed",
+      args: expect.objectContaining({
+        request: expect.objectContaining({
+          idempotencyKey: expect.not.stringContaining(
+            PENDING_BATCH.idempotencyKey,
+          ),
+        }),
+      }),
+    }),
+  );
+});
+
+test("pending discard confirmation becomes unavailable when billing capability returns", async ({
+  page,
+}) => {
+  const snapshot = {
+    ...SNAPSHOT,
+    pendingBatch: PENDING_BATCH,
+    timeBillingEnabled: false,
+    deletionStatus: "pending",
+  } satisfies ActivityDaySnapshot;
+  await installNativeBoundary({ page, snapshot });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.discardPendingRecovery,
+      exact: true,
+    })
+    .click();
+  await page.evaluate(
+    (next) => {
+      const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+      if (typeof update !== "function") {
+        throw new TypeError("Snapshot control is missing");
+      }
+      update(next);
+    },
+    { ...snapshot, timeBillingEnabled: true },
+  );
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("button", { name: enMessages.activity.delete, exact: true }),
+  ).toBeDisabled();
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({
+      command: "time_entry_discard_pending_batch_confirmed",
+    }),
+  );
+});
+
+test("stored pending retry permits confirmed unreadable repair while ordinary deletion stays blocked", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      pendingBatch: PENDING_BATCH,
+      timeBillingEnabled: false,
+      unreadable: true,
+      deletionStatus: "unreadable",
+    },
+  });
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.discardPendingRecovery,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteDay,
+      exact: true,
+    }),
+  ).toBeDisabled();
+  const repair = page.getByRole("button", {
+    name: enMessages.activity.unreadableEraseAction,
+    exact: true,
+  });
+  await expect(repair).toBeEnabled();
+  await repair.click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.unreadableEraseConfirmation,
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.empty, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_delete_all",
+    args: { recovery: "discardUnreadable" },
+  });
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({
+      command: "time_entry_discard_pending_batch_confirmed",
+    }),
+  );
+});
+
+test("unreadable activity erase requires confirmation of lost pending recovery", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: { ...SNAPSHOT, unreadable: true, deletionStatus: "unreadable" },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.unreadableEraseAction,
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.unreadableEraseConfirmation,
+  );
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_delete_all" }),
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_delete_all",
+    args: { recovery: "discardUnreadable" },
+  });
+});
+
+test("inactive unreadable history reaches its dedicated confirmed recovery path", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    historyDeletion: "unreadable",
+    snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.unrecoverableOtherHistoryConfirmation,
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_delete_other_account_history",
+    args: { recovery: "discardUnrecoverable" },
+  });
+});
+
+test("mixed inactive recovery failures use one confirmation and one discard mode", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    historyDeletion: "mixed",
+    snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.unrecoverableOtherHistoryConfirmation,
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const calls = await invocations(page);
+  expect(
+    Array.isArray(calls)
+      ? calls.filter(
+          (call: unknown) =>
+            typeof call === "object" &&
+            call !== null &&
+            "command" in call &&
+            call.command === "activity_delete_other_account_history",
+        )
+      : [],
+  ).toEqual([
+    {
+      command: "activity_delete_other_account_history",
+      args: { recovery: "preserve" },
+    },
+    {
+      command: "activity_delete_other_account_history",
+      args: { recovery: "discardUnrecoverable" },
+    },
+  ]);
+});
 
 test("missing-key erase requires explicit confirmation that draft recovery will be lost", async ({
   page,

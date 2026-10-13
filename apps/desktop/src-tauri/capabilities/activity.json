@@ -25,6 +25,7 @@
     "allow-activity-copy-text",
     "allow-time-entry-candidates",
     "allow-time-entry-submit-batch-confirmed",
+    "allow-time-entry-discard-pending-batch-confirmed",
     "allow-activity-assign-ranges"
   ]
 }

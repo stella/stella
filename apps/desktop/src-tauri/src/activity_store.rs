@@ -17,11 +17,11 @@ use std::{
 
 use crate::activity::{
   ActivityDeletionError, ActivityDeletionRecovery, ActivityDraftedEntry,
-  ActivityManualAssignment, ActivityPendingBatch, ActivitySegment, ActivitySettings,
-  format_date, parse_date,
+  ActivityManualAssignment, ActivityOtherHistoryRecovery, ActivityPendingBatch,
+  ActivitySegment, ActivitySettings, format_date, parse_date,
 };
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
-use crate::local_store::{EncryptedJsonFile, create_private_dir};
+use crate::local_store::{EncryptedJsonFile, EncryptedReadError, create_private_dir};
 
 const LABEL: &str = "activity";
 const SETTINGS_FILE_NAME: &str = "settings.json.enc";
@@ -55,12 +55,18 @@ pub struct ActivityStore {
 
 enum InactiveAccountKey {
   Found(ActivityStore),
-  Missing,
+  Missing(PathBuf),
 }
 
 struct OtherAccountHistoryFiles {
   day_count: usize,
   paths: Vec<PathBuf>,
+}
+
+#[derive(Clone, Copy)]
+enum ActivityRecoveryFile {
+  Settings,
+  Day(NaiveDate),
 }
 
 impl ActivityStore {
@@ -74,10 +80,19 @@ impl ActivityStore {
 
   /// Local dates can change between sessions; the recording boundary belongs
   /// to the account's entire retained history, not its current local day.
-  pub fn recorded_until(&self) -> Result<Option<DateTime<Utc>>, String> {
+  pub fn recorded_until(
+    &self,
+    earliest: NaiveDate,
+  ) -> Result<Option<DateTime<Utc>>, EncryptedReadError> {
     let mut latest = None;
-    for date in self.day_dates()? {
-      for segment in self.load_day(date)? {
+    for date in self.day_dates().map_err(EncryptedReadError::Unavailable)? {
+      let day = match self.day_file(date).load_checked::<ActivityDayFile>() {
+        Ok(Some(day)) => day,
+        Ok(None) => continue,
+        Err(EncryptedReadError::Unreadable(_)) if date < earliest => continue,
+        Err(error) => return Err(error),
+      };
+      for segment in day.segments {
         latest =
           Some(latest.map_or(segment.end, |end: DateTime<Utc>| end.max(segment.end)));
       }
@@ -116,6 +131,12 @@ impl ActivityStore {
       .map_err(|error| format!("activity store directory failed: {error}"))
   }
 
+  pub fn load_settings_checked(
+    &self,
+  ) -> Result<Option<ActivitySettings>, EncryptedReadError> {
+    self.settings_file().load_checked()
+  }
+
   pub fn load_settings(&self) -> Result<Option<ActivitySettings>, String> {
     self.settings_file().load()
   }
@@ -126,10 +147,19 @@ impl ActivityStore {
   }
 
   pub fn load_day(&self, date: NaiveDate) -> Result<Vec<ActivitySegment>, String> {
+    self
+      .load_day_checked(date)
+      .map_err(|error| error.to_string())
+  }
+
+  pub fn load_day_checked(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Vec<ActivitySegment>, EncryptedReadError> {
     Ok(
       self
         .day_file(date)
-        .load::<ActivityDayFile>()?
+        .load_checked::<ActivityDayFile>()?
         .map(|day| day.segments)
         .unwrap_or_default(),
     )
@@ -216,10 +246,19 @@ impl ActivityStore {
     &self,
     date: NaiveDate,
   ) -> Result<Option<ActivityPendingBatch>, String> {
+    self
+      .load_pending_checked(date)
+      .map_err(|error| error.to_string())
+  }
+
+  pub fn load_pending_checked(
+    &self,
+    date: NaiveDate,
+  ) -> Result<Option<ActivityPendingBatch>, EncryptedReadError> {
     Ok(
       self
         .day_file(date)
-        .load::<ActivityDayFile>()?
+        .load_checked::<ActivityDayFile>()?
         .and_then(|day| day.pending_batch),
     )
   }
@@ -310,11 +349,17 @@ impl ActivityStore {
       .map_err(ActivityDeletionError::Unavailable)
   }
 
-  pub fn pending_dates(&self) -> Result<Vec<NaiveDate>, String> {
+  pub fn pending_dates(
+    &self,
+    earliest: NaiveDate,
+  ) -> Result<Vec<NaiveDate>, EncryptedReadError> {
     let mut pending = Vec::new();
-    for date in self.day_dates()? {
-      if self.load_pending(date)?.is_some() {
-        pending.push(date);
+    for date in self.day_dates().map_err(EncryptedReadError::Unavailable)? {
+      match self.day_file(date).load_checked::<ActivityDayFile>() {
+        Ok(Some(day)) if day.pending_batch.is_some() => pending.push(date),
+        Ok(_) => {}
+        Err(EncryptedReadError::Unreadable(_)) if date < earliest => {}
+        Err(error) => return Err(error),
       }
     }
     Ok(pending)
@@ -393,11 +438,11 @@ impl ActivityStore {
     Ok(Self::other_account_history_files(root, current_namespace)?.day_count)
   }
 
-  /// Preflight every inactive day before erasing any account history.
+  /// Preflight and recheck all inactive history before removing any files.
   pub fn delete_other_account_history(
     root: &Path,
     current_namespace: &str,
-    recovery: ActivityDeletionRecovery,
+    recovery: ActivityOtherHistoryRecovery,
   ) -> Result<(), ActivityDeletionError> {
     Self::delete_other_account_history_with_key_lookup(
       root,
@@ -412,7 +457,7 @@ impl ActivityStore {
   fn delete_other_account_history_with_key_lookup(
     root: &Path,
     current_namespace: &str,
-    recovery: ActivityDeletionRecovery,
+    recovery: ActivityOtherHistoryRecovery,
     mut lookup: impl FnMut(&str) -> Result<LocalDataKeyLookup, String>,
   ) -> Result<(), ActivityDeletionError> {
     if !Self::is_account_namespace(current_namespace) {
@@ -424,9 +469,6 @@ impl ActivityStore {
       .map_err(ActivityDeletionError::Unavailable)?;
     let mut stores = BTreeMap::new();
     for path in &history.paths {
-      if path.extension().is_some_and(|extension| extension == "tmp") {
-        continue;
-      }
       let account_root = path.parent().and_then(Path::parent).ok_or_else(|| {
         ActivityDeletionError::Unavailable("activity history path is invalid".into())
       })?;
@@ -441,39 +483,83 @@ impl ActivityStore {
       if !stores.contains_key(namespace) {
         let account =
           match lookup(namespace).map_err(ActivityDeletionError::Unavailable)? {
-            LocalDataKeyLookup::Found(key) => InactiveAccountKey::Found(
-              ActivityStore::new(key, account_root.to_path_buf()),
-            ),
+            LocalDataKeyLookup::Found(key) => {
+              InactiveAccountKey::Found(Self::new(key, account_root.to_path_buf()))
+            }
             LocalDataKeyLookup::Missing => {
-              if recovery == ActivityDeletionRecovery::Preserve {
+              if recovery != ActivityOtherHistoryRecovery::DiscardUnrecoverable {
                 return Err(ActivityDeletionError::KeyMissing);
               }
-              InactiveAccountKey::Missing
+              InactiveAccountKey::Missing(account_root.to_path_buf())
             }
           };
         stores.insert(namespace.to_string(), account);
       }
-      let date = path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .and_then(|name| name.strip_suffix(DAY_FILE_SUFFIX))
-        .ok_or_else(|| {
-          ActivityDeletionError::Unavailable("activity history date is invalid".into())
-        })?;
-      let date = parse_date(date).map_err(ActivityDeletionError::Unavailable)?;
-      let store = match stores
-        .get(namespace)
-        .expect("inactive account key was loaded")
-      {
-        InactiveAccountKey::Found(store) => store,
-        InactiveAccountKey::Missing => continue,
+    }
+    let check_read =
+      |result: Result<bool, EncryptedReadError>| -> Result<(), ActivityDeletionError> {
+        match result {
+          Ok(true) => Err(ActivityDeletionError::PendingBatch),
+          Ok(false) => Ok(()),
+          Err(EncryptedReadError::Unreadable(_))
+            if recovery == ActivityOtherHistoryRecovery::DiscardUnrecoverable =>
+          {
+            Ok(())
+          }
+          Err(error) => Err(ActivityDeletionError::from(error)),
+        }
       };
-      if store
-        .load_pending(date)
-        .map_err(ActivityDeletionError::Unavailable)?
-        .is_some()
-      {
-        return Err(ActivityDeletionError::PendingBatch);
+    // Two complete read passes ensure key recovery and newly readable pending
+    // state are considered before the first removal.
+    for _ in 0..2 {
+      for (namespace, account) in &stores {
+        match (
+          account,
+          lookup(namespace).map_err(ActivityDeletionError::Unavailable)?,
+        ) {
+          (InactiveAccountKey::Found(store), LocalDataKeyLookup::Found(key))
+            if key == store.key =>
+          {
+            check_read(store.load_settings_checked().map(|_| false))?;
+            for date in store
+              .day_dates()
+              .map_err(ActivityDeletionError::Unavailable)?
+            {
+              check_read(
+                store
+                  .load_pending_checked(date)
+                  .map(|pending| pending.is_some()),
+              )?;
+            }
+          }
+          (InactiveAccountKey::Missing(_), LocalDataKeyLookup::Missing) => {}
+          _ => {
+            return Err(ActivityDeletionError::Unavailable(
+              "activity history key changed; review the deletion again".into(),
+            ));
+          }
+        }
+      }
+    }
+    for (namespace, account) in &stores {
+      match account {
+        InactiveAccountKey::Missing(account_root) => {
+          Self::remove_missing_key_with_lookup(
+            account_root,
+            ActivityDeletionRecovery::DiscardMissingKey,
+            || lookup(namespace),
+          )?
+        }
+        InactiveAccountKey::Found(store) => {
+          match store.load_settings_checked() {
+            Err(EncryptedReadError::Unreadable(_)) => {
+              remove_file_if_present(&store.root.join(SETTINGS_FILE_NAME))
+                .map_err(ActivityDeletionError::Unavailable)?;
+            }
+            Err(error) => return Err(ActivityDeletionError::from(error)),
+            Ok(_) => {}
+          }
+        }
       }
     }
     for path in history.paths {
@@ -577,8 +663,8 @@ impl ActivityStore {
 
   pub fn delete_all_days(&self) -> Result<(), ActivityDeletionError> {
     if !self
-      .pending_dates()
-      .map_err(ActivityDeletionError::Unavailable)?
+      .pending_dates(NaiveDate::MIN)
+      .map_err(ActivityDeletionError::from)?
       .is_empty()
     {
       return Err(ActivityDeletionError::PendingBatch);
@@ -607,6 +693,70 @@ impl ActivityStore {
     })
   }
 
+  pub(crate) fn remove_unreadable_with_lookup(
+    root: &Path,
+    recovery: ActivityDeletionRecovery,
+    mut lookup: impl FnMut() -> Result<LocalDataKeyLookup, String>,
+  ) -> Result<ActivityStore, ActivityDeletionError> {
+    if recovery != ActivityDeletionRecovery::DiscardUnreadable {
+      return Err(ActivityDeletionError::Unreadable);
+    }
+    let read_store = |key| ActivityStore::new(key, root.to_path_buf());
+    let key = match lookup().map_err(ActivityDeletionError::Unavailable)? {
+      LocalDataKeyLookup::Found(key) => key,
+      LocalDataKeyLookup::Missing => return Err(ActivityDeletionError::KeyMissing),
+    };
+    let store = read_store(key);
+    let mut unreadable = Vec::new();
+    match store.load_settings_checked() {
+      Err(EncryptedReadError::Unreadable(_)) => {
+        unreadable.push(ActivityRecoveryFile::Settings)
+      }
+      Err(error) => return Err(ActivityDeletionError::from(error)),
+      Ok(_) => {}
+    }
+    for date in store
+      .day_dates()
+      .map_err(ActivityDeletionError::Unavailable)?
+    {
+      match store.day_file(date).load_checked::<ActivityDayFile>() {
+        Err(EncryptedReadError::Unreadable(_)) => {
+          unreadable.push(ActivityRecoveryFile::Day(date))
+        }
+        Err(error) => return Err(ActivityDeletionError::from(error)),
+        Ok(_) => {}
+      }
+    }
+    // A key can be restored while the confirmation is open or during preflight.
+    let key = match lookup().map_err(ActivityDeletionError::Unavailable)? {
+      LocalDataKeyLookup::Found(key) => key,
+      LocalDataKeyLookup::Missing => return Err(ActivityDeletionError::KeyMissing),
+    };
+    let store = read_store(key);
+    for file in unreadable {
+      let result = match file {
+        ActivityRecoveryFile::Settings => store.load_settings_checked().map(|_| ()),
+        ActivityRecoveryFile::Day(date) => store
+          .day_file(date)
+          .load_checked::<ActivityDayFile>()
+          .map(|_| ()),
+      };
+      match result {
+        Ok(()) => continue,
+        Err(EncryptedReadError::Unavailable(message)) => {
+          return Err(ActivityDeletionError::Unavailable(message));
+        }
+        Err(EncryptedReadError::Unreadable(_)) => {}
+      }
+      let path = match file {
+        ActivityRecoveryFile::Settings => store.settings_file().path().to_path_buf(),
+        ActivityRecoveryFile::Day(date) => store.day_file(date).path().to_path_buf(),
+      };
+      remove_file_if_present(&path).map_err(ActivityDeletionError::Unavailable)?;
+    }
+    Ok(store)
+  }
+
   fn remove_missing_key_with_lookup(
     root: &Path,
     recovery: ActivityDeletionRecovery,
@@ -620,7 +770,7 @@ impl ActivityStore {
         ));
       }
       LocalDataKeyLookup::Missing => {
-        if recovery == ActivityDeletionRecovery::Preserve {
+        if recovery != ActivityDeletionRecovery::DiscardMissingKey {
           return Err(ActivityDeletionError::KeyMissing);
         }
       }
@@ -687,7 +837,7 @@ mod tests {
     ActivityStore::delete_other_account_history_with_key_lookup(
       root,
       current,
-      ActivityDeletionRecovery::Preserve,
+      ActivityOtherHistoryRecovery::Preserve,
       |_| Ok(LocalDataKeyLookup::Found([9; 32])),
     )
   }
@@ -802,7 +952,7 @@ mod tests {
     let result = ActivityStore::delete_other_account_history_with_key_lookup(
       &root,
       &current,
-      ActivityDeletionRecovery::Preserve,
+      ActivityOtherHistoryRecovery::Preserve,
       |_| Ok(LocalDataKeyLookup::Found([9; 32])),
     );
     assert_eq!(result, Err(ActivityDeletionError::PendingBatch));
@@ -810,7 +960,7 @@ mod tests {
       ActivityStore::delete_other_account_history_with_key_lookup(
         &root,
         &current,
-        ActivityDeletionRecovery::DiscardMissingKey,
+        ActivityOtherHistoryRecovery::DiscardUnrecoverable,
         |_| Ok(LocalDataKeyLookup::Found([9; 32])),
       ),
       Err(ActivityDeletionError::PendingBatch),
@@ -830,7 +980,7 @@ mod tests {
       ActivityStore::delete_other_account_history_with_key_lookup(
         &root,
         &current,
-        ActivityDeletionRecovery::Preserve,
+        ActivityOtherHistoryRecovery::Preserve,
         |_| Ok(LocalDataKeyLookup::Missing)
       ),
       Err(ActivityDeletionError::KeyMissing)
@@ -839,7 +989,7 @@ mod tests {
       ActivityStore::delete_other_account_history_with_key_lookup(
         &root,
         &current,
-        ActivityDeletionRecovery::DiscardMissingKey,
+        ActivityOtherHistoryRecovery::DiscardUnrecoverable,
         |_| Err("keychain unavailable".into())
       ),
       Err(ActivityDeletionError::Unavailable(_))
@@ -849,10 +999,10 @@ mod tests {
       ActivityStore::delete_other_account_history_with_key_lookup(
         &root,
         &current,
-        ActivityDeletionRecovery::DiscardMissingKey,
+        ActivityOtherHistoryRecovery::Preserve,
         |_| Ok(LocalDataKeyLookup::Found([8; 32]))
       ),
-      Err(ActivityDeletionError::Unavailable(_))
+      Err(ActivityDeletionError::Unreadable)
     ));
     assert!(account.load_pending(date(1)).unwrap().is_some());
     ActivityStore::remove(&root).unwrap();
@@ -867,6 +1017,15 @@ mod tests {
         &root,
         ActivityDeletionRecovery::Preserve,
         || Ok(LocalDataKeyLookup::Missing),
+      ),
+      Err(ActivityDeletionError::KeyMissing),
+    );
+    assert!(store.load_pending(date(1)).unwrap().is_some());
+    assert_eq!(
+      ActivityStore::remove_missing_key_with_lookup(
+        &root,
+        ActivityDeletionRecovery::DiscardUnreadable,
+        || Ok(LocalDataKeyLookup::Missing)
       ),
       Err(ActivityDeletionError::KeyMissing),
     );
@@ -907,15 +1066,169 @@ mod tests {
     let current = "a".repeat(64);
     let inactive_root = root.join("b".repeat(64));
     let account = ActivityStore::new([9; 32], inactive_root.clone());
+    account.save_settings(&ActivitySettings::default()).unwrap();
     account.save_pending(date(1), &pending()).unwrap();
     ActivityStore::delete_other_account_history_with_key_lookup(
       &root,
       &current,
-      ActivityDeletionRecovery::DiscardMissingKey,
+      ActivityOtherHistoryRecovery::DiscardUnrecoverable,
       |_| Ok(LocalDataKeyLookup::Missing),
     )
     .unwrap();
     assert!(account.load_pending(date(1)).unwrap().is_none());
+    assert!(!inactive_root.exists());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn confirmed_inactive_cleanup_handles_missing_and_unreadable_history_together() {
+    let (_, root) = store();
+    let current = "a".repeat(64);
+    let missing = "b".repeat(64);
+    let unreadable = "c".repeat(64);
+    let current_store = ActivityStore::new([9; 32], root.join(&current));
+    current_store.save_pending(date(1), &pending()).unwrap();
+    let missing_store = ActivityStore::new([9; 32], root.join(&missing));
+    missing_store
+      .save_settings(&ActivitySettings::default())
+      .unwrap();
+    missing_store.save_pending(date(1), &pending()).unwrap();
+    let unreadable_store = ActivityStore::new([8; 32], root.join(&unreadable));
+    unreadable_store
+      .save_settings(&ActivitySettings::default())
+      .unwrap();
+    unreadable_store.save_pending(date(1), &pending()).unwrap();
+    ActivityStore::delete_other_account_history_with_key_lookup(
+      &root,
+      &current,
+      ActivityOtherHistoryRecovery::DiscardUnrecoverable,
+      |namespace| {
+        Ok(if namespace == missing {
+          LocalDataKeyLookup::Missing
+        } else {
+          LocalDataKeyLookup::Found([9; 32])
+        })
+      },
+    )
+    .unwrap();
+    assert!(!missing_store.root.exists());
+    assert!(unreadable_store.day_dates().unwrap().is_empty());
+    assert!(!unreadable_store.root.join(SETTINGS_FILE_NAME).exists());
+    assert!(current_store.load_pending(date(1)).unwrap().is_some());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn inactive_cleanup_rechecks_keys_before_removing_any_file() {
+    let (_, root) = store();
+    let current = "a".repeat(64);
+    let account = ActivityStore::new([9; 32], root.join("b".repeat(64)));
+    account.save_day(date(1), &[segment("app")]).unwrap();
+    let mut reads = 0;
+    let result = ActivityStore::delete_other_account_history_with_key_lookup(
+      &root,
+      &current,
+      ActivityOtherHistoryRecovery::DiscardUnrecoverable,
+      |_| {
+        reads += 1;
+        Ok(LocalDataKeyLookup::Found(if reads < 3 {
+          [9; 32]
+        } else {
+          [8; 32]
+        }))
+      },
+    );
+    assert!(matches!(result, Err(ActivityDeletionError::Unavailable(_))));
+    assert_eq!(account.load_day(date(1)).unwrap().len(), 1);
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn confirmed_unreadable_recovery_preserves_every_readable_pending_and_history_file() {
+    let (store, root) = store();
+    store.save_settings(&ActivitySettings::default()).unwrap();
+    fs::write(store.settings_file().path(), b"unreadable settings").unwrap();
+    store.save_day(date(1), &[segment("app")]).unwrap();
+    let pending = pending();
+    store.save_pending(date(2), &pending).unwrap();
+    store.save_day(date(3), &[segment("app")]).unwrap();
+    fs::write(store.day_file(date(3)).path(), b"unreadable day").unwrap();
+    ActivityStore::remove_unreadable_with_lookup(
+      &root,
+      ActivityDeletionRecovery::DiscardUnreadable,
+      || Ok(LocalDataKeyLookup::Found([9; 32])),
+    )
+    .unwrap();
+    assert!(store.load_settings().unwrap().is_none());
+    assert_eq!(store.load_day(date(1)).unwrap().len(), 1);
+    assert_eq!(store.load_pending(date(2)).unwrap(), Some(pending));
+    assert!(store.load_day(date(3)).unwrap().is_empty());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn unreadable_recovery_rechecks_restored_keys_and_preserves_now_readable_pending() {
+    let (store, root) = store();
+    store.save_settings(&ActivitySettings::default()).unwrap();
+    let pending = pending();
+    store.save_pending(date(1), &pending).unwrap();
+    let before = fs::read(store.day_file(date(1)).path()).unwrap();
+    let mut keys = [[8; 32], [9; 32]].into_iter();
+    ActivityStore::remove_unreadable_with_lookup(
+      &root,
+      ActivityDeletionRecovery::DiscardUnreadable,
+      || Ok(LocalDataKeyLookup::Found(keys.next().unwrap())),
+    )
+    .unwrap();
+    assert_eq!(fs::read(store.day_file(date(1)).path()).unwrap(), before);
+    assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending));
+    assert!(store.load_settings().unwrap().is_some());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn unreadable_recovery_refuses_transient_key_or_file_reads() {
+    let (store, root) = store();
+    let pending = pending();
+    store.save_pending(date(1), &pending).unwrap();
+    assert!(matches!(
+      ActivityStore::remove_unreadable_with_lookup(
+        &root,
+        ActivityDeletionRecovery::DiscardUnreadable,
+        || Err("keychain unavailable".into())
+      ),
+      Err(ActivityDeletionError::Unavailable(_))
+    ));
+    fs::create_dir(store.settings_file().path()).unwrap();
+    assert!(matches!(
+      ActivityStore::remove_unreadable_with_lookup(
+        &root,
+        ActivityDeletionRecovery::DiscardUnreadable,
+        || Ok(LocalDataKeyLookup::Found([9; 32]))
+      ),
+      Err(ActivityDeletionError::Unavailable(_))
+    ));
+    assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending));
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn expired_unreadable_files_are_skipped_by_both_startup_scans() {
+    let (store, root) = store();
+    store.save_day(date(1), &[segment("app")]).unwrap();
+    fs::write(store.day_file(date(1)).path(), b"unreadable ciphertext").unwrap();
+    let pending = pending();
+    store.save_pending(date(3), &pending).unwrap();
+    assert_eq!(store.recorded_until(date(2)).unwrap(), None);
+    assert_eq!(store.pending_dates(date(2)).unwrap(), vec![date(3)]);
+    assert!(matches!(
+      store.recorded_until(date(1)),
+      Err(EncryptedReadError::Unreadable(_))
+    ));
+    assert!(matches!(
+      store.pending_dates(date(1)),
+      Err(EncryptedReadError::Unreadable(_))
+    ));
     ActivityStore::remove(&root).unwrap();
   }
 
@@ -1126,7 +1439,7 @@ mod tests {
         ActivityStore::delete_other_account_history(
           &root,
           &invalid,
-          ActivityDeletionRecovery::Preserve
+          ActivityOtherHistoryRecovery::Preserve
         )
         .unwrap_err(),
         ActivityDeletionError::Unavailable(

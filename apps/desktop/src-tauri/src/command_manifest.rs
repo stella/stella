@@ -58,6 +58,7 @@ macro_rules! with_stella_commands {
       time_entry_commands::time_entry_search_matters => "time_entry_search_matters",
       time_entry_commands::time_entry_candidates => "time_entry_candidates",
       time_entry_commands::time_entry_submit_batch_confirmed => "time_entry_submit_batch_confirmed",
+      time_entry_commands::time_entry_discard_pending_batch_confirmed => "time_entry_discard_pending_batch_confirmed",
       activity_commands::activity_assign_ranges => "activity_assign_ranges",
       activity_commands::activity_get_day => "activity_get_day",
       activity_commands::activity_set_recording_status => "activity_set_recording_status",

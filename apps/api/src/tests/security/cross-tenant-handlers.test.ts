@@ -2874,7 +2874,7 @@ const enableDesktopActivityForContext = ({ session }: TestHandlerContext) => {
 };
 
 const expectCreatedDesktopTimeEntry = async (
-  entryId: unknown,
+  entryId: SafeId<"timeEntry">,
   context: TestHandlerContext,
 ) => {
   const rows = await testDb
@@ -2887,6 +2887,7 @@ const expectCreatedDesktopTimeEntry = async (
     .from(timeEntries)
     .where(
       and(
+        eq(timeEntries.id, entryId),
         eq(timeEntries.workspaceId, context.workspaceId),
         eq(timeEntries.organizationId, context.session.activeOrganizationId),
         eq(timeEntries.userId, context.user.id),
@@ -3011,7 +3012,10 @@ function desktopTimeEntryIsolationCases(): IsolationCase[] {
         const response = v.parse(desktopTimeEntryBatchResponseSchema, result);
         expect(response.entries).toHaveLength(1);
         for (const entry of response.entries) {
-          await expectCreatedDesktopTimeEntry(entry.id, workspaceB);
+          await expectCreatedDesktopTimeEntry(
+            toSafeId<"timeEntry">(entry.id),
+            workspaceB,
+          );
         }
         return result;
       },
@@ -3068,7 +3072,7 @@ function desktopTimeEntryIsolationCases(): IsolationCase[] {
           { params: { workspaceId: testIds.wsB1 }, body: desktopTimeEntryBody },
         );
         await expectCreatedDesktopTimeEntry(
-          recordField(result, "id"),
+          toSafeId<"timeEntry">(v.parse(v.string(), recordField(result, "id"))),
           workspaceB,
         );
         return result;

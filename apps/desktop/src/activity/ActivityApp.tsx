@@ -41,6 +41,7 @@ import {
 } from "@stll/ui/select";
 
 import type { ClipboardSourceAppVisual } from "../clipboard/clipboard-types";
+import type { DesktopMessages } from "../i18n/index";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -85,7 +86,8 @@ type ActivityDialog =
   | { type: "deleteAll" }
   | { days: number; type: "deleteOtherAccountHistory" }
   | { type: "eraseMissingKeyAll" }
-  | { type: "eraseMissingKeyOtherAccounts" }
+  | { type: "eraseUnrecoverableOtherAccounts" }
+  | { type: "eraseUnreadableAll" }
   | { app: ActivityAppExclusion; type: "excludeApp" };
 
 type ActivityCommand =
@@ -410,6 +412,28 @@ const CaptureDetailsControl = ({
   );
 };
 
+const DELETION_ONLY_NOTICE = {
+  available: "errorRead",
+  pending: "errorRead",
+  unavailable: "errorRead",
+  keyMissing: "deletionOnly",
+  unreadable: "unreadableEraseNotice",
+} as const satisfies Record<
+  ActivityDaySnapshot["deletionStatus"],
+  keyof DesktopMessages["activity"]
+>;
+
+const BLOCKED_DELETION_NOTICE = {
+  available: "pendingActivityProtected",
+  pending: "pendingActivityProtected",
+  unavailable: "errorRead",
+  keyMissing: "pendingActivityProtected",
+  unreadable: "unreadableEraseNotice",
+} as const satisfies Record<
+  ActivityDaySnapshot["deletionStatus"],
+  keyof DesktopMessages["activity"]
+>;
+
 const DeletionOnlyNotice = ({
   onErase,
   keyStatus,
@@ -426,13 +450,15 @@ const DeletionOnlyNotice = ({
           className="text-destructive mt-0.5 size-4 shrink-0"
         />
         <p className="text-sm leading-relaxed">
-          {keyStatus === "keyMissing" ? t("deletionOnly") : t("errorRead")}
+          {t(DELETION_ONLY_NOTICE[keyStatus])}
         </p>
       </div>
-      {keyStatus === "keyMissing" ? (
+      {keyStatus === "keyMissing" || keyStatus === "unreadable" ? (
         <div>
           <Button onClick={onErase} variant="destructive">
-            {t("deleteAll")}
+            {keyStatus === "unreadable"
+              ? t("unreadableEraseAction")
+              : t("deleteAll")}
           </Button>
         </div>
       ) : null}
@@ -479,7 +505,7 @@ const DayHeader = ({
         </h1>
         <Button
           aria-label={t("nextDay")}
-          disabled={navigationDisabled || snapshot.date >= snapshot.today}
+          disabled={navigationDisabled || snapshot.date >= snapshot.latestDate}
           onClick={() => onNavigate(shiftDate(snapshot.date, 1))}
           size="icon"
           variant="ghost"
@@ -786,6 +812,7 @@ type ActivitySettingsProps = {
   onDeleteAll: () => void;
   onDeleteDay: () => void;
   deletionDisabled: boolean;
+  recoveryEraseStatus: "available" | "blocked";
   snapshot: ActivityDaySnapshot;
 };
 
@@ -794,6 +821,7 @@ const ActivitySettings = ({
   onDeleteAll,
   onDeleteDay,
   deletionDisabled,
+  recoveryEraseStatus,
   snapshot,
 }: ActivitySettingsProps) => {
   const t = useTranslations("activity");
@@ -890,9 +918,7 @@ const ActivitySettings = ({
       </div>
       {deletionDisabled ? (
         <p className="text-muted-foreground text-xs">
-          {snapshot.deletionStatus === "unavailable"
-            ? t("errorRead")
-            : t("pendingActivityProtected")}
+          {t(BLOCKED_DELETION_NOTICE[snapshot.deletionStatus])}
         </p>
       ) : null}
       <div className="flex flex-wrap gap-2">
@@ -905,12 +931,14 @@ const ActivitySettings = ({
           {t("deleteDay")}
         </Button>
         <Button
-          disabled={deletionDisabled}
+          disabled={deletionDisabled && recoveryEraseStatus === "blocked"}
           onClick={onDeleteAll}
           variant="destructive"
         >
           <Trash2Icon aria-hidden="true" />
-          {t("deleteAll")}
+          {snapshot.deletionStatus === "unreadable"
+            ? t("unreadableEraseAction")
+            : t("deleteAll")}
         </Button>
       </div>
     </section>
@@ -999,25 +1027,48 @@ const ActivityDialogView = ({
         />
       );
     case "eraseMissingKeyAll":
-    case "eraseMissingKeyOtherAccounts":
       return (
         <ConfirmDialog
           description={t("missingKeyEraseConfirmation")}
           onClose={onClose}
           onConfirm={() =>
             onCommand(
-              dialog.type === "eraseMissingKeyAll"
-                ? "activity_delete_all"
-                : "activity_delete_other_account_history",
+              "activity_delete_all",
               { recovery: "discardMissingKey" },
               onClose,
             )
           }
-          title={
-            dialog.type === "eraseMissingKeyAll"
-              ? t("deleteAll")
-              : t("deleteOtherAccountHistory")
+          title={t("deleteAll")}
+        />
+      );
+    case "eraseUnreadableAll":
+      return (
+        <ConfirmDialog
+          description={t("unreadableEraseConfirmation")}
+          onClose={onClose}
+          onConfirm={() =>
+            onCommand(
+              "activity_delete_all",
+              { recovery: "discardUnreadable" },
+              onClose,
+            )
           }
+          title={t("unreadableEraseAction")}
+        />
+      );
+    case "eraseUnrecoverableOtherAccounts":
+      return (
+        <ConfirmDialog
+          description={t("unrecoverableOtherHistoryConfirmation")}
+          onClose={onClose}
+          onConfirm={() =>
+            onCommand(
+              "activity_delete_other_account_history",
+              { recovery: "discardUnrecoverable" },
+              onClose,
+            )
+          }
+          title={t("deleteOtherAccountHistory")}
         />
       );
     case "deleteAll":
@@ -1090,24 +1141,17 @@ const ConfirmDialog = ({
 const REVIEW_PENDING = {
   editing: false,
   submitting: true,
+  discarding: true,
   retry: true,
   saved: false,
 } as const satisfies Record<ActivityReviewStatus, boolean>;
 
-const ActivityApp = () => {
+const useActivityDay = (
+  date: string | null,
+  onReadError: (message: string) => void,
+) => {
   const t = useTranslations("activity");
-  const [date, setDate] = useState<string | null>(null);
   const [view, setView] = useState<ActivityView>({ type: "loading" });
-  const [errorMessage, setError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<ActivityDialog>({ type: "closed" });
-  const [reviewStatus, setReviewStatus] =
-    useState<ActivityReviewStatus>("editing");
-  const reviewStatusRef = useRef<ActivityReviewStatus>("editing");
-  const onReviewStatusChange = useCallback((status: ActivityReviewStatus) => {
-    reviewStatusRef.current = status;
-    setReviewStatus(status);
-  }, []);
-  const reviewUnresolved = REVIEW_PENDING[reviewStatus];
   const requestId = useRef(0);
   const errorRead = t("errorRead");
 
@@ -1129,7 +1173,7 @@ const ActivityApp = () => {
             setView((previousView) =>
               previousView.type === "ready" ? previousView : { type: "failed" },
             );
-            setError(errorRead);
+            onReadError(errorRead);
             return undefined;
           }
           setView({ snapshot: value, type: "ready" });
@@ -1146,7 +1190,7 @@ const ActivityApp = () => {
           setView((previousView) =>
             previousView.type === "ready" ? previousView : { type: "failed" },
           );
-          setError(errorRead);
+          onReadError(errorRead);
         });
     };
     readDay();
@@ -1165,7 +1209,26 @@ const ActivityApp = () => {
       disposed = true;
       stopListening();
     };
-  }, [date, errorRead]);
+  }, [date, errorRead, onReadError]);
+
+  return view;
+};
+
+const ActivityApp = () => {
+  const t = useTranslations("activity");
+  const [date, setDate] = useState<string | null>(null);
+  const [errorMessage, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<ActivityDialog>({ type: "closed" });
+  const [reviewStatus, setReviewStatus] =
+    useState<ActivityReviewStatus>("editing");
+  const reviewStatusRef = useRef<ActivityReviewStatus>("editing");
+  const onReviewStatusChange = useCallback((status: ActivityReviewStatus) => {
+    reviewStatusRef.current = status;
+    setReviewStatus(status);
+  }, []);
+  const reviewUnresolved = REVIEW_PENDING[reviewStatus];
+  const view = useActivityDay(date, setError);
+  const errorRead = t("errorRead");
 
   const runCommand = (
     command: ActivityCommand,
@@ -1177,22 +1240,26 @@ const ActivityApp = () => {
       (view.type === "ready" &&
         (view.snapshot.pendingBatch !== null ||
           view.snapshot.deletionStatus !== "available"));
-    const confirmedMissingKeyErase =
-      args["recovery"] === "discardMissingKey" &&
-      (command === "activity_delete_all" ||
-        command === "activity_delete_other_account_history") &&
-      reviewStatusRef.current !== "submitting";
-    const inactiveMissingKeyPreflight =
+    const confirmedRecoveryErase =
+      ((command === "activity_delete_all" &&
+        (args["recovery"] === "discardMissingKey" ||
+          args["recovery"] === "discardUnreadable")) ||
+        (command === "activity_delete_other_account_history" &&
+          args["recovery"] === "discardUnrecoverable")) &&
+      reviewStatusRef.current !== "submitting" &&
+      reviewStatusRef.current !== "discarding";
+    const inactiveRecoveryPreflight =
       command === "activity_delete_other_account_history" &&
       args["recovery"] === "preserve" &&
       !REVIEW_PENDING[reviewStatusRef.current] &&
       view.type === "ready" &&
       view.snapshot.pendingBatch === null &&
-      view.snapshot.deletionStatus === "keyMissing";
+      (view.snapshot.deletionStatus === "keyMissing" ||
+        view.snapshot.deletionStatus === "unreadable");
     if (
       pending &&
-      !confirmedMissingKeyErase &&
-      !inactiveMissingKeyPreflight &&
+      !confirmedRecoveryErase &&
+      !inactiveRecoveryPreflight &&
       (command === "activity_delete_day" ||
         command === "activity_delete_all" ||
         command === "activity_delete_other_account_history" ||
@@ -1220,15 +1287,19 @@ const ActivityApp = () => {
           typeof error === "object" &&
           error !== null &&
           "type" in error &&
-          error.type === "keyMissing" &&
+          (error.type === "keyMissing" || error.type === "unreadable") &&
           (command === "activity_delete_all" ||
             command === "activity_delete_other_account_history")
         ) {
+          if (command === "activity_delete_other_account_history") {
+            setDialog({ type: "eraseUnrecoverableOtherAccounts" });
+            return;
+          }
           setDialog({
             type:
-              command === "activity_delete_all"
-                ? "eraseMissingKeyAll"
-                : "eraseMissingKeyOtherAccounts",
+              error.type === "unreadable"
+                ? "eraseUnreadableAll"
+                : "eraseMissingKeyAll",
           });
           return;
         }
@@ -1239,6 +1310,15 @@ const ActivityApp = () => {
           error.type === "pendingBatch"
         ) {
           setError(t("pendingActivityProtected"));
+          return;
+        }
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          error.type === "unavailable"
+        ) {
+          setError(t("errorRead"));
           return;
         }
         setError(
@@ -1280,7 +1360,9 @@ const ActivityApp = () => {
       days={snapshot.otherAccountHistoryDays}
       deletionDisabled={
         reviewPending ||
-        (deletionDisabled && snapshot.deletionStatus !== "keyMissing")
+        (deletionDisabled &&
+          snapshot.deletionStatus !== "keyMissing" &&
+          snapshot.deletionStatus !== "unreadable")
       }
       onDelete={() =>
         setDialog({
@@ -1303,7 +1385,14 @@ const ActivityApp = () => {
       <ActivityShell>
         <DeletionOnlyNotice
           keyStatus={snapshot.deletionStatus}
-          onErase={() => setDialog({ type: "eraseMissingKeyAll" })}
+          onErase={() =>
+            setDialog({
+              type:
+                snapshot.deletionStatus === "unreadable"
+                  ? "eraseUnreadableAll"
+                  : "eraseMissingKeyAll",
+            })
+          }
         />
         {otherAccountHistory}
         {errorMessage ? <ErrorLine message={errorMessage} /> : null}
@@ -1342,7 +1431,9 @@ const ActivityApp = () => {
         onReviewStatusChange={onReviewStatusChange}
         header={
           <DayHeader
-            navigationDisabled={reviewStatus === "submitting"}
+            navigationDisabled={
+              reviewStatus === "submitting" || reviewStatus === "discarding"
+            }
             onNavigate={(next) =>
               setDate(next === snapshot.today ? null : next)
             }
@@ -1376,8 +1467,22 @@ const ActivityApp = () => {
         />
         <ActivitySettings
           deletionDisabled={deletionDisabled}
+          recoveryEraseStatus={
+            snapshot.deletionStatus === "unreadable" &&
+            reviewStatus !== "submitting" &&
+            reviewStatus !== "discarding"
+              ? "available"
+              : "blocked"
+          }
           onCommand={runCommand}
-          onDeleteAll={() => setDialog({ type: "deleteAll" })}
+          onDeleteAll={() =>
+            setDialog({
+              type:
+                snapshot.deletionStatus === "unreadable"
+                  ? "eraseUnreadableAll"
+                  : "deleteAll",
+            })
+          }
           onDeleteDay={() =>
             setDialog({ date: snapshot.date, type: "deleteDay" })
           }

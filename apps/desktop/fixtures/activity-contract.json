@@ -11,7 +11,8 @@
     "available": true,
     "pending": true,
     "unavailable": true,
-    "keyMissing": true
+    "keyMissing": true,
+    "unreadable": true
   },
   "recordingStatuses": ["off", "recording", "paused"],
   "retentions": ["week", "month", "quarter"],

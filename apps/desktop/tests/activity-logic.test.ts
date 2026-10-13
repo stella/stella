@@ -52,6 +52,7 @@ describe("activity contract", () => {
       draftedEntries: [],
       timeBillingEnabled: false,
       earliestDate: "2026-02-09",
+      latestDate: "2026-03-10",
       excludedApps: [{ identifier: "com.example.app", name: "App" }],
       otherAccountHistoryDays: 0,
       captureDetails: false,
@@ -68,6 +69,10 @@ describe("activity contract", () => {
       unreadable: false,
     };
     expect(isActivityDaySnapshot(snapshot)).toBe(true);
+    expect(isActivityDaySnapshot({ ...snapshot, latestDate: undefined })).toBe(
+      false,
+    );
+    expect(isActivityDaySnapshot({ ...snapshot, latestDate: 123 })).toBe(false);
     for (const deletionStatus of Object.keys(contract.deletionStatuses)) {
       expect(isActivityDaySnapshot({ ...snapshot, deletionStatus })).toBe(true);
     }

@@ -11,7 +11,8 @@ use crate::{
   activity::{
     self, ActivityAppDetailCapture, ActivityAppState, ActivityDaySnapshot,
     ActivityDeletionError, ActivityDeletionRecovery, ActivityHistoryDisposition,
-    ActivityManager, ActivityRecordingStatus, ActivityRetention,
+    ActivityManager, ActivityOtherHistoryRecovery, ActivityRecordingStatus,
+    ActivityRetention,
   },
   activity_details,
   local_window::ActivityCaller,
@@ -141,12 +142,13 @@ pub fn activity_delete_day(
 }
 
 #[tauri::command]
-pub fn activity_delete_all(
+pub async fn activity_delete_all(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
   recovery: ActivityDeletionRecovery,
 ) -> Result<(), ActivityDeletionError> {
+  let _confirmation = crate::time_entry_commands::BATCH_CONFIRMATION.lock().await;
   update(&app, &state, &caller, |manager| {
     manager.delete_all(recovery)
   })
@@ -157,7 +159,7 @@ pub fn activity_delete_other_account_history(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
-  recovery: ActivityDeletionRecovery,
+  recovery: ActivityOtherHistoryRecovery,
 ) -> Result<(), ActivityDeletionError> {
   update(&app, &state, &caller, |manager| {
     manager.delete_other_account_history(recovery)
