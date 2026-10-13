@@ -25,7 +25,7 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   feature_gate::{DesktopFeature, FeatureGates},
   foreground_app::{self, AppExclusion},
-  keychain::LocalDataKey,
+  keychain::{self, LocalDataKey, LocalDataKeyLookup},
   local_store::{self, StoreKey},
   local_window::ActivityCaller,
 };
@@ -133,6 +133,7 @@ enum ActivityPersistence {
   Encrypted(ActivityStore),
   MemoryOnly,
   DeletionOnly(PathBuf),
+  KeyMissing(PathBuf),
 }
 
 /// What one sample saw.
@@ -260,6 +261,7 @@ pub struct ActivityPendingBatch {
 #[serde(tag = "type", content = "message", rename_all = "camelCase")]
 pub enum ActivityDeletionError {
   PendingBatch,
+  KeyMissing,
   Unavailable(String),
 }
 
@@ -284,15 +286,23 @@ macro_rules! activity_deletion_statuses {
   };
 }
 
-activity_deletion_statuses!(Available, Pending, Unavailable);
+activity_deletion_statuses!(Available, Pending, KeyMissing, Unavailable);
 
 impl std::fmt::Display for ActivityDeletionError {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
       Self::PendingBatch => formatter.write_str("activity batch is pending"),
+      Self::KeyMissing => formatter.write_str("activity history key is missing"),
       Self::Unavailable(message) => formatter.write_str(message),
     }
   }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ActivityDeletionRecovery {
+  Preserve,
+  DiscardMissingKey,
 }
 
 const MAX_BATCH_ENTRIES: usize = 100;
@@ -431,6 +441,7 @@ pub struct ActivityManager {
   drafted_entries: BTreeMap<NaiveDate, Vec<ActivityDraftedEntry>>,
   manual_assignments: BTreeMap<NaiveDate, Vec<ActivityManualAssignment>>,
   pending_batches: BTreeMap<NaiveDate, ActivityPendingBatch>,
+  cached_pending_dates: Result<BTreeSet<NaiveDate>, String>,
   last_flush: Option<Instant>,
   last_sample: Option<(DateTime<Utc>, Instant)>,
   wall_floor: Option<DateTime<Utc>>,
@@ -622,6 +633,7 @@ impl ActivityManager {
       drafted_entries: BTreeMap::new(),
       manual_assignments: BTreeMap::new(),
       pending_batches: BTreeMap::new(),
+      cached_pending_dates: Ok(BTreeSet::new()),
       last_flush: None,
       last_sample: None,
       wall_floor: None,
@@ -640,7 +652,9 @@ impl ActivityManager {
       ActivityPersistence::Initializing => ActivityPersistenceStatus::Initializing,
       ActivityPersistence::Encrypted(_) => ActivityPersistenceStatus::Encrypted,
       ActivityPersistence::MemoryOnly => ActivityPersistenceStatus::MemoryOnly,
-      ActivityPersistence::DeletionOnly(_) => ActivityPersistenceStatus::DeletionOnly,
+      ActivityPersistence::DeletionOnly(_) | ActivityPersistence::KeyMissing(_) => {
+        ActivityPersistenceStatus::DeletionOnly
+      }
     }
   }
 
@@ -670,6 +684,17 @@ impl ActivityManager {
         }
       },
       persistence => (persistence, settings, None),
+    };
+    self.cached_pending_dates = match &persistence {
+      ActivityPersistence::Encrypted(store) => store
+        .pending_dates()
+        .map(|dates| dates.into_iter().collect()),
+      ActivityPersistence::MemoryOnly => Ok(BTreeSet::new()),
+      ActivityPersistence::Initializing
+      | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_) => {
+        Err("activity recovery state is unavailable".into())
+      }
     };
     self.persistence = persistence;
     self.settings = settings;
@@ -728,7 +753,7 @@ impl ActivityManager {
       ActivityPersistence::Initializing => {
         Err("activity timeline is still loading".to_string())
       }
-      ActivityPersistence::DeletionOnly(_) => {
+      ActivityPersistence::DeletionOnly(_) | ActivityPersistence::KeyMissing(_) => {
         Err("activity timeline recovery state is unavailable".to_string())
       }
     }
@@ -1261,19 +1286,25 @@ impl ActivityManager {
   }
 
   fn pending_dates(&self) -> Result<BTreeSet<NaiveDate>, String> {
-    if let ActivityPersistence::Encrypted(store) = &self.persistence {
-      return Ok(store.pending_dates()?.into_iter().collect());
-    }
-    Ok(self.pending_batches.keys().copied().collect())
+    self.cached_pending_dates.clone()
   }
 
   /// Retention preserves pending days and their cached recovery state.
   pub fn prune_expired(&mut self, now: DateTime<Utc>) -> Result<bool, String> {
+    match self.persistence {
+      ActivityPersistence::Initializing
+      | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_) => return Ok(false),
+      ActivityPersistence::Encrypted(_) | ActivityPersistence::MemoryOnly => {}
+    }
     let earliest = self.earliest_date(local_date(now));
-    let pending_dates = self.pending_dates()?;
     let deleted = match &self.persistence {
       ActivityPersistence::Encrypted(store) => store.delete_days_before(earliest)?,
       _ => 0,
+    };
+    let pending_dates = match self.pending_dates() {
+      Ok(dates) => dates,
+      Err(_) => return Ok(deleted > 0),
     };
     let before = self.days.len();
     self
@@ -1328,7 +1359,19 @@ impl ActivityManager {
   }
 
   /// Recovery must settle every pending batch before recorded days are erased.
-  pub fn delete_all(&mut self) -> Result<(), ActivityDeletionError> {
+  pub fn delete_all(
+    &mut self,
+    recovery: ActivityDeletionRecovery,
+  ) -> Result<(), ActivityDeletionError> {
+    if let ActivityPersistence::KeyMissing(root) = &self.persistence {
+      let namespace = self.namespace.as_deref().ok_or_else(|| {
+        ActivityDeletionError::Unavailable("activity account is unavailable".into())
+      })?;
+      ActivityStore::remove_missing_key(root, namespace, recovery)?;
+      let (persistence, settings) = open_persistence(namespace);
+      self.install(persistence, settings, Utc::now());
+      return Ok(());
+    }
     self
       .require_writable()
       .map_err(ActivityDeletionError::Unavailable)?;
@@ -1453,6 +1496,9 @@ impl ActivityManager {
     } else {
       self.pending_batches.insert(date, pending);
     }
+    if let Ok(dates) = &mut self.cached_pending_dates {
+      dates.insert(date);
+    }
     Ok(())
   }
 
@@ -1472,6 +1518,9 @@ impl ActivityManager {
       store.cancel_pending(date, idempotency_key)?;
     } else {
       self.pending_batches.remove(&date);
+    }
+    if let Ok(dates) = &mut self.cached_pending_dates {
+      dates.remove(&date);
     }
     Ok(())
   }
@@ -1508,6 +1557,9 @@ impl ActivityManager {
     } else {
       self.drafted_entries.insert(date, entries);
       self.pending_batches.remove(&date);
+    }
+    if let Ok(dates) = &mut self.cached_pending_dates {
+      dates.remove(&date);
     }
     Ok(())
   }
@@ -1627,7 +1679,8 @@ impl ActivityManager {
   fn other_account_store_root(&self) -> Result<PathBuf, String> {
     let root = match &self.persistence {
       ActivityPersistence::Encrypted(store) => store.root().parent().map(PathBuf::from),
-      ActivityPersistence::DeletionOnly(root) => root.parent().map(PathBuf::from),
+      ActivityPersistence::DeletionOnly(root)
+      | ActivityPersistence::KeyMissing(root) => root.parent().map(PathBuf::from),
       ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
         store_root()
       }
@@ -1647,14 +1700,17 @@ impl ActivityManager {
     .map_err(|_| "activity history could not be listed".to_string())
   }
 
-  pub fn delete_other_account_history(&mut self) -> Result<(), ActivityDeletionError> {
+  pub fn delete_other_account_history(
+    &mut self,
+    recovery: ActivityDeletionRecovery,
+  ) -> Result<(), ActivityDeletionError> {
     let namespace = self.namespace.as_deref().ok_or_else(|| {
       ActivityDeletionError::Unavailable("activity account is unavailable".into())
     })?;
     let root = self
       .other_account_store_root()
       .map_err(ActivityDeletionError::Unavailable)?;
-    ActivityStore::delete_other_account_history(&root, namespace)
+    ActivityStore::delete_other_account_history(&root, namespace, recovery)
   }
 
   fn day_segments(&self, date: NaiveDate) -> (Vec<ActivitySegment>, bool) {
@@ -1665,7 +1721,9 @@ impl ActivityManager {
           Ok(segments) => (segments, false),
           Err(_) => (Vec::new(), true),
         },
-        ActivityPersistence::DeletionOnly(_) => (Vec::new(), true),
+        ActivityPersistence::DeletionOnly(_) | ActivityPersistence::KeyMissing(_) => {
+          (Vec::new(), true)
+        }
         _ => (Vec::new(), false),
       },
     };
@@ -1809,7 +1867,9 @@ impl ActivityManager {
           .map_or(retention_earliest, |pending_date| {
             pending_date.min(retention_earliest)
           }),
-        if matches!(
+        if matches!(self.persistence, ActivityPersistence::KeyMissing(_)) {
+          ActivityDeletionStatus::KeyMissing
+        } else if matches!(
           self.persistence,
           ActivityPersistence::Initializing | ActivityPersistence::DeletionOnly(_)
         ) {
@@ -1822,7 +1882,11 @@ impl ActivityManager {
       ),
       Err(_) => (
         retention_earliest.min(date),
-        ActivityDeletionStatus::Unavailable,
+        if matches!(self.persistence, ActivityPersistence::KeyMissing(_)) {
+          ActivityDeletionStatus::KeyMissing
+        } else {
+          ActivityDeletionStatus::Unavailable
+        },
       ),
     };
     ActivityDaySnapshot {
@@ -1865,19 +1929,38 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
     );
     return (ActivityPersistence::MemoryOnly, ActivitySettings::default());
   };
-  let key = match local_store::resolve_key(
-    LocalDataKey::ActivityTimeline(namespace),
-    ActivityStore::has_data(&root),
-  ) {
-    StoreKey::Key(key) => key,
-    StoreKey::MemoryOnly => {
-      return (ActivityPersistence::MemoryOnly, ActivitySettings::default());
+  let key = if ActivityStore::has_data(&root) {
+    match keychain::get_local_data_key(LocalDataKey::ActivityTimeline(namespace)) {
+      Ok(LocalDataKeyLookup::Found(key)) => key,
+      Ok(LocalDataKeyLookup::Missing) => {
+        return (
+          ActivityPersistence::KeyMissing(root),
+          ActivitySettings::default(),
+        );
+      }
+      Err(_) => {
+        tracing::warn!("activity history key is unavailable");
+        return (
+          ActivityPersistence::DeletionOnly(root),
+          ActivitySettings::default(),
+        );
+      }
     }
-    StoreKey::DeletionOnly => {
-      return (
-        ActivityPersistence::DeletionOnly(root),
-        ActivitySettings::default(),
-      );
+  } else {
+    match local_store::resolve_key(
+      LocalDataKey::ActivityTimeline(namespace),
+      ActivityStore::has_data(&root),
+    ) {
+      StoreKey::Key(key) => key,
+      StoreKey::MemoryOnly => {
+        return (ActivityPersistence::MemoryOnly, ActivitySettings::default());
+      }
+      StoreKey::DeletionOnly => {
+        return (
+          ActivityPersistence::DeletionOnly(root),
+          ActivitySettings::default(),
+        );
+      }
     }
   };
   let store = ActivityStore::new(key, root.clone());
@@ -2348,6 +2431,59 @@ mod tests {
   }
 
   #[test]
+  fn pending_date_index_tracks_only_successful_batch_transitions() {
+    let mut manager = recording_manager();
+    let date = local_date(at(0));
+    let pending = review_batch();
+    assert!(manager.pending_dates().unwrap().is_empty());
+    manager.reserve_batch(date, pending.clone()).unwrap();
+    assert_eq!(manager.pending_dates().unwrap(), BTreeSet::from([date]));
+    assert!(manager.cancel_pending_batch(date, "different-key").is_err());
+    assert!(manager.finish_batch(date, Vec::new()).is_err());
+    assert_eq!(manager.pending_dates().unwrap(), BTreeSet::from([date]));
+    manager
+      .cancel_pending_batch(date, &pending.idempotency_key)
+      .unwrap();
+    assert!(manager.pending_dates().unwrap().is_empty());
+    manager.reserve_batch(date, pending.clone()).unwrap();
+    manager
+      .finish_batch(
+        date,
+        vec![ActivityDraftedEntry {
+          start: pending.ranges[0][0].start.clone(),
+          end: pending.ranges[0][0].end.clone(),
+          entry_id: "created-entry".into(),
+        }],
+      )
+      .unwrap();
+    assert!(manager.pending_dates().unwrap().is_empty());
+  }
+
+  #[test]
+  fn installed_pending_date_index_does_not_reopen_day_files() {
+    let root = std::env::temp_dir()
+      .join(format!("stella-pending-index-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([9; 32], root.clone());
+    let date = local_date(at(0));
+    store.save_pending(date, &review_batch()).unwrap();
+    let mut manager = ActivityManager::new();
+    manager.install(
+      ActivityPersistence::Encrypted(store),
+      ActivitySettings::default(),
+      at(0),
+    );
+    std::fs::write(
+      root
+        .join("days")
+        .join(format!("{}.json.enc", format_date(date))),
+      b"unreadable",
+    )
+    .unwrap();
+    assert_eq!(manager.pending_dates().unwrap(), BTreeSet::from([date]));
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
   fn pending_submission_refuses_day_deletion_before_changing_recording_state() {
     let mut manager = recording_manager();
     let date = local_date(at(0));
@@ -2374,7 +2510,11 @@ mod tests {
     manager.reserve_batch(date, pending.clone()).unwrap();
     let generation = manager.observation_generation;
     assert_eq!(
-      manager.delete_all(),
+      manager.delete_all(ActivityDeletionRecovery::Preserve),
+      Err(ActivityDeletionError::PendingBatch)
+    );
+    assert_eq!(
+      manager.delete_all(ActivityDeletionRecovery::DiscardMissingKey),
       Err(ActivityDeletionError::PendingBatch)
     );
     assert_eq!(manager.pending_for_day(date).unwrap(), Some(pending));
@@ -2430,6 +2570,10 @@ mod tests {
   #[test]
   fn deletion_errors_and_statuses_have_the_native_response_shape() {
     assert_eq!(
+      serde_json::to_value(ActivityDeletionError::KeyMissing).unwrap(),
+      serde_json::json!({ "type": "keyMissing" }),
+    );
+    assert_eq!(
       serde_json::to_value(ActivityDeletionError::PendingBatch).unwrap(),
       serde_json::json!({ "type": "pendingBatch" }),
     );
@@ -2441,6 +2585,7 @@ mod tests {
     for (status, expected) in [
       (ActivityDeletionStatus::Available, "available"),
       (ActivityDeletionStatus::Pending, "pending"),
+      (ActivityDeletionStatus::KeyMissing, "keyMissing"),
       (ActivityDeletionStatus::Unavailable, "unavailable"),
     ] {
       assert_eq!(serde_json::to_value(status).unwrap(), expected);
@@ -2471,6 +2616,44 @@ mod tests {
         .unwrap()
     );
     assert_eq!(store.load_pending(date).unwrap(), Some(pending));
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn missing_and_transient_key_states_offer_distinct_deletion_statuses() {
+    let root =
+      std::env::temp_dir().join(format!("stella-review-key-{}", uuid::Uuid::new_v4()));
+    let store = ActivityStore::new([9; 32], root.clone());
+    let date = local_date(at(0));
+    let pending = review_batch();
+    store.save_pending(date, &pending).unwrap();
+    for (persistence, expected) in [
+      (
+        ActivityPersistence::KeyMissing(root.clone()),
+        ActivityDeletionStatus::KeyMissing,
+      ),
+      (
+        ActivityPersistence::DeletionOnly(root.clone()),
+        ActivityDeletionStatus::Unavailable,
+      ),
+    ] {
+      let mut manager = ActivityManager::new();
+      manager.install(persistence, ActivitySettings::default(), at(0));
+      let snapshot = manager.day_snapshot(
+        date,
+        at(0),
+        &ActivityCaller::for_account_test(1, "fixture"),
+        0,
+        ActivityDetailsAccess::Ready,
+      );
+      assert_eq!(snapshot.deletion_status, expected);
+      assert!(
+        !manager
+          .prune_expired(at(0) + chrono::Duration::days(40))
+          .unwrap()
+      );
+      assert_eq!(store.load_pending(date).unwrap(), Some(pending.clone()));
+    }
     ActivityStore::remove(&root).unwrap();
   }
 
@@ -3450,7 +3633,7 @@ mod tests {
       Err(ActivityDeletionError::Unavailable(_))
     ));
     assert!(matches!(
-      manager.delete_all(),
+      manager.delete_all(ActivityDeletionRecovery::Preserve),
       Err(ActivityDeletionError::Unavailable(_))
     ));
   }
@@ -3587,7 +3770,8 @@ mod tests {
   }
 
   #[test]
-  fn initialization_prunes_unreadable_expired_days_before_loading_the_boundary() {
+  fn initialization_preserves_unreadable_expired_days_and_refuses_an_unknown_boundary()
+  {
     let root = std::env::temp_dir().join(format!(
       "stella-expired-unreadable-{}",
       uuid::Uuid::new_v4()
@@ -3613,18 +3797,19 @@ mod tests {
       original.settings.clone(),
       at(10),
     );
-    assert!(!expired_path.exists());
+    assert!(expired_path.exists());
     assert_eq!(
       manager.persistence_status(),
-      ActivityPersistenceStatus::Encrypted
+      ActivityPersistenceStatus::DeletionOnly
     );
-    assert!(manager.is_recording());
-    assert_eq!(manager.wall_floor, Some(at(5)));
+    assert!(!manager.is_recording());
+    assert_eq!(manager.wall_floor, None);
     assert_eq!(store.load_day(retained_date).unwrap().len(), 1);
-    manager.observe(at(10), active("outlook"));
-    manager.observe(at(15), active("outlook"));
-    manager.stop(at(15)).unwrap();
-    assert_eq!(store.load_day(retained_date).unwrap().len(), 2);
+    assert!(
+      manager
+        .set_recording_status(ActivityRecordingStatus::Recording, at(10))
+        .is_err()
+    );
     ActivityStore::remove(&root).unwrap();
   }
 
@@ -3730,7 +3915,9 @@ mod tests {
               .set_recording_status(ActivityRecordingStatus::Recording, at(0))
               .unwrap();
           }
-          "delete" => manager.delete_all().unwrap(),
+          "delete" => manager
+            .delete_all(ActivityDeletionRecovery::Preserve)
+            .unwrap(),
           "unlink" => manager.unload_account(at(0)).unwrap(),
           "details-off" => {
             manager.set_capture_details(false, at(0)).unwrap();
@@ -3783,7 +3970,9 @@ mod tests {
           manager.delete_day(local_date(at(0))).unwrap();
         }
         _ => {
-          manager.delete_all().unwrap();
+          manager
+            .delete_all(ActivityDeletionRecovery::Preserve)
+            .unwrap();
         }
       }
       assert!(!manager.accepts_observation(generation, true));

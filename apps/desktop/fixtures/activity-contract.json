@@ -10,7 +10,8 @@
   "deletionStatuses": {
     "available": true,
     "pending": true,
-    "unavailable": true
+    "unavailable": true,
+    "keyMissing": true
   },
   "recordingStatuses": ["off", "recording", "paused"],
   "retentions": ["week", "month", "quarter"],

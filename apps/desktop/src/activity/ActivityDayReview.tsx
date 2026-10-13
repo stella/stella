@@ -62,8 +62,8 @@ type Submission =
   | { type: "editing" }
   | { type: "submitting"; idempotencyKey: string; items: BatchItem[] }
   | { type: "retry"; idempotencyKey: string; items: BatchItem[] }
-  | { type: "saved"; count: number; markerSaved: boolean };
-export type ActivityReviewStatus = Submission["type"] | "receiptPending";
+  | { type: "saved"; count: number };
+export type ActivityReviewStatus = Submission["type"];
 type Range = { startMs: number; endMs: number };
 
 const useMatterCandidates = (enabled: boolean) => {
@@ -123,9 +123,7 @@ const useReviewSubmission = ({
   });
   const updateSubmission = (next: Submission) => {
     setSubmission(next);
-    onReviewStatusChange(
-      next.type === "saved" && !next.markerSaved ? "receiptPending" : next.type,
-    );
+    onReviewStatusChange(next.type);
   };
   useEffect(() => {
     if (pendingBatch !== null) {
@@ -141,11 +139,7 @@ const useReviewSubmission = ({
       onReviewStatusChange("editing");
       return;
     }
-    onReviewStatusChange(
-      submission.type === "saved" && !submission.markerSaved
-        ? "receiptPending"
-        : submission.type,
-    );
+    onReviewStatusChange(submission.type);
   }, [onReviewStatusChange, pendingBatch, submission]);
   return { submission, updateSubmission };
 };
@@ -201,9 +195,7 @@ export const ActivityDayReview = ({
       billable: true,
       narrative: narrative(group),
     };
-  const editable =
-    submission.type === "editing" ||
-    (submission.type === "saved" && submission.markerSaved);
+  const editable = submission.type === "editing" || submission.type === "saved";
   const update = (group: DayReviewGroup, change: Partial<EntryEdit>) => {
     setEdits({
       ...edits,
@@ -266,9 +258,6 @@ export const ActivityDayReview = ({
     if (sending.current) {
       return;
     }
-    if (submission.type === "saved" && !submission.markerSaved) {
-      return;
-    }
     if (submission.type !== "retry" && selectionExceedsLimit) {
       return;
     }
@@ -319,7 +308,16 @@ export const ActivityDayReview = ({
               : [];
           }),
         ]);
-        updateSubmission({ type: "saved", count: entries.length, markerSaved });
+        if (markerSaved) {
+          updateSubmission({ type: "saved", count: entries.length });
+        } else {
+          updateSubmission({
+            type: "retry",
+            idempotencyKey: pending.idempotencyKey,
+            items: pending.items,
+          });
+          setError(t("draftMarkerFailed"));
+        }
         return undefined;
       })
       .catch((error: unknown) => {
@@ -407,13 +405,8 @@ export const ActivityDayReview = ({
         </p>
       ) : null}
       {submission.type === "saved" ? (
-        <p
-          role={submission.markerSaved ? "status" : "alert"}
-          className="text-sm"
-        >
-          {submission.markerSaved
-            ? t("batchCreated", { count: submission.count })
-            : t("draftMarkerFailed")}
+        <p role="status" className="text-sm">
+          {t("batchCreated", { count: submission.count })}
         </p>
       ) : null}
       <ReviewBar
@@ -497,7 +490,6 @@ const ReviewBar = ({
   const disabled =
     !snapshot.timeBillingEnabled ||
     submission.type === "submitting" ||
-    (submission.type === "saved" && !submission.markerSaved) ||
     (submission.type !== "retry" && (selected.length === 0 || !valid));
   return (
     <footer className="bg-card sticky bottom-0 z-10 -mx-6 flex flex-wrap items-center gap-3 border-t px-6 py-3">

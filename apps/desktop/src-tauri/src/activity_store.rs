@@ -16,8 +16,9 @@ use std::{
 };
 
 use crate::activity::{
-  ActivityDeletionError, ActivityDraftedEntry, ActivityManualAssignment,
-  ActivityPendingBatch, ActivitySegment, ActivitySettings, format_date, parse_date,
+  ActivityDeletionError, ActivityDeletionRecovery, ActivityDraftedEntry,
+  ActivityManualAssignment, ActivityPendingBatch, ActivitySegment, ActivitySettings,
+  format_date, parse_date,
 };
 use crate::keychain::{self, LocalDataKey, LocalDataKeyLookup};
 use crate::local_store::{EncryptedJsonFile, create_private_dir};
@@ -50,6 +51,11 @@ enum PendingMutation<'a> {
 pub struct ActivityStore {
   key: [u8; 32],
   root: PathBuf,
+}
+
+enum InactiveAccountKey {
+  Found(ActivityStore),
+  Missing,
 }
 
 struct OtherAccountHistoryFiles {
@@ -343,19 +349,25 @@ impl ActivityStore {
   /// Retention preserves unresolved batches; only settled days expire.
   pub fn delete_days_before(&self, earliest: NaiveDate) -> Result<usize, String> {
     let mut deleted = 0;
+    let mut unreadable_days = 0;
     for (path, date) in Self::day_entries_root(&self.root)? {
       match date {
-        Some(date) if date < earliest => {
-          if self.load_pending(date)?.is_none() {
+        Some(date) if date < earliest => match self.load_pending(date) {
+          Ok(None) => {
             self.delete_day(date).map_err(|error| error.to_string())?;
             deleted += 1;
           }
-        }
+          Ok(Some(_)) => {}
+          Err(_) => unreadable_days += 1,
+        },
         None if path.extension().is_some_and(|extension| extension == "tmp") => {
           remove_file_if_present(&path)?;
         }
         _ => {}
       }
+    }
+    if unreadable_days > 0 {
+      tracing::warn!("activity retention preserved unreadable day files");
     }
     Ok(deleted)
   }
@@ -385,10 +397,12 @@ impl ActivityStore {
   pub fn delete_other_account_history(
     root: &Path,
     current_namespace: &str,
+    recovery: ActivityDeletionRecovery,
   ) -> Result<(), ActivityDeletionError> {
     Self::delete_other_account_history_with_key_lookup(
       root,
       current_namespace,
+      recovery,
       |namespace| {
         keychain::get_local_data_key(LocalDataKey::ActivityTimeline(namespace))
       },
@@ -398,6 +412,7 @@ impl ActivityStore {
   fn delete_other_account_history_with_key_lookup(
     root: &Path,
     current_namespace: &str,
+    recovery: ActivityDeletionRecovery,
     mut lookup: impl FnMut(&str) -> Result<LocalDataKeyLookup, String>,
   ) -> Result<(), ActivityDeletionError> {
     if !Self::is_account_namespace(current_namespace) {
@@ -424,18 +439,19 @@ impl ActivityStore {
           )
         })?;
       if !stores.contains_key(namespace) {
-        let key = match lookup(namespace).map_err(ActivityDeletionError::Unavailable)? {
-          LocalDataKeyLookup::Found(key) => key,
-          LocalDataKeyLookup::Missing => {
-            return Err(ActivityDeletionError::Unavailable(
-              "activity history key is unavailable".into(),
-            ));
-          }
-        };
-        stores.insert(
-          namespace.to_string(),
-          ActivityStore::new(key, account_root.to_path_buf()),
-        );
+        let account =
+          match lookup(namespace).map_err(ActivityDeletionError::Unavailable)? {
+            LocalDataKeyLookup::Found(key) => InactiveAccountKey::Found(
+              ActivityStore::new(key, account_root.to_path_buf()),
+            ),
+            LocalDataKeyLookup::Missing => {
+              if recovery == ActivityDeletionRecovery::Preserve {
+                return Err(ActivityDeletionError::KeyMissing);
+              }
+              InactiveAccountKey::Missing
+            }
+          };
+        stores.insert(namespace.to_string(), account);
       }
       let date = path
         .file_name()
@@ -445,9 +461,13 @@ impl ActivityStore {
           ActivityDeletionError::Unavailable("activity history date is invalid".into())
         })?;
       let date = parse_date(date).map_err(ActivityDeletionError::Unavailable)?;
-      let store = stores
+      let store = match stores
         .get(namespace)
-        .expect("inactive account key was loaded");
+        .expect("inactive account key was loaded")
+      {
+        InactiveAccountKey::Found(store) => store,
+        InactiveAccountKey::Missing => continue,
+      };
       if store
         .load_pending(date)
         .map_err(ActivityDeletionError::Unavailable)?
@@ -572,7 +592,49 @@ impl ActivityStore {
     }
   }
 
-  /// Test teardown only; product deletion requires readable pending state.
+  pub fn remove_missing_key(
+    root: &Path,
+    namespace: &str,
+    recovery: ActivityDeletionRecovery,
+  ) -> Result<(), ActivityDeletionError> {
+    if !Self::is_account_namespace(namespace) {
+      return Err(ActivityDeletionError::Unavailable(
+        "activity account namespace is invalid".into(),
+      ));
+    }
+    Self::remove_missing_key_with_lookup(root, recovery, || {
+      keychain::get_local_data_key(LocalDataKey::ActivityTimeline(namespace))
+    })
+  }
+
+  fn remove_missing_key_with_lookup(
+    root: &Path,
+    recovery: ActivityDeletionRecovery,
+    lookup: impl FnOnce() -> Result<LocalDataKeyLookup, String>,
+  ) -> Result<(), ActivityDeletionError> {
+    match lookup().map_err(ActivityDeletionError::Unavailable)? {
+      LocalDataKeyLookup::Found(_) => {
+        return Err(ActivityDeletionError::Unavailable(
+          "activity history key is available; reconnect to recover pending drafts"
+            .into(),
+        ));
+      }
+      LocalDataKeyLookup::Missing => {
+        if recovery == ActivityDeletionRecovery::Preserve {
+          return Err(ActivityDeletionError::KeyMissing);
+        }
+      }
+    }
+    match fs::remove_dir_all(root) {
+      Ok(()) => Ok(()),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+      Err(error) => Err(ActivityDeletionError::Unavailable(format!(
+        "activity history could not be deleted: {error}"
+      ))),
+    }
+  }
+
+  /// Test teardown only; product erasure checks pending state or a missing key.
   #[cfg(test)]
   pub fn remove(root: &Path) -> Result<(), String> {
     match fs::remove_dir_all(root) {
@@ -622,9 +684,12 @@ mod tests {
     root: &Path,
     current: &str,
   ) -> Result<(), ActivityDeletionError> {
-    ActivityStore::delete_other_account_history_with_key_lookup(root, current, |_| {
-      Ok(LocalDataKeyLookup::Found([9; 32]))
-    })
+    ActivityStore::delete_other_account_history_with_key_lookup(
+      root,
+      current,
+      ActivityDeletionRecovery::Preserve,
+      |_| Ok(LocalDataKeyLookup::Found([9; 32])),
+    )
   }
 
   fn pending() -> ActivityPendingBatch {
@@ -737,9 +802,19 @@ mod tests {
     let result = ActivityStore::delete_other_account_history_with_key_lookup(
       &root,
       &current,
+      ActivityDeletionRecovery::Preserve,
       |_| Ok(LocalDataKeyLookup::Found([9; 32])),
     );
     assert_eq!(result, Err(ActivityDeletionError::PendingBatch));
+    assert_eq!(
+      ActivityStore::delete_other_account_history_with_key_lookup(
+        &root,
+        &current,
+        ActivityDeletionRecovery::DiscardMissingKey,
+        |_| Ok(LocalDataKeyLookup::Found([9; 32])),
+      ),
+      Err(ActivityDeletionError::PendingBatch),
+    );
     assert_eq!(account.load_day(date(1)).unwrap().len(), 1);
     assert!(account.load_pending(date(2)).unwrap().is_some());
     ActivityStore::remove(&root).unwrap();
@@ -751,30 +826,112 @@ mod tests {
     let current = "a".repeat(64);
     let account = ActivityStore::new([9; 32], root.join("b".repeat(64)));
     account.save_pending(date(1), &pending()).unwrap();
-    for lookup in [
-      Ok(LocalDataKeyLookup::Missing),
-      Err("keychain unavailable".into()),
-    ] {
-      let mut lookup = Some(lookup);
-      assert!(matches!(
-        ActivityStore::delete_other_account_history_with_key_lookup(
-          &root,
-          &current,
-          |_| lookup.take().unwrap()
-        ),
-        Err(ActivityDeletionError::Unavailable(_))
-      ));
-      assert!(account.load_pending(date(1)).unwrap().is_some());
-    }
+    assert_eq!(
+      ActivityStore::delete_other_account_history_with_key_lookup(
+        &root,
+        &current,
+        ActivityDeletionRecovery::Preserve,
+        |_| Ok(LocalDataKeyLookup::Missing)
+      ),
+      Err(ActivityDeletionError::KeyMissing)
+    );
     assert!(matches!(
       ActivityStore::delete_other_account_history_with_key_lookup(
         &root,
         &current,
+        ActivityDeletionRecovery::DiscardMissingKey,
+        |_| Err("keychain unavailable".into())
+      ),
+      Err(ActivityDeletionError::Unavailable(_))
+    ));
+    assert!(account.load_pending(date(1)).unwrap().is_some());
+    assert!(matches!(
+      ActivityStore::delete_other_account_history_with_key_lookup(
+        &root,
+        &current,
+        ActivityDeletionRecovery::DiscardMissingKey,
         |_| Ok(LocalDataKeyLookup::Found([8; 32]))
       ),
       Err(ActivityDeletionError::Unavailable(_))
     ));
     assert!(account.load_pending(date(1)).unwrap().is_some());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn confirmed_missing_key_erasure_removes_unrecoverable_history() {
+    let (store, root) = store();
+    store.save_pending(date(1), &pending()).unwrap();
+    assert_eq!(
+      ActivityStore::remove_missing_key_with_lookup(
+        &root,
+        ActivityDeletionRecovery::Preserve,
+        || Ok(LocalDataKeyLookup::Missing),
+      ),
+      Err(ActivityDeletionError::KeyMissing),
+    );
+    assert!(store.load_pending(date(1)).unwrap().is_some());
+    ActivityStore::remove_missing_key_with_lookup(
+      &root,
+      ActivityDeletionRecovery::DiscardMissingKey,
+      || Ok(LocalDataKeyLookup::Missing),
+    )
+    .unwrap();
+    assert!(!root.exists());
+  }
+
+  #[test]
+  fn confirmed_erasure_still_refuses_transient_or_recovered_keys() {
+    let (store, root) = store();
+    store.save_pending(date(1), &pending()).unwrap();
+    for lookup in [
+      Err("keychain unavailable".into()),
+      Ok(LocalDataKeyLookup::Found([9; 32])),
+    ] {
+      assert!(matches!(
+        ActivityStore::remove_missing_key_with_lookup(
+          &root,
+          ActivityDeletionRecovery::DiscardMissingKey,
+          || lookup,
+        ),
+        Err(ActivityDeletionError::Unavailable(_)),
+      ));
+      assert!(store.load_pending(date(1)).unwrap().is_some());
+    }
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn confirmed_inactive_erasure_removes_only_definitely_missing_key_history() {
+    let (_, root) = store();
+    let current = "a".repeat(64);
+    let inactive_root = root.join("b".repeat(64));
+    let account = ActivityStore::new([9; 32], inactive_root.clone());
+    account.save_pending(date(1), &pending()).unwrap();
+    ActivityStore::delete_other_account_history_with_key_lookup(
+      &root,
+      &current,
+      ActivityDeletionRecovery::DiscardMissingKey,
+      |_| Ok(LocalDataKeyLookup::Missing),
+    )
+    .unwrap();
+    assert!(account.load_pending(date(1)).unwrap().is_none());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn retention_skips_unreadable_expired_days_and_continues_sweeping() {
+    let (store, root) = store();
+    store.save_day(date(1), &[segment("app")]).unwrap();
+    fs::write(store.day_file(date(1)).path(), b"unreadable ciphertext").unwrap();
+    store.save_day(date(2), &[segment("app")]).unwrap();
+    let pending = pending();
+    store.save_pending(date(3), &pending).unwrap();
+    assert_eq!(store.delete_days_before(date(4)).unwrap(), 1);
+    assert!(store.day_file(date(1)).path().exists());
+    assert!(store.load_day(date(1)).is_err());
+    assert!(store.load_day(date(2)).unwrap().is_empty());
+    assert_eq!(store.load_pending(date(3)).unwrap(), Some(pending));
     ActivityStore::remove(&root).unwrap();
   }
 
@@ -966,7 +1123,12 @@ mod tests {
         "activity account namespace is invalid"
       );
       assert_eq!(
-        ActivityStore::delete_other_account_history(&root, &invalid).unwrap_err(),
+        ActivityStore::delete_other_account_history(
+          &root,
+          &invalid,
+          ActivityDeletionRecovery::Preserve
+        )
+        .unwrap_err(),
         ActivityDeletionError::Unavailable(
           "activity account namespace is invalid".into()
         )

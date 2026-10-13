@@ -10,8 +10,8 @@ use tauri::{AppHandle, Emitter, State};
 use crate::{
   activity::{
     self, ActivityAppDetailCapture, ActivityAppState, ActivityDaySnapshot,
-    ActivityDeletionError, ActivityHistoryDisposition, ActivityManager,
-    ActivityRecordingStatus, ActivityRetention,
+    ActivityDeletionError, ActivityDeletionRecovery, ActivityHistoryDisposition,
+    ActivityManager, ActivityRecordingStatus, ActivityRetention,
   },
   activity_details,
   local_window::ActivityCaller,
@@ -145,8 +145,11 @@ pub fn activity_delete_all(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
+  recovery: ActivityDeletionRecovery,
 ) -> Result<(), ActivityDeletionError> {
-  update(&app, &state, &caller, ActivityManager::delete_all)
+  update(&app, &state, &caller, |manager| {
+    manager.delete_all(recovery)
+  })
 }
 
 #[tauri::command]
@@ -154,13 +157,11 @@ pub fn activity_delete_other_account_history(
   caller: ActivityCaller,
   app: AppHandle,
   state: State<'_, ActivityAppState>,
+  recovery: ActivityDeletionRecovery,
 ) -> Result<(), ActivityDeletionError> {
-  update(
-    &app,
-    &state,
-    &caller,
-    ActivityManager::delete_other_account_history,
-  )
+  update(&app, &state, &caller, |manager| {
+    manager.delete_other_account_history(recovery)
+  })
 }
 
 /// Copies a block summary the window composed. The text goes to the system

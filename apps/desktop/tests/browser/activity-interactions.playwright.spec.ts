@@ -67,6 +67,8 @@ type InstallNativeBoundaryOptions = {
   snapshot?: ActivityDaySnapshot;
   language?: "en" | "ar";
   batchValidation?: "accept" | "reject-first" | "hold-first";
+  batchReceipt?: "save" | "fail-first" | "keep-pending";
+  historyDeletion?: "available" | "keyMissing";
 };
 
 const installNativeBoundary = async ({
@@ -74,6 +76,8 @@ const installNativeBoundary = async ({
   snapshot = SNAPSHOT,
   language = "en",
   batchValidation = "accept",
+  batchReceipt = "save",
+  historyDeletion = "available",
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
   await page.clock.setFixedTime(new Date(`${snapshot.today}T10:00:00Z`));
@@ -83,6 +87,8 @@ const installNativeBoundary = async ({
       changedEvent,
       language: desktopLanguage,
       batchValidation: validation,
+      batchReceipt: receipt,
+      historyDeletion: historyState,
     }) => {
       // Playwright's Date clock does not change native Temporal's clock.
       const nativeTemporal: unknown = Reflect.get(window, "Temporal");
@@ -139,6 +145,17 @@ const installNativeBoundary = async ({
             };
           }
           if (command === "activity_delete_other_account_history") {
+            if (
+              historyState === "keyMissing" &&
+              args["recovery"] === "preserve"
+            ) {
+              throw Object.assign(
+                new Error("Activity history key is missing"),
+                {
+                  type: "keyMissing",
+                },
+              );
+            }
             activitySnapshot = {
               ...activitySnapshot,
               otherAccountHistoryDays: 0,
@@ -255,9 +272,22 @@ const installNativeBoundary = async ({
                 },
               );
             }
+            const markerSaved = receipt !== "fail-first" || batchAttempts !== 1;
+            if (
+              markerSaved &&
+              receipt !== "keep-pending" &&
+              activitySnapshot.pendingBatch !== null
+            ) {
+              activitySnapshot = {
+                ...activitySnapshot,
+                pendingBatch: null,
+                deletionStatus: "available",
+              };
+              emitActivityChanged();
+            }
             return {
               entries: [{ id: "draft-1", matterId: "matter-1" }],
-              markerSaved: true,
+              markerSaved,
             };
           }
           if (command === "get_desktop_language") {
@@ -295,12 +325,20 @@ const installNativeBoundary = async ({
       changedEvent: ACTIVITY_CHANGED_EVENT,
       language,
       batchValidation,
+      batchReceipt,
+      historyDeletion,
     },
   );
   await page.goto("/");
   const messages = language === "ar" ? arMessages : enMessages;
   if (snapshot.persistence === "deletionOnly") {
-    await expect(page.getByText(messages.activity.deletionOnly)).toBeVisible();
+    await expect(
+      page.getByText(
+        snapshot.deletionStatus === "keyMissing"
+          ? messages.activity.deletionOnly
+          : messages.activity.errorRead,
+      ),
+    ).toBeVisible();
   } else if (
     snapshot.recordingStatus === "off" &&
     snapshot.pendingBatch === null &&
@@ -965,7 +1003,7 @@ test("unreadable saved activity explains why deletion is unavailable", async ({
     },
   });
   await expect(
-    page.getByText(enMessages.activity.deletionOnly, { exact: true }),
+    page.getByText(enMessages.activity.errorRead, { exact: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
@@ -1006,6 +1044,179 @@ test("stored pending drafts remain visible without billing capability and cannot
   expect(await invocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
   );
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.previousDay }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: enMessages.activity.previousDay })
+    .click();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_get_day",
+    args: { date: "2026-10-06" },
+  });
+});
+
+test("a saved draft receipt remains saved while its snapshot refresh is pending", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchReceipt: "keep-pending",
+    snapshot: {
+      ...SNAPSHOT,
+      pendingBatch: PENDING_BATCH,
+      deletionStatus: "pending",
+    },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.previousDay }),
+  ).toBeEnabled();
+});
+
+test("a failed draft receipt remains retryable with the same stored batch key", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchReceipt: "fail-first",
+    snapshot: {
+      ...SNAPSHOT,
+      pendingBatch: PENDING_BATCH,
+      deletionStatus: "pending",
+    },
+  });
+  const retry = page.getByRole("button", {
+    name: enMessages.activity.pendingRetry,
+    exact: true,
+  });
+  await retry.click();
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.draftMarkerFailed,
+  );
+  await expect(retry).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.previousDay }),
+  ).toBeEnabled();
+  await retry.click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  const calls = await invocations(page);
+  const expected = {
+    command: "time_entry_submit_batch_confirmed",
+    args: {
+      request: {
+        date: SNAPSHOT.date,
+        idempotencyKey: PENDING_BATCH.idempotencyKey,
+        items: [
+          { entry: PENDING_BATCH.entries[0], ranges: PENDING_BATCH.ranges[0] },
+        ],
+      },
+    },
+  };
+  expect(
+    Array.isArray(calls)
+      ? calls.filter(
+          (call: unknown) =>
+            typeof call === "object" &&
+            call !== null &&
+            "command" in call &&
+            call.command === "time_entry_submit_batch_confirmed",
+        )
+      : [],
+  ).toEqual([expected, expected]);
+});
+
+for (const currentKeyStatus of ["available", "keyMissing"] as const) {
+  test(`inactive missing-key history requires confirmation with current key ${currentKeyStatus}`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({
+      page,
+      historyDeletion: "keyMissing",
+      snapshot: {
+        ...SNAPSHOT,
+        otherAccountHistoryDays: 3,
+        deletionStatus: currentKeyStatus,
+        persistence:
+          currentKeyStatus === "keyMissing" ? "deletionOnly" : "encrypted",
+      },
+    });
+    await page
+      .getByRole("button", {
+        name: enMessages.activity.deleteOtherAccountHistory,
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: enMessages.activity.delete, exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toContainText(
+      enMessages.activity.missingKeyEraseConfirmation,
+    );
+    expect(await invocations(page)).toContainEqual({
+      command: "activity_delete_other_account_history",
+      args: { recovery: "preserve" },
+    });
+    expect(await invocations(page)).not.toContainEqual(
+      expect.objectContaining({ command: "activity_delete_all" }),
+    );
+    expect(await invocations(page)).not.toContainEqual({
+      command: "activity_delete_other_account_history",
+      args: { recovery: "discardMissingKey" },
+    });
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: enMessages.activity.delete, exact: true })
+      .click();
+    expect(await invocations(page)).toContainEqual({
+      command: "activity_delete_other_account_history",
+      args: { recovery: "discardMissingKey" },
+    });
+  });
+}
+
+test("missing-key erase requires explicit confirmation that draft recovery will be lost", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      persistence: "deletionOnly",
+      recordingStatus: "off",
+      deletionStatus: "keyMissing",
+    },
+  });
+  await page
+    .getByRole("button", { name: enMessages.activity.deleteAll, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.missingKeyEraseConfirmation,
+  );
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_delete_all" }),
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_delete_all",
+    args: { recovery: "discardMissingKey" },
+  });
 });
 
 test("only an explicit summary copy publishes activity to the clipboard", async ({
@@ -1112,7 +1323,7 @@ for (const state of [
     await expect(openDelete).toBeHidden();
     expect(await invocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
-      args: {},
+      args: { recovery: "preserve" },
     });
   });
 }

@@ -16,8 +16,9 @@ local-only feature follows every rule below and adds one entry to
   than one file.
 - **Deletion-only on a missing key.** `local_store::resolve_key` never mints a
   key while encrypted data exists without one; the store opens in a
-  deletion-only state. Activity history remains protected until its pending
-  draft state can be read; other local stores retain their deletion controls.
+  deletion-only state. Activity distinguishes a definitely missing key from
+  a transient keychain failure. Only a confirmed missing-key erase can discard
+  unreadable pending-draft recovery; other local stores retain their deletion controls.
 - **Debug builds stay in memory** unless the feature's
   `STELLA_ENABLE_DEBUG_*_PERSISTENCE` variable is set.
 - **Retention sweep.** Expired data for the loaded account is deleted on load
@@ -75,8 +76,10 @@ window; unreadable day files are preserved. Other namespaces remain untouched
 until explicit deletion: the open activity window shows only their aggregate
 day count and a Delete action with confirmation. It never shows their dates,
 identity or content. Counting needs no key or decryption. Deletion reads each
-inactive account's existing key and refuses the operation if pending state is
-unreadable or a draft batch remains unresolved, before removing any files.
+inactive account's existing key and refuses the operation if a draft batch
+remains unresolved or the keychain lookup fails, before removing any files.
+A definitely missing key requires a separate confirmation that pending-draft
+recovery will be lost before unreadable activity can be erased.
 It preserves the current account and settings. Namespace identity changed before
 release, so there is no migration or read of old unnamespaced stores.
 
@@ -150,9 +153,11 @@ a fixed warning and keeps the form completed, preventing an immediate retry.
 
 The confirmed batch and its idempotency key are stored before submission.
 Ordinary day rewrites and app-history deletion preserve that exact payload.
-Day deletion and all-history deletion wait for pending batches to settle;
-only authoritative cancellation or matching creation receipts clear them.
-Recovery remains available when the day has no recorded segments.
+Day deletion and ordinary all-history deletion wait for pending batches to settle;
+only authoritative cancellation or matching creation receipts clear readable batches.
+Recovery remains available when the day has no recorded segments. A stored retry
+does not block day navigation; only an active submission does. A failed receipt
+write retains the same batch key for another retry.
 
 The data-driven guards include the confirmation command owner in the activity
 window's capability and caller checks, and forbid the submission network owner

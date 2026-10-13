@@ -84,6 +84,8 @@ type ActivityDialog =
   | { date: string; type: "deleteDay" }
   | { type: "deleteAll" }
   | { days: number; type: "deleteOtherAccountHistory" }
+  | { type: "eraseMissingKeyAll" }
+  | { type: "eraseMissingKeyOtherAccounts" }
   | { app: ActivityAppExclusion; type: "excludeApp" };
 
 type ActivityCommand =
@@ -408,7 +410,13 @@ const CaptureDetailsControl = ({
   );
 };
 
-const DeletionOnlyNotice = () => {
+const DeletionOnlyNotice = ({
+  onErase,
+  keyStatus,
+}: {
+  onErase: () => void;
+  keyStatus: ActivityDaySnapshot["deletionStatus"];
+}) => {
   const t = useTranslations("activity");
   return (
     <section className="flex flex-col gap-4 rounded-2xl border p-6">
@@ -417,8 +425,17 @@ const DeletionOnlyNotice = () => {
           aria-hidden="true"
           className="text-destructive mt-0.5 size-4 shrink-0"
         />
-        <p className="text-sm leading-relaxed">{t("deletionOnly")}</p>
+        <p className="text-sm leading-relaxed">
+          {keyStatus === "keyMissing" ? t("deletionOnly") : t("errorRead")}
+        </p>
       </div>
+      {keyStatus === "keyMissing" ? (
+        <div>
+          <Button onClick={onErase} variant="destructive">
+            {t("deleteAll")}
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 };
@@ -972,9 +989,35 @@ const ActivityDialogView = ({
           })}
           onClose={onClose}
           onConfirm={() =>
-            onCommand("activity_delete_other_account_history", {}, onClose)
+            onCommand(
+              "activity_delete_other_account_history",
+              { recovery: "preserve" },
+              onClose,
+            )
           }
           title={t("deleteOtherAccountHistory")}
+        />
+      );
+    case "eraseMissingKeyAll":
+    case "eraseMissingKeyOtherAccounts":
+      return (
+        <ConfirmDialog
+          description={t("missingKeyEraseConfirmation")}
+          onClose={onClose}
+          onConfirm={() =>
+            onCommand(
+              dialog.type === "eraseMissingKeyAll"
+                ? "activity_delete_all"
+                : "activity_delete_other_account_history",
+              { recovery: "discardMissingKey" },
+              onClose,
+            )
+          }
+          title={
+            dialog.type === "eraseMissingKeyAll"
+              ? t("deleteAll")
+              : t("deleteOtherAccountHistory")
+          }
         />
       );
     case "deleteAll":
@@ -982,7 +1025,9 @@ const ActivityDialogView = ({
         <ConfirmDialog
           description={t("deleteAllConfirmation")}
           onClose={onClose}
-          onConfirm={() => onCommand("activity_delete_all", {}, onClose)}
+          onConfirm={() =>
+            onCommand("activity_delete_all", { recovery: "preserve" }, onClose)
+          }
           title={t("deleteAll")}
         />
       );
@@ -1046,7 +1091,6 @@ const REVIEW_PENDING = {
   editing: false,
   submitting: true,
   retry: true,
-  receiptPending: true,
   saved: false,
 } as const satisfies Record<ActivityReviewStatus, boolean>;
 
@@ -1133,8 +1177,22 @@ const ActivityApp = () => {
       (view.type === "ready" &&
         (view.snapshot.pendingBatch !== null ||
           view.snapshot.deletionStatus !== "available"));
+    const confirmedMissingKeyErase =
+      args["recovery"] === "discardMissingKey" &&
+      (command === "activity_delete_all" ||
+        command === "activity_delete_other_account_history") &&
+      reviewStatusRef.current !== "submitting";
+    const inactiveMissingKeyPreflight =
+      command === "activity_delete_other_account_history" &&
+      args["recovery"] === "preserve" &&
+      !REVIEW_PENDING[reviewStatusRef.current] &&
+      view.type === "ready" &&
+      view.snapshot.pendingBatch === null &&
+      view.snapshot.deletionStatus === "keyMissing";
     if (
       pending &&
+      !confirmedMissingKeyErase &&
+      !inactiveMissingKeyPreflight &&
       (command === "activity_delete_day" ||
         command === "activity_delete_all" ||
         command === "activity_delete_other_account_history" ||
@@ -1158,6 +1216,22 @@ const ActivityApp = () => {
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
         );
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          error.type === "keyMissing" &&
+          (command === "activity_delete_all" ||
+            command === "activity_delete_other_account_history")
+        ) {
+          setDialog({
+            type:
+              command === "activity_delete_all"
+                ? "eraseMissingKeyAll"
+                : "eraseMissingKeyOtherAccounts",
+          });
+          return;
+        }
         if (
           typeof error === "object" &&
           error !== null &&
@@ -1202,7 +1276,10 @@ const ActivityApp = () => {
   const otherAccountHistory = (
     <OtherAccountHistory
       days={snapshot.otherAccountHistoryDays}
-      deletionDisabled={deletionDisabled}
+      deletionDisabled={
+        reviewPending ||
+        (deletionDisabled && snapshot.deletionStatus !== "keyMissing")
+      }
       onDelete={() =>
         setDialog({
           days: snapshot.otherAccountHistoryDays,
@@ -1222,7 +1299,10 @@ const ActivityApp = () => {
   if (snapshot.persistence === "deletionOnly" && !reviewPending) {
     return (
       <ActivityShell>
-        <DeletionOnlyNotice />
+        <DeletionOnlyNotice
+          keyStatus={snapshot.deletionStatus}
+          onErase={() => setDialog({ type: "eraseMissingKeyAll" })}
+        />
         {otherAccountHistory}
         {errorMessage ? <ErrorLine message={errorMessage} /> : null}
         {dialogView}
@@ -1260,7 +1340,7 @@ const ActivityApp = () => {
         onReviewStatusChange={onReviewStatusChange}
         header={
           <DayHeader
-            navigationDisabled={reviewPending}
+            navigationDisabled={reviewStatus === "submitting"}
             onNavigate={(next) =>
               setDate(next === snapshot.today ? null : next)
             }
