@@ -1,5 +1,26 @@
 import { panic } from "better-result";
 
+export const quoteWindowsFixtureArgument = (arg: string) => {
+  const parts = ['"'];
+  let backslashes = 0;
+  for (const character of arg) {
+    if (character === "\\") {
+      backslashes += 1;
+      continue;
+    }
+    // Quotes consume doubled backslashes plus their own escape; ordinary
+    // characters preserve the run. Each input character is visited once.
+    parts.push(
+      "\\".repeat(character === '"' ? backslashes * 2 + 1 : backslashes),
+      character,
+    );
+    backslashes = 0;
+  }
+  // Double the trailing run so it cannot escape the closing quote.
+  parts.push("\\".repeat(backslashes * 2), '"');
+  return parts.join("");
+};
+
 // Bun gives its spawned children a nested kill-on-close job. Native fixture
 // descendants inherit only the surrounding jobs, so leader exit really leaves
 // an orphan for the invocation owner to measure and terminate.
@@ -26,10 +47,7 @@ export const spawnWindowsFixtureProcess = async (args: string[]) => {
   } as const);
   const wide = (value: string) => Buffer.from(`${value}\0`, "utf16le");
   const command = [process.execPath, ...args]
-    .map(
-      (arg) =>
-        `"${arg.replace(/(\\*)"/gu, '$1$1\\"').replace(/\\+$/gu, "$&$&")}"`,
-    )
+    .map(quoteWindowsFixtureArgument)
     .join(" ");
   const startup = new Uint8Array(104);
   new DataView(startup.buffer).setUint32(0, startup.byteLength, true);

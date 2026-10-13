@@ -11,6 +11,7 @@ import {
   watchTestProcessMemory,
 } from "./process-memory";
 import { spawnTestProcess } from "./process-spawn";
+import { quoteWindowsFixtureArgument } from "./test-fixtures/native-fixture-process";
 import {
   createWindowsProcessOwnership,
   WINDOWS_JOB_SYMBOLS,
@@ -18,6 +19,24 @@ import {
 } from "./windows-process-ownership";
 
 const windowsTest = process.platform === "win32" ? test : test.skip;
+test.each([0, 1, 2, 128, 2048])(
+  "native Windows arguments escape quote-adjacent and trailing runs of %i backslashes",
+  (length) => {
+    const slashes = "\\".repeat(length);
+    expect(quoteWindowsFixtureArgument(`a${slashes}"b${slashes}`)).toBe(
+      `"a${"\\".repeat(length * 2 + 1)}"b${slashes.repeat(2)}"`,
+    );
+    expect(quoteWindowsFixtureArgument(`${slashes}plain`)).toBe(
+      `"${slashes}plain"`,
+    );
+  },
+);
+test("native Windows arguments preserve empty, spaced and Unicode values", () => {
+  for (const arg of ["", "plain", "path with spaces", "非ASCII😀"]) {
+    expect(quoteWindowsFixtureArgument(arg)).toBe(`"${arg}"`);
+  }
+});
+
 windowsTest.each(["measurement", "hard-cap"] as const)(
   "native Windows job %s reports memory and terminates the orphan worker",
   async (mode) => {
