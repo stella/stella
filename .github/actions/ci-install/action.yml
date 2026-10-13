@@ -12,6 +12,10 @@ inputs:
     description: Optional smaller installer process budget within the platform limit.
     required: false
     default: ""
+  cache-write:
+    description: Designated saver uses save; other callers only restore.
+    required: false
+    default: restore
 outputs:
   cache-hit:
     description: Whether the exact scoped archive was restored.
@@ -28,6 +32,27 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Require zstd for install-store archives
+      id: compression
+      continue-on-error: true
+      shell: bash
+      run: |
+        if command -v zstd >/dev/null && zstd --version; then
+          exit 0
+        fi
+        # Playwright containers do not include zstd. Failure disables caching,
+        # never the frozen install, and cannot fall back to a gzip-only version.
+        if [[ "$RUNNER_OS" == Linux ]]; then
+          if [[ "$(id -u)" == 0 ]]; then
+            apt-get update && apt-get install -y --no-install-recommends zstd
+          else
+            sudo apt-get update && sudo apt-get install -y --no-install-recommends zstd
+          fi
+        fi
+        if ! command -v zstd >/dev/null || ! zstd --version; then
+          echo "::warning title=install-store-compression::zstd unavailable; skipping install-store cache."
+          exit 1
+        fi
     - name: Derive complete install-store identity
       id: identity
       shell: bash
@@ -39,6 +64,7 @@ runs:
         echo "start=$(bun -e 'console.log(Date.now())')" >> "$GITHUB_OUTPUT"
     - name: Restore exact complete install store
       id: cache
+      if: steps.compression.outcome == 'success'
       uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ steps.identity.outputs.store }}
@@ -78,21 +104,29 @@ runs:
     - name: Record install time and seal successful store
       id: install-time
       if: ${{ always() && steps.install.outcome != 'skipped' }}
+      continue-on-error: true
       shell: bash
       env:
         INSTALL_OUTCOME: ${{ steps.install.outcome }}
+        CACHE_WRITE: ${{ inputs.cache-write }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
         BUN_INSTALL_CACHE_DIR: ${{ steps.identity.outputs.store }}
         STORE_KEY: ${{ steps.identity.outputs.key }}
         START_MS: ${{ steps.restore-time.outputs.start }}
       run: |
-        if [[ "$INSTALL_OUTCOME" == success ]]; then
-          bun scripts/ci-install-store.ts seal "$STORE_KEY"
+        if [[ "$INSTALL_OUTCOME" == success && "$CACHE_WRITE" == save && "$CACHE_HIT" != true ]]; then
+          if ! bun scripts/ci-install-store.ts seal "$STORE_KEY"; then
+            echo "::warning title=install-store-save::Store sealing failed; skipping cache save."
+            echo '{"event":"install-store-save","outcome":"seal-failed"}'
+            exit 1
+          fi
         fi
         end=$(bun -e 'console.log(Date.now())')
         echo "milliseconds=$((end - START_MS))" >> "$GITHUB_OUTPUT"
-    - name: Save complete store from main
-      if: ${{ github.ref == 'refs/heads/main' }}
-      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+    - name: Register designated non-fatal store save after job work
+      if: ${{ github.ref == 'refs/heads/main' && inputs.cache-write == 'save' && steps.install-time.outcome == 'success' && steps.compression.outcome == 'success' && steps.cache.outputs.cache-hit != 'true' }}
+      continue-on-error: true
+      uses: $/.github/actions/ci-store-save
       with:
         path: ${{ steps.identity.outputs.store }}
         key: ${{ steps.identity.outputs.key }}

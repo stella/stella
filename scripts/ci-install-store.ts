@@ -269,7 +269,10 @@ if (import.meta.main) {
     console.log(`key=${key}`);
     const temporary = process.env["RUNNER_TEMP"];
     if (temporary !== undefined) {
-      console.log(`store=${path.join(temporary, "bun-scoped-install", key)}`);
+      // Cache versions hash the absolute path. Linux hosts and job containers
+      // must use the same path, including absolute Bun global-store links.
+      const base = process.platform === "linux" ? "/tmp" : temporary;
+      console.log(`store=${path.join(base, "bun-scoped-install", key)}`);
     }
   } else if (
     (operation === "seal" || operation === "verify") &&
