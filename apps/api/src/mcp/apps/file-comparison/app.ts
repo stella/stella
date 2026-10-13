@@ -1,4 +1,3 @@
-import { App } from "@modelcontextprotocol/ext-apps";
 import { panic, Result, TaggedError } from "better-result";
 
 import { FILE_COMPARISON_TRANSPORT } from "@stll/api-contract";
@@ -6,8 +5,9 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
 import { formatAppError, LocalizedAppError } from "../shared/app-error";
-import { parseAppToolPayload } from "../shared/bridge";
+import { createViewportApp, parseAppToolPayload } from "../shared/bridge";
 import { mountFilePicker } from "../shared/file-picker";
+import { mountAppViewport } from "../shared/size";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
 
@@ -140,7 +140,7 @@ const parseReservation = (
   });
 };
 
-const app = new App({ name: "stella file comparison", version: "1.0.0" });
+const app = createViewportApp("stella file comparison");
 
 const prepareComparison = async (
   base: File,
@@ -336,6 +336,14 @@ uploadButton.addEventListener("click", () => {
 });
 
 await app.connect();
+const stopViewport = mountAppViewport({
+  app,
+  onFailure: () => setStatus(() => t("bridgeUnavailable"), "error"),
+});
+app.onteardown = () => {
+  stopViewport();
+  return {};
+};
 const initialContext = app.getHostContext();
 if (initialContext) {
   applyHostContext(initialContext);

@@ -21,6 +21,46 @@ body {
   color: var(--color-text-primary, var(--foreground));
 }
 
+html,
+body {
+  overflow: hidden;
+}
+[data-app-shell] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+[data-app-viewport] {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+[data-app-toolbar] {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 16px;
+  border-block-end: 1px solid var(--border);
+}
+[data-app-toolbar][hidden] {
+  display: none;
+}
+[data-app-fullscreen] {
+  min-height: 44px;
+  padding-inline: 12px;
+  border-radius: var(--radius-md);
+  font: inherit;
+  cursor: pointer;
+}
+[data-app-fullscreen]:hover {
+  background: var(--muted);
+}
+[data-app-fullscreen]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
 .status-error {
   color: var(--color-text-danger, var(--destructive));
 }

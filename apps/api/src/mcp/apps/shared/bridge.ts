@@ -22,10 +22,14 @@ import {
 } from "./app-error";
 import type { AppFailure } from "./app-error";
 import { appLocale } from "./locale";
+import { mountAppViewport } from "./size";
 import {
   projectAppToolArguments,
   validateAppToolArguments,
 } from "./tool-input";
+
+export const createViewportApp = (name: string) =>
+  new App({ name, version: "1.0.0" }, {}, { autoResize: false });
 
 export type AppToolResult = Awaited<ReturnType<App["callServerTool"]>>;
 
@@ -306,9 +310,7 @@ export const createPresentationBridge = <View>({
   title,
   host,
 }: PresentationBridgeOptions<View>) => {
-  const app =
-    host ??
-    new App({ name: `stella ${manifest.directory}`, version: "1.0.0" }, {});
+  const app = host ?? createViewportApp(`stella ${manifest.directory}`);
   const listeners = new Set<() => void>();
   let snapshot: AppSnapshot<View> = {
     context: {},
@@ -316,6 +318,7 @@ export const createPresentationBridge = <View>({
     tool: manifest.linkedTools[0],
     result: { status: "idle" },
   };
+  let stopViewport: (() => void) | undefined;
   let generation = 0;
   let lastCall: ReadCall | undefined;
   let previous: { status: "empty" } | { status: "ready"; view: View } = {
@@ -396,6 +399,7 @@ export const createPresentationBridge = <View>({
     toolCancelled,
     teardown: () => {
       generation += 1;
+      stopViewport?.();
       listeners.clear();
     },
   });
@@ -403,7 +407,7 @@ export const createPresentationBridge = <View>({
   Reflect.set(app, "onerror", reportAppError);
 
   // Paged reads and previews own their request state.
-  const requestTool = (request: ReadCall) =>
+  const requestTool = async (request: ReadCall) =>
     requestLocalizedPresentationTool({
       app,
       manifest,
@@ -411,7 +415,7 @@ export const createPresentationBridge = <View>({
       formatFailure: (failure) =>
         formatAppFailure(failure, appLocale(snapshot.context.locale).t),
     });
-  const requestDisplayMode = (
+  const requestDisplayMode = async (
     mode: "fullscreen" | "inline",
     onError?: (message: string | null) => void,
   ) => {
@@ -466,6 +470,13 @@ export const createPresentationBridge = <View>({
       return;
     }
     hostContext(app.getHostContext() ?? {});
+    if (app instanceof App && stopViewport === undefined) {
+      stopViewport = mountAppViewport({
+        app,
+        onFailure: publishUnavailable,
+        onDisplayModeChange: hostContext,
+      });
+    }
   };
   return {
     detached: createDetached(publishUnavailable),

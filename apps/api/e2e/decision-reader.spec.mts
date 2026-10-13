@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 import type { FrameLocator, Page } from "@playwright/test";
 import { panic } from "better-result";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
+import path from "node:path";
+import ts from "typescript";
 import type * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
@@ -26,6 +28,7 @@ type ReaderFixtureHost = {
   toolResponses: { content: unknown[] }[];
   failures: string[];
   grantFullscreen: () => void;
+  grantInline: () => void;
 };
 declare global {
   var readerFixtureHost: ReaderFixtureHost;
@@ -261,6 +264,11 @@ type HostOptions = {
   revision?: "stable" | "updated";
   search?: SearchResults;
   searchInput?: Record<string, unknown>;
+  theme?: "light" | "dark";
+  fullscreen?: "supported" | "unsupported";
+  maxHeight?: number;
+  acceptFullscreen?: boolean;
+  directory?: string;
 };
 const mountReader = async ({
   page,
@@ -275,12 +283,22 @@ const mountReader = async ({
   revision = "stable",
   search = RESULT_FIXTURE,
   searchInput = { queries: ["náhrada škody"], country: "CZE", limit: 100 },
+  theme = "light",
+  fullscreen = "supported",
+  maxHeight = 900,
+  acceptFullscreen = host === "ChatGPT",
+  directory = surface === "reader" ? "decision-reader" : "case-law-results",
 }: HostOptions) => {
   const bundle = await readFile(
-    new URL(
-      `../src/mcp/apps/${surface === "reader" ? "decision-reader" : "case-law-results"}/generated/app.html.txt`,
-      import.meta.url,
-    ),
+    process.env["MCP_APP_BUNDLE_DIRECTORY"] === undefined
+      ? new URL(
+          `../src/mcp/apps/${directory}/generated/app.html.txt`,
+          import.meta.url,
+        )
+      : path.join(
+          process.env["MCP_APP_BUNDLE_DIRECTORY"] ?? "",
+          `${directory}.html`,
+        ),
     "utf-8",
   );
   const html = bundle.replace(
@@ -317,6 +335,10 @@ const mountReader = async ({
       searchArguments,
       revision: documentRevision,
       revisedPages,
+      theme: hostTheme,
+      fullscreen: fullscreenCapability,
+      maxHeight: inlineMaxHeight,
+      acceptFullscreen: grantRequest,
     }) => {
       const iframe = document.querySelector<HTMLIFrameElement>("iframe");
       if (iframe === null) {
@@ -365,9 +387,13 @@ const mountReader = async ({
                 },
                 hostContext: {
                   locale: hostLocale,
-                  theme: "light",
+                  theme: hostTheme,
                   displayMode: "inline",
-                  availableDisplayModes: ["inline", "fullscreen"],
+                  availableDisplayModes:
+                    fullscreenCapability === "supported"
+                      ? ["inline", "fullscreen"]
+                      : ["inline"],
+                  containerDimensions: { maxHeight: inlineMaxHeight },
                   toolInfo: {
                     id: "fixture-repeated-request-id",
                     tool: {
@@ -514,11 +540,19 @@ const mountReader = async ({
             reply({ jsonrpc: "2.0", id, result: output });
             break;
           }
+          case "ui/notifications/size-changed":
+            if (isRecord(params) && typeof params["height"] === "number") {
+              iframe.style.height = `${params["height"]}px`;
+            }
+            break;
           case "ui/request-display-mode":
+            if (grantRequest) {
+              iframe.style.height = "900px";
+            }
             reply({
               jsonrpc: "2.0",
               id,
-              result: { mode: hostName === "Claude" ? "inline" : "fullscreen" },
+              result: { mode: grantRequest ? "fullscreen" : "inline" },
             });
             break;
           case "ui/open-link":
@@ -541,12 +575,27 @@ const mountReader = async ({
         messages,
         toolResponses,
         failures,
-        grantFullscreen: () =>
+        grantInline: () => {
           reply({
             jsonrpc: "2.0",
             method: "ui/notifications/host-context-changed",
-            params: { displayMode: "fullscreen" },
-          }),
+            params: {
+              displayMode: "inline",
+              containerDimensions: { maxHeight: inlineMaxHeight },
+            },
+          });
+        },
+        grantFullscreen: () => {
+          iframe.style.height = "900px";
+          reply({
+            jsonrpc: "2.0",
+            method: "ui/notifications/host-context-changed",
+            params: {
+              displayMode: "fullscreen",
+              containerDimensions: { height: 900 },
+            },
+          });
+        },
       } satisfies ReaderFixtureHost;
       // safe-html: build-mcp-apps.ts emits the repository's self-contained reader bundle.
       iframe.srcdoc = appHtml;
@@ -568,6 +617,10 @@ const mountReader = async ({
       searchArguments: searchInput,
       revision,
       revisedPages: REVISED_PAGES,
+      theme,
+      fullscreen,
+      maxHeight,
+      acceptFullscreen,
     },
   );
   expect(mounted).toBe("mounted");
@@ -687,6 +740,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     );
     await expectNoCopyAction(app);
     await expect(app.locator("#para48")).toHaveCount(0);
+    await app.locator("[data-app-fullscreen]").click();
     await expect
       .poll(async () =>
         (await history(page)).messages
@@ -1083,7 +1137,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await opener.scrollIntoViewIfNeeded();
     await opener.focus();
     const scrollBefore = await opener.evaluate(
-      () => document.scrollingElement?.scrollTop,
+      () => document.querySelector("[data-app-viewport]")?.scrollTop,
     );
     expect(scrollBefore).toBeGreaterThan(0);
     await opener.press("Enter");
@@ -1135,6 +1189,7 @@ for (const host of ["ChatGPT", "Claude"] as const) {
         name: "open_case_law_decision",
         arguments: { decision_id: metadata.decisionId, paragraphs: "48-49" },
       });
+    await app.locator("[data-app-fullscreen]").click();
     await expect
       .poll(async () =>
         (await history(page)).messages
@@ -1146,7 +1201,9 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await expect(rows).toHaveCount(35);
     await expect(opener).toBeFocused();
     expect(
-      await opener.evaluate(() => document.scrollingElement?.scrollTop),
+      await opener.evaluate(
+        () => document.querySelector("[data-app-viewport]")?.scrollTop,
+      ),
     ).toBe(scrollBefore);
     await opener.press("Enter");
     await expect(app.locator("#para48[data-reader-landing]")).toBeVisible();
@@ -1157,7 +1214,9 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await expect(rows).toHaveCount(35);
     await expect(opener).toBeFocused();
     expect(
-      await opener.evaluate(() => document.scrollingElement?.scrollTop),
+      await opener.evaluate(
+        () => document.querySelector("[data-app-viewport]")?.scrollTop,
+      ),
     ).toBe(scrollBefore);
     await opener.press("Enter");
     await expect(app.locator("#para48[data-reader-landing]")).toBeVisible();
@@ -1510,3 +1569,218 @@ test("court multi-selection respects the declared cap, tier unions, search and a
     },
   });
 });
+
+const reportedHeight = async (page: Page) =>
+  page.evaluate(() => {
+    const last = globalThis.readerFixtureHost.messages.findLast(
+      ({ method }) => method === "ui/notifications/size-changed",
+    )?.params;
+    return typeof last === "object" &&
+      last !== null &&
+      "height" in last &&
+      typeof last.height === "number"
+      ? last.height
+      : 0;
+  });
+
+for (const host of ["Claude", "ChatGPT"] as const) {
+  for (const surface of ["reader", "results"] as const) {
+    for (const theme of ["light", "dark"] as const) {
+      test(`${host} ${surface} bounds inline reading and fills fullscreen in ${theme}`, async ({
+        page,
+      }) => {
+        await page.setViewportSize({ width: 1100, height: 1000 });
+        const app = await mountReader({
+          page,
+          host,
+          surface,
+          theme,
+          acceptFullscreen: false,
+        });
+        await expect(
+          app.locator(surface === "reader" ? "#para1" : "tbody tr").first(),
+        ).toBeVisible();
+        await expect.poll(async () => reportedHeight(page)).toBe(600);
+        const viewport = app.locator("[data-app-viewport]");
+        await expect
+          .poll(async () =>
+            viewport.evaluate(
+              (element) => element.scrollHeight > element.clientHeight,
+            ),
+          )
+          .toBe(true);
+        await viewport.evaluate((element) => {
+          element.scrollTop = 200;
+        });
+        await expect
+          .poll(async () => viewport.evaluate((element) => element.scrollTop))
+          .toBeGreaterThan(0);
+        expect(
+          (await history(page)).messages.filter(
+            ({ method }) => method === "ui/request-display-mode",
+          ),
+        ).toEqual([]);
+        await viewport.evaluate((element) => {
+          element.scrollTop = 0;
+        });
+        const screenshotRoot = process.env["MCP_APP_HEIGHT_SCREENSHOTS"];
+        if (screenshotRoot !== undefined) {
+          await mkdir(screenshotRoot, { recursive: true });
+          await page.locator("#reader").screenshot({
+            path: path.join(
+              screenshotRoot,
+              `${host.toLowerCase()}-${surface}-${theme}-inline.png`,
+            ),
+          });
+        }
+        await app.locator("[data-app-fullscreen]").click();
+        await expect
+          .poll(async () =>
+            (await history(page)).messages
+              .filter(({ method }) => method === "ui/request-display-mode")
+              .map(({ params }) => params),
+          )
+          .toEqual([{ mode: "fullscreen" }]);
+        await page.evaluate(() =>
+          globalThis.readerFixtureHost.grantFullscreen(),
+        );
+        await expect.poll(async () => reportedHeight(page)).toBe(900);
+        await expect
+          .poll(async () =>
+            viewport.evaluate((element) => element.clientHeight),
+          )
+          .toBe(900);
+        await expect(app.locator("[data-app-fullscreen]")).toBeHidden();
+        if (screenshotRoot !== undefined) {
+          await page.locator("#reader").screenshot({
+            path: path.join(
+              screenshotRoot,
+              `${host.toLowerCase()}-${surface}-${theme}-fullscreen.png`,
+            ),
+          });
+        }
+        await page.evaluate(() => globalThis.readerFixtureHost.grantInline());
+        await expect.poll(async () => reportedHeight(page)).toBe(600);
+      });
+    }
+  }
+  test(`${host} respects the smaller inline host maximum and hides unsupported fullscreen`, async ({
+    page,
+  }) => {
+    const app = await mountReader({
+      page,
+      host,
+      maxHeight: 420,
+      fullscreen: "unsupported",
+    });
+    await expect(app.locator("#para1")).toBeVisible();
+    await expect.poll(async () => reportedHeight(page)).toBe(420);
+    await expect(app.locator("[data-app-fullscreen]")).toBeHidden();
+    expect(
+      (await history(page)).messages.filter(
+        ({ method }) => method === "ui/request-display-mode",
+      ),
+    ).toEqual([]);
+  });
+  test(`${host} leaves short results at their natural inline height`, async ({
+    page,
+  }) => {
+    const app = await mountReader({
+      page,
+      host,
+      surface: "results",
+      search: { ...RESULT_FIXTURE, results: [] },
+    });
+    await expect(app.locator("[data-app-viewport]")).toBeVisible();
+    await expect.poll(async () => reportedHeight(page)).toBeGreaterThan(0);
+    expect(await reportedHeight(page)).toBeLessThan(600);
+    const viewport = app.locator("[data-app-viewport]");
+    expect(
+      await viewport.evaluate(
+        (element) => element.scrollHeight <= element.clientHeight,
+      ),
+    ).toBe(true);
+  });
+}
+
+const manifestSource = ts.createSourceFile(
+  "manifest.ts",
+  await readFile(
+    new URL("../src/mcp/apps/manifest.ts", import.meta.url),
+    "utf-8",
+  ),
+  ts.ScriptTarget.Latest,
+  true,
+);
+const registeredDirectories: string[] = [];
+const visitManifest = (node: ts.Node): void => {
+  if (
+    ts.isPropertyAssignment(node) &&
+    node.name.getText(manifestSource) === "directory" &&
+    ts.isStringLiteral(node.initializer)
+  ) {
+    registeredDirectories.push(node.initializer.text);
+  }
+  ts.forEachChild(node, visitManifest);
+};
+visitManifest(manifestSource);
+expect(registeredDirectories.length).toBeGreaterThan(0);
+
+for (const directory of registeredDirectories) {
+  test(`registered ${directory} bounds all long inline content`, async ({
+    page,
+  }) => {
+    const app = await mountReader({
+      page,
+      host: "Claude",
+      directory,
+      fullscreen: "unsupported",
+    });
+    const viewport = app.locator("[data-app-viewport]");
+    await expect(viewport).toBeVisible();
+    const appended = await viewport.evaluate((element) => {
+      const longContent = document.createElement("article");
+      longContent.style.height = "4000px";
+      longContent.textContent = "Long reading fixture";
+      const content = element.querySelector("#app");
+      if (content === null) {
+        return false;
+      }
+      content.append(longContent);
+      return true;
+    });
+    expect(appended).toBe(true);
+    await expect.poll(async () => reportedHeight(page)).toBe(600);
+    await expect
+      .poll(async () => viewport.evaluate((element) => element.scrollHeight))
+      .toBeGreaterThan(4000);
+    await viewport.evaluate((element) => {
+      element.scrollTop = 150;
+    });
+    await expect
+      .poll(async () => viewport.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+  });
+}
+
+for (const locale of ["en-GB", "cs", "sk", "ar"] as const) {
+  test(`fullscreen control uses host locale and direction in ${locale}`, async ({
+    page,
+  }) => {
+    const app = await mountReader({ page, host: "Claude", locale });
+    const button = app.locator("[data-app-fullscreen]");
+    await expect(button).toBeVisible();
+    await expect(button).toHaveText(
+      {
+        "en-GB": "Open full reader",
+        cs: "Otevřít celou čtečku",
+        sk: "Otvoriť celú čítačku",
+        ar: "فتح القارئ الكامل",
+      }[locale],
+    );
+    await expect(app.locator("html")).toHaveAttribute(
+      "dir",
+      locale === "ar" ? "rtl" : "ltr",
+    );
+  });
+}

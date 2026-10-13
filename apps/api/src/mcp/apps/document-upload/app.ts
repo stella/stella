@@ -1,4 +1,4 @@
-import { App } from "@modelcontextprotocol/ext-apps";
+import type { App } from "@modelcontextprotocol/ext-apps";
 import { panic, TaggedError } from "better-result";
 
 import {
@@ -12,8 +12,9 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { hashUploadFile } from "../file-content-hash";
 import { formatAppError, LocalizedAppError } from "../shared/app-error";
-import { parseAppToolPayload } from "../shared/bridge";
+import { createViewportApp, parseAppToolPayload } from "../shared/bridge";
 import { mountFilePicker } from "../shared/file-picker";
+import { mountAppViewport } from "../shared/size";
 import { createUploadTargetController } from "./upload-target";
 
 const UPLOAD_TIMEOUT_MS = 1_800_000;
@@ -98,7 +99,7 @@ const parseReservation = (
   };
 };
 
-const app = new App({ name: "stella document upload", version: "1.0.0" });
+const app = createViewportApp("stella document upload");
 
 app.addEventListener("hostcontextchanged", applyHostContext);
 app.addEventListener("toolinput", ({ arguments: toolArguments }) => {
@@ -205,6 +206,14 @@ uploadButton.addEventListener("click", () => {
 });
 
 await app.connect();
+const stopViewport = mountAppViewport({
+  app,
+  onFailure: () => setStatus(() => t("bridgeUnavailable"), "error"),
+});
+app.onteardown = () => {
+  stopViewport();
+  return {};
+};
 const initialContext = app.getHostContext();
 if (initialContext) {
   applyHostContext(initialContext);

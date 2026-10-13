@@ -148,7 +148,7 @@ describe("MCP decision reader controller", () => {
   test("restricted open metadata loads full app-only text under source mode A", async () => {
     const host = fixture();
     host.emit({ status: "ready", view: withheld() });
-    expect(host.fullscreenRequests()).toBe(1);
+    expect(host.fullscreenRequests()).toBe(0);
     const call = host.nextCall();
     expect(call.request).toEqual({
       name: "read_case_law_decision_blocks",

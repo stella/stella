@@ -936,15 +936,15 @@ const App = ({ bridge }: { bridge: CaseLawBridge }) => {
     }
     returnLocation.current = {
       trigger,
-      scrollX: window.scrollX,
-      scrollY: window.scrollY,
+      scrollX: document.querySelector("[data-app-viewport]")?.scrollLeft ?? 0,
+      scrollY: document.querySelector("[data-app-viewport]")?.scrollTop ?? 0,
     };
     const appUrl =
       row.appUrl === null ? null : parseLegalCitationHttpUrl(row.appUrl);
     const paragraphs =
       appUrl === null ? null : parseDecisionParagraphFragment(appUrl.hash);
     setScreen("reader");
-    window.scrollTo(0, 0);
+    document.querySelector("[data-app-viewport]")?.scrollTo(0, 0);
     embeddedReaderBridge.detached(
       embeddedReaderBridge.call({
         name: "open_case_law_decision",
@@ -988,7 +988,9 @@ const App = ({ bridge }: { bridge: CaseLawBridge }) => {
               const location = returnLocation.current;
               returnLocation.current = null;
               location.trigger.focus({ preventScroll: true });
-              window.scrollTo(location.scrollX, location.scrollY);
+              document
+                .querySelector("[data-app-viewport]")
+                ?.scrollTo(location.scrollX, location.scrollY);
             }}
             dir={direction}
             className="mx-auto max-w-6xl space-y-5 p-4 sm:p-6"

@@ -213,7 +213,6 @@ export const createReaderController = (
           : createReaderPager(received.metadata),
     };
     publish();
-    bridge.detached(bridge.requestFullscreen(), "request reader display mode");
     if (received.status !== "unavailable") {
       bridge.detached(loadNext(), "load decision blocks");
     }

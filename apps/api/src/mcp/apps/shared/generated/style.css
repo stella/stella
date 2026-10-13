@@ -1088,6 +1088,9 @@
   .min-h-72 {
     min-height: calc(var(--spacing) * 72);
   }
+  .min-h-\[44px\] {
+    min-height: 44px;
+  }
   .min-h-dvh {
     min-height: 100dvh;
   }
@@ -1298,9 +1301,6 @@
   .min-w-7 {
     min-width: calc(var(--spacing) * 7);
   }
-  .min-w-11 {
-    min-width: calc(var(--spacing) * 11);
-  }
   .min-w-12 {
     min-width: calc(var(--spacing) * 12);
   }
@@ -1309,6 +1309,9 @@
   }
   .min-w-36 {
     min-width: calc(var(--spacing) * 36);
+  }
+  .min-w-\[44px\] {
+    min-width: 44px;
   }
   .min-w-max {
     min-width: max-content;
@@ -5516,9 +5519,17 @@
       content: var(--tw-content);
       min-height: calc(var(--spacing) * 11);
     }
+    .pointer-coarse\:after\:min-h-\[44px\]::after {
+      content: var(--tw-content);
+      min-height: 44px;
+    }
     .pointer-coarse\:after\:min-w-11::after {
       content: var(--tw-content);
       min-width: calc(var(--spacing) * 11);
+    }
+    .pointer-coarse\:after\:min-w-\[44px\]::after {
+      content: var(--tw-content);
+      min-width: 44px;
     }
     .pointer-coarse\:after\:-translate-y-1\/2::after {
       content: var(--tw-content);
@@ -7526,6 +7537,45 @@ body {
   margin: 0;
   background: var(--color-background-primary, var(--background));
   color: var(--color-text-primary, var(--foreground));
+}
+html,
+body {
+  overflow: hidden;
+}
+[data-app-shell] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+[data-app-viewport] {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+[data-app-toolbar] {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 16px;
+  border-block-end: 1px solid var(--border);
+}
+[data-app-toolbar][hidden] {
+  display: none;
+}
+[data-app-fullscreen] {
+  min-height: 44px;
+  padding-inline: 12px;
+  border-radius: var(--radius-md);
+  font: inherit;
+  cursor: pointer;
+}
+[data-app-fullscreen]:hover {
+  background: var(--muted);
+}
+[data-app-fullscreen]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
 }
 .status-error {
   color: var(--color-text-danger, var(--destructive));
