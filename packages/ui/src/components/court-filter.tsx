@@ -7,6 +7,7 @@ import { cn } from "../lib/utils";
 import { BidiText } from "./bidi-text";
 import { Checkbox } from "./checkbox";
 import { DirectionalIcon } from "./directional-icon";
+import { Field, FieldLabel } from "./field";
 import { ScrollArea } from "./scroll-area";
 import { SearchField } from "./search-field";
 
@@ -162,6 +163,7 @@ const MultipleCourtGroup = ({
   options,
   hintId,
 }: MultipleCourtGroupProps) => {
+  const labelId = useId();
   const { selected } = options;
   const values = courts.map(({ value }) => value);
   const tierSelected = values.every((value) => selected.includes(value));
@@ -171,8 +173,12 @@ const MultipleCourtGroup = ({
     <fieldset className="min-w-0">
       <legend className="sr-only">{group.label ?? options.label}</legend>
       {group.label !== null && (
-        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs font-medium">
+        <label
+          id={`${labelId}-tier`}
+          className="flex min-h-11 cursor-pointer items-center gap-2 text-xs font-medium"
+        >
           <Checkbox
+            aria-labelledby={`${labelId}-tier`}
             checked={tierSelected}
             indeterminate={
               !tierSelected && values.some((value) => selected.includes(value))
@@ -189,13 +195,17 @@ const MultipleCourtGroup = ({
         </label>
       )}
       <ul className="flex flex-col">
-        {courts.map(({ value, label, badgeText }) => {
+        {courts.map(({ value, label, badgeText }, index) => {
           const checked = selected.includes(value);
           const next = toggleCourtSelection(selected, [value]);
           return (
             <li key={value}>
-              <label className="hover:bg-muted/60 has-[:focus-visible]:ring-ring flex min-h-11 cursor-pointer items-center gap-2 rounded-sm text-sm has-[:focus-visible]:ring-2">
+              <label
+                id={`${labelId}-${index}`}
+                className="hover:bg-muted/60 has-[:focus-visible]:ring-ring flex min-h-11 cursor-pointer items-center gap-2 rounded-sm text-sm has-[:focus-visible]:ring-2"
+              >
                 <Checkbox
+                  aria-labelledby={`${labelId}-${index}`}
                   checked={checked}
                   disabled={!checked && next.length > options.maxSelections}
                   aria-describedby={hintId}
@@ -252,13 +262,15 @@ const MultipleCourtFilter = (
   });
   return (
     <div className="min-w-0 space-y-2">
-      <SearchField
-        value={query}
-        onValueChange={setQuery}
-        clearLabel={options.clearLabel}
-        aria-label={options.searchLabel}
-        placeholder={options.searchLabel}
-      />
+      <Field>
+        <FieldLabel className="sr-only">{options.searchLabel}</FieldLabel>
+        <SearchField
+          value={query}
+          onValueChange={setQuery}
+          clearLabel={options.clearLabel}
+          placeholder={options.searchLabel}
+        />
+      </Field>
       <p id={hintId} role="status" className="text-muted-foreground text-xs">
         {options.selectionHint}
       </p>

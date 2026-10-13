@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { panic } from "better-result";
 
 import { CourtFilter } from "../court-filter";
+import { Field, FieldLabel } from "../field";
 import "./court-filter.fixture.css";
 
 const params = new URLSearchParams(location.search);
@@ -32,25 +33,28 @@ const Fixture = () => {
   const [selected, setSelected] = useState<string[]>([]);
   return (
     <main>
-      <CourtFilter
-        mode="multiple"
-        groups={[
-          {
-            value: "supreme",
-            label: labels.tier,
-            courts: [{ value: "NS" }, { value: "US" }],
-          },
-        ]}
-        label={labels.court}
-        selected={selected}
-        onChange={setSelected}
-        maxSelections={params.get("cap") === "two" ? 2 : 1}
-        selectionHint={labels.hint}
-        searchLabel={labels.search}
-        clearLabel={labels.clear}
-        emptyLabel={labels.empty}
-        matchText={(value) => value.toLowerCase()}
-      />
+      <Field>
+        <FieldLabel>{labels.court}</FieldLabel>
+        <CourtFilter
+          mode="multiple"
+          groups={[
+            {
+              value: "supreme",
+              label: labels.tier,
+              courts: [{ value: "NS" }, { value: "US" }],
+            },
+          ]}
+          label={labels.court}
+          selected={selected}
+          onChange={setSelected}
+          maxSelections={params.get("cap") === "two" ? 2 : 1}
+          selectionHint={labels.hint}
+          searchLabel={labels.search}
+          clearLabel={labels.clear}
+          emptyLabel={labels.empty}
+          matchText={(value) => value.toLowerCase()}
+        />
+      </Field>
       <output aria-label="Selected courts">{JSON.stringify(selected)}</output>
     </main>
   );
