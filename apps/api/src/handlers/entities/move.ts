@@ -21,6 +21,10 @@ import {
   treeParentCycleError,
 } from "@/api/lib/db/tree-parent-guard";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  admitEntityTransferAccess,
+  FLOW_TASK_FEATURE_ACCESS,
+} from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -43,6 +47,7 @@ const DESCENDANT_MOVE_MESSAGE =
 
 export type MoveEntityHandlerProps = {
   safeDb: SafeDb;
+  userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
   body: MoveEntityBodySchema;
@@ -172,12 +177,22 @@ const lockMove = async ({
 
 export const moveEntityHandler = async function* ({
   safeDb,
+  userId,
   workspaceId,
   recordAuditEvent,
   body,
   syncSearchActivity = syncWorkspaceSearchActivity,
 }: MoveEntityHandlerProps) {
   const attempt = await safeDb(async (tx) => {
+    const admission = await admitEntityTransferAccess(tx, {
+      workspaceId,
+      entityId: body.entityId,
+      userId,
+      access: "write",
+    });
+    if (admission.isErr()) {
+      return admission;
+    }
     // Serialize ancestry decisions before taking any entity locks. Disjoint
     // source/target row pairs can still join into a cycle across two moves;
     // the `entities_parent_acyclic` trigger holds the rule for any writer
@@ -311,6 +326,7 @@ const config = {
     "or into one of its own descendants, and a read-only entity is refused.",
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   realtime: entityRealtimeUpdates,
   mcp: { type: "covered", by: "save_document" },
   body: moveEntityBodySchema,
@@ -318,9 +334,10 @@ const config = {
 
 const moveEntity = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent, user }) {
     return yield* moveEntityHandler({
       safeDb,
+      userId: user.id,
       workspaceId,
       recordAuditEvent,
       body,

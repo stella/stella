@@ -367,7 +367,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 1,
@@ -421,6 +421,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -562,7 +565,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -604,6 +607,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -698,7 +704,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -740,6 +746,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -833,7 +842,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -875,6 +884,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -974,7 +986,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1016,6 +1028,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -1107,7 +1122,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1149,6 +1164,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -1215,7 +1233,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1259,6 +1277,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -1348,7 +1369,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1482,6 +1503,9 @@ describe("copy-to-workspace", () => {
       ) => await callback(tx),
     });
     const { safeDb, scopedDb } = createScopedDbMock(transactionFixture, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       siblingRows: [],
       visibleResources: {
         entity: [documentId, folderId, childDocId],
@@ -1566,7 +1590,7 @@ describe("copy-to-workspace", () => {
           findMany: async () => [],
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1606,6 +1630,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -1711,7 +1738,7 @@ describe("copy-to-workspace", () => {
           },
         },
         workspaces: {
-          findFirst: async () => ({ reference: null }),
+          findFirst: async () => ({ reference: null, organizationId }),
         },
       },
       $count: async () => 0,
@@ -1755,6 +1782,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -1827,7 +1857,9 @@ describe("copy-to-workspace", () => {
             },
           ],
         },
-        workspaces: { findFirst: async () => ({ reference: null }) },
+        workspaces: {
+          findFirst: async () => ({ reference: null, organizationId }),
+        },
       },
       $count: async () => 0,
       select: () => ({ from: () => ({ where: async () => [] }) }),
@@ -1846,6 +1878,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],
@@ -1894,6 +1929,9 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      entityTransferEligibility: [documentId, folderId, childDocId].map(
+        (entityId) => ({ entityId, eligible: true }),
+      ),
       visibleResources: {
         entity: [documentId, folderId, childDocId],
         field: [toSafeId<"field">("source_file_field")],

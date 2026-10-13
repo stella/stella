@@ -48,9 +48,11 @@ import {
 } from "@/api/lib/files/field-file-refs";
 import { deleteS3Objects } from "@/api/lib/files/utils";
 import {
+  admitEntityTransferAccess,
   admitFlowReviewTaskDeletion,
   FLOW_TASK_FEATURE_ACCESS,
 } from "@/api/lib/flows/review-gate-task";
+import { flowRelatedTaskVisibilityConditions } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -135,6 +137,8 @@ type ReadSourceEntityOptions = {
   sourceWorkspaceId: SafeId<"workspace">;
   sourceEntityId: SafeId<"entity">;
   transfer: EntityTransfer;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 };
 
 const readSourceEntity = async ({
@@ -142,10 +146,13 @@ const readSourceEntity = async ({
   sourceWorkspaceId,
   sourceEntityId,
   transfer,
+  organizationId,
+  userId,
 }: ReadSourceEntityOptions): Promise<EntitySnapshot | undefined> => {
   const where = {
     id: { eq: sourceEntityId },
     workspaceId: { eq: sourceWorkspaceId },
+    RAW: flowRelatedTaskVisibilityConditions({ organizationId, userId }).entity,
   } as const;
 
   if (transfer.type === "move") {
@@ -168,14 +175,21 @@ type ReadWorkspaceEntitiesOptions = {
   tx: Transaction;
   sourceWorkspaceId: SafeId<"workspace">;
   transfer: EntityTransfer;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
 };
 
 const readWorkspaceEntities = async ({
   tx,
   sourceWorkspaceId,
   transfer,
+  organizationId,
+  userId,
 }: ReadWorkspaceEntitiesOptions): Promise<EntitySnapshot[]> => {
-  const where = { workspaceId: { eq: sourceWorkspaceId } } as const;
+  const where = {
+    workspaceId: { eq: sourceWorkspaceId },
+    RAW: flowRelatedTaskVisibilityConditions({ organizationId, userId }).entity,
+  } as const;
 
   if (transfer.type === "move") {
     return await tx.query.entities.findMany({
@@ -384,17 +398,30 @@ const copyToWorkspaceHandler = async function* ({
   ) satisfies EntityTransfer;
 
   // Fetch source entity
-  const source = yield* Result.await(
-    safeDb(
-      async (tx) =>
+  const sourceRead = yield* Result.await(
+    safeDb(async (tx) => {
+      const admission = await admitEntityTransferAccess(tx, {
+        workspaceId: sourceWorkspaceId,
+        entityId: sourceEntityId,
+        userId,
+        access: "write",
+      });
+      if (admission.isErr()) {
+        return admission;
+      }
+      return Result.ok(
         await readSourceEntity({
           tx,
           sourceWorkspaceId,
           sourceEntityId,
           transfer,
+          organizationId,
+          userId,
         }),
-    ),
+      );
+    }),
   );
+  const source = yield* sourceRead;
 
   if (!source) {
     return Result.err(
@@ -414,12 +441,29 @@ const copyToWorkspaceHandler = async function* ({
   // Get subtree for folders
   let sourceEntities: EntitySnapshot[] = [source];
   if (source.kind === "folder") {
-    const workspaceEntities = yield* Result.await(
-      safeDb(
-        async (tx) =>
-          await readWorkspaceEntities({ tx, sourceWorkspaceId, transfer }),
-      ),
+    const workspaceRead = yield* Result.await(
+      safeDb(async (tx) => {
+        const admission = await admitEntityTransferAccess(tx, {
+          workspaceId: sourceWorkspaceId,
+          entityId: sourceEntityId,
+          userId,
+          access: "write",
+        });
+        if (admission.isErr()) {
+          return admission;
+        }
+        return Result.ok(
+          await readWorkspaceEntities({
+            tx,
+            sourceWorkspaceId,
+            transfer,
+            organizationId,
+            userId,
+          }),
+        );
+      }),
     );
+    const workspaceEntities = yield* workspaceRead;
 
     const subtree = getFolderSubtree(workspaceEntities, sourceEntityId);
     if (!subtree) {
@@ -565,6 +609,15 @@ const copyToWorkspaceHandler = async function* ({
   // to ensure atomicity — either both succeed or neither does.
   const sourceEntityIds = sourceEntities.map((e) => e.id);
   const txResultResult = await safeDb(async (tx) => {
+    const admission = await admitEntityTransferAccess(tx, {
+      workspaceId: sourceWorkspaceId,
+      entityId: sourceEntityId,
+      userId,
+      access: "write",
+    });
+    if (admission.isErr()) {
+      return admission;
+    }
     const copyResult = await copyEntities({
       organizationId,
       tx,
@@ -591,13 +644,13 @@ const copyToWorkspaceHandler = async function* ({
 
     // For move operations, delete source entities in the same transaction.
     if (deleteSource) {
-      const admission = await admitFlowReviewTaskDeletion(tx, {
+      const deletionAdmission = await admitFlowReviewTaskDeletion(tx, {
         workspaceId: sourceWorkspaceId,
         taskEntityIds: sourceEntityIds,
         userId,
       });
-      if (admission.isErr()) {
-        abortTransaction(admission.error);
+      if (deletionAdmission.isErr()) {
+        abortTransaction(deletionAdmission.error);
       }
       // The whole moved subtree goes in one statement. Ordering the deletes
       // bought nothing: `entities.parent_id` is ON DELETE SET NULL, so no

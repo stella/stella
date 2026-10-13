@@ -1961,6 +1961,7 @@ const updateDocumentEntity = async ({
     const moved = await Result.gen(() =>
       moveEntityHandler({
         safeDb: context.safeDb,
+        userId: context.userId,
         workspaceId,
         recordAuditEvent,
         body: { entityId, parentId: parentId ?? null },

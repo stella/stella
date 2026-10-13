@@ -37,6 +37,10 @@ type FeatureAccessMockOptions = {
 };
 
 type ScopedDbMockOptions = {
+  entityTransferEligibility?: {
+    entityId: typeof entities.$inferSelect.id;
+    eligible: boolean;
+  }[];
   siblingRows?: { name: string; parentId: string | null }[];
   featureAccess?: FeatureAccessMockOptions;
   flowTaskGates?: {
@@ -189,6 +193,7 @@ export const createScopedDbMock = (
   options?: ScopedDbMockOptions,
 ) => {
   let callCount = 0;
+  const transferEligibility = options?.entityTransferEligibility;
 
   const scopedDb: ScopedDb = async <T>(
     callback: (transaction: Transaction) => Promise<T>,
@@ -196,18 +201,46 @@ export const createScopedDbMock = (
     callCount += 1;
     // Tests provide only the transaction members touched by the handler.
     const advisoryKeys = new Map<string, number>();
+    const advisoryExecute = (query: SQL) => {
+      const rendered = new PgDialect().sqlToQuery(query);
+      if (!/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
+        return [];
+      }
+      const identity = JSON.stringify(rendered.params);
+      const key = advisoryKeys.get(identity) ?? advisoryKeys.size + 1;
+      advisoryKeys.set(identity, key);
+      return [{ key1: 1, key2: key, acquired: true }];
+    };
     const transaction = {
-      execute: (query: SQL) => {
-        const rendered = new PgDialect().sqlToQuery(query);
-        if (!/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
-          return [];
-        }
-        const identity = JSON.stringify(rendered.params);
-        const key = advisoryKeys.get(identity) ?? advisoryKeys.size + 1;
-        advisoryKeys.set(identity, key);
-        return [{ key1: 1, key2: key, acquired: true }];
-      },
+      execute: advisoryExecute,
       ...(typeof tx === "object" && tx !== null ? tx : {}),
+      ...(transferEligibility === undefined
+        ? {}
+        : {
+            execute: (query: SQL) => {
+              const rendered = new PgDialect().sqlToQuery(query);
+              if (rendered.sql.includes('root_id AS "entityId"')) {
+                return Promise.resolve(
+                  transferEligibility.filter((row) =>
+                    rendered.params.includes(row.entityId),
+                  ),
+                );
+              }
+              if (/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
+                return Promise.resolve(advisoryExecute(query));
+              }
+              if (
+                typeof tx !== "object" ||
+                tx === null ||
+                !("execute" in tx) ||
+                typeof tx.execute !== "function"
+              ) {
+                return panic("Missing fixture execute");
+              }
+              const result: unknown = Reflect.apply(tx.execute, tx, [query]);
+              return result;
+            },
+          }),
       select: fixtureSelect(tx, options),
     };
     return await callback(asTestRaw<Transaction>(transaction));

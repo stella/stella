@@ -5,7 +5,7 @@ import { FLOW_RUN_TERMINAL_STATUSES } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { flowRuns, flowRunSteps, workspaces } from "@/api/db/schema";
+import { entities, flowRuns, flowRunSteps, workspaces } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
@@ -21,7 +21,11 @@ import {
 import { resolveFlowReviewGate } from "@/api/lib/flows/flow-executor";
 import type { FlowRunActionResult } from "@/api/lib/flows/flow-executor";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
-import { classifyEntityResourceDeletions } from "@/api/lib/flows/visibility";
+import {
+  classifyEntityResourceDeletions,
+  flowFeatureActorVisibilitySql,
+} from "@/api/lib/flows/visibility";
+import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 import { WORK_OBLIGATION_TRANSITION_ACTION } from "@/api/lib/work-obligations/transitions";
 import type { WorkObligationTransitionAction } from "@/api/lib/work-obligations/transitions";
@@ -121,6 +125,103 @@ const admitLinkedFlowAccess = async (
     ? Result.ok(undefined)
     : Result.err(new HandlerError({ status: 404, message: "Not found" }));
 };
+
+type EntityTransferAccessOptions = {
+  workspaceId: SafeId<"workspace">;
+  entityId: SafeId<"entity">;
+  userId: SafeId<"user">;
+  access: "read" | "write";
+};
+
+type ReadEntityTransferEligibilityOptions = Omit<
+  EntityTransferAccessOptions,
+  "entityId" | "access"
+> & { entityIds: readonly SafeId<"entity">[] };
+
+/** Read only a decision for each supplied root, with no descendant identifiers. */
+export const readEntityTransferEligibility = async (
+  tx: Transaction,
+  { workspaceId, entityIds, userId }: ReadEntityTransferEligibilityOptions,
+) => {
+  if (entityIds.length === 0) {
+    return [];
+  }
+  const workspace = await tx.query.workspaces.findFirst({
+    where: { id: { eq: workspaceId } },
+    columns: { organizationId: true },
+  });
+  if (workspace === undefined) {
+    return [];
+  }
+  return await tx.execute<{
+    entityId: SafeId<"entity">;
+    eligible: boolean;
+  }>(sql`
+    WITH RECURSIVE subtree AS (
+      SELECT ${entities.id} AS root_id, ${entities.id} AS id, 1 AS depth
+      FROM ${entities}
+      WHERE ${inArray(entities.id, [...entityIds])}
+        AND ${entities.workspaceId} = ${workspaceId}
+      UNION ALL
+      SELECT subtree.root_id, child.id, subtree.depth + 1
+      FROM ${entities} child
+      JOIN subtree ON child.parent_id = subtree.id
+      WHERE child.workspace_id = ${workspaceId}
+        AND subtree.depth < ${LIMITS.entityAncestorWalkDepthMax}
+    )
+    SELECT root_id AS "entityId",
+      count(*) <= ${LIMITS.entitiesCount}
+      AND max(depth) < ${LIMITS.entityAncestorWalkDepthMax}
+      AND NOT EXISTS (
+        SELECT 1 FROM subtree linked
+        JOIN ${flowRunSteps} ON ${flowRunSteps.reviewTaskEntityId} = linked.id
+          AND ${flowRunSteps.workspaceId} = ${workspaceId}
+        WHERE linked.root_id = roots.root_id
+          AND NOT (${flowFeatureActorVisibilitySql({
+            organizationId: workspace.organizationId,
+            workspaceId,
+            userId,
+          })})
+      ) AS eligible
+    FROM subtree roots
+    GROUP BY root_id
+  `);
+};
+
+/** Writers take admission before tree/entity locks and evaluate current links. */
+const entityTransferIsEligible = async (
+  tx: Transaction,
+  { workspaceId, entityId, userId, access }: EntityTransferAccessOptions,
+): Promise<boolean> => {
+  if (access === "write") {
+    const workspace = await tx.query.workspaces.findFirst({
+      where: { id: { eq: workspaceId } },
+      columns: { organizationId: true },
+    });
+    if (workspace === undefined) {
+      return false;
+    }
+    await lockFeatureRecoveryAdmission({
+      tx,
+      organizationId: workspace.organizationId,
+      featureId: "flows",
+    });
+  }
+  const rows = await readEntityTransferEligibility(tx, {
+    workspaceId,
+    entityIds: [entityId],
+    userId,
+  });
+  return rows.at(0)?.eligible === true;
+};
+
+export const admitEntityTransferAccess = async (
+  tx: Transaction,
+  options: EntityTransferAccessOptions,
+): Promise<Result<void, HandlerError>> =>
+  (await entityTransferIsEligible(tx, options))
+    ? Result.ok(undefined)
+    : Result.err(new HandlerError({ status: 404, message: "Not found" }));
 
 type AdmitFlowReviewTaskDeletionOptions = {
   workspaceId: SafeId<"workspace">;
