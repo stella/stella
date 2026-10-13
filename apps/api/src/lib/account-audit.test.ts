@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import type { Transaction } from "@/api/db/root";
 import { accountAuditLogs } from "@/api/db/schema";
 import {
@@ -77,6 +79,50 @@ describe("account audit scope", () => {
           resourceId,
         },
       ]);
+    } finally {
+      await releaseRlsFixture();
+    }
+  });
+
+  test("an application transaction cannot record another user's account event", async () => {
+    const { ids, scopedQuery } = await getRlsFixture();
+    try {
+      const resourceId = Bun.randomUUIDv7();
+      const otherUserRecorder = createAuditRecorder({
+        account: { userId: ids.userA2 },
+        request: new Request("https://example.test/account"),
+        server: null,
+      });
+      const rejection = await rejectionOf(
+        scopedQuery(
+          [ids.wsA1],
+          ids.orgA,
+          async (tx) => {
+            await otherUserRecorder(tx, {
+              type: "account.data_export.requested",
+              resourceId,
+            });
+          },
+          ids.userA1,
+        ),
+      );
+      expect(rejection).toBeInstanceOf(Error);
+      const messages = [
+        rejection,
+        rejection instanceof Error ? rejection.cause : undefined,
+      ].map((error) => (error instanceof Error ? error.message : ""));
+      expect(messages.join("\n")).toMatch(/row-level security/u);
+      const rows = await scopedQuery(
+        [ids.wsA1],
+        ids.orgA,
+        async (tx) =>
+          await tx
+            .select({ resourceId: accountAuditLogs.resourceId })
+            .from(accountAuditLogs)
+            .where(eq(accountAuditLogs.resourceId, resourceId)),
+        ids.userA2,
+      );
+      expect(rows).toEqual([]);
     } finally {
       await releaseRlsFixture();
     }
