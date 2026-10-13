@@ -251,7 +251,7 @@ test("silent extraction continues beyond the stall interval while files change",
   expect(messages.join("")).not.toContain("class=install-stall");
 });
 
-test("external installer termination emits a distinct typed infrastructure annotation", async () => {
+test("external installer termination preserves the platform signal evidence", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "ci-install-signal-"));
   roots.push(root);
   const messages: string[] = [];
@@ -265,7 +265,14 @@ test("external installer termination emits a distinct typed infrastructure annot
       },
     }),
   ).not.toBe(0);
-  expect(messages.join("")).toContain("kind=infra class=install-signal");
-  expect(messages.join("")).toContain("signal=SIGTERM");
-  expect(messages.join("")).not.toContain("class=install-stall");
+  const reported = messages.join("");
+  expect(reported).not.toContain("class=install-stall");
+  if (process.platform === "win32") {
+    // Windows Bun reports self-SIGTERM as an ordinary exit without signal metadata.
+    expect(reported).toContain("Install finished; exit 1; signal none;");
+    expect(reported).not.toContain("class=install-signal");
+    return;
+  }
+  expect(reported).toContain("kind=infra class=install-signal");
+  expect(reported).toContain("signal=SIGTERM");
 });
