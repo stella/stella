@@ -88,8 +88,11 @@ const consumeRateLimitMock = mock(async () => ({
 // (cleared in beforeEach). Default (empty set) behaves like everything-enabled.
 const disabledFeatures = new Set<string>();
 const { handleMcpToolCall, listMcpTools } = await import("@/api/mcp/tools");
-const { featureOmittedCapabilityIds, mapHandlerResult } =
-  await import("@/api/mcp/capability-tools");
+const {
+  conditionalCapabilityInputs,
+  featureOmittedCapabilityIds,
+  mapHandlerResult,
+} = await import("@/api/mcp/capability-tools");
 const { UPLOAD_PURPOSE_GATE_BY_CAPABILITY } =
   await import("@/api/mcp/upload-purpose-gate");
 const { synthesizeCapabilityContext } =
@@ -649,6 +652,8 @@ describe("list verification access grants across MCP tools", () => {
       expect(hiddenNativeSurface).not.toContain(id);
     }
     let projectedLayouts = 0;
+    const enabledConditionalInputs = await conditionalCapabilityInputs(granted);
+    const hiddenConditionalInputs = await conditionalCapabilityInputs(denied);
     for (const { id } of capabilityCatalog.filter(
       (entry) =>
         "featureId" in entry &&
@@ -675,6 +680,11 @@ describe("list verification access grants across MCP tools", () => {
       }
       expect(hiddenSchema).not.toContain('"avt"');
       expect(hidden.isError).not.toBe(true);
+      expect(enabledConditionalInputs[id]).toBeUndefined();
+      expect(hiddenConditionalInputs[id]).toBeDefined();
+      const callerInput = JSON.stringify(hiddenConditionalInputs[id]);
+      expect(callerInput).not.toContain('"avt"');
+      expect(callerInput).not.toContain('"workspaceId"');
     }
     expect(projectedLayouts).toBeGreaterThan(0);
     const enabledResources = listMcpResources("default", granted);

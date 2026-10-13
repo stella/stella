@@ -49,6 +49,7 @@ import {
 } from "@/api/mcp/auth";
 import {
   accessibleFeatureCapabilityIds,
+  conditionalCapabilityInputs,
   invokedCapabilityConsumesServices,
   featureOmittedCapabilityIds,
 } from "@/api/mcp/capability-tools";
@@ -1010,6 +1011,7 @@ export const createMcpHttpRequestHandler = ({
         _meta: {
           featureAccess: {
             capabilities: await accessibleFeatureCapabilityIds(context),
+            conditionalInputs: await conditionalCapabilityInputs(context),
             tools: tools
               .filter((tool) => typeof tool._meta?.["featureId"] === "string")
               .map(({ name }) => name),

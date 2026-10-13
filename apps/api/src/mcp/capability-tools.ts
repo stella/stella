@@ -83,6 +83,7 @@ import {
   declaresInternalField,
   INTERNAL_FIELD_NAME,
   PUBLIC_FIELD_NAME,
+  withPublicFieldNames,
 } from "@/api/mcp/public-field-names";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
@@ -941,6 +942,51 @@ export const accessibleFeatureCapabilityIds = async (
         contextFeatureEnabled(entry.feature, context),
     )
     .map((entry) => entry.id);
+
+/** Current conditional inputs are invocation metadata, never a shared catalog. */
+export const conditionalCapabilityInputs = async (
+  context: McpRequestContext,
+) => {
+  const entries = (await getCatalog()).filter(
+    (entry) =>
+      entry.featureAccess === "conditional" &&
+      contextFeatureEnabled(entry.feature, context) &&
+      !isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "capabilities",
+        id: entry.id,
+        featureId: entry.featureId,
+      }),
+  );
+  const schemas = await Promise.all(
+    entries.map(async (entry) => {
+      const endpoint = await loadCapabilityEndpoint(entry.id);
+      if (endpoint?.config.featureAccess?.type !== "conditional") {
+        return panic(
+          "Conditional capability requires its live input projection",
+        );
+      }
+      const projected = endpoint.config.featureAccess.projectInputSchema(
+        advertisedSchemas(endpoint.config),
+      );
+      return [
+        entry.id,
+        {
+          ...(projected.body === undefined
+            ? {}
+            : { body: withPublicFieldNames(projected.body) }),
+          ...(projected.params === undefined
+            ? {}
+            : { params: withPublicFieldNames(projected.params) }),
+          ...(projected.query === undefined
+            ? {}
+            : { query: withPublicFieldNames(projected.query) }),
+        },
+      ] as const;
+    }),
+  );
+  return Object.fromEntries(schemas);
+};
 
 /**
  * Catalog capability ids gated off in this deployment, sorted: the ids

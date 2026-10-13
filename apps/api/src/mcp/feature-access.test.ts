@@ -399,8 +399,9 @@ for (const kind of [
       expect(toolsText).not.toContain("time-entries.create");
       expect(resourceText).not.toContain("stella://about");
       expect(toolsText).toContain(
-        '"featureAccess":{"capabilities":[],"tools":[]}',
+        '"featureAccess":{"capabilities":[],"conditionalInputs":',
       );
+      expect(toolsText).toContain('"tools":[]}');
     }
     expect(scopedDb).not.toHaveBeenCalled();
   });

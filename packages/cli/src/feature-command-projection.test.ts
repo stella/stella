@@ -170,7 +170,7 @@ test("the real catalog parser and route generator preserve feature ownership", (
   expect(parseCapabilityCatalog(incomplete)).toBeNull();
 });
 
-test("conditional catalog commands retain their ordinary projected schema without a snapshot", () => {
+test("conditional catalog commands require current input projection or admission", () => {
   const conditionalEntries = structuredClone(entries);
   for (const entry of conditionalEntries) {
     if (entry.id === CAPABILITY) {
@@ -189,14 +189,22 @@ test("conditional catalog commands retain their ordinary projected schema withou
     entries: parsed,
     annotations: generatedToolAnnotations,
   }).tree;
-  expect(
-    leafIds(
-      projectFeatureCommands({
-        tree: conditionalTree,
-        featureAccess: undefined,
-      }),
-    ),
-  ).toContain(CAPABILITY);
+  for (const featureAccess of [
+    undefined,
+    { capabilities: [], tools: [] },
+    { capabilities: [CAPABILITY], tools: [] },
+    { capabilities: [], tools: [], conditionalInputs: { [CAPABILITY]: {} } },
+  ]) {
+    expect(
+      leafIds(
+        projectFeatureCommands({ tree: conditionalTree, featureAccess }),
+      ).includes(CAPABILITY),
+    ).toBe(
+      featureAccess !== undefined &&
+        (featureAccess.capabilities.includes(CAPABILITY) ||
+          "conditionalInputs" in featureAccess),
+    );
+  }
 });
 
 for (const featureAccess of [undefined, hidden]) {

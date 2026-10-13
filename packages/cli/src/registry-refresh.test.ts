@@ -7,6 +7,8 @@ import path from "node:path";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { projectDeploymentCommands } from "./deployment-command-projection.js";
 import { projectFeatureCommands } from "./feature-command-projection.js";
+import { buildCliRouteTree } from "./generate-capability-tree.js";
+import type { CapabilityCatalogEntry } from "./generate-capability-tree.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
 import { McpClientError } from "./mcp-client.js";
@@ -20,6 +22,7 @@ import {
 import {
   type CurrentRegistry,
   refreshRegistryCache,
+  requiresFeatureAccessRefresh,
   resolveCommandTree,
 } from "./registry-refresh.js";
 import { validateFetchedToolsList } from "./registry-trust.js";
@@ -165,6 +168,111 @@ const writeCache = async (
 };
 
 describe("resolveCommandTree (S5.3)", () => {
+  test("current conditional inputs rebuild flags and restore full inputs after admission", async () => {
+    const env = await makeCacheEnv();
+    const entry = {
+      id: "fixture.rows.list",
+      featureId: "fixture",
+      featureAccess: "conditional",
+      handlerKind: "root",
+      access: "read",
+      destructive: false,
+      scope: "stella:read",
+      transport: { type: "json" },
+      inputSchema: {
+        body: {
+          type: "object",
+          properties: {
+            mode: { type: "string", enum: ["ordinary", "feature"] },
+          },
+        },
+      },
+    } as const satisfies CapabilityCatalogEntry;
+    const conditionalInputs = {
+      [entry.id]: {
+        body: {
+          type: "object",
+          properties: { mode: { type: "string", enum: ["ordinary"] } },
+        },
+      },
+    };
+    const bakedTree = buildCliRouteTree({
+      listings: [],
+      entries: [entry],
+      annotations: {},
+    }).tree;
+    expect(requiresFeatureAccessRefresh(bakedTree)).toBe(true);
+    for (const admitted of [false, true, false]) {
+      const featureAccess = {
+        capabilities: admitted ? [entry.id] : [],
+        tools: [],
+        conditionalInputs,
+      };
+      const refreshed = await refreshRegistryCache({
+        serverOrigin: ORIGIN,
+        token: "fixture",
+        env,
+        force: true,
+        bakedListings: [],
+        fetchLatestVersion: async () => undefined,
+        fetchRaw: okFetch(
+          JSON.stringify({ tools: [], _meta: { featureAccess } }),
+        ),
+      });
+      if (refreshed.status !== "refreshed") {
+        panic("Conditional registry fixture requires a current response");
+      }
+      const resolved = await resolveCommandTree({
+        serverOrigin: ORIGIN,
+        env,
+        registry: refreshed.registry,
+        featureAccess: refreshed.featureAccess,
+        bakedTree,
+        annotations: {},
+        loadCatalog: () => [entry],
+      });
+      const findCapability = (
+        node: RouteNode,
+      ): Extract<RouteNode, { kind: "capability-leaf" }> | undefined => {
+        if (node.kind === "capability-leaf") {
+          return node;
+        }
+        if (node.kind !== "route") {
+          return undefined;
+        }
+        return Object.values(node.children)
+          .map(findCapability)
+          .find((child) => child !== undefined);
+      };
+      const visible = findCapability(resolved.tree);
+      expect(
+        visible?.spec.flags.find((flag) => flag.flag === "--mode")?.enum,
+      ).toEqual(admitted ? ["ordinary", "feature"] : ["ordinary"]);
+      expect(
+        JSON.stringify(visible?.spec.inputSchema).includes('"feature"'),
+      ).toBe(admitted);
+      const unavailableCatalog = await resolveCommandTree({
+        serverOrigin: ORIGIN,
+        env,
+        registry: refreshed.registry,
+        featureAccess: refreshed.featureAccess,
+        bakedTree,
+        loadCatalog: () => null,
+      });
+      expect(
+        capabilityLeafIds(unavailableCatalog.tree).includes(entry.id),
+      ).toBe(admitted);
+      const cached = await readCacheFile(cachePathFor(ORIGIN, env));
+      expect(JSON.stringify(cached)).not.toContain("conditionalInputs");
+    }
+    const offline = await resolveCommandTree({
+      serverOrigin: ORIGIN,
+      env,
+      bakedTree,
+    });
+    expect(capabilityLeafIds(offline.tree)).not.toContain(entry.id);
+  });
+
   test("feature admission projects the caller tree without reporting registry drift", async () => {
     const env = await makeCacheEnv();
     const toolName = "save_time_entry";
