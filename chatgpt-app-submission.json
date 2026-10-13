@@ -987,7 +987,7 @@
         "destructiveHint": false
       },
       "justifications": {
-        "read_only_justification": "Creates a short-lived handoff credential so the user can open the selected stella page.",
+        "read_only_justification": "Adds an expiring handoff credential tied to existing user consent; it does not modify workspace records.",
         "open_world_justification": "Operates within stella’s private workspace and does not change public internet or third-party state.",
         "destructive_justification": "Does not delete, revoke access, overwrite irreversibly, or perform another destructive action."
       }

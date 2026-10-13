@@ -5872,7 +5872,8 @@
     },
     "annotations": {
       "title": "Open web link",
-      "readOnlyHint": true,
+      "readOnlyHint": false,
+      "idempotentHint": false,
       "destructiveHint": false,
       "openWorldHint": false
     }
