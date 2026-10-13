@@ -63,6 +63,7 @@ import {
 } from "@/lib/workspaces/queries/invoices";
 import type { InvoiceStatus } from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
+import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
 import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
@@ -342,6 +343,12 @@ const InvoiceDetail = ({
             invoiceId={invoiceId}
             workspaceId={workspaceId}
           />
+          {invoice.status !== "draft" && invoice.status !== "void" && (
+            <InvoiceExportMenu
+              invoiceId={invoiceId}
+              workspaceId={workspaceId}
+            />
+          )}
           <InvoiceActions
             invoiceStatus={invoiceStatus}
             onDelete={() => deleteMutation.mutate()}

@@ -186,6 +186,8 @@ describe("changed-file result boundary lint", () => {
           "apps/api/src/mcp/generated/capability-dispatch/matters.list.ts",
           "packages/start-runtime/src/runtime.ts",
           "packages/ssr-testkit/src/assert-document.ts",
+          "apps/web/src/server.ts",
+          "apps/web/src/ssr-renderer.ts",
           // apps/landing is outside RESULT_CONVENTION_SOURCE_GLOBS and carries
           // an opt-out reason, so its source is not planned for this lint.
           "apps/landing/src/example.ts",
@@ -208,6 +210,7 @@ describe("changed-file result boundary lint", () => {
       "--deny-warnings",
       "apps/api/src/lib/new-client.ts",
       "apps/web/src/lib/example.ts",
+      "apps/web/src/ssr-renderer.ts",
     ]);
   });
 });

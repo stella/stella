@@ -280,6 +280,16 @@ bug (for example, reading RTF as a plain string prints a picture
 destination's control words and hex payload into the decision text), and
 the parser is what changes.
 
+CourtListener explicitly supplies a source validation policy. Its local detector
+uses recognized RTF controls, the complete HTML5 entity grammar, and contextual
+URL/hash and wallet identifiers. Its source and inline text use canonical
+projection per element/block before folding whitespace. Other sources retain
+the shared detector and validator defaults. CourtListener preserves published
+escaped tags, entity literals, repeated OCR glyphs and malformed labelled
+identifiers only after proving complete text conservation, recording typed,
+anchored `sourceDefects`. Diagnostics remain visible; real control syntax and
+varying binary payloads remain unusable.
+
 To find the decisions already stored with residue, sweep per source. Every
 pattern below is `markupResidueSweepRules()`'s, and a test holds this block
 and those rules to exact agreement. Matching is case-insensitive (`~*`), so the SQL is never narrower than the

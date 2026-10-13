@@ -21,6 +21,7 @@ import {
   installPgliteDesktopPresenceRls,
   installPgliteFlowTransitions,
   installPgliteChatRunLogRls,
+  installPgliteAccountAuditRls,
   installPgliteChatMessageRevisionsRls,
   installPgliteChatSecretRls,
   installPgliteReaderAnswerRls,
@@ -698,6 +699,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteWorkspaceContactCapacity(db);
   await installPgliteListVerificationBudgets(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteAccountAuditRls(db);
   await installPgliteChatMessageRevisionsRls(db);
   await installPgliteChatSecretRls(db);
   await installPgliteReaderAnswerRls(db);
