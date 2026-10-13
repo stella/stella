@@ -121,8 +121,8 @@ const wasm = async () => {
     },
   ];
   for (const [name, fixture] of Object.entries(FIXTURES)) {
-    // A fresh worker per fixture: the first render pays worker start, WASM
-    // instantiation and font loading.
+    // A fresh renderer process per fixture: the first render pays process
+    // start, WASM instantiation and font loading.
     const session = openTypstSession();
     const render = (run = 0) =>
       renderInvoiceWithTypst({
@@ -173,6 +173,8 @@ const wasm = async () => {
       warmCompileMs: median(compile),
       postprocessMs: postprocess?.ms ?? -1,
       rawBytes: raw.status === "rendered" ? raw.bytes.byteLength : -1,
+      // The renderer is a separate process; this run's own RSS excludes it.
+      rendererPeakRss: raw.status === "rendered" ? raw.peakRssBytes : -1,
       bytes: outcome.pdf.byteLength,
       ...(await pdfFacts(outcome.pdf)),
     });

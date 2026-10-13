@@ -1,9 +1,15 @@
-import { afterAll, describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, setDefaultTimeout, test } from "bun:test";
 
 import { openTypstSession, TYPST_RENDER_LIMITS } from "./session";
 import type { TypstRenderLimits, TypstRenderRequest } from "./session";
 
 const MIB = 1024 * 1024;
+// Worker start (WASM instantiation, fonts) is slow on a loaded runner; the
+// render limits under test are much shorter than this per-test bound.
+setDefaultTimeout(60_000);
+// Never finishes: 10^10 iterations of the Typst interpreter.
+const ENDLESS =
+  "#let n = 0\n#for i in range(100000) { for j in range(100000) { n += 1 } }\n#n";
 
 const request = (template: string): TypstRenderRequest => ({
   template,
@@ -68,26 +74,16 @@ describe("sandboxed Typst rendering of an untrusted template", () => {
     }
   });
 
-  test("terminates a render that runs past the time limit and stops spending CPU", async () => {
-    const bounded = session({ timeoutMs: 400 });
-    const started = performance.now();
-    const outcome = await bounded.render(
-      request(
-        "#let n = 0\n#for i in range(20000) { for j in range(20000) { n += 1 } }\n#n",
-      ),
-    );
-    const elapsed = performance.now() - started;
+  test("kills a render that runs past the time limit", async () => {
+    const bounded = session({ timeoutMs: 2000 });
+    const outcome = await bounded.render(request(ENDLESS));
     expect(outcome).toMatchObject({ status: "rejected", reason: "timeout" });
-    // Worker start (WASM instantiation, fonts) is outside the render clock.
-    expect(elapsed).toBeLessThan(400 + 5000);
-    const cpuBefore = process.cpuUsage();
-    await Bun.sleep(300);
-    const cpu = process.cpuUsage(cpuBefore);
-    // A worker still looping would burn ~300 ms of CPU in this window.
-    expect((cpu.user + cpu.system) / 1000).toBeLessThan(150);
+    // The outcome is returned only after the renderer process exited, so
+    // nothing keeps running the template.
+    expect(bounded.renderers()).toEqual({ started: 1, exited: 1 });
   });
 
-  test("terminates a render that grows memory past the limit", async () => {
+  test("kills a render that grows memory past the limit", async () => {
     const bounded = session({
       maxMemoryGrowthBytes: 128 * MIB,
       timeoutMs: 20_000,
@@ -97,10 +93,8 @@ describe("sandboxed Typst rendering of an untrusted template", () => {
         "#let a = ()\n#for i in range(40000000) { a.push(str(i)) }\n#a.len()",
       ),
     );
-    expect(outcome).toMatchObject({ status: "rejected" });
-    if (outcome.status === "rejected") {
-      expect(["memory", "crashed"]).toContain(outcome.reason);
-    }
+    expect(outcome).toMatchObject({ status: "rejected", reason: "memory" });
+    expect(bounded.renderers()).toEqual({ started: 1, exited: 1 });
   });
 
   test("refuses output larger than the limit", async () => {
@@ -129,15 +123,14 @@ describe("sandboxed Typst rendering of an untrusted template", () => {
     ).toMatchObject({ status: "rejected", reason: "input-too-large" });
   });
 
-  test("a session keeps rendering after a terminated worker", async () => {
-    const bounded = session({ timeoutMs: 300 });
-    const killed = await bounded.render(
-      request(
-        "#let n = 0\n#for i in range(20000) { for j in range(20000) { n += 1 } }",
-      ),
-    );
+  test("a session keeps rendering after a killed renderer", async () => {
+    const bounded = session({ timeoutMs: 3000 });
+    const killed = await bounded.render(request(ENDLESS));
     expect(killed).toMatchObject({ status: "rejected", reason: "timeout" });
     const next = await bounded.render(request("After"));
     expect(next.status).toBe("rendered");
+    expect(bounded.renderers()).toEqual({ started: 2, exited: 1 });
+    await bounded.close();
+    expect(bounded.renderers()).toEqual({ started: 2, exited: 2 });
   });
 });

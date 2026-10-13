@@ -1,6 +1,8 @@
-import { Worker } from "node:worker_threads";
+import type { Subprocess } from "bun";
+import { fileURLToPath } from "node:url";
 
 import type { TypstOutputFormat } from "./compiler";
+import { TYPST_MEMORY_SIGNAL } from "./protocol";
 import type { TypstWorkerReply, TypstWorkerRequest } from "./protocol";
 
 const MIB = 1024 * 1024;
@@ -11,15 +13,15 @@ const MIB = 1024 * 1024;
  * memory and output it can spend.
  */
 export type TypstRenderLimits = {
-  /** Wall clock for one compile; the worker is terminated when it runs over. */
+  /** Wall clock for one compile; the renderer process is killed when it runs over. */
   timeoutMs: number;
-  /** Process RSS growth over the pre-render baseline that terminates the worker. */
+  /** RSS growth of the renderer process over its idle size that kills it. */
   maxMemoryGrowthBytes: number;
   maxOutputBytes: number;
   maxTemplateBytes: number;
   maxInputBytes: number;
   /**
-   * WASM linear memory never shrinks, so a worker that grew past this after
+   * WASM linear memory never shrinks, so a renderer that grew past this after
    * a successful render is replaced before the next one.
    */
   retireAboveMemoryBytes: number;
@@ -34,8 +36,7 @@ export const TYPST_RENDER_LIMITS = {
   retireAboveMemoryBytes: 256 * MIB,
 } as const satisfies TypstRenderLimits;
 
-const MEMORY_SAMPLE_MS = 10;
-const WORKER_START_TIMEOUT_MS = 10_000;
+const START_TIMEOUT_MS = 30_000;
 
 type TypstRenderRejection =
   | "template-too-large"
@@ -52,6 +53,7 @@ export type TypstRenderOutcome =
       bytes: Uint8Array;
       compileMs: number;
       memoryBytes: number;
+      peakRssBytes: number;
     }
   | {
       status: "rejected";
@@ -68,44 +70,111 @@ export type TypstRenderRequest = {
 export type TypstSession = {
   render: (request: TypstRenderRequest) => Promise<TypstRenderOutcome>;
   close: () => Promise<void>;
+  /** Renderer processes started and exited so far; equal when none runs. */
+  renderers: () => { started: number; exited: number };
 };
 
-type LiveWorker = { worker: Worker; ready: Promise<boolean> };
+type Renderer = {
+  process: Subprocess;
+  ready: Promise<boolean>;
+  /** Receives the renderer's replies after it reported ready. */
+  listen: (listener: ((reply: TypstWorkerReply) => void) | null) => void;
+  /** Resolves after the process exited and every exit callback ran. */
+  gone: Promise<void>;
+  /** Called once if the process exits while a render waits on it. */
+  watchExit: (listener: (() => void) | null) => void;
+};
 
-const startWorker = (): LiveWorker => {
-  const worker = new Worker(new URL("worker.ts", import.meta.url));
+const RENDERER_PATH = fileURLToPath(new URL("worker.ts", import.meta.url));
+
+const isReply = (value: unknown): value is TypstWorkerReply =>
+  typeof value === "object" &&
+  value !== null &&
+  "type" in value &&
+  (value.type === "ready" ||
+    value.type === "rendered" ||
+    value.type === "failed");
+
+const startRenderer = (
+  limits: TypstRenderLimits,
+  onExit: () => void,
+): Renderer => {
+  let listener: ((reply: TypstWorkerReply) => void) | null = null;
+  let exitListener: (() => void) | null = null;
+  let resolveReady: (ready: boolean) => void = () => undefined;
   const ready = new Promise<boolean>((resolve) => {
-    const timer = setTimeout(() => resolve(false), WORKER_START_TIMEOUT_MS);
-    worker.once("message", (reply: TypstWorkerReply) => {
-      clearTimeout(timer);
-      resolve(reply.type === "ready");
-    });
-    worker.once("error", () => {
-      clearTimeout(timer);
-      resolve(false);
-    });
+    resolveReady = resolve;
   });
-  return { worker, ready };
+  const timer = setTimeout(() => {
+    resolveReady(false);
+  }, START_TIMEOUT_MS);
+  let markGone: () => void = () => undefined;
+  const gone = new Promise<void>((resolve) => {
+    markGone = resolve;
+  });
+  const markReady = (value: boolean) => {
+    clearTimeout(timer);
+    resolveReady(value);
+  };
+  const child = Bun.spawn({
+    cmd: [process.execPath, RENDERER_PATH, String(limits.maxMemoryGrowthBytes)],
+    stdin: "ignore",
+    stdout: "ignore",
+    // Typst's in-memory file model logs refused reads; diagnostics reach the
+    // caller through IPC instead.
+    stderr: "ignore",
+    ipc: (message: unknown) => {
+      if (!isReply(message)) {
+        return;
+      }
+      if (message.type === "ready") {
+        markReady(true);
+        return;
+      }
+      listener?.(message);
+    },
+    onExit: () => {
+      markReady(false);
+      onExit();
+      exitListener?.();
+      markGone();
+    },
+  });
+  return {
+    process: child,
+    ready,
+    gone,
+    listen: (next) => {
+      listener = next;
+    },
+    watchExit: (next) => {
+      exitListener = next;
+    },
+  };
 };
 
 const byteLength = (value: string) => Buffer.byteLength(value, "utf-8");
 
 /**
- * One render worker reused across renders (warm), replaced after any limit
+ * One renderer process reused across renders (warm), replaced after any limit
  * breach, crash or excessive memory growth. Renders run one at a time.
  */
 export const openTypstSession = (
   limits: TypstRenderLimits = TYPST_RENDER_LIMITS,
 ): TypstSession => {
-  let live: LiveWorker | null = null;
+  let live: Renderer | null = null;
   let nextId = 0;
   let queue: Promise<unknown> = Promise.resolve();
+  const counts = { started: 0, exited: 0 };
 
   const retire = async () => {
     const current = live;
     live = null;
     if (current !== null) {
-      await current.worker.terminate();
+      current.process.kill("SIGKILL");
+      // Resolves once the process is gone, so a killed render has stopped
+      // running before the caller sees its outcome.
+      await current.gone;
     }
   };
 
@@ -132,57 +201,52 @@ export const openTypstSession = (
         diagnostics: [`Inputs exceed ${String(limits.maxInputBytes)} bytes`],
       };
     }
-    live ??= startWorker();
+    if (live === null) {
+      counts.started += 1;
+      live = startRenderer(limits, () => {
+        counts.exited += 1;
+      });
+    }
     const current = live;
     if (!(await current.ready)) {
       await retire();
       return {
         status: "rejected",
         reason: "crashed",
-        diagnostics: ["The Typst worker did not start"],
+        diagnostics: ["The Typst renderer did not start"],
       };
     }
     nextId += 1;
     const id = nextId;
-    const baseline = process.memoryUsage.rss();
     const outcome = await new Promise<
       TypstRenderOutcome & { memoryBytes?: number }
     >((resolve) => {
-      const cleanup: (() => void)[] = [];
+      const state: { settled: boolean; timer?: Timer } = { settled: false };
       const finish = (value: TypstRenderOutcome & { memoryBytes?: number }) => {
-        for (const undo of cleanup) {
-          undo();
+        if (state.settled) {
+          return;
         }
+        state.settled = true;
+        clearTimeout(state.timer);
+        current.listen(null);
+        current.watchExit(null);
         resolve(value);
       };
-      const timer = setTimeout(() => {
+      state.timer = setTimeout(() => {
         finish({
           status: "rejected",
           reason: "timeout",
           diagnostics: [`Render exceeded ${String(limits.timeoutMs)} ms`],
         });
       }, limits.timeoutMs);
-      cleanup.push(() => clearTimeout(timer));
-      const sampler = setInterval(() => {
-        const growth = process.memoryUsage.rss() - baseline;
-        if (growth > limits.maxMemoryGrowthBytes) {
-          finish({
-            status: "rejected",
-            reason: "memory",
-            diagnostics: [
-              `Render grew memory by ${String(growth)} bytes; the limit is ${String(limits.maxMemoryGrowthBytes)}`,
-            ],
-          });
-        }
-      }, MEMORY_SAMPLE_MS);
-      cleanup.push(() => clearInterval(sampler));
-      const onMessage = (reply: TypstWorkerReply) => {
+      current.listen((reply) => {
         if (reply.type === "rendered" && reply.id === id) {
           finish({
             status: "rendered",
             bytes: reply.bytes,
             compileMs: reply.compileMs,
             memoryBytes: reply.memoryBytes,
+            peakRssBytes: reply.peakRssBytes,
           });
         } else if (reply.type === "failed" && reply.id === id) {
           finish({
@@ -192,37 +256,24 @@ export const openTypstSession = (
             memoryBytes: reply.memoryBytes,
           });
         }
-      };
-      const onError = (error: unknown) => {
-        finish({
-          status: "rejected",
-          reason: "crashed",
-          diagnostics: [String(error)],
-        });
-      };
-      const onExit = (code: number) => {
-        finish({
-          status: "rejected",
-          reason: "crashed",
-          diagnostics: [`The Typst worker exited with code ${String(code)}`],
-        });
-      };
-      current.worker.on("message", onMessage);
-      current.worker.on("error", onError);
-      current.worker.on("exit", onExit);
-      cleanup.push(() => {
-        current.worker.off("message", onMessage);
-        current.worker.off("error", onError);
-        current.worker.off("exit", onExit);
       });
-      current.worker.postMessage(
-        {
-          id,
-          ...request,
-          maxOutputBytes: limits.maxOutputBytes,
-        } satisfies TypstWorkerRequest,
-        [],
-      );
+      current.watchExit(() => {
+        const memory = current.process.signalCode === TYPST_MEMORY_SIGNAL;
+        finish({
+          status: "rejected",
+          reason: memory ? "memory" : "crashed",
+          diagnostics: [
+            memory
+              ? `Render grew memory past ${String(limits.maxMemoryGrowthBytes)} bytes`
+              : `The Typst renderer exited (${String(current.process.signalCode ?? current.process.exitCode)})`,
+          ],
+        });
+      });
+      current.process.send({
+        id,
+        ...request,
+        maxOutputBytes: limits.maxOutputBytes,
+      } satisfies TypstWorkerRequest);
     });
     const keep =
       (outcome.status === "rendered" ||
@@ -250,5 +301,6 @@ export const openTypstSession = (
       await queue;
       await retire();
     },
+    renderers: () => ({ ...counts }),
   };
 };

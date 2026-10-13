@@ -20,7 +20,13 @@ type RenderInvoiceWithTypstOptions = {
 };
 
 type TypstInvoiceRender =
-  | { status: "rendered"; pdf: Uint8Array; compileMs: number }
+  | {
+      status: "rendered";
+      pdf: Uint8Array;
+      compileMs: number;
+      /** Peak RSS of the renderer process so far. */
+      peakRssBytes: number;
+    }
   | Extract<TypstRenderOutcome, { status: "rejected" }>;
 
 /**
@@ -57,5 +63,6 @@ export const renderInvoiceWithTypst = async ({
     status: "rendered",
     pdf,
     compileMs: outcome.compileMs,
+    peakRssBytes: outcome.peakRssBytes,
   } satisfies TypstInvoiceRender);
 };

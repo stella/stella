@@ -16,6 +16,8 @@ export type TypstWorkerReply =
       bytes: Uint8Array;
       compileMs: number;
       memoryBytes: number;
+      /** Highest process RSS the watchdog sampled so far. */
+      peakRssBytes: number;
     }
   | {
       type: "failed";
@@ -23,4 +25,8 @@ export type TypstWorkerReply =
       reason: "diagnostics" | "output-too-large" | "crashed";
       diagnostics: string[];
       memoryBytes: number;
+      peakRssBytes: number;
     };
+
+/** Signal the in-process watchdog raises when the memory cap is exceeded. */
+export const TYPST_MEMORY_SIGNAL = "SIGUSR2";

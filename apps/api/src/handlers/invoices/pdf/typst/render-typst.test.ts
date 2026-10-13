@@ -151,8 +151,10 @@ describe("Typst invoice renderer", () => {
 
 describe("SPAYD QR as SVG", () => {
   test("the SVG paths reproduce the encoder's module matrix exactly", () => {
-    const payload = buildInvoicePaymentPayload(invoiceFixture(1)).unwrap();
-    if (payload === null || payload.status !== "payable") {
+    const payment = buildInvoicePaymentPayload(invoiceFixture(1));
+    expect(payment).not.toBeNull();
+    const payload = payment?.unwrap();
+    if (payload?.status !== "payable") {
       throw new Error("Fixture must be payable");
     }
     const qr = encode(payload.payload, { border: 4, ecc: "M" });

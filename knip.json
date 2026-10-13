@@ -59,8 +59,10 @@
         "src/lib/search/extraction-worker.ts!",
         "src/lib/ocr-local/ocr-local-worker.ts!",
         "src/lib/ocr-searchable-pdf-worker.ts!",
-        // Spike renderer worker, started by URL from its session.
+        // Spike renderer process and its memory watchdog thread, started by
+        // path from the session.
         "src/handlers/invoices/pdf/typst/worker.ts",
+        "src/handlers/invoices/pdf/typst/watchdog.ts",
         "scripts/*.ts",
         // Compiler contract tests are checked by the API typecheck script.
         "contracts/**/*.ts",
