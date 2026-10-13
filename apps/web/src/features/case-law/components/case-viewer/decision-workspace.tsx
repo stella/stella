@@ -99,6 +99,8 @@ type DecisionWorkspaceBaseProps = {
   decisionId: SafeId<"caseLawDecision">;
   /** The block the URL names, which the reader arrived at from a result row. */
   initialAnchorId?: string | undefined;
+  /** A repeated citation is a fresh landing on the same passage. */
+  landingSessionId?: string | undefined;
 };
 
 /**
@@ -145,7 +147,7 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 );
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialAnchorId } = props;
+  const { decision, decisionId, initialAnchorId, landingSessionId } = props;
   const t = useTranslations();
   const provisions = useReaderProvisionMode();
   const ast = parseDocumentAst(decision.documentAst);
@@ -253,7 +255,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // goes. A new decision starts the question over, and so does a new fragment
   // on the same one: stepping back to `#p-1` from `#p-2` keeps this component
   // mounted, so the decision alone cannot tell the two landings apart.
-  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}`;
+  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}#${landingSessionId ?? ""}`;
   const paragraphLanding = decisionParagraphLanding(ast, initialAnchorId);
   const resolvedLandingAnchorId =
     paragraphLanding.type === "anchor" ? paragraphLanding.anchorId : undefined;
@@ -270,6 +272,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     containerRef: mainRef,
     documentAst: decision.documentAst,
     fragment: initialAnchorId,
+    sessionId: landingSessionId,
   });
 
   const jumpToAnchor = (anchorId: string) => {
@@ -701,6 +704,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                     decisionId={decisionId}
                     expandProvisions={provisions.expandProvisions}
                     landingAnchorId={landingAnchorId}
+                    landingSessionId={landingSessionId}
                     onAnnotationActivate={annotations.setActiveAnnotationId}
                     provisionAnchors={provisionAnchors}
                     sectionMap={showAiNotes ? sectionMap : undefined}

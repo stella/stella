@@ -1,13 +1,18 @@
 import type { Page } from "@playwright/test";
 
+import { toChatDecisionPassageHref } from "@stll/api-contract";
 import {
   createCaseLawDecisionPath,
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
+import type { SafeId } from "@stll/api-contract/safe-id";
 
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { decisionParagraphRangePayloads } from "../helpers/decision-paragraph-range-payloads";
+import { installDockedChatHistory } from "../helpers/docked-chat-fixtures";
+import { dockedChatMessagePage } from "../helpers/docked-chat-history";
 import { installDockedLegalFixtures } from "../helpers/docked-chat-legal-fixtures";
+import { dockedChatLegalPayloads } from "../helpers/docked-chat-legal-payloads";
 import { expect, test } from "../helpers/test";
 
 const { decision } = decisionParagraphRangePayloads;
@@ -59,6 +64,120 @@ const openDecision = async (page: Page, path: string) => {
     history.pushState(null, "", target);
   }, path);
 };
+
+test.describe("reader chat decision citations", () => {
+  test.use({ locale: "en-US", viewport: { width: 1440, height: 1000 } });
+
+  test("same-decision citations land in the main reader and other decisions reuse one panel chip", async ({
+    page,
+  }) => {
+    await installParagraphFixture(page);
+    await installDockedChatHistory(page);
+    const otherDecision = {
+      ...decision,
+      id: dockedChatLegalPayloads.bilingualCzechDecision.id,
+      caseNumber: "SYN 2/2026",
+      slug: "synthetic-citation-other-decision",
+    };
+    const citation = (decisionId: SafeId<"caseLawDecision">) =>
+      toChatDecisionPassageHref({
+        decisionId,
+        anchorId: "p-28",
+        courtParagraphNumber: 48,
+      });
+    await page.route("**/v1/chat/decision-threads/*", async (route) => {
+      await route.fulfill({
+        json: { threadId: "019a0000-0000-7000-8000-000000000001" },
+      });
+    });
+    await page.route("**/v1/chat/threads/*/messages*", async (route) => {
+      await route.fulfill({
+        json: {
+          ...dockedChatMessagePage,
+          messages: dockedChatMessagePage.messages.map((message) => ({
+            ...message,
+            parts: [
+              {
+                type: "text",
+                content: `[Same decision passage](${citation(decision.id)}) and [Different decision passage](${citation(otherDecision.id)}).`,
+              },
+            ],
+          })),
+        },
+      });
+    });
+    await page.route(
+      (url) =>
+        url.origin === E2E_API_ORIGIN &&
+        (url.pathname === `/v1/case/decisions/${otherDecision.id}` ||
+          url.pathname === `/v1/case/decisions/by-slug/${otherDecision.slug}`),
+      async (route) => {
+        await route.fulfill({ json: otherDecision });
+      },
+    );
+    await openDecision(page, canonicalPath);
+    const chat = page
+      .locator('[data-slot="docked-chat-thread"]:visible')
+      .first();
+    await expect(
+      chat.getByText("Same decision passage", { exact: true }),
+    ).toBeVisible();
+    const panel = page.locator('[data-slot="inspector"]');
+    const chips = panel.locator('[data-slot="inspector-rail-tab"]');
+    const chipCount = await chips.count();
+    const mainReader = page.locator(".reader-scroll").first();
+    const paragraph = mainReader.locator('[data-anchor="p-28"]');
+    await expect(paragraph).not.toBeInViewport();
+    await expect(panel.locator("main.reader-paper")).toHaveCount(0);
+
+    const openCitation = async (decisionId: string) => {
+      await chat.locator(`[data-decision-citation="${decisionId}"]`).click();
+      await page
+        .getByRole("link", { name: "Open in stella", exact: true })
+        .click();
+    };
+    await openCitation(decision.id);
+    await expect(panel.locator("main.reader-paper")).toHaveCount(0);
+    await expect(chips).toHaveCount(chipCount);
+    await expect(paragraph).toBeInViewport();
+    await expect(paragraph).toHaveClass(/\bbg-accent\b/u);
+    await expect(paragraph).toHaveAttribute("data-reader-landing");
+    await expect
+      .poll(async () => mainReader.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+
+    await mainReader.hover();
+    await page.mouse.wheel(0, -100_000);
+    await expect(paragraph).not.toBeInViewport();
+    await openCitation(decision.id);
+    await expect(paragraph).toBeInViewport();
+    await expect(paragraph).toHaveClass(/\bbg-accent\b/u);
+    await expect(paragraph).toHaveAttribute("data-reader-landing");
+    await expect(panel.locator("main.reader-paper")).toHaveCount(0);
+    await expect(chips).toHaveCount(chipCount);
+
+    await openCitation(otherDecision.id);
+    await expect(chips).toHaveCount(chipCount + 1);
+    const panelParagraph = panel.locator(
+      'main.reader-paper [data-anchor="p-28"]',
+    );
+    await expect(panelParagraph).toBeInViewport();
+    await panel
+      .locator('[data-slot="scroll-area-viewport"]')
+      .filter({
+        has: panel.locator("main.reader-paper"),
+      })
+      .hover();
+    await page.mouse.wheel(0, -100_000);
+    await expect(panelParagraph).not.toBeInViewport();
+    await openCitation(otherDecision.id);
+    await expect(panelParagraph).toBeInViewport();
+    await expect(panelParagraph).toHaveClass(/\bbg-accent\b/u);
+    await expect(panelParagraph).toHaveAttribute("data-reader-landing");
+    await expect(chips).toHaveCount(chipCount + 1);
+    await expect(panel.locator("main.reader-paper")).toHaveCount(1);
+  });
+});
 
 test.describe("court paragraph deep links", () => {
   test.use({ storageState: { cookies: [], origins: [] }, locale: "en-US" });
