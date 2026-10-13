@@ -557,6 +557,80 @@ test("a missing log directory cannot prevent stopping and reaping the child", as
 const posixTest = process.platform === "win32" ? test.skip : test;
 
 posixTest(
+  "the final memory sample fails an exited leader whose surviving worker exceeds the cap",
+  async () => {
+    const fixture = createFixture({
+      memoryLimitBytes: 64 * 1024 ** 2,
+      memorySampleIntervalMs: 60_000,
+      childTimeoutMs: 8000,
+      deadlineMs: 15_000,
+      onStdout: () => {
+        // Stream callbacks run after the synchronous initial sample. Release the
+        // worker only then; no periodic sample can run before the child deadline.
+        writeFileSync(path.join(fixture.directory, "spawn-worker"), "ready");
+      },
+    });
+    const workerPidPath = path.join(fixture.directory, "worker.pid");
+    const worker = `
+    import { writeFileSync } from 'node:fs';
+    const allocation = new Uint8Array(96 * 1024 ** 2).fill(1);
+    writeFileSync(${JSON.stringify(workerPidPath)}, String(process.pid));
+    setInterval(() => { allocation[0] = allocation[0] === 1 ? 2 : 1; }, 1000);
+  `;
+    try {
+      const result = await fixture.supervisor.run({
+        command: () => [
+          process.execPath,
+          "-e",
+          `
+        console.log('start worker after initial sample');
+        while (!(await Bun.file('spawn-worker').exists())) await Bun.sleep(10);
+        Bun.spawn([process.execPath, '-e', ${JSON.stringify(worker)}], { stdout: 'ignore', stderr: 'ignore' });
+        while (!(await Bun.file('worker.pid').exists())) await Bun.sleep(10);
+        process.exit(0);
+      `,
+        ],
+        cwd: fixture.directory,
+        env: process.env,
+        identity: {
+          kind: "batch",
+          label: "final-memory",
+          files: ["final-memory.test.ts"],
+          lane: 0,
+        },
+        mode: "stream",
+      });
+      expect(fixture.diagnostics.join("")).toContain(
+        "Test invocation memory limit exceeded for final-memory.test.ts",
+      );
+      expect(fixture.diagnostics.join("")).not.toContain("wall-clock budget");
+      expect(fixture.supervisor.signal.aborted).toBe(true);
+      expect(result.exitCode).toBe(124);
+      const pid = Number(readFileSync(workerPidPath, "utf-8"));
+      expect(Number.isSafeInteger(pid) && pid > 1).toBe(true);
+      const alive = () => {
+        if (process.platform === "linux") {
+          const status = Result.try(() =>
+            readFileSync(`/proc/${pid}/status`, "utf-8"),
+          );
+          if (status.isOk() && /^State:\s+Z\b/mu.test(status.value)) {
+            return false;
+          }
+        }
+        return Result.try(() => process.kill(pid, 0)).isOk();
+      };
+      for (let attempt = 0; attempt < 100 && alive(); attempt += 1) {
+        await Bun.sleep(10);
+      }
+      expect(alive()).toBe(false);
+    } finally {
+      fixture.cleanup();
+    }
+  },
+  15_000,
+);
+
+posixTest(
   "the supervisor counts an over-budget worker under a low-memory leader and kills their group",
   async () => {
     const fixture = createFixture({

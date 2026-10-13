@@ -101,6 +101,7 @@ type SupervisorOptions = {
   deadlineMs?: number;
   stopGraceMs?: number;
   memoryLimitBytes?: number;
+  memorySampleIntervalMs?: number;
   maxLogBytes?: number;
   tailBytes?: number;
 };
@@ -151,6 +152,9 @@ export class TestProcessSupervisor {
       this.maxLogBytes,
       this.tailBytes,
       options.deadlineMs ?? RUNNER_DEADLINE_MS,
+      ...(options.memorySampleIntervalMs === undefined
+        ? []
+        : [options.memorySampleIntervalMs]),
     ]) {
       if (!Number.isSafeInteger(limit) || limit < 2) {
         panic("Test process limits must be integers of at least two");
@@ -417,11 +421,17 @@ export class TestProcessSupervisor {
         child,
         limitBytes: this.memoryLimitBytes,
         readBytes,
+        ...(this.options.memorySampleIntervalMs === undefined
+          ? {}
+          : { intervalMs: this.options.memorySampleIntervalMs }),
         file: () => identity.files.join(", ") || identity.label,
         onFailure: (message) => this.stop(message),
         onWarning: (message) => this.diagnose(message),
       });
       await Promise.all([child.exited, ...streams]);
+      // Surviving workers can breach the cap after the last periodic sample.
+      // Finalize accounting before success is captured in the returned result.
+      await memoryWatchdog.stop();
       const result = {
         exitCode:
           this.failure === null ? childExitStatus(child) : TIMEOUT_EXIT_CODE,
