@@ -10,6 +10,7 @@ import {
 } from "@stll/scripts/src/process-memory";
 import { attachTestProcessShutdown } from "@stll/scripts/src/process-shutdown";
 import { forwardTestStderr } from "@stll/scripts/src/process-stderr";
+import { createWindowsProcessOwnership } from "@stll/scripts/src/windows-process-ownership";
 
 import { planTestRuns } from "./test-run-plan";
 import type { PathKind } from "./test-run-plan";
@@ -64,7 +65,18 @@ for (const run of runs) {
     stderr: "pipe",
     detached: process.platform !== "win32",
   });
+  // Register this known worker before observing output or starting its census.
+  const windowsProcesses =
+    process.platform === "win32"
+      ? createWindowsProcessOwnership({
+          rootPid: child.pid,
+          onWarning: (message) => {
+            process.stderr.write(`${message}\n`);
+          },
+        })
+      : undefined;
   const shutdown = attachTestProcessShutdown({
+    windowsProcesses,
     child,
     termination: process.platform === "win32" ? "process" : "group",
     onWarning: (message) => {

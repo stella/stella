@@ -2,7 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { readFileSync } from "node:fs";
 
 import {
-  parseWindowsCreationTime,
+  parseWindowsProcessRows,
+  windowsProcessTreeCommand,
   WINDOWS_POWERSHELL_COMMAND,
   type WindowsProcessIdentity,
   type createWindowsProcessOwnership,
@@ -49,47 +50,23 @@ type ProcessMemoryReader = ((
 
 /** Ignore foreign rows even if a sampler returns more than the owned tree. */
 export const parseWindowsProcessTree = (rootPid: number, output: string) => {
-  const rows = new Map<
-    number,
-    { parent: number; bytes: number; creationTime: bigint | undefined }
-  >();
-  let unavailable: ProcessMemoryReadError | undefined;
-  for (const line of output.trim().split(/\r?\n/u)) {
-    if (line === "unknown") {
-      unavailable = new ProcessMemoryReadError({
-        message: "Process ancestry sample unavailable",
-      });
-      continue;
-    }
-    const values = line.trim().split(/\s+/u);
-    const pid = Number(values.at(0));
-    const parent = Number(values.at(1));
-    const bytes = Number(values.at(2));
-    const created = values.at(3);
-    if (
-      values.length !== 4 ||
-      created === undefined ||
-      !Number.isSafeInteger(pid) ||
-      pid <= 0 ||
-      !Number.isSafeInteger(parent) ||
-      parent < 0
-    ) {
-      return Result.err(
-        new ProcessMemoryReadError({ message: "Invalid process tree sample" }),
-      );
-    }
-    const creation = parseWindowsCreationTime(created);
-    if (creation.isErr()) {
-      unavailable ??= new ProcessMemoryReadError({
-        message: creation.error.message,
-      });
-    }
-    rows.set(pid, {
-      parent,
-      bytes,
-      creationTime: creation.isOk() ? creation.value : undefined,
-    });
+  const parsed = parseWindowsProcessRows(output);
+  if (parsed.isErr()) {
+    return Result.err(
+      new ProcessMemoryReadError({
+        message: parsed.error.message,
+        cause: parsed.error,
+      }),
+    );
   }
+  const rows = new Map(parsed.value.rows.map((row) => [row.pid, row] as const));
+  const unavailable =
+    parsed.value.unavailable === undefined
+      ? undefined
+      : new ProcessMemoryReadError({
+          message: parsed.value.unavailable.message,
+          cause: parsed.value.unavailable,
+        });
   const sample: ProcessTreeSample = {
     identities: [],
     readings: new Map(),
@@ -132,62 +109,7 @@ const sampleWindowsProcessTree = async (rootPid: number, signal: AbortSignal) =>
       // Keep the root handle open through the census, so its identity survives
       // an exit during the query. CIM dates have microsecond precision; compare
       // that metadata to the handle before retaining its exact FILETIME.
-      const command = `
-$ErrorActionPreference='Stop'
-$root=Get-Process -Id ${rootPid} -ErrorAction SilentlyContinue
-$rootCreated='unknown'
-try {
-  if($null -ne $root) {
-    try { [void]$root.Handle; if(!$root.HasExited) { $rootCreated=$root.StartTime.ToFileTimeUtc().ToString() } }
-    catch { if(!$root.HasExited) { throw } }
-  }
-  $rows=@()
-  try { $rows=@(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate) }
-  catch { Write-Output 'unknown' }
-  $metadata=@{}
-  foreach($row in $rows) { $metadata[[int]$row.ProcessId]=$row }
-  $owned=[System.Collections.Generic.HashSet[int]]::new()
-  $queue=[System.Collections.Generic.Queue[int]]::new()
-  [void]$owned.Add(${rootPid})
-  $queue.Enqueue(${rootPid})
-  while($queue.Count -gt 0) {
-    $pidValue=$queue.Dequeue()
-    foreach($row in $rows) {
-      $parentCreated=$null
-      if($pidValue -eq ${rootPid} -and $rootCreated -ne 'unknown') { $parentCreated=[DateTime]::FromFileTimeUtc([long]$rootCreated) }
-      elseif($metadata.ContainsKey($pidValue)) { $parentCreated=$metadata[$pidValue].CreationDate.ToUniversalTime() }
-      if($row.ParentProcessId -eq $pidValue -and $null -ne $parentCreated -and $row.CreationDate.ToUniversalTime() -ge $parentCreated -and $owned.Add([int]$row.ProcessId)) {
-        $queue.Enqueue([int]$row.ProcessId)
-      }
-    }
-  }
-  $memory=@{}
-  $created=@{}
-  Get-Process -Id @($owned) -ErrorAction SilentlyContinue | ForEach-Object {
-    $p=$_
-    try {
-      [void]$p.Handle
-      $birth=$p.StartTime.ToFileTimeUtc()
-      $row=$metadata[[int]$p.Id]
-      if($null -ne $row -and [decimal]::Truncate(([decimal]$birth)/10) -eq [decimal]::Truncate(([decimal]($row.CreationDate.ToFileTimeUtc()))/10)) {
-        $memory[[int]$p.Id]=$p.WorkingSet64
-        $created[[int]$p.Id]=$birth.ToString()
-      }
-    } catch { $created[[int]$p.Id]='unknown' }
-    finally { $p.Dispose() }
-  }
-  $created[${rootPid}]=$rootCreated
-  foreach($pidValue in $owned) {
-    $parent=0
-    if($metadata.ContainsKey($pidValue)) { $parent=$metadata[$pidValue].ParentProcessId }
-    $bytes=-1
-    $creation='unknown'
-    if($memory.ContainsKey($pidValue)) { $bytes=$memory[$pidValue] }
-    if($created.ContainsKey($pidValue)) { $creation=$created[$pidValue] }
-    Write-Output "$pidValue $parent $bytes $creation"
-  }
-} finally { if($null -ne $root) { $root.Dispose() } }
-`;
+      const command = windowsProcessTreeCommand({ rootPid });
       const child = Bun.spawn([...WINDOWS_POWERSHELL_COMMAND], {
         stdin: new TextEncoder().encode(command),
         stdout: "pipe",
@@ -320,7 +242,10 @@ const processChildren = (pid: number) => {
 };
 
 type WatchTestProcessMemoryOptions = {
-  child: Pick<Bun.Subprocess, "pid" | "exitCode" | "signalCode" | "kill">;
+  child: Pick<
+    Bun.Subprocess,
+    "pid" | "exitCode" | "signalCode" | "kill" | "exited"
+  >;
   limitBytes: number;
   readBytes: ProcessMemoryReader;
   file: () => string;
@@ -333,9 +258,117 @@ type WatchTestProcessMemoryOptions = {
   windowsProcesses?:
     | Pick<
         ReturnType<typeof createWindowsProcessOwnership>,
-        "recordTree" | "signal"
+        "recordTree" | "signal" | "finish"
       >
     | undefined;
+};
+
+type KillMemoryProcessTreeOptions = Pick<
+  WatchTestProcessMemoryOptions,
+  "child" | "termination" | "onFailure" | "windowsProcesses"
+> & {
+  sampledPids: readonly number[];
+  signalPid: NonNullable<WatchTestProcessMemoryOptions["signalPid"]>;
+};
+
+const killMemoryProcessTree = ({
+  child,
+  termination,
+  sampledPids,
+  signalPid,
+  windowsProcesses,
+  onFailure,
+}: KillMemoryProcessTreeOptions) => {
+  if (windowsProcesses !== undefined) {
+    const killed = windowsProcesses.signal("SIGKILL");
+    if (killed.isErr()) {
+      onFailure(
+        `Could not kill Windows test process tree ${child.pid}: ${killed.error.message}`,
+      );
+    }
+    return;
+  }
+  if (termination === "group") {
+    const killed = Result.try({
+      try: () => signalPid(-child.pid, "SIGKILL"),
+      catch: (cause) =>
+        new ProcessMemoryReadError({ message: String(cause), cause }),
+    });
+    if (killed.isErr() && !processGone(killed.error)) {
+      onFailure(
+        `Could not kill test process group ${child.pid}: ${killed.error.message}`,
+      );
+    }
+  }
+  for (const pid of sampledPids.toReversed()) {
+    if (pid === child.pid) {
+      continue;
+    }
+    const killed = Result.try({
+      try: () => signalPid(pid, "SIGKILL"),
+      catch: (cause) =>
+        new ProcessMemoryReadError({ message: String(cause), cause }),
+    });
+    if (killed.isErr() && !processGone(killed.error)) {
+      onFailure(
+        `Could not kill test descendant PID ${pid}: ${killed.error.message}`,
+      );
+    }
+  }
+  child.kill("SIGKILL");
+};
+
+type ObserveWindowsProcessExitOptions = Pick<
+  WatchTestProcessMemoryOptions,
+  "child"
+> & {
+  windowsProcesses: NonNullable<
+    WatchTestProcessMemoryOptions["windowsProcesses"]
+  >;
+};
+
+const observeWindowsProcessExit = ({
+  child,
+  windowsProcesses,
+}: ObserveWindowsProcessExitOptions) => {
+  let status: "watching" | "stopped" = "watching";
+  let failure: ProcessMemoryReadError | undefined;
+  const finish = () => {
+    const finished = Result.try({
+      try: () => windowsProcesses.finish(),
+      catch: (cause) =>
+        new ProcessMemoryReadError({
+          message: `Cannot retain descendants at test process exit: ${String(cause)}`,
+          cause,
+        }),
+    });
+    if (finished.isErr()) {
+      failure = finished.error;
+    }
+  };
+  const exited = Result.tryPromise({
+    try: async () => {
+      await child.exited;
+      if (status === "watching") {
+        finish();
+      }
+    },
+    catch: (cause) =>
+      new ProcessMemoryReadError({ message: String(cause), cause }),
+  });
+  return {
+    stop: async () => {
+      finish();
+      status = "stopped";
+      if (child.exitCode !== null || child.signalCode !== null) {
+        const settled = await exited;
+        if (settled.isErr()) {
+          failure ??= settled.error;
+        }
+      }
+      return failure;
+    },
+  };
 };
 
 export const watchTestProcessMemory = ({
@@ -360,44 +393,14 @@ export const watchTestProcessMemory = ({
   let warned = false;
   const fail = (message: string) => {
     failure = message;
-    if (windowsProcesses !== undefined) {
-      const killed = windowsProcesses.signal("SIGKILL");
-      if (killed.isErr()) {
-        onFailure(
-          `Could not kill Windows test process tree ${child.pid}: ${killed.error.message}`,
-        );
-      }
-      onFailure(message);
-      return;
-    }
-    if (termination === "group") {
-      const killed = Result.try({
-        try: () => signalPid(-child.pid, "SIGKILL"),
-        catch: (cause) =>
-          new ProcessMemoryReadError({ message: String(cause), cause }),
-      });
-      if (killed.isErr() && !processGone(killed.error)) {
-        onFailure(
-          `Could not kill test process group ${child.pid}: ${killed.error.message}`,
-        );
-      }
-    }
-    for (const pid of sampledPids.toReversed()) {
-      if (pid === child.pid) {
-        continue;
-      }
-      const killed = Result.try({
-        try: () => signalPid(pid, "SIGKILL"),
-        catch: (cause) =>
-          new ProcessMemoryReadError({ message: String(cause), cause }),
-      });
-      if (killed.isErr() && !processGone(killed.error)) {
-        onFailure(
-          `Could not kill test descendant PID ${pid}: ${killed.error.message}`,
-        );
-      }
-    }
-    child.kill("SIGKILL");
+    killMemoryProcessTree({
+      child,
+      termination,
+      sampledPids,
+      signalPid,
+      windowsProcesses,
+      onFailure,
+    });
     onFailure(message);
   };
   const sample = (tree?: ProcessTreeSample) => {
@@ -482,6 +485,10 @@ export const watchTestProcessMemory = ({
       );
     }
   };
+  const exitObserver =
+    windowsProcesses === undefined
+      ? undefined
+      : observeWindowsProcessExit({ child, windowsProcesses });
   const cancellation = new AbortController();
   let pendingSample: Promise<void> | undefined;
   const tick = () => {
@@ -530,10 +537,17 @@ export const watchTestProcessMemory = ({
   tick();
   return {
     stop: async () => {
+      // The final synchronous census retains orphans before cancellation can
+      // discard the asynchronous query that was still running at root exit.
+      const exitStopped = exitObserver?.stop();
       stopped = true;
       clearInterval(timer);
       cancellation.abort();
       await pendingSample;
+      const exitFailure = await exitStopped;
+      if (exitFailure !== undefined) {
+        onWarning(exitFailure.message);
+      }
     },
     failure: () => failure,
     peakBytes: () => peakBytes,

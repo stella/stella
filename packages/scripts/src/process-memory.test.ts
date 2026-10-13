@@ -9,6 +9,7 @@ import {
   watchTestProcessMemory,
 } from "./process-memory";
 import { attachTestProcessShutdown } from "./process-shutdown";
+import { createWindowsProcessOwnership } from "./windows-process-ownership";
 
 test("Windows snapshots retain only owned PID readings and preserve unknown lower bounds", () => {
   const parsed = parseWindowsProcessTree(
@@ -36,9 +37,11 @@ test("Windows snapshots retain only owned PID readings and preserve unknown lowe
 
 test("a completed Windows census retains identities even after its root exit notification", async () => {
   const identities: number[] = [];
+  const exit = Promise.withResolvers<number>();
   let rootExitCode: number | null = null;
   const child = {
     pid: 42,
+    exited: exit.promise,
     get exitCode() {
       return rootExitCode;
     },
@@ -56,6 +59,7 @@ test("a completed Windows census retains identities even after its root exit not
       throw new TypeError(message);
     },
     windowsProcesses: {
+      finish: () => {},
       recordTree: (sample) => {
         identities.push(...sample.map(({ pid }) => pid));
       },
@@ -64,6 +68,7 @@ test("a completed Windows census retains identities even after its root exit not
     readBytes: Object.assign(() => Result.ok(0), {
       sampleTree: async () => {
         rootExitCode = 0;
+        exit.resolve(0);
         return parseWindowsProcessTree(
           42,
           "42 1 700 133700000000000001\n43 42 500 133700000000000002",
@@ -73,6 +78,106 @@ test("a completed Windows census retains identities even after its root exit not
   });
   await watchdog.stop();
   expect(identities).toEqual([42, 43]);
+});
+
+test("leader exit retains an unseen worker before cancelling the real watchdog's pending census", async () => {
+  const exit = Promise.withResolvers<number>();
+  const running = new Map([
+    [42, 1n],
+    [43, 2n],
+  ]);
+  let signal: AbortSignal | undefined;
+  let censuses = 0;
+  let abortedAtCensus: boolean | undefined;
+  const owner = createWindowsProcessOwnership({
+    rootPid: 42,
+    onWarning: (message) => {
+      throw new TypeError(message);
+    },
+    readIdentity: (pid) => Result.ok({ pid, creationTime: 1n }),
+    readTree: () => {
+      censuses += 1;
+      abortedAtCensus = signal?.aborted;
+      return Result.ok({
+        identities: [
+          { pid: 42, creationTime: 1n },
+          { pid: 43, creationTime: 2n },
+        ],
+        unavailable: undefined,
+      });
+    },
+    signalProcesses: ({ identities }) => {
+      for (const { pid, creationTime } of identities) {
+        if (running.get(pid) === creationTime) {
+          running.delete(pid);
+        }
+      }
+      return Result.ok(undefined);
+    },
+  });
+  let rootExitCode: number | null = null;
+  const child = {
+    pid: 42,
+    exited: exit.promise,
+    get exitCode() {
+      return rootExitCode;
+    },
+    signalCode: null,
+    kill: () => {
+      throw new TypeError("Must terminate retained identities");
+    },
+  };
+  const watchdog = watchTestProcessMemory({
+    child,
+    windowsProcesses: owner,
+    limitBytes: 1000,
+    file: () => "short-lived.test.ts",
+    onFailure: (message) => {
+      throw new TypeError(message);
+    },
+    onWarning: (message) => {
+      throw new TypeError(message);
+    },
+    readBytes: Object.assign(() => Result.ok(0), {
+      sampleTree: async (_pid: number, cancellation: AbortSignal) => {
+        signal = cancellation;
+        return new Promise<ReturnType<typeof parseWindowsProcessTree>>(
+          (resolve) => {
+            cancellation.addEventListener(
+              "abort",
+              () => resolve(parseWindowsProcessTree(42, "42 1 -1 1")),
+              { once: true },
+            );
+          },
+        );
+      },
+    }),
+  });
+  const shutdown = attachTestProcessShutdown({
+    child,
+    termination: "process",
+    windowsProcesses: owner,
+    onWarning: (message) => {
+      throw new TypeError(message);
+    },
+  });
+  try {
+    running.delete(42);
+    rootExitCode = 0;
+    exit.resolve(0);
+    await exit.promise;
+    expect(running.has(43)).toBe(true);
+    expect(censuses).toBe(1);
+    expect(abortedAtCensus).toBe(false);
+    await watchdog.stop();
+    expect(signal?.aborted).toBe(true);
+    shutdown.dispose();
+    expect(running.has(43)).toBe(false);
+    expect(censuses).toBe(1);
+  } finally {
+    await watchdog.stop();
+    shutdown.dispose();
+  }
 });
 
 test("asynchronous tree queries do not overlap, enforce readable sums, and abort on stop", async () => {
@@ -95,7 +200,13 @@ test("asynchronous tree queries do not overlap, enforce readable sums, and abort
     },
   });
   const watchdog = watchTestProcessMemory({
-    child: { pid: 42, exitCode: null, signalCode: null, kill: () => {} },
+    child: {
+      pid: 42,
+      exited: new Promise<number>(() => {}),
+      exitCode: null,
+      signalCode: null,
+      kill: () => {},
+    },
     readBytes,
     limitBytes: 1000,
     intervalMs: 5,
@@ -156,7 +267,13 @@ test("stopping a pending tree query aborts and joins it without measuring unknow
     },
   });
   const watchdog = watchTestProcessMemory({
-    child: { pid: 42, exitCode: null, signalCode: null, kill: () => {} },
+    child: {
+      pid: 42,
+      exited: new Promise<number>(() => {}),
+      exitCode: null,
+      signalCode: null,
+      kill: () => {},
+    },
     readBytes,
     limitBytes: 1000,
     file: () => "pending.test.ts",
@@ -265,6 +382,7 @@ for (const boundary of ["census", "reading"] as const) {
     const watchdog = watchTestProcessMemory({
       child: {
         pid: 42,
+        exited: new Promise<number>(() => {}),
         exitCode: null,
         signalCode: null,
         kill: (signal) => {
@@ -322,6 +440,7 @@ test("the cap sums measured workers instead of allowing each worker a full budge
   const watchdog = watchTestProcessMemory({
     child: {
       pid: process.pid,
+      exited: new Promise<number>(() => {}),
       exitCode: null,
       signalCode: null,
       kill: (signal) => {
@@ -359,6 +478,7 @@ for (const boundary of ["census", "reading"] as const) {
       const watchdog = watchTestProcessMemory({
         child: {
           pid: 42,
+          exited: new Promise<number>(() => {}),
           exitCode: null,
           signalCode: null,
           kill: (signal) => {
@@ -429,6 +549,7 @@ test("an unavailable root census still enforces the measured root memory", async
   const watchdog = watchTestProcessMemory({
     child: {
       pid: 42,
+      exited: new Promise<number>(() => {}),
       exitCode: null,
       signalCode: null,
       kill: (signal) => {

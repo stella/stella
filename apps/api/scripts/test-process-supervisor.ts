@@ -293,6 +293,14 @@ export class TestProcessSupervisor {
       stdout: "pipe",
       stderr: "pipe",
     });
+    // Register each known runner child immediately at its spawn boundary.
+    const windowsProcesses =
+      process.platform === "win32"
+        ? createWindowsProcessOwnership({
+            rootPid: child.pid,
+            onWarning: (message) => this.diagnose(message),
+          })
+        : undefined;
     const stdout = child.stdout.getReader();
     const stderr = child.stderr.getReader();
     const cancelStreams = () => {
@@ -315,13 +323,7 @@ export class TestProcessSupervisor {
       child,
       tail: Buffer.alloc(0),
       cancelStreams,
-      windowsProcesses:
-        process.platform === "win32"
-          ? createWindowsProcessOwnership({
-              rootPid: child.pid,
-              onWarning: (message) => this.diagnose(message),
-            })
-          : undefined,
+      windowsProcesses,
     };
     this.active.set(id, entry);
 

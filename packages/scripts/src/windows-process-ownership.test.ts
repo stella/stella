@@ -38,6 +38,7 @@ for (const workerState of ["original", "reused"] as const) {
           creationTime === undefined ? undefined : { pid, creationTime },
         );
       },
+      readTree: () => Result.ok({ identities: [], unavailable: undefined }),
       signalProcesses: ({ identities }) => {
         signalled.push(...identities);
         for (const { pid, creationTime } of identities) {
@@ -92,6 +93,7 @@ test("a known spawned worker retains ownership without waiting for a memory samp
       throw new TypeError(message);
     },
     readIdentity: (pid) => Result.ok({ pid, creationTime: BigInt(pid) }),
+    readTree: () => Result.ok({ identities: [], unavailable: undefined }),
     signalProcesses: ({ identities }) => {
       signalled.push(...identities.map(({ pid }) => pid));
       return Result.ok(undefined);

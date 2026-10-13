@@ -1,6 +1,12 @@
 import { panic } from "better-result";
 
+import {
+  createProcessMemoryReader,
+  watchTestProcessMemory,
+} from "../process-memory";
 import { attachTestProcessShutdown } from "../process-shutdown";
+
+const readBytes = await createProcessMemoryReader();
 
 const child = Bun.spawn(
   [
@@ -28,11 +34,24 @@ const workerPid = Number(new TextDecoder().decode(ready.value).trim());
 if (!Number.isSafeInteger(workerPid) || workerPid <= 1) {
   panic("Missing worker PID");
 }
-// The spawning fixture communicates the known worker before exiting its leader.
-shutdown.windowsProcesses?.capturePid(workerPid);
+const watchdog = watchTestProcessMemory({
+  child,
+  readBytes,
+  windowsProcesses: shutdown.windowsProcesses,
+  limitBytes: 1024 ** 3,
+  intervalMs: 60_000,
+  file: () => "orphan fixture",
+  onFailure: (message) => {
+    panic(message);
+  },
+  onWarning: (message) => {
+    process.stderr.write(`${message}\n`);
+  },
+});
 await child.stdin.end();
 await child.exited;
 console.log(`${child.pid} ${workerPid}`);
 await Bun.stdin.text();
+await watchdog.stop();
 shutdown.dispose();
 process.exit(0);

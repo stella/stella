@@ -18,7 +18,9 @@ type AttachTestProcessShutdownOptions = {
   child: Pick<Bun.Subprocess, "pid" | "kill">;
   termination: "process" | "group";
   onWarning: (message: string) => void;
-  windowsProcesses?: ReturnType<typeof createWindowsProcessOwnership>;
+  windowsProcesses?:
+    | ReturnType<typeof createWindowsProcessOwnership>
+    | undefined;
 };
 
 /** Own this child's process tree until its pipes and exit have settled. */
