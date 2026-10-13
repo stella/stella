@@ -124,6 +124,7 @@ export const envBaseServerSchema = {
   STELLA_WORKER_DIR: v.optional(v.string()),
   STELLA_OCR_PDF_FONT_PATH: v.optional(v.string()),
   STELLA_YARA_RULES_DIR: v.optional(v.string()),
+  STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV: v.optional(v.string()),
   SKIP_MIGRATION_CHECK: v.optional(v.pipe(v.string(), v.parseBoolean())),
   INGESTION_USER_AGENT: v.optional(v.string()),
   SANCTIONS_EU_XML_URL: v.optional(v.pipe(v.string(), v.url())),
