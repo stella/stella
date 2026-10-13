@@ -5,8 +5,8 @@ import * as v from "valibot";
 
 import { toSafeId } from "@stll/api-contract/safe-id";
 
+import type { WebRoutes } from "../../src/generated/api-routes.gen";
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
-import type { WebApiRoutes } from "../../src/lib/eden-client";
 import { dockedChatMessagePage } from "../helpers/docked-chat-history";
 import {
   DOCKED_CHAT_LEGAL_ROUTES,
@@ -63,7 +63,7 @@ test("a fresh decision reader succeeds on its first chat question", async ({
     edited: false,
     createdAt: new Date().toISOString(),
     parts: [{ type: "text", content: ANSWER }],
-  } satisfies WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]["messages"][number];
+  } satisfies WebRoutes["v1"]["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]["messages"][number];
   await page.route("**/v1/chat/threads/*/messages*", async (route) => {
     await route.fulfill({
       json: {
