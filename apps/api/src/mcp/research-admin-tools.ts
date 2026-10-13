@@ -15,6 +15,7 @@ import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/chat/organization-ai-instructions";
 import {
   MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
   MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION,
@@ -24,7 +25,6 @@ import {
 } from "@/api/lib/chat/projections";
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/organization-ai-instructions";
 import { TIME_ZONE_ID_MAX_LENGTH } from "@/api/lib/organization-time-zone";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";

@@ -19,6 +19,7 @@ import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   managedProviderUnavailable,
@@ -41,7 +42,6 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
-import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/organization-ai-instructions";
 import {
   admitModelDispatch,
   NO_ORGANIZATION_MODEL_DISPATCH,

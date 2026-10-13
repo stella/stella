@@ -118,6 +118,7 @@ import type {
   ChatSafePromptLayers,
 } from "@/api/lib/chat/chat-prompt-layers";
 import { estimateTextTokens } from "@/api/lib/chat/compaction-tokens";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
@@ -151,7 +152,6 @@ import {
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import type { LegislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
-import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/organization-ai-instructions";
 import {
   sanitizeForPrompt,
   sanitizePromptLine,

@@ -29,8 +29,8 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/organization-ai-instructions";
 import { authorizeOperation } from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import {

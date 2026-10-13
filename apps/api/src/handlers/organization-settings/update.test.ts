@@ -9,7 +9,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/organization-ai-instructions";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/chat/organization-ai-instructions";
 import {
   hasMemberPermission,
   sessionMemberRole,

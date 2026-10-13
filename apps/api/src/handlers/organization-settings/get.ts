@@ -18,6 +18,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/chat/organization-ai-instructions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
   isFeatureAccessSnapshotForPrincipal,
@@ -29,7 +30,6 @@ import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
 } from "@/api/lib/matter-reference";
-import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/lib/organization-ai-instructions";
 import {
   effectiveOrganizationTimeZone,
   ORGANIZATION_TIME_ZONE_SOURCE,
