@@ -172,6 +172,12 @@ if (import.meta.main) {
     }
     return result.stdout.toString().trim();
   };
+  const githubCommand = (args: string[]) =>
+    command([
+      "bash",
+      process.env["GH_RETRY_SCRIPT"] ?? path.join(root, "scripts/gh-retry.sh"),
+      ...args,
+    ]);
   // This optional CI boundary fails closed: unavailable tools, inventory, API,
   // download or manifest always leave the expensive build enabled.
   try {
@@ -208,8 +214,7 @@ if (import.meta.main) {
         const file = v.parse(
           v.object({ content: v.string(), encoding: v.literal("base64") }),
           JSON.parse(
-            command([
-              "gh",
+            githubCommand([
               "api",
               `repos/${process.env["GITHUB_REPOSITORY"]}/contents/.github/workflows/ci.yml?ref=${workflowSha}`,
             ]),
@@ -225,7 +230,7 @@ if (import.meta.main) {
       event: process.env["GITHUB_EVENT_NAME"] ?? "",
       repository: process.env["GITHUB_REPOSITORY"] ?? "",
       destination,
-      run: (args) => command(["gh", ...args]),
+      run: githubCommand,
       readManifest: () => JSON.parse(readFileSync(manifestPath, "utf-8")),
     });
     if (reused) {

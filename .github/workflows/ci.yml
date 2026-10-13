@@ -3402,7 +3402,11 @@ jobs:
 
       - name: Generated source artifact contract
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/ci-generated-sources.test.ts scripts/ci-windows-dry-run-result.test.ts packages/scripts/src/prepared-generated-sources.test.ts
+        run: bun test scripts/ci-generated-sources.test.ts packages/scripts/src/prepared-generated-sources.test.ts
+
+      - name: Windows dry-run receipt contract
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-windows-dry-run-result.test.ts
 
       - name: Test input coverage
         env:

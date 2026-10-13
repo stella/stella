@@ -1353,6 +1353,9 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Windows dry-run receipts bind the build profile and executed workflow revision.
+  "WINDOWS_BUILD_PROFILE",
+  "WINDOWS_WORKFLOW_SHA",
   // Ordered frozen install flags shared by the scoped CI cache and installer.
   "STELLA_CI_INSTALL_FLAGS",
   // Optional smaller process cap leaves room inside the composite caller deadline.

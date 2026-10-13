@@ -188,14 +188,15 @@ test.skipIf(process.platform === "win32")(
       writeFileSync(
         gh,
         `#!${process.execPath}
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 const args = process.argv.slice(2);
-if (process.env.PROOF_MODE === "api-failure") process.exit(1);
+const mode = readFileSync(${JSON.stringify(path.join(root, "proof-mode"))}, "utf-8");
+if (mode === "api-failure") process.exit(1);
 if (args[1]?.includes("/contents/")) { console.log(JSON.stringify({ content: Buffer.from("executed recipe").toString("base64"), encoding: "base64" })); process.exit(0); }
 if (args[0] === "run") {
   const dir = args[args.indexOf("--dir") + 1];
   const name = args[args.indexOf("--name") + 1];
-  if (process.env.PROOF_MODE !== "missing") writeFileSync(dir + "/manifest.json", process.env.PROOF_MODE === "corrupt" ? "{" : JSON.stringify({ inputHash: name.slice("desktop-windows-dry-run-".length), runId: "123", event: "merge_group", conclusion: "success" }));
+  if (mode !== "missing") writeFileSync(dir + "/manifest.json", mode === "corrupt" ? "{" : JSON.stringify({ inputHash: name.slice("desktop-windows-dry-run-".length), runId: "123", event: "merge_group", conclusion: "success" }));
 } else if (args[1].includes("/artifacts?")) {
   const name = args[1].split("?name=")[1].split("&")[0];
   console.log(JSON.stringify({ artifacts: [{ name, expired: false, workflow_run: { id: 123 } }] }));
@@ -214,6 +215,7 @@ if (args[0] === "run") {
         "valid",
         "valid-main",
       ]) {
+        writeFileSync(path.join(root, "proof-mode"), mode);
         const temporary = path.join(root, mode);
         mkdirSync(temporary);
         if (mode !== "key-missing") {
@@ -242,9 +244,9 @@ if (args[0] === "run") {
               GITHUB_REPOSITORY: "stella/stella",
               GITHUB_RUN_ID: "456",
               GITHUB_OUTPUT: output,
+              GH_RETRY_SCRIPT: path.resolve(import.meta.dir, "gh-retry.sh"),
               GITHUB_STEP_SUMMARY: summary,
               WINDOWS_BUILD_PROFILE: "dry-run;nsis",
-              PROOF_MODE: mode,
             },
           },
         );
