@@ -21,7 +21,7 @@ export const Route = createFileRoute(
     const [role, preview] = await Promise.all([
       ensureRouteQueryData(context.queryClient, roleOptions),
       Result.tryPromise({
-        try: () => previewPromise,
+        try: async () => previewPromise,
         catch: (cause) => cause,
       }),
     ]);
