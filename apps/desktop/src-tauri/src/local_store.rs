@@ -35,14 +35,15 @@ struct EncryptedEnvelope {
 pub enum EncryptedReadError {
   Unavailable(String),
   Unreadable(String),
+  Incompatible(String),
 }
 
 impl std::fmt::Display for EncryptedReadError {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::Unavailable(message) | Self::Unreadable(message) => {
-        formatter.write_str(message)
-      }
+      Self::Unavailable(message)
+      | Self::Unreadable(message)
+      | Self::Incompatible(message) => formatter.write_str(message),
     }
   }
 }
@@ -105,7 +106,7 @@ impl EncryptedJsonFile {
         EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
       })?;
     if envelope.version != ENVELOPE_VERSION {
-      return Err(EncryptedReadError::Unreadable(format!(
+      return Err(EncryptedReadError::Incompatible(format!(
         "{label} store version is unsupported"
       )));
     }
@@ -139,7 +140,7 @@ impl EncryptedJsonFile {
     serde_json::from_slice(&plaintext)
       .map(Some)
       .map_err(|error| {
-        EncryptedReadError::Unreadable(format!("{label} store is invalid: {error}"))
+        EncryptedReadError::Incompatible(format!("{label} store is invalid: {error}"))
       })
   }
 
@@ -345,6 +346,32 @@ mod tests {
 
   fn remove_store(path: &Path) {
     fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn newer_envelopes_and_decryptable_unknown_variants_are_incompatible() {
+    #[derive(Debug, Deserialize)]
+    enum SavedState {
+      Ready,
+    }
+    let _ = SavedState::Ready;
+    let path = unique_path();
+    let file = EncryptedJsonFile::new([9; 32], path.clone(), "fixture");
+    file.persist(&"FutureState").unwrap();
+    let original = fs::read(&path).unwrap();
+    assert!(matches!(
+      file.load_checked::<SavedState>(),
+      Err(EncryptedReadError::Incompatible(_))
+    ));
+    assert_eq!(fs::read(&path).unwrap(), original);
+    let mut envelope: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    envelope["version"] = serde_json::json!(ENVELOPE_VERSION + 1);
+    fs::write(&path, serde_json::to_vec(&envelope).unwrap()).unwrap();
+    assert!(matches!(
+      file.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Incompatible(_))
+    ));
+    remove_store(&path);
   }
 
   #[test]

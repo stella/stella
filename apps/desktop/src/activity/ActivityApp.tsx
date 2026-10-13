@@ -418,6 +418,7 @@ const DELETION_ONLY_NOTICE = {
   unavailable: "errorRead",
   keyMissing: "deletionOnly",
   unreadable: "unreadableEraseNotice",
+  incompatible: "incompatibleActivity",
 } as const satisfies Record<
   ActivityDaySnapshot["deletionStatus"],
   keyof DesktopMessages["activity"]
@@ -429,6 +430,7 @@ const BLOCKED_DELETION_NOTICE = {
   unavailable: "errorRead",
   keyMissing: "pendingActivityProtected",
   unreadable: "unreadableEraseNotice",
+  incompatible: "incompatibleActivity",
 } as const satisfies Record<
   ActivityDaySnapshot["deletionStatus"],
   keyof DesktopMessages["activity"]
@@ -916,7 +918,7 @@ const ActivitySettings = ({
           </ul>
         )}
       </div>
-      {deletionDisabled ? (
+      {deletionDisabled && snapshot.deletionStatus !== "incompatible" ? (
         <p className="text-muted-foreground text-xs">
           {t(BLOCKED_DELETION_NOTICE[snapshot.deletionStatus])}
         </p>
@@ -946,6 +948,7 @@ const ActivitySettings = ({
 };
 
 type ActivityDialogViewProps = {
+  deletionStatus: ActivityDaySnapshot["deletionStatus"];
   dialog: ActivityDialog;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
   onClose: () => void;
@@ -953,6 +956,7 @@ type ActivityDialogViewProps = {
 };
 
 const ActivityDialogView = ({
+  deletionStatus,
   dialog,
   sourceAppVisuals,
   onClose,
@@ -960,6 +964,9 @@ const ActivityDialogView = ({
 }: ActivityDialogViewProps) => {
   const t = useTranslations("activity");
   const format = useFormatter();
+  if (deletionStatus === "incompatible") {
+    return null;
+  }
   switch (dialog.type) {
     case "closed":
       return null;
@@ -1266,8 +1273,8 @@ const ActivityApp = () => {
         (command === "activity_exclude_app" && args["history"] === "delete"))
     ) {
       setError(
-        view.type === "ready" && view.snapshot.deletionStatus === "unavailable"
-          ? t("errorRead")
+        view.type === "ready"
+          ? t(BLOCKED_DELETION_NOTICE[view.snapshot.deletionStatus])
           : t("pendingActivityProtected"),
       );
       return;
@@ -1283,6 +1290,16 @@ const ActivityApp = () => {
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
         );
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          error.type === "incompatible"
+        ) {
+          setDialog({ type: "closed" });
+          setError(t("incompatibleActivity"));
+          return;
+        }
         if (
           typeof error === "object" &&
           error !== null &&
@@ -1374,6 +1391,7 @@ const ActivityApp = () => {
   );
   const dialogView = (
     <ActivityDialogView
+      deletionStatus={snapshot.deletionStatus}
       dialog={dialog}
       sourceAppVisuals={snapshot.sourceAppVisuals}
       onClose={() => setDialog({ type: "closed" })}
@@ -1426,6 +1444,9 @@ const ActivityApp = () => {
   return (
     <ActivityShell>
       {errorMessage ? <ErrorLine message={errorMessage} /> : null}
+      {snapshot.deletionStatus === "incompatible" ? (
+        <ErrorLine message={t("incompatibleActivity")} />
+      ) : null}
       <DayContent
         reviewVisible={reviewVisible}
         onReviewStatusChange={onReviewStatusChange}

@@ -70,7 +70,12 @@ type InstallNativeBoundaryOptions = {
   language?: "en" | "ar";
   batchValidation?: "accept" | "reject-first" | "hold-first";
   batchReceipt?: "save" | "fail-first" | "keep-pending";
-  historyDeletion?: "available" | "keyMissing" | "unreadable" | "mixed";
+  historyDeletion?:
+    | "available"
+    | "keyMissing"
+    | "unreadable"
+    | "mixed"
+    | "incompatible";
 };
 
 const installNativeBoundary = async ({
@@ -385,6 +390,7 @@ const installNativeBoundary = async ({
           available: messages.activity.errorRead,
           pending: messages.activity.errorRead,
           unavailable: messages.activity.errorRead,
+          incompatible: messages.activity.incompatibleActivity,
         }[snapshot.deletionStatus],
       ),
     ).toBeVisible();
@@ -1640,6 +1646,125 @@ test("mixed inactive recovery failures use one confirmation and one discard mode
       args: { recovery: "discardUnrecoverable" },
     },
   ]);
+});
+
+test("incompatible saved activity asks for an app update and exposes no erase action", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      persistence: "deletionOnly",
+      recordingStatus: "off",
+      deletionStatus: "incompatible",
+    },
+  });
+  await expect(
+    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteAll,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.unreadableEraseAction,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("healthy current activity shows incompatible history guidance and protects deletion", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      deletionStatus: "incompatible",
+      otherAccountHistoryDays: 3,
+    },
+  });
+  await expect(
+    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
+  ).toBeVisible();
+  for (const name of [
+    enMessages.activity.deleteDay,
+    enMessages.activity.deleteAll,
+    enMessages.activity.deleteOtherAccountHistory,
+  ]) {
+    await expect(
+      page.getByRole("button", { name, exact: true }),
+    ).toBeDisabled();
+  }
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.unreadableEraseAction,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+});
+
+test("an open erase dialog disappears safely when saved history becomes incompatible", async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await installNativeBoundary({ page });
+  await page
+    .getByRole("button", { name: enMessages.activity.deleteDay, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.evaluate(
+    (next) => {
+      const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+      if (typeof update !== "function") {
+        throw new TypeError("Snapshot control is missing");
+      }
+      update(next);
+    },
+    { ...SNAPSHOT, deletionStatus: "incompatible" },
+  );
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
+  ).toBeVisible();
+  expect(pageErrors).toEqual([]);
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_delete_day" }),
+  );
+});
+
+test("inactive incompatible history closes consent and requests an app update", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    historyDeletion: "incompatible",
+    snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.incompatibleActivity,
+  );
+  expect(await invocations(page)).not.toContainEqual({
+    command: "activity_delete_other_account_history",
+    args: { recovery: "discardUnrecoverable" },
+  });
 });
 
 test("missing-key erase requires explicit confirmation that draft recovery will be lost", async ({

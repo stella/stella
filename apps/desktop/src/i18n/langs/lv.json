@@ -450,6 +450,7 @@
     "batchFailed": "Neizdevās izveidot melnrakstus. Mēģiniet vēlreiz.",
     "batchLimitExceeded": "Lai izveidotu melnrakstus, atlasiet ne vairāk kā {limit} lietas. Lai turpinātu, noņemiet vienas lietas atlasi.",
     "pendingRetry": "Mēģināt izveidot melnrakstus vēlreiz",
+    "incompatibleActivity": "Šī lietotnes versija nevar nolasīt saglabāto darbību. Lai turpinātu, atjauniniet lietotni.",
     "unrecoverableOtherHistoryConfirmation": "Citu kontu saglabātā vēsture tiks dzēsta, tostarp gaidošo melnrakstu atkopšanas dati ar trūkstošām atslēgām vai nenolasāmiem failiem. Izveidotie melnraksti jau var pastāvēt. Šo darbību nevar atsaukt.",
     "unreadableEraseAction": "Dzēst nenolasāmo darbību",
     "unreadableEraseConfirmation": "Nenolasāmā saglabātā darbība un tās gaidošo melnrakstu atkopšanas dati tiks dzēsti. Izveidotie melnraksti jau var pastāvēt. Šo darbību nevar atsaukt.",

@@ -17,13 +17,15 @@ local-only feature follows every rule below and adds one entry to
 - **Deletion-only on a missing key.** `local_store::resolve_key` never mints a
   key while encrypted data exists without one; the store opens in a
   deletion-only state. Activity distinguishes a definitely missing key from
-  a transient keychain failure. Only a confirmed missing-key erase can discard
-  unreadable pending-draft recovery; other local stores retain their deletion controls.
+  a transient keychain failure. Missing-key and corrupt-file erasure require
+  separate confirmation of lost pending recovery. Incompatible activity files
+  require an app update and are always preserved.
 - **Debug builds stay in memory** unless the feature's
   `STELLA_ENABLE_DEBUG_*_PERSISTENCE` variable is set.
 - **Retention sweep.** Expired data for the loaded account is deleted on load
   and by an hourly sweep, whether or not the feature is currently enabled.
-  Activity preserves days with pending draft batches and unreadable days.
+  Activity preserves days with pending draft batches, unreadable days, and
+  incompatible files.
   It never automatically deletes another account's history.
 - **Payload-free events.** Changes are announced with `emit(..., ())`; the
   window pulls data through commands that take the feature's `LocalCaller`
@@ -85,7 +87,11 @@ missing-key account roots, and preserves the current account. Current-account
 unreadable recovery removes only files that remain unreadable after a live recheck,
 preserving readable history and pending batches. A transient read error never
 authorizes erasure. When time billing is unavailable, a stored batch can be
-discarded locally after confirming the same possible loss of draft recovery. Namespace identity changed before
+discarded locally after confirming the same possible loss of draft recovery.
+Unsupported envelope versions and successfully decrypted payloads that this build
+cannot parse are incompatible: erasure and retention preserve them,
+and the UI asks the user to update the app.
+Namespace identity changed before
 release, so there is no migration or read of old unnamespaced stores.
 
 An app exclusion asks whether to keep or delete its past segments. Both choices

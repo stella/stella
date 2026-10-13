@@ -135,6 +135,7 @@ enum ActivityPersistence {
   DeletionOnly(PathBuf),
   KeyMissing(PathBuf),
   Unreadable(PathBuf),
+  Incompatible(PathBuf),
 }
 
 /// What one sample saw.
@@ -264,6 +265,7 @@ pub enum ActivityDeletionError {
   PendingBatch,
   KeyMissing,
   Unreadable,
+  Incompatible,
   Unavailable(String),
 }
 
@@ -280,6 +282,7 @@ impl From<crate::local_store::EncryptedReadError> for ActivityDeletionError {
         Self::Unavailable(message)
       }
       crate::local_store::EncryptedReadError::Unreadable(_) => Self::Unreadable,
+      crate::local_store::EncryptedReadError::Incompatible(_) => Self::Incompatible,
     }
   }
 }
@@ -299,7 +302,14 @@ macro_rules! activity_deletion_statuses {
   };
 }
 
-activity_deletion_statuses!(Available, Pending, KeyMissing, Unreadable, Unavailable);
+activity_deletion_statuses!(
+  Available,
+  Pending,
+  KeyMissing,
+  Unreadable,
+  Incompatible,
+  Unavailable
+);
 
 impl std::fmt::Display for ActivityDeletionError {
   fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -307,6 +317,9 @@ impl std::fmt::Display for ActivityDeletionError {
       Self::PendingBatch => formatter.write_str("activity batch is pending"),
       Self::KeyMissing => formatter.write_str("activity history key is missing"),
       Self::Unreadable => formatter.write_str("activity recovery files are unreadable"),
+      Self::Incompatible => {
+        formatter.write_str("activity history requires an updated app")
+      }
       Self::Unavailable(message) => formatter.write_str(message),
     }
   }
@@ -682,7 +695,8 @@ impl ActivityManager {
       ActivityPersistence::MemoryOnly => ActivityPersistenceStatus::MemoryOnly,
       ActivityPersistence::DeletionOnly(_)
       | ActivityPersistence::KeyMissing(_)
-      | ActivityPersistence::Unreadable(_) => ActivityPersistenceStatus::DeletionOnly,
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => ActivityPersistenceStatus::DeletionOnly,
     }
   }
 
@@ -712,6 +726,9 @@ impl ActivityManager {
               crate::local_store::EncryptedReadError::Unreadable(_) => {
                 ActivityPersistence::Unreadable(store.root().to_path_buf())
               }
+              crate::local_store::EncryptedReadError::Incompatible(_) => {
+                ActivityPersistence::Incompatible(store.root().to_path_buf())
+              }
             },
             ActivitySettings::default(),
             None,
@@ -729,7 +746,8 @@ impl ActivityManager {
       ActivityPersistence::Initializing
       | ActivityPersistence::DeletionOnly(_)
       | ActivityPersistence::KeyMissing(_)
-      | ActivityPersistence::Unreadable(_) => {
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => {
         Err("activity recovery state is unavailable".into())
       }
     };
@@ -792,7 +810,8 @@ impl ActivityManager {
       }
       ActivityPersistence::DeletionOnly(_)
       | ActivityPersistence::KeyMissing(_)
-      | ActivityPersistence::Unreadable(_) => {
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => {
         Err("activity timeline recovery state is unavailable".to_string())
       }
     }
@@ -1334,7 +1353,8 @@ impl ActivityManager {
       ActivityPersistence::Initializing
       | ActivityPersistence::DeletionOnly(_)
       | ActivityPersistence::KeyMissing(_)
-      | ActivityPersistence::Unreadable(_) => return Ok(false),
+      | ActivityPersistence::Unreadable(_)
+      | ActivityPersistence::Incompatible(_) => return Ok(false),
       ActivityPersistence::Encrypted(_) | ActivityPersistence::MemoryOnly => {}
     }
     let earliest = self.earliest_date(local_date(now));
@@ -1365,14 +1385,30 @@ impl ActivityManager {
   }
 
   pub fn delete_day(&mut self, date: NaiveDate) -> Result<(), ActivityDeletionError> {
+    if matches!(self.persistence, ActivityPersistence::Incompatible(_)) {
+      return Err(ActivityDeletionError::Incompatible);
+    }
     self
       .require_writable()
       .map_err(ActivityDeletionError::Unavailable)?;
-    if self
-      .pending_for_day(date)
-      .map_err(ActivityDeletionError::Unavailable)?
-      .is_some()
-    {
+    let pending = match &self.persistence {
+      ActivityPersistence::Encrypted(store) => store
+        .load_pending_checked(date)
+        .map_err(ActivityDeletionError::from)?,
+      ActivityPersistence::MemoryOnly => self.pending_batches.get(&date).cloned(),
+      ActivityPersistence::Initializing
+      | ActivityPersistence::DeletionOnly(_)
+      | ActivityPersistence::KeyMissing(_)
+      | ActivityPersistence::Unreadable(_) => {
+        return Err(ActivityDeletionError::Unavailable(
+          "activity recovery state is unavailable".into(),
+        ));
+      }
+      ActivityPersistence::Incompatible(_) => {
+        return Err(ActivityDeletionError::Incompatible);
+      }
+    };
+    if pending.is_some() {
       return Err(ActivityDeletionError::PendingBatch);
     }
     if let ActivityPersistence::Encrypted(store) = &self.persistence {
@@ -1408,6 +1444,9 @@ impl ActivityManager {
     let root = match &self.persistence {
       ActivityPersistence::Encrypted(store) => store.root().to_path_buf(),
       ActivityPersistence::Unreadable(root) => root.clone(),
+      ActivityPersistence::Incompatible(_) => {
+        return Err(ActivityDeletionError::Incompatible);
+      }
       ActivityPersistence::KeyMissing(_) => {
         return Err(ActivityDeletionError::KeyMissing);
       }
@@ -1442,7 +1481,10 @@ impl ActivityManager {
       }
       let saved = match store.load_day_checked(date) {
         Ok(segments) => segments,
-        Err(crate::local_store::EncryptedReadError::Unreadable(_)) => continue,
+        Err(
+          crate::local_store::EncryptedReadError::Unreadable(_)
+          | crate::local_store::EncryptedReadError::Incompatible(_),
+        ) => continue,
         Err(error) => return Err(ActivityDeletionError::from(error)),
       };
       if !self.dirty.contains(&date)
@@ -1478,10 +1520,16 @@ impl ActivityManager {
       .map(|dates| dates.into_iter().collect())
       .map_err(|error| error.to_string());
     let store = recovery_result?;
+    let mut incompatible_file = None;
     for (date, known) in recovered_segments {
-      let mut segments = store
-        .load_day_checked(date)
-        .map_err(ActivityDeletionError::from)?;
+      let mut segments = match store.load_day_checked(date) {
+        Ok(segments) => segments,
+        Err(error @ crate::local_store::EncryptedReadError::Incompatible(_)) => {
+          incompatible_file = Some(error);
+          continue;
+        }
+        Err(error) => return Err(ActivityDeletionError::from(error)),
+      };
       for segment in known {
         push_merged(&mut segments, segment);
       }
@@ -1489,10 +1537,20 @@ impl ActivityManager {
         .save_day(date, &segments)
         .map_err(ActivityDeletionError::Unavailable)?;
     }
-    let settings = store
-      .load_settings_checked()
-      .map_err(ActivityDeletionError::from)?
-      .unwrap_or_default();
+    let settings = match store.load_settings_checked() {
+      Ok(settings) => settings.unwrap_or_default(),
+      Err(error @ crate::local_store::EncryptedReadError::Incompatible(_)) => {
+        incompatible_file = Some(error);
+        self.settings.clone()
+      }
+      Err(error) => return Err(ActivityDeletionError::from(error)),
+    };
+    if let Some(error) = incompatible_file {
+      self.cached_pending_dates = Err(error.to_string());
+      self.persistence = ActivityPersistence::Incompatible(store.root().to_path_buf());
+      self.observation_generation = self.observation_generation.wrapping_add(1);
+      return Err(ActivityDeletionError::Incompatible);
+    }
     self.install(ActivityPersistence::Encrypted(store), settings, now);
     Ok(())
   }
@@ -1502,6 +1560,9 @@ impl ActivityManager {
     &mut self,
     recovery: ActivityDeletionRecovery,
   ) -> Result<(), ActivityDeletionError> {
+    if matches!(self.persistence, ActivityPersistence::Incompatible(_)) {
+      return Err(ActivityDeletionError::Incompatible);
+    }
     if matches!(self.persistence, ActivityPersistence::Unreadable(_))
       || (matches!(self.persistence, ActivityPersistence::Encrypted(_))
         && recovery == ActivityDeletionRecovery::DiscardUnreadable)
@@ -1840,7 +1901,8 @@ impl ActivityManager {
       ActivityPersistence::Encrypted(store) => store.root().parent().map(PathBuf::from),
       ActivityPersistence::DeletionOnly(root)
       | ActivityPersistence::KeyMissing(root)
-      | ActivityPersistence::Unreadable(root) => root.parent().map(PathBuf::from),
+      | ActivityPersistence::Unreadable(root)
+      | ActivityPersistence::Incompatible(root) => root.parent().map(PathBuf::from),
       ActivityPersistence::Initializing | ActivityPersistence::MemoryOnly => {
         store_root()
       }
@@ -1883,7 +1945,8 @@ impl ActivityManager {
         },
         ActivityPersistence::DeletionOnly(_)
         | ActivityPersistence::KeyMissing(_)
-        | ActivityPersistence::Unreadable(_) => (Vec::new(), true),
+        | ActivityPersistence::Unreadable(_)
+        | ActivityPersistence::Incompatible(_) => (Vec::new(), true),
         _ => (Vec::new(), false),
       },
     };
@@ -2020,6 +2083,9 @@ impl ActivityManager {
         Err(crate::local_store::EncryptedReadError::Unavailable(_)) => {
           (None, true, Some(ActivityDeletionStatus::Unavailable))
         }
+        Err(crate::local_store::EncryptedReadError::Incompatible(_)) => {
+          (None, true, Some(ActivityDeletionStatus::Incompatible))
+        }
       },
       _ => match self.pending_for_day(date) {
         Ok(pending) => (pending, false, None),
@@ -2044,7 +2110,9 @@ impl ActivityManager {
           .last()
           .copied()
           .map_or(today, |pending_date| pending_date.max(today)),
-        if matches!(self.persistence, ActivityPersistence::Unreadable(_)) {
+        if matches!(self.persistence, ActivityPersistence::Incompatible(_)) {
+          ActivityDeletionStatus::Incompatible
+        } else if matches!(self.persistence, ActivityPersistence::Unreadable(_)) {
           ActivityDeletionStatus::Unreadable
         } else if matches!(self.persistence, ActivityPersistence::KeyMissing(_)) {
           ActivityDeletionStatus::KeyMissing
@@ -2062,7 +2130,9 @@ impl ActivityManager {
       Err(_) => (
         retention_earliest.min(date),
         today,
-        if matches!(self.persistence, ActivityPersistence::Unreadable(_)) {
+        if matches!(self.persistence, ActivityPersistence::Incompatible(_)) {
+          ActivityDeletionStatus::Incompatible
+        } else if matches!(self.persistence, ActivityPersistence::Unreadable(_)) {
           ActivityDeletionStatus::Unreadable
         } else if matches!(self.persistence, ActivityPersistence::KeyMissing(_)) {
           ActivityDeletionStatus::KeyMissing
@@ -2171,6 +2241,9 @@ fn open_persistence(namespace: &str) -> (ActivityPersistence, ActivitySettings) 
           }
           crate::local_store::EncryptedReadError::Unreadable(_) => {
             ActivityPersistence::Unreadable(root)
+          }
+          crate::local_store::EncryptedReadError::Incompatible(_) => {
+            ActivityPersistence::Incompatible(root)
           }
         },
         ActivitySettings::default(),
@@ -2819,6 +2892,10 @@ mod tests {
   #[test]
   fn deletion_errors_and_statuses_have_the_native_response_shape() {
     assert_eq!(
+      serde_json::to_value(ActivityDeletionError::Incompatible).unwrap(),
+      serde_json::json!({ "type": "incompatible" }),
+    );
+    assert_eq!(
       serde_json::to_value(ActivityDeletionError::Unreadable).unwrap(),
       serde_json::json!({ "type": "unreadable" }),
     );
@@ -2840,6 +2917,7 @@ mod tests {
       (ActivityDeletionStatus::Pending, "pending"),
       (ActivityDeletionStatus::KeyMissing, "keyMissing"),
       (ActivityDeletionStatus::Unreadable, "unreadable"),
+      (ActivityDeletionStatus::Incompatible, "incompatible"),
       (ActivityDeletionStatus::Unavailable, "unavailable"),
     ] {
       assert_eq!(serde_json::to_value(status).unwrap(), expected);
@@ -3644,7 +3722,7 @@ mod tests {
           manager = ActivityManager::new();
         }
         if enabled_b {
-          let settings_b = store_b.load_settings().unwrap().unwrap_or_default();
+          let settings_b = store_b.load_settings_checked().unwrap().unwrap_or_default();
           manager.install_account(
             (2, "b".into()),
             ActivityPersistence::Encrypted(store_b),
@@ -3683,7 +3761,7 @@ mod tests {
           assert!(!manager.is_recording());
         }
         // A's history and consent persist only in A's encrypted namespace.
-        let settings_a = store_a.load_settings().unwrap().unwrap();
+        let settings_a = store_a.load_settings_checked().unwrap().unwrap();
         assert_eq!(
           settings_a.recording_status,
           ActivityRecordingStatus::Recording
@@ -4098,7 +4176,7 @@ mod tests {
     assert_eq!(manager.tray_snapshot(at(10)).unwrap().total_ms, 10000);
     assert_eq!(manager.days.get(&date).unwrap().last().unwrap().end, at(5));
     assert!(manager.open.is_some());
-    assert!(store.load_settings().unwrap().is_some());
+    assert!(store.load_settings_checked().unwrap().is_some());
     ActivityStore::remove(&root).unwrap();
   }
 

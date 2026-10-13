@@ -450,6 +450,7 @@
     "batchFailed": "Drafts could not be created. Try again.",
     "batchLimitExceeded": "Select no more than {limit} matters to create drafts. Deselect a matter to continue.",
     "pendingRetry": "Retry draft creation",
+    "incompatibleActivity": "Saved activity cannot be read by this version of the app. Update the app to continue.",
     "unrecoverableOtherHistoryConfirmation": "Saved history from other accounts will be deleted, including pending draft recovery with missing keys or unreadable files. Created drafts may already exist. This cannot be undone.",
     "unreadableEraseAction": "Erase unreadable activity",
     "unreadableEraseConfirmation": "Unreadable saved activity and its pending draft recovery will be erased. Created drafts may already exist. This cannot be undone.",

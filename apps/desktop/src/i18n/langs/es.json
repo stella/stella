@@ -450,6 +450,7 @@
     "batchFailed": "No se pudieron crear los borradores. Inténtelo de nuevo.",
     "batchLimitExceeded": "Seleccione como máximo {limit} asuntos para crear borradores. Deseleccione un asunto para continuar.",
     "pendingRetry": "Reintentar la creación de borradores",
+    "incompatibleActivity": "Esta versión de la aplicación no puede leer la actividad guardada. Actualice la aplicación para continuar.",
     "unrecoverableOtherHistoryConfirmation": "Se eliminará el historial guardado de otras cuentas, incluidos los datos de recuperación de borradores pendientes con claves ausentes o archivos ilegibles. Es posible que los borradores creados ya existan. Esta acción no se puede deshacer.",
     "unreadableEraseAction": "Borrar actividad ilegible",
     "unreadableEraseConfirmation": "Se borrarán la actividad guardada ilegible y los datos de recuperación de sus borradores pendientes. Es posible que los borradores creados ya existan. Esta acción no se puede deshacer.",

@@ -450,6 +450,7 @@
     "batchFailed": "Koncepty sa nepodarilo vytvoriť. Skúste to znova.",
     "batchLimitExceeded": "Na vytvorenie konceptov vyberte najviac {limit} spisov. Ak chcete pokračovať, zrušte výber niektorého spisu.",
     "pendingRetry": "Skúsiť vytvoriť koncepty znova",
+    "incompatibleActivity": "Táto verzia aplikácie nedokáže prečítať uloženú aktivitu. Ak chcete pokračovať, aktualizujte aplikáciu.",
     "unrecoverableOtherHistoryConfirmation": "Uložená história iných účtov bude vymazaná vrátane údajov na obnovenie čakajúcich konceptov s chýbajúcimi kľúčmi alebo nečitateľnými súbormi. Vytvorené koncepty už môžu existovať. Túto akciu nemožno vrátiť späť.",
     "unreadableEraseAction": "Vymazať nečitateľnú aktivitu",
     "unreadableEraseConfirmation": "Nečitateľná uložená aktivita a údaje na obnovenie jej čakajúcich konceptov budú vymazané. Vytvorené koncepty už môžu existovať. Túto akciu nemožno vrátiť späť.",

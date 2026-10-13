@@ -76,6 +76,25 @@ type Submission =
 export type ActivityReviewStatus = Submission["type"];
 type Range = { startMs: number; endMs: number };
 
+const PENDING_DISCARD_ACCESS = {
+  available: true,
+  pending: true,
+  unreadable: true,
+  unavailable: false,
+  keyMissing: false,
+  incompatible: false,
+} as const satisfies Record<ActivityDaySnapshot["deletionStatus"], boolean>;
+
+const canDiscardPending = (
+  snapshot: ActivityDaySnapshot,
+  submission: Submission,
+): submission is Extract<Submission, { type: "retry" }> =>
+  PENDING_DISCARD_ACCESS[snapshot.deletionStatus] &&
+  !snapshot.timeBillingEnabled &&
+  !snapshot.unreadable &&
+  submission.type === "retry" &&
+  snapshot.pendingBatch?.idempotencyKey === submission.idempotencyKey;
+
 const useMatterCandidates = (enabled: boolean) => {
   const [candidates, setCandidates] = useState<CandidateState>({
     type: "loading",
@@ -347,13 +366,7 @@ export const ActivityDayReview = ({
       });
   };
   const discardPending = () => {
-    if (
-      submission.type !== "retry" ||
-      snapshot.timeBillingEnabled ||
-      snapshot.unreadable ||
-      snapshot.pendingBatch?.idempotencyKey !== submission.idempotencyKey ||
-      sending.current
-    ) {
+    if (!canDiscardPending(snapshot, submission) || sending.current) {
       return;
     }
     const pending = submission;
@@ -534,10 +547,7 @@ const ReviewSubmissionFeedback = ({
           {t("batchUnavailable")}
         </p>
       ) : null}
-      {!snapshot.timeBillingEnabled &&
-      !snapshot.unreadable &&
-      submission.type === "retry" &&
-      snapshot.pendingBatch?.idempotencyKey === submission.idempotencyKey ? (
+      {canDiscardPending(snapshot, submission) ? (
         <div>
           <Button
             variant="outline"
@@ -548,7 +558,10 @@ const ReviewSubmissionFeedback = ({
         </div>
       ) : null}
       <Dialog
-        open={discardPrompt === "confirming"}
+        open={
+          discardPrompt === "confirming" &&
+          snapshot.deletionStatus !== "incompatible"
+        }
         onOpenChange={(open) =>
           onDiscardPromptChange(open ? "confirming" : "closed")
         }
@@ -566,13 +579,7 @@ const ReviewSubmissionFeedback = ({
             </DialogClose>
             <Button
               variant="destructive"
-              disabled={
-                snapshot.timeBillingEnabled ||
-                snapshot.unreadable ||
-                submission.type !== "retry" ||
-                snapshot.pendingBatch?.idempotencyKey !==
-                  submission.idempotencyKey
-              }
+              disabled={!canDiscardPending(snapshot, submission)}
               onClick={discardPending}
             >
               {t("delete")}

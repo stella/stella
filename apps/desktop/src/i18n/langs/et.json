@@ -450,6 +450,7 @@
     "batchFailed": "Mustandeid ei õnnestunud luua. Proovi uuesti.",
     "batchLimitExceeded": "Mustandite loomiseks valige kuni {limit} toimikut. Jätkamiseks eemaldage ühe toimiku valik.",
     "pendingRetry": "Proovi mustandeid uuesti luua",
+    "incompatibleActivity": "See rakenduse versioon ei saa salvestatud tegevust lugeda. Jätkamiseks uuendage rakendust.",
     "unrecoverableOtherHistoryConfirmation": "Teiste kontode salvestatud ajalugu kustutatakse, sealhulgas puuduvate võtmete või loetamatute failidega pooleliolevate mustandite taastamisandmed. Loodud mustandid võivad juba olemas olla. Seda ei saa tagasi võtta.",
     "unreadableEraseAction": "Kustuta loetamatu tegevus",
     "unreadableEraseConfirmation": "Loetamatu salvestatud tegevus ja selle pooleliolevate mustandite taastamisandmed kustutatakse. Loodud mustandid võivad juba olemas olla. Seda ei saa tagasi võtta.",

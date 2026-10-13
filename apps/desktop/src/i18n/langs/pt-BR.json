@@ -450,6 +450,7 @@
     "batchFailed": "Não foi possível criar os rascunhos. Tente novamente.",
     "batchLimitExceeded": "Selecione no máximo {limit} casos para criar rascunhos. Desmarque um caso para continuar.",
     "pendingRetry": "Tentar criar os rascunhos novamente",
+    "incompatibleActivity": "Esta versão do aplicativo não consegue ler a atividade salva. Atualize o aplicativo para continuar.",
     "unrecoverableOtherHistoryConfirmation": "O histórico salvo de outras contas será excluído, incluindo dados de recuperação de rascunhos pendentes com chaves ausentes ou arquivos ilegíveis. Os rascunhos criados podem já existir. Esta ação não pode ser desfeita.",
     "unreadableEraseAction": "Apagar atividade ilegível",
     "unreadableEraseConfirmation": "A atividade salva ilegível e os dados de recuperação dos rascunhos pendentes dela serão apagados. Os rascunhos criados podem já existir. Esta ação não pode ser desfeita.",

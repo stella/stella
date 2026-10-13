@@ -450,6 +450,7 @@
     "batchFailed": "A piszkozatokat nem sikerült létrehozni. Próbálja újra.",
     "batchLimitExceeded": "Piszkozatok létrehozásához legfeljebb {limit} ügyet válasszon ki. A folytatáshoz törölje egy ügy kijelölését.",
     "pendingRetry": "Piszkozatok létrehozásának újrapróbálása",
+    "incompatibleActivity": "Az alkalmazás ezen verziója nem tudja olvasni a mentett tevékenységet. A folytatáshoz frissítse az alkalmazást.",
     "unrecoverableOtherHistoryConfirmation": "A más fiókokhoz tartozó mentett előzmények törlődnek, beleértve a hiányzó kulcsokkal vagy olvashatatlan fájlokkal rendelkező függőben lévő piszkozatok helyreállítási adatait. A létrehozott piszkozatok már létezhetnek. Ez a művelet nem vonható vissza.",
     "unreadableEraseAction": "Olvashatatlan tevékenység törlése",
     "unreadableEraseConfirmation": "Az olvashatatlan mentett tevékenység és a hozzá tartozó függőben lévő piszkozatok helyreállítási adatai törlődnek. A létrehozott piszkozatok már létezhetnek. Ez a művelet nem vonható vissza.",

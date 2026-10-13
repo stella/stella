@@ -450,6 +450,7 @@
     "batchFailed": "Nie udało się utworzyć wersji roboczych. Spróbuj ponownie.",
     "batchLimitExceeded": "Aby utworzyć wersje robocze, wybierz nie więcej niż {limit} spraw. Odznacz jedną sprawę, aby kontynuować.",
     "pendingRetry": "Ponów tworzenie wersji roboczych",
+    "incompatibleActivity": "Ta wersja aplikacji nie może odczytać zapisanej aktywności. Zaktualizuj aplikację, aby kontynuować.",
     "unrecoverableOtherHistoryConfirmation": "Zapisana historia innych kont zostanie usunięta, w tym dane odzyskiwania oczekujących wersji roboczych z brakującymi kluczami lub nieczytelnymi plikami. Utworzone wersje robocze mogą już istnieć. Tej operacji nie można cofnąć.",
     "unreadableEraseAction": "Usuń nieczytelną aktywność",
     "unreadableEraseConfirmation": "Nieczytelna zapisana aktywność i dane odzyskiwania jej oczekujących wersji roboczych zostaną usunięte. Utworzone wersje robocze mogą już istnieć. Tej operacji nie można cofnąć.",

@@ -450,6 +450,7 @@
     "batchFailed": "Entwürfe konnten nicht erstellt werden. Versuchen Sie es erneut.",
     "batchLimitExceeded": "Wählen Sie höchstens {limit} Mandate aus, um Entwürfe zu erstellen. Wählen Sie ein Mandat ab, um fortzufahren.",
     "pendingRetry": "Entwürfe erneut erstellen",
+    "incompatibleActivity": "Die gespeicherte Aktivität kann von dieser App-Version nicht gelesen werden. Aktualisieren Sie die App, um fortzufahren.",
     "unrecoverableOtherHistoryConfirmation": "Die gespeicherte Historie anderer Konten wird gelöscht, einschließlich der Wiederherstellungsdaten ausstehender Entwürfe mit fehlenden Schlüsseln oder unlesbaren Dateien. Erstellte Entwürfe können bereits vorhanden sein. Dies kann nicht rückgängig gemacht werden.",
     "unreadableEraseAction": "Unlesbare Aktivität löschen",
     "unreadableEraseConfirmation": "Unlesbare gespeicherte Aktivitäten und die Wiederherstellungsdaten ihrer ausstehenden Entwürfe werden gelöscht. Erstellte Entwürfe können bereits vorhanden sein. Dies kann nicht rückgängig gemacht werden.",

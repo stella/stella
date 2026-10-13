@@ -450,6 +450,7 @@
     "batchFailed": "Nepavyko sukurti juodraščių. Bandykite dar kartą.",
     "batchLimitExceeded": "Norėdami sukurti juodraščius, pasirinkite ne daugiau kaip {limit} bylų. Norėdami tęsti, panaikinkite vienos bylos pasirinkimą.",
     "pendingRetry": "Bandyti dar kartą sukurti juodraščius",
+    "incompatibleActivity": "Ši programos versija negali perskaityti įrašytos veiklos. Norėdami tęsti, atnaujinkite programą.",
     "unrecoverableOtherHistoryConfirmation": "Kitų paskyrų įrašyta istorija bus ištrinta, įskaitant laukiamų juodraščių atkūrimo duomenis su trūkstamais raktais arba neperskaitomais failais. Sukurti juodraščiai jau gali egzistuoti. Šio veiksmo atšaukti negalima.",
     "unreadableEraseAction": "Ištrinti neperskaitomą veiklą",
     "unreadableEraseConfirmation": "Neperskaitoma įrašyta veikla ir jos laukiamų juodraščių atkūrimo duomenys bus ištrinti. Sukurti juodraščiai jau gali egzistuoti. Šio veiksmo atšaukti negalima.",

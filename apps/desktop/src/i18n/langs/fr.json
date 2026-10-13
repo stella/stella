@@ -450,6 +450,7 @@
     "batchFailed": "Impossible de créer les brouillons. Réessayez.",
     "batchLimitExceeded": "Sélectionnez au maximum {limit} dossiers pour créer des brouillons. Désélectionnez un dossier pour continuer.",
     "pendingRetry": "Réessayer la création des brouillons",
+    "incompatibleActivity": "Cette version de l'application ne peut pas lire l'activité enregistrée. Mettez l'application à jour pour continuer.",
     "unrecoverableOtherHistoryConfirmation": "L'historique enregistré des autres comptes sera supprimé, y compris les données de récupération des brouillons en attente dont les clés sont absentes ou les fichiers illisibles. Des brouillons créés peuvent déjà exister. Cette action est irréversible.",
     "unreadableEraseAction": "Effacer l'activité illisible",
     "unreadableEraseConfirmation": "Les activités enregistrées illisibles et les données de récupération de leurs brouillons en attente seront effacées. Des brouillons créés peuvent déjà exister. Cette action est irréversible.",

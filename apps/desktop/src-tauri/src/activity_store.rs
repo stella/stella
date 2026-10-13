@@ -137,11 +137,10 @@ impl ActivityStore {
     self.settings_file().load_checked()
   }
 
-  pub fn load_settings(&self) -> Result<Option<ActivitySettings>, String> {
-    self.settings_file().load()
-  }
-
   pub fn save_settings(&self, settings: &ActivitySettings) -> Result<(), String> {
+    self
+      .load_settings_checked()
+      .map_err(|error| error.to_string())?;
     self.ensure_dirs()?;
     self.settings_file().persist(settings)
   }
@@ -339,8 +338,8 @@ impl ActivityStore {
 
   pub fn delete_day(&self, date: NaiveDate) -> Result<(), ActivityDeletionError> {
     if self
-      .load_pending(date)
-      .map_err(ActivityDeletionError::Unavailable)?
+      .load_pending_checked(date)
+      .map_err(ActivityDeletionError::from)?
       .is_some()
     {
       return Err(ActivityDeletionError::PendingBatch);
@@ -397,13 +396,16 @@ impl ActivityStore {
     let mut unreadable_days = 0;
     for (path, date) in Self::day_entries_root(&self.root)? {
       match date {
-        Some(date) if date < earliest => match self.load_pending(date) {
+        Some(date) if date < earliest => match self.load_pending_checked(date) {
           Ok(None) => {
             self.delete_day(date).map_err(|error| error.to_string())?;
             deleted += 1;
           }
           Ok(Some(_)) => {}
-          Err(_) => unreadable_days += 1,
+          Err(
+            EncryptedReadError::Unreadable(_) | EncryptedReadError::Incompatible(_),
+          ) => unreadable_days += 1,
+          Err(EncryptedReadError::Unavailable(message)) => return Err(message),
         },
         None if path.extension().is_some_and(|extension| extension == "tmp") => {
           remove_file_if_present(&path)?;
@@ -469,6 +471,9 @@ impl ActivityStore {
       .map_err(ActivityDeletionError::Unavailable)?;
     let mut stores = BTreeMap::new();
     for path in &history.paths {
+      if path.extension().is_some_and(|extension| extension == "tmp") {
+        continue;
+      }
       let account_root = path.parent().and_then(Path::parent).ok_or_else(|| {
         ActivityDeletionError::Unavailable("activity history path is invalid".into())
       })?;
@@ -550,16 +555,14 @@ impl ActivityStore {
             || lookup(namespace),
           )?
         }
-        InactiveAccountKey::Found(store) => {
-          match store.load_settings_checked() {
-            Err(EncryptedReadError::Unreadable(_)) => {
-              remove_file_if_present(&store.root.join(SETTINGS_FILE_NAME))
-                .map_err(ActivityDeletionError::Unavailable)?;
-            }
-            Err(error) => return Err(ActivityDeletionError::from(error)),
-            Ok(_) => {}
+        InactiveAccountKey::Found(store) => match store.load_settings_checked() {
+          Err(EncryptedReadError::Unreadable(_)) => {
+            remove_file_if_present(&store.root.join(SETTINGS_FILE_NAME))
+              .map_err(ActivityDeletionError::Unavailable)?;
           }
-        }
+          Err(error) => return Err(ActivityDeletionError::from(error)),
+          Ok(_) => {}
+        },
       }
     }
     for path in history.paths {
@@ -712,6 +715,7 @@ impl ActivityStore {
       Err(EncryptedReadError::Unreadable(_)) => {
         unreadable.push(ActivityRecoveryFile::Settings)
       }
+      Err(EncryptedReadError::Incompatible(_)) => {}
       Err(error) => return Err(ActivityDeletionError::from(error)),
       Ok(_) => {}
     }
@@ -723,6 +727,7 @@ impl ActivityStore {
         Err(EncryptedReadError::Unreadable(_)) => {
           unreadable.push(ActivityRecoveryFile::Day(date))
         }
+        Err(EncryptedReadError::Incompatible(_)) => {}
         Err(error) => return Err(ActivityDeletionError::from(error)),
         Ok(_) => {}
       }
@@ -743,6 +748,7 @@ impl ActivityStore {
       };
       match result {
         Ok(()) => continue,
+        Err(EncryptedReadError::Incompatible(_)) => continue,
         Err(EncryptedReadError::Unavailable(message)) => {
           return Err(ActivityDeletionError::Unavailable(message));
         }
@@ -1144,6 +1150,40 @@ mod tests {
   }
 
   #[test]
+  fn inactive_cleanup_preserves_all_roots_when_settings_require_a_newer_app() {
+    let (_, root) = store();
+    let current = "a".repeat(64);
+    let missing = "b".repeat(64);
+    let incompatible = "c".repeat(64);
+    let missing_store = ActivityStore::new([9; 32], root.join(&missing));
+    missing_store.save_day(date(1), &[segment("app")]).unwrap();
+    let future_store = ActivityStore::new([9; 32], root.join(&incompatible));
+    let mut settings = serde_json::to_value(ActivitySettings::default()).unwrap();
+    settings["recordingStatus"] = serde_json::json!("futureMode");
+    future_store.settings_file().persist(&settings).unwrap();
+    let original = fs::read(future_store.settings_file().path()).unwrap();
+    assert!(matches!(
+      ActivityStore::delete_other_account_history_with_key_lookup(
+        &root,
+        &current,
+        ActivityOtherHistoryRecovery::DiscardUnrecoverable,
+        |namespace| Ok(if namespace == missing {
+          LocalDataKeyLookup::Missing
+        } else {
+          LocalDataKeyLookup::Found([9; 32])
+        })
+      ),
+      Err(ActivityDeletionError::Incompatible)
+    ));
+    assert!(missing_store.day_file(date(1)).path().exists());
+    assert_eq!(
+      fs::read(future_store.settings_file().path()).unwrap(),
+      original
+    );
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
   fn confirmed_unreadable_recovery_preserves_every_readable_pending_and_history_file() {
     let (store, root) = store();
     store.save_settings(&ActivitySettings::default()).unwrap();
@@ -1159,7 +1199,7 @@ mod tests {
       || Ok(LocalDataKeyLookup::Found([9; 32])),
     )
     .unwrap();
-    assert!(store.load_settings().unwrap().is_none());
+    assert!(store.load_settings_checked().unwrap().is_none());
     assert_eq!(store.load_day(date(1)).unwrap().len(), 1);
     assert_eq!(store.load_pending(date(2)).unwrap(), Some(pending));
     assert!(store.load_day(date(3)).unwrap().is_empty());
@@ -1182,7 +1222,7 @@ mod tests {
     .unwrap();
     assert_eq!(fs::read(store.day_file(date(1)).path()).unwrap(), before);
     assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending));
-    assert!(store.load_settings().unwrap().is_some());
+    assert!(store.load_settings_checked().unwrap().is_some());
     ActivityStore::remove(&root).unwrap();
   }
 
@@ -1229,6 +1269,60 @@ mod tests {
       store.pending_dates(date(1)),
       Err(EncryptedReadError::Unreadable(_))
     ));
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn incompatible_settings_survive_writes_and_independent_unreadable_recovery() {
+    let (store, root) = store();
+    let mut settings = serde_json::to_value(ActivitySettings::default()).unwrap();
+    settings["recordingStatus"] = serde_json::json!("futureMode");
+    store.settings_file().persist(&settings).unwrap();
+    let original = fs::read(store.settings_file().path()).unwrap();
+    assert!(matches!(
+      store.load_settings_checked(),
+      Err(EncryptedReadError::Incompatible(_))
+    ));
+    assert!(store.save_settings(&ActivitySettings::default()).is_err());
+    store.save_pending(date(1), &pending()).unwrap();
+    store.save_day(date(2), &[segment("app")]).unwrap();
+    fs::write(store.day_file(date(2)).path(), b"invalid envelope").unwrap();
+    ActivityStore::remove_unreadable_with_lookup(
+      &root,
+      ActivityDeletionRecovery::DiscardUnreadable,
+      || Ok(LocalDataKeyLookup::Found([9; 32])),
+    )
+    .unwrap();
+    assert_eq!(fs::read(store.settings_file().path()).unwrap(), original);
+    assert_eq!(store.load_pending(date(1)).unwrap(), Some(pending()));
+    assert!(!store.day_file(date(2)).path().exists());
+    ActivityStore::remove(&root).unwrap();
+  }
+
+  #[test]
+  fn newer_day_envelope_survives_deletion_and_unreadable_recovery() {
+    let (store, root) = store();
+    store.save_day(date(1), &[segment("app")]).unwrap();
+    let path = store.day_file(date(1)).path().to_path_buf();
+    let mut envelope: serde_json::Value =
+      serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    envelope["version"] = serde_json::json!(999);
+    let original = serde_json::to_vec(&envelope).unwrap();
+    fs::write(&path, &original).unwrap();
+    assert!(matches!(
+      store.delete_day(date(1)),
+      Err(ActivityDeletionError::Incompatible)
+    ));
+    store.save_day(date(2), &[segment("app")]).unwrap();
+    fs::write(store.day_file(date(2)).path(), b"invalid envelope").unwrap();
+    ActivityStore::remove_unreadable_with_lookup(
+      &root,
+      ActivityDeletionRecovery::DiscardUnreadable,
+      || Ok(LocalDataKeyLookup::Found([9; 32])),
+    )
+    .unwrap();
+    assert_eq!(fs::read(&path).unwrap(), original);
+    assert!(!store.day_file(date(2)).path().exists());
     ActivityStore::remove(&root).unwrap();
   }
 
@@ -1379,7 +1473,7 @@ mod tests {
         "end": original.end,
       }]}))
       .unwrap();
-    let settings = store.load_settings().unwrap().unwrap();
+    let settings = store.load_settings_checked().unwrap().unwrap();
     assert!(!settings.capture_details);
     assert!(settings.app_name_only_apps.is_empty());
     assert!(settings.browser_title_apps.is_empty());
