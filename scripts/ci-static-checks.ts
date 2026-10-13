@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { generatedInputTreeHash } from "../packages/scripts/src/generated-input-identity";
@@ -392,6 +392,7 @@ const downloadReceipt = (name: string, destination: string) => {
     if (!trustedQueueRun({ raw: run, repository, runId })) {
       continue;
     }
+    rmSync(destination, { recursive: true, force: true });
     github(
       "run",
       "download",
