@@ -1,4 +1,5 @@
 import { PDF } from "@libpdf/core";
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 // The embedded file's Subtype is a PDF name: "/" must be written once as
@@ -31,7 +32,9 @@ test("the attachment patch follows the pinned @libpdf/core version", async () =>
   } = await Bun.file(
     new URL("../../../../../package.json", import.meta.url),
   ).json();
-  const version = manifest.catalog["@libpdf/core"];
+  const version =
+    manifest.catalog["@libpdf/core"] ??
+    panic("@libpdf/core is not pinned in the root catalog");
 
   expect(manifest.patchedDependencies).toHaveProperty([
     `@libpdf/core@${version}`,
