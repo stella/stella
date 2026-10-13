@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { isTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
@@ -12,13 +13,24 @@ export const Route = createFileRoute(
   "/_protected/settings/organization/billing",
 )({
   beforeLoad: async ({ context }) => {
-    const role = await ensureRouteQueryData(context.queryClient, roleOptions);
+    const previewPromise = isTimeBillingPreviewEnabled(context.queryClient, {
+      userId: context.user.id,
+      organizationId: context.user.activeOrganizationId,
+    });
+    // Capture preview failure so the role decision still takes precedence.
+    const [role, preview] = await Promise.all([
+      ensureRouteQueryData(context.queryClient, roleOptions),
+      Result.tryPromise({
+        try: () => previewPromise,
+        catch: (cause) => cause,
+      }),
+    ]);
+    if (Result.isError(preview)) {
+      throw preview.error;
+    }
     if (
       !isBillingSettingsAccessible({
-        previewEnabled: await isTimeBillingPreviewEnabled(context.queryClient, {
-          userId: context.user.id,
-          organizationId: context.user.activeOrganizationId,
-        }),
+        previewEnabled: preview.value,
         role,
       })
     ) {
