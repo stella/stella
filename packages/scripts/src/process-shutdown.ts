@@ -1,5 +1,7 @@
 import { Result, TaggedError } from "better-result";
 
+import { createWindowsProcessOwnership } from "./windows-process-ownership";
+
 const SHUTDOWN_SIGNALS = [
   { signal: "SIGINT", number: 2 },
   { signal: "SIGTERM", number: 15 },
@@ -16,6 +18,7 @@ type AttachTestProcessShutdownOptions = {
   child: Pick<Bun.Subprocess, "pid" | "kill">;
   termination: "process" | "group";
   onWarning: (message: string) => void;
+  windowsProcesses?: ReturnType<typeof createWindowsProcessOwnership>;
 };
 
 /** Own this child's process tree until its pipes and exit have settled. */
@@ -23,6 +26,9 @@ export const attachTestProcessShutdown = ({
   child,
   termination,
   onWarning,
+  windowsProcesses = process.platform === "win32"
+    ? createWindowsProcessOwnership({ rootPid: child.pid, onWarning })
+    : undefined,
 }: AttachTestProcessShutdownOptions) => {
   let exitCode: number | undefined;
   let escalation: ReturnType<typeof setTimeout> | undefined;
@@ -34,31 +40,16 @@ export const attachTestProcessShutdown = ({
           process.kill(-child.pid, signal);
           return Result.ok(undefined);
         }
-        if (process.platform === "win32") {
-          // Exit listeners cannot await a subprocess; finish tree cleanup before
-          // the runner exits, including workers absent from the latest sample.
-          const result = Bun.spawnSync(
-            [
-              "taskkill.exe",
-              "/PID",
-              String(child.pid),
-              "/T",
-              ...(signal === "SIGKILL" ? ["/F"] : []),
-            ],
-            { timeout: 5000, stdout: "ignore", stderr: "pipe" },
-          );
-          if (!result.success) {
-            // taskkill also fails when the tree has already exited. Probe the
-            // root so an ordinary reap does not become a cleanup warning.
-            process.kill(child.pid, 0);
-            return Result.err(
-              new TestProcessSignalError({
-                message: result.stderr.toString().trim(),
-                cause: result.exitCode,
-              }),
-            );
-          }
-          return Result.ok(undefined);
+        if (windowsProcesses !== undefined) {
+          const windowsSignal = windowsProcesses.signal(signal);
+          return windowsSignal.isErr()
+            ? Result.err(
+                new TestProcessSignalError({
+                  message: windowsSignal.error.message,
+                  cause: windowsSignal.error,
+                }),
+              )
+            : Result.ok(undefined);
         }
         child.kill(signal);
         return Result.ok(undefined);
@@ -104,6 +95,7 @@ export const attachTestProcessShutdown = ({
   });
   process.on("exit", cleanup);
   return {
+    windowsProcesses,
     exitCode: () => exitCode,
     dispose: () => {
       cleanup();

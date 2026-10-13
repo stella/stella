@@ -18,4 +18,8 @@ if (process.argv.at(3) === "leaf") {
   );
   await grandchild.stdout.getReader().read();
   console.log(grandchild.pid);
+  if (process.argv.at(3) === "leader-exit") {
+    await Bun.stdin.text();
+    process.exit(0);
+  }
 }

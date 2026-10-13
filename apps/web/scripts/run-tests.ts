@@ -72,6 +72,7 @@ for (const run of runs) {
     },
   });
   const watchdog = watchTestProcessMemory({
+    windowsProcesses: shutdown.windowsProcesses,
     child,
     limitBytes,
     readBytes,

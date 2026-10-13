@@ -8,11 +8,12 @@ import {
   TEST_INVOCATION_MEMORY_GIB_ENV,
   watchTestProcessMemory,
 } from "./process-memory";
+import { attachTestProcessShutdown } from "./process-shutdown";
 
 test("Windows snapshots retain only owned PID readings and preserve unknown lower bounds", () => {
   const parsed = parseWindowsProcessTree(
     42,
-    "unknown\n42 1 700\n43 42 -1\n44 43 500\n99 1 9000",
+    "unknown\n42 1 700 133700000000000001\n43 42 -1 133700000000000001\n44 43 500 133700000000000001\n99 1 9000 133700000000000001",
   );
   expect(parsed.isOk()).toBe(true);
   if (parsed.isErr()) {
@@ -23,7 +24,55 @@ test("Windows snapshots retain only owned PID readings and preserve unknown lowe
   expect(parsed.value.readings.get(43)?.isErr()).toBe(true);
   expect(parsed.value.readings.get(44)?.unwrap()).toBe(500);
   expect(parsed.value.unavailable?.message).toContain("ancestry");
+  expect(
+    parsed.value.identities.map(({ pid, creationTime }) => [pid, creationTime]),
+  ).toEqual([
+    [42, 133_700_000_000_000_001n],
+    [43, 133_700_000_000_000_001n],
+    [44, 133_700_000_000_000_001n],
+  ]);
   expect(parseWindowsProcessTree(42, "bad row").isErr()).toBe(true);
+});
+
+test("a completed Windows census retains identities even after its root exit notification", async () => {
+  const identities: number[] = [];
+  let rootExitCode: number | null = null;
+  const child = {
+    pid: 42,
+    get exitCode() {
+      return rootExitCode;
+    },
+    signalCode: null,
+    kill: () => {},
+  };
+  const watchdog = watchTestProcessMemory({
+    child,
+    limitBytes: 1000,
+    file: () => "orphan.test.ts",
+    onFailure: (message) => {
+      throw new TypeError(message);
+    },
+    onWarning: (message) => {
+      throw new TypeError(message);
+    },
+    windowsProcesses: {
+      recordTree: (sample) => {
+        identities.push(...sample.map(({ pid }) => pid));
+      },
+      signal: () => Result.ok(undefined),
+    },
+    readBytes: Object.assign(() => Result.ok(0), {
+      sampleTree: async () => {
+        rootExitCode = 0;
+        return parseWindowsProcessTree(
+          42,
+          "42 1 700 133700000000000001\n43 42 500 133700000000000002",
+        );
+      },
+    }),
+  });
+  await watchdog.stop();
+  expect(identities).toEqual([42, 43]);
 });
 
 test("asynchronous tree queries do not overlap, enforce readable sums, and abort on stop", async () => {
@@ -63,7 +112,10 @@ test("asynchronous tree queries do not overlap, enforce readable sums, and abort
     await Bun.sleep(20);
     expect(queries).toBe(1);
     finish?.(
-      parseWindowsProcessTree(42, "unknown\n42 1 700\n43 42 -1\n44 42 500"),
+      parseWindowsProcessTree(
+        42,
+        "unknown\n42 1 700 133700000000000001\n43 42 -1 133700000000000001\n44 42 500 133700000000000001",
+      ),
     );
     await Bun.sleep(20);
     expect(failures).toHaveLength(1);
@@ -71,7 +123,7 @@ test("asynchronous tree queries do not overlap, enforce readable sums, and abort
     expect(watchdog.peakBytes()).toBe(1200);
     expect(queries).toBe(1);
   } finally {
-    finish?.(parseWindowsProcessTree(42, "42 1 0"));
+    finish?.(parseWindowsProcessTree(42, "42 1 0 133700000000000001"));
     await watchdog.stop();
   }
   expect(observedSignal?.aborted).toBe(true);
@@ -90,7 +142,12 @@ test("stopping a pending tree query aborts and joins it without measuring unknow
             "abort",
             () => {
               cancelled = true;
-              resolve(parseWindowsProcessTree(42, "unknown\n42 1 -1"));
+              resolve(
+                parseWindowsProcessTree(
+                  42,
+                  "unknown\n42 1 -1 133700000000000001",
+                ),
+              );
             },
             { once: true },
           );
@@ -143,7 +200,18 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
     );
     const failures: string[] = [];
     const limitBytes = 128 * 1024 ** 2;
+    const shutdown =
+      process.platform === "win32"
+        ? attachTestProcessShutdown({
+            child,
+            termination: "process",
+            onWarning: (message) => {
+              throw new TypeError(message);
+            },
+          })
+        : undefined;
     const watchdog = watchTestProcessMemory({
+      windowsProcesses: shutdown?.windowsProcesses,
       child,
       limitBytes,
       readBytes,
@@ -159,7 +227,11 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
     });
     try {
       await child.exited;
-      expect(child.signalCode).toBe("SIGKILL");
+      if (process.platform === "win32") {
+        expect(child.exitCode).not.toBe(0);
+      } else {
+        expect(child.signalCode).toBe("SIGKILL");
+      }
       expect(watchdog.peakBytes()).toBeGreaterThan(limitBytes);
       expect(failures).toHaveLength(1);
       expect(failures.at(0)).toContain(
@@ -169,12 +241,13 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
       expect(failures.at(0)).toContain("cap 0.125 GiB");
     } finally {
       await watchdog.stop();
+      shutdown?.dispose();
       if (child.exitCode === null && child.signalCode === null) {
         child.kill("SIGKILL");
         await child.exited;
       }
     }
-  });
+  }, 15_000);
 }
 
 for (const boundary of ["census", "reading"] as const) {

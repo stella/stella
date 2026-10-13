@@ -9,6 +9,7 @@ import {
   testInvocationMemoryLimit,
   watchTestProcessMemory,
 } from "@stll/scripts/src/process-memory";
+import { createWindowsProcessOwnership } from "@stll/scripts/src/windows-process-ownership";
 
 // A measured CI solo batch (254 chat turn tests) took 250.9s. Ten minutes
 // gives it more than twice that headroom, while bounding imports, snapshot
@@ -86,6 +87,9 @@ type ActiveProcess = {
   child: Bun.Subprocess;
   tail: Buffer;
   cancelStreams: () => void;
+  windowsProcesses:
+    | ReturnType<typeof createWindowsProcessOwnership>
+    | undefined;
 };
 
 type SupervisorOptions = {
@@ -188,15 +192,20 @@ export class TestProcessSupervisor {
   }
 
   private signalProcess(
-    { child, pid }: ActiveProcess,
+    { pid, windowsProcesses }: ActiveProcess,
     signal: NodeJS.Signals,
   ): void {
+    if (windowsProcesses !== undefined) {
+      const signalled = windowsProcesses.signal(signal);
+      if (signalled.isErr()) {
+        this.diagnose(
+          `Could not send ${signal} to Windows process tree ${pid}: ${signalled.error.message}`,
+        );
+      }
+      return;
+    }
     const signalled = Result.try({
       try: () => {
-        if (process.platform === "win32") {
-          child.kill(signal);
-          return;
-        }
         // Each POSIX child starts its own session, so this group belongs to
         // this invocation, including descendants that retain the output pipes.
         process.kill(-pid, signal);
@@ -306,6 +315,13 @@ export class TestProcessSupervisor {
       child,
       tail: Buffer.alloc(0),
       cancelStreams,
+      windowsProcesses:
+        process.platform === "win32"
+          ? createWindowsProcessOwnership({
+              rootPid: child.pid,
+              onWarning: (message) => this.diagnose(message),
+            })
+          : undefined,
     };
     this.active.set(id, entry);
 
@@ -396,6 +412,7 @@ export class TestProcessSupervisor {
         collect(stderr, this.options.onStderr),
       );
       memoryWatchdog = watchTestProcessMemory({
+        windowsProcesses: entry.windowsProcesses,
         child,
         limitBytes: this.memoryLimitBytes,
         readBytes,
@@ -422,6 +439,9 @@ export class TestProcessSupervisor {
       await memoryWatchdog?.stop();
       // A stopped leader may exit before its descendants, which still need escalation.
       if (!this.stopped()) {
+        if (entry.windowsProcesses !== undefined) {
+          this.signalProcess(entry, "SIGKILL");
+        }
         this.active.delete(id);
       }
       const saved = Result.try({

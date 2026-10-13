@@ -1,6 +1,13 @@
 import { panic, Result, TaggedError } from "better-result";
 import { readFileSync } from "node:fs";
 
+import {
+  parseWindowsCreationTime,
+  WINDOWS_POWERSHELL_COMMAND,
+  type WindowsProcessIdentity,
+  type createWindowsProcessOwnership,
+} from "./windows-process-ownership";
+
 const GIB = 1024 ** 3;
 const SAMPLE_INTERVAL_MS = 2000;
 export const TEST_INVOCATION_MEMORY_GIB_ENV = "TEST_INVOCATION_MEMORY_GIB";
@@ -25,6 +32,7 @@ const processGone = ({ cause }: ProcessMemoryReadError) =>
   cause instanceof Error && "code" in cause && cause.code === "ESRCH";
 
 type ProcessTreeSample = {
+  identities: WindowsProcessIdentity[];
   readings: Map<number, Result<number, ProcessMemoryReadError>>;
   children: Map<number, number[]>;
   unavailable: ProcessMemoryReadError | undefined;
@@ -41,7 +49,10 @@ type ProcessMemoryReader = ((
 
 /** Ignore foreign rows even if a sampler returns more than the owned tree. */
 export const parseWindowsProcessTree = (rootPid: number, output: string) => {
-  const rows = new Map<number, { parent: number; bytes: number }>();
+  const rows = new Map<
+    number,
+    { parent: number; bytes: number; creationTime: bigint | undefined }
+  >();
   let unavailable: ProcessMemoryReadError | undefined;
   for (const line of output.trim().split(/\r?\n/u)) {
     if (line === "unknown") {
@@ -50,13 +61,14 @@ export const parseWindowsProcessTree = (rootPid: number, output: string) => {
       });
       continue;
     }
-    const values = line.trim().split(/\s+/u).map(Number);
-    const [pid, parent, bytes] = values;
+    const values = line.trim().split(/\s+/u);
+    const pid = Number(values.at(0));
+    const parent = Number(values.at(1));
+    const bytes = Number(values.at(2));
+    const created = values.at(3);
     if (
-      values.length !== 3 ||
-      pid === undefined ||
-      parent === undefined ||
-      bytes === undefined ||
+      values.length !== 4 ||
+      created === undefined ||
       !Number.isSafeInteger(pid) ||
       pid <= 0 ||
       !Number.isSafeInteger(parent) ||
@@ -66,9 +78,20 @@ export const parseWindowsProcessTree = (rootPid: number, output: string) => {
         new ProcessMemoryReadError({ message: "Invalid process tree sample" }),
       );
     }
-    rows.set(pid, { parent, bytes });
+    const creation = parseWindowsCreationTime(created);
+    if (creation.isErr()) {
+      unavailable ??= new ProcessMemoryReadError({
+        message: creation.error.message,
+      });
+    }
+    rows.set(pid, {
+      parent,
+      bytes,
+      creationTime: creation.isOk() ? creation.value : undefined,
+    });
   }
   const sample: ProcessTreeSample = {
+    identities: [],
     readings: new Map(),
     children: new Map(),
     unavailable,
@@ -76,6 +99,9 @@ export const parseWindowsProcessTree = (rootPid: number, output: string) => {
   const owned = [rootPid];
   for (const pid of owned) {
     const row = rows.get(pid);
+    if (row?.creationTime !== undefined) {
+      sample.identities.push({ pid, creationTime: row.creationTime });
+    }
     sample.readings.set(
       pid,
       row !== undefined && Number.isFinite(row.bytes) && row.bytes >= 0
@@ -103,23 +129,73 @@ const sampleWindowsProcessTree = async (rootPid: number, signal: AbortSignal) =>
     try: async () => {
       // Windows has no POSIX process group: query the full descendant census on
       // every sample. Working sets are queried only for those owned PIDs.
-      const command = `$ErrorActionPreference='Stop'; $rows=@(); try { $rows=@(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId) } catch { Write-Output 'unknown' }; $owned=[System.Collections.Generic.HashSet[int]]::new(); $queue=[System.Collections.Generic.Queue[int]]::new(); [void]$owned.Add(${rootPid}); $queue.Enqueue(${rootPid}); while($queue.Count -gt 0) { $pidValue=$queue.Dequeue(); foreach($row in $rows) { if($row.ParentProcessId -eq $pidValue -and $owned.Add([int]$row.ProcessId)) { $queue.Enqueue([int]$row.ProcessId) } } }; $memory=@{}; Get-Process -Id @($owned) -ErrorAction SilentlyContinue | ForEach-Object { $memory[[int]$_.Id]=$_.WorkingSet64 }; foreach($pidValue in $owned) { $parent=0; foreach($row in $rows) { if($row.ProcessId -eq $pidValue) { $parent=$row.ParentProcessId; break } }; $bytes=-1; if($memory.ContainsKey($pidValue)) { $bytes=$memory[$pidValue] }; Write-Output "$pidValue $parent $bytes" }`;
-      const child = Bun.spawn(
-        [
-          "powershell.exe",
-          "-NoProfile",
-          "-NonInteractive",
-          "-Command",
-          command,
-        ],
-        {
-          stdout: "pipe",
-          stderr: "ignore",
-          signal,
-          timeout: 5000,
-          killSignal: "SIGKILL",
-        },
-      );
+      // Keep the root handle open through the census, so its identity survives
+      // an exit during the query. CIM dates have microsecond precision; compare
+      // that metadata to the handle before retaining its exact FILETIME.
+      const command = `
+$ErrorActionPreference='Stop'
+$root=Get-Process -Id ${rootPid} -ErrorAction SilentlyContinue
+$rootCreated='unknown'
+try {
+  if($null -ne $root) {
+    try { [void]$root.Handle; if(!$root.HasExited) { $rootCreated=$root.StartTime.ToFileTimeUtc().ToString() } }
+    catch { if(!$root.HasExited) { throw } }
+  }
+  $rows=@()
+  try { $rows=@(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId,CreationDate) }
+  catch { Write-Output 'unknown' }
+  $metadata=@{}
+  foreach($row in $rows) { $metadata[[int]$row.ProcessId]=$row }
+  $owned=[System.Collections.Generic.HashSet[int]]::new()
+  $queue=[System.Collections.Generic.Queue[int]]::new()
+  [void]$owned.Add(${rootPid})
+  $queue.Enqueue(${rootPid})
+  while($queue.Count -gt 0) {
+    $pidValue=$queue.Dequeue()
+    foreach($row in $rows) {
+      $parentCreated=$null
+      if($pidValue -eq ${rootPid} -and $rootCreated -ne 'unknown') { $parentCreated=[DateTime]::FromFileTimeUtc([long]$rootCreated) }
+      elseif($metadata.ContainsKey($pidValue)) { $parentCreated=$metadata[$pidValue].CreationDate.ToUniversalTime() }
+      if($row.ParentProcessId -eq $pidValue -and $null -ne $parentCreated -and $row.CreationDate.ToUniversalTime() -ge $parentCreated -and $owned.Add([int]$row.ProcessId)) {
+        $queue.Enqueue([int]$row.ProcessId)
+      }
+    }
+  }
+  $memory=@{}
+  $created=@{}
+  Get-Process -Id @($owned) -ErrorAction SilentlyContinue | ForEach-Object {
+    $p=$_
+    try {
+      [void]$p.Handle
+      $birth=$p.StartTime.ToFileTimeUtc()
+      $row=$metadata[[int]$p.Id]
+      if($null -ne $row -and [decimal]::Truncate(([decimal]$birth)/10) -eq [decimal]::Truncate(([decimal]($row.CreationDate.ToFileTimeUtc()))/10)) {
+        $memory[[int]$p.Id]=$p.WorkingSet64
+        $created[[int]$p.Id]=$birth.ToString()
+      }
+    } catch { $created[[int]$p.Id]='unknown' }
+    finally { $p.Dispose() }
+  }
+  $created[${rootPid}]=$rootCreated
+  foreach($pidValue in $owned) {
+    $parent=0
+    if($metadata.ContainsKey($pidValue)) { $parent=$metadata[$pidValue].ParentProcessId }
+    $bytes=-1
+    $creation='unknown'
+    if($memory.ContainsKey($pidValue)) { $bytes=$memory[$pidValue] }
+    if($created.ContainsKey($pidValue)) { $creation=$created[$pidValue] }
+    Write-Output "$pidValue $parent $bytes $creation"
+  }
+} finally { if($null -ne $root) { $root.Dispose() } }
+`;
+      const child = Bun.spawn([...WINDOWS_POWERSHELL_COMMAND], {
+        stdin: new TextEncoder().encode(command),
+        stdout: "pipe",
+        stderr: "ignore",
+        signal,
+        timeout: 5000,
+        killSignal: "SIGKILL",
+      });
       const [output, exitCode] = await Promise.all([
         new Response(child.stdout).text(),
         child.exited,
@@ -254,6 +330,12 @@ type WatchTestProcessMemoryOptions = {
   intervalMs?: number;
   children?: (pid: number) => Result<readonly number[], ProcessMemoryReadError>;
   signalPid?: (pid: number, signal: NodeJS.Signals | 0) => void;
+  windowsProcesses?:
+    | Pick<
+        ReturnType<typeof createWindowsProcessOwnership>,
+        "recordTree" | "signal"
+      >
+    | undefined;
 };
 
 export const watchTestProcessMemory = ({
@@ -266,6 +348,7 @@ export const watchTestProcessMemory = ({
   termination = "process",
   intervalMs = SAMPLE_INTERVAL_MS,
   children = processChildren,
+  windowsProcesses,
   signalPid = (pid, signal) => {
     process.kill(pid, signal);
   },
@@ -277,6 +360,16 @@ export const watchTestProcessMemory = ({
   let warned = false;
   const fail = (message: string) => {
     failure = message;
+    if (windowsProcesses !== undefined) {
+      const killed = windowsProcesses.signal("SIGKILL");
+      if (killed.isErr()) {
+        onFailure(
+          `Could not kill Windows test process tree ${child.pid}: ${killed.error.message}`,
+        );
+      }
+      onFailure(message);
+      return;
+    }
     if (termination === "group") {
       const killed = Result.try({
         try: () => signalPid(-child.pid, "SIGKILL"),
@@ -409,6 +502,11 @@ export const watchTestProcessMemory = ({
     // The watchdog owns one asynchronous query at a time; stop aborts it.
     pendingSample = sampleTree(child.pid, cancellation.signal)
       .then((result) => {
+        if (result.isOk()) {
+          // A completed census can still establish ownership after the root's
+          // exit notification. Retain it before memory sampling stops.
+          windowsProcesses?.recordTree(result.value.identities);
+        }
         if (stopped) {
           return undefined;
         }
@@ -416,6 +514,7 @@ export const watchTestProcessMemory = ({
           result.isOk()
             ? result.value
             : {
+                identities: [],
                 readings: new Map(),
                 children: new Map(),
                 unavailable: result.error,

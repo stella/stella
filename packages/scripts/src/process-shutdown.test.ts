@@ -152,3 +152,59 @@ test("cleanup of an already exited test process does not warn", async () => {
   shutdown.dispose();
   expect(warnings).toEqual([]);
 });
+
+test("disposing after the test leader exits reaps its surviving long-lived worker", async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "stella-orphan-test-"));
+  const parent = Bun.spawn(
+    [
+      process.execPath,
+      `${import.meta.dir}/test-fixtures/orphan-cleanup-parent.ts`,
+      path.join(directory, "signal"),
+    ],
+    { stdin: "pipe", stdout: "pipe", stderr: "inherit" },
+  );
+  let workerPid: number | undefined;
+  try {
+    const ready = await parent.stdout.getReader().read();
+    const [leaderPid, worker] = new TextDecoder()
+      .decode(ready.value)
+      .trim()
+      .split(/\s+/u)
+      .map(Number);
+    if (
+      leaderPid === undefined ||
+      worker === undefined ||
+      !Number.isSafeInteger(leaderPid) ||
+      leaderPid <= 1 ||
+      !Number.isSafeInteger(worker) ||
+      worker <= 1
+    ) {
+      throw new TypeError("Fixture readiness must contain both PIDs");
+    }
+    workerPid = worker;
+    // The original root is already gone, but the worker still owns a live process.
+    expect(Result.try(() => process.kill(leaderPid, 0)).isErr()).toBe(true);
+    expect(Result.try(() => process.kill(worker, 0)).isOk()).toBe(true);
+    await parent.stdin.end();
+    await parent.exited;
+    expect(parent.exitCode).toBe(0);
+    await Bun.sleep(50);
+    const alive = Result.try(() => process.kill(worker, 0));
+    const status =
+      process.platform === "linux"
+        ? Result.try(() => readFileSync(`/proc/${worker}/status`, "utf-8"))
+        : undefined;
+    const zombie = status?.isOk() && /^State:\s+Z\b/mu.test(status.value);
+    expect(alive.isErr() || zombie).toBe(true);
+  } finally {
+    if (parent.exitCode === null && parent.signalCode === null) {
+      parent.kill("SIGKILL");
+      await parent.exited;
+    }
+    if (workerPid !== undefined) {
+      const ownedPid = workerPid;
+      Result.try(() => process.kill(ownedPid, "SIGKILL"));
+    }
+    rmSync(directory, { recursive: true, force: true });
+  }
+}, 15_000);
