@@ -30,7 +30,7 @@ import { SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN } from "@/api/lib/observability/log
 // rejects such keys at the call site can pin the same one.
 const SENSITIVE_ATTRIBUTE_KEY_PATTERN = SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN;
 
-type LoggerAttributeValue = AttributeValue;
+type LoggerAttributeValue = AttributeValue | null;
 
 export type LoggerAttributes = Record<string, LoggerAttributeValue>;
 type LoggerAttributeInput = Record<string, unknown>;
@@ -83,7 +83,12 @@ const isOwnedValueValid = (key: string, value: unknown): boolean => {
 
 const UNSERIALIZABLE_ATTRIBUTE = "[unserializable attribute]";
 
-const outputAttributeValue = (value: unknown): AttributeValue | undefined => {
+const outputAttributeValue = (
+  value: unknown,
+): LoggerAttributeValue | undefined => {
+  if (value === null) {
+    return null;
+  }
   if (
     typeof value === "string" ||
     typeof value === "number" ||
@@ -258,7 +263,12 @@ const emit = ({
   if (safeAttributes) {
     logs.getLogger("stella.api").emit({
       ...record,
-      attributes: safeAttributes,
+      // OTel omits absent values; the structured stream preserves JSON null.
+      attributes: Object.fromEntries(
+        Object.entries(safeAttributes).flatMap(([key, value]) =>
+          value === null ? [] : [[key, value] as const],
+        ),
+      ),
     });
   } else {
     logs.getLogger("stella.api").emit(record);

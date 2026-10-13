@@ -15,6 +15,20 @@ afterEach(() => {
 });
 
 describe("logger attributes", () => {
+  test("preserves absent identifiers as JSON null in the structured stream", () => {
+    const chunks: string[] = [];
+    process.stderr.write = (chunk: string | Uint8Array): boolean => {
+      chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+      return true;
+    };
+    logger.warn("test.refused", { "oauth.grant_family": null });
+    expect(chunks).toHaveLength(1);
+    expect(JSON.parse(chunks.join(""))).toEqual({
+      severity: "WARN",
+      message: "test.refused",
+      "oauth.grant_family": null,
+    });
+  });
   test("drops sensitive attribute keys before emission", () => {
     expect(
       sanitizeLogAttributes({
