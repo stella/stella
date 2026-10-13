@@ -447,6 +447,7 @@
     "selectRange": "Atlasīt posmu",
     "batchCreated": "{count, plural, one {Izveidots # melnraksts} other {Izveidoti # melnraksti}}",
     "batchFailed": "Neizdevās izveidot melnrakstus. Mēģiniet vēlreiz.",
+    "batchLimitExceeded": "Lai izveidotu melnrakstus, atlasiet ne vairāk kā {limit} lietas. Lai turpinātu, noņemiet vienas lietas atlasi.",
     "pendingRetry": "Mēģināt izveidot melnrakstus vēlreiz",
     "draftMarkerFailed": "Melnraksti ir izveidoti, bet vietējo apstiprinājumu neizdevās saglabāt. Pirms turpināšanas ielādējiet vēlreiz.",
     "narrativeEvidence": "Darbs ar: {evidence}",

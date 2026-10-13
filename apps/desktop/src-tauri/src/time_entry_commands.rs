@@ -41,16 +41,21 @@ pub struct SubmitResult {
   marker_saved: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Debug, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum SubmitError {
   Rejected,
   Uncertain,
 }
-impl From<String> for SubmitError {
-  fn from(_: String) -> Self {
-    Self::Uncertain
+fn validate_confirmation(
+  batch: &ConfirmedBatch,
+  date: &str,
+) -> Result<(), SubmitError> {
+  batch.validate().map_err(|_| SubmitError::Rejected)?;
+  if batch.entries.iter().any(|entry| entry.date_worked != date) {
+    return Err(SubmitError::Rejected);
   }
+  Ok(())
 }
 
 fn require_account(
@@ -123,8 +128,10 @@ pub async fn time_entry_submit_batch_confirmed(
     items,
   } = request;
   let _confirmation = BATCH_CONFIRMATION.lock().await;
-  let day = activity::parse_date(&date)?;
-  let account = linked_account(&caller, &gates, &accounts).await?;
+  let day = activity::parse_date(&date).map_err(|_| SubmitError::Rejected)?;
+  let account = linked_account(&caller, &gates, &accounts)
+    .await
+    .map_err(|_| SubmitError::Rejected)?;
   let (entries, ranges): (Vec<_>, Vec<_>) = items
     .into_iter()
     .map(|item| (item.entry, item.ranges))
@@ -133,40 +140,52 @@ pub async fn time_entry_submit_batch_confirmed(
     idempotency_key,
     entries,
   };
-  batch.validate()?;
-  if batch.entries.iter().any(|entry| entry.date_worked != date) {
-    return Err(SubmitError::Rejected);
-  }
+  validate_confirmation(&batch, &date)?;
   let pending = ActivityPendingBatch {
     idempotency_key: batch.idempotency_key.clone(),
-    entries: serde_json::to_value(&batch.entries).map_err(|_| REFUSAL.to_string())?,
+    entries: serde_json::to_value(&batch.entries).map_err(|_| SubmitError::Rejected)?,
     ranges: ranges.clone(),
   };
   {
-    let mut manager = state.lock().map_err(|_| REFUSAL.to_string())?;
-    caller.require_current(&app)?;
-    manager.require_caller(&caller)?;
+    let mut manager = state.lock().map_err(|_| SubmitError::Rejected)?;
+    caller
+      .require_current(&app)
+      .map_err(|_| SubmitError::Rejected)?;
+    manager
+      .require_caller(&caller)
+      .map_err(|_| SubmitError::Rejected)?;
     // Persist the exact confirmed request before any outbound I/O. A changed
     // request cannot replace a batch whose response may have been lost.
-    manager.reserve_batch(day, pending)?;
+    manager
+      .reserve_batch(day, pending)
+      .map_err(|_| SubmitError::Uncertain)?;
   };
-  let created =
-    match time_entry_submit::submit_batch_with_recovery(&account, &batch).await {
-      Ok(created) => created,
-      Err(time_entry_submit::SubmitFailure::Cancelled) => {
-        require_account(&caller, &gates, &account)?;
-        caller.require_current(&app)?;
-        let mut manager = state.lock().map_err(|_| REFUSAL.to_string())?;
-        manager.require_caller(&caller)?;
-        manager.cancel_pending_batch(day, &batch.idempotency_key)?;
-        drop(manager);
-        let _ = app.emit(activity::CHANGED_EVENT, ());
-        return Err(SubmitError::Rejected);
-      }
-      Err(_) => return Err(SubmitError::Uncertain),
-    };
-  require_account(&caller, &gates, &account)?;
-  caller.require_current(&app)?;
+  let created = match time_entry_submit::submit_batch_with_recovery(&account, &batch)
+    .await
+  {
+    Ok(created) => created,
+    Err(time_entry_submit::SubmitFailure::Cancelled) => {
+      require_account(&caller, &gates, &account).map_err(|_| SubmitError::Uncertain)?;
+      caller
+        .require_current(&app)
+        .map_err(|_| SubmitError::Uncertain)?;
+      let mut manager = state.lock().map_err(|_| SubmitError::Uncertain)?;
+      manager
+        .require_caller(&caller)
+        .map_err(|_| SubmitError::Uncertain)?;
+      manager
+        .cancel_pending_batch(day, &batch.idempotency_key)
+        .map_err(|_| SubmitError::Uncertain)?;
+      drop(manager);
+      let _ = app.emit(activity::CHANGED_EVENT, ());
+      return Err(SubmitError::Rejected);
+    }
+    Err(_) => return Err(SubmitError::Uncertain),
+  };
+  require_account(&caller, &gates, &account).map_err(|_| SubmitError::Uncertain)?;
+  caller
+    .require_current(&app)
+    .map_err(|_| SubmitError::Uncertain)?;
   let markers = created
     .entries
     .iter()
@@ -180,8 +199,10 @@ pub async fn time_entry_submit_batch_confirmed(
     })
     .collect();
   let marker_saved = {
-    let mut manager = state.lock().map_err(|_| REFUSAL.to_string())?;
-    manager.require_caller(&caller)?;
+    let mut manager = state.lock().map_err(|_| SubmitError::Uncertain)?;
+    manager
+      .require_caller(&caller)
+      .map_err(|_| SubmitError::Uncertain)?;
     manager.finish_batch(day, markers).is_ok()
   };
   let _ = app.emit(activity::CHANGED_EVENT, ());
@@ -195,6 +216,33 @@ pub async fn time_entry_submit_batch_confirmed(
 mod tests {
   use super::*;
   use std::collections::HashSet;
+
+  #[test]
+  fn oversized_confirmation_is_rejected_before_reservation() {
+    let date = "2026-10-09";
+    let batch = ConfirmedBatch {
+      idempotency_key: "confirmed-batch".into(),
+      entries: (0..101)
+        .map(|index| ConfirmedTimeEntry {
+          matter_id: format!("matter_{index}"),
+          date_worked: date.into(),
+          timezone_id: "UTC".into(),
+          duration_minutes: 6,
+          narrative: "Reviewed agreement".into(),
+          billable: false,
+        })
+        .collect(),
+    };
+    assert_eq!(
+      validate_confirmation(&batch, date),
+      Err(SubmitError::Rejected)
+    );
+    let accepted = ConfirmedBatch {
+      idempotency_key: batch.idempotency_key,
+      entries: batch.entries.into_iter().take(100).collect(),
+    };
+    assert_eq!(validate_confirmation(&accepted, date), Ok(()));
+  }
 
   #[test]
   fn confirmation_requires_both_features_and_the_original_account_generation() {

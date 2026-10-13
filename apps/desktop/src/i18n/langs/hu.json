@@ -447,6 +447,7 @@
     "selectRange": "Időszak kijelölése",
     "batchCreated": "{count, plural, one {# piszkozat létrehozva} other {# piszkozat létrehozva}}",
     "batchFailed": "A piszkozatokat nem sikerült létrehozni. Próbálja újra.",
+    "batchLimitExceeded": "Piszkozatok létrehozásához legfeljebb {limit} ügyet válasszon ki. A folytatáshoz törölje egy ügy kijelölését.",
     "pendingRetry": "Piszkozatok létrehozásának újrapróbálása",
     "draftMarkerFailed": "A piszkozatok létrejöttek, de a helyi visszaigazolást nem sikerült menteni. A folytatás előtt töltse újra az oldalt.",
     "narrativeEvidence": "Munka: {evidence}",

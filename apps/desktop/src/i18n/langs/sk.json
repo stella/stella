@@ -447,6 +447,7 @@
     "selectRange": "Vybrať úsek",
     "batchCreated": "{count, plural, one {Vytvorený # koncept} few {Vytvorené # koncepty} other {Vytvorených # konceptov}}",
     "batchFailed": "Koncepty sa nepodarilo vytvoriť. Skúste to znova.",
+    "batchLimitExceeded": "Na vytvorenie konceptov vyberte najviac {limit} spisov. Ak chcete pokračovať, zrušte výber niektorého spisu.",
     "pendingRetry": "Skúsiť vytvoriť koncepty znova",
     "draftMarkerFailed": "Koncepty boli vytvorené, ale miestne potvrdenie sa nepodarilo uložiť. Pred pokračovaním znovu načítajte stránku.",
     "narrativeEvidence": "Práca na: {evidence}",

@@ -447,6 +447,7 @@
     "selectRange": "Select a range",
     "batchCreated": "{count, plural, one {# draft created} other {# drafts created}}",
     "batchFailed": "Drafts could not be created. Try again.",
+    "batchLimitExceeded": "Select no more than {limit} matters to create drafts. Deselect a matter to continue.",
     "pendingRetry": "Retry draft creation",
     "draftMarkerFailed": "Drafts were created, but the local receipt could not be saved. Reload before continuing.",
     "narrativeEvidence": "Work on {evidence}",

@@ -514,6 +514,71 @@ test("only explicit batch creation sends the edited billing fields and prevents 
   ).toBeDisabled();
 });
 
+test("more than 100 selected matters keep the review editable until the selection is reduced", async ({
+  page,
+}) => {
+  const startMs = Date.parse("2026-10-07T09:00:00Z");
+  const manualAssignments = Array.from({ length: 101 }, (_, index) => ({
+    start: new Date(startMs + index * 60_000).toISOString(),
+    end: new Date(startMs + (index + 1) * 60_000).toISOString(),
+    matterId: `manual-matter-${index}`,
+    matter: {
+      id: `manual-matter-${index}`,
+      name: `Manual matter ${index}`,
+      reference: null,
+      color: null,
+      clientName: null,
+    },
+  }));
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      manualAssignments,
+      segments: [
+        {
+          appIdentifier: "com.example.editor",
+          appName: "Example Editor",
+          start: "2026-10-07T09:00:00Z",
+          end: "2026-10-07T10:41:00Z",
+        },
+      ],
+    },
+  });
+  const includes = page.getByRole("checkbox", {
+    name: /^Include Manual matter /u,
+  });
+  await expect(includes).toHaveCount(101);
+  await expect(
+    page.getByRole("button", { name: "Create 101 drafts", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.batchLimitExceeded.replace("{limit}", "100"),
+  );
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
+  );
+  const include = page.getByRole("checkbox", {
+    name: "Include Manual matter 0",
+    exact: true,
+  });
+  await expect(include).toBeEnabled();
+  await expect(
+    page
+      .getByRole("textbox", { name: enMessages.activity.entryNarrative })
+      .first(),
+  ).toBeEnabled();
+  await include.uncheck();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Create 100 drafts", exact: true }),
+  ).toBeEnabled();
+  await include.check();
+  await expect(
+    page.getByRole("button", { name: "Create 101 drafts", exact: true }),
+  ).toBeDisabled();
+});
+
 test("only an explicit summary copy publishes activity to the clipboard", async ({
   page,
 }) => {

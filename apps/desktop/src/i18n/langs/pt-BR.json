@@ -447,6 +447,7 @@
     "selectRange": "Selecionar um intervalo",
     "batchCreated": "{count, plural, one {# rascunho criado} other {# rascunhos criados}}",
     "batchFailed": "Não foi possível criar os rascunhos. Tente novamente.",
+    "batchLimitExceeded": "Selecione no máximo {limit} casos para criar rascunhos. Desmarque um caso para continuar.",
     "pendingRetry": "Tentar criar os rascunhos novamente",
     "draftMarkerFailed": "Os rascunhos foram criados, mas a confirmação local não pôde ser salva. Recarregue antes de continuar.",
     "narrativeEvidence": "Trabalho em {evidence}",

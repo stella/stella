@@ -447,6 +447,7 @@
     "selectRange": "Wybierz przedział",
     "batchCreated": "{count, plural, one {Utworzono # wersję roboczą} few {Utworzono # wersje robocze} many {Utworzono # wersji roboczych} other {Utworzono # wersji roboczej}}",
     "batchFailed": "Nie udało się utworzyć wersji roboczych. Spróbuj ponownie.",
+    "batchLimitExceeded": "Aby utworzyć wersje robocze, wybierz nie więcej niż {limit} spraw. Odznacz jedną sprawę, aby kontynuować.",
     "pendingRetry": "Ponów tworzenie wersji roboczych",
     "draftMarkerFailed": "Utworzono wersje robocze, ale nie udało się zapisać lokalnego potwierdzenia. Odśwież przed kontynuowaniem.",
     "narrativeEvidence": "Praca nad: {evidence}",

@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { DESKTOP_ACTIVITY_REVIEW_LIMIT } from "@stll/api-contract/desktop-time-entries";
 import type {
   DesktopMatter,
   DesktopTimeEntryBatch,
@@ -171,6 +172,7 @@ export const ActivityDayReview = ({
       group.matter !== null,
   );
   const selected = eligible.filter((group) => editFor(group).selected);
+  const selectionExceedsLimit = selected.length > DESKTOP_ACTIVITY_REVIEW_LIMIT;
   const selectedTenths = selected.reduce(
     (sum, group) => sum + group.roundedTenths,
     0,
@@ -219,6 +221,9 @@ export const ActivityDayReview = ({
       return;
     }
     if (submission.type === "saved" && !submission.markerSaved) {
+      return;
+    }
+    if (submission.type !== "retry" && selectionExceedsLimit) {
       return;
     }
     const pending =
@@ -345,6 +350,11 @@ export const ActivityDayReview = ({
           {errorMessage}
         </p>
       ) : null}
+      {editable && selectionExceedsLimit ? (
+        <p role="alert" className="text-destructive text-sm">
+          {t("batchLimitExceeded", { limit: DESKTOP_ACTIVITY_REVIEW_LIMIT })}
+        </p>
+      ) : null}
       {submission.type === "saved" ? (
         <p
           role={submission.markerSaved ? "status" : "alert"}
@@ -374,9 +384,10 @@ export const ActivityDayReview = ({
           )
         }
         onSubmit={submit}
-        valid={selected.every(
-          (group) => editFor(group).narrative.trim().length > 0,
-        )}
+        valid={
+          !selectionExceedsLimit &&
+          selected.every((group) => editFor(group).narrative.trim().length > 0)
+        }
       />
     </div>
   );

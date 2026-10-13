@@ -447,6 +447,7 @@
     "selectRange": "Pasirinkti laikotarpį",
     "batchCreated": "{count, plural, one {Sukurtas # juodraštis} few {Sukurti # juodraščiai} other {Sukurta # juodraščių}}",
     "batchFailed": "Nepavyko sukurti juodraščių. Bandykite dar kartą.",
+    "batchLimitExceeded": "Norėdami sukurti juodraščius, pasirinkite ne daugiau kaip {limit} bylų. Norėdami tęsti, panaikinkite vienos bylos pasirinkimą.",
     "pendingRetry": "Bandyti dar kartą sukurti juodraščius",
     "draftMarkerFailed": "Juodraščiai sukurti, bet vietinio patvirtinimo nepavyko išsaugoti. Prieš tęsdami įkelkite iš naujo.",
     "narrativeEvidence": "Darbas: {evidence}",

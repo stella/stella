@@ -447,6 +447,7 @@
     "selectRange": "Zeitraum auswählen",
     "batchCreated": "{count, plural, one {# Entwurf erstellt} other {# Entwürfe erstellt}}",
     "batchFailed": "Entwürfe konnten nicht erstellt werden. Versuchen Sie es erneut.",
+    "batchLimitExceeded": "Wählen Sie höchstens {limit} Mandate aus, um Entwürfe zu erstellen. Wählen Sie ein Mandat ab, um fortzufahren.",
     "pendingRetry": "Entwürfe erneut erstellen",
     "draftMarkerFailed": "Entwürfe wurden erstellt, aber die lokale Bestätigung konnte nicht gespeichert werden. Laden Sie vor dem Fortfahren neu.",
     "narrativeEvidence": "Arbeit an {evidence}",

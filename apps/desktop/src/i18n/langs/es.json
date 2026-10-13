@@ -447,6 +447,7 @@
     "selectRange": "Seleccionar un intervalo",
     "batchCreated": "{count, plural, one {# borrador creado} other {# borradores creados}}",
     "batchFailed": "No se pudieron crear los borradores. Inténtelo de nuevo.",
+    "batchLimitExceeded": "Seleccione como máximo {limit} asuntos para crear borradores. Deseleccione un asunto para continuar.",
     "pendingRetry": "Reintentar la creación de borradores",
     "draftMarkerFailed": "Se crearon los borradores, pero no se pudo guardar la confirmación local. Recargue antes de continuar.",
     "narrativeEvidence": "Trabajo en {evidence}",

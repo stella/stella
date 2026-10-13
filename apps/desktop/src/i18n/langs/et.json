@@ -447,6 +447,7 @@
     "selectRange": "Vali ajavahemik",
     "batchCreated": "{count, plural, one {# mustand loodud} other {# mustandit loodud}}",
     "batchFailed": "Mustandeid ei õnnestunud luua. Proovi uuesti.",
+    "batchLimitExceeded": "Mustandite loomiseks valige kuni {limit} toimikut. Jätkamiseks eemaldage ühe toimiku valik.",
     "pendingRetry": "Proovi mustandeid uuesti luua",
     "draftMarkerFailed": "Mustandid loodi, kuid kohalikku kinnitust ei õnnestunud salvestada. Enne jätkamist laadi leht uuesti.",
     "narrativeEvidence": "Töö: {evidence}",

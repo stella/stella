@@ -447,6 +447,7 @@
     "selectRange": "Sélectionner une plage",
     "batchCreated": "{count, plural, one {# brouillon créé} other {# brouillons créés}}",
     "batchFailed": "Impossible de créer les brouillons. Réessayez.",
+    "batchLimitExceeded": "Sélectionnez au maximum {limit} dossiers pour créer des brouillons. Désélectionnez un dossier pour continuer.",
     "pendingRetry": "Réessayer la création des brouillons",
     "draftMarkerFailed": "Les brouillons ont été créés, mais la confirmation locale n’a pas pu être enregistrée. Rechargez avant de continuer.",
     "narrativeEvidence": "Travail sur {evidence}",
