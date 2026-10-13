@@ -17,6 +17,7 @@ import {
 } from "@stll/ui/accordion";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
@@ -48,6 +49,7 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";
 import { decisionDateToIso } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -315,6 +317,9 @@ const WorkReferences = ({
         }) && <QueryViewFeedback view={versionsView} />}
       <div className="flex min-w-0 flex-wrap items-center gap-x-2">
         <AccordionTrigger className="min-w-0 flex-1" size="compact">
+          <DocumentIdentityBadge
+            identity={statuteDocumentIdentity(group.workEli)}
+          />
           <BidiText as="span" className="min-w-0 text-pretty">
             {title}
           </BidiText>

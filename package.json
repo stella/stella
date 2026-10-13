@@ -100,7 +100,7 @@
     "check:knip-exports": "bun scripts/knip-exports-ratchet.ts --check",
     "check:toast-errors": "bun test scripts/toast-error-census.test.ts && bun scripts/toast-error-census.ts",
     "check:design-tokens": "bun scripts/design-tokens-doc.ts --check",
-    "check:module-ownership": "bun test scripts/ownership.test.ts scripts/schema-introspection.test.ts && bun scripts/ownership.ts --check && bun scripts/outbound-transport-ownership.ts --check && bun test scripts/outbound-transport-ownership.test.ts",
+    "check:module-ownership": "bun test scripts/ownership.test.ts scripts/schema-introspection.test.ts && bun scripts/ownership.ts --check && bun scripts/outbound-transport-ownership.ts --check && bun test scripts/outbound-transport-ownership.test.ts scripts/document-identity-guard.test.ts && bun scripts/document-identity-guard.ts",
     "check:standalone-lockfiles": "bun scripts/check-standalone-lockfiles.ts",
     "check:standalone-negated-shell": "bun scripts/check-standalone-negated-shell.ts",
     "check:published-package-lists": "bun scripts/check-published-package-lists.ts --check",
@@ -292,8 +292,8 @@
     "react19": {
       "@types/react": "^19.2.17",
       "@types/react-dom": "^19.2.7",
-      "react": "^19.2.8",
-      "react-dom": "^19.2.8"
+      "react": "^19.3.0",
+      "react-dom": "^19.3.0"
     }
   },
   "patchedDependencies": {
@@ -313,7 +313,8 @@
     "@tanstack/ai-gemini@0.36.0": "patches/@tanstack%2Fai-gemini@0.36.0.patch",
     "@tanstack/ai-mistral@0.6.14": "patches/@tanstack%2Fai-mistral@0.6.14.patch",
     "@tanstack/ai-openrouter@0.21.1": "patches/@tanstack%2Fai-openrouter@0.21.1.patch",
-    "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch"
+    "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
+    "@libpdf/core@0.4.2": "patches/@libpdf%2Fcore@0.4.2.patch"
   },
   "trustedDependencies": [
     "lefthook"

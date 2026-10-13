@@ -14,6 +14,7 @@ import {
 import path from "node:path";
 
 import { childExitStatus } from "../packages/scripts/src/child-exit-status";
+import { parseInstallFlags } from "./ci-install-store";
 
 const INSTALL_TIMEOUT_MS = 120_000;
 // Windows Bun 1.4.3 completed 1,680 extractions from a 2,502-package resolved
@@ -22,8 +23,32 @@ const INSTALL_TIMEOUT_MS = 120_000;
 // Count all packages conservatively, including those skipped on this platform.
 const WINDOWS_COLD_INSTALL_TIMEOUT_MS = 240_000;
 
-export const installTimeoutMs = (platform: NodeJS.Platform) =>
-  platform === "win32" ? WINDOWS_COLD_INSTALL_TIMEOUT_MS : INSTALL_TIMEOUT_MS;
+class CiInstallBudgetError extends Error {
+  override name = "CiInstallBudgetError";
+  readonly _tag = "CiInstallBudgetError";
+}
+
+export const installTimeoutMs = (
+  platform: NodeJS.Platform,
+  requested?: string,
+) => {
+  const maximum =
+    platform === "win32" ? WINDOWS_COLD_INSTALL_TIMEOUT_MS : INSTALL_TIMEOUT_MS;
+  if (requested === undefined || requested === "") {
+    return maximum;
+  }
+  const budget = Number(requested);
+  if (
+    !/^[1-9]\d*$/u.test(requested) ||
+    !Number.isSafeInteger(budget) ||
+    budget > maximum
+  ) {
+    throw new CiInstallBudgetError(
+      "Installer budget must be positive integer milliseconds within the platform limit",
+    );
+  }
+  return budget;
+};
 const CONSOLE_TAIL_BYTES = 4096;
 
 type LoggedInstallOptions = {
@@ -95,9 +120,16 @@ if (import.meta.main) {
     );
     process.exit(1);
   }
+  const flags =
+    args.length > 0
+      ? args
+      : parseInstallFlags(process.env["STELLA_CI_INSTALL_FLAGS"]);
   process.exitCode = await runLoggedInstall({
-    command: [process.execPath, "install", "--verbose", ...args],
+    command: [process.execPath, "install", "--verbose", ...flags],
     logFile,
-    timeoutMs: installTimeoutMs(process.platform),
+    timeoutMs: installTimeoutMs(
+      process.platform,
+      process.env["STELLA_CI_INSTALL_BUDGET_MS"],
+    ),
   });
 }
