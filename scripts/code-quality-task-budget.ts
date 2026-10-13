@@ -318,6 +318,7 @@ export const createTaskProgressWatchdog = ({
     },
     maximumGapMs: () =>
       finished ? maxGap : Math.max(maxGap, now() - progressAt),
+    wasStalled: () => stalled,
     idleMs: () => now() - progressAt,
     warn: warning,
     tick: () => {
@@ -354,8 +355,7 @@ const processSnapshot = async ({
   });
   const startedAt = Date.now();
   let output = "";
-  let overflow = false;
-  let stalled = false;
+  const overflow = new AbortController();
   const watchdog = createTaskProgressWatchdog({
     budgetMs: 1000,
     stallMs,
@@ -365,7 +365,6 @@ const processSnapshot = async ({
         `::warning title=task-budget::phase=diagnostic elapsed_ms=${Date.now() - startedAt} budget_ms=1000\n`,
       ),
     kill: () => {
-      stalled = true;
       report(
         `::error title=task-stall::kind=infra class=task-stall phase=diagnostic elapsed_ms=${Date.now() - startedAt} idle_ms=${watchdog.idleMs()}\n`,
       );
@@ -381,7 +380,7 @@ const processSnapshot = async ({
       return;
     }
     if (output.length + chunk.length > 2 * 1024 * 1024) {
-      overflow = true;
+      overflow.abort();
       return;
     }
     output += chunk.toString();
@@ -394,9 +393,9 @@ const processSnapshot = async ({
       child.once("error", reject);
       child.once("close", (exitCode) => resolve(exitCode ?? 1));
     });
-    if (code !== 0 || stalled || overflow) {
+    if (code !== 0 || watchdog.wasStalled() || overflow.signal.aborted) {
       return invalid(
-        `Process snapshot failed: exit=${code} stalled=${stalled} overflow=${overflow}`,
+        `Process snapshot failed: exit=${code} stalled=${watchdog.wasStalled()} overflow=${overflow.signal.aborted}`,
       );
     }
     return output;
@@ -672,11 +671,55 @@ const createTaskMonitor = ({
   let previousCpu: string | undefined;
   let progressProbeWarning = false;
   let probing: Promise<void> | undefined;
-  let exited = false;
+  const completion = new AbortController();
   let lastProbe = startedAt;
+  const probeCpu = async () => {
+    const cpuSnapshot = await Result.tryPromise(async () => {
+      const snapshot = await processSnapshot({
+        columns: "pid=,ppid=,pgid=,stat=,time=,command=",
+        stallMs,
+        report: reportDiagnostic,
+      });
+      if (pid === undefined) {
+        return "";
+      }
+      return ownedProcessTreeRows(snapshot, pid)
+        .map((row) => {
+          const fields = row.split(/\s+/u);
+          const processId = fields.at(0);
+          const cpuTime = fields.at(4);
+          if (processId === undefined || cpuTime === undefined) {
+            return invalid("Malformed process CPU snapshot row");
+          }
+          return `${processId}:${cpuTime}`;
+        })
+        .toSorted()
+        .join("|");
+    });
+    if (completion.signal.aborted) {
+      return;
+    }
+    if (cpuSnapshot.isErr()) {
+      // Failed observation cannot prove a CPU stall. Surface it once and use
+      // the job deadline, rather than killing a potentially busy compiler.
+      if (!progressProbeWarning) {
+        progressProbeWarning = true;
+        reportDiagnostic(
+          `::warning title=task-progress-probe::Cannot observe task CPU progress: ${failureMessage(cpuSnapshot.error)}; job deadline remains the outer bound\n`,
+        );
+      }
+      return;
+    }
+    const cpu = cpuSnapshot.value;
+    if (previousCpu !== undefined && cpu !== previousCpu) {
+      watchdog.progress();
+    }
+    previousCpu = cpu;
+    watchdog.tick();
+  };
   const timer = setInterval(
     () => {
-      if (exited || probing !== undefined) {
+      if (completion.signal.aborted || probing !== undefined) {
         return;
       }
       watchdog.warn();
@@ -693,45 +736,7 @@ const createTaskMonitor = ({
         return;
       }
       lastProbe = Date.now();
-      probing = (async () => {
-        const cpuSnapshot = await Result.tryPromise(
-          async () =>
-            await processSnapshot({
-              columns: "pid=,ppid=,pgid=,stat=,time=,command=",
-              stallMs,
-              report: reportDiagnostic,
-            }),
-        );
-        if (exited) {
-          return;
-        }
-        if (cpuSnapshot.isErr()) {
-          // Failed observation cannot prove a CPU stall. Surface it once and use
-          // the job deadline, rather than killing a potentially busy compiler.
-          if (!progressProbeWarning) {
-            progressProbeWarning = true;
-            reportDiagnostic(
-              `::warning title=task-progress-probe::Cannot observe task CPU progress: ${failureMessage(cpuSnapshot.error)}; job deadline remains the outer bound\n`,
-            );
-          }
-          return;
-        }
-        const cpu =
-          pid === undefined
-            ? ""
-            : ownedProcessTreeRows(cpuSnapshot.value, pid)
-                .map((row) => {
-                  const fields = row.split(/\s+/u);
-                  return `${fields.at(0)}:${fields.at(4)}`;
-                })
-                .toSorted()
-                .join("|");
-        if (previousCpu !== undefined && cpu !== previousCpu) {
-          watchdog.progress();
-        }
-        previousCpu = cpu;
-        watchdog.tick();
-      })().finally(() => {
+      probing = probeCpu().finally(() => {
         probing = undefined;
       });
     },
@@ -739,7 +744,7 @@ const createTaskMonitor = ({
   );
 
   const stop = () => {
-    exited = true;
+    completion.abort();
     clearInterval(timer);
     watchdog.finish();
   };

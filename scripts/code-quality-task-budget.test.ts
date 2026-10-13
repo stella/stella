@@ -490,6 +490,7 @@ test("slow task progress warns once beyond its budget and finishing stops the wa
   now = 1000;
   watchdog.tick();
   expect(events).toEqual(["warning"]);
+  expect(watchdog.wasStalled()).toBe(false);
 });
 
 test("silent task hangs warn then kill exactly once at the stall threshold", () => {
@@ -517,6 +518,7 @@ test("silent task hangs warn then kill exactly once at the stall threshold", () 
   watchdog.tick();
   watchdog.finish();
   expect(events).toEqual(["warning", "stall"]);
+  expect(watchdog.wasStalled()).toBe(true);
 });
 
 test.each([0, 7])(
