@@ -20,7 +20,7 @@ test("worktree identities are bounded SQL identifiers and distinguish paths", ()
     "/work/b",
     "/work/á",
     "/work/a b",
-    '/work/a";DROP DATABASE postgres;',
+    '/work/team\'s notes; "draft"',
   ];
   const databases = paths.map(sharedTestDatabase);
   expect(new Set(databases).size).toBe(paths.length);

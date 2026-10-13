@@ -43,7 +43,7 @@ describe("shared template role replay", () => {
       mkdirSync(migration);
       writeFileSync(
         path.join(migration, "migration.sql"),
-        "CREATE ROLE fixture_reader LOGIN SUPERUSER;",
+        "CREATE ROLE fixture_reader NOLOGIN NOINHERIT;",
       );
       expect(() =>
         sharedTestTemplateMigrations({ migrationsFolder: folder }),
