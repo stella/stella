@@ -7,6 +7,7 @@ import { CourtName } from "./court-name";
 export const DECISION_TITLE_SEPARATOR = "·";
 
 type DecisionIdentityProps = {
+  presentation?: "breadcrumb" | "embedded";
   caseNumber: string;
   court: string;
   courtAbbreviation: string | null;
@@ -15,17 +16,29 @@ type DecisionIdentityProps = {
 
 /** The public decision breadcrumb's identity, shared with embedded readers. */
 export const DecisionIdentity = ({
+  presentation = "breadcrumb",
   caseNumber,
   court,
   courtAbbreviation,
   courtTier,
 }: DecisionIdentityProps) => (
   <>
-    <BreadcrumbPage className="min-w-0 flex-1 truncate font-medium">
+    <BreadcrumbPage
+      className={
+        presentation === "embedded"
+          ? "min-w-0 font-medium wrap-break-word"
+          : "min-w-0 flex-1 truncate font-medium"
+      }
+    >
       <BidiText>{caseNumber}</BidiText>
     </BreadcrumbPage>
-    {/* On narrow screens the case number identifies the decision by itself. */}
-    <span className="text-muted-foreground flex min-w-0 items-center gap-1.5 truncate max-sm:hidden">
+    <span
+      className={
+        presentation === "embedded"
+          ? "text-muted-foreground flex min-w-0 items-center gap-1.5"
+          : "text-muted-foreground flex min-w-0 items-center gap-1.5 truncate max-sm:hidden"
+      }
+    >
       {DECISION_TITLE_SEPARATOR}
       <CourtName
         abbreviation={courtAbbreviation}

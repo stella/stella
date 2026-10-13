@@ -1,6 +1,14 @@
 import { createDetached } from "@stll/errors";
 
+import {
+  appFailure,
+  createAppRequestId,
+  formatAppFailure,
+} from "../shared/app-error";
+import type { AppFailure } from "../shared/app-error";
+import { appLocale } from "../shared/locale";
 import type { ReaderController } from "./controller";
+import { readerToolFailure } from "./failures";
 import { parseOpenDecision } from "./model";
 
 type ReaderBridge = ReaderController["bridge"];
@@ -39,15 +47,33 @@ export const createEmbeddedReaderBridge = (parent: EmbeddedReaderTransport) => {
       listener();
     }
   };
+  const failedResult = (failure: AppFailure) =>
+    ({
+      status: "error",
+      failure,
+      message: formatAppFailure(
+        failure,
+        appLocale(parent.getSnapshot().context.locale).t,
+      ),
+    }) as const;
+  const publishFailure = (failure: AppFailure) =>
+    publish(failedResult(failure));
   parent.subscribe(() => {
-    snapshot = { ...snapshot, context: parent.getSnapshot().context };
+    snapshot = {
+      ...snapshot,
+      context: parent.getSnapshot().context,
+      result:
+        snapshot.result.status === "error"
+          ? failedResult(snapshot.result.failure)
+          : snapshot.result,
+    };
     for (const listener of listeners) {
       listener();
     }
   });
   const call = async (request: Parameters<ReaderBridge["call"]>[0]) => {
     if (request.name !== "open_case_law_decision") {
-      publish({ status: "error", message: null });
+      publishFailure(appFailure("invalid_arguments", createAppRequestId()));
       return;
     }
     const current = ++generation;
@@ -65,12 +91,12 @@ export const createEmbeddedReaderBridge = (parent: EmbeddedReaderTransport) => {
       return;
     }
     const view =
-      result === undefined || result.isError === true
+      result.isError === true
         ? undefined
         : parseOpenDecision(result.structuredContent);
     publish(
       view === undefined
-        ? { status: "error", message: null }
+        ? failedResult(readerToolFailure(result))
         : { status: "ready", view },
     );
   };
@@ -82,7 +108,9 @@ export const createEmbeddedReaderBridge = (parent: EmbeddedReaderTransport) => {
         listeners.delete(listener);
       };
     },
-    detached: createDetached(() => publish({ status: "error", message: null })),
+    detached: createDetached(() =>
+      publishFailure(appFailure("unavailable", createAppRequestId(), true)),
+    ),
     call,
     retry: async () =>
       call({ name: "open_case_law_decision", arguments: snapshot.input }),
@@ -91,7 +119,7 @@ export const createEmbeddedReaderBridge = (parent: EmbeddedReaderTransport) => {
       const current = generation;
       await parent.requestFullscreen(() => {
         if (current === generation) {
-          publish({ status: "error", message: null });
+          publishFailure(appFailure("unavailable", createAppRequestId(), true));
         }
       });
     },
@@ -99,7 +127,7 @@ export const createEmbeddedReaderBridge = (parent: EmbeddedReaderTransport) => {
       const current = generation;
       await parent.requestInline(() => {
         if (current === generation) {
-          publish({ status: "error", message: null });
+          publishFailure(appFailure("unavailable", createAppRequestId(), true));
         }
       });
     },
@@ -108,7 +136,7 @@ export const createEmbeddedReaderBridge = (parent: EmbeddedReaderTransport) => {
       const current = generation;
       await parent.openLink(url, () => {
         if (current === generation) {
-          publish({ status: "error", message: null });
+          publishFailure(appFailure("unavailable", createAppRequestId(), true));
         }
       });
     },

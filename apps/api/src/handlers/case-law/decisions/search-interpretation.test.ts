@@ -232,6 +232,7 @@ describe("searchAnswer", () => {
     ).toEqual([
       {
         code: "no_hits_filtered",
+        filters: ["court"],
         message:
           "Nothing matched under the filters this search narrowed with: court.",
         hint: "Drop or widen that filter and search again; the same words may match outside it.",

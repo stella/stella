@@ -9,6 +9,7 @@ import {
 import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types";
 import { DECISION_TEXT_WITHHELD_REASON } from "@stll/api-contract/case-law-text-field";
 import {
+  CASE_LAW_SEARCH_FILTERS,
   CASE_LAW_SEARCH_WARNING_CODES,
   FACET_COUNT_TYPE,
   SEARCH_PAGE_REACH,
@@ -106,14 +107,36 @@ export const searchDecisionsBodySchema = t.Object({
   alternatives: t.Optional(tLegalAlternatives),
 });
 
-const searchWarningSchema = t.Object(
-  {
-    code: t.UnionEnum([...CASE_LAW_SEARCH_WARNING_CODES]),
-    message: boundedString(bytes.warning),
-    hint: boundedString(bytes.warning),
-  },
-  { additionalProperties: false },
-);
+const searchWarningText = {
+  message: boundedString(bytes.warning),
+  hint: boundedString(bytes.warning),
+};
+const searchWarningSchema = t.Union([
+  t.Object(
+    {
+      code: t.Literal("function_words_optional"),
+      ...searchWarningText,
+      droppedFunctionWords: t.Array(boundedString(bytes.queryUsed), {
+        maxItems: LIMITS.searchQueryMaxLength,
+      }),
+    },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    { code: t.Literal("no_hits"), ...searchWarningText },
+    { additionalProperties: false },
+  ),
+  t.Object(
+    {
+      code: t.Literal("no_hits_filtered"),
+      ...searchWarningText,
+      filters: t.Array(t.UnionEnum([...CASE_LAW_SEARCH_FILTERS]), {
+        maxItems: CASE_LAW_SEARCH_FILTERS.length,
+      }),
+    },
+    { additionalProperties: false },
+  ),
+]);
 
 const nullableStringSchema = nullableBoundedString(bytes.date);
 

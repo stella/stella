@@ -65,14 +65,7 @@ export const APP_SEARCH_SCHEMA = v.union([
     ),
     searches: v.array(
       v.object({
-        warnings: v.array(
-          v.object(
-            v.pick(search.entries.searches.item.entries.warnings.item, [
-              "message",
-              "hint",
-            ]).entries,
-          ),
-        ),
+        warnings: search.entries.searches.item.entries.warnings,
       }),
     ),
   }),

@@ -4,9 +4,11 @@ import fc from "fast-check";
 import type { ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
+import { appFailure } from "../shared/app-error";
 import {
   appendReaderPage,
   createReaderPager,
+  isReaderCursorConflict,
   parseOpenDecision,
   parseReaderPage,
   resolveReaderRange,
@@ -296,4 +298,36 @@ describe("MCP decision reader paging", () => {
       }),
     ).toBeDefined();
   });
+});
+
+test("cursor conflicts require a typed failed tool result", () => {
+  const structuredContent = {
+    appFailure: appFailure("conflict", "reader-conflict-fixture", true),
+  };
+  expect(isReaderCursorConflict({ isError: true, structuredContent })).toBe(
+    true,
+  );
+  expect(isReaderCursorConflict({ isError: false, structuredContent })).toBe(
+    false,
+  );
+  expect(
+    isReaderCursorConflict({
+      isError: true,
+      structuredContent: {
+        appFailure: appFailure(
+          "unavailable",
+          "reader-unavailable-fixture",
+          true,
+        ),
+      },
+    }),
+  ).toBe(false);
+  expect(
+    isReaderCursorConflict({
+      isError: true,
+      structuredContent: {
+        appFailure: { type: "conflict" },
+      },
+    }),
+  ).toBe(false);
 });

@@ -12,6 +12,10 @@ import {
 import { UI_LOCALES } from "@stll/locales";
 
 import {
+  AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
+  CASE_LAW_SEARCH_WARNING_PRODUCERS,
+} from "../lib/case-law/search-warnings";
+import {
   READ_PROVISION_HISTORY_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
 } from "../lib/chat/legislation-result-projections";
@@ -377,6 +381,24 @@ describe("MCP app registry and contracts", () => {
   test("app consumed-field snapshots match the fields the view actually reads", () => {
     const search = new Set([
       ...observedFields(APP_SEARCH_FIXTURE, searchView),
+      ...observedFields(
+        {
+          ...APP_SEARCH_FIXTURE,
+          searches: [
+            {
+              warnings: [
+                ...Object.values(CASE_LAW_SEARCH_WARNING_PRODUCERS).map(
+                  (produce) => produce(),
+                ),
+                ...Object.values(AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS).map(
+                  (produce) => produce(),
+                ),
+              ],
+            },
+          ],
+        },
+        searchView,
+      ),
       ...observedFields(APP_UNAVAILABLE_FIXTURE, searchView),
     ]);
     const resolution = new Set([
@@ -507,10 +529,10 @@ describe("MCP app registry and contracts", () => {
     expect(view.results.at(0)?.appUrl).toBeNull();
     expect(view.results.at(0)?.source_url).toBe("http://example.org/original");
   });
-  test("filter changes restart the search without discarding unrelated filters", () => {
+  test("filter changes restart the search and retain only declared arguments", () => {
     const expected = {
       queries: ["náhrada škody"],
-      source_id: "source",
+      source_id: "00000000-0000-4000-8000-000000000001",
       limit: 10,
       country: "SVK",
       court: "court",
@@ -523,7 +545,8 @@ describe("MCP app registry and contracts", () => {
           country: "CZE",
           cursor: "old",
           courts: ["old court"],
-          source_id: "source",
+          source_id: "00000000-0000-4000-8000-000000000001",
+          unknown_model_key: true,
           limit: 10,
           date_to: "2023-01-01",
         },

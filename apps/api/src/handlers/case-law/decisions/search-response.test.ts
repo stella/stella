@@ -90,7 +90,14 @@ const responseWithText = (text: string): SearchResponse => {
     paginationOutcome: SEARCH_PAGINATION_COMPLETE,
     pageReach: SEARCH_PAGE_REACH.REACHED,
     queryUsed: text,
-    warnings: [{ code: "function_words_optional", message: text, hint: text }],
+    warnings: [
+      {
+        code: "function_words_optional",
+        droppedFunctionWords: [text],
+        message: text,
+        hint: text,
+      },
+    ],
   };
 };
 

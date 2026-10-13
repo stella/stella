@@ -273,13 +273,15 @@ const App = () => {
             {result.status === "error" ? (
               <>
                 <p>{result.message ?? locale.messages.error}</p>
-                <Button
-                  onClick={() =>
-                    bridge.detached(bridge.retry(), "retry provision history")
-                  }
-                >
-                  {locale.messages.retry}
-                </Button>
+                {result.failure.retryable && (
+                  <Button
+                    onClick={() =>
+                      bridge.detached(bridge.retry(), "retry provision history")
+                    }
+                  >
+                    {locale.messages.retry}
+                  </Button>
+                )}
               </>
             ) : (
               locale.messages.loading

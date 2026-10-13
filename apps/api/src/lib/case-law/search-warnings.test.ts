@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import {
+  CASE_LAW_SEARCH_FILTERS,
   CASE_LAW_SEARCH_WARNING_CODES,
   type CaseLawSearchWarningCode,
 } from "@stll/api-contract/search";
@@ -10,6 +12,9 @@ import {
   AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
   CASE_LAW_SEARCH_WARNING_PRODUCERS,
   caseLawSearchWarnings,
+  agentCaseLawSearchWarningSchema,
+  filterReadWarning,
+  filterDroppedWarning,
 } from "@/api/lib/case-law/search-warnings";
 
 describe("caseLawSearchWarnings", () => {
@@ -70,7 +75,7 @@ describe("caseLawSearchWarnings", () => {
   });
 
   test("the two empty-page codes never both appear", () => {
-    for (const filters of [[], ["court"]]) {
+    for (const filters of [[], ["court"]] as const) {
       const codes = caseLawSearchWarnings({
         droppedFunctionWords: [],
         filters,
@@ -126,4 +131,63 @@ describe("warning code census", () => {
       expect(warning.message.endsWith(".")).toBe(true);
     }
   });
+});
+
+test("every warning preserves its structured fields through the agent schema", () => {
+  for (const produce of [
+    ...Object.values(CASE_LAW_SEARCH_WARNING_PRODUCERS),
+    ...Object.values(AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS),
+  ]) {
+    const warning = produce();
+    expect(v.parse(agentCaseLawSearchWarningSchema, warning)).toEqual(warning);
+  }
+  expect(
+    filterReadWarning({
+      filter: "court",
+      received: "NS",
+      values: ["Nejvyšší soud", "Nejvyšší soud ČR"],
+    }),
+  ).toMatchObject({
+    filter: "court",
+    courtAliases: [
+      { input: "NS", resolved: "Nejvyšší soud" },
+      { input: "NS", resolved: "Nejvyšší soud ČR" },
+    ],
+  });
+  expect(
+    filterDroppedWarning({
+      filter: "court",
+      received: "unknown",
+      known: "Known courts",
+    }),
+  ).toMatchObject({ filter: "court", received: "unknown" });
+  expect(
+    caseLawSearchWarnings({
+      droppedFunctionWords: ["na"],
+      filters: ["court"],
+      emptyResultSet: true,
+    }),
+  ).toMatchObject([
+    { code: "function_words_optional", droppedFunctionWords: ["na"] },
+    { code: "no_hits_filtered", filters: ["court"] },
+  ]);
+});
+
+test("warnings carry only canonical narrowing filter names", () => {
+  expect(
+    v.parse(agentCaseLawSearchWarningSchema, {
+      code: "no_hits_filtered",
+      message: "No results",
+      hint: "Widen filters",
+      filters: [...CASE_LAW_SEARCH_FILTERS],
+    }),
+  ).toMatchObject({ filters: [...CASE_LAW_SEARCH_FILTERS] });
+  expect(
+    v.safeParse(agentCaseLawSearchWarningSchema, {
+      code: "no_hits_filtered",
+      message: "No results",
+      hint: "Widen filters",
+      filters: ["date_from"],
+    }).success,
+  ).toBe(false);
 });

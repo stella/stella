@@ -8,7 +8,6 @@ import postcss from "postcss";
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
 import { repoRelativePath } from "@stll/portable-path";
 
-import readerPackage from "../../../packages/decision-reader/package.json";
 import { MCP_APP_OUTPUT_SCHEMAS } from "../src/mcp/app-contracts";
 import {
   READER_MESSAGE_KEYS,
@@ -17,15 +16,18 @@ import {
 import { MCP_APPS } from "../src/mcp/apps/manifest";
 import { defineChatProjectionMcpToolOutput } from "../src/mcp/valibot-tool-definition";
 import { inspectMcpAppHtml } from "./lib/mcp-app-html-guard";
+import { generateMcpAppInputs } from "./lib/mcp-app-inputs";
 import {
   inspectMcpReaderUi,
   MCP_READER_UI_APP_DIRECTORIES,
+  MCP_SHARED_UI_MODULE_FILES,
 } from "./lib/mcp-reader-ui-guard";
 
 const generatedRoot = path.resolve(
   import.meta.dirname,
   "../src/mcp/apps/shared/generated",
 );
+await generateMcpAppInputs(generatedRoot);
 await Bun.write(
   path.join(generatedRoot, "messages.json"),
   `${JSON.stringify(MCP_APP_MESSAGES, null, 2)}\n`,
@@ -179,11 +181,8 @@ const buildMcpApp = async ({
       file,
       text: await Bun.file(path.join(repoRoot, file)).text(),
     });
-    const sharedFiles = Object.values(readerPackage.exports)
-      .filter((file) => file.endsWith(".tsx"))
-      .map((file) => `packages/decision-reader/${file.replace(/^\.\//u, "")}`);
     const [sharedModules, astModules, bundleModules] = await Promise.all([
-      Promise.all(sharedFiles.map(loadModule)),
+      Promise.all(MCP_SHARED_UI_MODULE_FILES.map(loadModule)),
       Promise.all(
         [
           "packages/legal-ast/src/document-ast.ts",

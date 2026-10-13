@@ -1,6 +1,11 @@
-import type {
-  CaseLawSearchWarning,
-  CaseLawSearchWarningCode,
+import * as v from "valibot";
+
+import {
+  caseLawSearchFilterSchema,
+  caseLawSearchWarningSchema,
+  type CaseLawSearchFilter,
+  type CaseLawSearchWarning,
+  type CaseLawSearchWarningCode,
 } from "@stll/api-contract/search";
 
 /**
@@ -25,7 +30,7 @@ import type {
  * request. Order is the schema's, so two requests carrying the same filters
  * produce the same sentence.
  */
-type CaseLawSearchFilterNames = readonly string[];
+type CaseLawSearchFilterNames = readonly CaseLawSearchFilter[];
 
 type CaseLawSearchWarningsOptions = {
   /**
@@ -47,6 +52,7 @@ const functionWordsWarning = (
   dropped: readonly string[],
 ): CaseLawSearchWarning => ({
   code: "function_words_optional",
+  droppedFunctionWords: [...dropped],
   // Named, not counted: a reader deciding whether the search answered their
   // question needs to know which words it stopped requiring, not how many.
   message: `The search did not require these words, which are grammar rather than subject matter: ${dropped.join(", ")}.`,
@@ -64,6 +70,7 @@ const noHitsFilteredWarning = (
   filters: CaseLawSearchFilterNames,
 ): CaseLawSearchWarning => ({
   code: "no_hits_filtered",
+  filters: [...filters],
   // The filters are named because the reader chose them and can drop them.
   // The other reading of an empty page — that the corpus holds nothing on the
   // subject — is the one this warning exists to rule out.
@@ -123,11 +130,33 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
 type AgentCaseLawSearchWarningCode =
   (typeof AGENT_CASE_LAW_SEARCH_WARNING_CODES)[number];
 
-export type AgentCaseLawSearchWarning = {
-  readonly code: CaseLawSearchWarningCode | AgentCaseLawSearchWarningCode;
-  readonly message: string;
-  readonly hint: string;
-};
+const agentWarningText = { message: v.string(), hint: v.string() };
+
+export const agentCaseLawSearchWarningSchema = v.variant("code", [
+  ...caseLawSearchWarningSchema.options,
+  v.strictObject({
+    code: v.literal("filter_read"),
+    filter: caseLawSearchFilterSchema,
+    courtAliases: v.array(
+      v.strictObject({ input: v.string(), resolved: v.string() }),
+    ),
+    ...agentWarningText,
+  }),
+  v.strictObject({
+    code: v.literal("filter_dropped"),
+    filter: caseLawSearchFilterSchema,
+    received: v.string(),
+    ...agentWarningText,
+  }),
+  v.strictObject({
+    code: v.literal("many_required_terms"),
+    ...agentWarningText,
+  }),
+]);
+
+export type AgentCaseLawSearchWarning = v.InferOutput<
+  typeof agentCaseLawSearchWarningSchema
+>;
 
 /**
  * A court the corpus stores under several spellings (with and without the
@@ -139,19 +168,29 @@ export const filterReadWarning = ({
   received,
   values: [value, ...others],
 }: {
-  filter: string;
+  filter: CaseLawSearchFilter;
   received: string;
   values: readonly [string, ...string[]];
 }): AgentCaseLawSearchWarning =>
   others.length === 0
     ? {
         code: "filter_read",
-        message: `Read ${filter} ${received} as "${value}".`,
+        filter,
+        courtAliases: [value, ...others].map((resolved) => ({
+          input: received,
+          resolved,
+        })),
+        message: `Read ${filter} ${JSON.stringify(received)} as "${value}".`,
         hint: `Pass ${filter} "${value}" to search the same way without this note.`,
       }
     : {
         code: "filter_read",
-        message: `Read ${filter} ${received} as one ${filter} stored under ${String(others.length + 1)} spellings, and matched each: ${[value, ...others].map((spelling) => `"${spelling}"`).join(", ")}.`,
+        filter,
+        courtAliases: [value, ...others].map((resolved) => ({
+          input: received,
+          resolved,
+        })),
+        message: `Read ${filter} ${JSON.stringify(received)} as one ${filter} stored under ${String(others.length + 1)} spellings, and matched each: ${[value, ...others].map((spelling) => `"${spelling}"`).join(", ")}.`,
         hint: `Pass ${filter} "${value}" to search the same ${filter} the same way.`,
       };
 
@@ -160,13 +199,15 @@ export const filterDroppedWarning = ({
   received,
   known,
 }: {
-  filter: string;
+  filter: CaseLawSearchFilter;
   received: string;
   /** The values the caller could have meant, most useful first; bounded. */
   known: string;
 }): AgentCaseLawSearchWarning => ({
   code: "filter_dropped",
-  message: `${received} names no single ${filter}, so this search ran without the ${filter} filter.`,
+  filter,
+  received,
+  message: `${JSON.stringify(received)} names no single ${filter}, so this search ran without the ${filter} filter.`,
   hint: `To narrow by ${filter}, pass one of the stored values. ${known}`,
 });
 
@@ -228,13 +269,13 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
   filter_read: () =>
     filterReadWarning({
       filter: "court",
-      received: '"NS"',
+      received: "NS",
       values: ["Nejvyšší soud"],
     }),
   filter_dropped: () =>
     filterDroppedWarning({
       filter: "court",
-      received: '"Česká republika"',
+      received: "Česká republika",
       known: 'Known values include "Nejvyšší soud".',
     }),
   many_required_terms: () =>

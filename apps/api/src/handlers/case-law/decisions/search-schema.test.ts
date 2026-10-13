@@ -32,6 +32,7 @@ import {
 } from "@/api/handlers/case-law/decisions/search-schema";
 import type { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
 import type { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
+import { CASE_LAW_SEARCH_WARNING_PRODUCERS } from "@/api/lib/case-law/search-warnings";
 import {
   SEARCH_SORTS,
   type SearchSort,
@@ -237,7 +238,7 @@ describe("case-law search response schema", () => {
       expect(
         Value.Check(searchDecisionsSuccessResponseSchema, {
           ...validResponse,
-          warnings: [{ code, message: "Something", hint: "Do something" }],
+          warnings: [CASE_LAW_SEARCH_WARNING_PRODUCERS[code]()],
         }),
       ).toBe(true);
     }

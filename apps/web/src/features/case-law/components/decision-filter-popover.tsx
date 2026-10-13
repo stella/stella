@@ -1,15 +1,14 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ChevronRightIcon } from "@stll/ui/icons";
-import { cn } from "@stll/ui/utils";
+import { foldSearchMatchText } from "@stll/text-normalize";
+import { CourtFilter } from "@stll/ui/court-filter";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
 import {
-  FACET_SECTION_LIMIT,
   facetSectionView,
+  formatFacetCount,
 } from "@/components/public-law-table/public-law-facets.logic";
 import type { FacetSourceBucket } from "@/components/public-law-table/public-law-facets.logic";
 import {
@@ -28,7 +27,6 @@ import {
   yearDateRange,
 } from "@/features/case-law/case-law-index-search.logic";
 import {
-  COLLAPSED_COURT_TIERS,
   COURT_TIER_LABEL_KEYS,
   decisionTypeSectionBuckets,
   YEAR_SECTION_LIMIT,
@@ -40,7 +38,6 @@ import type {
 
 /** What the URL selects, one value per facet. */
 type DecisionFacetSelection = Record<CaseLawFilterKey, string | undefined>;
-type CourtTierBucketsTier = DecisionFilterFacets["courtTiers"][number]["tier"];
 
 type DecisionFilterPopoverProps = {
   /** How many filters are on; drawn on the button, so a short list is explained. */
@@ -100,23 +97,45 @@ export const DecisionFilterPopover = ({
   selection,
 }: DecisionFilterPopoverProps) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   return (
     <PublicLawFilterPopover activeFilterCount={activeFilterCount}>
       {facets.courtTiers.length > 0 && (
         <section>
           <FilterSectionHeading>{t("common.court")}</FilterSectionHeading>
-          <div className="flex flex-col gap-3">
-            {facets.courtTiers.map(({ courts, tier }) => (
-              <CourtTierSection
-                courts={courts}
-                key={tier ?? "untiered"}
-                onSelect={(value) => onSelect("court", value)}
-                selectedValue={selection.court}
-                tier={tier}
-              />
-            ))}
-          </div>
+          <CourtFilter
+            mode="single"
+            matchText={foldSearchMatchText}
+            groups={facets.courtTiers.map(({ courts, tier }) => ({
+              value: tier ?? "untiered",
+              label:
+                tier === null
+                  ? t("common.court")
+                  : t(COURT_TIER_LABEL_KEYS[tier]),
+              courts: courts.map((court) => ({
+                value: court.value,
+                label: court.label ?? court.value,
+                badgeText:
+                  court.count === null || court.count === undefined
+                    ? undefined
+                    : (formatFacetCount(
+                        {
+                          ...court,
+                          label: court.label ?? court.value,
+                          count: court.count,
+                        },
+                        format.number,
+                      ) ?? undefined),
+              })),
+            }))}
+            selected={selection.court}
+            onChange={(value) => onSelect("court", value)}
+            label={t("common.court")}
+            searchLabel={t("common.search")}
+            clearLabel={t("common.reset")}
+            emptyLabel={t("common.noResults")}
+          />
         </section>
       )}
       {/* No source (publisher) section: the court filter already says where
@@ -204,91 +223,5 @@ const DateSection = ({
         }
       />
     </section>
-  );
-};
-
-const CourtTierSection = ({
-  courts,
-  onSelect,
-  selectedValue,
-  tier,
-}: {
-  courts: readonly FacetSourceBucket[];
-  onSelect: (value: string | undefined) => void;
-  selectedValue: string | undefined;
-  tier: CourtTierBucketsTier;
-}) => {
-  const t = useTranslations();
-  const panelId = useId();
-  const collapsedByDefault =
-    tier !== null && COLLAPSED_COURT_TIERS.includes(tier);
-  const selectedHere = courts.some((court) => court.value === selectedValue);
-  const [open, setOpen] = useState(!collapsedByDefault);
-  const [showAll, setShowAll] = useState(false);
-  const { hiddenCount, items } = facetSectionView({
-    buckets: courts,
-    expanded: showAll,
-    limit: FACET_SECTION_LIMIT,
-    // A tier the selection is not in must not pull the selection into itself.
-    selectedValue: selectedHere ? selectedValue : undefined,
-  });
-  if (items.length === 0) {
-    return null;
-  }
-  if (tier === null) {
-    return (
-      <div>
-        <FacetOptions
-          groupLabel={t("common.court")}
-          items={items}
-          name="court"
-          onSelect={onSelect}
-          selectedValue={selectedValue}
-        />
-        {hiddenCount > 0 && (
-          <ShowAllButton onClick={() => setShowAll(true)}>
-            {t("common.showAll")}
-          </ShowAllButton>
-        )}
-      </div>
-    );
-  }
-
-  // A tier holding the reader's own choice opens whatever its default was.
-  const expanded = open || selectedHere;
-  return (
-    <div>
-      <button
-        aria-controls={panelId}
-        aria-expanded={expanded}
-        className="text-foreground-strong-muted hover:text-foreground flex min-h-11 w-full items-center gap-1 py-1 text-start text-xs font-medium"
-        onClick={() => setOpen(!expanded)}
-        type="button"
-      >
-        <DirectionalIcon
-          className={cn(
-            "size-3 shrink-0 transition-transform",
-            expanded && "rotate-90",
-          )}
-          flip={!expanded}
-          icon={ChevronRightIcon}
-        />
-        {t(COURT_TIER_LABEL_KEYS[tier])}
-      </button>
-      <div hidden={!expanded} id={panelId}>
-        <FacetOptions
-          groupLabel={t(COURT_TIER_LABEL_KEYS[tier])}
-          items={items}
-          name={`court-${tier}`}
-          onSelect={onSelect}
-          selectedValue={selectedValue}
-        />
-        {hiddenCount > 0 && (
-          <ShowAllButton onClick={() => setShowAll(true)}>
-            {t("common.showAll")}
-          </ShowAllButton>
-        )}
-      </div>
-    </div>
   );
 };

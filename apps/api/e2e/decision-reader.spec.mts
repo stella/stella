@@ -258,6 +258,7 @@ type HostOptions = {
   surface?: "reader" | "results";
   sandbox?: "opaque" | "same-origin";
   revision?: "stable" | "updated";
+  search?: SearchResults;
 };
 const mountReader = async ({
   page,
@@ -270,6 +271,7 @@ const mountReader = async ({
   surface = "reader",
   sandbox = "opaque",
   revision = "stable",
+  search = RESULT_FIXTURE,
 }: HostOptions) => {
   const bundle = await readFile(
     new URL(
@@ -558,7 +560,7 @@ const mountReader = async ({
       citedPage: CITED_PAGE,
       provisionPreview: PREVIEW,
       surface,
-      searchResult: RESULT_FIXTURE,
+      searchResult: search,
       revision,
       revisedPages: REVISED_PAGES,
     },
@@ -1056,7 +1058,7 @@ test("reader reassembles fragmented blocks and consumes anchor-only pages", asyn
 });
 
 for (const host of ["ChatGPT", "Claude"] as const) {
-  test(`${host} results open the reader in the same iframe and restore the row after Back and Escape`, async ({
+  test(`${host} results open the reader in the same iframe and restore the row after Back, Escape and Alt+Left`, async ({
     page,
   }) => {
     const app = await mountReader({
@@ -1083,6 +1085,24 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     await expect(app.locator("#para48[data-reader-landing]")).toBeVisible();
     await expect(app.locator("#para49[data-reader-landing]")).toBeVisible();
     await expectNoCopyAction(app);
+    const header = app.locator('[data-slot="reader-header"]');
+    const back = header.getByRole("button", { name: "Back", exact: true });
+    await expect(back.locator("svg")).toHaveCount(1);
+    await expect(header.getByText(metadata.caseNumber, { exact: true })).toBeVisible();
+    await expect(header.getByText(metadata.court, { exact: true })).toBeVisible();
+    await expect(header.getByRole("button", { name: "Open in stella", exact: true })).toBeVisible();
+    await expect(app.getByText("cs", { exact: true })).toHaveCount(0);
+    for (const width of [360, 900]) {
+      await page.locator("iframe").evaluate((element, viewportWidth) => {
+        element.style.width = `${viewportWidth}px`;
+      }, width);
+      await expect(header.getByText(metadata.court, { exact: true })).toBeVisible();
+      const bounds = await back.boundingBox();
+      expect(bounds?.height).toBeGreaterThanOrEqual(44);
+      expect(bounds?.width).toBeGreaterThanOrEqual(44);
+      expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    }
+    await page.locator("iframe").evaluate((element) => { element.style.width = "100%"; });
     await app
       .getByRole("button", { name: "Open in stella", exact: true })
       .click();
@@ -1120,6 +1140,11 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     expect(
       await opener.evaluate(() => document.scrollingElement?.scrollTop),
     ).toBe(scrollBefore);
+    await opener.press("Enter");
+    await expect(app.locator("#para48[data-reader-landing]")).toBeVisible();
+    await back.press("Alt+ArrowLeft");
+    await expect(rows).toHaveCount(35);
+    await expect(opener).toBeFocused();
     expect((await history(page)).links).toEqual([
       `${metadata.appUrl}#par=48-49`,
     ]);
@@ -1214,3 +1239,43 @@ for (const host of ["ChatGPT", "Claude"] as const) {
     });
   });
 }
+
+
+test("search notes use one compact disclosure and hide model-only instructions", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  const search = {
+    ...RESULT_FIXTURE,
+    searches: [{ warnings: [
+      { code: "filter_read", filter: "court", courtAliases: [{ input: "NS", resolved: "Nejvyšší soud" }, { input: "ÚS", resolved: "Ústavní soud" }], message: "MODEL ONLY", hint: "Pass court" },
+      { code: "function_words_optional", droppedFunctionWords: ["za", "při"], message: "MODEL ONLY", hint: "Pass strict: true" },
+      { code: "function_words_optional", droppedFunctionWords: ["při", "se"], message: "MODEL ONLY", hint: "Pass strict: true" },
+    ] }],
+  } satisfies SearchResults;
+  const app = await mountReader({ page, host: "ChatGPT", surface: "results", locale: "cs", search });
+  const notice = app.locator("[data-app-notice]");
+  await expect(notice).toHaveCount(1);
+  await expect(notice.locator("summary")).toContainText("NS jako Nejvyšší soud, ÚS jako Ústavní soud");
+  await expect(notice.locator("summary")).toContainText("za, při, se");
+  await expect(notice).not.toHaveAttribute("open");
+  await expect(notice.locator("ul")).toBeHidden();
+  const collapsedHeight = await notice.evaluate((element) => element.getBoundingClientRect().height);
+  expect(collapsedHeight).toBeLessThanOrEqual(24);
+  await notice.locator("summary").press("Enter");
+  await expect(notice).toHaveAttribute("open", "");
+  await expect(notice.locator("li")).toHaveCount(2);
+  await expect(notice.locator("li").first()).toBeVisible();
+  await expect(app.getByText("MODEL ONLY", { exact: false })).toHaveCount(0);
+  await expect(app.getByText("Pass strict", { exact: false })).toHaveCount(0);
+  await notice.locator("summary").press("Space");
+  await expect(notice).not.toHaveAttribute("open");
+});
+
+test("search pages with only model guidance have no notice", async ({ page }) => {
+  const search = {
+    ...RESULT_FIXTURE,
+    searches: [{ warnings: [{ code: "many_required_terms", message: "MODEL ONLY", hint: "Pass fewer terms" }] }],
+  } satisfies SearchResults;
+  const app = await mountReader({ page, host: "Claude", surface: "results", search });
+  await expect(app.locator("tbody tr")).toHaveCount(35);
+  await expect(app.locator("[data-app-notice]")).toHaveCount(0);
+});

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createDetached } from "@stll/errors";
 import type { ParagraphBlock } from "@stll/legal-ast/document-ast";
 
+import { appFailure } from "../shared/app-error";
 import { createReaderController } from "./controller";
 import type { OpenDecision, ProvisionPreview, ReaderPage } from "./model";
 
@@ -11,6 +12,13 @@ type ToolRequest = Parameters<ReaderBridge["requestTool"]>[0];
 type ToolResponse = Awaited<ReturnType<ReaderBridge["requestTool"]>>;
 type BridgeSnapshot = ReturnType<ReaderBridge["getSnapshot"]>;
 
+const unavailableResponse = {
+  isError: true,
+  content: [],
+  structuredContent: {
+    appFailure: appFailure("unavailable", "unavailable-fixture", true),
+  },
+} satisfies ToolResponse;
 const metadata = {
   decisionId: "00000000-0000-4000-8000-000000000001",
   caseNumber: "1 C 1/2026",
@@ -222,9 +230,12 @@ describe("MCP decision reader controller", () => {
     host.nextCall().resolve(response(page(48, "page-2")));
     await settle();
     const failedLoad = host.controller.loadNext();
-    host.nextCall().resolve(undefined);
+    host.nextCall().resolve(unavailableResponse);
     await failedLoad;
     expect(host.controller.getSnapshot().requestStatus).toBe("error");
+    expect(host.controller.getSnapshot().requestFailure).toEqual(
+      appFailure("unavailable", "unavailable-fixture", true),
+    );
     expect(host.controller.getSnapshot().document?.blocks).toEqual([
       paragraph(48),
     ]);
@@ -256,20 +267,11 @@ describe("MCP decision reader controller", () => {
     const previewCall = host.nextCall();
     continuation.resolve({
       isError: true,
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify({
-            error: {
-              code: "conflict",
-              message: "Decision text changed between pages.",
-              hint: "Restart the decision read without a cursor.",
-              retryable: true,
-            },
-          }),
-        },
-      ],
-    } satisfies NonNullable<ToolResponse>);
+      content: [{ type: "text", text: "The decision text changed." }],
+      structuredContent: {
+        appFailure: appFailure("conflict", "page-conflict-fixture", true),
+      },
+    } satisfies ToolResponse);
     await settle();
     expect(host.controller.getSnapshot().requestStatus).toBe("conflict");
     expect(host.controller.getSnapshot().document?.blocks).toEqual([]);
@@ -475,7 +477,7 @@ describe("MCP decision reader controller", () => {
       cited_anchor: "par-1-1",
     };
     const failedPreview = host.controller.loadPreview(provision);
-    host.nextCall().resolve(undefined);
+    host.nextCall().resolve(unavailableResponse);
     await failedPreview;
     expect(host.controller.getSnapshot().previewStatus).toBe("error");
     const retry = host.controller.retry();
@@ -510,7 +512,7 @@ describe("MCP decision reader controller", () => {
     host.emit({ status: "loading" });
     host.emit({ status: "ready", view: open() });
     const fresh = host.nextCall();
-    stale.resolve(undefined);
+    stale.resolve(unavailableResponse);
     await settle();
     expect(host.controller.getSnapshot().requestStatus).toBe("loading");
     expect(host.controller.bridge.getSnapshot().result.status).toBe("ready");
@@ -523,7 +525,11 @@ describe("MCP decision reader controller", () => {
   });
   test("opening failures retry through the bridge", async () => {
     const host = fixture();
-    host.emit({ status: "error", message: "Opening failed" });
+    host.emit({
+      status: "error",
+      message: "Opening failed",
+      failure: appFailure("unavailable", "opening-fixture", true),
+    });
     await host.controller.retry();
     expect(host.openingRetries()).toBe(1);
   });
@@ -532,7 +538,11 @@ describe("MCP decision reader controller", () => {
     host.emit({ status: "ready", view: open() });
     host.nextCall().resolve(response(page(48)));
     await settle();
-    host.emit({ status: "error", message: "Host operation failed" });
+    host.emit({
+      status: "error",
+      message: "Host operation failed",
+      failure: appFailure("unavailable", "host-fixture", true),
+    });
     expect(host.controller.getSnapshot().document?.blocks).toEqual([
       paragraph(48),
     ]);

@@ -17,6 +17,7 @@ import {
   formatDecisionParagraphRange,
 } from "@stll/api-contract/decision-paragraph-range";
 import { parseLegalCitationHttpUrl } from "@stll/api-contract/legal-citation-links";
+import { foldSearchMatchText } from "@stll/text-normalize";
 import { Temporal, todayFor } from "@stll/time";
 import {
   Accordion,
@@ -25,6 +26,7 @@ import {
   AccordionTrigger,
 } from "@stll/ui/accordion";
 import { Button } from "@stll/ui/button";
+import { CourtFilter } from "@stll/ui/court-filter";
 import { DateRangeFilter } from "@stll/ui/date-range-filter";
 import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Field, FieldLabel } from "@stll/ui/field";
@@ -41,6 +43,7 @@ import {
   PaginationItem,
   PaginationLink,
 } from "@stll/ui/pagination";
+import { Popover, PopoverPopup, PopoverTrigger } from "@stll/ui/popover";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -49,8 +52,6 @@ import {
 import { SearchField } from "@stll/ui/search-field";
 import {
   Select,
-  SelectGroup,
-  SelectGroupLabel,
   SelectItem,
   SelectPopup,
   SelectTrigger,
@@ -80,13 +81,9 @@ import { ReaderView } from "../decision-reader/view";
 import { CASE_LAW_RESULTS_APP } from "../manifest";
 import { createPresentationBridge } from "../shared/bridge";
 import { appLocale } from "../shared/locale";
+import { SearchNotice } from "../shared/notice";
 import { filterDefaults, searchFilterInput, sortResultRows } from "./model";
-import type {
-  CaseLawView,
-  CourtSelection,
-  ResultRow,
-  ResultSort,
-} from "./model";
+import type { CaseLawView, ResultRow, ResultSort } from "./model";
 import { createCaseLawParser } from "./parse";
 import "../shared/generated/style.css";
 
@@ -420,7 +417,6 @@ type SearchControlsProps = {
   input: Record<string, unknown>;
   defaults: Extract<ReturnType<typeof filterDefaults>, { status: "ready" }>;
 };
-type CourtFilterState = { value: string; selection: CourtSelection };
 
 const SearchControls = ({
   bridge,
@@ -438,20 +434,33 @@ const SearchControls = ({
   const [country, setCountry] = useState(defaults.country);
   const [from, setFrom] = useState(defaults.from);
   const [to, setTo] = useState(defaults.to);
-  const [court, setCourt] = useState((): CourtFilterState => {
-    if (defaults.courts.length > 0) {
-      return {
-        value: "current",
-        selection: { type: "courts", names: defaults.courts },
-      };
-    }
-    if (defaults.court === "") {
-      return { value: "all", selection: { type: "all" } };
-    }
-    return {
-      value: `court:${defaults.court}`,
-      selection: { type: "court", name: defaults.court },
-    };
+  const [courts, setCourts] = useState(() => {
+    const initial = normalizeStringList(defaults.court, {
+      split: "delimiters",
+    });
+    const selected = (() => {
+      if (defaults.courts.length > 0) {
+        return defaults.courts;
+      }
+      return initial.ok ? initial.value : [];
+    })();
+    const aliases = page.searches.flatMap(({ warnings }) =>
+      warnings.flatMap((warning) =>
+        warning.code === "filter_read" && warning.filter === "court"
+          ? warning.courtAliases
+          : [],
+      ),
+    );
+    return [
+      ...new Set(
+        selected.flatMap((name) => {
+          const resolved = aliases
+            .filter(({ input: value }) => value === name)
+            .map(({ resolved: value }) => value);
+          return resolved.length === 0 ? [name] : resolved;
+        }),
+      ),
+    ];
   });
   const facets = page.facets;
   const dateLabels = {
@@ -480,7 +489,10 @@ const SearchControls = ({
               ...searchFilterInput({
                 input,
                 country,
-                court: court.selection,
+                court:
+                  courts.length === 0
+                    ? { type: "all" }
+                    : { type: "courts", names: courts },
                 from,
                 to,
               }),
@@ -518,7 +530,7 @@ const SearchControls = ({
             onValueChange={(value) => {
               if (value !== null && value !== country) {
                 setCountry(value);
-                setCourt({ value: "all", selection: { type: "all" } });
+                setCourts([]);
               }
             }}
           >
@@ -538,82 +550,51 @@ const SearchControls = ({
           <FieldLabel className="text-muted-foreground text-xs">
             {t("court")}
           </FieldLabel>
-          <Select
-            value={court.value}
-            onValueChange={(value) => {
-              if (value === null) {
-                return;
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-auto min-h-11 w-full flex-wrap justify-start text-start"
+                  aria-label={t("court")}
+                />
               }
-              let selection: CourtSelection;
-              if (value === "all") {
-                selection = { type: "all" };
-              } else if (value === "current") {
-                selection = { type: "courts", names: defaults.courts };
-              } else if (value.startsWith("court:")) {
-                selection = {
-                  type: "court",
-                  name: value.slice("court:".length),
-                };
-              } else {
-                const tier = facets?.court.find(
-                  (entry) => value === `tier:${entry.tierLabel}`,
-                );
-                if (tier === undefined) {
-                  return;
-                }
-                selection = {
-                  type: "courts",
-                  names: tier.courts.map(({ value: name }) => name),
-                };
-              }
-              setCourt({ value, selection });
-            }}
-          >
-            <SelectTrigger aria-label={t("court")} className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectPopup>
-              <SelectItem value="all">{t("all")}</SelectItem>
-              {defaults.courts.length > 0 && (
-                <SelectItem value="current">
-                  {defaults.courts.join(", ")}
-                </SelectItem>
-              )}
-              {defaults.court !== "" &&
-                (facets === null ||
-                  !facets.court.some((tier) =>
-                    tier.courts.some(({ value }) => value === defaults.court),
-                  )) && (
-                  <SelectItem value={`court:${defaults.court}`}>
-                    {defaults.court}
-                  </SelectItem>
-                )}
-              {court.value.startsWith("tier:") &&
-                !facets?.court.some(
-                  ({ tierLabel }) => court.value === `tier:${tierLabel}`,
-                ) && (
-                  <SelectItem value={court.value}>
-                    {t(court.value.slice("tier:".length))}
-                  </SelectItem>
-                )}
-              {facets?.court.map(({ tierLabel, courts }) => (
-                <SelectGroup key={tierLabel}>
-                  <SelectGroupLabel>{t(tierLabel)}</SelectGroupLabel>
-                  <SelectItem
-                    value={`tier:${tierLabel}`}
-                    disabled={courts.length === 0}
-                  >
-                    {t(tierLabel)}
-                  </SelectItem>
-                  {courts.map(({ value }) => (
-                    <SelectItem key={value} value={`court:${value}`}>
-                      {value}
-                    </SelectItem>
+            >
+              {courts.length === 0
+                ? t("all")
+                : courts.map((name) => (
+                    <span
+                      key={name}
+                      className="bg-muted max-w-full rounded px-1.5 py-0.5 text-xs break-words"
+                    >
+                      <bdi>{name}</bdi>
+                    </span>
                   ))}
-                </SelectGroup>
-              ))}
-            </SelectPopup>
-          </Select>
+            </PopoverTrigger>
+            <PopoverPopup
+              align="start"
+              className="w-80 max-w-[calc(100vw-2rem)] p-3"
+            >
+              <CourtFilter
+                mode="multiple"
+                matchText={foldSearchMatchText}
+                groups={
+                  facets?.court.map(({ tierLabel, courts: options }) => ({
+                    value: tierLabel,
+                    label: t(tierLabel),
+                    courts: options,
+                  })) ?? []
+                }
+                selected={courts}
+                onChange={setCourts}
+                label={t("court")}
+                searchLabel={t("search")}
+                clearLabel={t("reset")}
+                emptyLabel={t("noResults")}
+              />
+            </PopoverPopup>
+          </Popover>
         </Field>
         <DateRangeFilter
           {...dateLabels}
@@ -664,26 +645,9 @@ const SearchResults = ({
           defaults={defaults}
         />
       )}
-      {[
-        ...new Map(
-          page.searches
-            .flatMap(({ warnings }) => warnings)
-            .map((warning) => [`${warning.message}-${warning.hint}`, warning]),
-        ).values(),
-      ].map((warning) => (
-        <p
-          role="status"
-          className="bg-muted/60 text-muted-foreground rounded-lg p-3 text-xs"
-          key={`${warning.message}-${warning.hint}`}
-        >
-          {warning.message} {warning.hint}
-        </p>
-      ))}
-      {page.nextStep !== undefined && (
-        <p role="status" className="text-muted-foreground text-xs">
-          {page.nextStep}
-        </p>
-      )}
+      <SearchNotice
+        warnings={page.searches.flatMap(({ warnings }) => warnings)}
+      />
       <div className="bg-background overflow-hidden rounded-xl border shadow-xs">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <p className="text-muted-foreground shrink-0 text-xs font-medium whitespace-nowrap">
@@ -807,14 +771,16 @@ const ResultContent = ({
       return (
         <div role="alert" className="space-y-3 rounded-lg border p-4">
           <p className="text-sm">{result.message ?? t("error")}</p>
-          <Button
-            variant="outline"
-            onClick={() =>
-              bridge.detached(bridge.retry(), "retry case-law read")
-            }
-          >
-            {t("retry")}
-          </Button>
+          {result.failure.retryable && (
+            <Button
+              variant="outline"
+              onClick={() =>
+                bridge.detached(bridge.retry(), "retry case-law read")
+              }
+            >
+              {t("retry")}
+            </Button>
+          )}
         </div>
       );
     case "ready": {
