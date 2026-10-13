@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
+import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import {
   GENERATORS,
@@ -141,6 +142,45 @@ test("visual source changes select the frame bundle before API catalog generatio
   expect(generator("visual-sandbox-bundle").outputs).toEqual([
     "apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt",
   ]);
+});
+
+test("MCP app parser schema imports are registered generation inputs", () => {
+  const repoRoot = nodePath.resolve(import.meta.dir, "..");
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  const pending = [
+    ...new Bun.Glob("apps/api/src/mcp/apps/*/parse.ts").scanSync(repoRoot),
+  ];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (file === undefined || visited.has(file)) {
+      continue;
+    }
+    visited.add(file);
+    for (const { path: specifier } of transpiler.scanImports(
+      readFileSync(nodePath.join(repoRoot, file), "utf-8"),
+    )) {
+      if (!specifier.startsWith(".")) {
+        continue;
+      }
+      const dependency = repoRelativePath(
+        repoRoot,
+        nodePath.resolve(repoRoot, nodePath.dirname(file), `${specifier}.ts`),
+      );
+      if (!dependency.startsWith("apps/api/src/lib/")) {
+        continue;
+      }
+      for (const id of ["mcp-app-bundles", "cli-registry"]) {
+        expect(
+          generator(id).inputs.some((glob) =>
+            matchesGeneratedGlob(glob, dependency),
+          ),
+          `${id} covers ${dependency} imported by ${file}`,
+        ).toBe(true);
+      }
+      pending.push(dependency);
+    }
+  }
 });
 
 test("generation metadata loads without dependencies in a reduced checkout", async () => {
