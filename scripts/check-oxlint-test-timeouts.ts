@@ -2,6 +2,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "../packages/portable-path/src/index";
+import { guardEnforcesLine } from "./guard-rollouts";
+
 const TEST_DIRECTORY = path.resolve(
   import.meta.dirname,
   "../.oxlint-plugins/__tests__",
@@ -40,7 +43,15 @@ const memberPath = (expression: ts.Expression): string[] => {
   return [];
 };
 
-const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
+type TestPolicyViolationOptions = {
+  file: ts.SourceFile;
+  enforcesLine: (line: number) => boolean;
+};
+
+const testPolicyViolation = ({
+  file,
+  enforcesLine,
+}: TestPolicyViolationOptions): string | undefined => {
   const bindings = new Map<string, string>();
   const namespaces = new Set<string>();
   for (const statement of file.statements) {
@@ -157,11 +168,27 @@ const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
     );
   };
 
+  const enforcesNode = (node: ts.Node): boolean => {
+    const start =
+      file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1;
+    const end = file.getLineAndCharacterOfPosition(node.getEnd()).line + 1;
+    for (let line = start; line <= end; line += 1) {
+      if (enforcesLine(line)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const visit = (node: ts.Node): string | undefined => {
     if (ts.isImportDeclaration(node)) {
       return undefined;
     }
-    if (ts.isExpression(node) && isIndirectReference(node)) {
+    if (
+      ts.isExpression(node) &&
+      isIndirectReference(node) &&
+      enforcesNode(node)
+    ) {
       return "call test APIs directly";
     }
     if (ts.isCallExpression(node)) {
@@ -182,10 +209,14 @@ const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
                 ts.isFunctionExpression(thirdArgument))));
         const optionsArgument = optionsFirst ? secondArgument : thirdArgument;
         if (
-          api === "setDefaultTimeout" ||
-          node.arguments.some(ts.isSpreadElement) ||
+          (api === "setDefaultTimeout" && enforcesNode(node)) ||
+          node.arguments.some(
+            (argument) =>
+              ts.isSpreadElement(argument) && enforcesNode(argument),
+          ) ||
           (optionsArgument !== undefined &&
-            !isTimeoutFreeOptions(optionsArgument))
+            !isTimeoutFreeOptions(optionsArgument) &&
+            enforcesNode(optionsArgument))
         ) {
           return "pass test options inline without timeout keys or spreads";
         }
@@ -199,11 +230,17 @@ const testPolicyViolation = (file: ts.SourceFile): string | undefined => {
 type CustomLintTestTimeoutOptions = {
   directory?: string;
   allowlist?: Readonly<Record<string, string>>;
+  changedLines?: ReadonlyMap<string, ReadonlySet<number>>;
+  now?: Date;
+  scope?: "all" | "rollout";
 };
 
 export const customLintTestTimeoutViolations = ({
   directory = TEST_DIRECTORY,
   allowlist = TIMEOUT_ALLOWLIST,
+  changedLines,
+  now,
+  scope = "rollout",
 }: CustomLintTestTimeoutOptions = {}): string[] => {
   const violations: string[] = [];
   for (const filename of new Bun.Glob(
@@ -216,7 +253,22 @@ export const customLintTestTimeoutViolations = ({
       ts.ScriptTarget.Latest,
       true,
     );
-    const violation = testPolicyViolation(file);
+    const repositoryFile = repoRelativePath(
+      path.resolve(import.meta.dirname, ".."),
+      path.join(directory, filename),
+    );
+    const violation = testPolicyViolation({
+      file,
+      enforcesLine: (line) =>
+        scope === "all" ||
+        guardEnforcesLine({
+          guard: "central-test-timeout",
+          file: repositoryFile,
+          line,
+          changedLines,
+          now,
+        }),
+    });
     if (violation === undefined) {
       continue;
     }
@@ -229,3 +281,13 @@ export const customLintTestTimeoutViolations = ({
   }
   return violations.toSorted();
 };
+
+if (import.meta.main) {
+  const violations = customLintTestTimeoutViolations({
+    scope: process.argv.includes("--all") ? "all" : "rollout",
+  });
+  if (violations.length > 0) {
+    console.error(violations.join("\n"));
+    process.exit(1);
+  }
+}

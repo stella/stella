@@ -4,6 +4,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Variable } from "@oxlint/plugins";
 
+import { guardEnforcesLine } from "../scripts/guard-rollouts";
 import type { ScopeContext } from "./utils.ts";
 import {
   filenameForContext,
@@ -155,6 +156,41 @@ const portableIdentifierMixer = (
   };
 };
 
+const cookedTemplatePart = (quasi: unknown): string | null => {
+  if (!isAstNode(quasi)) {
+    return null;
+  }
+  const value = quasi.value;
+  if (typeof value !== "object" || value === null || !("cooked" in value)) {
+    return null;
+  }
+  return typeof value.cooked === "string" ? value.cooked : null;
+};
+
+type PathGuardContext = Parameters<typeof filenameForContext>[0] & {
+  sourceCode: { getLocFromIndex: (offset: number) => { line: number } };
+};
+
+const enforcesPortablePath = (
+  context: PathGuardContext,
+  node: { range: readonly [number, number] },
+): boolean => {
+  const start = context.sourceCode.getLocFromIndex(node.range[0]).line;
+  const end = context.sourceCode.getLocFromIndex(node.range[1] - 1).line;
+  for (let line = start; line <= end; line++) {
+    if (
+      guardEnforcesLine({
+        guard: "portable-path",
+        file: filenameForContext(context),
+        line,
+      })
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
 export default eslintCompatPlugin({
   meta: { name: "no-raw-path-relative" },
   rules: {
@@ -298,23 +334,10 @@ export default eslintCompatPlugin({
           }
           const head = quasis.at(0);
           const tail = quasis.at(1);
-          const cooked = (quasi: unknown): string | null => {
-            if (!isAstNode(quasi)) {
-              return null;
-            }
-            const value = quasi.value;
-            if (
-              typeof value !== "object" ||
-              value === null ||
-              !("cooked" in value)
-            ) {
-              return null;
-            }
-            return typeof value.cooked === "string" ? value.cooked : null;
-          };
+
           return (
-            cooked(head) === ".." &&
-            cooked(tail) === "" &&
+            cookedTemplatePart(head) === ".." &&
+            cookedTemplatePart(tail) === "" &&
             isPathSeparator(expressions.at(0))
           );
         };
@@ -331,14 +354,20 @@ export default eslintCompatPlugin({
             isOwner = filenameForContext(context).includes(OWNER_PATH);
           },
           CallExpression(node) {
-            if (!isOwner && isPathRelative(node.callee)) {
+            if (isOwner) {
+              return;
+            }
+            if (
+              isPathRelative(node.callee) &&
+              enforcesPortablePath(context, node)
+            ) {
               context.report({ node, messageId: "noRawPathRelative" });
             }
             if (
-              !isOwner &&
               isNativeEscapeCheck(node.callee) &&
               Array.isArray(node.arguments) &&
-              isNativeEscapePrefix(node.arguments.at(0))
+              isNativeEscapePrefix(node.arguments.at(0)) &&
+              enforcesPortablePath(context, node)
             ) {
               context.report({
                 node,
@@ -346,7 +375,10 @@ export default eslintCompatPlugin({
                   "Do not build path escape checks from native separators. Use isPathInside from @stll/portable-path.",
               });
             }
-            if (!isOwner && mixesPortableIdentifierAndSeparator(node)) {
+            if (
+              mixesPortableIdentifierAndSeparator(node) &&
+              enforcesPortablePath(context, node)
+            ) {
               context.report({
                 node,
                 message:
@@ -355,7 +387,11 @@ export default eslintCompatPlugin({
             }
           },
           "BinaryExpression, TemplateLiteral"(node) {
-            if (!isOwner && mixesPortableIdentifierAndSeparator(node)) {
+            if (
+              !isOwner &&
+              mixesPortableIdentifierAndSeparator(node) &&
+              enforcesPortablePath(context, node)
+            ) {
               context.report({
                 node,
                 message:
