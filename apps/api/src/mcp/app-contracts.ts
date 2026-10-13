@@ -4,6 +4,7 @@ import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
 
 import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
+import { READ_PROVISION_HISTORY_PROJECTION } from "../lib/chat/legislation-result-projections";
 import { MCP_APPS } from "./apps/manifest";
 import type { PresentationApp } from "./apps/manifest";
 import {
@@ -43,6 +44,7 @@ MCP_APPS satisfies readonly AppManifest[];
 
 export const MCP_APP_OUTPUT_SCHEMAS = {
   mint_web_handoff: mcpWebHandoffLinkOutputSchema,
+  read_provision_history: READ_PROVISION_HISTORY_PROJECTION,
   open_case_law_decision: openDecisionOutput,
   read_case_law_decision_blocks: blocksDecisionOutput,
   preview_cited_provision: provisionPreviewOutput,

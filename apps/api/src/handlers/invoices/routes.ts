@@ -4,6 +4,7 @@ import createInvoice from "@/api/handlers/invoices/create";
 import deleteInvoice from "@/api/handlers/invoices/delete";
 import addEntries from "@/api/handlers/invoices/entries/add";
 import removeEntries from "@/api/handlers/invoices/entries/remove";
+import exportInvoices from "@/api/handlers/invoices/export";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import deleteInvoiceLine from "@/api/handlers/invoices/lines/delete";
@@ -35,6 +36,12 @@ export const invoicesRoute = new Elysia({
     permissions: readInvoices.config.permissions,
     accountAccess: readInvoices.config.accountAccess,
     query: readInvoices.config.query,
+  })
+  .post("/export", exportInvoices.handler, {
+    body: exportInvoices.config.body,
+    params: exportInvoices.config.params,
+    permissions: exportInvoices.config.permissions,
+    accountAccess: exportInvoices.config.accountAccess,
   })
   .get("/:invoiceId", readInvoiceById.handler, {
     params: readInvoiceById.config.params,

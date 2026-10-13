@@ -1,8 +1,31 @@
 import { describe, expect, test } from "bun:test";
 
-import { diffWords } from "@/components/ai-suggestions/review-word-diff";
+import { diffWords } from "./review-word-diff";
 
 describe("word diff", () => {
+  test("large token streams preserve both wordings as a bounded replacement", () => {
+    for (const count of [260, 3000]) {
+      const before = "a ".repeat(count);
+      const after = "b ".repeat(count);
+      const ops = diffWords(before, after);
+      expect(ops.some(({ type }) => type === "equal")).toBe(false);
+      expect(
+        ops
+          .filter(({ type }) => type !== "insert")
+          .map(({ token }) => token)
+          .join(""),
+      ).toBe(before);
+      expect(
+        ops
+          .filter(({ type }) => type !== "delete")
+          .map(({ token }) => token)
+          .join(""),
+      ).toBe(after);
+      expect(
+        diffWords(before, before).every(({ type }) => type === "equal"),
+      ).toBe(true);
+    }
+  });
   test("identical text is entirely equal", () => {
     expect(diffWords("twelve months", "twelve months")).toEqual([
       { token: "twelve", type: "equal" },

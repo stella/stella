@@ -23,8 +23,10 @@ import type { LegislationProvisionVersion } from "@/api/handlers/legislation/pro
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
   READ_PROVISION_HISTORY_PROJECTION,
-  READ_STATUTE_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
+} from "@/api/lib/chat/legislation-result-projections";
+import {
+  READ_STATUTE_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -93,6 +95,8 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
+
+import { STATUTE_TIMELINE_RESOURCE_URI } from "./apps/resource-uri";
 
 /**
  * The stella legislation corpus as agent-facing tools: find a statute, read
@@ -475,6 +479,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: { ui: { resourceUri: STATUTE_TIMELINE_RESOURCE_URI } },
     name: "read_provision_history",
     scope: "stella:read",
   }),

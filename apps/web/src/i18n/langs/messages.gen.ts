@@ -542,6 +542,16 @@ type Messages = {
       "createInvoice": "Create invoice";
       "dueDate": "Due date";
       "editInvoice": "Edit invoice";
+      "export": {
+        "accounting": "Accounting import";
+        "eBilling": "E-billing";
+        "eso9": "ESO9 import sheet (XLSX)";
+        "exporting": "Preparing export…";
+        "isdoc": "ISDOC e-invoice (ABRA Gen and others)";
+        "spreadsheets": "Spreadsheets";
+        "xlsx": "Invoices (XLSX)";
+        "xlsxLines": "Invoice lines (XLSX)";
+      };
       "finalize": "Finalize";
       "invoiceDate": "Invoice date";
       "invoiceDetail": "Invoice detail";

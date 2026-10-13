@@ -539,6 +539,16 @@
       "createInvoice": "Számla létrehozása",
       "dueDate": "Fizetési határidő",
       "editInvoice": "Számla szerkesztése",
+      "export": {
+        "accounting": "Könyvelési import",
+        "eBilling": "E-számlázás",
+        "eso9": "ESO9 importtábla (XLSX)",
+        "exporting": "Export előkészítése…",
+        "isdoc": "ISDOC e-számla (ABRA Gen és mások)",
+        "spreadsheets": "Táblázatok",
+        "xlsx": "Számlák (XLSX)",
+        "xlsxLines": "Számlatételek (XLSX)"
+      },
       "finalize": "Véglegesítés",
       "invoiceDate": "Számla kelte",
       "invoiceDetail": "Számla részletei",

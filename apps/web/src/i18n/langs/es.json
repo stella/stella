@@ -539,6 +539,16 @@
       "createInvoice": "Crear factura",
       "dueDate": "Fecha de vencimiento",
       "editInvoice": "Editar factura",
+      "export": {
+        "accounting": "Importación contable",
+        "eBilling": "Facturación electrónica",
+        "eso9": "Hoja de importación ESO9 (XLSX)",
+        "exporting": "Preparando la exportación…",
+        "isdoc": "Factura electrónica ISDOC (ABRA Gen y otros)",
+        "spreadsheets": "Hojas de cálculo",
+        "xlsx": "Facturas (XLSX)",
+        "xlsxLines": "Líneas de factura (XLSX)"
+      },
       "finalize": "Finalizar",
       "invoiceDate": "Fecha de factura",
       "invoiceDetail": "Detalle de factura",

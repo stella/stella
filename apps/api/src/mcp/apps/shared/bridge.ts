@@ -44,11 +44,14 @@ export const applyHostStyles = (context: McpUiHostContext) => {
   }
 };
 
-const applyHostPresentation = (context: McpUiHostContext) => {
+const applyHostPresentation = (
+  context: McpUiHostContext,
+  title: string | undefined,
+) => {
   const locale = appLocale(context.locale);
   document.documentElement.lang = locale.locale;
   document.documentElement.dir = locale.direction;
-  document.title = locale.messages.title;
+  document.title = title ?? locale.messages.title;
   applyHostStyles(context);
 };
 
@@ -114,6 +117,7 @@ type AppSnapshot<View> = {
 type ReadCall = { name: ToolName; arguments: Record<string, unknown> };
 
 type PresentationBridgeOptions<View> = {
+  title?: (context: McpUiHostContext) => string;
   manifest: PresentationApp;
   parse: (payload: unknown, input: Record<string, unknown>) => View | undefined;
 };
@@ -146,6 +150,7 @@ const requestPresentationTool = async ({
 export const createPresentationBridge = <View>({
   manifest,
   parse,
+  title,
 }: PresentationBridgeOptions<View>) => {
   const app = new App(
     { name: `stella ${manifest.directory}`, version: "1.0.0" },
@@ -200,7 +205,7 @@ export const createPresentationBridge = <View>({
             snapshot.tool),
       result: snapshot.result,
     };
-    applyHostPresentation(merged);
+    applyHostPresentation(merged, title?.(merged));
     for (const listener of listeners) {
       listener();
     }
@@ -307,7 +312,7 @@ export const createPresentationBridge = <View>({
     await openPresentationLink({ app, url, fail });
   };
   const connect = async (): Promise<void> => {
-    applyHostPresentation(snapshot.context);
+    applyHostPresentation(snapshot.context, title?.(snapshot.context));
     const connected = await Result.tryPromise(async () => app.connect());
     if (Result.isError(connected)) {
       publish({ status: "error", message: connected.error.message });
