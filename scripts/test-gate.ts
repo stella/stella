@@ -776,6 +776,7 @@ type PackageInvocationOptions = ShellInvocation & {
   readonly packageDirectory: string;
   readonly packageName: string;
   readonly scriptName: string;
+  readonly propagation?: ShellPropagation;
 };
 
 const packageInvocationEnd = ({
@@ -785,6 +786,7 @@ const packageInvocationEnd = ({
   packageDirectory,
   packageName,
   scriptName,
+  propagation,
 }: PackageInvocationOptions): number | undefined => {
   if (words[index] !== "bun") {
     return undefined;
@@ -804,7 +806,8 @@ const packageInvocationEnd = ({
   ) {
     return index + cwdOffset + 3;
   }
-  // An adjacent `cd ... &&` proves the directory whenever this runner executes.
+  // An adjacent directory change must succeed before this runner executes.
+  // Workflow errexit also enforces that contract across statement separators.
   const preceding = tokens
     .slice(0, index)
     .filter(
@@ -813,11 +816,18 @@ const packageInvocationEnd = ({
   const separator = preceding.at(-1);
   const directory = preceding.at(-2);
   const changeDirectory = preceding.at(-3);
+  const directoryPrefix = preceding.at(-4);
   if (
     words[index + 1] === "run" &&
     words[index + 2] === scriptName &&
     separator?.role === "operator" &&
-    separator.value === "&&" &&
+    (separator.value === "&&" ||
+      ((propagation?.errexit ?? true) &&
+        (directoryPrefix === undefined ||
+          (directoryPrefix.role === "operator" &&
+            (directoryPrefix.value === "\n" ||
+              directoryPrefix.value === ";"))) &&
+        (separator.value === "\n" || separator.value === ";"))) &&
     directory?.role === "argument" &&
     directory.value === packageDirectory &&
     changeDirectory?.role === "command" &&
@@ -968,6 +978,9 @@ export const packageTestExecutionFailure = ({
             packageDirectory,
             packageName,
             scriptName,
+            ...(packageScript
+              ? { propagation: PACKAGE_SCRIPT_PROPAGATION }
+              : {}),
           }),
         ...(packageScript ? { propagation: PACKAGE_SCRIPT_PROPAGATION } : {}),
       });

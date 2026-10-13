@@ -505,6 +505,7 @@ context("test registration census", () => {
       for (const command of [
         "echo cd packages/fixture && bun run test",
         "cd packages/fixture || true; bun run test",
+        "false && cd packages/fixture; bun run test",
         "cd packages/fixture && cd packages/other && bun run test",
       ]) {
         expect(
@@ -525,6 +526,32 @@ context("test registration census", () => {
           shardedPackages: new Set<string>(),
         }),
       ).toBeUndefined();
+      for (const separator of ["&&", ";", "\n"]) {
+        const command = `cd packages/fixture${separator}bun run test`;
+        const options = {
+          packageDirectory: "packages/fixture",
+          packageName: "@stll/fixture",
+          shardedPackages: new Set<string>(),
+        };
+        expect(
+          packageTestExecutionFailure({
+            ...options,
+            gatingJobs: new Map([["checks", [command]]]),
+          }),
+        ).toBeUndefined();
+        const packageFailure = packageTestExecutionFailure({
+          ...options,
+          rootScripts: { check: command },
+          gatingJobs: new Map([["checks", ["bun run check"]]]),
+        });
+        if (separator === "&&") {
+          expect(packageFailure).toBeUndefined();
+        } else {
+          expect(packageFailure).toBe(
+            "job condition: no gating job executes @stll/fixture test",
+          );
+        }
+      }
     },
   );
 
