@@ -118,9 +118,13 @@ const partitionJobSchema = (
         v.array(v.looseObject({ name: v.string() })),
         withoutStaticReceipts(job.steps),
       );
-      if ("env" in job && typeof job.env === "object" && job.env !== null) {
+      if (
+        "env" in job &&
+        typeof job["env"] === "object" &&
+        job["env"] !== null
+      ) {
         result["env"] = Object.fromEntries(
-          Object.entries(job.env).filter(
+          Object.entries(job["env"]).filter(
             ([key]) =>
               !["CI_CANCELLATION_KIND", "CI_CANCELLATION_CONTEXT"].includes(
                 key,
