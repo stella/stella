@@ -1560,7 +1560,8 @@ const rtfLiteralSpans = (text: string): LiteralSpan[] => {
   const paths: LiteralSpan[] = [];
   for (const match of text.matchAll(/\S+/gu)) {
     const token = match[0];
-    const path = /(?:[a-zA-Z]:\\|\\\\[^\\\s]+\\[^\\\s]+)/u.exec(token);
+    const path =
+      /(?:(?<![\p{L}\p{N}])[a-zA-Z]:\\|\\\\[^\\\s]+\\[^\\\s]+)/u.exec(token);
     if (path) {
       const start = match.index + path.index;
       const tokenEnd = match.index + token.length;
