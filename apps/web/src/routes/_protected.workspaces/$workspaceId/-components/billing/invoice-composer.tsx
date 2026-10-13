@@ -40,7 +40,7 @@ import { cn } from "@stll/ui/utils";
 
 import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
-import { useFormatter } from "@/i18n/formatting-context";
+import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
@@ -59,6 +59,7 @@ import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$worksp
 import {
   composeTotals,
   dueDateFor,
+  editableHoursText,
   entryAdjustments,
   entryAmount,
   entryChoice,
@@ -1081,7 +1082,7 @@ const BilledHoursInput = ({
 }: BilledHoursInputProps) => {
   const t = useTranslations();
   const format = useFormatter();
-  const shown = format.number(minutes / 60, { maximumFractionDigits: 2 });
+  const shown = editableHoursText(minutes, useLocale());
   const [text, setText] = useState(shown);
   return (
     <span className="flex flex-col items-end gap-0.5">

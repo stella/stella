@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   composeTotals,
   dueDateFor,
+  editableHoursText,
   entryAdjustments,
   hasBillableItems,
   includedExpenseIdsOf,
@@ -292,4 +293,19 @@ describe("includedExpenseIdsOf", () => {
       includedExpenseIdsOf(expenses, new Set(["x", "billed-elsewhere"])),
     ).toEqual(["x"]);
   });
+});
+
+describe("editableHoursText", () => {
+  test.each([
+    ["en", 60_000, "1000"],
+    ["en", 90, "1.5"],
+    ["cs", 90, "1,5"],
+    ["ar", 90, "1.5"],
+  ])(
+    "%s %d minutes edit as %s and read back unchanged",
+    (locale, minutes, text) => {
+      expect(editableHoursText(minutes, locale)).toBe(text);
+      expect(parseHoursInput(text)).toBe(minutes);
+    },
+  );
 });

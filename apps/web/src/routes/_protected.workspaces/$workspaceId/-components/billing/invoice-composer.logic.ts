@@ -212,6 +212,19 @@ const HOURS_PATTERN = /^(?<whole>\d{1,4})(?:[.,](?<fraction>\d{1,4}))?$/u;
  * Minutes for hours a person typed ("1.5", "1,25", "2"), rounded to the
  * minute, or null when the text is not a number of hours.
  */
+/**
+ * Billed hours as editable text that `parseHoursInput` reads back unchanged:
+ * the locale's decimal separator, but Latin digits and no grouping, so
+ * "1,000" hours never re-parses as one hour and Arabic-Indic digits never
+ * revert an edit.
+ */
+export const editableHoursText = (minutes: number, locale: string) =>
+  new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 2,
+    numberingSystem: "latn",
+    useGrouping: false,
+  }).format(minutes / 60);
+
 export const parseHoursInput = (text: string): number | null => {
   const match = HOURS_PATTERN.exec(text.trim());
   const whole = match?.groups?.["whole"];
