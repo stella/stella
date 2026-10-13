@@ -39,17 +39,15 @@ export const transferEligibilityOptions = ({
     ],
     queryFn: async ({ signal }) => {
       const matter = { workspaceId: toSafeId<"workspace">(workspaceId) };
+      const options = { fetch: { signal } };
       const request = api.entities(matter)["transfer-eligibility"].post;
       const results = await mapWithConcurrency({
         items: chunk(ids, DEFAULT_ENTITY_WINDOW_SIZE),
         limit: TRANSFER_ELIGIBILITY_CONCURRENCY,
-        operation: async (batch) =>
-          unwrapEden(
-            await request(
-              { entityIds: batch.map((id) => toSafeId<"entity">(id)) },
-              { fetch: { signal } },
-            ),
-          ),
+        operation: async (batch) => {
+          const body = { entityIds: batch.map((id) => toSafeId<"entity">(id)) };
+          return unwrapEden(await request(body, options));
+        },
       });
       return { transfers: results.flatMap(({ transfers }) => transfers) };
     },

@@ -2,6 +2,7 @@ import { QueryClient, skipToken, type QueryKey } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
+import ts from "typescript";
 
 import { repoRelativePath } from "@stll/portable-path";
 
@@ -910,6 +911,173 @@ const closingParen = (source: string, open: number) => {
   return -1;
 };
 
+const readScanBindingNames = (name: ts.BindingName): ts.Identifier[] => {
+  if (ts.isIdentifier(name)) {
+    return [name];
+  }
+  return name.elements.flatMap((element) =>
+    ts.isOmittedExpression(element) ? [] : readScanBindingNames(element.name),
+  );
+};
+
+const readScanScope = (node: ts.Node): boolean =>
+  ts.isSourceFile(node) ||
+  ts.isBlock(node) ||
+  ts.isFunctionLike(node) ||
+  ts.isCatchClause(node) ||
+  ts.isForStatement(node) ||
+  ts.isForOfStatement(node) ||
+  ts.isForInStatement(node) ||
+  ts.isCaseBlock(node);
+
+const readScanDeclarations = (ast: ts.SourceFile) => {
+  const declarations = new Map<ts.Node, Map<string, ts.Identifier>>();
+  const add = (
+    name: ts.Identifier,
+    parent: ts.Node,
+    functionScoped = false,
+  ) => {
+    const scope = ts.findAncestor(parent, (node) =>
+      functionScoped
+        ? ts.isSourceFile(node) || ts.isFunctionLike(node)
+        : readScanScope(node),
+    );
+    if (scope === undefined) {
+      return;
+    }
+    const bindings =
+      declarations.get(scope) ?? new Map<string, ts.Identifier>();
+    bindings.set(name.text, name);
+    declarations.set(scope, bindings);
+  };
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) || ts.isParameter(node)) {
+      const variableList = node.parent;
+      const functionScoped =
+        ts.isVariableDeclarationList(variableList) &&
+        variableList.flags % (ts.NodeFlags.BlockScoped + 1) ===
+          ts.NodeFlags.None;
+      for (const name of readScanBindingNames(node.name)) {
+        add(name, node.parent, functionScoped);
+      }
+    } else if (
+      (ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) &&
+      node.name !== undefined
+    ) {
+      add(node.name, node.parent);
+    } else if (ts.isFunctionExpression(node) && node.name !== undefined) {
+      add(node.name, node);
+    } else if (ts.isImportDeclaration(node)) {
+      const clause = node.importClause;
+      if (clause?.name !== undefined) {
+        add(clause.name, node.parent);
+      }
+      const bindings = clause?.namedBindings;
+      if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+        add(bindings.name, node.parent);
+      }
+      if (bindings !== undefined && ts.isNamedImports(bindings)) {
+        for (const binding of bindings.elements) {
+          add(binding.name, node.parent);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return declarations;
+};
+
+const staticReadScanChain = (
+  node: ts.Expression,
+  roots: readonly string[],
+): string | undefined => {
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isSatisfiesExpression(node) ||
+    ts.isNonNullExpression(node)
+  ) {
+    return staticReadScanChain(node.expression, roots);
+  }
+  if (ts.isIdentifier(node)) {
+    return roots.includes(node.text) ? node.text : undefined;
+  }
+  if (ts.isPropertyAccessExpression(node)) {
+    const chain = staticReadScanChain(node.expression, roots);
+    return chain === undefined ? undefined : `${chain}.${node.name.text}`;
+  }
+  if (
+    ts.isElementAccessExpression(node) &&
+    ts.isStringLiteralLike(node.argumentExpression)
+  ) {
+    const chain = staticReadScanChain(node.expression, roots);
+    return chain === undefined
+      ? undefined
+      : `${chain}["${node.argumentExpression.text}"]`;
+  }
+  if (ts.isCallExpression(node)) {
+    const chain = staticReadScanChain(node.expression, roots);
+    return chain === undefined ? undefined : `${chain}()`;
+  }
+  return undefined;
+};
+
+// A method getter becomes read evidence only when its immutable lexical binding
+// is called. Parameters and inner declarations retain their own identity.
+const calledReadScanAliases = (
+  source: string,
+  roots: readonly string[],
+): string[] => {
+  if (
+    !/\bconst\s/u.test(source) ||
+    !roots.some((root) => source.includes(root))
+  ) {
+    return [];
+  }
+  const text = source.trimStart().startsWith("{")
+    ? `const readScanObject = (${source});`
+    : source;
+  const ast = ts.createSourceFile(
+    "read-scan.tsx",
+    text,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const declarations = readScanDeclarations(ast);
+  const chains: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+      const callee = node.expression;
+      let binding: ts.Identifier | undefined;
+      ts.findAncestor(callee.parent, (scope) => {
+        binding = declarations.get(scope)?.get(callee.text);
+        return binding !== undefined;
+      });
+      const declaration = binding?.parent;
+      if (
+        declaration !== undefined &&
+        ts.isVariableDeclaration(declaration) &&
+        declaration.initializer !== undefined &&
+        ts.isVariableDeclarationList(declaration.parent) &&
+        declaration.parent.flags % (ts.NodeFlags.BlockScoped + 1) ===
+          ts.NodeFlags.Const &&
+        (ts.isPropertyAccessExpression(declaration.initializer) ||
+          ts.isElementAccessExpression(declaration.initializer))
+      ) {
+        const chain = staticReadScanChain(declaration.initializer, roots);
+        if (chain !== undefined) {
+          chains.push(`${chain}()`);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return chains;
+};
+
 /**
  * Member chains starting at one of `roots`, with call arguments dropped:
  * `api.workspaces({ workspaceId }).activity.get({ … })` reads
@@ -955,6 +1123,7 @@ const callChains = (source: string, roots: readonly string[]) => {
     }
     chains.push(chain);
   }
+  chains.push(...calledReadScanAliases(source, roots));
   return chains;
 };
 
@@ -1324,6 +1493,59 @@ test("organization settings skip authenticated reads until an organization is se
 });
 
 describe("the per-user read scan", () => {
+  test("recognizes an immutable endpoint method only when its binding is called", () => {
+    const source = `
+const request = api.entities(matter)["transfer-eligibility"].post;
+const load = async () => await request(body, options);
+`;
+    expect(callChains(source, ["api"])).toContain(
+      'api.entities()["transfer-eligibility"].post()',
+    );
+  });
+
+  test.each([
+    'const request = api.entities(matter)["transfer-eligibility"].post;',
+    'let request = api.entities(matter)["transfer-eligibility"].post; request(body);',
+    'const request = api.entities(matter)["transfer-eligibility"].post; const load = (request) => request(body);',
+    'const request = api.entities(matter)["transfer-eligibility"].post; const load = ({ request }) => request(body);',
+    'const request = api.entities(matter)["transfer-eligibility"].post; { const request = unrelated; request(body); }',
+    'const request = api.entities(matter)["transfer-eligibility"].post; const load = () => { var request = unrelated; request(body); };',
+    'const request = api.entities(matter)["transfer-eligibility"].post; try {} catch (request) { request(body); }',
+    'const request = api.entities(matter)["transfer-eligibility"].post; for (const request of requests) request(body);',
+  ])(
+    "an uncalled or separate endpoint binding supplies no called chain: %s",
+    (source) => {
+      expect(callChains(source, ["api"])).not.toContain(
+        'api.entities()["transfer-eligibility"].post()',
+      );
+    },
+  );
+
+  test("query snippets require caller keys when they call an immutable endpoint method", () => {
+    const source = `
+export const eligibilityOptions = (organizationId: string) => queryOptions({
+  queryKey: ["eligibility", organizationId],
+  queryFn: async () => {
+    const request = api.entities(matter)["transfer-eligibility"].post;
+    return await request(body, options);
+  },
+});
+`;
+    const calls = ['api.entities()["transfer-eligibility"].post'];
+    expect(unkeyedQueries(source, calls)).toEqual([
+      '["eligibility", organizationId]',
+    ]);
+    expect(
+      unkeyedQueries(
+        source.replace(
+          '"eligibility", organizationId',
+          '"eligibility", organizationId, userId',
+        ),
+        calls,
+      ),
+    ).toEqual([]);
+  });
+
   test("sees the caller however a handler refers to it", () => {
     for (const reference of [
       "eq(timeEntries.userId, currentUser.id)",
