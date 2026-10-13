@@ -167,7 +167,7 @@ if (import.meta.main) {
     const result = Bun.spawnSync(args, { cwd: root, timeout: 20_000 });
     if (result.exitCode !== 0) {
       throw new WindowsResultError({
-        message: `Windows result command failed: ${args.at(0)}`,
+        message: `Windows result command failed: ${String(args.at(0))}`,
       });
     }
     return result.stdout.toString().trim();
@@ -216,7 +216,7 @@ if (import.meta.main) {
           JSON.parse(
             githubCommand([
               "api",
-              `repos/${process.env["GITHUB_REPOSITORY"]}/contents/.github/workflows/ci.yml?ref=${workflowSha}`,
+              `repos/${String(process.env["GITHUB_REPOSITORY"])}/contents/.github/workflows/ci.yml?ref=${workflowSha}`,
             ]),
           ),
         );

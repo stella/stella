@@ -236,7 +236,7 @@ if (args[0] === "run") {
             cwd: root,
             env: {
               ...process.env,
-              PATH: `${bin}${path.delimiter}${process.env["PATH"]}`,
+              PATH: `${bin}${path.delimiter}${String(process.env["PATH"])}`,
               RUNNER_TEMP: temporary,
               GITHUB_SHA: (mode === "valid-main" ? "b" : "a").repeat(40),
               WINDOWS_WORKFLOW_SHA: "b".repeat(40),
