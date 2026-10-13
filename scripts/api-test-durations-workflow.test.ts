@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
-import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
+import {
+  workflowCiInstallFlags,
+  workflowJobSteps,
+  workflowStepByName,
+} from "./workflow-steps";
 
 const ciText = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -93,7 +97,12 @@ test("duration cache saves only after green main API shards", () => {
   const stepIndex = (name: string) =>
     steps.findIndex((step) => step["name"] === name);
   const install = workflowStepByName(steps, "Install API script dependencies");
-  expect(String(install["run"])).toContain("--filter @stll/api");
+  expect(workflowCiInstallFlags(install)).toEqual([
+    "--frozen-lockfile",
+    "--ignore-scripts",
+    "--filter",
+    "@stll/api",
+  ]);
   expect(stepIndex("Install API script dependencies")).toBeGreaterThan(
     stepIndex("Setup Bun"),
   );
