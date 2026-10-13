@@ -401,6 +401,27 @@ const CHAT_RUN_LOG_MIGRATION_PATH = nodePath.join(
   "migration.sql",
 );
 
+/** Apply the account audit migration's forced user boundary after schema push. */
+export const installPgliteAccountAuditRls = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statement = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261010005100_account_audit_scope",
+      "migration.sql",
+    ),
+  ).find((candidate) =>
+    executableSql(candidate).startsWith(
+      'ALTER TABLE "account_audit_logs" FORCE ROW LEVEL SECURITY',
+    ),
+  );
+  if (statement === undefined) {
+    panic("Account audit FORCE RLS migration statement is missing");
+  }
+  await db.execute(sql.raw(statement));
+};
+
 /** Apply the revision migration's forced boundary, which schema push omits. */
 export const installPgliteChatMessageRevisionsRls = async (
   db: PgliteSchemaDb,
@@ -959,6 +980,29 @@ export const installPgliteDecisionAliases = async (
     );
   });
   for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
+};
+
+/** Use the committed SQL for the projection that schema push cannot install. */
+export const installPgliteDecisionCitationStats = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  for (const statement of readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261005120200_decision_citation_stats",
+      "migration.sql",
+    ),
+  ).filter((candidate) => {
+    const text = executableSql(candidate);
+    return (
+      text.startsWith("CREATE FUNCTION") ||
+      text.startsWith("CREATE TRIGGER") ||
+      text.startsWith("REVOKE ALL ON FUNCTION") ||
+      text.startsWith("GRANT EXECUTE ON FUNCTION")
+    );
+  })) {
     await db.execute(sql.raw(statement));
   }
 };

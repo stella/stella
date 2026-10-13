@@ -12,6 +12,7 @@ node_modules
 
 # Testing
 coverage
+apps/api/.test-mutants/
 
 # AI SDK DevTools traces (local plaintext AI interactions)
 .devtools/

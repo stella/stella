@@ -3,7 +3,77 @@ import { mkdir, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { loadLocalModule } from "./local-module-loader";
+import { isWithinRoot, loadLocalModule } from "./local-module-loader";
+
+describe("filesystem root containment", () => {
+  test("accepts descendants of POSIX and Windows filesystem roots", () => {
+    expect(isWithinRoot({ pathApi: path.posix, root: "/", target: "/" })).toBe(
+      true,
+    );
+    expect(
+      isWithinRoot({ pathApi: path.posix, root: "/", target: "/a/b.mjs" }),
+    ).toBe(true);
+    expect(
+      isWithinRoot({
+        pathApi: path.win32,
+        root: "C:\\",
+        target: "C:\\a\\b.mjs",
+      }),
+    ).toBe(true);
+  });
+
+  test("uses platform case semantics for descendant paths", () => {
+    for (const target of [
+      "c:\\modules\\a.mjs",
+      "C:\\MODULES\\sub\\b.mjs",
+      "C:\\modules\\..cache\\x.mjs",
+    ]) {
+      expect(
+        isWithinRoot({ pathApi: path.win32, root: "C:\\modules", target }),
+      ).toBe(true);
+    }
+    for (const target of [
+      "C:\\modules-other\\a.mjs",
+      "C:\\a.mjs",
+      "D:\\modules\\a.mjs",
+    ]) {
+      expect(
+        isWithinRoot({ pathApi: path.win32, root: "C:\\modules", target }),
+      ).toBe(false);
+    }
+    expect(
+      isWithinRoot({
+        pathApi: path.posix,
+        root: "/mods",
+        target: "/MODS/a.mjs",
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects other roots, sibling prefixes and parent traversal", () => {
+    expect(
+      isWithinRoot({
+        pathApi: path.win32,
+        root: "C:\\",
+        target: "D:\\a.mjs",
+      }),
+    ).toBe(false);
+    expect(
+      isWithinRoot({
+        pathApi: path.posix,
+        root: "/modules",
+        target: "/modules-backup/a.mjs",
+      }),
+    ).toBe(false);
+    expect(
+      isWithinRoot({
+        pathApi: path.posix,
+        root: "/modules",
+        target: "/modules/../a.mjs",
+      }),
+    ).toBe(false);
+  });
+});
 
 describe("bounded local module loading", () => {
   test("imports relative, absolute and symlinked entries inside the real root", async () => {
@@ -41,7 +111,7 @@ describe("bounded local module loading", () => {
   test("loads only files whose real path is inside the declared root", async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "local-module-root-"));
     const root = path.join(directory, "modules");
-    const sibling = path.join(directory, "other");
+    const sibling = path.join(directory, "modules-backup");
     try {
       await mkdir(path.join(root, "nested"), { recursive: true });
       await mkdir(sibling);
@@ -53,7 +123,7 @@ describe("bounded local module loading", () => {
       );
       await symlink(siblingModule, path.join(root, "linked.mjs"));
       for (const modulePath of [
-        "../other/value.mjs",
+        "../modules-backup/value.mjs",
         "nested/../inside.mjs",
         siblingModule,
         "linked.mjs",

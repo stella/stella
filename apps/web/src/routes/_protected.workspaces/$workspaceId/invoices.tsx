@@ -22,6 +22,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { detached } from "@/lib/detached";
 import { invoicesInfiniteOptions } from "@/lib/workspaces/queries/invoices";
+import { InvoiceExportMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-export-menu";
 import { InvoiceStatusBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-status-badge";
 
 export const Route = createFileRoute(
@@ -63,18 +64,21 @@ function InvoicesPage() {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-4 py-3">
         <h1 className="text-sm font-medium">{t("common.invoices")}</h1>
-        {canCreateInvoice && (
-          <Link
-            params={{ workspaceId }}
-            search={{}}
-            to="/workspaces/$workspaceId/invoices"
-          >
-            <Button size="sm" variant="outline">
-              <PlusIcon className="size-4" />
-              {t("billing.invoices.createInvoice")}
-            </Button>
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          <InvoiceExportMenu workspaceId={workspaceId} />
+          {canCreateInvoice && (
+            <Link
+              params={{ workspaceId }}
+              search={{}}
+              to="/workspaces/$workspaceId/invoices"
+            >
+              <Button size="sm" variant="outline">
+                <PlusIcon className="size-4" />
+                {t("billing.invoices.createInvoice")}
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto p-4">

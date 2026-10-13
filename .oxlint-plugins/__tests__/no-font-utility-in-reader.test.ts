@@ -1,10 +1,8 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 const RULE_NAME = "no-font-utility-in-reader";
-
-setDefaultTimeout(20_000);
 
 const lint = async (source: string) =>
   await lintSingleRule(RULE_NAME, source, { sourcePath: "reader-surface.tsx" });

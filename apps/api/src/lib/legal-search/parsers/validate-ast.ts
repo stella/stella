@@ -1,3 +1,4 @@
+// parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
 // parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
 // parser-output-unchanged: the reference text is read from the same elements in the same order; validation diagnostics and stored parser output are unchanged.
 /**
@@ -60,6 +61,14 @@ export type ValidationResult = {
       ancestorChecks: number;
     };
   };
+};
+
+/** Explicit publisher policy; other sources keep the shared validation semantics. */
+export type ValidationSourcePolicy = {
+  source: "courtlistener";
+  projectSourceText: (text: string) => string;
+  projectInlineText: (inlines: readonly Inline[]) => string;
+  markupResidueIn: (text: string) => MarkupResidue | undefined;
 };
 
 /** Source markup found in one block, named by the anchor that holds it. */
@@ -274,6 +283,7 @@ export const validateAst = (
     maxMissingWords?: number;
     /** Source words with explicit inline breaks; never used for retention. */
     wordComparisonText?: string;
+    sourcePolicy?: ValidationSourcePolicy;
   },
 ): ValidationResult => {
   const { minRetainedPct = 90, maxMissingWords = 15 } = options ?? {};
@@ -307,7 +317,14 @@ export const validateAst = (
       return cached;
     }
     work.textComputations += 1;
-    const value = visibleHtmlText($(el)).replace(/\s+/gu, " ").trim();
+    const sourceText = visibleHtmlText($(el));
+    const value = (
+      options?.sourcePolicy
+        ? options.sourcePolicy.projectSourceText(sourceText)
+        : sourceText
+    )
+      .replace(/\s+/gu, " ")
+      .trim();
     work.textCharacters += value.length;
     normalizedTextCache.set(el, value);
     return value;
@@ -483,7 +500,9 @@ export const validateAst = (
     // is prompted with it, and none of them can tell it from the court's
     // words. It also inflates the retention ratio, so a parse carrying
     // residue is the one whose CONTENT_LOSS reading cannot be trusted.
-    const residue = markupResidueIn(text);
+    const residue = options?.sourcePolicy
+      ? options.sourcePolicy.markupResidueIn(text)
+      : markupResidueIn(text);
     if (residue) {
       markupResidue.push({ ...residue, anchorId: block.anchorId });
     }
@@ -516,7 +535,11 @@ export const validateAst = (
     if (block.type === "heading" || block.type === "paragraph") {
       // Parsers normalize plainText while inlines keep source spacing;
       // compare whitespace-collapsed forms so padding never flags.
-      const inlineLen = collapseWhitespace(inlineText(block.inlines)).length;
+      const inlineLen = (
+        options?.sourcePolicy
+          ? options.sourcePolicy.projectInlineText(block.inlines)
+          : collapseWhitespace(inlineText(block.inlines))
+      ).length;
       const plainLen = collapseWhitespace(block.plainText).length;
       // Allow some tolerance for whitespace differences
       if (
