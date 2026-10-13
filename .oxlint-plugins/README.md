@@ -326,6 +326,13 @@ implies a hazard that is gone.
 
 ## Adding or changing a rule
 
+Every new guard or lint ships with an autofix or codemod registered in the PR
+Autofix job, or enforces only lines changed against the merge base for its first
+week. Register the dated scope in `scripts/guard-rollouts.ts` so the existing
+dated-waiver inventory and healing checks enforce its seven-day deadline.
+The plugin registry check rejects newly added rule IDs without a rollout entry;
+an autofix entry names an eligible generator in `scripts/generated-files.ts`.
+
 1. Put one cohesive detector in `<plugin-name>.ts`; use multiple rule IDs only when
    they share one domain boundary and lifecycle.
 2. State the invariant, accepted shapes, rejected shapes, and known analysis boundary

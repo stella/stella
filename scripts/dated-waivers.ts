@@ -18,6 +18,7 @@ import {
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
+import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollouts";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -46,6 +47,8 @@ export const RECHECK_INSTRUCTIONS = {
   "dependency-audit":
     "Re-run the dependency audit, check patched releases and dependency reachability; remove the acceptance.",
   "quarantined-test": "Run the quarantined test without its skip.",
+  "guard-rollout":
+    "Run the full guard and remove its temporary changed-lines scope.",
   "suppression-waiver":
     "Recheck the suppression invariant and evidence; remove the suppression.",
 } as const;
@@ -90,6 +93,7 @@ type CollectWaiversOptions = {
   bunfigs: readonly string[];
   releaseAgeSources: Readonly<Record<string, string>>;
   quarantineSources?: Readonly<Record<string, string>>;
+  guardRollouts?: readonly GuardRollout[];
 };
 
 export const collectWaivers = ({
@@ -99,6 +103,7 @@ export const collectWaivers = ({
   bunfigs,
   releaseAgeSources,
   quarantineSources = {},
+  guardRollouts = [],
 }: CollectWaiversOptions): DatedWaiver[] => {
   const entries: DatedWaiver[] = docs.map((entry) => ({
     source: DOC_SOURCE_FILE,
@@ -216,6 +221,23 @@ export const collectWaivers = ({
     });
   }
   entries.push(...readTestQuarantines(quarantineSources));
+  for (const rollout of guardRollouts) {
+    if (rollout.type !== "changed-lines") {
+      continue;
+    }
+    const source = "scripts/guard-rollouts.ts";
+    entries.push({
+      source,
+      line: sourceLine(read(source), rollout.id),
+      id: rollout.id,
+      kind: "guard-rollout",
+      expiresAt: rollout.expiresAt,
+      probe: {
+        command: ["env", "STELLA_GUARD_SCOPE=all", ...rollout.check],
+        attempts: TEST_ATTEMPTS,
+      },
+    });
+  }
   const identities = new Set<string>();
   for (const entry of entries) {
     expiryInstant(entry.expiresAt);
@@ -462,6 +484,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
     Object.fromEntries(policyFiles.map((file) => [file, read(file)])),
     new Set([
       DOC_SOURCE_FILE,
+      "scripts/guard-rollouts.ts",
       "scripts/suppression-waivers.ts",
       "scripts/suppression-waivers.json",
       "scripts/dependency-audit-baseline.json",
@@ -496,6 +519,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   return collectWaivers({
     read,
     docs: DOC_SOURCE_EXCLUSIONS,
+    guardRollouts: GUARD_ROLLOUTS,
     audit,
     bunfigs: files,
     releaseAgeSources: configSources,

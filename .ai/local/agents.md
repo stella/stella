@@ -24,6 +24,11 @@ rules.
 
 ## Implementation Quality
 
+Every new guard or lint ships with an autofix or codemod registered in the PR
+Autofix job, or enforces only lines changed against the merge base for its first
+week. Register the dated scope in `scripts/guard-rollouts.ts` so the existing
+dated-waiver inventory and healing checks enforce its seven-day deadline.
+
 - Comments explain a non-obvious invariant, trade-off, safety constraint, or why
   the code exists. Do not narrate the next statement, add empty documentation
   blocks, or label closing braces.
