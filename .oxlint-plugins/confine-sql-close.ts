@@ -77,6 +77,10 @@ export default eslintCompatPlugin({
             return canonicalModuleId(filename, filename) !== SQL_CLOSE_OWNER;
           },
           Property(node) {
+            // Only object literals supply a budget; destructuring reads one.
+            if (node.parent?.type !== "ObjectExpression") {
+              return;
+            }
             const name = node.computed
               ? staticStringValue(node.key)
               : getPropertyName(node.key);

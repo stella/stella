@@ -43,6 +43,18 @@ describe(RULE, () => {
     ).toEqual([1, 2, 3, 4, 5, 6, 7]);
   });
 
+  test("reads a close budget through destructuring without reporting it", async () => {
+    expect(
+      await lint(
+        [
+          "const { closeTimeout } = options;",
+          "const { closeTimeout: renamed } = options;",
+          "const supplied = { closeTimeout: renamed };",
+        ].join("\n"),
+      ),
+    ).toEqual([3]);
+  });
+
   test("follows stable local option and method aliases including object spreads", async () => {
     expect(
       await lint(
