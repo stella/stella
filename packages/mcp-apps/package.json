@@ -39,6 +39,7 @@
     "@stll/legal-ast": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/sha256": "workspace:*",
+    "@stll/time": "workspace:*",
     "@stll/ui": "workspace:*",
     "better-result": "catalog:",
     "react": "catalog:react19",
@@ -48,6 +49,7 @@
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "20.14.5",
+    "@stll/portable-path": "workspace:*",
     "@stll/property-testing": "workspace:*",
     "@stll/scripts": "workspace:*",
     "@stll/typescript-config": "workspace:*",

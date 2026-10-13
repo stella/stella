@@ -11,6 +11,8 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { apiResolvedTypecheckInputs } from "./api-typecheck-inputs";
 
 const ROOT = path.resolve(import.meta.dir, "../../..");
@@ -633,9 +635,10 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     const script = "scripts/test-path-filters.ts";
     write(`apps/api/${script}`, valid);
     for (const file of [safe, coupled]) {
-      const relative = path
-        .relative(path.dirname(file), script)
-        .replace(/\.ts$/u, "");
+      const relative = repoRelativePath(path.dirname(file), script).replace(
+        /\.ts$/u,
+        "",
+      );
       write(
         `apps/api/${file}`,
         `import { value } from '${relative}';\nexport const checked: number = value;\n`,
@@ -660,9 +663,10 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     const imported = "src/handlers/visual-sandbox/browser/manifest.ts";
     expect(sourceTask["inputs"]).toContain("**");
     write(`apps/api/${imported}`, valid);
-    const relative = path
-      .relative(path.dirname(coupled), imported)
-      .replace(/\.ts$/u, "");
+    const relative = repoRelativePath(path.dirname(coupled), imported).replace(
+      /\.ts$/u,
+      "",
+    );
     const specifier = relative.startsWith(".") ? relative : `./${relative}`;
     write(
       `apps/api/${coupled}`,

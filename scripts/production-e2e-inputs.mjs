@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { isPathStrictlyInside } from "../packages/portable-path/src/index.ts";
+
 const CONFIG_PATH = path.resolve(
   import.meta.dirname,
   "../apps/web/e2e/playwright.config.ts",
@@ -33,7 +35,7 @@ export const productionE2eInputs = (configPath) => {
   if (existsSync(tsconfig)) {
     pending.push(tsconfig);
   }
-  if (!testDirectory.startsWith(`${String(root)}${String(path.sep)}`)) {
+  if (!isPathStrictlyInside(root, testDirectory)) {
     fail("Production E2E testDir must stay inside its E2E tree");
   }
   for (const file of readdirSync(testDirectory, {
@@ -76,7 +78,7 @@ export const productionE2eInputs = (configPath) => {
         continue;
       }
       const resolved = path.resolve(path.dirname(file), reference);
-      if (!resolved.startsWith(`${String(root)}${String(path.sep)}`)) {
+      if (!isPathStrictlyInside(root, resolved)) {
         continue;
       }
       const candidates = [
@@ -106,19 +108,13 @@ if (
   const changedFiles = process.argv.slice(2);
   const root = path.dirname(CONFIG_PATH);
   const absoluteFiles = changedFiles.map((file) => path.resolve(file));
-  if (
-    !absoluteFiles.some((file) =>
-      file.startsWith(`${String(root)}${String(path.sep)}`),
-    )
-  ) {
+  if (!absoluteFiles.some((file) => isPathStrictlyInside(root, file))) {
     console.log(false);
   } else {
     const { testDirectory, files } = productionE2eInputs(CONFIG_PATH);
     console.log(
       absoluteFiles.some(
-        (file) =>
-          file.startsWith(`${String(testDirectory)}${String(path.sep)}`) ||
-          files.has(file),
+        (file) => isPathStrictlyInside(testDirectory, file) || files.has(file),
       ),
     );
   }

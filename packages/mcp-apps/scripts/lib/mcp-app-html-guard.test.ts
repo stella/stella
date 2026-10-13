@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { MCP_APPS } from "../../src/manifest";
 import { inspectMcpAppHtml } from "./mcp-app-html-guard";
 
@@ -106,7 +108,7 @@ test("committed MCP app bundles pass the HTML guard", async () => {
   );
 
   expect(
-    bundlePaths.map((file) => path.relative(appsDirectory, file)).toSorted(),
+    bundlePaths.map((file) => repoRelativePath(appsDirectory, file)).toSorted(),
   ).toEqual(
     MCP_APPS.map(
       ({ directory }) => `${directory}/generated/app.html.txt`,

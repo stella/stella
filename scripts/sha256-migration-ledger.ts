@@ -5,6 +5,8 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   parseReasonedLedger,
   runLedgerMembershipGuard,
@@ -74,9 +76,10 @@ export const sha256MigrationFiles = (root: string): string[] => {
       output.diagnostics
         .filter(({ code }) => code.startsWith(RULE))
         .map(({ filename }) =>
-          path
-            .relative(root, path.resolve(root, filename))
-            .replaceAll("\\", "/"),
+          repoRelativePath(root, path.resolve(root, filename)).replaceAll(
+            "\\",
+            "/",
+          ),
         )
         .filter((file) => tracked.has(file)),
     ),

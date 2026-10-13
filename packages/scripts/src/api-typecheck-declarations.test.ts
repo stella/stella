@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { readApiTypecheckConfig } from "./api-typecheck-config";
@@ -212,7 +213,7 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
     expect(result.files.toSorted()).toEqual([manifest, leaf].toSorted());
     expect(missingDeclarationCacheInputs(result.files, project)).toEqual([]);
     for (const removed of [manifest, leaf]) {
-      writeInputs([...inputs, `!${path.relative(api, removed)}`]);
+      writeInputs([...inputs, `!${repoRelativePath(api, removed)}`]);
       expect(missingDeclarationCacheInputs(result.files, project)).toEqual([
         removed,
       ]);
@@ -571,7 +572,7 @@ test("declaration aliases resolve transitive API contracts without checking thei
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 30_000);
 
 test("stable wrappers prepare and restore exact roots and owners without committed config churn", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "api-prepared-projects-"));

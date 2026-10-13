@@ -3,6 +3,8 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const API_ROOT = path.resolve(import.meta.dir, "../../..");
 const SEARCH_ROOTS = ["src", "scripts"];
 
@@ -11,12 +13,12 @@ const SEARCH_ROOTS = ["src", "scripts"];
  * schema that declares the variable in the first place.
  */
 const OWNERS = new Set([
-  path.relative(
+  repoRelativePath(
     API_ROOT,
     fileURLToPath(import.meta.resolve("./auth-cookie-name.ts")),
   ),
-  path.relative(API_ROOT, import.meta.filename),
-  path.join("src", "env-schema.ts"),
+  repoRelativePath(API_ROOT, import.meta.filename),
+  "src/env-schema.ts",
 ]);
 
 const walk = (directory: string): string[] => {

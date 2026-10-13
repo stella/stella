@@ -15,6 +15,7 @@ import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
+import { repoRelativePath } from "@stll/portable-path";
 
 import {
   anchorMarketingAgentFinalTurn,
@@ -1127,7 +1128,7 @@ const recordCaptureInContext = async ({
       reference: payoffReference,
     });
   }
-  process.stdout.write(`recorded ${path.relative(REPO_ROOT, outputPath)}\n`);
+  process.stdout.write(`recorded ${repoRelativePath(REPO_ROOT, outputPath)}\n`);
 };
 
 const READY_MARKER_ID = "__stella_capture_ready_marker";

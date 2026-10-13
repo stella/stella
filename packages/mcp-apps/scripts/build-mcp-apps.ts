@@ -5,6 +5,7 @@ import { transform } from "oxc-transform-react";
 import postcss from "postcss";
 
 import MCP_APP_MESSAGES from "@stll/api-contract/mcp-app-messages";
+import { repoRelativePath } from "@stll/portable-path";
 import {
   REACT_COMPILER_OPTIONS,
   REACT_COMPILER_EXCLUDE,
@@ -192,7 +193,7 @@ const buildMcpApp = async ({
   const graph =
     result.metafile ?? panic("MCP app build did not report reachable inputs");
   const apiInputs = Object.keys(graph.inputs).filter((file) =>
-    path.relative(repoRoot, path.resolve(file)).startsWith("apps/api/"),
+    repoRelativePath(repoRoot, path.resolve(file)).startsWith("apps/api/"),
   );
   if (apiInputs.length > 0) {
     panic(`MCP app ${app} reaches API source: ${apiInputs.join(", ")}`);
@@ -205,7 +206,7 @@ const buildMcpApp = async ({
     const metafile =
       result.metafile ?? panic("Reader build did not report reachable inputs");
     const inputs = Object.keys(metafile.inputs)
-      .map((file) => path.relative(repoRoot, path.resolve(file)))
+      .map((file) => repoRelativePath(repoRoot, path.resolve(file)))
       .filter((file) => /^(?:apps|packages)\//u.test(file))
       .toSorted();
     const loadModule = async (file: string) => ({
