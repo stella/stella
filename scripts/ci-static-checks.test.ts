@@ -21,8 +21,6 @@ import {
   runStaticReceiptBoundary,
   STATIC_RECEIPT_STEP_NAMES,
   staticCheckKey,
-  staticReuseOutputs,
-  staticReuseCondition,
   trustedQueueRun,
 } from "./ci-static-checks";
 import { workflowJobSteps } from "./workflow-steps";
@@ -101,104 +99,90 @@ const temporaryFiles = (step: Record<string, unknown>) => {
 };
 
 // Follow file and step-output consumers through reports to their uploads.
-// A later reader must either require actual execution or declare reuse handling.
-test("every downstream reader of a reusable check handles reuse or requires execution", () => {
-  for (const job of jobs) {
-    const steps = classifiedChecks(workflow, job);
-    for (const [index, producer] of steps.entries()) {
-      const env = producer["env"];
-      if (!record(env) || env["CI_CHECK_KIND"] !== "STATIC") {
+// Reuse certifies the result, not runner-local files or step output values.
+const receiptReaderViolations = (steps: Record<string, unknown>[]) => {
+  const violations: string[] = [];
+  for (const [index, producer] of steps.entries()) {
+    const env = producer["env"];
+    if (!record(env) || env["CI_CHECK_KIND"] !== "STATIC") {
+      continue;
+    }
+    const id = String(producer["id"]);
+    const files = temporaryFiles(producer);
+    const sourceIds = new Set([id]);
+    if (String(producer["run"]).includes("GITHUB_ENV")) {
+      violations.push(
+        `${String(producer["name"])} changes downstream environment`,
+      );
+    }
+    for (const reader of steps.slice(index + 1)) {
+      const inputs = temporaryFiles(reader);
+      const text = JSON.stringify(reader);
+      if (
+        ![...inputs].some((file) => files.has(file)) &&
+        ![...sourceIds].some((source) =>
+          text.includes(`steps.${source}.outputs.`),
+        )
+      ) {
         continue;
       }
-      const id = String(producer["id"]);
-      const files = temporaryFiles(producer);
-      const sourceIds = new Set([id]);
-      for (const reader of steps.slice(index + 1)) {
-        const inputs = temporaryFiles(reader);
-        const text = JSON.stringify(reader);
-        if (
-          ![...inputs].some((file) => files.has(file)) &&
-          ![...sourceIds].some((source) =>
-            text.includes(`steps.${source}.outputs.`),
-          )
-        ) {
-          continue;
-        }
-        const condition = String(reader["if"]);
-        if (condition.includes(`steps.${id}.outcome == 'success'`)) {
-          continue;
-        }
-        const readerEnv = reader["env"];
-        expect(record(readerEnv)).toBe(true);
-        if (!record(readerEnv)) {
-          throw new TypeError("Missing reader reuse declaration");
-        }
-        expect(readerEnv["CI_CHECK_REUSE_SOURCE"]).toBe(id);
-        expect(readerEnv["CI_STATIC_REUSED"]).toBe(
-          `\${{ steps.static_receipts.outputs.reuse_${id} }}`,
-        );
-        expect(readerEnv["CI_STATIC_RECEIPT_RUN_ID"]).toBe(
-          `\${{ steps.static_receipts.outputs.receipt_run_${id} }}`,
-        );
-        for (const file of inputs) {
-          files.add(file);
-        }
-        if (typeof reader["id"] === "string") {
-          sourceIds.add(reader["id"]);
-        }
+      if (!String(reader["if"]).includes(`steps.${id}.outcome == 'success'`)) {
+        violations.push(`${id}/${String(reader["name"])}`);
+      }
+      for (const file of inputs) {
+        files.add(file);
+      }
+      if (typeof reader["id"] === "string") {
+        sourceIds.add(reader["id"]);
       }
     }
+  }
+  return violations;
+};
+
+test("every downstream reader of a reusable check requires actual execution", () => {
+  for (const job of jobs) {
+    expect(receiptReaderViolations(classifiedChecks(workflow, job))).toEqual(
+      [],
+    );
   }
 });
 
-test("required parity reuse reports the verified receipt run without reading an execution log", () => {
-  const steps = workflowJobSteps(workflow, "ci-checks-rest");
-  const parity = steps.find((step) => step["id"] === "typecheck_parity");
-  if (!parity) {
-    return;
-  } // Dispatch-only parity can move out of these partitions.
-  const report = steps.find(
-    (step) => step["name"] === "Record typecheck parity report",
-  );
-  const upload = steps.find(
-    (step) => step["name"] === "Upload typecheck parity report",
-  );
-  expect(String(report?.["if"])).toContain(
-    "steps.typecheck_parity_gate.outputs.required == 'true'",
-  );
-  expect(String(parity["if"])).toContain(
-    staticReuseCondition("typecheck_parity"),
-  );
-  const directory = mkdtempSync(path.join(tmpdir(), "static-parity-report-"));
-  try {
-    writeFileSync(path.join(directory, "CLOUD_REPORT.md"), "Parity report\n");
-    const run = report?.["run"];
-    if (typeof run !== "string") {
-      throw new TypeError("Missing parity report command");
-    }
-    const child = Bun.spawnSync(["bash", "-e", "-c", run], {
-      cwd: directory,
-      env: {
-        ...process.env,
-        RUNNER_TEMP: directory,
-        CI_STATIC_REUSED: "true",
-        CI_STATIC_RECEIPT_RUN_ID: "42",
-      },
-    });
-    expect(child.exitCode).toBe(0);
-    expect(
-      readFileSync(path.join(directory, "CLOUD_REPORT.md"), "utf-8"),
-    ).toContain("Reused typecheck parity from receipt run 42.");
-    const withOptions = upload?.["with"];
-    expect(record(withOptions) && withOptions["path"]).toBe(
-      `\${{ runner.temp }}/CLOUD_REPORT.md`,
-    );
-    expect(staticReuseOutputs([{ id: "typecheck_parity", runId: 42 }])).toBe(
-      "reuse_typecheck_parity=true\nreceipt_run_typecheck_parity=42\n",
-    );
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
+test("receipt reader census rejects missing logs, transitive uploads, summaries and environment writes", () => {
+  const producer = {
+    name: "Check",
+    id: "checked",
+    env: { CI_CHECK_KIND: "STATIC" },
+    run: 'check | tee "$RUNNER_TEMP/check.log"',
+  };
+  const report = {
+    name: "Report",
+    run: 'cat "$RUNNER_TEMP/check.log" > "$RUNNER_TEMP/report.md"',
+  };
+  const upload = {
+    name: "Upload",
+    uses: "actions/upload-artifact",
+    with: { path: `\${{ runner.temp }}/report.md` },
+  };
+  const summary = {
+    name: "Summary",
+    run: `echo "\${{ steps.checked.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"`,
+  };
+  expect(receiptReaderViolations([producer, report, upload, summary])).toEqual([
+    "checked/Report",
+    "checked/Upload",
+    "checked/Summary",
+  ]);
+  const readers = [report, upload, summary].map((reader) => ({
+    ...reader,
+    if: "steps.checked.outcome == 'success'",
+  }));
+  expect(receiptReaderViolations([producer, ...readers])).toEqual([]);
+  expect(
+    receiptReaderViolations([
+      { ...producer, run: 'echo MODE=proof >> "$GITHUB_ENV"' },
+    ]),
+  ).toEqual(["Check changes downstream environment"]);
 });
 
 test("new or incomplete task declarations fail the census", () => {
