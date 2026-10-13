@@ -56,6 +56,31 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "api-image-install-tooling",
+    outputKind: "committed",
+    outputs: ["apps/api/Dockerfile"],
+    blocks: [
+      {
+        path: "apps/api/Dockerfile",
+        begin: "# BEGIN GENERATED INSTALL TOOLING",
+        end: "# END GENERATED INSTALL TOOLING",
+      },
+    ],
+    inputs: ["scripts/**", "packages/**", "bun.lock", "tsconfig*.json"],
+    write: [
+      "bun",
+      "scripts/docker-source-closure.ts",
+      "--write-install-tooling",
+    ],
+    check: [
+      "bun",
+      "scripts/docker-source-closure.ts",
+      "--check-install-tooling",
+    ],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "bun-toolchain",
     outputKind: "committed",
     outputs: ["scripts/bun-toolchain.gen.json"],

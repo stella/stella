@@ -1,8 +1,12 @@
 # Pin to digest for supply-chain integrity (oven/bun:1.4.3-slim)
 FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS base
 WORKDIR /app
-COPY scripts/ci-install.ts scripts/ci-install.ts
+# BEGIN GENERATED INSTALL TOOLING
 COPY packages/scripts/src/child-exit-status.ts packages/scripts/src/child-exit-status.ts
+COPY packages/sha256/src/bun.ts packages/sha256/src/bun.ts
+COPY scripts/ci-install-store.ts scripts/ci-install-store.ts
+COPY scripts/ci-install.ts scripts/ci-install.ts
+# END GENERATED INSTALL TOOLING
 
 FROM base AS install-inputs
 # Preserve Bun's committed root lockfile and full workspace manifest map.

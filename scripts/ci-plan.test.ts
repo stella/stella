@@ -393,12 +393,31 @@ test("every release requires both final image smokes regardless of other changed
 }, 30_000);
 
 test("API image construction and smoke orchestration changes require the final image", () => {
+  const block = GENERATORS.find(
+    ({ id }) => id === "api-image-install-tooling",
+  )?.blocks?.at(0);
+  if (block === undefined) {
+    panic("Missing API install tooling generator");
+  }
+  const dockerfile = readFileSync(
+    new URL(`../${block.path}`, import.meta.url),
+    "utf-8",
+  );
+  const copies = dockerfile.slice(
+    dockerfile.indexOf(block.begin),
+    dockerfile.indexOf(block.end),
+  );
+  const toolingFiles = [...copies.matchAll(/^COPY (\S+) \S+$/gmu)].map(
+    (match) => match.at(1) ?? panic("Missing generated COPY source"),
+  );
+  expect(toolingFiles.length).toBeGreaterThan(0);
   for (const file of [
     "apps/api/Dockerfile",
     "scripts/smoke-api-image.sh",
     ".dockerignore",
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
+    ...toolingFiles,
   ]) {
     expect(imageSmokePlan([file]).at(0), file).toBe("true");
   }
