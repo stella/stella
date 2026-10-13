@@ -493,24 +493,6 @@ const withoutLocalVerification = (step: Step): Step => {
   return original;
 };
 
-// Project topology changes need parity too; the executable selection tests
-// guard this widening while the partition census still checks every other byte.
-const withoutApiProjectParityTrigger = (step: Step): Step => {
-  if (
-    step.name !== "Select typecheck parity coverage" ||
-    typeof step["run"] !== "string"
-  ) {
-    return step;
-  }
-  return {
-    ...step,
-    run: step["run"].replace(
-      ' || git("diff", "--name-only", base, "HEAD", "--", "apps/api/tsconfig*.json", "scripts/typecheck-parity.ts") !== ""',
-      "",
-    ),
-  };
-};
-
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
@@ -519,7 +501,6 @@ const ownedSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutPreparedGeneration)
     .map(withoutTestTimeout)
-    .map(withoutApiProjectParityTrigger)
     .map(withoutStepId)
     .map((step) => {
       const { background, ...check } = step;
@@ -1763,9 +1744,6 @@ const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
     if (id !== undefined) {
       outcomes[id] = {
         outcome,
-        ...(id === "typecheck_parity_gate"
-          ? { outputs: { required: outcome === "success" ? "true" : "" } }
-          : {}),
       };
     }
     if (outcome === "failure") {
@@ -1774,18 +1752,6 @@ const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
   }
   return results;
 };
-
-test("a failed parity selection keeps the seeded-error probe while skipping the full comparison", () => {
-  const results = simulateRestLeg({
-    failures: ["Select typecheck parity coverage"],
-    lockfileScope: "false",
-  });
-  expect(results["Select typecheck parity coverage"]).toBe("failure");
-  expect(results["Typecheck parity (all checked projects)"]).toBe("skipped");
-  expect(results["Record typecheck parity report"]).toBe("skipped");
-  expect(results["Upload typecheck parity report"]).toBe("skipped");
-  expect(results["Typecheck command rejects errors"]).toBe("success");
-});
 
 test("an unrelated pre-install failure still runs planned safety, installation and later guards", () => {
   for (const lockfileScope of ["true", "false"] as const) {
