@@ -123,6 +123,7 @@ jobs:
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
+            packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 

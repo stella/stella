@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   SKILL_FILE_NAME,
   SKILL_RESOURCE_EXTENSIONS,
@@ -171,10 +173,7 @@ function collectPackageFiles(
     if (!entry.isFile()) {
       continue;
     }
-    const relativePath = path
-      .relative(packageDir, entryPath)
-      .split(path.sep)
-      .join("/");
+    const relativePath = repoRelativePath(packageDir, entryPath);
     files.push({
       content: readFileSync(entryPath, "utf-8"),
       path: relativePath,
@@ -209,8 +208,6 @@ function formatEntry(entry: PackageEntry): string {
 
 function toImportPath(filePath: string, manifest: Manifest): string {
   const outputPath = path.join(packageRoot, "src", manifest.outputFileName);
-  const relativePath = path.relative(path.dirname(outputPath), filePath);
-  return relativePath.startsWith(".")
-    ? relativePath.split(path.sep).join("/")
-    : `./${relativePath.split(path.sep).join("/")}`;
+  const relativePath = repoRelativePath(path.dirname(outputPath), filePath);
+  return relativePath.startsWith(".") ? relativePath : `./${relativePath}`;
 }

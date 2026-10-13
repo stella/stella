@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 import { realpathSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { walkStaticImportGraph } from "./static-import-graph";
 
 const sourceRoot = realpathSync(import.meta.dir);
@@ -15,12 +17,12 @@ test("the format import graph excludes generated skill content", () => {
     onImport: ({ importer, specifier, resolved }) => {
       if (specifier.endsWith(".md")) {
         violations.push(
-          `${path.relative(repositoryRoot, importer)} imports ${specifier}`,
+          `${repoRelativePath(repositoryRoot, importer)} imports ${specifier}`,
         );
         return;
       }
       if (resolved !== null && /\.gen\.[cm]?[jt]sx?$/u.test(resolved)) {
-        violations.push(path.relative(repositoryRoot, resolved));
+        violations.push(repoRelativePath(repositoryRoot, resolved));
       }
     },
   });

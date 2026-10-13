@@ -1626,6 +1626,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
+    "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
@@ -2442,6 +2443,22 @@ const config = defineConfig({
         "no-object-url-leak/no-object-url-leak": "error",
         "no-auth-token-in-web-storage/no-auth-token-in-web-storage": "error",
       },
+    },
+    {
+      // Repository-relative strings are portable identifiers, whose separator
+      // must not vary with the operating system running the code.
+      files: [
+        "apps/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "packages/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+      ],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // published package cannot depend on the private portable-path owner until it is publishable; tracked follow-up
+      files: ["packages/start-runtime/src/local-module-loader.ts"],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
     },
     {
       // String normalization belongs to @stll/text-normalize. The owner is
