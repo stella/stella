@@ -4401,6 +4401,7 @@ mod tests {
     let store = ActivityStore::new([9; 32], root.clone());
     let mut original = recording_manager();
     original.observe(at(0), active("word"));
+    original.observe(at(5), active("word"));
     original.stop(at(5)).unwrap();
     let date = local_date(at(0));
     store
@@ -4423,6 +4424,7 @@ mod tests {
     assert!(manager.is_recording());
     assert_eq!(manager.wall_floor, Some(at(5)));
     manager.observe(at(10), active("word"));
+    manager.observe(at(15), active("word"));
     manager.stop(at(15)).unwrap();
     let saved = store.load_day(date).unwrap();
     assert_eq!(saved.len(), 2);
@@ -4602,6 +4604,7 @@ mod tests {
     manager.observe(at(4), active("word"));
     assert!(manager.open.is_none());
     manager.observe(at(10), active("word"));
+    manager.observe(at(15), active("word"));
     manager.stop(at(15)).unwrap();
     let saved = store.load_day(retained_date).unwrap();
     assert_eq!(saved.len(), 2);
