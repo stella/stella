@@ -7,7 +7,7 @@ const TIME_BILLING_HOOK = "@/hooks/use-time-billing-preview";
 const MIXED_ROUTE_REASONS = new Map([
   [
     "/_protected/settings/organization",
-    "Only the time-policy prefetch is gated.",
+    "Only matched settings admission and the time-policy prefetch are gated.",
   ],
   [
     "/_protected/workspaces/$workspaceId/$viewId",

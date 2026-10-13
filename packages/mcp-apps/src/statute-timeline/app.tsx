@@ -19,14 +19,14 @@ import {
   mergeHistory,
   versionWording,
 } from "./model";
-import { parseHistory } from "./parse";
+import { parseStatuteTimelineHistory } from "./parse";
 import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
 import { TimelineChart, VersionLabel } from "./presentation";
 import "../shared/generated/style.css";
 
 const bridge = createPresentationBridge({
   manifest: STATUTE_TIMELINE_APP,
-  parse: parseHistory,
+  parse: parseStatuteTimelineHistory,
   title: (context) => appLocale(context.locale).messages.timelineTitle,
 });
 type ReadState =
@@ -96,7 +96,7 @@ const Timeline = ({
     const page =
       result?.isError === true
         ? undefined
-        : parseHistory(result?.structuredContent);
+        : parseStatuteTimelineHistory(result?.structuredContent);
     if (
       page === undefined ||
       page.eli !== history.eli ||

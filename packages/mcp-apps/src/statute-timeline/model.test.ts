@@ -8,7 +8,7 @@ import {
   versionWording,
 } from "./model";
 import type { StatuteTimelineHistory, ProvisionVersion } from "./parse";
-import { parseHistory } from "./parse";
+import { parseStatuteTimelineHistory } from "./parse";
 
 type FoundVersion = Extract<ProvisionVersion, { status: "found" }>;
 
@@ -125,9 +125,11 @@ describe("statute timeline model", () => {
       nextCursor: "cursor-next",
     } as const satisfies StatuteTimelineHistory;
 
-    const parsed = parseHistory(payload);
+    const parsed = parseStatuteTimelineHistory(payload);
     expect(parsed).toEqual(payload);
-    expect(parseHistory({ ...payload, unexpected: true })).toBeUndefined();
+    expect(
+      parseStatuteTimelineHistory({ ...payload, unexpected: true }),
+    ).toBeUndefined();
     const first = parsed?.items.at(0);
     if (first?.status !== "found") {
       throw new Error("Expected found provision wording");
