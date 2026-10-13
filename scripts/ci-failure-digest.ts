@@ -39,6 +39,7 @@ const MAX_TAIL_DETAIL = 12;
 const TAIL_WINDOW = 40;
 
 export type FailureKind =
+  | "infra"
   | "test"
   | "typecheck"
   | "lint"
@@ -608,6 +609,12 @@ export const failureLines = (
     .map(logLine)
     .filter(({ text }) => !EXIT_MARKER.test(text));
   const extractors = [
+    () =>
+      lines.flatMap(({ text }) => {
+        const stall =
+          /infra-stall: dependency-install exceeded [0-9.]+ s/u.exec(text);
+        return stall ? [{ message: stall[0] }] : [];
+      }),
     () => testFailures(rawLines).map(testFailureLine),
     () => tscLines(lines),
     () => oxlintLines(lines),
@@ -629,6 +636,9 @@ export const classify = (
 ): FailureKind => {
   const name = step.toLowerCase();
   const text = lines.map(({ message }) => message).join("\n");
+  if (/infra-stall: dependency-install exceeded [0-9.]+ s/u.test(text)) {
+    return "infra";
+  }
   if (/ratchet/u.test(name) || /\bratchet\b/iu.test(text)) {
     return "ratchet";
   }

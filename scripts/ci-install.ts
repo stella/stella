@@ -60,17 +60,29 @@ export const runLoggedInstall = async ({
       stdin: "ignore",
       stdout: "pipe",
       stderr: "pipe",
-      timeout: timeoutMs,
-      killSignal: "SIGKILL",
     });
+    let timedOut = false;
+    const deadline = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, timeoutMs);
     // Verbose extraction can emit hundreds of thousands of lines. Keep the
     // artifact complete without coupling install throughput to the CI console.
-    await Promise.all([
-      child.stdout.pipeTo(new WritableStream({ write: record })),
-      child.stderr.pipeTo(new WritableStream({ write: record })),
-      child.exited,
-    ]);
-    const exitCode = childExitStatus(child);
+    try {
+      await Promise.all([
+        child.stdout.pipeTo(new WritableStream({ write: record })),
+        child.stderr.pipeTo(new WritableStream({ write: record })),
+        child.exited.then(() => clearTimeout(deadline)),
+      ]);
+    } finally {
+      clearTimeout(deadline);
+    }
+    const exitCode = timedOut ? 1 : childExitStatus(child);
+    if (timedOut) {
+      summary(
+        `::error title=infra-stall::infra-stall: dependency-install exceeded ${timeoutMs / 1000} s\n`,
+      );
+    }
     if (exitCode !== 0) {
       const size = fstatSync(descriptor).size;
       const length = Math.min(size, CONSOLE_TAIL_BYTES);

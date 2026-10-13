@@ -42,6 +42,7 @@ test("failed and hung installers preserve output and never retry", async () => {
   const failed = readFileSync(logFile, "utf-8");
   expect(failed).toContain("stdout evidence");
   expect(failed).toContain("stderr evidence");
+  expect(failed).not.toContain("infra-stall");
   expect(failed.match(/Install started/gu)).toHaveLength(1);
   expect(
     await runLoggedInstall({
@@ -57,7 +58,23 @@ test("failed and hung installers preserve output and never retry", async () => {
   const hung = readFileSync(logFile, "utf-8");
   expect(hung).toContain("partial output before hang");
   expect(hung).toContain("Install finished;");
+  expect(hung).toContain(
+    "::error title=infra-stall::infra-stall: dependency-install exceeded 0.5 s",
+  );
   expect(hung.match(/Install started/gu)).toHaveLength(1);
+});
+
+test("an externally killed installer remains a command failure", async () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ci-install-signal-"));
+  roots.push(root);
+  const logFile = path.join(root, "install.log");
+  expect(
+    await runLoggedInstall({
+      command: [process.execPath, "-e", 'process.kill(process.pid, "SIGKILL")'],
+      logFile,
+    }),
+  ).not.toBe(0);
+  expect(readFileSync(logFile, "utf-8")).not.toContain("infra-stall");
 });
 
 test.each([0, 7])(

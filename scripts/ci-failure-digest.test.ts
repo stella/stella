@@ -257,6 +257,37 @@ test("step kinds follow the step name, then the extracted lines", () => {
   expect(classify("Run", [{ message: "x" }])).toBe("other");
 });
 
+test("install deadlines retain infrastructure classification through Docker progress and annotations", () => {
+  const message = "infra-stall: dependency-install exceeded 120 s";
+  for (const output of [
+    `#13 120.001 ::error title=infra-stall::${message}`,
+    `::error title=infra-stall::${message}`,
+    `##[error]${message}`,
+  ]) {
+    const lines = failureLines([
+      "#13 ERROR: process did not complete successfully: exit code: 1",
+      output,
+      "error: package download failed",
+    ]);
+    expect(lines).toEqual([{ message }]);
+    for (const step of [
+      "Build final API release image",
+      "Install",
+      "Smoke test",
+    ]) {
+      expect(classify(step, lines)).toBe("infra");
+    }
+  }
+  expect(
+    classify(
+      "Build final API release image",
+      failureLines([
+        "#13 ERROR: process did not complete successfully: exit code: 1",
+      ]),
+    ),
+  ).toBe("build");
+});
+
 const JOB_LOG = [
   ...stamp(1, ["Current runner version: '2.330.0'"]),
   ...runStep(2, "bun scripts/typecheck-negative.ts", [

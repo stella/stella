@@ -7728,6 +7728,13 @@ jobs:
               annotate "API image smoke" "Failed after: ${last_pass:-no check passed}"
             fi
           elif [[ -f "$build_log" ]]; then
+            # Docker prefixes nested workflow commands with BuildKit progress.
+            # Promote the install owner's fixed diagnostic to a runner annotation.
+            stall=$(grep -oE 'infra-stall: dependency-install exceeded [0-9.]+ s' "$build_log" | head -n 1 || true)
+            if [[ -n "$stall" ]]; then
+              printf '::error title=infra-stall::%s\n' "$stall"
+              exit 0
+            fi
             # BuildKit prefixes each line with its step number; keep the
             # output of the step that failed. Bun prints an uncaught error's
             # headline under a caret line; without one, fall back to error

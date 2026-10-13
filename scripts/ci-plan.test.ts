@@ -2954,6 +2954,17 @@ const annotate = (logs: { build?: string; smoke?: string }) => {
 test("a failed API image run annotates the failing lines, escaped", () => {
   expect(
     annotate({
+      build: [
+        "#13 120.001 ::error title=infra-stall::infra-stall: dependency-install exceeded 120 s",
+        "#13 120.002 Install finished; exit 1; signal SIGKILL",
+        "#13 ERROR: process did not complete successfully: exit code: 1",
+      ].join("\n"),
+    }),
+  ).toEqual([
+    "::error title=infra-stall::infra-stall: dependency-install exceeded 120 s",
+  ]);
+  expect(
+    annotate({
       smoke: [
         "PASS: fresh database migrations",
         "FAIL: /app/backfill.js did not reach 100% of validation\r::warning::x",
