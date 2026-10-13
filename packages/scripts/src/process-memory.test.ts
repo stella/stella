@@ -171,7 +171,9 @@ for (const fixture of ["memory-allocation.ts", "memory-allocation-parent.ts"]) {
     const filename = `test-fixtures/${fixture}`;
     const limitBytes = 128 * 1024 ** 2;
     const { child, windowsProcesses } = spawnTestProcess({
-      limitBytes,
+      // Leave startup headroom for every Bun runtime; the watchdog's lower
+      // reporting threshold still proves measurement and whole-job termination.
+      limitBytes: process.platform === "win32" ? 512 * 1024 ** 2 : limitBytes,
       command: [process.execPath, `${import.meta.dir}/${filename}`],
       options: {
         stdout: "ignore",

@@ -23,7 +23,7 @@ windowsTest.each(["measurement", "hard-cap"] as const)(
   async (mode) => {
     const directory = mkdtempSync(path.join(tmpdir(), "stella-job-orphan-"));
     const marker = path.join(directory, "ready");
-    const limitBytes = (mode === "hard-cap" ? 128 : 256) * 1024 ** 2;
+    const limitBytes = (mode === "hard-cap" ? 512 : 1024) * 1024 ** 2;
     const { child, windowsProcesses } = spawnTestProcess({
       limitBytes,
       command: [

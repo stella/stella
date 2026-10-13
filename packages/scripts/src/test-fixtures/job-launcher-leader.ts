@@ -1,5 +1,10 @@
-import { panic } from "better-result";
-import { writeFileSync } from "node:fs";
+import { panic, Result } from "better-result";
+import { readFileSync, writeFileSync } from "node:fs";
+
+import {
+  exitFixtureLeader,
+  spawnWindowsFixtureProcess,
+} from "./native-fixture-process";
 
 const marker = process.argv.at(3) ?? panic("Missing job worker marker");
 const native = process.argv.at(4) === "hard-cap";
@@ -18,7 +23,7 @@ switch (process.argv.at(2) ?? panic("Missing job fixture mode")) {
       // on Bun's allocator error handling to observe the kernel's rejection.
       const allocation = library.symbols.VirtualAlloc(
         null,
-        256 * 1024 ** 2,
+        1024 ** 3,
         0x30_00,
         4,
       );
@@ -38,6 +43,17 @@ switch (process.argv.at(2) ?? panic("Missing job fixture mode")) {
     break;
   }
   case "launcher": {
+    if (process.platform === "win32") {
+      const workerPid = await spawnWindowsFixtureProcess([
+        import.meta.path,
+        "worker",
+        marker,
+        ...(native ? ["hard-cap"] : []),
+      ]);
+      writeFileSync(`${marker}.pid`, String(workerPid));
+      await exitFixtureLeader();
+      break;
+    }
     const worker = Bun.spawn(
       [
         process.execPath,
@@ -52,10 +68,31 @@ switch (process.argv.at(2) ?? panic("Missing job fixture mode")) {
       },
     );
     console.log(worker.pid);
-    process.exit(0);
+    await exitFixtureLeader();
+    break;
   }
   case "leader":
   case "leader-exit": {
+    if (process.platform === "win32") {
+      const launcherPid = await spawnWindowsFixtureProcess([
+        import.meta.path,
+        "launcher",
+        marker,
+        ...(native ? ["hard-cap"] : []),
+      ]);
+      while (!(await Bun.file(marker).exists())) {
+        await Bun.sleep(10);
+      }
+      while (Result.try(() => process.kill(launcherPid, 0)).isOk()) {
+        await Bun.sleep(10);
+      }
+      const worker = readFileSync(`${marker}.pid`, "utf-8").trim();
+      console.log(`${launcherPid} ${worker}`);
+      if (process.argv.at(2) === "leader-exit") {
+        await exitFixtureLeader();
+      }
+      break;
+    }
     const launcher = Bun.spawn(
       [
         process.execPath,
@@ -76,7 +113,7 @@ switch (process.argv.at(2) ?? panic("Missing job fixture mode")) {
     }
     console.log(`${launcher.pid} ${worker}`);
     if (process.argv.at(2) === "leader-exit") {
-      process.exit(0);
+      await exitFixtureLeader();
     }
     break;
   }

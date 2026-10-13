@@ -1,3 +1,5 @@
+import { childExitStatus } from "../child-exit-status";
+
 const child = Bun.spawn(
   [process.execPath, `${import.meta.dir}/memory-allocation.ts`],
   {
@@ -6,3 +8,4 @@ const child = Bun.spawn(
   },
 );
 await child.exited;
+process.exit(childExitStatus(child));
