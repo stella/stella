@@ -3165,14 +3165,14 @@
         "steps": {
           "basics": {
             "body": "Lisa nimi ja kirjeldus. Vajadusel piira see ühe dokumendiliigiga.",
-            "title": "Anna juhendile nimi"
+            "title": "Anna playbookile nimi"
           },
           "create": {
-            "body": "Alusta tühja juhendiga.",
-            "title": "Loo juhend"
+            "body": "Alusta tühja playbookiga.",
+            "title": "Loo playbook"
           },
           "overview": {
-            "body": "Juhend säilitab küsimused ja reeglid teiste dokumentide jaoks.",
+            "body": "Playbook säilitab küsimused ja reeglid teiste dokumentide jaoks.",
             "title": "Salvesta ülevaatamise käik"
           },
           "positions": {
@@ -3180,7 +3180,7 @@
             "title": "Lisa ülevaatuse reeglid"
           }
         },
-        "title": "Loo juhend"
+        "title": "Loo playbook"
       },
       "tabularReview": {
         "description": "Eralda vastused paljudest failidest korraga",
@@ -4447,7 +4447,7 @@
         "governingLaw": "Kohaldatav õigus",
         "liabilityCap": "Vastutuse ülempiir",
         "missing": "Puudub",
-        "outsidePlaybook": "Ei vasta juhendile",
+        "outsidePlaybook": "Ei vasta playbookile",
         "termination": "Lepingu lõpetamine"
       },
       "searchPlaceholder": "Mida sa tegema pead?",
