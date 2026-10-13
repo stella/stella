@@ -2,6 +2,16 @@ import { expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
 
+test("routes without options do not forward a partial access policy", async () => {
+  expect(
+    await lintSingleRule(
+      "no-direct-handler-config",
+      'app.get("/", endpoint.handler);\napp.post("/", endpoint.handler);',
+      { plugin: "require-safe-route-handlers" },
+    ),
+  ).toEqual([]);
+});
+
 test("rejects mutable endpoint config for supported HTTP route verbs", async () => {
   expect(
     await lintSingleRule(
