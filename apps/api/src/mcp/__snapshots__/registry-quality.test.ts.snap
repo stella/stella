@@ -5949,22 +5949,22 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding"
+          "description": "Pattern; pair with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern"
+          "description": "Zero-padding width; pair with matter_number_pattern"
         },
         "ai_instructions": {
           "type": "string",
           "maxLength": 3000,
-          "description": "Organization-wide AI instructions, up to 3000 characters (update_org_settings); send an empty string to clear. Apply across conversations and take priority over personal preferences."
+          "description": "Org-wide AI instructions (3000 chars); empty clears. Next message onward; override personal preferences."
         },
         "prompt_caching_enabled": {
           "type": "boolean",
-          "description": "Toggle AI prompt caching (update_org_settings)"
+          "description": "Enable AI prompt caching"
         },
         "document_processing_mode": {
           "enum": [
@@ -5972,18 +5972,18 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "searchable-text"
           ],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction (update_org_settings)"
+          "description": "Automatic PDF searchable-text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60 (update_org_settings)"
+          "description": "Time increment in minutes; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry (update_org_settings)"
+          "description": "Days a timekeeper may edit an entry"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -5995,11 +5995,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock (update_org_settings)"
+          "description": "Latest locked month's last day; null unlocks"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries (update_org_settings)"
+          "description": "Require time-entry narratives"
         },
         "time_zone": {
           "anyOf": [
@@ -12439,22 +12439,22 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding"
+          "description": "Pattern; pair with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern"
+          "description": "Zero-padding width; pair with matter_number_pattern"
         },
         "ai_instructions": {
           "type": "string",
           "maxLength": 3000,
-          "description": "Organization-wide AI instructions, up to 3000 characters (update_org_settings); send an empty string to clear. Apply across conversations and take priority over personal preferences."
+          "description": "Org-wide AI instructions (3000 chars); empty clears. Next message onward; override personal preferences."
         },
         "prompt_caching_enabled": {
           "type": "boolean",
-          "description": "Toggle AI prompt caching (update_org_settings)"
+          "description": "Enable AI prompt caching"
         },
         "document_processing_mode": {
           "enum": [
@@ -12462,18 +12462,18 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "searchable-text"
           ],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction (update_org_settings)"
+          "description": "Automatic PDF searchable-text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60 (update_org_settings)"
+          "description": "Time increment in minutes; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry (update_org_settings)"
+          "description": "Days a timekeeper may edit an entry"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -12485,11 +12485,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock (update_org_settings)"
+          "description": "Latest locked month's last day; null unlocks"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries (update_org_settings)"
+          "description": "Require time-entry narratives"
         },
         "time_zone": {
           "anyOf": [

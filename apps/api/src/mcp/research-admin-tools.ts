@@ -729,9 +729,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.string(),
           v.minLength(1),
           v.maxLength(128),
-          v.description(
-            "Matter-number pattern (update_org_settings); send with matter_number_padding",
-          ),
+          v.description("Pattern; pair with matter_number_padding"),
         ),
       ),
       matter_number_padding: v.optional(
@@ -740,9 +738,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.integer(),
           v.minValue(1),
           v.maxValue(6),
-          v.description(
-            "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern",
-          ),
+          v.description("Zero-padding width; pair with matter_number_pattern"),
         ),
       ),
       ai_instructions: v.optional(
@@ -750,22 +746,17 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.string(),
           v.maxLength(ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH),
           v.description(
-            `Organization-wide AI instructions, up to ${ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH} characters (update_org_settings); send an empty string to clear. Apply across conversations and take priority over personal preferences.`,
+            `Org-wide AI instructions (${ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH} chars); empty clears. Next message onward; override personal preferences.`,
           ),
         ),
       ),
       prompt_caching_enabled: v.optional(
-        v.pipe(
-          v.boolean(),
-          v.description("Toggle AI prompt caching (update_org_settings)"),
-        ),
+        v.pipe(v.boolean(), v.description("Enable AI prompt caching")),
       ),
       document_processing_mode: v.optional(
         v.pipe(
           v.picklist(DOCUMENT_PROCESSING_MODES),
-          v.description(
-            "Set automatic PDF searchable-text extraction (update_org_settings)",
-          ),
+          v.description("Automatic PDF searchable-text extraction"),
         ),
       ),
       time_minimum_unit_minutes: v.optional(
@@ -774,9 +765,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.integer(),
           v.minValue(1),
           v.maxValue(60),
-          v.description(
-            "Minimum time increment in minutes; must divide 60 (update_org_settings)",
-          ),
+          v.description("Time increment in minutes; must divide 60"),
         ),
       ),
       time_edit_window_days: v.optional(
@@ -784,26 +773,17 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           v.number(),
           v.integer(),
           v.minValue(0),
-          v.description(
-            "Days a timekeeper may edit an entry (update_org_settings)",
-          ),
+          v.description("Days a timekeeper may edit an entry"),
         ),
       ),
       time_locked_through_month: v.optional(
         v.pipe(
           v.nullable(v.pipe(v.string(), v.isoDate())),
-          v.description(
-            "Last day of the latest locked month, or null to unlock (update_org_settings)",
-          ),
+          v.description("Latest locked month's last day; null unlocks"),
         ),
       ),
       time_narrative_required: v.optional(
-        v.pipe(
-          v.boolean(),
-          v.description(
-            "Require a narrative on time entries (update_org_settings)",
-          ),
-        ),
+        v.pipe(v.boolean(), v.description("Require time-entry narratives")),
       ),
       time_zone: v.optional(
         v.pipe(

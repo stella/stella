@@ -295,7 +295,9 @@ test("immediate editor changes reach the host before navigation while default ed
         markdown="Original instructions"
         imagePolicy="data-only"
         changeEmission="immediate"
-        onMarkdownChange={(text) => immediateChanges.push(text)}
+        onMarkdownChange={(text) => {
+          immediateChanges.push(text);
+        }}
       />
     </IntlProvider>,
   );
@@ -304,7 +306,9 @@ test("immediate editor changes reach the host before navigation while default ed
       <MarkdownHybridEditor
         markdown="Original instructions"
         imagePolicy="data-only"
-        onMarkdownChange={(text) => debouncedChanges.push(text)}
+        onMarkdownChange={(text) => {
+          debouncedChanges.push(text);
+        }}
       />
     </IntlProvider>,
   );

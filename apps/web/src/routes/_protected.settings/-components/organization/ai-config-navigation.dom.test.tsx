@@ -91,6 +91,9 @@ globalThis.fetch = Object.assign(
         user: { id: "user", email: "admin@example.test", name: "Admin" },
       });
     }
+    if (pathname.endsWith("/auth/organization/get-active-member-role")) {
+      return Response.json({ role: "admin" });
+    }
     if (
       auxiliaryFailure &&
       pathname.endsWith(auxiliaryFailure.path) &&
@@ -366,6 +369,7 @@ test("leaving AI provider settings with a dirty key prompts before navigation", 
 
 test("organization instruction edits block navigation before the editor debounce interval", async () => {
   const appRouter = await mount();
+  await screen.findByRole("button", { name: messages.common.save });
   await waitFor(() =>
     expect(document.querySelector(".md-editor")).not.toBeNull(),
   );

@@ -170,7 +170,7 @@ export const MarkdownHybridEditor = ({
         return;
       default:
         changeEmission satisfies never;
-        return panic("Unhandled markdown change emission mode");
+        panic("Unhandled markdown change emission mode");
     }
   });
   useImperativeHandle(ref, () => ({

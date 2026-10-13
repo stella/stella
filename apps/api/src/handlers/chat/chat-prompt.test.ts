@@ -733,14 +733,22 @@ describe("chat prompt builders", () => {
       buildGlobalPromptParts({
         organizationAIInstructions,
         practiceJurisdictions: [{ countryCode: "CZ", isPrimary: true }],
-        userContext: { userName: "First User", locale: "cs" },
+        userContext: {
+          userName: "First User",
+          locale: "cs",
+          timezone: "Europe/Prague",
+        },
       });
     const matter = (organizationAIInstructions: string) =>
       buildWorkspacePromptParts({
         organizationAIInstructions,
         entityCount: 1,
         refRegistry: createChatRefRegistry(),
-        userContext: { userName: "First User", locale: "cs" },
+        userContext: {
+          userName: "First User",
+          locale: "cs",
+          timezone: "Europe/Prague",
+        },
         workspaceId: WORKSPACE_ID,
         workspaceName: "Matter Alpha",
       });
