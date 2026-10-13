@@ -333,6 +333,15 @@ const providerQueries = () => {
   }
   return within(section);
 };
+const unreadableRecoveryQueries = () => {
+  const recovery = screen.getByText(
+    messages.common.somethingWentWrong,
+  ).parentElement;
+  if (recovery === null) {
+    panic("Unreadable AI recovery controls must be present");
+  }
+  return within(recovery);
+};
 const settingsSectionQueries = (title: string) => {
   const heading = screen.getByRole("heading", { name: title });
   const section =
@@ -1574,10 +1583,14 @@ test.each([false, true])(
     );
     fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
     fireEvent.click(
-      screen.getByRole("button", { name: messages.common.remove }),
+      unreadableRecoveryQueries().getByRole("button", {
+        name: messages.common.remove,
+      }),
     );
     expect(
-      screen.getByRole("button", { name: messages.common.cancel }),
+      unreadableRecoveryQueries().getByRole("button", {
+        name: messages.common.cancel,
+      }),
     ).toBeDefined();
     expect(writes()).toEqual([]);
     expect(hasUnsavedWork()).toBe(true);
@@ -1608,7 +1621,9 @@ test.each([false, true])(
         "Configuration removal needs correction",
       );
       expect(
-        screen.getByRole("button", { name: messages.common.cancel }),
+        unreadableRecoveryQueries().getByRole("button", {
+          name: messages.common.cancel,
+        }),
       ).toBeDefined();
       settingsFailure = undefined;
       savePage();
@@ -1636,12 +1651,22 @@ test("recovering readable AI settings cancels pending removal and preserves auxi
     messages.translate.settings.apiKeyLabel,
   );
   fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
-  fireEvent.click(screen.getByRole("button", { name: messages.common.remove }));
+  fireEvent.click(
+    unreadableRecoveryQueries().getByRole("button", {
+      name: messages.common.remove,
+    }),
+  );
   expect(
-    screen.getByRole("button", { name: messages.common.cancel }),
+    unreadableRecoveryQueries().getByRole("button", {
+      name: messages.common.cancel,
+    }),
   ).toBeDefined();
   expect(writes()).toEqual([]);
-  fireEvent.click(screen.getByRole("button", { name: messages.common.retry }));
+  fireEvent.click(
+    unreadableRecoveryQueries().getByRole("button", {
+      name: messages.common.retry,
+    }),
+  );
   expect(await screen.findByText("AIza****1234")).toBeDefined();
   fireEvent.click(
     screen.getByRole("button", {
@@ -1667,8 +1692,11 @@ test("recovering readable AI settings cancels pending removal and preserves auxi
   );
   expect(deepl).toHaveProperty("value", "fixture-deepl-key");
   expect(
-    screen.queryByRole("button", { name: messages.common.cancel }),
+    providerQueries().queryByRole("button", { name: messages.common.cancel }),
   ).toBeNull();
+  expect(screen.queryByText(messages.common.somethingWentWrong) === null).toBe(
+    true,
+  );
   expect(hasUnsavedWork()).toBe(true);
   expect(writes()).toEqual([]);
   savePage();
