@@ -76,6 +76,7 @@ import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
 } from "./chat-query-contract";
+import { ChatRequestError, findChatRequestError } from "./chat-request-error";
 
 type ChatToolScope = typeof SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE;
 
@@ -285,13 +286,16 @@ const requestChatTurnStop = async ({
 
 const ignoreAbandonedStreamError = (_error: unknown): void => undefined;
 
-class ChatMessageStartError extends Error {
+class ChatMessageStartError extends ChatRequestError {
   readonly messageId: SafeId<"chatMessage">;
 
-  constructor(messageId: SafeId<"chatMessage">) {
-    super(
-      `TanStack ChatClient did not append user message "${messageId}" before starting the stream.`,
-    );
+  constructor(messageId: SafeId<"chatMessage">, cause?: unknown) {
+    super({
+      kind: "not_started",
+      message:
+        "Chat client did not start the message while another request was active",
+      cause,
+    });
     this.name = "ChatMessageStartError";
     this.messageId = messageId;
   }
@@ -596,18 +600,31 @@ export const createChatRuntime = ({
         return panic("Stella chat connection received model messages");
       }
       providerDiagnostic = undefined;
+      const prepared = Result.try({
+        try: () =>
+          buildSendRequestBody({
+            context,
+            key,
+            messages: toPersistedChatMessages(messages),
+            run: runContext,
+            requestBody: normalizeChatContinuationRequestBody(data),
+          }),
+        catch: (cause) =>
+          new ChatRequestError({
+            kind: "preparation_failed",
+            message: "Chat request could not be prepared",
+            cause,
+          }),
+      });
+      if (prepared.isErr()) {
+        throw prepared.error;
+      }
       return observeChatProviderDiagnostic(
         keepPostedMessagesInSnapshots(
           messages,
           upstreamConnection.connect(
             messages,
-            buildSendRequestBody({
-              context,
-              key,
-              messages: toPersistedChatMessages(messages),
-              run: runContext,
-              requestBody: normalizeChatContinuationRequestBody(data),
-            }),
+            prepared.value,
             abortSignal,
             runContext,
           ),
@@ -655,7 +672,16 @@ export const createChatRuntime = ({
       ) {
         activeToolResultOperation.rejection = error;
       }
-      const normalized = withProviderDiagnostic(error, providerDiagnostic);
+      const normalized = withProviderDiagnostic(
+        error instanceof DOMException && error.name === "TimeoutError"
+          ? new ChatRequestError({
+              kind: "timed_out",
+              message: "Chat stream timed out",
+              cause: error,
+            })
+          : error,
+        providerDiagnostic,
+      );
       onError(normalized);
       setSnapshot({ error: normalized });
     },
@@ -668,6 +694,8 @@ export const createChatRuntime = ({
           !actionAdmissionOutcome(error)) ||
           (chatRefusal(snapshot.error) !== null &&
             chatRefusal(error) === null) ||
+          (findChatRequestError(snapshot.error) !== undefined &&
+            findChatRequestError(error) === undefined) ||
           (providerDiagnosticFromThrown(snapshot.error) !== undefined &&
             providerDiagnosticFromThrown(error) === undefined &&
             providerDiagnostic === undefined))
@@ -850,27 +878,54 @@ export const createChatRuntime = ({
     viewerAttached.resolve(undefined);
   };
 
+  type ChatClientSendStart =
+    | ChatRouteHandoffStart
+    | {
+        status: "not_started";
+        messageId: SafeId<"chatMessage">;
+        stream: Promise<void>;
+      };
+
   const startClientSend = (
     message: ChatUserMessageInput,
     options: ChatSendMessageOptions | undefined,
-  ): ChatRouteHandoffStart => {
+  ): ChatClientSendStart => {
     attachClient();
     supersedePendingInterrupts();
+    const requestWasActive =
+      snapshot.isLoading || isChatClientRequestActive(snapshot.status);
     const stream = client.sendMessage(message, options?.body);
     if (!hasUserMessage(snapshot.messages, message.id)) {
-      detached(stream.catch(ignoreAbandonedStreamError), "chat-queries.stream");
-      throw captureRuntimeError(new ChatMessageStartError(message.id));
+      return {
+        messageId: message.id,
+        status: "not_started",
+        stream: stream.catch((error: unknown) => {
+          if (requestWasActive) {
+            throw new ChatMessageStartError(message.id, error);
+          }
+          throw new ChatRequestError({
+            kind: "preparation_failed",
+            message: "Chat client failed before starting the message",
+            cause: error,
+          });
+        }),
+      };
     }
     startTurn();
     return { messageId: message.id, status: "started", stream };
   };
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
-    const { stream } = startClientSend(message, options);
-    try {
-      await stream;
-    } catch (error) {
-      throw captureRuntimeError(error);
+    const started = startClientSend(message, options);
+    const outcome = await Result.tryPromise({
+      try: async () => await started.stream,
+      catch: (cause) => captureRuntimeError(cause),
+    });
+    if (outcome.isErr()) {
+      throw outcome.error;
+    }
+    if (started.status === "not_started") {
+      throw captureRuntimeError(new ChatMessageStartError(message.id));
     }
   };
 
@@ -1107,6 +1162,9 @@ export const createChatRuntime = ({
         started.stream.catch(captureRuntimeError),
         "chat-queries.stream",
       );
+      if (started.status === "not_started") {
+        throw captureRuntimeError(new ChatMessageStartError(message.id));
+      }
       return started;
     },
     stop: () => {
