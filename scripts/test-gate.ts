@@ -1063,6 +1063,43 @@ type ShellToken = {
     | "operator";
 };
 
+type TimeoutArgument = "duration" | "option-value" | "unresolved";
+
+type TimeoutArgumentOptions = {
+  readonly state: TimeoutArgument;
+  readonly value: string;
+};
+
+const nextTimeoutArgument = ({
+  state,
+  value,
+}: TimeoutArgumentOptions): TimeoutArgument | undefined => {
+  switch (state) {
+    case "option-value":
+      return "duration";
+    case "unresolved":
+      return "unresolved";
+    case "duration":
+      if (["-k", "--kill-after", "-s", "--signal"].includes(value)) {
+        return "option-value";
+      }
+      if (
+        ["--", "--foreground", "--preserve-status", "-v", "--verbose"].includes(
+          value,
+        ) ||
+        /^(?:--kill-after|--signal)=.+/u.test(value)
+      ) {
+        return "duration";
+      }
+      return /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u.test(value)
+        ? undefined
+        : "unresolved";
+    default:
+      state satisfies never;
+      return panic("Unrecognized timeout argument state");
+  }
+};
+
 // Preserve syntax roles: quoted operators and heredoc bodies are data, and
 // only the first non-assignment word of a simple command is executable.
 const shellTokens = (command: string): ShellToken[] => {
@@ -1072,6 +1109,7 @@ const shellTokens = (command: string): ShellToken[] => {
   const heredocs: { delimiter: string; stripTabs: boolean }[] = [];
   let commandPosition = true;
   let redirect: string | undefined;
+  let timeoutArgument: TimeoutArgument | undefined;
   let match: RegExpExecArray | null;
   let consumed = 0;
   while ((match = pattern.exec(command)) !== null) {
@@ -1091,6 +1129,7 @@ const shellTokens = (command: string): ShellToken[] => {
       }
       commandPosition = true;
       redirect = undefined;
+      timeoutArgument = undefined;
       if (operator === "\n") {
         for (const { delimiter, stripTabs } of heredocs) {
           let found = false;
@@ -1135,6 +1174,12 @@ const shellTokens = (command: string): ShellToken[] => {
       redirect = undefined;
       continue;
     }
+    if (timeoutArgument !== undefined) {
+      tokens.push({ value, role: "argument" });
+      timeoutArgument = nextTimeoutArgument({ state: timeoutArgument, value });
+      commandPosition = timeoutArgument === undefined;
+      continue;
+    }
     if (
       commandPosition &&
       ["{", "}", "then", "else", "elif", "do"].includes(raw)
@@ -1148,6 +1193,9 @@ const shellTokens = (command: string): ShellToken[] => {
       continue;
     }
     tokens.push({ value, role: commandPosition ? "command" : "argument" });
+    if (commandPosition && value === "timeout") {
+      timeoutArgument = "duration";
+    }
     commandPosition = false;
   }
   return command.slice(consumed).trim() === "" ? tokens : [];

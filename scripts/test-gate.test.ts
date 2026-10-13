@@ -666,6 +666,8 @@ context("test registration census", () => {
     "cat <<EOF\nRUNNER\nEOF",
     "cat <<-EOF\n\tRUNNER\n\tEOF",
     "echo ';' RUNNER",
+    "echo timeout 30s RUNNER",
+    "timeout --help RUNNER",
     '"RUNNER',
     "'RUNNER",
   ])("command text does not execute a runner: %s", (shape) => {
@@ -700,6 +702,8 @@ context("test registration census", () => {
     "set +e; set -e; RUNNER",
     "echo set +e; RUNNER",
     "FIXTURE_MODE=on RUNNER",
+    "timeout --kill-after=5s 30s RUNNER",
+    "timeout -s TERM -k 5s 30s RUNNER",
     "if true; then RUNNER; fi",
     "cat <<'EOF'\ndata\nEOF\nRUNNER",
     "RUNNER || exit 1",
