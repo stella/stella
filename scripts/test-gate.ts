@@ -1136,8 +1136,10 @@ const nextTimeoutArgument = ({
 // Preserve syntax roles: quoted operators and heredoc bodies are data, and
 // only the first non-assignment word of a simple command is executable.
 const shellTokens = (command: string): ShellToken[] => {
+  // Sticky matching consumes whitespace explicitly and prevents restarting
+  // the numeric redirection prefix at every digit of a malformed word.
   const pattern =
-    /(#.*)|(\d*(?:<<<|<<-?|[<>]&|>>?|<)|\|\||&&|[;&|()\n])|((?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|\\[^\n]|[^\s;&|()<>"'\\])+)/gu;
+    /(#.*)|(\d*(?:<<<|<<-?|[<>]&|>>?|<)|\|\||&&|[;&|()\n])|((?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|\\[^\n]|[^\s;&|()<>"'\\])+)|([^\S\n]+)/uy;
   const tokens: ShellToken[] = [];
   const heredocs: { delimiter: string; stripTabs: boolean }[] = [];
   let commandPosition = true;
@@ -1146,10 +1148,10 @@ const shellTokens = (command: string): ShellToken[] => {
   let match: RegExpExecArray | null;
   let consumed = 0;
   while ((match = pattern.exec(command)) !== null) {
-    if (command.slice(consumed, match.index).trim() !== "") {
-      return [];
-    }
     consumed = pattern.lastIndex;
+    if (match[4] !== undefined) {
+      continue;
+    }
     if (match[1] !== undefined) {
       continue;
     }
