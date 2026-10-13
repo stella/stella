@@ -1,7 +1,10 @@
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
+import { getAnalytics } from "@/lib/analytics/provider";
+import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
 import { SSR_STATUS_HEADER, ssrStatusFromHeader } from "@/ssr-response-status";
+import { fetchBoundedSsrResponse } from "@/ssr-response-stream";
 
 // @stll/anonymize-wasm's native pipeline (2.0+) runs on a
 // wasm32-wasip1-threads binding (shared memory), which browsers only
@@ -18,7 +21,29 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
 
 export default createServerEntry({
   async fetch(request) {
-    const response = await handler.fetch(request);
+    const documentRequest =
+      request.method === "GET" &&
+      (isPublicSsrPath(new URL(request.url).pathname) ||
+        request.headers.get("Accept")?.includes("text/html") === true);
+    const response = documentRequest
+      ? await fetchBoundedSsrResponse({
+          request,
+          fetchResponse: async (renderRequest) =>
+            await handler.fetch(renderRequest),
+          reportError: (error) => {
+            getAnalytics().captureError(error);
+            // Keep server diagnostics available without an analytics sink;
+            // request URLs and renderer messages can contain reader data.
+            process.stderr.write(
+              `${JSON.stringify({
+                severity: "ERROR",
+                message: "ssr.response_failed",
+                error: error instanceof Error ? error.name : "UnknownError",
+              })}\n`,
+            );
+          },
+        })
+      : await handler.fetch(request);
     const headers = new Headers(response.headers);
     for (const [name, value] of Object.entries(
       CROSS_ORIGIN_ISOLATION_HEADERS,
