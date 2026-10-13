@@ -270,12 +270,14 @@ export const classifyTarget = ({
   }
   // A root-level name with no directory in it ("docs", "docker", ".env") is a
   // field value, a command, or a fixture filename far more often than a read.
+  // Dotenv suffixes remain fixture names; actual reads use an explicit path.
   // Only a named file with an extension (`oxlint.config.ts`) reads as a path —
   // unless the literal was a glob, which says outright that it scans a tree.
   if (
     !fromGlob &&
     !candidate.includes("/") &&
-    (candidate.lastIndexOf(".") <= 0 ||
+    (/^\.env(?:\.|$)/u.test(candidate) ||
+      candidate.lastIndexOf(".") <= 0 ||
       statSync(path.join(root, candidate)).isDirectory())
   ) {
     return { type: "absent" };

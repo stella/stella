@@ -160,6 +160,20 @@ describe("target classification", () => {
     expect(classify("package.json").type).toBe("package-local");
   });
 
+  test("dotenv fixture names do not become source reads when local env exists", () => {
+    const names = [".env", ".env.local", ".env.test", ".env.production"];
+    for (const name of names) {
+      write(root, name, "LOCAL_FIXTURE=1");
+    }
+    for (const name of names) {
+      expect(classify(name).type).toBe("absent");
+      expect(classify(`../../../${name}`)).toEqual({
+        target: name,
+        type: "repository",
+      });
+    }
+  });
+
   test("reports a path owned by another package", () => {
     expect(classify("apps/beta/src/route.ts")).toEqual({
       target: "apps/beta/src/route.ts",
