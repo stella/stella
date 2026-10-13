@@ -602,7 +602,9 @@ for (const anchorId of [null, "p-12"]) {
     );
     // Native navigation follows the href, so a cited passage rides in it.
     reader.hash = anchorId ?? "";
-    expect(primary.getAttribute("href")).toBe(reader.href);
+    expect(primary.getAttribute("href")).toBe(
+      `${reader.pathname}${reader.search}${reader.hash}`,
+    );
     expect(primary.textContent).toBe("NS");
     expect(primary.textContent).not.toContain(target.caseNumber);
     fireEvent.focus(primary);

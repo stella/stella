@@ -160,13 +160,28 @@ test.describe("reader chat decision citations", () => {
     await expect(paragraph).not.toBeInViewport();
     await expect(panel.locator("main.reader-paper")).toHaveCount(0);
 
-    const openCitation = async (decisionId: string) => {
-      await chat.locator(`[data-decision-citation="${decisionId}"]`).click();
-      await page
-        .getByRole("link", { name: "Open in stella", exact: true })
-        .click();
+    const openCitation = async (target: typeof decision) => {
+      const trigger = chat.locator(`[data-decision-citation="${target.id}"]`);
+      await trigger.click();
+      await expect(trigger).toHaveAttribute("aria-expanded", "true");
+      const popup = page.locator('[data-slot="popover-popup"][data-open]');
+      await expect(popup).not.toHaveAttribute("data-ending-style");
+      const action = popup.getByRole("link", {
+        name: "Open in stella",
+        exact: true,
+      });
+      const targetPath = createCaseLawDecisionPath(
+        createCaseLawDecisionRouteParams({
+          ...routeInput,
+          caseNumber: target.caseNumber,
+          decisionId: target.id,
+          slug: target.slug,
+        }),
+      );
+      await expect(action).toHaveAttribute("href", `${targetPath}#p-28`);
+      await action.click();
     };
-    await openCitation(decision.id);
+    await openCitation(decision);
     await expect(panel.locator("main.reader-paper")).toHaveCount(0);
     await expect(chips).toHaveCount(chipCount);
     await expect(paragraph).toBeInViewport();
@@ -179,14 +194,14 @@ test.describe("reader chat decision citations", () => {
     await mainReader.hover();
     await page.mouse.wheel(0, -100_000);
     await expect(paragraph).not.toBeInViewport();
-    await openCitation(decision.id);
+    await openCitation(decision);
     await expect(paragraph).toBeInViewport();
     await expect(paragraph).toHaveClass(/\bbg-accent\b/u);
     await expect(paragraph).toHaveAttribute("data-reader-landing");
     await expect(panel.locator("main.reader-paper")).toHaveCount(0);
     await expect(chips).toHaveCount(chipCount);
 
-    await openCitation(otherDecision.id);
+    await openCitation(otherDecision);
     await expect(chips).toHaveCount(chipCount + 1);
     const panelParagraph = panel.locator(
       'main.reader-paper [data-anchor="p-28"]',
@@ -200,7 +215,7 @@ test.describe("reader chat decision citations", () => {
       .hover();
     await page.mouse.wheel(0, -100_000);
     await expect(panelParagraph).not.toBeInViewport();
-    await openCitation(otherDecision.id);
+    await openCitation(otherDecision);
     await expect(panelParagraph).toBeInViewport();
     await expect(panelParagraph).toHaveClass(/\bbg-accent\b/u);
     await expect(panelParagraph).toHaveAttribute("data-reader-landing");
