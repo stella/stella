@@ -4,7 +4,7 @@
 # No merge/rebase chains are inferred: an ambiguous relation is refused.
 set -euo pipefail
 export GIT_NO_REPLACE_OBJECTS=1
-# Discovery returns only a candidate; callers still validate its status provenance.
+# Discovery returns a candidate SHA or empty on a miss; callers still validate it.
 if [[ "${1:-}" == --find-proof ]]; then
   shift
   repo="${1:?repository is required}"
@@ -29,7 +29,7 @@ if [[ "${1:-}" == --find-proof ]]; then
     if length == 0 then empty elif length == 1 then "\(.[0].head.sha) \(.[0].number)"
     else error("ambiguous release proof") end
   ' <<< "$pulls")
-  if [[ -z "$candidate" ]]; then printf '%s\n' "$sha"; exit 0; fi
+  if [[ -z "$candidate" ]]; then exit 0; fi
   read -r proof pull_number <<< "$candidate"
   [[ "$proof" =~ ^[0-9a-f]{40}$ && "$pull_number" =~ ^[1-9][0-9]*$ ]] || exit 1
   proof_statuses=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$proof/statuses?per_page=100")
@@ -39,14 +39,11 @@ if [[ "${1:-}" == --find-proof ]]; then
       .creator.login == "github-actions[bot]" and .creator.type == "Bot" and
       (.description | type) == "string" and (.description | test("; main=[0-9a-f]{40}$")))
   ' <<< "$proof_statuses" >/dev/null; then
-    printf '%s\n' "$sha"
     exit 0
   fi
   files=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/pulls/$pull_number/files?per_page=100")
   if jq -e 'any(.[][]; .filename == "VERSION" and .status == "modified")' <<< "$files" >/dev/null; then
     printf '%s\n' "$proof"
-  else
-    printf '%s\n' "$sha"
   fi
   exit 0
 fi

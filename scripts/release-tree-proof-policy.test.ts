@@ -227,12 +227,14 @@ const reuseProblems = (source: string) => {
     problems.push("reuse may skip only after the health gate succeeds");
   }
   const blockingHealth = [
-    'if proof=$(bash scripts/verify-release-tree-proof.sh --find-proof "$GITHUB_REPOSITORY" "$SHA") &&',
-    'bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof"; then',
+    "set -euo pipefail",
+    'if proof=$(bash scripts/verify-release-tree-proof.sh --find-proof "$GITHUB_REPOSITORY" "$SHA") && [[ -n "$proof" ]]; then',
+    'if bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof"; then',
     'echo "proof=$proof" >> "$GITHUB_OUTPUT"',
     'echo "run=false" >> "$GITHUB_OUTPUT"',
     "else",
     'echo "run=true" >> "$GITHUB_OUTPUT"',
+    "fi",
     "fi",
   ].join("\n");
   const normalized = script
@@ -244,10 +246,10 @@ const reuseProblems = (source: string) => {
     !script.includes(
       'proof=$(bash scripts/verify-release-tree-proof.sh --find-proof "$GITHUB_REPOSITORY" "$SHA")',
     ) ||
-    !normalized.includes(blockingHealth)
+    normalized !== blockingHealth
   ) {
     problems.push(
-      "proof reuse must publish proof only after success and force fresh gates on failure",
+      "proof reuse must force fresh gates only for a failed identified proof",
     );
   }
   const selection = steps.find(({ id }) => id === "selection");
@@ -273,7 +275,7 @@ const reuseProblems = (source: string) => {
     !selectionScript.startsWith(freshSelection)
   ) {
     problems.push(
-      "failed proof validation must force fresh gates before historical status selection",
+      "failed identified proof validation must force fresh gates before historical status selection",
     );
   }
   const workflow: unknown = Bun.YAML.parse(source);
@@ -328,6 +330,12 @@ test("main proof workflows skip through the trusted successful health gate", () 
       source.replace(
         'process.env.REUSE_RUN === "true"',
         'process.env.REUSE_RUN === "false"',
+      ),
+      source.replace(' && [[ -n "$proof" ]]', ""),
+      source.replace(
+        "            fi\n          fi",
+        () =>
+          '            fi\n          else\n            echo "run=true" >> "$GITHUB_OUTPUT"\n          fi',
       ),
     ]) {
       expect(changed).not.toBe(source);

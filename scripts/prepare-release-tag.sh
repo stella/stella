@@ -40,6 +40,7 @@ if [[ -z "$sha" ]]; then
   candidates=$(git rev-list --first-parent origin/main)
   while IFS= read -r candidate; do
     selected_proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$candidate")
+    selected_proof="${selected_proof:-$candidate}"
     states=$(release_states "$selected_proof")
     if all_success "$states"; then
       sha="$candidate"
@@ -54,7 +55,10 @@ candidate=$(bash "$script_dir/check-release-candidate.sh" "$sha")
 while IFS='=' read -r key value; do
   case "$key" in sha) sha="$value" ;; esac
 done <<< "$candidate"
-if [[ -z "$proof" ]]; then proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$sha"); fi
+if [[ -z "$proof" ]]; then
+  proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$sha")
+  proof="${proof:-$sha}"
+fi
 bash "$tree_proof_verifier" "$repo" "$sha" "$proof" >/dev/null
 states=$(release_states "$proof")
 if ! all_success "$states"; then

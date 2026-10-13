@@ -9,7 +9,10 @@ repo="${1:?repository is required}"
 sha="${2:?commit SHA is required}"
 tree_proof_verifier="${RELEASE_TREE_PROOF_VERIFIER:-$(dirname "${BASH_SOURCE[0]}")/verify-release-tree-proof.sh}"
 proof="${3:-}"
-if [[ -z "$proof" ]]; then proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$sha"); fi
+if [[ -z "$proof" ]]; then
+  proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$sha")
+  proof="${proof:-$sha}"
+fi
 bash "$tree_proof_verifier" "$repo" "$sha" "$proof" >/dev/null
 [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$sha" =~ ^[0-9a-f]{40}$ ]] || {
   echo '::error::RELEASE_HEAVY_NOT_GREEN: invalid repository or SHA' >&2; exit 1;
