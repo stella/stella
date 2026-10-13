@@ -12,6 +12,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import postcss from "postcss";
 
+import { mcpAppBundlePath } from "../src/bundles";
 import { MCP_APPS } from "../src/manifest";
 
 test("MCP styles stay unchanged when generated bundles contain stale utilities", async () => {
@@ -50,10 +51,10 @@ test("MCP styles stay unchanged when generated bundles contain stale utilities",
     expect(clean).not.toContain(".leading-3 {");
 
     for (const { directory } of MCP_APPS) {
-      const generated = path.join(appsRoot, directory, "generated");
-      mkdirSync(generated, { recursive: true });
+      const bundlePath = mcpAppBundlePath(directory, root);
+      mkdirSync(path.dirname(bundlePath), { recursive: true });
       writeFileSync(
-        path.join(generated, "app.html.txt"),
+        bundlePath,
         `<style>${clean}</style><div class="mt-97"></div>`,
       );
     }

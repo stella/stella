@@ -23,7 +23,6 @@
 // so it is too slow for the local lint/pre-commit loop. Wired into
 // .github/workflows/ci.yml's web-build job, right after "Build web".
 
-import { panic } from "better-result";
 import {
   appendFileSync,
   existsSync,
@@ -36,6 +35,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { readMcpAppBundle } from "../packages/mcp-apps/src/bundles";
 import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
 import { BASELINE_PATHS } from "./baseline-paths";
 
@@ -593,20 +593,17 @@ const readMcpBaselineField = () => {
   return baseline.mcpApps === undefined ? {} : { mcpApps: baseline.mcpApps };
 };
 
-const runMcpApps = (): number => {
+const runMcpApps = async (): Promise<number> => {
   const measured = new Map(
-    MCP_APPS.map(({ directory }) => {
-      const file = path.join(
-        REPO_ROOT,
-        "packages/mcp-apps/src",
-        directory,
-        "generated/app.html.txt",
-      );
-      if (!existsSync(file)) {
-        panic(`Build MCP app ${directory} before measuring its budget`);
-      }
-      return [directory, gzipSize(file)] as const;
-    }),
+    await Promise.all(
+      MCP_APPS.map(
+        async ({ directory }) =>
+          [
+            directory,
+            Bun.gzipSync(await readMcpAppBundle(directory)).length,
+          ] as const,
+      ),
+    ),
   );
   const field = readMcpBaselineField();
   if (process.argv.includes("--write-baseline")) {
@@ -655,7 +652,7 @@ const runMcpApps = (): number => {
 
 // --- Entry ------------------------------------------------------------------
 
-const main = (): number => {
+const main = async (): Promise<number> => {
   if (process.argv.includes("--mcp-apps")) {
     return runMcpApps();
   }
@@ -672,5 +669,5 @@ const main = (): number => {
 };
 
 if (import.meta.main) {
-  process.exit(main());
+  process.exit(await main());
 }

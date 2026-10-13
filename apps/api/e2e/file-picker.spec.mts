@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
-import { readFile } from "node:fs/promises";
+
+import { readMcpAppBundle } from "@stll/mcp-apps/bundles";
 
 type PickerApp = "document-upload" | "file-comparison";
 
@@ -10,13 +11,7 @@ declare global {
 
 type MountPickerOptions = { page: Page; app: PickerApp };
 const mountPicker = async ({ page, app }: MountPickerOptions) => {
-  const html = await readFile(
-    new URL(
-      `../../../packages/mcp-apps/src/${app}/generated/app.html.txt`,
-      import.meta.url,
-    ),
-    "utf-8",
-  );
+  const html = await readMcpAppBundle(app);
   const fixtureUrl = "http://localhost/file-picker-fixture";
   await page.route(fixtureUrl, async (route) =>
     route.fulfill({

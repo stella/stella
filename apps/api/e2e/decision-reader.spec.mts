@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 import type { FrameLocator, Page } from "@playwright/test";
 import { panic } from "better-result";
-import { readFile } from "node:fs/promises";
 import type * as v from "valibot";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import type { Block } from "@stll/legal-ast/document-ast";
+import { readMcpAppBundle } from "@stll/mcp-apps/bundles";
 import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
 
 import type {
@@ -271,12 +271,8 @@ const mountReader = async ({
   sandbox = "opaque",
   revision = "stable",
 }: HostOptions) => {
-  const bundle = await readFile(
-    new URL(
-      `../../../packages/mcp-apps/src/${surface === "reader" ? "decision-reader" : "case-law-results"}/generated/app.html.txt`,
-      import.meta.url,
-    ),
-    "utf-8",
+  const bundle = await readMcpAppBundle(
+    surface === "reader" ? "decision-reader" : "case-law-results",
   );
   const html = bundle.replace(
     "<head>",

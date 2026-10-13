@@ -8,7 +8,7 @@ import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
-import { MCP_APP_BUNDLES } from "@stll/mcp-apps/bundles";
+import { readMcpAppBundle } from "@stll/mcp-apps/bundles";
 import {
   CASE_LAW_RESULTS_APP,
   DECISION_READER_APP,
@@ -139,7 +139,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     description: "Read a case-law decision and its cited provisions.",
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
-    read: () => MCP_APP_BUNDLES["decision-reader"],
+    read: () => readMcpAppBundle("decision-reader"),
     resourceMeta: () => ({
       ui: {
         csp: { connectDomains: [], resourceDomains: [] },
@@ -155,7 +155,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
       "Interactive results for case-law searches and identifier lookups.",
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
-    read: () => MCP_APP_BUNDLES["case-law-results"],
+    read: () => readMcpAppBundle("case-law-results"),
     resourceMeta: () => ({
       ui: {
         csp: { connectDomains: [], resourceDomains: [] },
@@ -257,7 +257,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     // A text import makes Bun embed the generated app in the compiled API
     // binary. Reading from the source tree at runtime would work in dev but
     // fail in the production image, which ships only the compiled server.
-    read: () => MCP_APP_BUNDLES["document-upload"],
+    read: () => readMcpAppBundle("document-upload"),
     resourceMeta: () => uploadAppResourceMeta(),
   },
   {
@@ -268,7 +268,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
       "Portable MCP App picker that uploads two .docx files from the user's browser for compare_documents to redline.",
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
-    read: () => MCP_APP_BUNDLES["file-comparison"],
+    read: () => readMcpAppBundle("file-comparison"),
     resourceMeta: () => uploadAppResourceMeta(),
   },
 ];

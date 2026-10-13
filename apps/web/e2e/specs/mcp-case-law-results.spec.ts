@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { execFileSync } from "node:child_process";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
@@ -10,6 +9,7 @@ import {
   APP_RESOLVE_STATUS_FIXTURES,
   APP_SEARCH_FIXTURE,
 } from "@stll/api-contract/mcp-app.fixtures";
+import { readMcpAppBundle } from "@stll/mcp-apps/bundles";
 
 test.use({ storageState: { cookies: [], origins: [] } });
 
@@ -63,13 +63,7 @@ const mountApp = async ({
   const bundle =
     bundleKind === "country-fixture"
       ? countryFixtureBundle()
-      : await readFile(
-          new URL(
-            "../../../../packages/mcp-apps/src/case-law-results/generated/app.html.txt",
-            import.meta.url,
-          ),
-          "utf-8",
-        );
+      : await readMcpAppBundle("case-law-results");
   const html = bundle.replace(
     "<head>",
     () =>
