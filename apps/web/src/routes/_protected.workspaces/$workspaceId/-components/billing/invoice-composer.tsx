@@ -241,7 +241,9 @@ export const InvoiceComposer = ({
         invoiceDate,
         dueDate,
         taxableSupplyDate: supplyDate,
-        expectedTotalAmount: totals?.grossAmountMinor,
+        ...(totals === null
+          ? {}
+          : { expectedTotalAmount: totals.grossAmountMinor }),
         currency,
         timeEntryIds: includedEntryIds.map((id) => toSafeId<"timeEntry">(id)),
         expenseIds: [...includedExpenseIds].map((id) =>
