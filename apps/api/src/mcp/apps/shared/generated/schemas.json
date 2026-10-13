@@ -1,4 +1,141 @@
 {
+  "read_provision_history": {
+    "type": "object",
+    "properties": {
+      "anchor": {
+        "type": "string"
+      },
+      "eli": {
+        "type": "string"
+      },
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "appUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "url": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "source_url": {
+              "type": "string"
+            },
+            "documentId": {
+              "type": "string"
+            },
+            "resourceName": {
+              "type": "string"
+            },
+            "versionValidFrom": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "versionValidTo": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "expressionKind": {
+              "enum": [
+                "consolidation",
+                "promulgated",
+                "unversioned"
+              ],
+              "type": "string"
+            },
+            "windowDisposition": {
+              "enum": [
+                "effective",
+                "never-in-force",
+                "invalid-window",
+                "withdrawn"
+              ],
+              "type": "string"
+            },
+            "windowDispositionBasis": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "publisher-flag",
+                    "replaced-same-day",
+                    "zero-length-window",
+                    "reversed",
+                    "missing-start",
+                    "publisher-unlisted",
+                    "listed-not-stored",
+                    "deferred-promulgated"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "status": {
+              "enum": [
+                "found",
+                "text_withheld"
+              ],
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "nextTextCursor": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "truncated": {
+              "type": "boolean"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "appUrl",
+            "url",
+            "documentId",
+            "resourceName",
+            "versionValidFrom",
+            "versionValidTo",
+            "expressionKind",
+            "windowDisposition",
+            "windowDispositionBasis",
+            "status"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "nextCursor": {
+        "type": [
+          "string",
+          "null"
+        ]
+      }
+    },
+    "required": [
+      "anchor",
+      "eli",
+      "items",
+      "nextCursor"
+    ],
+    "additionalProperties": false
+  },
   "open_case_law_decision": {
     "type": "object",
     "properties": {

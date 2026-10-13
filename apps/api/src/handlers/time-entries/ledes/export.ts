@@ -7,7 +7,6 @@ import type { CentsAmount } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
-import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import {
   loadTimekeeperNames,
   timeEntryExportConditions,
@@ -17,6 +16,7 @@ import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/ex
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
+import { exportAmountText } from "@/api/lib/billing/export-amount";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

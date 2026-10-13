@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   mkdtempSync,
@@ -5,9 +6,13 @@ import {
   writeFileSync,
   rmSync,
   existsSync,
+  readFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { AUTOFIX_PROTECTED_PATHS } from "./autofix-protected-paths";
+import { parseVerifyWorkflow } from "./verify-workflow";
 
 const workflow = await Bun.file(
   new URL("../.github/workflows/autofix.yml", import.meta.url),
@@ -78,6 +83,58 @@ exit 1
 };
 
 describe("ratchet autofix output boundary", () => {
+  test("the actual fixer excludes each protected glob with the installed Bash", () => {
+    const step = parseVerifyWorkflow(workflow, "autofix").find(
+      ({ name }) => name === "Fix changed files",
+    );
+    if (!step) {
+      panic("Autofix changed-file owner is missing");
+    }
+    const root = mkdtempSync(path.join(tmpdir(), "autofix-glob-boundary-"));
+    try {
+      const bin = path.join(root, "bin");
+      mkdirSync(bin);
+      const protectedPaths = AUTOFIX_PROTECTED_PATHS.map((pattern) => {
+        expect(pattern).not.toMatch(/[|(){}@]/u);
+        return pattern.replace(/\*+/gu, "fixture.json");
+      });
+      const unprotected = "scripts/unprotected.json";
+      for (const file of [...protectedPaths, unprotected]) {
+        mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+        writeFileSync(path.join(root, file), "{}");
+      }
+      writeFileSync(
+        path.join(root, "policy"),
+        `${AUTOFIX_PROTECTED_PATHS.join("\n")}\n`,
+      );
+      writeFileSync(
+        path.join(root, "autofix-changed-paths"),
+        `${[...protectedPaths, unprotected].join("\0")}\0`,
+      );
+      writeFileSync(
+        path.join(bin, "bun"),
+        `#!/bin/bash
+if [[ "$1" == scripts/autofix-protected-paths.ts ]]; then cat "$RUNNER_TEMP/policy"; exit 0; fi
+printf '%s\\n' "$@" >> "$RUNNER_TEMP/commands"
+`,
+        { mode: 0o755 },
+      );
+      const result = Bun.spawnSync(["bash", "-c", step.run], {
+        cwd: root,
+        env: { PATH: `${bin}:/usr/bin:/bin`, RUNNER_TEMP: root },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      const commands = readFileSync(path.join(root, "commands"), "utf-8");
+      expect(commands).toContain(`./${unprotected}`);
+      for (const file of protectedPaths) {
+        expect(commands).not.toContain(`./${file}`);
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
   test("changed paths and planner globs cannot authorize a retired budget", () => {
     expect(runBoundary({ written: "false", baseline: "expected" })).toEqual({
       exitCode: 1,

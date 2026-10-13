@@ -77,7 +77,7 @@ export const FilteredEmptyState = ({
           </p>
         </div>
         <Button onClick={onClearFilters} size="sm" variant="secondary">
-          {t("workspaces.views.clearFilters")}
+          {t("common.clearFilters")}
         </Button>
       </div>
     </div>
