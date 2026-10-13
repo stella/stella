@@ -21,3 +21,19 @@ test("an attached file keeps a valid MIME subtype", async () => {
     mimeType: "application/xml",
   });
 });
+
+// The fix is a dependency patch keyed by version: upgrading @libpdf/core
+// without moving the patch would silently bring the double escape back.
+test("the attachment patch follows the pinned @libpdf/core version", async () => {
+  const manifest: {
+    catalog: Record<string, string>;
+    patchedDependencies: Record<string, string>;
+  } = await Bun.file(
+    new URL("../../../../../package.json", import.meta.url),
+  ).json();
+  const version = manifest.catalog["@libpdf/core"];
+
+  expect(manifest.patchedDependencies).toHaveProperty([
+    `@libpdf/core@${version}`,
+  ]);
+});
