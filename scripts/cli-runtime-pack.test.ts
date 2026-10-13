@@ -15,6 +15,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   CLI_CONTRACT_SURFACE_PATHS,
   canonicalJson,
@@ -296,7 +298,7 @@ const expectedPackedFiles = (
     .split("\n")
     .filter((line) => line.startsWith("TSFILE: "))
     .map((line) =>
-      path.relative(directory, line.slice("TSFILE: ".length).trim()),
+      repoRelativePath(directory, line.slice("TSFILE: ".length).trim()),
     );
   for (const file of emitted) {
     const source = file
