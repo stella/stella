@@ -232,7 +232,7 @@ describe("changed-file autofix boundary", () => {
     expect(job).not.toContain("secrets.");
 
     const preparationStep = job.indexOf(
-      "- name: Prepare selected generated files",
+      "- name: Prepare selected MCP app exports",
     );
     const fixesStep = job.indexOf("- name: Fix changed files");
     expect(preparationStep).toBeGreaterThan(0);
@@ -348,7 +348,7 @@ describe("changed-file autofix boundary", () => {
     ).text();
     const ciWorkflow = Bun.YAML.parse(ci);
     const preparationStep = job.indexOf(
-      "- name: Prepare selected generated files",
+      "- name: Prepare selected MCP app exports",
     );
     const fixesStep = job.indexOf("- name: Fix changed files");
     expect(preparationStep).toBeGreaterThan(0);

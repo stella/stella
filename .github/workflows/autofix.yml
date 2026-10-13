@@ -471,14 +471,20 @@ jobs:
 
       # Generated exports must exist before the compiler can check source fixes.
       # Regenerate again below because lint may rewrite generator inputs.
-      - name: Prepare selected generated files
+      - name: Prepare selected MCP app exports
         if: needs.regenerate-scope.outputs.run == 'true'
         env:
           STELLA_LOCAL_AUTOFIX: "true"
           GENERATOR_IDS: ${{ needs.regenerate-scope.outputs.ids }}
         run: |
-          if [[ -n "$GENERATOR_IDS" ]]; then
-            bun scripts/autofix-plan.ts run "$GENERATOR_IDS"
+          mcp_ids=""
+          for id in mcp-app-contracts mcp-app-bundles; do
+            if [[ ",$GENERATOR_IDS," == *",$id,"* ]]; then
+              mcp_ids="${mcp_ids:+$mcp_ids,}$id"
+            fi
+          done
+          if [[ -n "$mcp_ids" ]]; then
+            bun scripts/autofix-plan.ts run "$mcp_ids"
           fi
 
       - name: Fix changed files
