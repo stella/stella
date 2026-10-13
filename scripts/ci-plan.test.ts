@@ -42,6 +42,7 @@ import {
   requiresPackageChecks,
 } from "./ci-package-scope";
 import { extractPlanSelector } from "./ci-plan-selector";
+import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
@@ -2239,6 +2240,7 @@ const jobSteps = (job: unknown) =>
       steps: v.pipe(
         v.unknown(),
         v.transform(flattenWorkflowSteps),
+        v.transform((steps) => steps.map(withoutStaticReuseCondition)),
         v.array(
           v.object({
             name: v.optional(v.string()),

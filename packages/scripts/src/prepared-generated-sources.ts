@@ -7,7 +7,7 @@ import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { CI_GENERATED_FILES } from "./generated-files";
 import {
-  generatedInputGit as git,
+  generatedInputGit,
   generatedInputTreeHash,
 } from "./generated-input-identity";
 
@@ -34,11 +34,18 @@ export const generatedInputIdentity = (root: string) => {
     ),
   );
   return {
-    sourceSha: git(root, ["rev-parse", "HEAD"]).trim(),
+    sourceSha: generatedInputGit({
+      root,
+      args: ["rev-parse", "HEAD"],
+      onFailure: panic,
+    }).trim(),
     inputHash: generatedInputTreeHash({
       root,
       toolchain: { bun: Bun.version, compiler: compiler.version },
       generatedOutputs: "exclude",
+      createHasher: createSha256,
+      hashFile: generatedFileHash,
+      onFailure: panic,
     }),
     bunVersion: Bun.version,
     compilerVersion: compiler.version,

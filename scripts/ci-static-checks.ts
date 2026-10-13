@@ -2,7 +2,8 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { generatedInputTreeHash } from "../packages/scripts/src/generated-input-identity";
-import { sha256Hex } from "../packages/sha256/src/bun";
+import { createSha256, sha256Hex } from "../packages/sha256/src/bun";
+import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
 import {
   completeInstallStoreKey,
   parseGlobalStoreMode,
@@ -31,8 +32,37 @@ class StaticCheckError extends Error {
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-export const classifiedChecks = (workflow: unknown, job: string) =>
-  workflowJobSteps(workflow, job).filter((step) => {
+export const staticReuseCondition = (id: string) =>
+  ` && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_${id} != 'true')`;
+
+export const classifiedChecks = (workflow: unknown, job: string) => {
+  const steps = workflowJobSteps(workflow, job).map((step) => {
+    if (step["name"] !== CANONICAL_CANCEL_STEP.name) {
+      return step;
+    }
+    if (
+      !record(workflow) ||
+      !record(workflow["jobs"]) ||
+      !record(workflow["jobs"][job])
+    ) {
+      throw new StaticCheckError("Missing cancellation partition declaration");
+    }
+    const env = workflow["jobs"][job]["env"];
+    if (
+      !record(env) ||
+      env["CI_CANCELLATION_KIND"] !== "CONTEXTUAL" ||
+      typeof env["CI_CANCELLATION_CONTEXT"] !== "string"
+    ) {
+      throw new StaticCheckError("Unclassified cancellation task");
+    }
+    const classified = { ...step };
+    classified["env"] = {
+      CI_CHECK_KIND: env["CI_CANCELLATION_KIND"],
+      CI_CHECK_CONTEXT: env["CI_CANCELLATION_CONTEXT"],
+    };
+    return classified;
+  });
+  return steps.filter((step) => {
     if (
       isWorkflowBarrier(step) ||
       STATIC_RECEIPT_STEP_NAMES.some((name) => name === step["name"])
@@ -45,7 +75,7 @@ export const classifiedChecks = (workflow: unknown, job: string) =>
       !["STATIC", "CONTEXTUAL"].includes(String(env["CI_CHECK_KIND"]))
     ) {
       throw new StaticCheckError(
-        `Unclassified CI check: ${job}/${step["name"]}`,
+        `Unclassified CI check: ${job}/${String(step["name"])}`,
       );
     }
     if (
@@ -55,7 +85,7 @@ export const classifiedChecks = (workflow: unknown, job: string) =>
         typeof step["run"] !== "string")
     ) {
       throw new StaticCheckError(
-        `Static CI check has no input closure or command: ${step["name"]}`,
+        `Static CI check has no input closure or command: ${String(step["name"])}`,
       );
     }
     if (
@@ -63,11 +93,12 @@ export const classifiedChecks = (workflow: unknown, job: string) =>
       typeof env["CI_CHECK_CONTEXT"] !== "string"
     ) {
       throw new StaticCheckError(
-        `Contextual CI check has no reason: ${step["name"]}`,
+        `Contextual CI check has no reason: ${String(step["name"])}`,
       );
     }
     return true;
   });
+};
 
 type StaticKeyOptions = {
   inputHash: string;
@@ -169,7 +200,9 @@ const command = (args: string[]) => {
     timeout: RECEIPT_OPERATION_TIMEOUT_MS,
   });
   if (child.exitCode !== 0) {
-    throw new StaticCheckError(`Receipt operation failed: ${args.at(0)}`);
+    throw new StaticCheckError(
+      `Receipt operation failed: ${String(args.at(0))}`,
+    );
   }
   return child.stdout.toString().trim();
 };
@@ -216,6 +249,11 @@ const identity = (root: string, workflow: unknown, job: string) => {
     root,
     toolchain,
     generatedOutputs: "tracked",
+    createHasher: createSha256,
+    hashFile: sha256Hex,
+    onFailure: (message) => {
+      throw new StaticCheckError(message);
+    },
   });
   if (
     !record(workflow) ||

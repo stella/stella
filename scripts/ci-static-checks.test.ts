@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { generatedInputTreeHash } from "../packages/scripts/src/generated-input-identity";
+import { createSha256, sha256Hex } from "../packages/sha256/src/bun";
 import {
   classifiedChecks,
   passedStaticChecks,
@@ -41,7 +42,7 @@ test("every partition task declares its inputs or contextual dependency and exac
       if (!record(env)) {
         expect.unreachable("Missing task environment");
       }
-      const gate = ` && steps.static_receipts.outputs.reuse_${step["id"]} != 'true'`;
+      const gate = ` && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_${String(step["id"])} != 'true')`;
       switch (env["CI_CHECK_KIND"]) {
         case "STATIC":
           expect(step["if"]).toContain(gate);
@@ -135,6 +136,9 @@ test("the shared generated input identity covers file bytes, inventory and execu
       root,
       toolchain: "toolchain",
       generatedOutputs: "tracked",
+      createHasher: createSha256,
+      hashFile: sha256Hex,
+      onFailure: expect.unreachable,
     });
     for (const filename of ["source.ts", "bun.lock"]) {
       const original = readFileSync(path.join(root, filename));
@@ -144,6 +148,9 @@ test("the shared generated input identity covers file bytes, inventory and execu
           root,
           toolchain: "toolchain",
           generatedOutputs: "tracked",
+          createHasher: createSha256,
+          hashFile: sha256Hex,
+          onFailure: expect.unreachable,
         }),
       ).not.toBe(key);
       writeFileSync(path.join(root, filename), original);
@@ -153,6 +160,9 @@ test("the shared generated input identity covers file bytes, inventory and execu
         root,
         toolchain: "toolchain",
         generatedOutputs: "tracked",
+        createHasher: createSha256,
+        hashFile: sha256Hex,
+        onFailure: expect.unreachable,
       }),
     ).toBe(key);
     writeFileSync(path.join(root, "new-input.ts"), "new");
@@ -162,6 +172,9 @@ test("the shared generated input identity covers file bytes, inventory and execu
         root,
         toolchain: "toolchain",
         generatedOutputs: "tracked",
+        createHasher: createSha256,
+        hashFile: sha256Hex,
+        onFailure: expect.unreachable,
       }),
     ).not.toBe(key);
     git("rm", "--cached", "new-input.ts");
@@ -171,6 +184,9 @@ test("the shared generated input identity covers file bytes, inventory and execu
         root,
         toolchain: "toolchain",
         generatedOutputs: "tracked",
+        createHasher: createSha256,
+        hashFile: sha256Hex,
+        onFailure: expect.unreachable,
       }),
     ).not.toBe(key);
     const output = "apps/web/src/routeTree.gen.ts";
@@ -181,11 +197,17 @@ test("the shared generated input identity covers file bytes, inventory and execu
       root,
       toolchain: "toolchain",
       generatedOutputs: "tracked",
+      createHasher: createSha256,
+      hashFile: sha256Hex,
+      onFailure: expect.unreachable,
     });
     const producer = generatedInputTreeHash({
       root,
       toolchain: "toolchain",
       generatedOutputs: "exclude",
+      createHasher: createSha256,
+      hashFile: sha256Hex,
+      onFailure: expect.unreachable,
     });
     writeFileSync(path.join(root, output), "hydrated output");
     expect(
@@ -193,6 +215,9 @@ test("the shared generated input identity covers file bytes, inventory and execu
         root,
         toolchain: "toolchain",
         generatedOutputs: "tracked",
+        createHasher: createSha256,
+        hashFile: sha256Hex,
+        onFailure: expect.unreachable,
       }),
     ).toBe(before);
     git("add", output);
@@ -201,6 +226,9 @@ test("the shared generated input identity covers file bytes, inventory and execu
         root,
         toolchain: "toolchain",
         generatedOutputs: "tracked",
+        createHasher: createSha256,
+        hashFile: sha256Hex,
+        onFailure: expect.unreachable,
       }),
     ).not.toBe(before);
     expect(
@@ -208,6 +236,9 @@ test("the shared generated input identity covers file bytes, inventory and execu
         root,
         toolchain: "toolchain",
         generatedOutputs: "exclude",
+        createHasher: createSha256,
+        hashFile: sha256Hex,
+        onFailure: expect.unreachable,
       }),
     ).toBe(producer);
   } finally {

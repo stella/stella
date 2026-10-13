@@ -1,19 +1,22 @@
 import { lstatSync, readFileSync, readlinkSync } from "node:fs";
 import path from "node:path";
 
-// This identity is also needed before dependency installation in CI.
-import { createSha256, sha256Hex } from "../../sha256/src/bun";
+import type { Sha256Hasher } from "../../sha256/src/types";
 import { CI_GENERATED_FILES } from "./generated-files";
 
-class GeneratedInputError extends Error {
-  override name = "GeneratedInputError";
-  readonly _tag = "GeneratedInputError";
-}
-
-export const generatedInputGit = (root: string, args: string[]) => {
+type GeneratedInputGitOptions = {
+  root: string;
+  args: string[];
+  onFailure: (message: string) => never;
+};
+export const generatedInputGit = ({
+  root,
+  args,
+  onFailure,
+}: GeneratedInputGitOptions) => {
   const result = Bun.spawnSync(["git", ...args], { cwd: root });
   if (result.exitCode !== 0) {
-    throw new GeneratedInputError(
+    return onFailure(
       `Generated source input inventory failed: ${result.stderr.toString()}`,
     );
   }
@@ -24,30 +27,34 @@ type GeneratedInputTreeHashOptions = {
   root: string;
   toolchain: unknown;
   generatedOutputs: "exclude" | "tracked";
+  createHasher: () => Sha256Hasher;
+  hashFile: (contents: string | Uint8Array) => string;
+  onFailure: (message: string) => never;
 };
 export const generatedInputTreeHash = ({
   root,
   toolchain,
   generatedOutputs,
+  createHasher,
+  hashFile,
+  onFailure,
 }: GeneratedInputTreeHashOptions) => {
   const generated = new Set<string>(CI_GENERATED_FILES);
-  const hash = createSha256();
+  const hash = createHasher();
   hash.update(JSON.stringify(toolchain));
   // A full tracked closure covers newly added generator inputs automatically.
   // Generated outputs are derived from these inputs and the resolved toolchain.
-  for (const entry of generatedInputGit(root, [
-    "ls-files",
-    "--stage",
-    "-z",
-  ]).split("\0")) {
+  for (const entry of generatedInputGit({
+    root,
+    args: ["ls-files", "--stage", "-z"],
+    onFailure,
+  }).split("\0")) {
     if (entry === "") {
       continue;
     }
     const separator = entry.indexOf("\t");
     if (separator === -1) {
-      throw new GeneratedInputError(
-        "Generated source input inventory has no path",
-      );
+      return onFailure("Generated source input inventory has no path");
     }
     const file = entry.slice(separator + 1);
     if (generated.has(file)) {
@@ -69,7 +76,7 @@ export const generatedInputTreeHash = ({
         ? readlinkSync(absolute)
         : readFileSync(absolute);
     })();
-    hash.update(JSON.stringify([entry.slice(0, 6), file, sha256Hex(bytes)]));
+    hash.update(JSON.stringify([entry.slice(0, 6), file, hashFile(bytes)]));
   }
   return hash.digest("hex");
 };

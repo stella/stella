@@ -55,6 +55,7 @@
         "route-tree.config.ts",
         "scripts/generate-route-tree.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-input-identity.ts",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "package.json",
@@ -597,6 +598,7 @@
         "$TURBO_ROOT$/packages/scripts/src/prepare-cli-runtime.ts",
         "$TURBO_ROOT$/packages/scripts/src/child-exit-status.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-input-identity.ts",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/scripts/generated-files.ts",
         "src/capability-catalog-load.ts",
@@ -719,6 +721,7 @@
         "$TURBO_ROOT$/packages/cli/capabilities/**",
         "$TURBO_ROOT$/packages/cli/src/capability-catalog-data.ts",
         "$TURBO_ROOT$/packages/scripts/src/prepared-generated-sources.ts",
+        "$TURBO_ROOT$/packages/scripts/src/generated-input-identity.ts",
         "$TURBO_ROOT$/packages/scripts/src/generated-files.ts",
         "$TURBO_ROOT$/scripts/generated-files.ts"
       ],
