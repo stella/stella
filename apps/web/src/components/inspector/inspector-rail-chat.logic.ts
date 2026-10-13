@@ -14,12 +14,14 @@
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
-import { skillLabel } from "@/components/inspector/inspector-store-types";
 import type { ChatTab } from "@/components/inspector/inspector-store-types";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 
 type RailChatOpenArgsOptions = {
-  activeSkill?: ChatTab["activeSkill"];
+  /** The skill the rail's active tab runs, with its title as `useSkillLabel` gives it. */
+  activeSkill?:
+    | { label: string; skill: NonNullable<ChatTab["activeSkill"]> }
+    | undefined;
   /** The corpus document the main view shows, when it shows one. */
   legalDocument?: ActiveLegalDocument | undefined;
   /** The matter the rail is mounted in, when it is mounted in one. */
@@ -48,7 +50,7 @@ export const railChatOpenArgs = ({
   const skillContext =
     activeSkill === undefined
       ? {}
-      : { activeSkill, label: skillLabel(activeSkill) };
+      : { activeSkill: activeSkill.skill, label: activeSkill.label };
   const matterContext =
     workspaceId === undefined
       ? {}

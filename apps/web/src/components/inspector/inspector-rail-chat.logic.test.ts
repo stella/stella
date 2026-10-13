@@ -49,7 +49,10 @@ describe("what the rail's new-chat button opens", () => {
   test("keeps naming the skill the reader picked, over the document they stand on", () => {
     expect(
       railChatOpenArgs({
-        activeSkill: { skillId: "skill-1", skillName: "Redline" },
+        activeSkill: {
+          label: "Redline",
+          skill: { skillId: "skill-1", skillName: "Redline" },
+        },
         legalDocument: decision,
       }),
     ).toEqual({
@@ -59,17 +62,10 @@ describe("what the rail's new-chat button opens", () => {
     });
   });
 
-  test("labels a skill chat with the skill's title, not its slug", () => {
-    const activeSkill = {
-      skillDisplayName: "Build a playbook",
-      skillName: "playbook-builder",
-    };
-    expect(railChatOpenArgs({ activeSkill })).toEqual({
-      activeSkill,
-      label: "Build a playbook",
-    });
+  test("labels a skill chat with the title it is given, not its slug", () => {
+    const skill = { skillName: "playbook-builder" };
     expect(
-      railChatOpenArgs({ activeSkill: { skillName: "playbook-builder" } }),
-    ).toMatchObject({ label: "playbook-builder" });
+      railChatOpenArgs({ activeSkill: { label: "Build a playbook", skill } }),
+    ).toEqual({ activeSkill: skill, label: "Build a playbook" });
   });
 });

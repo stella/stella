@@ -53,6 +53,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -92,6 +93,7 @@ export const InspectorRail = ({
     activeTab,
     activeSkillCatalogueData?.entries,
   );
+  const skillLabel = useSkillLabel();
   const railContextMenu = useRailContextMenu({ activeSkill, workspaceId });
   // The rail stands beside the main view, so a chat started here is about
   // whatever that view is showing.
@@ -124,7 +126,16 @@ export const InspectorRail = ({
   const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
 
   const openContextChat = () => {
-    onOpenChat(railChatOpenArgs({ activeSkill, legalDocument, workspaceId }));
+    onOpenChat(
+      railChatOpenArgs({
+        activeSkill:
+          activeSkill === undefined
+            ? undefined
+            : { label: skillLabel(activeSkill), skill: activeSkill },
+        legalDocument,
+        workspaceId,
+      }),
+    );
   };
 
   const toggleLabel = (() => {
