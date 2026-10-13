@@ -146,19 +146,14 @@ describe("stored analyses", () => {
   test("survive a re-parse that keeps the analysed text", async () => {
     const row = await analysedRow();
     row.source_raw = "<recorded payload>";
-    const documentAst = structuredClone(row.document_ast);
-    // A paragraph number is structure, not analysed text.
-    const blocks = blocksOf(documentAst);
-    const paragraph = firstParagraph(blocks);
-    blocks[paragraph] = { ...blocks[paragraph], number: 1 };
     const result = await reparseFixtureRow({
       adapterKey: "cz-us",
       row,
       reparse: async () => ({
-        documentAst,
+        documentAst: row.document_ast,
         sections: row.sections ?? null,
         fulltext: row.fulltext ?? null,
-        parserVersion: row.parser_version ?? null,
+        parserVersion: (row.parser_version ?? 0) + 1,
       }),
     });
     expect(result.type).toBe("changed");
@@ -168,31 +163,54 @@ describe("stored analyses", () => {
     }
   });
 
-  test("fail the row when the new parse changes the analysed input", async () => {
-    const row = await analysedRow();
-    row.source_raw = "<recorded payload>";
-    const documentAst = structuredClone(row.document_ast);
-    const blocks = blocksOf(documentAst);
-    const index = blocks.findIndex(
-      (block) =>
-        typeof block["plainText"] === "string" && block["plainText"] !== "",
-    );
-    blocks[index] = { ...blocks[index], plainText: "Reworded by a new parser" };
-    const result = await reparseFixtureRow({
-      adapterKey: "cz-us",
-      row,
-      reparse: async () => ({
-        documentAst,
-        sections: row.sections ?? null,
-        fulltext: row.fulltext ?? null,
-        parserVersion: row.parser_version ?? null,
-      }),
-    });
-    expect(result.type).toBe("failed");
-    if (result.type === "failed") {
-      expect(result.message).toContain("never re-stamped");
-    }
-  });
+  test.each(["text", "court-number"] as const)(
+    "fail the row when the new parse changes the analysed %s",
+    async (change) => {
+      const row = await analysedRow();
+      row.source_raw = "<recorded payload>";
+      const documentAst = structuredClone(row.document_ast);
+      const blocks = blocksOf(documentAst);
+      const index = blocks.findIndex(
+        (block) =>
+          block["type"] === "paragraph" &&
+          typeof block["plainText"] === "string" &&
+          block["plainText"] !== "",
+      );
+      const block = blocks[index];
+      if (block === undefined) {
+        throw new TypeError("Fixture AST has no nonempty paragraph");
+      }
+      switch (change) {
+        case "text":
+          blocks[index] = { ...block, plainText: "Reworded by a new parser" };
+          break;
+        case "court-number":
+          blocks[index] = {
+            ...block,
+            number:
+              typeof block["number"] === "number" ? block["number"] + 1 : 1,
+          };
+          break;
+        default:
+          change satisfies never;
+      }
+      expect(sameJson(documentAst, row.document_ast)).toBe(false);
+      const result = await reparseFixtureRow({
+        adapterKey: "cz-us",
+        row,
+        reparse: async () => ({
+          documentAst,
+          sections: row.sections ?? null,
+          fulltext: row.fulltext ?? null,
+          parserVersion: row.parser_version ?? null,
+        }),
+      });
+      expect(result.type).toBe("failed");
+      if (result.type === "failed") {
+        expect(result.message).toContain("never re-stamped");
+      }
+    },
+  );
 });
 
 test("comparison ignores key order only", () => {
