@@ -44,12 +44,12 @@ type TypstWasmCompiler = {
 
 let initialized: Promise<InitOutput> | null = null;
 
-const initialize = () => {
+const initialize = async () => {
   initialized ??= Bun.file(
     new URL(import.meta.resolve("@myriaddreamin/typst-ts-web-compiler/wasm")),
   )
     .arrayBuffer()
-    .then((bytes) => initCompiler({ module_or_path: bytes }));
+    .then(async (bytes) => initCompiler({ module_or_path: bytes }));
   return initialized;
 };
 

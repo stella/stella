@@ -287,8 +287,8 @@ export const openTypstSession = (
   };
 
   return {
-    render: (request) => {
-      const next = queue.then(() => run(request));
+    render: async (request) => {
+      const next = queue.then(async () => run(request));
       // Keep the queue alive whatever this render's outcome; the caller
       // receives the rejection through `next`.
       queue = next.then(

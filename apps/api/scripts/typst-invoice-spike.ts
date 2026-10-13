@@ -89,12 +89,12 @@ const report = (mode: Mode, rows: Row[]) => {
 const legacy = async () => {
   const rows: Row[] = [];
   for (const [name, fixture] of Object.entries(FIXTURES)) {
-    const cold = await timed(() => renderInvoicePdf(fixture));
+    const cold = await timed(async () => renderInvoicePdf(fixture));
     const bytes = cold.value.unwrap();
     const warm: number[] = [];
     for (let run = 1; run <= WARM_RUNS; run += 1) {
       warm.push(
-        (await timed(() => renderInvoicePdf(variant(fixture, run)))).ms,
+        (await timed(async () => renderInvoicePdf(variant(fixture, run)))).ms,
       );
     }
     await Bun.write(path.join(outDir, `legacy-${name}.pdf`), bytes);
@@ -124,14 +124,14 @@ const wasm = async () => {
     // A fresh renderer process per fixture: the first render pays process
     // start, WASM instantiation and font loading.
     const session = openTypstSession();
-    const render = (run = 0) =>
+    const render = async (run = 0) =>
       renderInvoiceWithTypst({
         invoice: variant(fixture, run),
         session,
         attachments,
         createdAt: CREATED_AT,
       });
-    const cold = await timed(() => render());
+    const cold = await timed(async () => render());
     const outcome = cold.value.unwrap();
     if (outcome.status !== "rendered") {
       return panic(outcome.diagnostics.join("\n"));
@@ -139,7 +139,7 @@ const wasm = async () => {
     const warm: number[] = [];
     const compile: number[] = [];
     for (let run = 1; run <= WARM_RUNS; run += 1) {
-      const next = await timed(() => render(run));
+      const next = await timed(async () => render(run));
       const value = next.value.unwrap();
       if (value.status === "rendered") {
         compile.push(value.compileMs);
@@ -155,7 +155,7 @@ const wasm = async () => {
     });
     const postprocess =
       raw.status === "rendered"
-        ? await timed(() =>
+        ? await timed(async () =>
             toPdfA3(raw.bytes, {
               title: data.title,
               lang: data.lang,

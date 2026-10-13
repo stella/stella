@@ -7,7 +7,7 @@ import type { PdfA3Attachment } from "./pdfa";
 import { toPdfA3 } from "./pdfa";
 import type { TypstRenderOutcome, TypstSession } from "./session";
 
-export const loadDefaultInvoiceTemplate = () =>
+export const loadDefaultInvoiceTemplate = async () =>
   Bun.file(defaultTemplatePath).text();
 
 type RenderInvoiceWithTypstOptions = {

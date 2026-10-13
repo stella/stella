@@ -25,7 +25,7 @@ const session = (limits: Partial<TypstRenderLimits> = {}) => {
 };
 
 afterAll(async () => {
-  await Promise.all(sessions.map((opened) => opened.close()));
+  await Promise.all(sessions.map(async (opened) => opened.close()));
 });
 
 const pdfHeader = (bytes: Uint8Array) =>
