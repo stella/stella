@@ -20,6 +20,7 @@ export type Generator = {
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
+  prepare?: readonly string[];
   autofix: boolean;
   after: readonly string[];
 } & GeneratorCheck &
@@ -271,6 +272,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/scripts/lib/mcp-app-html-guard.ts",
       "apps/api/scripts/lib/mcp-reader-ui-guard.ts",
       "apps/api/src/mcp/app-contracts.ts",
+      "apps/api/src/lib/chat/decision-reader-projections.ts",
       "apps/api/src/lib/chat/projections.ts",
       "apps/api/src/lib/chat/case-law-result-projections.ts",
       "apps/api/src/lib/chat/case-law-court-projection.ts",
@@ -290,6 +292,7 @@ const GENERATOR_DECLARATIONS = [
       "bun.lock",
     ],
     write: ["bun", "--cwd=apps/api", "run", "build:mcp-apps"],
+    prepare: ["bun", "scripts/prepare-mcp-apps.ts"],
     check: null,
     checkedBy: "MCP App bundle and shared assets guard",
     autofix: true,

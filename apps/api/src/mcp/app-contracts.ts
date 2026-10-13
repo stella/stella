@@ -3,14 +3,14 @@ import type * as v from "valibot";
 import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 
 import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
-import { READ_PROVISION_HISTORY_PROJECTION } from "../lib/chat/legislation-result-projections";
-import { MCP_APPS } from "./apps/manifest";
-import type { PresentationApp } from "./apps/manifest";
 import {
   openDecisionOutput,
   blocksDecisionOutput,
   provisionPreviewOutput,
-} from "./decision-reader-contract";
+} from "../lib/chat/decision-reader-projections";
+import { READ_PROVISION_HISTORY_PROJECTION } from "../lib/chat/legislation-result-projections";
+import { MCP_APPS } from "./apps/manifest";
+import type { PresentationApp } from "./apps/manifest";
 import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "./static-tool-definitions";
 
 type Tool = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];

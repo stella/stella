@@ -1,5 +1,14 @@
-import { panic } from "better-result";
-import { mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { panic, Result } from "better-result";
+import {
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
@@ -7,6 +16,12 @@ import { repoRelativePath } from "@stll/portable-path";
 import { createSha256, sha256Hex } from "@stll/sha256/bun";
 
 import { withGenerationLock } from "./generation-lock";
+
+const cacheManifestSchema = v.record(
+  v.string(),
+  v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
+);
+const GENERATED_OUTPUT_CACHE_IDENTITY_LIMIT = 2;
 
 type GeneratedOutputCacheOptions = {
   root: string;
@@ -54,15 +69,73 @@ export const withGeneratedOutputCache = async ({
     }
     return hash.digest("hex");
   };
+  const cacheRoot = path.join(root, ".cache/generated-output", name);
+  const prune = (currentIdentity: string) => {
+    const entries = readdirSync(cacheRoot, { withFileTypes: true });
+    const successful: { identity: string; completedAt: number }[] = [];
+    for (const entry of entries) {
+      if (!entry.isDirectory() || !/^[a-f0-9]{64}$/u.test(entry.name)) {
+        continue;
+      }
+      const directory = path.join(cacheRoot, entry.name);
+      const manifestPath = path.join(directory, "manifest.json");
+      const inspection = Result.try(() => {
+        if (!lstatSync(manifestPath).isFile()) {
+          return undefined;
+        }
+        const parsed = v.safeParse(
+          cacheManifestSchema,
+          JSON.parse(readFileSync(manifestPath, "utf-8")),
+        );
+        if (!parsed.success) {
+          return undefined;
+        }
+        const files = Object.keys(parsed.output);
+        if (
+          files.length === 0 ||
+          !files.every(
+            (file) =>
+              generated.some((glob) => glob.match(file)) &&
+              repoRelativePath(root, path.resolve(root, file)) === file &&
+              lstatSync(path.join(directory, file)).isFile(),
+          )
+        ) {
+          return undefined;
+        }
+        return statSync(manifestPath).mtimeMs;
+      });
+      if (inspection.isErr() || inspection.value === undefined) {
+        rmSync(directory, { recursive: true, force: true });
+        continue;
+      }
+      successful.push({ identity: entry.name, completedAt: inspection.value });
+    }
+    const keep = new Set([
+      currentIdentity,
+      ...successful
+        .filter(({ identity }) => identity !== currentIdentity)
+        .toSorted((left, right) => right.completedAt - left.completedAt)
+        .slice(0, GENERATED_OUTPUT_CACHE_IDENTITY_LIMIT - 1)
+        .map(({ identity }) => identity),
+    ]);
+    for (const { identity } of successful) {
+      if (!keep.has(identity)) {
+        rmSync(path.join(cacheRoot, identity), {
+          recursive: true,
+          force: true,
+        });
+      }
+    }
+  };
   const identity = inputHash();
-  const cache = path.join(root, ".cache/generated-output", name, identity);
+  const cache = path.join(cacheRoot, identity);
   const result = await withGenerationLock({
     lockPath: path.join(root, ".cache/generated-output", `${name}.sqlite`),
     run: async () => {
       const manifestPath = path.join(cache, "manifest.json");
       if (await Bun.file(manifestPath).exists()) {
         const manifest = v.parse(
-          v.record(v.string(), v.string()),
+          cacheManifestSchema,
           await Bun.file(manifestPath).json(),
         );
         const files = Object.keys(manifest);
@@ -99,10 +172,14 @@ export const withGeneratedOutputCache = async ({
           mkdirSync(path.dirname(destination), { recursive: true });
           writeFileSync(destination, bytes);
         }
+        const now = new Date();
+        utimesSync(manifestPath, now, now);
+        prune(identity);
         console.log(`${name}: cached`);
         return;
       }
       const started = performance.now();
+      rmSync(cache, { recursive: true, force: true });
       for (const file of scan(outputs)) {
         rmSync(path.join(root, file));
       }
@@ -130,6 +207,7 @@ export const withGeneratedOutputCache = async ({
           ),
         ),
       );
+      prune(identity);
       console.log(
         `${name}: generated in ${Math.round(performance.now() - started)} ms`,
       );

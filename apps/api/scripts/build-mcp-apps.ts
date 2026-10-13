@@ -1,6 +1,4 @@
 import tailwindcss from "@tailwindcss/postcss";
-
-import "../src/tests/setup-env";
 import { panic } from "better-result";
 import path from "node:path";
 import postcss from "postcss";
