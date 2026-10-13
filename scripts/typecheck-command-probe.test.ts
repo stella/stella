@@ -54,7 +54,7 @@ done
       cwd: directory,
       env: {
         ...process.env,
-        PATH: `${bin}:${process.env["PATH"]}`,
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
         RUNNER_TEMP: directory,
       },
       stdout: "pipe",
