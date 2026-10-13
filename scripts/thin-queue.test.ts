@@ -107,6 +107,10 @@ const outcome = step({
   job: "ci-result",
   name: "Evaluate CI outcome",
 });
+const folded = v.parse(
+  v.record(v.string(), v.record(v.string(), v.string())),
+  JSON.parse(outcome.env?.["FOLDED_SUITES"] ?? ""),
+);
 const scopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),
   JSON.parse(outcome.env?.["JOB_SCOPES"] ?? ""),
@@ -114,9 +118,10 @@ const scopes = v.parse(
 const needs = v.parse(v.array(v.string()), ci.jobs["ci-result"]?.needs);
 const plan = {
   ...Object.fromEntries(
-    Object.values(scopes).flatMap((scope) =>
-      scope === null ? [] : [[scope, "true"]],
-    ),
+    [
+      ...Object.values(scopes),
+      ...Object.values(folded).flatMap(Object.values),
+    ].flatMap((scope) => (scope === null ? [] : [[scope, "true"]])),
   ),
   ...Object.fromEntries(
     Object.values(
@@ -982,10 +987,6 @@ const evaluate = ({
   result,
   script = outcome.run,
 }: EvaluateOptions) => {
-  const folded = v.parse(
-    v.record(v.string(), v.record(v.string(), v.string())),
-    JSON.parse(outcome.env?.["FOLDED_SUITES"] ?? "{}"),
-  );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
       let jobResult =

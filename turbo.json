@@ -1,5 +1,6 @@
 {
   "$schema": "https://turborepo.com/schema.json",
+  "remoteCache": { "timeout": 20, "uploadTimeout": 20 },
   // Turbo runs tasks in strict env mode, which strips undeclared variables from
   // the task environment. propertyConfig reads these at run time: the nightly
   // factor that scales property numRuns, the pinned seed a replay command
@@ -18,7 +19,7 @@
   // default changes and a cached pass could replay over the edit. Hashing the
   // patches globally is the honest scope: the blast radius is every dependent
   // package, not one task's declared inputs.
-  "globalDependencies": ["patches/**"],
+  "globalDependencies": ["patches/**", "scripts/bun-toolchain.gen.json"],
   "tasks": {
     "@stll/desktop#test:browser": {
       "inputs": ["$TURBO_DEFAULT$"]
@@ -131,8 +132,6 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -270,9 +269,9 @@
       // A package type-checking @stll/api source needs its generated capability
       // runtime modules first.
       "dependsOn": ["transit", "^generate:capability-runtime"],
-      // These files live outside each workspace but can change dependency
-      // resolution or the shared compiler program. Hash them explicitly so a
-      // linked worktree never restores a stale lint or TypeScript result.
+      // Turbo hashes each workspace dependency closure from bun.lock. Root
+      // tools (typescript and bun-types) enter its global dependency hash;
+      // The narrow generated Bun pin is a global input. Hash shared source separately.
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -361,14 +360,14 @@
       // A package type-checking @stll/api source needs its generated capability
       // runtime modules first.
       "dependsOn": ["transit", "^generate:capability-runtime"],
+      // Root oxlint, oxlint-tsgolint, oxlint-tailwindcss, typescript and
+      // better-result are covered by Turbo's global root dependency hash.
       // Type-aware lint reads the same external install and compiler inputs as
       // TypeScript, in addition to Oxlint's root config and plugins.
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -425,8 +424,6 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -474,8 +471,6 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -636,8 +631,6 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
@@ -1230,8 +1223,6 @@
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
         "$TURBO_ROOT$/bunfig.toml",
-        "$TURBO_ROOT$/package.json",
-        "$TURBO_ROOT$/bun.lock",
         "$TURBO_ROOT$/oxlint.config.ts",
         "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
         "$TURBO_ROOT$/.oxlint-plugins/**",
