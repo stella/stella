@@ -132,7 +132,7 @@
   {
     "file": "apps/web/e2e/specs/decision-narrow-reader.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard and title-filter args; coverage proven by route-smoke at runtime"
+    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
   },
   {
     "file": "apps/web/e2e/specs/decision-paragraph-range.spec.ts",
@@ -197,7 +197,7 @@
   {
     "file": "apps/web/e2e/specs/law-cases-ssr.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard and title-filter args; coverage proven by route-smoke at runtime"
+    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
   },
   {
     "file": "apps/web/e2e/specs/lists-granted.spec.ts",
@@ -241,6 +241,11 @@
   },
   {
     "file": "apps/web/e2e/specs/public-tools.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+  },
+  {
+    "file": "apps/web/e2e/specs/reader-chat-first-turn.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
     "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
   },
