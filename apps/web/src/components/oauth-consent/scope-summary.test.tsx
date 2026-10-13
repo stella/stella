@@ -8,13 +8,13 @@ import {
   MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
 
+import { ScopeSummary } from "@/components/oauth-consent/scope-summary";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
 import {
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
 } from "@/lib/oauth-scopes";
-import { ScopeSummary } from "@/routes/consent/-components/scope-summary";
 
 describe("concise consent permissions", () => {
   test.each(["stella:feedback", "stella:onboarding"])(

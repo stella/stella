@@ -14,6 +14,14 @@ import * as v from "valibot";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { CheckCircle2Icon } from "@stll/ui/icons";
 
+import { resolveConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
+import { ConsentCard } from "@/components/oauth-consent/consent-card";
+import {
+  ConsentAccountRows,
+  ConsentDecisionBar,
+} from "@/components/oauth-consent/consent-controls";
+import { OAuthClientDetails } from "@/components/oauth-consent/oauth-client-details";
+import { ScopeSummary } from "@/components/oauth-consent/scope-summary";
 import { useMountEffect } from "@/hooks/use-effect";
 import { signOutAndRelease } from "@/hooks/use-sign-out";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -39,14 +47,6 @@ import { optionalOrganizationSettingsOptions } from "@/lib/organization/settings
 import { pageTitle } from "@/lib/page-title";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { loadAuthContext } from "@/routes/-auth-context";
-import { resolveConsentClientIdentity } from "@/routes/consent/-components/client-identity.logic";
-import { ConsentCard } from "@/routes/consent/-components/consent-card";
-import {
-  ConsentAccountRows,
-  ConsentDecisionBar,
-} from "@/routes/consent/-components/consent-controls";
-import { OAuthClientDetails } from "@/routes/consent/-components/oauth-client-details";
-import { ScopeSummary } from "@/routes/consent/-components/scope-summary";
 
 export const Route = createFileRoute("/consent")({
   beforeLoad: async ({ context, location }) => {

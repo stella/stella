@@ -2,6 +2,7 @@ import { useFormatter, useTranslations } from "use-intl";
 
 import { TriangleAlertIcon } from "@stll/ui/icons";
 
+import type Messages from "@/i18n/langs/messages.gen";
 import type { TranslationKey } from "@/i18n/types";
 import {
   type OAuthScopeGroup,
@@ -22,12 +23,15 @@ const SCOPE_GROUP_LABELS = {
   [Group in OAuthScopeGroup]: { group: Group; label: TranslationKey };
 };
 const SUMMARY_LABELS = {
-  read: { group: "read", summary: "consent.summaryLineRead" },
-  change: { group: "change", summary: "consent.summaryLineChange" },
-  use: { group: "use", summary: "consent.summaryLineUse" },
-  other: { group: "other", summary: "consent.summaryLineOther" },
+  read: { group: "read", summary: "summaryLineRead" },
+  change: { group: "change", summary: "summaryLineChange" },
+  use: { group: "use", summary: "summaryLineUse" },
+  other: { group: "other", summary: "summaryLineOther" },
 } as const satisfies {
-  [Group in OAuthScopeSummaryGroup]: { group: Group; summary: TranslationKey };
+  [Group in OAuthScopeSummaryGroup]: {
+    group: Group;
+    summary: keyof Messages["consent"];
+  };
 };
 
 export const ScopeSummary = ({ scopes }: { scopes: readonly string[] }) => {
@@ -35,6 +39,7 @@ export const ScopeSummary = ({ scopes }: { scopes: readonly string[] }) => {
   const groups = groupOAuthScopeDisplayEntries(entries);
   const summaryGroups = groupOAuthScopeSummaryEntries(entries);
   const t = useTranslations();
+  const tConsent = useTranslations("consent");
   const format = useFormatter();
   const total = Object.values(groups).reduce(
     (sum, groupEntries) => sum + groupEntries.length,
@@ -61,7 +66,7 @@ export const ScopeSummary = ({ scopes }: { scopes: readonly string[] }) => {
                   entry.summary === "consent.summaryStaySignedIn",
               )
                 ? t("consent.summaryStaySignedIn")
-                : t.rich(summary, {
+                : tConsent.rich(summary, {
                     items: format.list(
                       summaryGroups[group].map((entry) =>
                         translateOAuthScopeSummary(t, entry),

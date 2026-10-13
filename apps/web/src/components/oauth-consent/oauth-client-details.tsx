@@ -9,8 +9,8 @@ import {
   PopoverTitle,
 } from "@stll/ui/popover";
 
+import { classifyOAuthDestination } from "@/components/oauth-consent/oauth-destination.logic";
 import type { OAuthConsentInfo } from "@/lib/oauth-provider";
-import { classifyOAuthDestination } from "@/routes/consent/-components/oauth-destination.logic";
 
 type OAuthClientDetailsProps = {
   info: OAuthConsentInfo;
@@ -23,25 +23,22 @@ export const OAuthClientDetails = ({
   clientName,
   redirectUri,
 }: OAuthClientDetailsProps) => {
-  const t = useTranslations();
+  const t = useTranslations("consent");
   const destination = classifyOAuthDestination(info, redirectUri);
   return (
     <Popover>
       <PopoverTrigger
-        aria-label={t("consent.destinationDetails")}
+        aria-label={t("destinationDetails")}
         render={<Button variant="ghost" className="size-11 shrink-0" />}
       >
         <InfoIcon className="size-4" aria-hidden="true" />
       </PopoverTrigger>
       <PopoverPanel align="end" className="w-80 max-w-[calc(100vw-2rem)]">
-        <PopoverTitle>{t("consent.destinationDetails")}</PopoverTitle>
+        <PopoverTitle>{t("destinationDetails")}</PopoverTitle>
         <p>
-          {t(
-            destination === "loopback"
-              ? "consent.returnsLocally"
-              : "consent.returnsTo",
-            { clientName },
-          )}
+          {t(destination === "loopback" ? "returnsLocally" : "returnsTo", {
+            clientName,
+          })}
         </p>
         <div className="text-muted-foreground">
           <div className="flex flex-col gap-1 pb-2">
@@ -52,7 +49,7 @@ export const OAuthClientDetails = ({
             ))}
             {info.clientIdHost ? (
               <p className="break-all">
-                {t.rich("consent.publishedBy", {
+                {t.rich("publishedBy", {
                   host: (chunks) => <bdi>{chunks}</bdi>,
                   publisherHost: info.clientIdHost,
                 })}

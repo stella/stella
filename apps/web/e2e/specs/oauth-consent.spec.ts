@@ -341,6 +341,7 @@ test("consent discloses permissions on demand and brands only verified locations
         redirectUri: scenario.redirectUri,
         scopes,
       }),
+      { waitUntil: "commit" },
     );
     await expect(
       page.getByRole("heading", {

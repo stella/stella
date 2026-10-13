@@ -7,8 +7,8 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import {
   ConsentClientTiles,
   ConsentClientVerification,
-} from "@/routes/consent/-components/client-identity";
-import type { ConsentClientIdentity } from "@/routes/consent/-components/client-identity.logic";
+} from "@/components/oauth-consent/client-identity";
+import type { ConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
 
 type ConsentCardProps = {
   identity: ConsentClientIdentity;
@@ -24,7 +24,7 @@ export const ConsentCard = ({
   children,
   decision,
 }: ConsentCardProps) => {
-  const t = useTranslations();
+  const t = useTranslations("consent");
   return (
     <main className="bg-muted/40 flex h-dvh flex-1 sm:px-6 sm:py-6">
       <div
@@ -39,7 +39,7 @@ export const ConsentCard = ({
             </div>
             <div className="flex min-w-0 flex-col gap-2">
               <h1 className="text-xl leading-tight font-semibold text-balance sm:text-2xl">
-                {t("consent.connectTitle", { clientName: identity.name })}
+                {t("connectTitle", { clientName: identity.name })}
               </h1>
               <ConsentClientVerification identity={identity} />
             </div>

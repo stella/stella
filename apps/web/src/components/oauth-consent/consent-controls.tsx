@@ -20,7 +20,7 @@ type ConsentAccountRowsProps = {
 };
 
 /** Who is granting access, and in which organization the app will work. */
-export function ConsentAccountRows({
+export const ConsentAccountRows = ({
   activeOrganizationId,
   disabled,
   email,
@@ -28,12 +28,15 @@ export function ConsentAccountRows({
   onOrganizationSwitch,
   organizationName,
   organizations,
-}: ConsentAccountRowsProps) {
-  const t = useTranslations();
+}: ConsentAccountRowsProps) => {
+  const t = useTranslations("consent");
+  const tCommon = useTranslations("common");
+  const tAccount = useTranslations("settings.account");
+  const tOrganization = useTranslations("organization");
   return (
     <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-1 text-sm">
       <dt className="text-muted-foreground self-start sm:self-center">
-        {t("settings.account.title")}
+        {tAccount("title")}
       </dt>
       <dd className="flex min-w-0 flex-col items-start gap-x-3 sm:flex-row sm:items-center sm:justify-between">
         <bdi className="min-w-0 break-all">{email}</bdi>
@@ -44,12 +47,12 @@ export function ConsentAccountRows({
           disabled={disabled}
           onClick={onAccountSwitch}
         >
-          {t("consent.useAnotherAccount")}
+          {t("useAnotherAccount")}
         </Button>
       </dd>
       {organizationName ? (
         <>
-          <dt className="text-muted-foreground">{t("common.organization")}</dt>
+          <dt className="text-muted-foreground">{tCommon("organization")}</dt>
           <dd className="min-w-0">
             {organizations !== undefined && organizations.length > 1 ? (
               <Select
@@ -65,7 +68,7 @@ export function ConsentAccountRows({
                 value={activeOrganizationId}
               >
                 <SelectTrigger
-                  aria-label={t("organization.switchOrganization")}
+                  aria-label={tOrganization("switchOrganization")}
                   className="min-h-11 w-full"
                 >
                   <SelectValue>{() => organizationName}</SelectValue>
@@ -86,10 +89,10 @@ export function ConsentAccountRows({
       ) : null}
     </dl>
   );
-}
+};
 
 /** Decline and Allow, outside the scrolling body so they never leave view. */
-export function ConsentDecisionBar({
+export const ConsentDecisionBar = ({
   allowDisabled,
   hasError,
   isPending,
@@ -99,12 +102,13 @@ export function ConsentDecisionBar({
   hasError: boolean;
   isPending: boolean;
   onDecide: (accept: boolean) => void;
-}) {
-  const t = useTranslations();
+}) => {
+  const t = useTranslations("consent");
+  const tCommon = useTranslations("common");
   return (
     <div className="border-border/64 bg-background flex shrink-0 flex-col gap-2 border-t px-6 py-4">
       {hasError ? (
-        <p className="text-destructive text-sm">{t("consent.error")}</p>
+        <p className="text-destructive text-sm">{t("error")}</p>
       ) : null}
       <div className="grid grid-cols-2 gap-3">
         <Button
@@ -116,7 +120,7 @@ export function ConsentDecisionBar({
           type="button"
           variant="outline"
         >
-          {t("common.decline")}
+          {tCommon("decline")}
         </Button>
         <Button
           className="min-h-11 w-full"
@@ -127,9 +131,9 @@ export function ConsentDecisionBar({
           }}
           type="button"
         >
-          {t("consent.allow")}
+          {t("allow")}
         </Button>
       </div>
     </div>
   );
-}
+};

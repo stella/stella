@@ -3,9 +3,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { OAuthClientDetails } from "@/components/oauth-consent/oauth-client-details";
 import ar from "@/i18n/langs/ar.json";
 import en from "@/i18n/langs/en.json";
-import { OAuthClientDetails } from "@/routes/consent/-components/oauth-client-details";
 
 describe("consent app details", () => {
   test.each([

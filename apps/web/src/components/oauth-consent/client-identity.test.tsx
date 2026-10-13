@@ -5,13 +5,13 @@ import { IntlProvider } from "use-intl";
 
 import { VERIFIED_OAUTH_CLIENT_BRANDS } from "@stll/api-contract";
 
-import en from "@/i18n/langs/en.json";
-import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 import {
   ConsentClientTiles,
   ConsentClientVerification,
-} from "@/routes/consent/-components/client-identity";
-import { resolveConsentClientIdentity } from "@/routes/consent/-components/client-identity.logic";
+} from "@/components/oauth-consent/client-identity";
+import { resolveConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
+import en from "@/i18n/langs/en.json";
+import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 
 const info = (overrides: Partial<OAuthConsentInfo>): OAuthConsentInfo => ({
   client_name: "Claude",

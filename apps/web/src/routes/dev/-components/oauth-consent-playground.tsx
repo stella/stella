@@ -8,15 +8,15 @@ import {
 } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 
-import type { OAuthConsentInfo } from "@/lib/oauth-provider";
-import { resolveConsentClientIdentity } from "@/routes/consent/-components/client-identity.logic";
-import { ConsentCard } from "@/routes/consent/-components/consent-card";
+import { resolveConsentClientIdentity } from "@/components/oauth-consent/client-identity.logic";
+import { ConsentCard } from "@/components/oauth-consent/consent-card";
 import {
   ConsentAccountRows,
   ConsentDecisionBar,
-} from "@/routes/consent/-components/consent-controls";
-import { OAuthClientDetails } from "@/routes/consent/-components/oauth-client-details";
-import { ScopeSummary } from "@/routes/consent/-components/scope-summary";
+} from "@/components/oauth-consent/consent-controls";
+import { OAuthClientDetails } from "@/components/oauth-consent/oauth-client-details";
+import { ScopeSummary } from "@/components/oauth-consent/scope-summary";
+import type { OAuthConsentInfo } from "@/lib/oauth-provider";
 
 const CLIENTS = {
   claude: {
@@ -43,11 +43,11 @@ const CLIENTS = {
 } as const satisfies Record<string, OAuthConsentInfo>;
 
 export const OAuthConsentPlayground = () => {
-  const t = useTranslations();
+  const t = useTranslations("consent");
   const [info, setInfo] = useState<OAuthConsentInfo>(CLIENTS.claude);
   const identity = resolveConsentClientIdentity(
     info,
-    info.client_name ?? t("consent.defaultClientName"),
+    info.client_name ?? t("defaultClientName"),
   );
   return (
     <section className="w-full" data-playground-section="oauth-consent">
@@ -92,7 +92,7 @@ export const OAuthConsentPlayground = () => {
           organizations={undefined}
         />
         <p className="text-muted-foreground -mt-3 text-sm text-pretty">
-          {t("consent.actingAs", {
+          {t("actingAs", {
             clientName: identity.name,
             organizationName: "Harbrook & Partners",
           })}
@@ -104,7 +104,7 @@ export const OAuthConsentPlayground = () => {
           ]}
         />
         <p className="text-muted-foreground text-xs text-pretty">
-          {t("consent.connectionDuration")}
+          {t("connectionDuration")}
         </p>
       </ConsentCard>
     </section>
