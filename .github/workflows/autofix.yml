@@ -7,17 +7,158 @@ defaults:
 # No `paths` filter: each job scopes itself. Dependency updates and ordinary
 # same-repository PRs share the Tauri alignment fixer and existing App push.
 on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Pull request number
+        required: true
+        type: number
+      generator:
+        description: Owning generator ID
+        required: true
+        type: string
   pull_request:
     types: [opened, synchronize, reopened]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request') && format('pr-{0}', github.event.pull_request.number || github.ref) || format('run-{0}', github.run_id) }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number || github.ref) || github.event_name == 'workflow_dispatch' && format('dispatch-pr-{0}-run-{1}', inputs.pr, github.run_id) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
+  regenerate-requested-files:
+    name: Regenerate requested files
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      STELLA_LOCAL_AUTOFIX: "true"
+    steps:
+      - name: Checkout regeneration controls
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          path: .regeneration-controls
+          persist-credentials: false
+          sparse-checkout: |
+            package.json
+            scripts/pr-regeneration.ts
+            scripts/gh-retry.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Setup regeneration tooling
+        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: .regeneration-controls/package.json
+
+      - name: Preserve regeneration controls
+        id: controls
+        run: |
+          set -euo pipefail
+          cp .regeneration-controls/scripts/pr-regeneration.ts "$RUNNER_TEMP/pr-regeneration.ts"
+          cp .regeneration-controls/scripts/gh-retry.sh "$RUNNER_TEMP/gh-retry.sh"
+          {
+            echo "hash=$(sha256sum "$RUNNER_TEMP/pr-regeneration.ts" | cut -d ' ' -f 1)"
+            echo "retry_hash=$(sha256sum "$RUNNER_TEMP/gh-retry.sh" | cut -d ' ' -f 1)"
+            echo "event_hash=$(sha256sum "$GITHUB_EVENT_PATH" | cut -d ' ' -f 1)"
+          } >> "$GITHUB_OUTPUT"
+          rm -rf .regeneration-controls
+
+      - name: Verify regeneration request
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr }}
+          GENERATOR_ID: ${{ inputs.generator }}
+        run: |
+          set -euo pipefail
+          [[ "$PR_NUMBER" =~ ^[1-9][0-9]*$ ]] || { echo "::error::Invalid pull request number."; exit 1; }
+          bash "$RUNNER_TEMP/gh-retry.sh" api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/regeneration-pr.json"
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" plan "$GENERATOR_ID" "$RUNNER_TEMP/regeneration-pr.json" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout regeneration head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.target.outputs.head }}
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: true
+
+      - name: Install regeneration dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare regeneration environment
+        run: |
+          [[ -f apps/api/.env ]] || cp apps/api/.env.example apps/api/.env
+
+      - name: Run owning generator
+        env:
+          GENERATOR_ID: ${{ inputs.generator }}
+          CONTROL_HASH: ${{ steps.controls.outputs.hash }}
+          JOB_SERVICES: ${{ toJSON(job.services) }}
+        run: |
+          set -euo pipefail
+          echo "$CONTROL_HASH  $RUNNER_TEMP/pr-regeneration.ts" | sha256sum --check
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" run "$GENERATOR_ID"
+
+      - name: Verify generated outputs
+        env:
+          GENERATOR_ID: ${{ inputs.generator }}
+          CONTROL_HASH: ${{ steps.controls.outputs.hash }}
+          HEAD_SHA: ${{ steps.target.outputs.head }}
+        run: |
+          set -euo pipefail
+          echo "$CONTROL_HASH  $RUNNER_TEMP/pr-regeneration.ts" | sha256sum --check
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" check "$GENERATOR_ID" "$HEAD_SHA"
+
+      - name: Verify current regeneration head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr }}
+          GENERATOR_ID: ${{ inputs.generator }}
+          CONTROL_HASH: ${{ steps.controls.outputs.hash }}
+          RETRY_HASH: ${{ steps.controls.outputs.retry_hash }}
+          EVENT_HASH: ${{ steps.controls.outputs.event_hash }}
+          HEAD_SHA: ${{ steps.target.outputs.head }}
+        run: |
+          set -euo pipefail
+          echo "$CONTROL_HASH  $RUNNER_TEMP/pr-regeneration.ts" | sha256sum --check
+          echo "$RETRY_HASH  $RUNNER_TEMP/gh-retry.sh" | sha256sum --check
+          echo "$EVENT_HASH  $GITHUB_EVENT_PATH" | sha256sum --check
+          bash "$RUNNER_TEMP/gh-retry.sh" api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" > "$RUNNER_TEMP/regeneration-pr.json"
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" plan "$GENERATOR_ID" "$RUNNER_TEMP/regeneration-pr.json"
+          bun --no-install --no-env-file "$RUNNER_TEMP/pr-regeneration.ts" check "$GENERATOR_ID" "$HEAD_SHA"
+
+      - name: Push regenerated files
+        id: regeneration-push
+        continue-on-error: true
+        uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4
+        with:
+          commit-message: "chore: regenerate files"
+          fail-fast: false
+
+      - name: Verify regeneration submission
+        if: ${{ !cancelled() && steps.regeneration-push.outcome != 'skipped' }}
+        env:
+          SUBMISSION_OUTCOME: ${{ steps.regeneration-push.outcome }}
+          AUTOFIX_STARTED: ${{ steps.regeneration-push.outputs.autofix_started }}
+        run: |
+          set -euo pipefail
+          if [[ "$SUBMISSION_OUTCOME" == success || ( "$SUBMISSION_OUTCOME" == failure && "$AUTOFIX_STARTED" == true ) ]]; then
+            exit 0
+          fi
+          echo "::error::Regeneration submission failed."
+          exit 1
+
   dependabot-bun-autofix:
     name: Autofix Dependabot dependency update
     if: >-

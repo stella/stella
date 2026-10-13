@@ -9,7 +9,16 @@ import { childExitStatus } from "./child-exit-status";
 if (!process.env["TURBO_HASH"]) {
   const result = spawnSync(
     process.execPath,
-    ["run", "typecheck", "--filter=@stll/api"],
+    [
+      "x",
+      "--no-install",
+      "turbo",
+      "run",
+      process.argv.includes("--declarations")
+        ? "generate:typecheck-declarations"
+        : "typecheck",
+      "--filter=@stll/api",
+    ],
     { cwd: path.resolve(import.meta.dir, "../../.."), stdio: "inherit" },
   );
   process.exit(childExitStatus(result));

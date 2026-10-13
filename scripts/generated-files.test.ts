@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
+import ts from "typescript";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
@@ -33,6 +34,81 @@ const generator = (id: string) => {
   const found = GENERATORS.find((entry) => entry.id === id);
   return found ?? panic(`Missing generator ${id}`);
 };
+
+test("Generator output kinds remain literal discriminators after export widening", () => {
+  const file = nodePath.resolve(import.meta.dirname, "generator-type-probe.ts");
+  const declaration = ts.createSourceFile(
+    file,
+    readFileSync(
+      nodePath.resolve(import.meta.dirname, "generated-files.ts"),
+      "utf-8",
+    ),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const definitions = declaration.statements
+    .filter(
+      (statement) =>
+        ts.isTypeAliasDeclaration(statement) &&
+        ["Generator", "GeneratorCheck"].includes(statement.name.text),
+    )
+    .map((statement) => statement.getText(declaration))
+    .join("\n");
+  const options = { strict: true, noEmit: true, skipLibCheck: true, types: [] };
+  const host = ts.createCompilerHost(options);
+  const sourceFile = host.getSourceFile;
+  host.getSourceFile = (
+    name,
+    languageVersion,
+    onError,
+    shouldCreateNewSourceFile,
+  ) =>
+    name === file
+      ? ts.createSourceFile(name, definitions, ts.ScriptTarget.Latest, true)
+      : sourceFile(name, languageVersion, onError, shouldCreateNewSourceFile);
+  const program = ts.createProgram([file], options, host);
+  const probe = program.getSourceFile(file);
+  if (probe === undefined) {
+    throw new Error("Missing generator type probe");
+  }
+  const generatorType = probe.statements.find(
+    (statement) =>
+      ts.isTypeAliasDeclaration(statement) &&
+      statement.name.text === "Generator",
+  );
+  if (
+    generatorType === undefined ||
+    !ts.isTypeAliasDeclaration(generatorType)
+  ) {
+    throw new Error("Missing Generator declaration");
+  }
+  const checker = program.getTypeChecker();
+  const generatorUnion = checker.getTypeAtLocation(generatorType);
+  if (!generatorUnion.isUnion()) {
+    throw new Error("Generator must be a discriminated union");
+  }
+  const kinds = new Set<string>();
+  for (const branch of generatorUnion.types) {
+    const discriminator = checker.getPropertyOfType(branch, "outputKind");
+    if (discriminator === undefined) {
+      throw new Error("Generator branch has no outputKind");
+    }
+    const kind = checker.getTypeOfSymbolAtLocation(
+      discriminator,
+      generatorType,
+    );
+    // A union-valued property recreates TS1360 even if another field forms a union.
+    if (!kind.isStringLiteral()) {
+      throw new Error(
+        "Every Generator branch must retain a literal outputKind",
+      );
+    }
+    kinds.add(kind.value);
+  }
+  expect(kinds).toEqual(
+    new Set(GENERATORS.map(({ outputKind }) => outputKind)),
+  );
+});
 
 test("generation owners have unique identifiers", () => {
   const ids = GENERATORS.map(({ id }) => id);
