@@ -5,6 +5,10 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
+import {
+  PUBLIC_ROBOTS_DENIED_USER_AGENTS,
+  ROBOTS_DISALLOWED_PATHS,
+} from "@stll/api-contract/public-crawl-rules";
 
 import { env } from "@/env";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
@@ -381,6 +385,12 @@ type RobotsTxtOptions = {
   seoIndexable?: boolean;
 };
 
+const createDeniedCrawlerRules = () =>
+  PUBLIC_ROBOTS_DENIED_USER_AGENTS.flatMap((userAgent) => [
+    `User-agent: ${userAgent}`,
+    "Disallow: /",
+  ]);
+
 export const createRobotsTxt = ({
   publicKnowledgeCrawlAllowed = isPublicKnowledgeCrawlAllowed(),
   publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
@@ -391,9 +401,12 @@ export const createRobotsTxt = ({
   // Sitemap line, so crawlers stay out even when sitemaps are served for
   // verification.
   if (!seoIndexable) {
-    return `User-agent: *
-Disallow: /
-`;
+    return `${[
+      "User-agent: *",
+      "Disallow: /",
+      ...ROBOTS_DISALLOWED_PATHS.map((path) => `Disallow: ${path}`),
+      ...createDeniedCrawlerRules(),
+    ].join("\n")}\n`;
   }
 
   const sitemapUrl = new URL(
@@ -412,6 +425,13 @@ Disallow: /
       : [`Allow: ${path}/`, `Allow: ${path}$`],
   );
 
-  return `${["User-agent: *", ...allowLines, "Disallow: /", `Sitemap: ${sitemapUrl}`].join("\n")}
+  return `${[
+    "User-agent: *",
+    ...ROBOTS_DISALLOWED_PATHS.map((path) => `Disallow: ${path}`),
+    ...allowLines,
+    "Disallow: /",
+    `Sitemap: ${sitemapUrl}`,
+    ...createDeniedCrawlerRules(),
+  ].join("\n")}
 `;
 };

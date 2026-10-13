@@ -86,6 +86,10 @@ import {
   cloneOperationInput,
 } from "@/api/lib/proofs/checked-transaction";
 import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
+import {
+  publicReadTimeoutError,
+  runPublicReadRequest,
+} from "@/api/lib/public-read-timeout";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import {
@@ -941,10 +945,9 @@ const runSafeHandlerInDeliveryScope = async <
 
     const error = result.error;
 
-    const handlerError = resolveHandlerError(
-      error,
-      env.ACTION_LIMIT_CONTACT_URL,
-    );
+    const handlerError =
+      publicReadTimeoutError(error) ??
+      resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       const statusCode = handlerError.status;
 
@@ -1012,10 +1015,9 @@ const runSafeHandlerInDeliveryScope = async <
     // an AI request hitting a role the org has not configured a
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
-    const handlerError = resolveHandlerError(
-      error,
-      env.ACTION_LIMIT_CONTACT_URL,
-    );
+    const handlerError =
+      publicReadTimeoutError(error) ??
+      resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       logAndCaptureSafeError({
         request: ctx.request,
@@ -2288,12 +2290,16 @@ export const createSafeUncheckedBoundedPublicHandler = <
   const definition = {
     config,
     handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const result = await runSafeHandlerWith({
-        ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
-        toErrorStatus: toBoundedPublicErrorStatus,
-      });
+      const result = await runPublicReadRequest(
+        ctx.request,
+        async () =>
+          await runSafeHandlerWith({
+            ctx,
+            handler,
+            contentDelivery: config.contentDelivery,
+            toErrorStatus: toBoundedPublicErrorStatus,
+          }),
+      );
       const response =
         // Projection is idempotent, so factory-built statuses pass through it
         // unchanged; handler-returned statuses are bounded the same way.

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { PUBLIC_ROBOTS_DENIED_USER_AGENTS } from "@stll/api-contract/public-crawl-rules";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 // Type-only, so the decision reader's component graph never loads here.
@@ -31,12 +32,95 @@ const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { ssrCacheClassHeaders } = await import("@/route-response-policy");
 const { isWorkspaceDocumentRoutePath } =
   await import("@/components/workspaces/entity-utils");
+const { Route: robotsRoute } = await import("@/routes/robots[.]txt");
 
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../..");
 const readSource = async (path: string) =>
   await Bun.file(nodePath.resolve(repoRoot, path)).text();
 const expectNoDirectAuthImport = (source: string) => {
   expect(source).not.toMatch(/@\/lib\/auth["']/u);
+};
+
+type RobotsRule = { kind: "allow" | "disallow"; pattern: string };
+type RobotsGroup = { agents: string[]; rules: RobotsRule[] };
+
+const parseRobotsGroups = (robotsTxt: string): RobotsGroup[] => {
+  const groups: RobotsGroup[] = [];
+  let group: RobotsGroup = { agents: [], rules: [] };
+  for (const line of robotsTxt.split("\n")) {
+    const directive = line.split("#", 1)[0]?.trim();
+    if (!directive) {
+      continue;
+    }
+
+    const separator = directive.indexOf(":");
+    const name = directive.slice(0, separator).toLowerCase();
+    const value = directive.slice(separator + 1).trim();
+    if (name === "user-agent") {
+      if (group.rules.length > 0) {
+        groups.push(group);
+        group = { agents: [], rules: [] };
+      }
+      group.agents.push(value.toLowerCase());
+      continue;
+    }
+
+    if ((name === "allow" || name === "disallow") && value) {
+      group.rules.push({ kind: name, pattern: value });
+    }
+  }
+  if (group.agents.length > 0) {
+    groups.push(group);
+  }
+  return groups;
+};
+
+const namedRobotsAgents = (robotsTxt: string) =>
+  parseRobotsGroups(robotsTxt)
+    .flatMap(({ agents }) => agents)
+    .filter((agent) => agent !== "*");
+
+/** Evaluates the group selection and longest matching rule emitted by these files. */
+const robotsAllows = (
+  groups: RobotsGroup[],
+  userAgent: string,
+  pathAndQuery: string,
+): boolean => {
+  const userAgentToken = userAgent.toLowerCase();
+  const exactGroups = groups.filter((group) =>
+    group.agents.some(
+      (agent) => agent !== "*" && userAgentToken.includes(agent),
+    ),
+  );
+  const selectedGroups = exactGroups.length
+    ? exactGroups
+    : groups.filter((group) => group.agents.includes("*"));
+  const matchingRules = selectedGroups.flatMap(({ rules }) =>
+    rules.filter(({ pattern }) => {
+      const isEndAnchored = pattern.endsWith("$");
+      const pathPattern = isEndAnchored ? pattern.slice(0, -1) : pattern;
+      const expression = pathPattern
+        .split("*")
+        .map((part) => part.replace(/[.+?^${}()|[\]\\]/gu, "\\$&"))
+        .join(".*");
+      const endAnchor = isEndAnchored ? "$" : "";
+      return new RegExp(`^${expression}${endAnchor}`, "u").test(pathAndQuery);
+    }),
+  );
+  const specificity = (pattern: string) =>
+    pattern.replaceAll("*", "").replace(/\$$/u, "").length;
+  const longestMatch = Math.max(
+    -1,
+    ...matchingRules.map(({ pattern }) => specificity(pattern)),
+  );
+  if (longestMatch < 0) {
+    return true;
+  }
+
+  return matchingRules.some(
+    ({ kind, pattern }) =>
+      specificity(pattern) === longestMatch && kind === "allow",
+  );
 };
 
 const requestUrlForTest = (input: Request | URL | string): string => {
@@ -52,6 +136,116 @@ const requestUrlForTest = (input: Request | URL | string): string => {
 };
 
 describe("public law sitemap", () => {
+  test("app robots response blocks bulk and AI crawlers while retaining the deployment crawl policy", async () => {
+    const response = await robotsRoute.options.server?.handlers?.GET();
+    expect(response).toBeInstanceOf(Response);
+    if (!(response instanceof Response)) {
+      return;
+    }
+
+    const body = await response.text();
+    const lines = body.split("\n");
+    expect(lines.slice(0, 2)).toEqual([
+      "# Automated scraping, bulk download and AI training on stella are not permitted.",
+      "# Interested in our data? We license it: hello@stll.app",
+    ]);
+    expect(lines).toContain("Disallow: /api/");
+    expect(lines).toContain("Disallow: /*?q=");
+    expect(lines).toContain("Disallow: /*&q=");
+    expect(lines).toContain("Disallow: /*?query=");
+    expect(lines).toContain("Disallow: /*&query=");
+    expect(lines).toContain("Disallow: /law/*?q=");
+    expect(lines).toContain("Disallow: /law/*&q=");
+    expect(response.headers.get("Content-Type")).toBe(
+      "text/plain; charset=utf-8",
+    );
+    expect(namedRobotsAgents(body)).toEqual(
+      PUBLIC_ROBOTS_DENIED_USER_AGENTS.map((userAgent) =>
+        userAgent.toLowerCase(),
+      ),
+    );
+    for (const userAgent of PUBLIC_ROBOTS_DENIED_USER_AGENTS) {
+      const agentLine = `User-agent: ${userAgent}`;
+      const agentIndex = lines.indexOf(agentLine);
+      expect(agentIndex).toBeGreaterThanOrEqual(0);
+      expect(lines[agentIndex + 1]).toBe("Disallow: /");
+    }
+  });
+
+  test("landing robots rules block the same crawl classes and retain its sitemap", async () => {
+    const robots = await readSource("apps/landing/public/robots.txt");
+    const lines = robots.split("\n");
+
+    expect(lines.slice(0, 2)).toEqual([
+      "# Automated scraping, bulk download and AI training on stella are not permitted.",
+      "# Interested in our data? We license it: hello@stll.app",
+    ]);
+    expect(lines).toContain("Disallow: /api/");
+    expect(lines).toContain("Disallow: /*?q=");
+    expect(lines).toContain("Disallow: /*&q=");
+    expect(lines).toContain("Disallow: /*?query=");
+    expect(lines).toContain("Disallow: /*&query=");
+    expect(lines).toContain("Disallow: /law/*?q=");
+    expect(lines).toContain("Disallow: /law/*&q=");
+    expect(lines).toContain("Allow: /");
+    expect(lines).toContain("Sitemap: https://stll.app/sitemap-index.xml");
+    expect(namedRobotsAgents(robots)).toEqual(
+      PUBLIC_ROBOTS_DENIED_USER_AGENTS.map((userAgent) =>
+        userAgent.toLowerCase(),
+      ),
+    );
+  });
+
+  test("robots path rules preserve public law and sitemap crawling while excluding searches", async () => {
+    const appRobots = createRobotsTxt({
+      publicLawCrawlAllowed: true,
+      seoIndexable: true,
+    });
+    const landingRobots = await readSource("apps/landing/public/robots.txt");
+    const policies = [
+      { name: "app", groups: parseRobotsGroups(appRobots) },
+      { name: "landing", groups: parseRobotsGroups(landingRobots) },
+    ];
+    const crawlablePaths = [
+      "/law/cases",
+      "/law/cze/statutes/constitution",
+      "/sitemap.xml",
+      "/sitemaps/law.xml",
+    ];
+    const excludedPaths = [
+      "/api/v1/public",
+      "/law/search?query=x",
+      "/law/statutes/search?query=x",
+      "/law/cases?q=x",
+    ];
+
+    for (const { name, groups } of policies) {
+      for (const userAgent of ["Googlebot", "Bingbot", "OAI-SearchBot"]) {
+        for (const path of crawlablePaths) {
+          expect(
+            robotsAllows(groups, userAgent, path),
+            `${name}: ${userAgent} ${path}`,
+          ).toBe(true);
+        }
+        for (const path of excludedPaths) {
+          expect(
+            robotsAllows(groups, userAgent, path),
+            `${name}: ${userAgent} ${path}`,
+          ).toBe(false);
+        }
+      }
+
+      for (const userAgent of PUBLIC_ROBOTS_DENIED_USER_AGENTS) {
+        for (const path of crawlablePaths) {
+          expect(
+            robotsAllows(groups, userAgent, path),
+            `${name}: ${userAgent} ${path}`,
+          ).toBe(false);
+        }
+      }
+    }
+  });
+
   test("fetches public sitemap decisions from the public case-law API only", async () => {
     const requestedUrls: string[] = [];
     const fetchImpl = async (input: Request | URL | string) => {
@@ -465,7 +659,7 @@ describe("public law sitemap", () => {
       seoIndexable: false,
     });
 
-    expect(robots).toBe("User-agent: *\nDisallow: /\n");
+    expect(robots.startsWith("User-agent: *\nDisallow: /\n")).toBe(true);
     expect(robots).not.toContain("Disallow: /law/");
     expect(robots).not.toContain("Disallow: /workspaces");
     expect(robots).not.toContain("Sitemap:");
@@ -473,7 +667,9 @@ describe("public law sitemap", () => {
 
   test("robots defaults to a full crawl block until the deployment is indexable", () => {
     // The env default leaves VITE_SEO_INDEXABLE off.
-    expect(createRobotsTxt()).toBe("User-agent: *\nDisallow: /\n");
+    expect(createRobotsTxt().startsWith("User-agent: *\nDisallow: /\n")).toBe(
+      true,
+    );
   });
 
   test("robots default-denies the whole host when indexable without crawl permission", () => {
@@ -597,7 +793,7 @@ describe("public law sitemap", () => {
       "<loc>http://localhost:3000/sitemaps/law.xml</loc>",
     );
     expect(staticXml).not.toContain("http://localhost:3000/law/cases");
-    expect(robots).toBe("User-agent: *\nDisallow: /\n");
+    expect(robots.startsWith("User-agent: *\nDisallow: /\n")).toBe(true);
   });
 
   test("dark-launched law sitemaps do not publish law URLs", () => {

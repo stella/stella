@@ -22,6 +22,7 @@ import type {
   PublicLawColumnGrantsByRelation,
   PublicLawColumnPair,
 } from "@/api/lib/public-law-relations";
+import { getPublicReadStatementTimeoutMs } from "@/api/lib/public-read-timeout";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const EXTERNAL_PUBLIC_LAW_CONNECTION_TIMEOUT_SECONDS = 10;
@@ -399,8 +400,12 @@ export const configureReadTransaction = async (
   if (!readOnly || statementTimeoutMs === undefined) {
     panic("Public-law read guards require read-only and a statement timeout");
   }
+  const requestTimeoutMs = getPublicReadStatementTimeoutMs();
   await setSharedReadTransactionGuards(tx, {
-    statementTimeoutMs,
+    statementTimeoutMs:
+      requestTimeoutMs === undefined
+        ? statementTimeoutMs
+        : Math.min(statementTimeoutMs, requestTimeoutMs),
     ...(lockTimeoutMs === undefined ? {} : { lockTimeoutMs }),
     ...(idleInTransactionTimeoutMs === undefined
       ? {}
