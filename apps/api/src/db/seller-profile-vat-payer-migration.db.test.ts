@@ -3,12 +3,9 @@ import { expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-const migration = async () =>
+const migration = async (name: string) =>
   await Bun.file(
-    new URL(
-      "../../drizzle/20261012230000_seller_profile_vat_payer/migration.sql",
-      import.meta.url,
-    ),
+    new URL(`../../drizzle/${name}/migration.sql`, import.meta.url),
   ).text();
 
 test("the VAT payer backfill keeps every profile with a VAT ID a payer", async () => {
@@ -20,7 +17,13 @@ test("the VAT payer backfill keeps every profile with a VAT ID a payer", async (
       ('blank-vat-id', '   '),
       ('no-vat-id', NULL);
   `);
-  await database.exec(await migration());
+  await database.exec(
+    await migration("20261012230000_seller_profile_vat_payer"),
+  );
+  // The backfill leaves no payer without a VAT ID, so validation succeeds.
+  await database.exec(
+    await migration("20261012230001_seller_profile_vat_payer_validate"),
+  );
 
   const rows = await database.query<{ id: string; vat_payer: boolean }>(
     "SELECT id, vat_payer FROM seller_profiles ORDER BY id",

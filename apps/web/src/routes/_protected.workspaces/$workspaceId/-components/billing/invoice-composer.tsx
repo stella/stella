@@ -136,13 +136,7 @@ const RowText = ({
   className?: string;
   children: ReactNode;
 }) => (
-  <span
-    className={cn(
-      "transition-colors",
-      excluded && "text-foreground-disabled",
-      className,
-    )}
-  >
+  <span className={cn(excluded && "text-foreground-disabled", className)}>
     {children}
   </span>
 );
@@ -365,7 +359,7 @@ const useComposerSubmit = ({
           );
         }
       }
-      const invoice = await queryClient.fetchQuery(
+      const invoice = await queryClient.query(
         invoiceByIdOptions(workspaceId, created.id),
       );
       return {

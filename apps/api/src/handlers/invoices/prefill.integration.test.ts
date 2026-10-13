@@ -113,6 +113,7 @@ afterEach(async () => {
 afterAll(releaseRlsFixture);
 
 const context = <TContext>(
+  _handler: (context: TContext) => unknown,
   body: unknown,
   {
     params = {},
@@ -241,7 +242,8 @@ const setClient = async (taxId: string, country = "CZ") => {
 type CreateBody = Parameters<typeof createInvoice.handler>[0]["body"];
 const create = async (body: Partial<CreateBody>, role?: MemberRole) => {
   const result = await createInvoice.handler(
-    context<Parameters<typeof createInvoice.handler>[0]>(
+    context(
+      createInvoice.handler,
       {
         invoiceDate: "2026-10-12",
         currency: "CZK",
@@ -325,7 +327,7 @@ describe("invoice prefill", () => {
     const entry = await seedEntry("2026-09-15");
 
     const prefill = await prefillInvoice.handler(
-      context<Parameters<typeof prefillInvoice.handler>[0]>({}),
+      context(prefillInvoice.handler, {}),
     );
     expect(prefill).toMatchObject({
       seller: { vatId: "CZ12345678", vatPayer: false },
@@ -352,7 +354,7 @@ describe("invoice prefill", () => {
     const entry = await seedEntry("2026-09-15");
 
     const prefill = await prefillInvoice.handler(
-      context<Parameters<typeof prefillInvoice.handler>[0]>({}),
+      context(prefillInvoice.handler, {}),
     );
     expect(prefill).toMatchObject({
       currency: "CZK",
@@ -386,7 +388,7 @@ describe("invoice prefill", () => {
     const entry = await seedEntry("2026-09-15");
 
     const prefill = await prefillInvoice.handler(
-      context<Parameters<typeof prefillInvoice.handler>[0]>({}),
+      context(prefillInvoice.handler, {}),
     );
     expect(prefill).toMatchObject({
       vat: {
@@ -478,7 +480,8 @@ describe("invoice create with expenses and billed-time changes", () => {
     ).toMatchObject({ status: "billed", invoiceId: id });
 
     const issued = await transitionInvoice.handler(
-      context<Parameters<typeof transitionInvoice.handler>[0]>(
+      context(
+        transitionInvoice.handler,
         { action: "finalize" },
         { params: { invoiceId: id } },
       ),
