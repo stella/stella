@@ -1,10 +1,13 @@
+import { panic } from "better-result";
+
+import type {
+  CitationDirection,
+  decisionCitationSummaryOptions,
+} from "@/features/case-law/queries/citations";
 import type { TranslationKey } from "@/i18n/types";
 import type { api } from "@/lib/api";
 
 type CitationsGet = ReturnType<typeof api.case.decisions>["citations"]["get"];
-type SummaryGet = ReturnType<
-  typeof api.case.decisions
->["citations"]["summary"]["get"];
 
 type CitationPageResponse = Extract<
   NonNullable<Awaited<ReturnType<CitationsGet>>["data"]>,
@@ -25,10 +28,29 @@ type CitedDecision = NonNullable<DecisionCitation["decision"]>;
  */
 export type CitedDecisionAddress = Omit<CitedDecision, "citationAuthority">;
 
-export type DecisionCitationSummary = Extract<
-  NonNullable<Awaited<ReturnType<SummaryGet>>["data"]>,
-  { incoming: unknown }
+export type DecisionCitationSummary = Awaited<
+  ReturnType<
+    NonNullable<ReturnType<typeof decisionCitationSummaryOptions>["queryFn"]>
+  >
 >;
+
+export const citationSummaryIsCapped = (
+  { precision }: DecisionCitationSummary,
+  direction: CitationDirection,
+): boolean => {
+  switch (precision.status) {
+    case "exact":
+      return false;
+    case "bounded":
+      return precision.capped[direction];
+    default: {
+      precision satisfies never;
+      return panic(
+        `Unhandled citation summary precision: ${String(precision)}`,
+      );
+    }
+  }
+};
 
 export type CitationTreatmentCounts = DecisionCitationSummary["incoming"];
 

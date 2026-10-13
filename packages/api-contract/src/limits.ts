@@ -84,6 +84,9 @@ export const ENTITIES_PER_WORKSPACE_MAX = 10_000;
  */
 export const CASE_LAW_CITATION_TIMELINE_MAX_YEARS = 60;
 
+/** Raw incoming edges considered by bounded citation summaries and rankings. */
+export const CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT = 2048;
+
 /**
  * Decisions one research-answer run request may queue. The server rejects a
  * longer list, so a client with more rows on screen than this has to send them

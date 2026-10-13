@@ -27,7 +27,6 @@ import {
   LOOKUP_BUSINESS_REGISTRY_PROJECTION,
   MANAGE_ORGANIZATION_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
-  LOOKUP_CASE_LAW_PROJECTION,
   CASE_LAW_COVERAGE_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
   READ_PROVISION_HISTORY_PROJECTION,
@@ -295,11 +294,9 @@ export const READ_TOOL_REF_FIELD_MAP = {
     inputRefs: [],
     projection: SEARCH_CASE_LAW_PROJECTION,
   },
-  lookup_case_law: {
-    chatProjectable: true,
-    inputRefs: [],
-    projection: LOOKUP_CASE_LAW_PROJECTION,
-  },
+  // Resolve returns source AST blocks; chat reads bounded text through its existing corpus readers.
+  resolve_case_law_decision: { chatProjectable: false },
+  resolve_law_citation: { chatProjectable: false },
   read_case_law_decision: {
     chatProjectable: true,
     inputRefs: [],

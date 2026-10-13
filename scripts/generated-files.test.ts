@@ -5,10 +5,12 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
+import ts from "typescript";
 import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
+import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import {
   GENERATORS,
   CI_GENERATED_FILES,
@@ -32,6 +34,81 @@ const generator = (id: string) => {
   const found = GENERATORS.find((entry) => entry.id === id);
   return found ?? panic(`Missing generator ${id}`);
 };
+
+test("Generator output kinds remain literal discriminators after export widening", () => {
+  const file = nodePath.resolve(import.meta.dirname, "generator-type-probe.ts");
+  const declaration = ts.createSourceFile(
+    file,
+    readFileSync(
+      nodePath.resolve(import.meta.dirname, "generated-files.ts"),
+      "utf-8",
+    ),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const definitions = declaration.statements
+    .filter(
+      (statement) =>
+        ts.isTypeAliasDeclaration(statement) &&
+        ["Generator", "GeneratorCheck"].includes(statement.name.text),
+    )
+    .map((statement) => statement.getText(declaration))
+    .join("\n");
+  const options = { strict: true, noEmit: true, skipLibCheck: true, types: [] };
+  const host = ts.createCompilerHost(options);
+  const sourceFile = host.getSourceFile;
+  host.getSourceFile = (
+    name,
+    languageVersion,
+    onError,
+    shouldCreateNewSourceFile,
+  ) =>
+    name === file
+      ? ts.createSourceFile(name, definitions, ts.ScriptTarget.Latest, true)
+      : sourceFile(name, languageVersion, onError, shouldCreateNewSourceFile);
+  const program = ts.createProgram([file], options, host);
+  const probe = program.getSourceFile(file);
+  if (probe === undefined) {
+    throw new Error("Missing generator type probe");
+  }
+  const generatorType = probe.statements.find(
+    (statement) =>
+      ts.isTypeAliasDeclaration(statement) &&
+      statement.name.text === "Generator",
+  );
+  if (
+    generatorType === undefined ||
+    !ts.isTypeAliasDeclaration(generatorType)
+  ) {
+    throw new Error("Missing Generator declaration");
+  }
+  const checker = program.getTypeChecker();
+  const generatorUnion = checker.getTypeAtLocation(generatorType);
+  if (!generatorUnion.isUnion()) {
+    throw new Error("Generator must be a discriminated union");
+  }
+  const kinds = new Set<string>();
+  for (const branch of generatorUnion.types) {
+    const discriminator = checker.getPropertyOfType(branch, "outputKind");
+    if (discriminator === undefined) {
+      throw new Error("Generator branch has no outputKind");
+    }
+    const kind = checker.getTypeOfSymbolAtLocation(
+      discriminator,
+      generatorType,
+    );
+    // A union-valued property recreates TS1360 even if another field forms a union.
+    if (!kind.isStringLiteral()) {
+      throw new Error(
+        "Every Generator branch must retain a literal outputKind",
+      );
+    }
+    kinds.add(kind.value);
+  }
+  expect(kinds).toEqual(
+    new Set(GENERATORS.map(({ outputKind }) => outputKind)),
+  );
+});
 
 test("generation owners have unique identifiers", () => {
   const ids = GENERATORS.map(({ id }) => id);
@@ -249,11 +326,16 @@ test("capability runtime cache manifests cover every file the producer writes", 
       ),
     );
     const assertOutputs = (tasks: typeof config.tasks) => {
+      expect(tasks["@stll/api#typecheck"]?.dependsOn).toContain(
+        "typecheck:src",
+      );
       expect(
         tasks["@stll/api#generate:capability-runtime"]?.outputs?.toSorted(),
       ).toEqual(outputs);
       for (const output of outputs) {
-        expect(tasks["@stll/api#typecheck"]?.outputs).toContain(output);
+        expect(tasks["@stll/api#typecheck:src"]?.dependsOn).toContain(
+          "generate:capability-runtime",
+        );
         expect(tasks["@stll/web#generate:api-types"]?.inputs).toContain(
           `!$TURBO_ROOT$/apps/api/${output}`,
         );
@@ -273,10 +355,7 @@ test("capability runtime cache manifests cover every file the producer writes", 
       expect(web.inputs.length).toBe(originalLength - 1);
       expect(() => assertOutputs(mutated)).toThrow("toContain");
     }
-    for (const task of [
-      "@stll/api#generate:capability-runtime",
-      "@stll/api#typecheck",
-    ]) {
+    for (const task of ["@stll/api#generate:capability-runtime"]) {
       for (const output of outputs) {
         const mutated = structuredClone(config.tasks);
         const body = mutated[task];
@@ -383,6 +462,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     "cli-registry",
     "cli-runtime",
     "mcp-surface",
+    "api-typecheck-projects",
   ] satisfies readonly (typeof GENERATORS)[number]["id"][];
   expect(
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
@@ -393,7 +473,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["scripts/ownership/new-capability.ts"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["module-ownership"]);
+  ).toEqual(["api-typecheck-projects", "module-ownership"]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
     [],
   );
@@ -841,5 +921,50 @@ test("catalog upstream inputs have one scheduled producer and an offline check",
         outputs.some((glob) => matchesGeneratedGlob(glob, file)),
       ).map(({ id }) => id),
     ).toEqual([owner.id]);
+  }
+});
+
+test("API compiler input regeneration uses the restricted autofix output contract", () => {
+  const owner =
+    GENERATORS.find((entry) => entry.id === "api-typecheck-projects") ??
+    panic("Missing API compiler input generator");
+  const outputs = [
+    "apps/api/tsconfig.declarations.json",
+    "apps/api/tsconfig.src.json",
+    "apps/api/tsconfig.tests.json",
+    "turbo.json",
+  ];
+  expect(owner.autofix).toBe(true);
+  expect(allowedOutputs([owner]).toSorted()).toEqual(outputs.toSorted());
+  expect(owner.checkedBy).toBe("Typecheck coverage");
+  for (const file of [
+    "apps/api/src/new.ts",
+    "packages/shared/src/new.ts",
+    "scripts/status-transition.ts",
+    "apps/runner/tsconfig.json",
+    "bun.lock",
+    "patches/example.patch",
+    ...outputs,
+  ]) {
+    expect(
+      generatorsForFiles([file]).map(({ id }) => id),
+      file,
+    ).toContain(owner.id);
+  }
+  const commands = API_TYPECHECK_REGENERATION_COMMANDS.map((command) =>
+    command.join(" "),
+  );
+  expect(commands).toEqual([
+    "bun --cwd=packages/cli run codegen:runtime",
+    "bun --cwd=apps/api run generate:capability-runtime",
+    "bun --cwd=apps/api run generate:typecheck-declarations --write-surface",
+    "bun packages/scripts/src/api-typecheck-partition.ts --write",
+    "bun packages/scripts/src/api-typecheck-partition.ts --resolved",
+  ]);
+  const selected = orderGenerators(generatorsForFiles(["apps/api/src/new.ts"]));
+  const ids = selected.map(({ id }) => id);
+  for (const prerequisite of owner.after) {
+    expect(ids).toContain(prerequisite);
+    expect(ids.indexOf(prerequisite)).toBeLessThan(ids.indexOf(owner.id));
   }
 });

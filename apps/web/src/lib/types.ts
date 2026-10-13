@@ -335,6 +335,8 @@ type VerdictRationaleJustificationBlock = {
 type DecisionPassageJustificationBlock = {
   kind: "decision-passage";
   anchorId: string;
+  /** The number the court printed on the cited block; null when none. */
+  courtParagraphNumber: number | null;
   excerpt: string;
 };
 

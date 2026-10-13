@@ -776,6 +776,9 @@
       "none": "Zatiaľ nie sú zaznamenané žiadne citácie.",
       "openAtCitation": "Otvoriť na mieste citácie",
       "openDecision": "Otvoriť rozhodnutie",
+      "paragraphLabel": "Bod {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, bod {paragraph}",
       "partialSummary": "Súčty citácií a časová os sú neúplné.",
       "passageNotFound": "Citujúcu pasáž sa v texte nepodarilo nájsť",
       "positiveCount": "{count, plural, one {# pozitívna} few {# pozitívne} many {# pozitívnych} other {# pozitívnych}}",
@@ -1432,6 +1435,8 @@
     "sendPrompt": "Odoslať správu",
     "sendQueuedMessageNow": "Odoslať hneď",
     "sendWithoutAnonymization": "Odoslať bez anonymizácie",
+    "signInToChat": "Prihláste sa a chatujte o tomto dokumente",
+    "signInToChatAbout": "Prihláste sa a chatujte o",
     "skills": {
       "scope": {
         "private": "Vaše AI zručnosti",
