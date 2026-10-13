@@ -1,9 +1,10 @@
+import { E2E_API_ORIGIN } from "../helpers/api";
 import { expect, test } from "../helpers/test";
 
 test("email reauthentication keeps the current session while showing the OTP challenge", async ({
   page,
 }) => {
-  const sessionUrl = "/api/auth/get-session";
+  const sessionUrl = `${E2E_API_ORIGIN}/api/auth/get-session`;
   const previousResponse = await page.request.get(sessionUrl);
   const previousSession = await previousResponse.json();
   expect(previousSession).toMatchObject({
