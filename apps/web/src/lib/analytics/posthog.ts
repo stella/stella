@@ -10,6 +10,7 @@ import {
 } from "@stll/api-contract";
 
 import { env } from "@/env";
+import { sanitizeHandoffUrl } from "@/lib/account/handoff-url";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
 import { isErrorReference } from "@/lib/analytics/error-reference";
 import { fingerprintExceptionEvent } from "@/lib/analytics/exception-fingerprint";
@@ -25,7 +26,6 @@ import type {
 } from "@/lib/analytics/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import { logDevError } from "@/lib/errors/telemetry";
-import { sanitizeHandoffUrl } from "@/lib/handoff-url";
 
 const isWebAnalyticsEvent = (event: string): event is WebAnalyticsEvent =>
   Object.values(WEB_ANALYTICS_EVENTS).some((value) => value === event);

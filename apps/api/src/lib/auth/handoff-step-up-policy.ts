@@ -13,11 +13,16 @@ export const HANDOFF_ACCESS_DETAIL = {
   permissions: "__stellaHandoffPermissions",
 } as const;
 
-const normalizePath = (path: string) =>
-  path
+const normalizePath = (path: string) => {
+  const normalized = path
     .replace(/^\/api(?=\/|$)/u, "")
-    .replace(/^\/v1(?=\/|$)/u, "")
-    .replace(/\/+$/u, "") || "/";
+    .replace(/^\/v1(?=\/|$)/u, "");
+  let end = normalized.length;
+  while (end > 0 && normalized.charAt(end - 1) === "/") {
+    end -= 1;
+  }
+  return normalized.slice(0, end) || "/";
+};
 
 export const requiresHandoffStepUpForRequest = (request: Request): boolean => {
   const path = normalizePath(new URL(request.url).pathname);
@@ -33,7 +38,7 @@ type HandoffAccessMetadata = {
   accountAccess?: AccountAccess;
   permissions?: Readonly<Record<string, readonly string[] | undefined>>;
 };
-export const requiresHandoffStepUpForMetadata = ({
+const requiresHandoffStepUpForMetadata = ({
   accountAccess,
   permissions,
 }: HandoffAccessMetadata) =>
@@ -61,7 +66,7 @@ export const createHandoffStepUpGuard = (metadata: HandoffAccessMetadata) => {
   return guard;
 };
 
-export type HandoffStepUpGuard = (context: {
+type HandoffStepUpGuard = (context: {
   handoffOriginConsentId: string | null;
 }) => unknown;
 

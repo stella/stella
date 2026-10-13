@@ -6,6 +6,8 @@ GlobalRegistrator.register({ url: "http://localhost:3000/settings" });
 const { listAuthSessions } = await import("@/lib/auth-client");
 
 const originalFetch = globalThis.fetch;
+let originConsentId: string | null = "handoff-consent";
+let handoffRequests = 0;
 let handoffResponse: Response | "network-error" = Response.json({
   sessions: [{ id: "session-one", clientName: "ChatGPT" }],
 });
@@ -17,6 +19,7 @@ globalThis.fetch = Object.assign(
       return Response.json([
         {
           id: "session-one",
+          originConsentId,
           userId: "user-one",
           token: "ordinary-session-token",
           expiresAt: "2026-10-14T00:00:00.000Z",
@@ -28,6 +31,7 @@ globalThis.fetch = Object.assign(
       ]);
     }
     if (url.pathname.endsWith("/mcp-handoff/sessions")) {
+      handoffRequests += 1;
       if (handoffResponse === "network-error") {
         throw new TypeError("Network unavailable");
       }
@@ -39,6 +43,8 @@ globalThis.fetch = Object.assign(
 );
 
 beforeEach(() => {
+  originConsentId = "handoff-consent";
+  handoffRequests = 0;
   handoffResponse = Response.json({
     sessions: [{ id: "session-one", clientName: "ChatGPT" }],
   });
@@ -50,6 +56,13 @@ afterAll(async () => {
 });
 
 describe("auth session listing", () => {
+  test("ordinary sessions need no handoff lookup", async () => {
+    originConsentId = null;
+    const result = await listAuthSessions();
+    expect(result.data?.at(0)?.id).toBe("session-one");
+    expect(handoffRequests).toBe(0);
+  });
+
   test.each([
     [
       "HTTP failure",
@@ -64,6 +77,7 @@ describe("auth session listing", () => {
 
       const result = await listAuthSessions();
 
+      expect(handoffRequests).toBe(1);
       expect(result.error).toBeNull();
       expect(result.data).toHaveLength(1);
       expect(result.data?.[0]).toMatchObject({
@@ -79,5 +93,6 @@ describe("auth session listing", () => {
 
     expect(result.error).toBeNull();
     expect(result.data?.[0]?.originClientName).toBe("ChatGPT");
+    expect(handoffRequests).toBe(1);
   });
 });

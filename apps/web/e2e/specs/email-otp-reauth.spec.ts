@@ -24,7 +24,9 @@ test("email reauthentication keeps the current session while showing the OTP cha
   await page.route("**/dev-public/last-otp?**", async (route) => {
     await route.fulfill({ json: null });
   });
-  await page.goto("/auth/reauth?redirectTo=%2Faccount");
+  await page.goto("/auth/reauth?redirectTo=%2Faccount", {
+    waitUntil: "domcontentloaded",
+  });
   await page.getByPlaceholder("you@example.com").fill("reader@example.test");
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   await expect(page).toHaveURL(/\/auth\/otp\?.*mode=reauthenticate/u);
@@ -47,6 +49,7 @@ test("an ordinary OTP link redirects an already signed-in account", async ({
 }) => {
   await page.goto(
     "/auth/otp?email=reader%40example.test&redirectTo=%2Faccount",
+    { waitUntil: "domcontentloaded" },
   );
   await expect(page).toHaveURL(/\/account(?:\?|$)/u);
   await expect(

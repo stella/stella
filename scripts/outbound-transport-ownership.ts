@@ -63,6 +63,12 @@ const NETWORK_MODULES = new Set([
   "@opentelemetry/exporter-trace-otlp-http",
   "@opentelemetry/exporter-metrics-otlp-http",
 ]);
+// These exact Better Auth primitives perform in-process cookie and adapter work, with no network I/O.
+const LOCAL_BETTER_AUTH_MODULES = new Set([
+  "better-auth/cookies",
+  "better-auth/adapters/drizzle",
+]);
+
 const NETWORK_PACKAGE_PREFIXES = [
   "@aws-sdk/client-",
   "@openrouter/sdk",
@@ -518,6 +524,9 @@ const registerModule = ({
     names !== null &&
     !names.includes("createRemoteJWKSet")
   ) {
+    return;
+  }
+  if (LOCAL_BETTER_AUTH_MODULES.has(module)) {
     return;
   }
   const isNetworkModule = NETWORK_MODULES.has(module);

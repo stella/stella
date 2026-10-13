@@ -18,6 +18,7 @@ import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
 import { HANDOFF_AUTH_ENDPOINT_POLICY } from "@/api/lib/auth/handoff-auth-endpoint-policy";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
+import { MACHINE_API_KEY_CONFIG_ID } from "@/api/lib/machine-api-key-config";
 import {
   createHumanSession,
   signInHuman,
@@ -191,6 +192,16 @@ describe("handoff sessions enforce recent authentication at real entry points", 
     };
 
     const mountedPaths = mounted.map(({ path }) => path);
+    expect(mountedPaths).not.toContain("/");
+    expect(registered.verifyApiKey.path).toBeUndefined();
+    expect(registered.addMember.path).toBeUndefined();
+    const verification = await auth.api.verifyApiKey({
+      body: {
+        configId: MACHINE_API_KEY_CONFIG_ID,
+        key: "nonexistent-fixture-key",
+      },
+    });
+    expect(verification.valid).toBe(false);
     expect(census(mountedPaths)).toEqual({
       missingFromPolicy: [],
       absentFromAuth: [],

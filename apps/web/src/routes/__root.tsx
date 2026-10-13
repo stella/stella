@@ -29,6 +29,7 @@ import {
   resolveDocumentLanguage,
 } from "@/i18n/page-language";
 import "@/fonts.css";
+import { loadMcpHandoff, pendingHandoffPath } from "@/lib/account/mcp-handoff";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
@@ -38,7 +39,6 @@ import {
   isPublicKnowledgeCrawlAllowed,
 } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
-import { loadMcpHandoff, pendingHandoffPath } from "@/lib/mcp-handoff";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";

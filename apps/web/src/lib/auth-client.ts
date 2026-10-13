@@ -21,10 +21,11 @@ import {
   takeBootPrefetch,
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { browserAuthBaseUrl } from "@/lib/api-url";
+import { AuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { notifyStepUp } from "@/lib/mcp-step-up";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
@@ -192,18 +193,20 @@ export const submitOAuthConsent = async (accept: boolean) => {
 };
 
 export const listAuthSessions = async () => {
-  const [result, handoffSessionsResult] = await Promise.all([
-    authClient.listSessions(),
-    Result.tryPromise({
-      try: async () =>
-        await authClient.$fetch<unknown>("/mcp-handoff/sessions"),
-      catch: (cause) => cause,
-    }),
-  ]);
-
+  const result = await authClient.listSessions();
   if (result.error) {
     return result;
   }
+  const hasHandoffSession = result.data.some(
+    (session) => typeof session.originConsentId === "string",
+  );
+  const handoffSessionsResult = hasHandoffSession
+    ? await Result.tryPromise({
+        try: async () =>
+          await authClient.$fetch<unknown>("/mcp-handoff/sessions"),
+        catch: (cause) => cause,
+      })
+    : Result.ok({ data: { sessions: [] }, error: null });
 
   let handoffs: v.InferOutput<typeof mcpHandoffSessionsSchema> | null = null;
   if (Result.isError(handoffSessionsResult)) {
@@ -225,7 +228,11 @@ export const listAuthSessions = async () => {
       handoffs = handoffsResult.output;
     } else {
       getAnalytics().captureError(
-        new Error("Invalid MCP handoff session response"),
+        new AuthClientError({
+          message: "Invalid MCP handoff session response",
+          status: 502,
+          statusText: "Bad Gateway",
+        }),
         { type: "detached", operation: "auth.list_sessions.handoffs" },
       );
     }

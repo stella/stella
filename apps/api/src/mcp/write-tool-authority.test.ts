@@ -646,6 +646,7 @@ describe("write tool account access", () => {
     ).toEqual([
       "fill_template:standard",
       "manage_organization:account-control",
+      "mint_web_handoff:standard",
       "save_filled_template:standard",
       "set_practice_jurisdictions:standard",
       "submit_feedback:standard",

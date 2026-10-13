@@ -5,7 +5,11 @@ const URL_PATTERN = /https?:\/\/[^\s<>"'`\\]+/gu;
 
 const mapProseLinks = (text: string, transform: (url: string) => string) =>
   text.replace(URL_PATTERN, (match) => {
-    const url = match.replace(/[),.;\]}]+$/u, "");
+    let end = match.length;
+    while (end > 0 && "),.;]}".includes(match.charAt(end - 1))) {
+      end -= 1;
+    }
+    const url = match.slice(0, end);
     return `${transform(url)}${match.slice(url.length)}`;
   });
 
@@ -41,7 +45,7 @@ const mapText = (text: string, transform: (value: string) => string) => {
     return JSON.stringify(mapStrings(parsed.value, transform));
   }
   return text.replace(
-    /(\[[^\]]*\]\()([^\s)]+)(\))/gu,
+    /(\[[^[\]]*\]\()([^\s)]+)(\))/gu,
     (_, prefix: string, url: string, suffix: string) =>
       `${prefix}${transform(url)}${suffix}`,
   );

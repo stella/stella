@@ -4,7 +4,7 @@ import { runInNewContext } from "node:vm";
 import {
   sanitizeHandoffUrl,
   handoffNavigationDestination,
-} from "@/lib/handoff-url";
+} from "@/lib/account/handoff-url";
 
 const capture = async (href: string) => {
   const location = new URL(href);
@@ -22,7 +22,7 @@ const capture = async (href: string) => {
     },
   };
   const source = await Bun.file(
-    new URL("../../public/handoff-init.js", import.meta.url),
+    new URL("../../../public/handoff-init.js", import.meta.url),
   ).text();
   runInNewContext(source, { window, URL, URLSearchParams });
   return { window, clean };

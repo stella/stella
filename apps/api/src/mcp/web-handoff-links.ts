@@ -8,8 +8,8 @@ import {
   mcpWebHandoffLinkOutputSchema,
 } from "@stll/api-contract/mcp-web-handoff";
 
+import { mintWebHandoff } from "@/api/lib/auth";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
-import { mintWebHandoff } from "@/api/lib/mcp-web-handoff";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {

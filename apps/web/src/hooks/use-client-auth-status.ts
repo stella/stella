@@ -1,4 +1,4 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { panic } from "better-result";
 
 import { PROFESSIONAL_USE_STATUS } from "@stll/api-contract/professional-use";
@@ -42,11 +42,10 @@ export const useClientAuthStatus = ({
     ? sessionData.session.userId
     : undefined;
   // Read only for a member: a visitor's cache holds nothing of it.
-  const queries =
-    memberUserId === undefined
-      ? []
-      : [{ ...professionalUseOptions(memberUserId), enabled }];
-  const professionalUse = useQueries({ queries }).at(0);
+  const professionalUse = useQuery({
+    ...professionalUseOptions(memberUserId),
+    enabled,
+  });
 
   if (isPending) {
     return {
@@ -70,7 +69,7 @@ export const useClientAuthStatus = ({
     };
   }
 
-  if (professionalUse === undefined || professionalUse.isPending) {
+  if (memberUserId === undefined || professionalUse.isPending) {
     return {
       status: "checking",
       isAuthenticated: false,

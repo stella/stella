@@ -40,8 +40,9 @@ import {
 import { databaseRelations } from "@/api/db/database-relations";
 import { auditLogs } from "@/api/db/schema";
 import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
+import { createMcpWebHandoffPlugin } from "@/api/lib/auth";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
-import { createMcpWebHandoffPlugin } from "@/api/lib/auth/mcp-web-handoff-plugin";
+import { createWebHandoffService } from "@/api/lib/auth/mcp-web-handoff";
 import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
 import { toSafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
@@ -49,7 +50,6 @@ import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
-import { createWebHandoffService } from "@/api/lib/mcp-web-handoff";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";

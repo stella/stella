@@ -3,13 +3,13 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { notifyUserError } from "@/lib/errors/user-toast";
+import { HandoffConfirmationPanel } from "@/components/auth/handoff-confirmation-panel";
 import {
   cancelHandoff,
   finishHandoff,
   handoffConfirmation,
-} from "@/lib/mcp-handoff";
-import { HandoffConfirmationPanel } from "@/routes/auth/-components/handoff-confirmation-panel";
+} from "@/lib/account/mcp-handoff";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 export const Route = createFileRoute("/auth/handoff")({
   ssr: false,

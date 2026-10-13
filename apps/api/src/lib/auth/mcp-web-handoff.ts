@@ -1,4 +1,4 @@
-import { Result, panic } from "better-result";
+import { Result, panic, TaggedError } from "better-result";
 import { and, desc, eq, exists, isNull, ne, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { randomBytes } from "node:crypto";
@@ -15,14 +15,12 @@ import {
   session,
   user,
 } from "@/api/db/auth-schema";
-import { rootDb } from "@/api/db/root";
 import {
   mcpWebHandoff,
   MCP_WEB_HANDOFF_MAX_PATHS,
   type MCP_WEB_HANDOFF_KINDS,
 } from "@/api/db/schema/mcp-web-handoff";
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import {
   createAuditRecorder,
   AUDIT_ACTION,
@@ -30,15 +28,20 @@ import {
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { logger } from "@/api/lib/observability/logger";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
-import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 import {
   brandPersistedUserId,
   brandPersistedOrganizationId,
 } from "@/api/lib/safe-id-boundaries";
+
+const HANDOFF_SESSION_LABEL_CAP = 100;
+class HandoffSessionLimitError extends TaggedError("HandoffSessionLimitError")<{
+  message: string;
+}> {}
 
 export const WEB_HANDOFF_TTL_MS = {
   text: 10 * 60 * 1000,
@@ -46,7 +49,7 @@ export const WEB_HANDOFF_TTL_MS = {
 } as const satisfies Record<(typeof MCP_WEB_HANDOFF_KINDS)[number], number>;
 export const WEB_HANDOFF_CODE_PATTERN = /^sh1_[A-Za-z0-9_-]{43}$/u;
 type HandoffKind = (typeof MCP_WEB_HANDOFF_KINDS)[number];
-export type WebHandoffMintContext = {
+type WebHandoffMintContext = {
   credentialType: "oauth" | "api-key" | "anonymous";
   grantedScopes: readonly string[];
   clientId: string | null;
@@ -231,8 +234,41 @@ export const createWebHandoffService = ({
     });
   };
 
+  const listSessionClients = async (userId: SafeId<"user">) => {
+    const result = await readBounded(
+      db
+        .select({
+          id: session.id,
+          clientName: sql<string>`COALESCE(${oauthClient.name}, ${oauthClient.clientId})`,
+        })
+        .from(session)
+        .innerJoin(oauthConsent, eq(oauthConsent.id, session.originConsentId))
+        .innerJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId))
+        .where(
+          and(
+            eq(session.userId, userId),
+            sql`${session.expiresAt} > ${now()}::timestamptz`,
+          ),
+        ),
+      HANDOFF_SESSION_LABEL_CAP,
+    );
+    switch (result.type) {
+      case "complete":
+        return Result.ok(result.rows);
+      case "overflow":
+        return Result.err(
+          new HandoffSessionLimitError({
+            message: "Session information exceeds its read limit.",
+          }),
+        );
+      default:
+        result satisfies never;
+        return panic("Unhandled session label read result");
+    }
+  };
   return {
     mint,
+    listSessionClients,
     isEnabled: enabled,
     ...createHandoffRedemption({
       db,
@@ -472,22 +508,6 @@ const createHandoffRedemption = ({
         metadata: { kind: shown.kind, clientId: shown.oauthClientId },
       });
     });
-  const listSessionClients = async (userId: SafeId<"user">) =>
-    await db
-      .select({
-        id: session.id,
-        clientName: sql<string>`COALESCE(${oauthClient.name}, ${oauthClient.clientId})`,
-      })
-      .from(session)
-      .innerJoin(oauthConsent, eq(oauthConsent.id, session.originConsentId))
-      .innerJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId))
-      .where(
-        and(
-          eq(session.userId, userId),
-          sql`${session.expiresAt} > ${now()}::timestamptz`,
-        ),
-      )
-      .limit(100);
   return {
     inspect: async (code: string) => {
       const grant = await inspectWebHandoff(db, code);
@@ -498,31 +518,5 @@ const createHandoffRedemption = ({
     auditRefusal,
     admitRedeem,
     admitUser,
-    listSessionClients,
   };
-};
-
-let service: ReturnType<typeof createWebHandoffService> | undefined;
-export const getWebHandoffService = () =>
-  (service ??= createWebHandoffService({
-    db: rootDb,
-    budget: new RedisRateLimitContext({ failurePolicy: "fail_closed" }),
-    enabled: () => env.MCP_WEB_HANDOFF_MINT_ENABLED,
-    textEnabled: () => env.MCP_WEB_HANDOFF_TEXT_ENABLED === "1",
-  }));
-export const mintWebHandoff = async (
-  ctx: WebHandoffMintContext,
-  paths: readonly string[],
-  kind: HandoffKind,
-) => {
-  const outcome = await Result.tryPromise(async () =>
-    getWebHandoffService().mint(ctx, paths, kind),
-  );
-  if (Result.isOk(outcome)) {
-    return outcome.value;
-  }
-  captureError(outcome.error, {
-    operation: "mcp_web_handoff.mint",
-  });
-  return null;
 };

@@ -4,8 +4,8 @@ import * as v from "valibot";
 
 import { mcpHandoffRedeemResultSchema } from "@stll/api-contract/mcp-web-handoff";
 
+import { handoffNavigationDestination } from "@/lib/account/handoff-url";
 import { authClient } from "@/lib/auth-client";
-import { handoffNavigationDestination } from "@/lib/handoff-url";
 import { normalizeRedirectTo } from "@/lib/redirect";
 
 declare global {

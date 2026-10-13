@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "@stll/api-contract";
+import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import { readCapabilityCatalog } from "@stll/cli/capability-catalog-data";
 import type { PermissionInput } from "@stll/permissions";
 import { roles } from "@stll/permissions";
@@ -36,6 +37,7 @@ import { CAPABILITY_FEATURE_BINDINGS } from "@/api/mcp/generated/capability-feat
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
   isMemberAuthorizedForMcpTool,
@@ -182,6 +184,8 @@ const ADDITIONAL_REST_OPERATIONS: Readonly<
 
 /** Write tools with no REST or UI counterpart, each with the reason. */
 const NO_REST_COUNTERPART = {
+  [MCP_WEB_HANDOFF_TOOL_NAME]:
+    "App-only link refresh verifies current OAuth consent and its live user grant; no REST endpoint mints the credential.",
   write_capability:
     "Dispatches a catalog capability chosen at call time; that capability's own REST permissions are checked before dispatch.",
 } as const satisfies Readonly<Record<string, string>>;
@@ -589,6 +593,9 @@ const OPERATION_MATRIX: readonly OperationRow[] = writeTools.flatMap(
  * applies its own.
  */
 const expectedAccountAccess = (tool: string): AccountAccess => {
+  if (tool === MCP_WEB_HANDOFF_TOOL_NAME) {
+    return "standard";
+  }
   const declared = (restOperationsByTool.get(tool) ?? []).flatMap(
     (operation) => operation.accountAccess,
   );
@@ -888,8 +895,8 @@ describe("write tool role matrix", () => {
     }
     const expected =
       restExpectation(tool, role) ??
-      // No REST counterpart: the declaration is delegated, so the tool is
-      // offered and its target is checked at dispatch.
+      // No REST counterpart: the declaration determines discovery, and
+      // delegated authority is checked at dispatch.
       isMemberAuthorizedForMcpTool(sessionMemberRole(role), definition);
 
     for (const mode of modes) {
@@ -1088,7 +1095,10 @@ describe("CLI and MCP write tool parity", () => {
       curatedLeaves(cliTreeFor(null)).map((leaf) => leaf.toolName),
     );
     const defaultWriteTools = writeTools
-      .filter(({ modes }) => modes.includes("default"))
+      .filter(
+        ({ modes, definition }) =>
+          modes.includes("default") && isMcpToolVisibleTo(definition, "model"),
+      )
       .map(({ definition }) => definition.name);
     expect(defaultWriteTools.filter((name) => !cliTools.has(name))).toEqual(
       defaultWriteTools.filter(isCliExcluded),

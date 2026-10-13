@@ -186,9 +186,7 @@ test("OTP verification refreshes the existing session before the two-factor rout
     expect(client.getQueryData(sessionOptions.queryKey)).toEqual(
       MEMBER_SESSION,
     );
-    fireEvent.click(
-      ui.getByRole("button", { name: messages.common.verify, exact: true }),
-    );
+    fireEvent.click(ui.getByRole("button", { name: messages.common.verify }));
     await ui.findByTestId("two-factor-challenge");
     expect(client.getQueryData(sessionOptions.queryKey)).toBeNull();
     expect(events.indexOf("verify")).toBeLessThan(

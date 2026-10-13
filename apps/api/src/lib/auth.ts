@@ -9,6 +9,9 @@ import type { getSessionFromCtx } from "better-auth/api";
 import {
   APIError,
   createAuthMiddleware,
+  createAuthEndpoint,
+  originCheckMiddleware,
+  sessionMiddleware,
   getAuthoritativeSessionFromCtx,
   getOAuthState,
   isAPIError,
@@ -33,6 +36,7 @@ import {
 } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
+import * as v from "valibot";
 
 import { MCP_HANDOFF_STEP_UP_REQUIRED } from "@stll/api-contract/mcp-web-handoff";
 import {
@@ -119,9 +123,12 @@ import {
   HANDOFF_ACCESS_DETAIL,
 } from "@/api/lib/auth/handoff-step-up-policy";
 import {
-  createMcpWebHandoffPlugin,
-  MCP_HANDOFF_REDEEM_PATH,
-} from "@/api/lib/auth/mcp-web-handoff-plugin";
+  canonicalHandoffPath,
+  createWebHandoffService,
+  hasWebHandoffScopes,
+  WEB_HANDOFF_CODE_PATTERN,
+} from "@/api/lib/auth/mcp-web-handoff";
+import { completeHandoffSession } from "@/api/lib/auth/mcp-web-handoff-session";
 import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
@@ -270,6 +277,10 @@ import {
   brandPersistedUserId,
   parseAuthProviderId,
 } from "@/api/lib/safe-id-boundaries";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+} from "@/api/lib/security-headers";
 import {
   assertSelfhostEmailOtpAllowed,
   assertSelfhostBootstrapSignUp,
@@ -1063,6 +1074,237 @@ const authRefusalLogPlugin = {
     ],
   },
 } satisfies BetterAuthPlugin;
+
+const HANDOFF_MINT_FAILURE = failureSink({
+  event: "mcp_web_handoff.mint_failed",
+  expected: [],
+});
+type WebHandoffMintArgs = Parameters<
+  ReturnType<typeof createWebHandoffService>["mint"]
+>;
+
+let webHandoffService: ReturnType<typeof createWebHandoffService> | undefined;
+const getWebHandoffService = () =>
+  (webHandoffService ??= createWebHandoffService({
+    db: rootDb,
+    budget: new RedisRateLimitContext({ failurePolicy: "fail_closed" }),
+    enabled: () => env.MCP_WEB_HANDOFF_MINT_ENABLED,
+    textEnabled: () => env.MCP_WEB_HANDOFF_TEXT_ENABLED === "1",
+  }));
+export const mintWebHandoff = async (
+  ctx: WebHandoffMintArgs[0],
+  paths: WebHandoffMintArgs[1],
+  kind: WebHandoffMintArgs[2],
+) => {
+  const outcome = await Result.tryPromise(async () =>
+    getWebHandoffService().mint(ctx, paths, kind),
+  );
+  if (Result.isOk(outcome)) {
+    return outcome.value;
+  }
+  observeFailure(outcome.error, {
+    sink: HANDOFF_MINT_FAILURE,
+    ctx: { operation: "mcp_web_handoff.mint" },
+  });
+  return null;
+};
+
+const MCP_HANDOFF_REDEEM_PATH = "/mcp-handoff/redeem";
+const HANDOFF_PLUGIN_FAILURE = failureSink({
+  event: "mcp_web_handoff.endpoint_failed",
+  expected: [],
+});
+
+type HandoffPluginOptions = {
+  service?: () => ReturnType<typeof getWebHandoffService>;
+  now?: () => Date;
+  textSessionMaxSeconds?: () => number;
+};
+
+export const createMcpWebHandoffPlugin = ({
+  service = getWebHandoffService,
+  now = () => new Date(),
+  textSessionMaxSeconds = () => env.MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS,
+}: HandoffPluginOptions = {}) =>
+  ({
+    id: "mcp-web-handoff",
+    endpoints: {
+      redeemMcpWebHandoff: createAuthEndpoint(
+        MCP_HANDOFF_REDEEM_PATH,
+        {
+          method: "POST",
+          requireHeaders: true,
+          body: v.strictObject({
+            code: v.pipe(v.string(), v.maxLength(128)),
+            path: v.pipe(v.string(), v.maxLength(4096)),
+            confirmation: v.optional(v.literal("confirmed")),
+          }),
+          use: [originCheckMiddleware],
+        },
+        async (ctx) => {
+          ctx.setHeader(CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL);
+          ctx.setHeader("Referrer-Policy", "no-referrer");
+          const refusalResponse = async () => {
+            ctx.setStatus(403);
+            return ctx.json({ status: "refused" as const });
+          };
+          // A browser-origin request is mandatory even when the instance allows other auth clients.
+          const origin = ctx.headers.get("origin");
+          if (!origin || !ctx.context.isTrustedOrigin(origin)) {
+            return refusalResponse();
+          }
+          const currentService = service();
+          const request = ctx.request;
+          if (!request) {
+            panic("Handoff endpoint requires HTTP dispatch");
+          }
+          const { code, path, confirmation } = ctx.body;
+          if (!currentService.isEnabled()) {
+            return refusalResponse();
+          }
+          const address =
+            ctx.headers.get(AUTH_CLIENT_ADDRESS_HEADER) ?? "unknown";
+          const admitted = await Result.tryPromise(
+            async () => await currentService.admitRedeem(address),
+          );
+          if (Result.isError(admitted)) {
+            observeFailure(admitted.error, {
+              sink: HANDOFF_PLUGIN_FAILURE,
+              ctx: { operation: "mcp_web_handoff.admission" },
+            });
+            return refusalResponse();
+          }
+          if (!admitted.value) {
+            return refusalResponse();
+          }
+          // Receipt-specific work is allowed only after address and global admission.
+          const refuse = async (reason: string) => {
+            const audited = await Result.tryPromise(
+              async () =>
+                await currentService.auditRefusal(code, reason, request),
+            );
+            if (Result.isError(audited)) {
+              observeFailure(audited.error, {
+                sink: HANDOFF_PLUGIN_FAILURE,
+                ctx: { operation: "mcp_web_handoff.refusal_audit" },
+              });
+            }
+            return refusalResponse();
+          };
+          const originalCookies = ctx.responseHeaders.getSetCookie();
+          const originalSession = ctx.context.newSession;
+          const outcome = await Result.tryPromise(async () => {
+            const canonical = canonicalHandoffPath(path);
+            if (
+              !WEB_HANDOFF_CODE_PATTERN.test(code) ||
+              !canonical ||
+              canonical !== path
+            ) {
+              return await refuse("input");
+            }
+            const grant = await currentService.inspect(code);
+            if (!grant) {
+              return await refuse("unavailable");
+            }
+            const userAdmitted = await Result.tryPromise(
+              async () =>
+                await currentService.admitUser(
+                  brandPersistedUserId(grant.userId),
+                ),
+            );
+            if (Result.isError(userAdmitted)) {
+              observeFailure(userAdmitted.error, {
+                sink: HANDOFF_PLUGIN_FAILURE,
+                ctx: { operation: "mcp_web_handoff.admission" },
+              });
+              return refusalResponse();
+            }
+            if (!userAdmitted.value) {
+              return refusalResponse();
+            }
+            if (
+              grant.handoff.consumedAt ||
+              grant.handoff.expiresAt <= now() ||
+              !hasWebHandoffScopes(grant.scopes)
+            ) {
+              return await refuse("unavailable");
+            }
+            if (!grant.handoff.allowedPaths.includes(canonical)) {
+              return await refuse("path");
+            }
+            const existing = await getAuthoritativeSessionFromCtx(ctx);
+            if (
+              (grant.handoff.kind === "text" ||
+                (existing && existing.user.id !== grant.userId)) &&
+              confirmation !== "confirmed"
+            ) {
+              await currentService.recordConfirmation(code, request);
+              return ctx.json({
+                status: "needs_confirmation" as const,
+                email: grant.email,
+                organizationName: grant.organizationName,
+              });
+            }
+            const sameUser = existing?.user.id === grant.userId;
+            const consumed = await currentService.consume({
+              code,
+              path: canonical,
+              request,
+              ipAddress: address === "unknown" ? null : address,
+              previousOrganizationId:
+                sameUser &&
+                typeof existing.session["activeOrganizationId"] === "string"
+                  ? existing.session["activeOrganizationId"]
+                  : null,
+              complete: async (completionContext) =>
+                await completeHandoffSession({
+                  ctx,
+                  completionContext,
+                  existing,
+                  originalSession,
+                  now,
+                  textSessionMaxSeconds,
+                }),
+            });
+            if (!consumed) {
+              return await refuse("unavailable");
+            }
+            return ctx.json({ status: "redeemed" as const });
+          });
+          if (Result.isOk(outcome)) {
+            return outcome.value;
+          }
+          // Rollback must also discard cookies and endpoint state prepared for the uncommitted session.
+          ctx.responseHeaders.delete("set-cookie");
+          for (const cookie of originalCookies) {
+            ctx.responseHeaders.append("set-cookie", cookie);
+          }
+          ctx.context.setNewSession(originalSession);
+          observeFailure(outcome.error, {
+            sink: HANDOFF_PLUGIN_FAILURE,
+            ctx: { operation: "mcp_web_handoff.redeem" },
+          });
+          return await refuse("runtime");
+        },
+      ),
+      listMcpHandoffSessionClients: createAuthEndpoint(
+        "/mcp-handoff/sessions",
+        { method: "GET", requireHeaders: true, use: [sessionMiddleware] },
+        async (ctx) => {
+          ctx.setHeader(CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL);
+          const result = await service().listSessionClients(
+            brandPersistedUserId(ctx.context.session.user.id),
+          );
+          if (Result.isError(result)) {
+            observeFailure(result.error, { sink: HANDOFF_PLUGIN_FAILURE });
+            ctx.setStatus(503);
+            return ctx.json({ message: "Session information is unavailable." });
+          }
+          return ctx.json({ sessions: result.value });
+        },
+      ),
+    },
+  }) satisfies BetterAuthPlugin;
 
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
@@ -2207,7 +2449,8 @@ export const createAuth = (
       before: createAuthMiddleware(async (ctx) => {
         await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
-        if (!ctx.path) {
+        // Better Call gives pathless server-only operations the middleware path "/".
+        if (!ctx.path || ctx.path === "/") {
           return undefined;
         }
         if (demoConfig.email) {
@@ -2525,55 +2768,59 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
-export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
-  validateSession: {
-    async resolve({ status, request, set }) {
-      const sessionResult = await Result.tryPromise(async () => {
-        const resolved = await getAuth().api.getSession({
-          headers: request.headers,
-          returnHeaders: true,
+export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" })
+  .macro({
+    validateSession: {
+      async resolve({ status, request, set }) {
+        const sessionResult = await Result.tryPromise(async () => {
+          const resolved = await getAuth().api.getSession({
+            headers: request.headers,
+            returnHeaders: true,
+          });
+          forwardAuthResponseCookies(set.headers, resolved.headers);
+          return resolved.response;
         });
-        forwardAuthResponseCookies(set.headers, resolved.headers);
-        return resolved.response;
-      });
 
-      if (Result.isError(sessionResult)) {
-        return status(500, AUTH_REJECTION_BODY[500]);
-      }
+        if (Result.isError(sessionResult)) {
+          return status(500, AUTH_REJECTION_BODY[500]);
+        }
 
-      const session = sessionResult.value?.session;
-      const user = sessionResult.value?.user;
-      if (!session || !user) {
-        return status(401, AUTH_REJECTION_BODY[401]);
-      }
+        const session = sessionResult.value?.session;
+        const user = sessionResult.value?.user;
+        if (!session || !user) {
+          return status(401, AUTH_REJECTION_BODY[401]);
+        }
 
-      if (session.originConsentId && requiresHandoffStepUpForRequest(request)) {
-        return status(403, {
-          code: MCP_HANDOFF_STEP_UP_REQUIRED,
-          message: "Sign in again to continue.",
+        if (
+          session.originConsentId &&
+          requiresHandoffStepUpForRequest(request)
+        ) {
+          return status(403, {
+            code: MCP_HANDOFF_STEP_UP_REQUIRED,
+            message: "Sign in again to continue.",
+          });
+        }
+
+        const userId = toSafeId<"user">(user.id);
+        enrichRequestContext(request, {
+          posthogDistinctId: userId,
         });
-      }
 
-      const userId = toSafeId<"user">(user.id);
-      enrichRequestContext(request, {
-        posthogDistinctId: userId,
-      });
-
-      return {
-        handoffOriginConsentId: session.originConsentId ?? null,
-        user: {
-          id: userId,
-          email: user.email,
-        },
-      };
+        return {
+          handoffOriginConsentId: session.originConsentId ?? null,
+          user: {
+            id: userId,
+            email: user.email,
+          },
+        };
+      },
     },
-  },
-  accountAccess: (accountAccess: AccountAccess) => ({
+  })
+  .macro("accountAccess", (accountAccess: AccountAccess) => ({
     validateSession: true,
     detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
     beforeHandle: createHandoffStepUpGuard({ accountAccess }),
-  }),
-});
+  }));
 
 /**
  * Structural subset of `rootDb` the bounded membership query needs. Tests can
@@ -2960,6 +3207,132 @@ type AuthSafeDb = ReturnType<
   typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
 >;
 
+type RequestWorkspaceAccessOptions = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  initialWorkspaceId: SafeId<"workspace"> | null;
+  workspace: AccessibleWorkspace | null;
+};
+
+const createRequestWorkspaceAccess = ({
+  organizationId,
+  userId,
+  initialWorkspaceId,
+  workspace: initialWorkspace,
+}: RequestWorkspaceAccessOptions) => {
+  // Preserve the bounded workspace authorization already proved by the
+  // membership lookup for the lifetime of this request's transactions. This
+  // matters for operations such as self-removal: later statements must finish
+  // their cleanup and audit work after the membership row is deleted.
+  const serverValidatedWorkspaceIds = initialWorkspace
+    ? [initialWorkspace.id]
+    : [];
+  const validatedWorkspaceIdSet = new Set(serverValidatedWorkspaceIds);
+  const pinServerValidatedWorkspaceId = (
+    workspaceId: SafeId<"workspace">,
+  ): boolean => {
+    if (!validatedWorkspaceIdSet.has(workspaceId)) {
+      return false;
+    }
+    if (!serverValidatedWorkspaceIds.includes(workspaceId)) {
+      serverValidatedWorkspaceIds.push(workspaceId);
+    }
+    return true;
+  };
+  const databaseIdentity = {
+    organizationId,
+    serverValidatedWorkspaceIds,
+    userId,
+  };
+  const scopedDb: AuthScopedDb = createMembershipScopedDb(
+    rlsDb,
+    databaseIdentity,
+  );
+  const safeDb: AuthSafeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
+
+  let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
+  const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
+    accessibleWorkspacesPromise ??= scopedDb(
+      async (tx) =>
+        await tx
+          .select({ id: workspaces.id, status: workspaces.status })
+          .from(workspaces)
+          .where(eq(workspaces.organizationId, organizationId)),
+    ).then((items) => {
+      for (const workspace of items) {
+        validatedWorkspaceIdSet.add(workspace.id);
+      }
+      return items;
+    });
+    return await accessibleWorkspacesPromise;
+  };
+
+  let activeWorkspaceIdsPromise: Promise<SafeId<"workspace">[]> | null = null;
+  const getActiveWorkspaceIds = async (): Promise<SafeId<"workspace">[]> => {
+    activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) => {
+      const activeWorkspaceIds: SafeId<"workspace">[] = [];
+      for (const item of items) {
+        if (item.status !== "deleting") {
+          activeWorkspaceIds.push(item.id);
+        }
+      }
+      return activeWorkspaceIds;
+    });
+    return await activeWorkspaceIdsPromise;
+  };
+
+  const workspaceAccessPromises = new Map<
+    SafeId<"workspace">,
+    Promise<AccessibleWorkspace | null>
+  >();
+  if (initialWorkspaceId) {
+    workspaceAccessPromises.set(initialWorkspaceId, Promise.resolve(workspace));
+  }
+  const getWorkspaceAccess = async (
+    workspaceId: SafeId<"workspace">,
+  ): Promise<AccessibleWorkspace | null> => {
+    let accessPromise = workspaceAccessPromises.get(workspaceId);
+    if (!accessPromise) {
+      accessPromise = accessibleWorkspacesPromise
+        ? accessibleWorkspacesPromise.then(
+            (items) => items.find((item) => item.id === workspaceId) ?? null,
+          )
+        : resolveMemberAuthorization(
+            {
+              organizationId,
+              userId,
+              workspaceId,
+            },
+            rootDb,
+          ).then((targetAuthorization) => {
+            if (targetAuthorization?.workspace?.id !== workspaceId) {
+              return null;
+            }
+            return targetAuthorization.workspace;
+          });
+      workspaceAccessPromises.set(workspaceId, accessPromise);
+    }
+    const workspace = await accessPromise;
+    if (workspace) {
+      // The factories above intentionally retain this small array by
+      // reference. A later transaction therefore preserves only the target
+      // this request just proved, never the full accessible-workspace list.
+      validatedWorkspaceIdSet.add(workspace.id);
+      pinServerValidatedWorkspaceId(workspace.id);
+    }
+    return workspace;
+  };
+
+  return {
+    getActiveWorkspaceIds,
+    getAccessibleWorkspaces,
+    getWorkspaceAccess,
+    pinServerValidatedWorkspaceId,
+    scopedDb,
+    safeDb,
+  };
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -3037,111 +3410,19 @@ const resolveValidateAuth = async ({
     managedAIResidency,
   } = orgSettings;
 
-  // Preserve the bounded workspace authorization already proved by the
-  // membership lookup for the lifetime of this request's transactions. This
-  // matters for operations such as self-removal: later statements must finish
-  // their cleanup and audit work after the membership row is deleted.
-  const serverValidatedWorkspaceIds = authorization.workspace
-    ? [authorization.workspace.id]
-    : [];
-  const validatedWorkspaceIdSet = new Set(serverValidatedWorkspaceIds);
-  const pinServerValidatedWorkspaceId = (
-    workspaceId: SafeId<"workspace">,
-  ): boolean => {
-    if (!validatedWorkspaceIdSet.has(workspaceId)) {
-      return false;
-    }
-    if (!serverValidatedWorkspaceIds.includes(workspaceId)) {
-      serverValidatedWorkspaceIds.push(workspaceId);
-    }
-    return true;
-  };
-  const databaseIdentity = {
+  const {
+    getActiveWorkspaceIds,
+    getAccessibleWorkspaces,
+    getWorkspaceAccess,
+    pinServerValidatedWorkspaceId,
+    scopedDb,
+    safeDb,
+  } = createRequestWorkspaceAccess({
     organizationId: activeOrganizationId,
-    serverValidatedWorkspaceIds,
     userId,
-  };
-  const scopedDb: AuthScopedDb = createMembershipScopedDb(
-    rlsDb,
-    databaseIdentity,
-  );
-  const safeDb: AuthSafeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
-
-  let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
-  const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
-    accessibleWorkspacesPromise ??= scopedDb(
-      async (tx) =>
-        await tx
-          .select({ id: workspaces.id, status: workspaces.status })
-          .from(workspaces)
-          .where(eq(workspaces.organizationId, activeOrganizationId)),
-    ).then((items) => {
-      for (const workspace of items) {
-        validatedWorkspaceIdSet.add(workspace.id);
-      }
-      return items;
-    });
-    return await accessibleWorkspacesPromise;
-  };
-
-  let activeWorkspaceIdsPromise: Promise<SafeId<"workspace">[]> | null = null;
-  const getActiveWorkspaceIds = async (): Promise<SafeId<"workspace">[]> => {
-    activeWorkspaceIdsPromise ??= getAccessibleWorkspaces().then((items) => {
-      const activeWorkspaceIds: SafeId<"workspace">[] = [];
-      for (const item of items) {
-        if (item.status !== "deleting") {
-          activeWorkspaceIds.push(item.id);
-        }
-      }
-      return activeWorkspaceIds;
-    });
-    return await activeWorkspaceIdsPromise;
-  };
-
-  const workspaceAccessPromises = new Map<
-    SafeId<"workspace">,
-    Promise<AccessibleWorkspace | null>
-  >();
-  if (initialWorkspaceId) {
-    workspaceAccessPromises.set(
-      initialWorkspaceId,
-      Promise.resolve(authorization.workspace),
-    );
-  }
-  const getWorkspaceAccess = async (
-    workspaceId: SafeId<"workspace">,
-  ): Promise<AccessibleWorkspace | null> => {
-    let accessPromise = workspaceAccessPromises.get(workspaceId);
-    if (!accessPromise) {
-      accessPromise = accessibleWorkspacesPromise
-        ? accessibleWorkspacesPromise.then(
-            (items) => items.find((item) => item.id === workspaceId) ?? null,
-          )
-        : resolveMemberAuthorization(
-            {
-              organizationId: activeOrganizationId,
-              userId,
-              workspaceId,
-            },
-            rootDb,
-          ).then((targetAuthorization) => {
-            if (targetAuthorization?.workspace?.id !== workspaceId) {
-              return null;
-            }
-            return targetAuthorization.workspace;
-          });
-      workspaceAccessPromises.set(workspaceId, accessPromise);
-    }
-    const workspace = await accessPromise;
-    if (workspace) {
-      // The factories above intentionally retain this small array by
-      // reference. A later transaction therefore preserves only the target
-      // this request just proved, never the full accessible-workspace list.
-      validatedWorkspaceIdSet.add(workspace.id);
-      pinServerValidatedWorkspaceId(workspace.id);
-    }
-    return workspace;
-  };
+    initialWorkspaceId,
+    workspace: authorization.workspace,
+  });
 
   const recorderBindings = {
     organizationId: activeOrganizationId,

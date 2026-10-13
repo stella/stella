@@ -542,7 +542,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
       "module:@better-auth/cimd",
       "module:@better-auth/cimd/node",
       "module:better-auth",
-      "module:better-auth/adapters/drizzle",
       "module:better-auth/api",
       "module:better-auth/plugins",
     ],
@@ -712,7 +711,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: [
       "global:fetch",
       "module:better-auth",
-      "module:better-auth/adapters/drizzle",
       "module:better-auth/plugins",
       "module:bun",
     ],

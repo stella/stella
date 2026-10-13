@@ -83,8 +83,11 @@ export const openPresentationLink = async ({
       ? fresh.value.structuredContent
       : undefined;
   const freshUrl =
-    payload !== undefined && typeof payload["url"] === "string"
-      ? parseLegalCitationHttpUrl(payload["url"])
+    typeof payload === "object" &&
+    payload !== null &&
+    "url" in payload &&
+    typeof payload.url === "string"
+      ? parseLegalCitationHttpUrl(payload.url)
       : null;
   const opened = await Result.tryPromise(async () =>
     app.openLink({ url: freshUrl?.href ?? parsed.href }),

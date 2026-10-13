@@ -18,13 +18,14 @@ import {
 import { databaseRelations } from "@/api/db/database-relations";
 import { mcpWebHandoff } from "@/api/db/schema/mcp-web-handoff";
 import { envApiServerSchema } from "@/api/env-schema";
-import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import {
   createWebHandoffService,
   WEB_HANDOFF_TTL_MS,
-} from "@/api/lib/mcp-web-handoff";
+} from "@/api/lib/auth/mcp-web-handoff";
+import { createDatabaseSessionLifetimeStore } from "@/api/lib/auth/session-lifetime-store";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -377,6 +378,27 @@ describe("MCP web handoff lifecycle", () => {
         boundary: "activity",
       }),
     ).toBeNull();
+  });
+  test("session labels refuse an incomplete read instead of truncating it", async () => {
+    const userId = brandPersistedUserId(fixture.userId);
+    const complete = await service.listSessionClients(userId);
+    expect(Result.isOk(complete)).toBe(true);
+    await db.insert(session).values(
+      Array.from({ length: 101 }, (_, index) => ({
+        id: `label-session-${index}`,
+        token: `label-token-${index}`,
+        userId,
+        originConsentId: fixture.consentId,
+        expiresAt: new Date(instant.getTime() + 60 * 60 * 1000),
+      })),
+    );
+    const overflow = await service.listSessionClients(userId);
+    expect(Result.isError(overflow)).toBe(true);
+    if (Result.isError(overflow)) {
+      expect(overflow.error.message).toBe(
+        "Session information exceeds its read limit.",
+      );
+    }
   });
   test("disconnect removes receipts and the sessions created from them", async () => {
     const code = await mint();

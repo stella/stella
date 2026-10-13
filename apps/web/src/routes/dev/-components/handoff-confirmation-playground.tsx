@@ -1,6 +1,6 @@
 import type { ComponentProps } from "react";
 
-import { HandoffConfirmationPanel } from "@/routes/auth/-components/handoff-confirmation-panel";
+import { HandoffConfirmationPanel } from "@/components/auth/handoff-confirmation-panel";
 
 const confirmation = {
   email: "reader@example.test",
