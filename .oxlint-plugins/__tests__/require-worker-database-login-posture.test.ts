@@ -83,6 +83,16 @@ describe.serial("worker hosts require the database login posture check", () => {
     ).toEqual([3]);
   });
 
+  test("requires explicit property names in the host context", async () => {
+    for (const body of [
+      'async function start(db, key, other) { await check(db); host("api", { db, [key]: other }, mode, []); }',
+      'async function start(db, other) { const key = "db"; await check(db); host("api", { db, [key]: other }, mode, []); }',
+      'async function start(db, other) { await check(db); host("api", { db, ["db"]: other }, mode, []); }',
+    ]) {
+      expect(await lint(body)).toEqual([3]);
+    }
+  });
+
   test("allows isolated worker host test fixtures", async () => {
     expect(
       await lint(

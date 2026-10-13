@@ -34,7 +34,10 @@ const guardedBefore = (context: RuleContext, host: AstNode) => {
   }
   if (
     options.properties.some(
-      (property) => !isAstNode(property) || property.type !== "Property",
+      (property) =>
+        !isAstNode(property) ||
+        property.type !== "Property" ||
+        property.computed === true,
     )
   ) {
     return false;
