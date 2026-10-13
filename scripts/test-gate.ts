@@ -6,12 +6,15 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { compareCodeUnit } from "../packages/collation/src/collation";
 import {
   contextFromNested,
   definitelyFalse,
   evaluate,
 } from "./github-expression";
+import { customLintTestCommand } from "./run-custom-lint-tests";
 import { unlistedTests } from "./run-unlisted-script-tests";
 import {
   registrationRunsWithService,
@@ -585,7 +588,7 @@ const nearestPackage = (file: string): string | undefined => {
   while (directory !== ".") {
     const candidate = path.join(ROOT, directory, "package.json");
     if (existsSync(candidate)) {
-      return path.relative(ROOT, candidate);
+      return repoRelativePath(ROOT, candidate);
     }
     directory = path.dirname(directory);
   }
@@ -644,9 +647,13 @@ const shellInvocationGates = (
 ): boolean => {
   const pipefail = propagation?.pipefail ?? true;
   const scriptErrexit = propagation?.errexit ?? true;
-  const words = shellWords(command.replaceAll(/\\\r?\n/gu, " "), "include");
+  const tokens = shellTokens(command.replaceAll(/\\\r?\n/gu, " "));
+  const words = tokens.map(({ value }) => value);
   let errexit = true;
   for (let index = 0; index < words.length; index += 1) {
+    if (tokens[index]?.role !== "command") {
+      continue;
+    }
     if (words[index] === "set" && words[index + 1] === "+e") {
       errexit = false;
     }
@@ -657,12 +664,14 @@ const shellInvocationGates = (
       continue;
     }
     const suffix = words.slice(index + 1);
+    const suffixTokens = tokens.slice(index + 1);
     const succeeds = (offset: number): boolean => {
       const next = suffix.at(offset);
       return (
-        next === "true" ||
-        next === ":" ||
-        (next === "exit" && suffix.at(offset + 1) === "0")
+        suffixTokens[offset]?.role === "command" &&
+        (next === "true" ||
+          next === ":" ||
+          (next === "exit" && suffix.at(offset + 1) === "0"))
       );
     };
     // A `||` fallback swallows the runner's failure unless the fallback itself
@@ -679,6 +688,7 @@ const shellInvocationGates = (
           return false;
         }
         if (
+          suffixTokens[cursor]?.role === "command" &&
           word === "false" &&
           (cursor === start || suffix[cursor - 1] === ";")
         ) {
@@ -686,6 +696,7 @@ const shellInvocationGates = (
         }
         const status = suffix.at(cursor + 1);
         if (
+          suffixTokens[cursor]?.role === "command" &&
           word === "exit" &&
           status !== undefined &&
           /^[1-9]\d*$/u.test(status)
@@ -698,20 +709,29 @@ const shellInvocationGates = (
     // A newline right after `&&`, `||` or `|` continues the list.
     const end = suffix.findIndex(
       (word, offset) =>
-        word === ";" ||
-        (word === "\n" &&
-          !["&&", "||", "|"].includes(
-            offset === 0 ? (words[index] ?? "") : (suffix[offset - 1] ?? ""),
-          )),
+        suffixTokens[offset]?.role === "operator" &&
+        (word === ";" ||
+          (word === "\n" &&
+            !["&&", "||", "|"].includes(
+              offset === 0 ? (words[index] ?? "") : (suffix[offset - 1] ?? ""),
+            ))),
     );
     const list = end === -1 ? suffix : suffix.slice(0, end);
     const pipelineEnd = list.findIndex(
-      (word) => word === "&&" || word === "||",
+      (word, offset) =>
+        suffixTokens[offset]?.role === "operator" &&
+        (word === "&&" || word === "||"),
     );
     const pipeline = pipelineEnd === -1 ? list : list.slice(0, pipelineEnd);
     // A background job's status never reaches errexit; a piped runner's status
     // reaches it only under pipefail.
-    if (pipeline.includes("&") || (!pipefail && pipeline.includes("|"))) {
+    if (
+      pipeline.some(
+        (word, offset) =>
+          suffixTokens[offset]?.role === "operator" &&
+          (word === "&" || (!pipefail && word === "|")),
+      )
+    ) {
       continue;
     }
     const trailing =
@@ -727,7 +747,10 @@ const shellInvocationGates = (
     }
     const suppressed =
       list.some(
-        (word, offset) => word === "||" && !fallbackFails(offset + 1),
+        (word, offset) =>
+          suffixTokens[offset]?.role === "operator" &&
+          word === "||" &&
+          !fallbackFails(offset + 1),
       ) ||
       (end !== -1 && succeeds(end + 1));
     if (!suppressed) {
@@ -1030,18 +1053,112 @@ const packageScripts = (packageFile: string): PackageScripts | undefined => {
   return isRecord(scripts) ? scripts : undefined;
 };
 
+type ShellToken = {
+  readonly value: string;
+  readonly role:
+    | "command"
+    | "argument"
+    | "assignment"
+    | "redirect"
+    | "operator";
+};
+
+// Preserve syntax roles: quoted operators and heredoc bodies are data, and
+// only the first non-assignment word of a simple command is executable.
+const shellTokens = (command: string): ShellToken[] => {
+  const pattern =
+    /(#.*)|(\d*(?:<<<|<<-?|[<>]&|>>?|<)|\|\||&&|[;&|()\n])|((?:"[^"\\]*(?:\\.[^"\\]*)*"|'[^']*'|\\[^\n]|[^\s;&|()<>"'\\])+)/gu;
+  const tokens: ShellToken[] = [];
+  const heredocs: { delimiter: string; stripTabs: boolean }[] = [];
+  let commandPosition = true;
+  let redirect: string | undefined;
+  let match: RegExpExecArray | null;
+  let consumed = 0;
+  while ((match = pattern.exec(command)) !== null) {
+    if (command.slice(consumed, match.index).trim() !== "") {
+      return [];
+    }
+    consumed = pattern.lastIndex;
+    if (match[1] !== undefined) {
+      continue;
+    }
+    const operator = match[2];
+    if (operator !== undefined) {
+      tokens.push({ value: operator, role: "operator" });
+      if (/[<>]/u.test(operator)) {
+        redirect = operator.replace(/^\d+/u, "");
+        continue;
+      }
+      commandPosition = true;
+      redirect = undefined;
+      if (operator === "\n") {
+        for (const { delimiter, stripTabs } of heredocs) {
+          let found = false;
+          while (pattern.lastIndex < command.length) {
+            const start = pattern.lastIndex;
+            const end = command.indexOf("\n", start);
+            const line = command.slice(
+              start,
+              end === -1 ? command.length : end,
+            );
+            pattern.lastIndex = end === -1 ? command.length : end + 1;
+            if (
+              (stripTabs ? line.replace(/^\t+/u, "") : line).replace(
+                /\r$/u,
+                "",
+              ) === delimiter
+            ) {
+              found = true;
+              break;
+            }
+          }
+          if (!found) {
+            return tokens;
+          }
+        }
+        heredocs.length = 0;
+        consumed = pattern.lastIndex;
+      }
+      continue;
+    }
+    const raw = match[3] ?? panic("Shell token has neither syntax nor a word");
+    const value = [
+      ...raw.matchAll(/"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|([^"']+)/gu),
+    ]
+      .map((part) => part[1] ?? part[2] ?? part[3] ?? "")
+      .join("");
+    if (redirect !== undefined) {
+      tokens.push({ value, role: "redirect" });
+      if (redirect === "<<" || redirect === "<<-") {
+        heredocs.push({ delimiter: value, stripTabs: redirect === "<<-" });
+      }
+      redirect = undefined;
+      continue;
+    }
+    if (
+      commandPosition &&
+      ["{", "}", "then", "else", "elif", "do"].includes(raw)
+    ) {
+      tokens.push({ value, role: "operator" });
+      commandPosition = true;
+      continue;
+    }
+    if (commandPosition && /^[A-Za-z_][A-Za-z0-9_]*=/u.test(raw)) {
+      tokens.push({ value, role: "assignment" });
+      continue;
+    }
+    tokens.push({ value, role: commandPosition ? "command" : "argument" });
+    commandPosition = false;
+  }
+  return command.slice(consumed).trim() === "" ? tokens : [];
+};
+
 const shellWords = (
   command: string,
   operators: "include" | "omit" = "omit",
 ): string[] =>
-  [
-    ...command.matchAll(
-      /"([^"\\]*(?:\\.[^"\\]*)*)"|'([^']*)'|(\|\||&&|[;&|()\n])|([^\s;&|()]+)/gu,
-    ),
-  ].flatMap((match) =>
-    match[3] !== undefined && operators === "omit"
-      ? []
-      : [match[1] ?? match[2] ?? match[3] ?? match[4] ?? ""],
+  shellTokens(command).flatMap(({ role, value }) =>
+    role === "operator" && operators === "omit" ? [] : [value],
   );
 
 const BUN_VALUE_ARGUMENTS = new Set([
@@ -1222,7 +1339,7 @@ export const packageTestCollectionFailure = ({
       const remaining = words.slice(index + 2);
       const boundary = remaining.findIndex((word) => SHELL_OPERATORS.has(word));
       const failure = bunArgumentCollectionFailure(
-        path.posix.relative(packageDirectory, candidate),
+        repoRelativePath(packageDirectory, candidate),
         [
           ...(boundary === -1 ? remaining : remaining.slice(0, boundary)),
           ...(boundary === -1 ? forwardedArguments : []),
@@ -1245,7 +1362,7 @@ export const packageTestCollectionFailure = ({
       ...(end === -1 ? remaining : remaining.slice(0, end)),
       ...(end === -1 ? forwardedArguments : []),
     ];
-    const relativeCandidate = path.posix.relative(packageDirectory, candidate);
+    const relativeCandidate = repoRelativePath(packageDirectory, candidate);
     const failure = bunArgumentCollectionFailure(relativeCandidate, arguments_);
     if (failure === undefined) {
       return undefined;
@@ -2116,7 +2233,7 @@ const playwrightConfigCollection = (
     ) {
       return unresolved("testDir");
     }
-    const relative = path.posix.relative(
+    const relative = repoRelativePath(
       path.posix.normalize(
         path.posix.join(path.posix.dirname(configFile), directory.text),
       ),
@@ -2422,9 +2539,6 @@ export const firstCollectionFailure = ({
     const isUnlistedScript =
       new Bun.Glob("scripts/**/*.test.ts").match(file) &&
       unlistedTests([file], topology.workflow).length === 1;
-    const pluginGlob = ".oxlint-plugins/__tests__/*.test.ts";
-    const pluginRunner =
-      "find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test";
     const commandMatches = (command: string): boolean =>
       shellInvocationGates(command, (words, index) => {
         if (words[index] === "bash" && words[index + 1] === "-c") {
@@ -2435,14 +2549,6 @@ export const firstCollectionFailure = ({
           isUnlistedScript &&
           words[index] === "bun" &&
           words[index + 1] === "scripts/run-unlisted-script-tests.ts"
-        ) {
-          return true;
-        }
-        if (
-          new Bun.Glob(pluginGlob).match(file) &&
-          shellWords(pluginRunner, "include").every(
-            (word, offset) => words[index + offset] === word,
-          )
         ) {
           return true;
         }
@@ -2463,6 +2569,29 @@ export const firstCollectionFailure = ({
           return false;
         }
         const invocation = end === -1 ? remaining : remaining.slice(0, end);
+        if (words[index + 1] === "scripts/run-custom-lint-tests.ts") {
+          const args = invocation.slice(2);
+          if (
+            args.some(
+              (argument) =>
+                argument === "--timeout" || argument.startsWith("--timeout="),
+            )
+          ) {
+            return false;
+          }
+          const runner = customLintTestCommand(args);
+          return (
+            packageTestCollectionFailure({
+              candidate: file,
+              packageDirectory: ".",
+              scripts: {
+                test: ["bun", ...runner.slice(1)]
+                  .map((word) => JSON.stringify(word))
+                  .join(" "),
+              },
+            }) === undefined
+          );
+        }
         const line = invocation.map((word) => JSON.stringify(word)).join(" ");
         if (
           packageTestCollectionFailure({

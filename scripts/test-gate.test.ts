@@ -655,7 +655,53 @@ context("test registration census", () => {
   });
 
   check.each([
+    "echo RUNNER",
+    'echo "RUNNER"',
+    "echo 'RUNNER'",
+    "printf '%s\\n' RUNNER",
+    "echo ignored > RUNNER",
+    "echo ignored >& RUNNER",
+    "# RUNNER",
+    "cat <<'EOF'\nRUNNER\nEOF",
+    "cat <<EOF\nRUNNER\nEOF",
+    "cat <<-EOF\n\tRUNNER\n\tEOF",
+    "echo ';' RUNNER",
+    '"RUNNER',
+    "'RUNNER",
+  ])("command text does not execute a runner: %s", (shape) => {
+    const gatingJobs = (runner: string) =>
+      new Map([["checks", [shape.replace("RUNNER", () => runner)]]]);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingJobs("bun --filter @stll/orphan test"),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set<string>(),
+      }),
+    ).toBe("job condition: no gating job executes @stll/orphan test");
+    expect(
+      rootCommandExecutionFailure({
+        command: "bun scripts/test-gate.ts",
+        gatingJobs: gatingJobs("bun scripts/test-gate.ts"),
+      }),
+    ).toBe("job condition: no gating job executes bun scripts/test-gate.ts");
+    expect(
+      managedServiceRunnerFailure({
+        command: "bun run test:postgres",
+        gate: "STELLA_RUN_POSTGRES_TESTS",
+        gatingJobs: gatingJobs("bun run test:postgres"),
+      }),
+    ).toBe(
+      "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
+    );
+  });
+
+  check.each([
     "set +e; set -e; RUNNER",
+    "echo set +e; RUNNER",
+    "FIXTURE_MODE=on RUNNER",
+    "if true; then RUNNER; fi",
+    "cat <<'EOF'\ndata\nEOF\nRUNNER",
     "RUNNER || exit 1",
     "RUNNER; cleanup || true",
   ])("preserves failure-propagating runners: %s", (shape) => {
@@ -1162,7 +1208,7 @@ context("root test runner coverage", () => {
     ".oxlint-plugins/__tests__/orphan.test.ts",
   ];
   const runner =
-    "bun scripts/run-unlisted-script-tests.ts\nfind ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test";
+    "bun scripts/run-unlisted-script-tests.ts\nbun scripts/run-custom-lint-tests.ts";
   const cases = [
     { name: "disabled", condition: "if: false" },
     { name: "push-only", condition: "if: github.event_name == 'push'" },
@@ -1207,15 +1253,53 @@ context("root test runner coverage", () => {
       shardedPackages: new Set<string>(),
       workflow,
     };
-    for (const file of [...files, "scripts/named.test.ts"]) {
+    for (const file of [
+      ...files,
+      "scripts/named.test.ts",
+      ".oxlint-plugins/__tests__/nested/orphan.test.ts",
+    ]) {
       expect(
         firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
       ).toBeUndefined();
     }
-    const file = ".oxlint-plugins/__tests__/nested/orphan.test.ts";
+    const file = ".oxlint-plugins/other/orphan.test.ts";
     expect(
       firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
     ).toBe(`job condition: no gating job collects ${file}`);
+  });
+
+  check("custom lint runner selections bound collection", () => {
+    const selected = ".oxlint-plugins/__tests__/selected.test.ts";
+    const other = ".oxlint-plugins/__tests__/other.test.ts";
+    for (const run of [
+      `bun scripts/run-custom-lint-tests.ts ${selected}`,
+      `echo bun scripts/run-custom-lint-tests.ts ${selected}`,
+    ]) {
+      const workflow = `jobs:\n  checks:\n    steps:\n      - run: ${run}\n  ci-result:\n    needs: [checks]\n`;
+      const topology = {
+        gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
+        shardedPackages: new Set<string>(),
+        workflow,
+      };
+      expect(
+        firstCollectionFailure({
+          file: selected,
+          nonGatingFiles: new Set(),
+          topology,
+        }),
+      ).toBe(
+        run.startsWith("echo")
+          ? `job condition: no gating job collects ${selected}`
+          : undefined,
+      );
+      expect(
+        firstCollectionFailure({
+          file: other,
+          nonGatingFiles: new Set(),
+          topology,
+        }),
+      ).toBe(`job condition: no gating job collects ${other}`);
+    }
   });
 
   check(
