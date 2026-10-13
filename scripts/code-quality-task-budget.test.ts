@@ -725,6 +725,32 @@ test("only a missing summary directory permits starting the command; other files
   }
 });
 
+test("leader exit lets a short-lived descendant finish without a cleanup diagnostic", async () => {
+  const cwd = await scratch();
+  try {
+    const descendant =
+      "process.stdout.write('ready'); setTimeout(()=>process.exit(0),200)";
+    const leader = `
+      const {spawn}=require('child_process');
+      const nested=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:['ignore','pipe','inherit']});
+      nested.stdout.once('data',()=>process.exit(0));
+    `;
+    const result = await runBudgetedCheck({
+      command: [process.execPath, "-e", leader],
+      cwd,
+      timeoutMs: 5000,
+      graceMs: 500,
+      writeStdout: () => {},
+      writeStderr: () => {},
+      writeSummary: () => {},
+    });
+    expect(result.exitCode, result.output).toBe(0);
+    expect(result.output).toBe("");
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test("successful leader exit cleans its inherited-pipe descendants without failing the command", async () => {
   const cwd = await scratch();
   try {
@@ -760,6 +786,90 @@ test("successful leader exit cleans its inherited-pipe descendants without faili
       .trim();
     // An adopted zombie is no longer executing and has closed its inherited pipes.
     expect(state === "" || state.startsWith("Z")).toBe(true);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("the execution deadline interrupts a longer group drain window", async () => {
+  const cwd = await scratch();
+  try {
+    const descendant =
+      "process.stdout.write('ready'); setTimeout(()=>process.exit(0),5000)";
+    const leader = `
+      const {spawn}=require('child_process');
+      const nested=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:['ignore','pipe','inherit']});
+      nested.stdout.once('data',()=>process.exit(0));
+    `;
+    const started = Date.now();
+    const result = await runBudgetedCheck({
+      command: [process.execPath, "-e", leader],
+      cwd,
+      timeoutMs: 1000,
+      graceMs: 2000,
+      writeStdout: () => {},
+      writeStderr: () => {},
+      writeSummary: () => {},
+    });
+    expect(result.exitCode).toBe(124);
+    expect(result.output).toContain("execution deadline exceeded");
+    expect(Date.now() - started).toBeLessThan(3800);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("an empty group skips the drain window", async () => {
+  const cwd = await scratch();
+  try {
+    const started = Date.now();
+    const result = await runBudgetedCheck({
+      command: [process.execPath, "-e", "process.exit(0)"],
+      cwd,
+      timeoutMs: 5000,
+      graceMs: 3000,
+      writeStdout: () => {},
+      writeStderr: () => {},
+      writeSummary: () => {},
+    });
+    expect(result.exitCode, result.output).toBe(0);
+    expect(result.output).toBe("");
+    expect(Date.now() - started).toBeLessThan(2000);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("owned group inspection errors fail closed", async () => {
+  const cwd = await scratch();
+  try {
+    await writeFile(path.join(cwd, "ps"), "#!/bin/sh\nexit 7\n", {
+      mode: 0o755,
+    });
+    const module = path.join(
+      import.meta.dirname,
+      "code-quality-task-budget.ts",
+    );
+    const runner = Bun.spawn(
+      [
+        process.execPath,
+        "--eval",
+        `
+        import { runBudgetedCheck } from ${JSON.stringify(module)};
+        const result = await runBudgetedCheck({
+          command: [process.execPath, '-e', 'process.exit(0)'],
+          cwd: ${JSON.stringify(cwd)}, timeoutMs: 5000, graceMs: 200,
+          writeStdout: () => {}, writeStderr: text => process.stdout.write(text),
+          writeSummary: () => {},
+        });
+        process.exit(result.exitCode);
+      `,
+      ],
+      { env: { ...process.env, PATH: cwd }, stdout: "pipe", stderr: "pipe" },
+    );
+    const output = await new Response(runner.stdout).text();
+    expect(await runner.exited, output).toBe(1);
+    expect(output).toContain("Cannot inspect owned process group");
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

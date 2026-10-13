@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import path from "node:path";
 import ts from "typescript";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
 import {
   apiDeclarationConsumers,
   usesGeneratedApiConfig,
@@ -31,7 +33,10 @@ export const nativeProgramSpansWorkspaces = (
   const workspaces = new Set<string>();
   const directory = ts.sys.realpath?.(root) ?? root;
   for (const file of files) {
-    const relative = path.relative(directory, ts.sys.realpath?.(file) ?? file);
+    const relative = repoRelativePath(
+      directory,
+      ts.sys.realpath?.(file) ?? file,
+    );
     const workspace = /^(?:apps|packages)[/\\][^/\\]+(?=[/\\])/u.exec(
       relative,
     )?.[0];
@@ -77,7 +82,7 @@ export const apiProgramTypecheckInputs = (
   const root = path.resolve(api, "../..");
   const roots = new Set(["**"]);
   for (const file of nativeFiles) {
-    const relative = path.relative(root, file).replaceAll(path.sep, "/");
+    const relative = repoRelativePath(root, file);
     if (
       relative.startsWith("../") ||
       /(?:^|\/)(?:node_modules|\.cache|\.turbo)(?:\/|$)/u.test(relative)
@@ -110,7 +115,7 @@ export const apiProgramTypecheckInputs = (
   ) {
     for (const consumer of apiDeclarationConsumers(config)) {
       for (const file of consumer.fileNames) {
-        const relative = path.relative(root, file).replaceAll(path.sep, "/");
+        const relative = repoRelativePath(root, file);
         if (
           relative.startsWith("../") ||
           /(?:^|\/)(?:node_modules|\.cache|\.turbo)(?:\/|$)/u.test(relative)
@@ -136,11 +141,7 @@ export const apiProgramTypecheckInputs = (
     parsed.options.outDir,
     parsed.options.declarationDir,
   ].flatMap((output) =>
-    output
-      ? [
-          `!${path.relative(api, path.resolve(output)).replaceAll(path.sep, "/")}/**`,
-        ]
-      : [],
+    output ? [`!${repoRelativePath(api, path.resolve(output))}/**`] : [],
   );
   return [
     ...new Set([
@@ -199,14 +200,11 @@ export const uncoveredApiTypecheckFiles = ({
     };
   });
   return files.filter((file) => {
+    const resolved = ts.sys.realpath?.(file) ?? file;
     const matches = patterns.filter(
       (pattern) =>
-        !path
-          .relative(pattern.directory, ts.sys.realpath?.(file) ?? file)
-          .startsWith(`..${path.sep}`) &&
-        pattern.glob.match(
-          path.relative(pattern.directory, ts.sys.realpath?.(file) ?? file),
-        ),
+        isPathInside(pattern.directory, resolved) &&
+        pattern.glob.match(repoRelativePath(pattern.directory, resolved)),
     );
     return (
       !matches.some((pattern) => !pattern.excluded) ||
