@@ -11,14 +11,14 @@ import {
   expenses,
   timeEntries,
 } from "@/api/db/schema";
-import {
-  selectTimekeeperNames,
-  timekeeperIdsOf,
-} from "@/api/handlers/time-entries/timekeeper-names";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { resolveInvoicePrefill } from "@/api/lib/billing/invoice-prefill";
 import { latestDate } from "@/api/lib/billing/invoice-prefill.logic";
+import {
+  selectTimekeeperNames,
+  timekeeperIdsOf,
+} from "@/api/lib/billing/timekeeper-names";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
