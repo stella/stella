@@ -18,7 +18,9 @@ for (const destination of ["/workspaces", "/law?country=cze"]) {
             : { status: "redeemed" },
       });
     });
-    await page.goto(`${destination}#section=2&sh=sh1_browser_fixture`);
+    await page.goto(`${destination}#section=2&sh=sh1_browser_fixture`, {
+      waitUntil: "domcontentloaded",
+    });
     await expect(page).toHaveURL(/\/auth\/handoff$/u);
     await expect(
       page.getByText("Continue as reader@example.test in Example legal team?", {
@@ -97,7 +99,9 @@ test.describe("signed-out public-law handoff", () => {
       redemptionCount += 1;
       await route.fulfill({ json: { status: "refused" } });
     });
-    await page.goto("/law?country=cze#section=2&sh=sh1_browser_fixture");
+    await page.goto("/law?country=cze#section=2&sh=sh1_browser_fixture", {
+      waitUntil: "domcontentloaded",
+    });
     await expect(page).toHaveURL(
       new URL("/law?country=cze#section=2", page.url()).href,
     );

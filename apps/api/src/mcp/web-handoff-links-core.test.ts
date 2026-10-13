@@ -106,9 +106,9 @@ describe("MCP web handoff result links", () => {
       },
     });
     expect(calls).toEqual([["/workspaces/matter", "/law/cz/2020/1"]]);
-    expect(decorated.structuredContent?.["appUrl"]).toBe(
-      `${base}/workspaces/matter#sh=sh1_example`,
-    );
+    expect(decorated.structuredContent).toMatchObject({
+      appUrl: `${base}/workspaces/matter#sh=sh1_example`,
+    });
     expect(
       await handoffLinkResult({
         result,
@@ -160,7 +160,13 @@ describe("MCP web handoff result links", () => {
             links,
             "sh1_example",
           );
-          const value = decorated.structuredContent?.["appUrl"];
+          const content = decorated.structuredContent;
+          const value =
+            typeof content === "object" &&
+            content !== null &&
+            "appUrl" in content
+              ? content.appUrl
+              : undefined;
           expect(typeof value).toBe("string");
           if (typeof value !== "string") {
             expect.unreachable("Expected a decorated URL");
