@@ -1435,6 +1435,8 @@
     "sendPrompt": "Enviar mensagem",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
+    "signInToChat": "Entre para conversar sobre este documento",
+    "signInToChatAbout": "Entre para conversar sobre",
     "skills": {
       "scope": {
         "private": "Suas habilidades de IA",
