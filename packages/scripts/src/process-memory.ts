@@ -101,7 +101,8 @@ export const parseWindowsProcessTree = (rootPid: number, output: string) => {
 const sampleWindowsProcessTree = async (rootPid: number, signal: AbortSignal) =>
   Result.tryPromise({
     try: async () => {
-      // Ancestry uses metadata only. Working sets are queried only for owned PIDs.
+      // Windows has no POSIX process group: query the full descendant census on
+      // every sample. Working sets are queried only for those owned PIDs.
       const command = `$ErrorActionPreference='Stop'; $rows=@(); try { $rows=@(Get-CimInstance Win32_Process -Property ProcessId,ParentProcessId) } catch { Write-Output 'unknown' }; $owned=[System.Collections.Generic.HashSet[int]]::new(); $queue=[System.Collections.Generic.Queue[int]]::new(); [void]$owned.Add(${rootPid}); $queue.Enqueue(${rootPid}); while($queue.Count -gt 0) { $pidValue=$queue.Dequeue(); foreach($row in $rows) { if($row.ParentProcessId -eq $pidValue -and $owned.Add([int]$row.ProcessId)) { $queue.Enqueue([int]$row.ProcessId) } } }; $memory=@{}; Get-Process -Id @($owned) -ErrorAction SilentlyContinue | ForEach-Object { $memory[[int]$_.Id]=$_.WorkingSet64 }; foreach($pidValue in $owned) { $parent=0; foreach($row in $rows) { if($row.ProcessId -eq $pidValue) { $parent=$row.ParentProcessId; break } }; $bytes=-1; if($memory.ContainsKey($pidValue)) { $bytes=$memory[$pidValue] }; Write-Output "$pidValue $parent $bytes" }`;
       const child = Bun.spawn(
         [

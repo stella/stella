@@ -8,7 +8,7 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
   process.on(signal, () => writeFileSync(marker, signal));
 }
 // The fixture remains bounded even if shutdown escalation is removed.
-setTimeout(() => process.exit(0), 5000);
+setTimeout(() => process.exit(0), 30_000);
 if (process.argv.at(3) === "leaf") {
   console.log("ready");
 } else {
