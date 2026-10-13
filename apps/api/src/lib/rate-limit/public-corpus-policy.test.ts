@@ -4,6 +4,14 @@ import ts from "typescript";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
+import { PUBLIC_READ_STATEMENT_TIMEOUT_MS } from "@/api/db/shared-pool-timeouts";
+import {
+  publicReadTimeoutError,
+  PUBLIC_READ_TIMEOUT_CODE,
+  runPublicReadRequest,
+} from "@/api/lib/legal-search/public-read-timeout";
+import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
+import { PG_ERROR } from "@/api/lib/pg-error";
 import {
   PUBLIC_CORPUS_ROUTE_POLICY,
   resolvePublicCorpusPolicy,
@@ -256,6 +264,43 @@ const expectCompletePolicy = ({ mounted, classified }: CensusOptions) => {
 };
 
 describe("public corpus admission policy", () => {
+  test("request budgets survive asynchronous reads without leaking into other work", async () => {
+    const request = new Request(
+      `http://localhost${STELLA_API_VERSION_PREFIX}/law/statutes`,
+    );
+    const reached = Promise.withResolvers<undefined>();
+    const resume = Promise.withResolvers<undefined>();
+    const reading = runPublicReadRequest(request, async () => {
+      reached.resolve(undefined);
+      await resume.promise;
+      return getPublicReadStatementTimeoutMs();
+    });
+    await reached.promise;
+    expect(getPublicReadStatementTimeoutMs()).toBeUndefined();
+    resume.resolve(undefined);
+    expect(await reading).toBe(PUBLIC_READ_STATEMENT_TIMEOUT_MS.browse);
+    expect(getPublicReadStatementTimeoutMs()).toBeUndefined();
+  });
+
+  test("only public request cancellations become typed retryable statuses", () => {
+    const canceled = Object.assign(new Error("SQL diagnostics"), {
+      code: PG_ERROR.QUERY_CANCELED,
+    });
+    expect(publicReadTimeoutError(canceled)).toBeNull();
+    const request = new Request(
+      `http://localhost${STELLA_API_VERSION_PREFIX}/law/statutes/search`,
+    );
+    runPublicReadRequest(request, () => {
+      const wrapped = new Error("query wrapper", { cause: canceled });
+      expect(publicReadTimeoutError(wrapped)).toMatchObject({
+        status: 503,
+        code: PUBLIC_READ_TIMEOUT_CODE,
+        message: "Public read timed out. Please try again.",
+      });
+      expect(publicReadTimeoutError(new Error("other failure"))).toBeNull();
+    });
+  });
+
   test("classifies exactly the routes mounted by both public corpus routers", async () => {
     const mounted = await readMountedRoutes();
     expect(mounted.length).toBeGreaterThan(0);
@@ -263,6 +308,24 @@ describe("public corpus admission policy", () => {
       mounted,
       classified: Object.keys(PUBLIC_CORPUS_ROUTE_POLICY),
     });
+    for (const [route, routeClass] of Object.entries(
+      PUBLIC_CORPUS_ROUTE_POLICY,
+    )) {
+      const separator = route.indexOf(" ");
+      const method = route.slice(0, separator);
+      const path = route.slice(separator + 1).replace(/:[^/]+/gu, "fixture");
+      const request = new Request(
+        `http://localhost${STELLA_API_VERSION_PREFIX}${path}`,
+        { method },
+      );
+      const budget = runPublicReadRequest(
+        request,
+        getPublicReadStatementTimeoutMs,
+      );
+      expect(budget, route).toBe(PUBLIC_READ_STATEMENT_TIMEOUT_MS[routeClass]);
+      expect(budget, route).toBeGreaterThan(0);
+    }
+    expect(getPublicReadStatementTimeoutMs()).toBeUndefined();
   });
 
   test("the census rejects an unclassified route and a stale removed route", () => {

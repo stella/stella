@@ -1,9 +1,7 @@
-import { expect, setDefaultTimeout, test } from "bun:test";
+import { expect, test } from "bun:test";
 
 import repositoryConfig from "../../oxlint.config.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(30_000);
 
 const source = await Bun.file(
   new URL("../__fixtures__/no-use-before-define.fixture.ts", import.meta.url),

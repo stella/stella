@@ -5,6 +5,11 @@ import { useTranslations } from "use-intl";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import {
+  pickVersionAt,
+  referencesOutsideVersion,
+  versionCoversDate,
+} from "@stll/api-contract/statute-version";
+import {
   Accordion,
   AccordionItem,
   AccordionPanel,
@@ -38,11 +43,6 @@ import type {
   CitedWorkAtDate,
   ResolvedCitedStatute,
 } from "@/features/case-law/queries/provisions";
-import {
-  pickVersionAt,
-  referencesOutsideVersion,
-  versionCoversDate,
-} from "@/features/case-law/statute-version";
 import { useProvisionPartRenderer } from "@/features/case-law/use-provision-part-renderer";
 import { useHydrated } from "@/hooks/use-hydrated";
 import { optionalArray } from "@/lib/arrays";

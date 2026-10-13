@@ -8,8 +8,7 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const WORKFLOW_FILE = ".github/workflows/ci.yml";
 const TEST_DIRECTORY = ".oxlint-plugins/__tests__";
 const TEST_STEP = "Test oxlint plugins";
-const TEST_COMMAND =
-  "find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test";
+const TEST_COMMAND = "bun scripts/run-custom-lint-tests.ts";
 
 const workflow = Bun.YAML.parse(
   readFileSync(path.join(REPO_ROOT, WORKFLOW_FILE), "utf-8"),

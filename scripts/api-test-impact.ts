@@ -5,6 +5,8 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { listApiTestPaths } from "../apps/api/scripts/api-test-plan";
 import { partitionTestFiles } from "../apps/api/scripts/test-file-shards";
 import {
@@ -240,7 +242,7 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
   const pending = starts.map((file) => path.join(root, file));
   while (pending.length > 0) {
     const absolute = pending.pop() ?? panic("Graph queue is empty");
-    const file = path.relative(root, absolute);
+    const file = repoRelativePath(root, absolute);
     if (edges.has(file)) {
       continue;
     }
@@ -307,7 +309,7 @@ export const buildImportGraph = (root: string, starts: readonly string[]) => {
       if (resolution.value === undefined) {
         continue;
       }
-      dependencies.push(path.relative(root, resolution.value));
+      dependencies.push(repoRelativePath(root, resolution.value));
       pending.push(resolution.value);
     }
   }

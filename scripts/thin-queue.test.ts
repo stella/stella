@@ -18,7 +18,12 @@ import {
   evaluate as evaluateExpression,
   UNKNOWN,
 } from "./github-expression";
-import { mainHeavyJobs, queueAdmittedJobs, thinJobs } from "./main-heavy-plan";
+import {
+  mainHeavyJobs,
+  MERGE_GROUP_EXCEPTIONS,
+  queueAdmittedJobs,
+  thinJobs,
+} from "./main-heavy-plan";
 
 const root = new URL("../", import.meta.url).pathname;
 const stepSchema = v.looseObject({
@@ -102,6 +107,10 @@ const outcome = step({
   job: "ci-result",
   name: "Evaluate CI outcome",
 });
+const folded = v.parse(
+  v.record(v.string(), v.record(v.string(), v.string())),
+  JSON.parse(outcome.env?.["FOLDED_SUITES"] ?? ""),
+);
 const scopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),
   JSON.parse(outcome.env?.["JOB_SCOPES"] ?? ""),
@@ -109,9 +118,10 @@ const scopes = v.parse(
 const needs = v.parse(v.array(v.string()), ci.jobs["ci-result"]?.needs);
 const plan = {
   ...Object.fromEntries(
-    Object.values(scopes).flatMap((scope) =>
-      scope === null ? [] : [[scope, "true"]],
-    ),
+    [
+      ...Object.values(scopes),
+      ...Object.values(folded).flatMap(Object.values),
+    ].flatMap((scope) => (scope === null ? [] : [[scope, "true"]])),
   ),
   ...Object.fromEntries(
     Object.values(
@@ -122,6 +132,9 @@ const plan = {
     ).map((scope) => [scope, "true"]),
   ),
   desktop_browser_required: "true",
+  ci_browser_scope_required: "true",
+  legal_atlas_image_inputs_required: "true",
+  legal_atlas_api_source_required: "true",
   agent_sandbox_docker_required: "true",
   api_image_deps_required: "true",
   run_required: "true",
@@ -974,10 +987,6 @@ const evaluate = ({
   result,
   script = outcome.run,
 }: EvaluateOptions) => {
-  const folded = v.parse(
-    v.record(v.string(), v.record(v.string(), v.string())),
-    JSON.parse(outcome.env?.["FOLDED_SUITES"] ?? "{}"),
-  );
   const dependencies = Object.fromEntries(
     needs.map((name) => {
       let jobResult =
@@ -1231,15 +1240,31 @@ test("main release and scheduled runs execute the planned version compiler in ei
 }, 30_000);
 
 test("queue admission covers every gated job except documented event and producer exceptions", () => {
-  const exceptions = new Set([
-    "ci-checks-docs",
-    "fix-tests-on-base",
-    "heavy-web-build",
-    "release-typecheck",
-  ]);
+  const exceptions = new Set(Object.keys(MERGE_GROUP_EXCEPTIONS));
   expect([...admitted].toSorted()).toEqual(
     needs.filter((job) => job !== "ci-plan" && !exceptions.has(job)).toSorted(),
   );
+});
+
+test("docs checks certify scoped merge groups at both queue depths", () => {
+  expect(admitted).toContain("ci-checks-docs");
+  for (const queueDepth of ["thin", "full"]) {
+    for (const required of ["true", "false"]) {
+      const value = context({
+        event: { event: "merge_group", message: "ordinary" },
+        variable: queueDepth,
+        queueDepth,
+      });
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic("Missing ci-plan context");
+      }
+      planner.outputs["docs_checks_required"] = required;
+      expect(selected(ci.jobs["ci-checks-docs"]?.if, value)).toBe(
+        required === "true",
+      );
+    }
+  }
 });
 
 test("scoped queue eligibility is invariant under depth and the retired browser switch", () => {
@@ -1260,6 +1285,9 @@ test("scoped queue eligibility is invariant under depth and the retired browser 
           }
           if (scope) {
             planner.outputs[scope] = required;
+          }
+          if (scope === "legal_atlas_image_required") {
+            planner.outputs["legal_atlas_image_inputs_required"] = required;
           }
           if (job === "postgres-service-suites") {
             planner.outputs["postgres_suites_required"] = required;

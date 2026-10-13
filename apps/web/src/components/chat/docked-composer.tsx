@@ -98,37 +98,13 @@ export const PromptBarShell = ({
 );
 
 /**
- * What a bar that is drawn but cannot be typed into does when it is pressed.
- * Absent while the live editor hydrates (nothing to say yet); present where
- * the bar is the entry point to something the reader does not have an account
- * for, so the press is what asks for one.
- */
-type PromptBarActivation = {
-  /** Names the act for a screen reader; the bar itself only shows a hint. */
-  label: string;
-  onActivate: () => void;
-};
-
-/**
  * Complete prompt row rendered while the live editor hydrates. Known controls
  * stay real and fixed in place; only data-owned content belongs in a skeleton.
  * Keeping this beside `PromptBar` makes the attachment and send affordances a
  * single owned pair instead of asking each loading shell to mirror them.
- *
- * With an `activation` the same row becomes pressable: the controls stay inert
- * and one transparent button covers the box, so the reader presses the bar
- * they can see rather than a control that only looks enabled.
  */
-export const PromptBarPending = ({
-  activation,
-  children,
-}: {
-  activation?: PromptBarActivation | undefined;
-  children: ReactNode;
-}) => (
-  <PromptBarShell
-    {...(activation === undefined ? { "aria-hidden": true } : {})}
-  >
+export const PromptBarPending = ({ children }: { children: ReactNode }) => (
+  <PromptBarShell aria-hidden>
     <ComposerControlSlot>
       <ComposerPlusMenu disabled onOpenFilePicker={() => undefined} />
     </ComposerControlSlot>
@@ -147,14 +123,6 @@ export const PromptBarPending = ({
         onSend={() => undefined}
       />
     </ComposerControlSlot>
-    {activation !== undefined && (
-      <button
-        aria-label={activation.label}
-        className="absolute inset-0 cursor-text rounded-[inherit]"
-        onClick={activation.onActivate}
-        type="button"
-      />
-    )}
   </PromptBarShell>
 );
 

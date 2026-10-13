@@ -199,7 +199,7 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "47f41949cebdc06d6bdd951dc89fa1163ddfcf3c8b69d5772f3d190ea714e069",
+    "fingerprint": "3093a86d6d59138e1e50e4a3d9146e2211fa94750b6aae0dfdd193e8dbf1e834",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -212,12 +212,6 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "4b2d3c90e312c34ab2df9bbaf6b997a7462643046fa362d6ba10cb006bfbd0f6",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "4bd82cdc92cf9ce8321f920dcfed517f9382a874ba7e562c2dd3df45362228d6",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -338,12 +332,6 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "da4775ee52425377bbacf92dc2245c9d30a54bb95c7a6f62e24e030a632435d6",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "e1e59c6a3e27a646023813ca7f64ed7d636b312b60cb80e9b88a4e61e8e00053",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },

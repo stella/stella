@@ -4,7 +4,7 @@
 /// <reference lib="dom" />
 /// <reference lib="dom.iterable" />
 import { chromium } from "@playwright/test";
-import type { Browser, Locator, Page } from "@playwright/test";
+import type { Browser, BrowserContext, Locator, Page } from "@playwright/test";
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -15,7 +15,15 @@ import {
   PROFESSIONAL_USE_DISPLAYED_VERSION_FIELD,
   PROFESSIONAL_USE_STATEMENT_VERSION,
 } from "@stll/api-contract/professional-use";
+import { repoRelativePath } from "@stll/portable-path";
 
+import {
+  anchorMarketingAgentFinalTurn,
+  getMarketingAgentThreadId,
+  MARKETING_AGENT_CITED_SOURCES,
+  MARKETING_AGENT_FIRST_QUESTION,
+  settleMarketingAgentThread,
+} from "./agent-thread";
 import {
   CAPTURE_DPR,
   CAPTURE_THEMES,
@@ -30,27 +38,28 @@ import type {
   RecordingsManifest,
   StoryCaptureId,
 } from "./captures";
+import {
+  assertNoActiveEditBadge,
+  releaseSupplierAgreementEditLock,
+  SUPPLIER_AGREEMENT_EDITOR_PATH,
+} from "./edit-locks";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const MEDIA_DIR = path.join(REPO_ROOT, "apps/landing/public/media/products");
 const RAW_VIDEO_DIR = path.join(REPO_ROOT, ".playwright/marketing-video");
 const WEB_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
 const API_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
+const MARKETING_URLS = { apiUrl: API_URL, webUrl: WEB_URL };
 const CAPTURE_FILTER = process.env["MARKETING_CAPTURE"];
 const THEME_FILTER = process.env["MARKETING_THEME"];
 const EMAIL = "test@stella.dev";
 const MARKETING_ORGANIZATION_NAME = "Harbrook & Partners";
-const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
 const EXPORT_REVIEW_WORKSPACE_ID = "bb8641dc-0667-574c-8e30-152a1fd4b3f5";
 const MERIDIAN_WORKSPACE_ID = "6cbf3f81-bcc9-55da-8a4e-840221d4cabe";
-// The negotiated Supplier Agreement in the "Meridian supply agreement"
-// matter (seed-dev.ts: `ws-akvizice-energo-doc-7` /
-// `ws-akvizice-energo-field-file-6`): the docx with the clause-12
-// liability-cap redline and playbook margin comments that the editor scenes
-// film, matching the landing DOM mock (storyEditorDocument in
+// The editor scenes film the negotiated Supplier Agreement (edit-locks.ts):
+// the docx with the clause-12 liability-cap redline and playbook margin
+// comments, matching the landing DOM mock (storyEditorDocument in
 // apps/landing/src/data/product-story.ts).
-const SUPPLIER_AGREEMENT_ENTITY_ID = "84824638-eb81-58c5-8a81-5d7e961fb7d5";
-const SUPPLIER_AGREEMENT_FIELD_ID = "3f985a8b-26be-5a07-89d3-2a05acb94354";
 const SUPPLIER_AGREEMENT_FILE_NAME = "Supplier_Agreement.docx";
 // The wide/hero/portrait viewports and the capture matrix live in
 // ./captures.ts so the staleness check (scripts/check-marketing-recordings.ts)
@@ -73,6 +82,10 @@ type StoryScene = {
   collapsedSidebar?: boolean;
   cursor: CursorMode;
   durationSeconds: number;
+  // Opens the Supplier Agreement for editing, which takes its edit lock; the
+  // recorder releases it after every take and expects no lock badge in every
+  // other scene (edit-locks.ts).
+  holdsEditLock?: boolean;
   id: StoryCaptureId;
   path: (views: MarketingViewRoutes) => string;
   prepare: (page: Page) => Promise<void>;
@@ -188,21 +201,43 @@ const waitForInspectorPreview = async (
   }
 };
 
-const FIRST_SOURCE_PREVIEW = {
-  bodyMarker: "Aurora_Retail_Shareholder_Register_2018",
-  label: "Aurora_Retail_Shareholder_Register_2018",
-} as const satisfies InspectorPreviewMarker;
-const SECOND_SOURCE_PREVIEW = {
-  bodyMarker: "Edison_Bank_Permit_2018",
-  label: "Edison_Bank_Permit_2018",
-} as const satisfies InspectorPreviewMarker;
+const [FIRST_CITED_SOURCE, SECOND_CITED_SOURCE] =
+  MARKETING_AGENT_CITED_SOURCES satisfies readonly InspectorPreviewMarker[];
+
+// A cited source's inline chip in the final answer. Clicked only once it is
+// inside the viewport, so the scene never films a click that scrolled the
+// transcript or landed off-frame.
+const citedSourceChip = async (
+  page: Page,
+  source: (typeof MARKETING_AGENT_CITED_SOURCES)[number],
+) => {
+  const chip = page.getByText(source.chipLabel).first();
+  await chip.waitFor();
+  const inViewport = await chip.evaluate(
+    async (element) =>
+      new Promise<boolean>((resolve) => {
+        const observer = new IntersectionObserver((entries) => {
+          observer.disconnect();
+          resolve((entries.at(-1)?.intersectionRatio ?? 0) >= 0.99);
+        });
+        observer.observe(element);
+      }),
+  );
+  if (!inViewport) {
+    throw new Error(
+      `agent: the "${source.chipLabel}" citation is not fully in frame; ` +
+        "refusing to film a click outside the shot",
+    );
+  }
+  return chip;
+};
 
 // ─── Review-citation scene: cell-to-passage click-through ───────────────
 // The Export Review table's Governing Law column for the seeded
 // Aurora_Retail_Shareholder_Register_2018.docx row (seed-dev.ts row index 0:
 // a "Direct citation" evidence-quality DOCX). Its citation quote
 // ("Governing law: Netherlands") is a verbatim line in the seeded document
-// body, and seed-dev.ts's ExportReviewCitationSeed.blockIndex points the
+// body, and seed-export-review.ts's ExportReviewCitationSeed.blockIndex points the
 // citation at that exact paragraph, so opening it resolves to a real
 // folio exact-passage highlight (PR #1215) instead of a degraded block
 // flash — required for this scene to ever have something to hold on.
@@ -474,11 +509,8 @@ const scenes = [
     // imply drag-scrolling that is not happening), so the overlay stays off.
     id: "editor",
     cursor: "hidden",
-    path: () =>
-      `/workspaces/${MERIDIAN_WORKSPACE_ID}/all/document` +
-      "?editing=true" +
-      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
-      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
+    holdsEditLock: true,
+    path: () => SUPPLIER_AGREEMENT_EDITOR_PATH,
     durationSeconds: 3.5,
     prepare: prepareEditorScene,
   },
@@ -491,11 +523,8 @@ const scenes = [
     id: "editor-doc",
     collapsedSidebar: true,
     cursor: "hidden",
-    path: () =>
-      `/workspaces/${MERIDIAN_WORKSPACE_ID}/all/document` +
-      "?editing=true" +
-      `&entity=${SUPPLIER_AGREEMENT_ENTITY_ID}` +
-      `&field=${SUPPLIER_AGREEMENT_FIELD_ID}`,
+    holdsEditLock: true,
+    path: () => SUPPLIER_AGREEMENT_EDITOR_PATH,
     durationSeconds: 3.5,
     prepare: prepareEditorScene,
   },
@@ -548,37 +577,36 @@ const scenes = [
     path: ({ agent }) => agent,
     durationSeconds: 5.5,
     prepare: async (page) => {
-      await page
-        .getByText("Compare the change-of-control clauses across this matter.")
-        .first()
-        .waitFor();
-      await page
-        .getByText(/assignment or a material service change/u)
-        .first()
-        .waitFor();
+      await page.getByText(MARKETING_AGENT_FIRST_QUESTION).first().waitFor();
+      // Every answer, citation, the generated view and the recap have
+      // painted, and the final turn (question, cited lead-in, view) is
+      // framed at the top of the transcript.
+      await settleMarketingAgentThread(page);
       // Pre-warm both cited documents the loop will click: open each in
       // the inspector, require its folio preview to really paint (this
       // fails the run early when a preview cannot render), then close the
       // pane again so frame 0 keeps the full-width chat. The warmed
       // download/layout caches are what let the in-cut opens meet the
       // paint budget enforced in the replay.
-      for (const marker of [FIRST_SOURCE_PREVIEW, SECOND_SOURCE_PREVIEW]) {
-        await page.getByText(new RegExp(marker.label, "u")).first().click();
+      for (const source of [FIRST_CITED_SOURCE, SECOND_CITED_SOURCE]) {
+        await (await citedSourceChip(page, source)).click();
         await waitForInspectorPreview(
           page,
-          marker,
+          source,
           INSPECTOR_PREWARM_TIMEOUT_MS,
         );
       }
       // Pre-warming opened one inspector tab per document; close them all
       // so frame 0 keeps the full-width chat and the loop's first click
-      // performs the open on camera.
+      // performs the open on camera. The pane reflowed the chat, so frame
+      // the final turn again.
       await closeAllInspectorTabs(page);
+      await anchorMarketingAgentFinalTurn(page);
       // Rest just below-right of the first cited source: neutral (nothing
       // hovered), and the loop's first eased move starts from a short,
       // natural approach onto that source.
       const firstSource = await locatorCenter(
-        page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
+        await citedSourceChip(page, FIRST_CITED_SOURCE),
       );
       await moveCursorTo(page, {
         x: firstSource.x + 56,
@@ -803,6 +831,10 @@ const warmSceneRoutes = async ({
     await page.goto(route, { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("networkidle").catch(() => undefined);
   }
+  // Warming opened the editor routes, and with them the Supplier Agreement's
+  // edit lock; release it (and any lock an earlier run left) before the
+  // first take.
+  await releaseSupplierAgreementEditLock(context.request, MARKETING_URLS);
   await context.close();
 };
 
@@ -972,11 +1004,36 @@ const recordCapture = async ({
     theme,
     viewport: capture.viewport,
   });
+  try {
+    await recordCaptureInContext({ capture, context, theme, views });
+    return;
+  } finally {
+    // Closing the page never unmounts the editor, so an editor take's lock
+    // would outlive it and badge the document in later scenes. Release it
+    // even when the take failed and is about to be retried.
+    if (capture.holdsEditLock === true) {
+      await releaseSupplierAgreementEditLock(context.request, MARKETING_URLS);
+    }
+    await context.close();
+  }
+};
+
+const recordCaptureInContext = async ({
+  capture,
+  context,
+  theme,
+  views,
+}: Omit<RecordCaptureOptions, "browser" | "cookies"> & {
+  context: BrowserContext;
+}) => {
   const page = await context.newPage();
   configurePage(page);
 
   await page.goto(capture.path(views), { waitUntil: "commit" });
   await capture.prepare(page);
+  if (capture.holdsEditLock !== true) {
+    await assertNoActiveEditBadge(page, capture.captureId);
+  }
   await hideCaptureNoise(page);
   await page.evaluate(async () => {
     await document.fonts.ready;
@@ -1035,7 +1092,6 @@ const recordCapture = async ({
     `story-${capture.captureId}${suffix}-poster.jpg`,
   );
   await video.saveAs(rawPath);
-  await context.close();
 
   const label = `${capture.captureId} (${theme})`;
   const { lastFrameSeconds, markerEndSeconds } = await findReadyMarker(
@@ -1072,7 +1128,7 @@ const recordCapture = async ({
       reference: payoffReference,
     });
   }
-  process.stdout.write(`recorded ${path.relative(REPO_ROOT, outputPath)}\n`);
+  process.stdout.write(`recorded ${repoRelativePath(REPO_ROOT, outputPath)}\n`);
 };
 
 const READY_MARKER_ID = "__stella_capture_ready_marker";
@@ -1623,46 +1679,6 @@ const resolveMarketingViewRoutes = async (
   };
 };
 
-// `Array.isArray` narrows `unknown` to `any[]`; this keeps elements `unknown`.
-const isUnknownArray = (value: unknown): value is unknown[] =>
-  Array.isArray(value);
-
-const getMarketingAgentThreadId = (payload: unknown): string | undefined => {
-  if (
-    typeof payload !== "object" ||
-    payload === null ||
-    !("workspaces" in payload) ||
-    !isUnknownArray(payload.workspaces)
-  ) {
-    return undefined;
-  }
-
-  for (const workspace of payload.workspaces) {
-    if (
-      typeof workspace !== "object" ||
-      workspace === null ||
-      !("threads" in workspace) ||
-      !isUnknownArray(workspace.threads)
-    ) {
-      continue;
-    }
-    for (const thread of workspace.threads) {
-      if (
-        typeof thread === "object" &&
-        thread !== null &&
-        "id" in thread &&
-        typeof thread.id === "string" &&
-        "title" in thread &&
-        thread.title === MARKETING_AGENT_THREAD_TITLE
-      ) {
-        return thread.id;
-      }
-    }
-  }
-
-  return undefined;
-};
-
 type ViewRecord = {
   id: string;
   layout: { type: string };
@@ -2057,26 +2073,22 @@ const replayCaptureMotion = async (page: Page, captureId: StoryCaptureId) => {
   // paint budget (pre-warmed in prepare); a blank pane on camera fails
   // the run, and the budget wait is deducted from the hold so the loop's
   // cadence stays fixed.
-  await clickWithCursor(
-    page,
-    page.getByText(/Aurora_Retail_Shareholder_Register_2018/u).first(),
-  );
+  await clickWithCursor(page, await citedSourceChip(page, FIRST_CITED_SOURCE));
   const firstPaintStartedAt = Date.now();
   await waitForInspectorPreview(
     page,
-    FIRST_SOURCE_PREVIEW,
+    FIRST_CITED_SOURCE,
     INSPECTOR_PREVIEW_PAINT_BUDGET_MS,
   );
   await page.waitForTimeout(
     Math.max(0, 2600 - (Date.now() - firstPaintStartedAt)),
   );
-  await clickWithCursor(
-    page,
-    page.getByText(/Edison_Bank_Permit_2018/u).first(),
-  );
+  // The open pane narrowed the chat; the chip check refuses a second click
+  // the reflow pushed out of frame.
+  await clickWithCursor(page, await citedSourceChip(page, SECOND_CITED_SOURCE));
   await waitForInspectorPreview(
     page,
-    SECOND_SOURCE_PREVIEW,
+    SECOND_CITED_SOURCE,
     INSPECTOR_PREVIEW_PAINT_BUDGET_MS,
   );
 };

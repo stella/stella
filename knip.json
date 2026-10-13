@@ -177,6 +177,9 @@
     "packages/permissions": {
       "entry": ["src/index.ts"]
     },
+    "packages/portable-path": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
     "packages/playwright-tools": {
       "entry": ["src/marketing-config.ts"]
     },

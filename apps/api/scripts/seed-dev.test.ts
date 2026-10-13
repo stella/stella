@@ -1,17 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  createMockDocx,
+  createSeedEmail,
+  SEED_EMAIL_FILE_NAMES,
+} from "./seed-dev";
+import {
   buildExportReviewCitationSeeds,
   buildExportReviewDocumentText,
   buildExportReviewMetadata,
-  createSeedEmail,
-  createMockDocx,
-  SEED_EMAIL_FILE_NAMES,
-} from "./seed-dev";
+} from "./seed-export-review";
 
 // Reproduces the non-empty-block walk folio's DOCX extractor performs (see
 // the `blockIndex` doc comment on `ExportReviewCitationSeed` in
-// seed-dev.ts): the leading title paragraph is block 1, then one block per
+// seed-export-review.ts): the leading title paragraph is block 1, then one block per
 // non-blank line of the body text, blank lines uncounted.
 const nonEmptyBlockTexts = (title: string, bodyText: string): string[] =>
   [title, ...bodyText.split("\n")].filter((line) => line.trim().length > 0);
