@@ -1273,6 +1273,11 @@
     "greeting": "Na čem chcete pracovat?",
     "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
     "hideThread": "Skrýt konverzaci",
+    "history": {
+      "matterUnavailable": "Tento spis není dostupný",
+      "older": "Starší",
+      "previous7Days": "Předchozích 7 dní"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {a # další} few {a # další} other {a # dalších}}"
@@ -1435,6 +1440,8 @@
     "sendPrompt": "Odeslat zprávu",
     "sendQueuedMessageNow": "Odeslat hned",
     "sendWithoutAnonymization": "Odeslat bez anonymizace",
+    "signInToChat": "Přihlaste se a chatujte o tomto dokumentu",
+    "signInToChatAbout": "Přihlaste se a chatujte o",
     "skills": {
       "scope": {
         "private": "Vaše dovednosti",
@@ -1765,6 +1772,8 @@
     "citations": "Citace",
     "clauses": "Vzorová ustanovení",
     "clearDate": "Vymazat datum",
+    "clearFilters": "Vymazat filtry",
+    "clearSearch": "Vymazat hledání",
     "close": "Zavřít",
     "closeAll": "Zavřít vše",
     "closeOthers": "Zavřít ostatní",
@@ -1795,6 +1804,7 @@
       "nextDecade": "Další desetiletí",
       "nextMonth": "Další měsíc",
       "nextYear": "Další rok",
+      "outOfRange": "Vyberte datum v povoleném rozmezí.",
       "previousDecade": "Předchozí desetiletí",
       "previousMonth": "Předchozí měsíc",
       "previousYear": "Předchozí rok",
@@ -4120,7 +4130,6 @@
     "appsSubtitle": "stella funguje i mimo prohlížeč: v aplikaci pro počítač a ve vašem AI asistentovi. K tomuto nastavení se můžete kdykoliv později vrátit.",
     "appsTitle": "Získejte stellu všude",
     "catalogueAlwaysOn": "Vždy zapnuto",
-    "catalogueClearSearch": "Vymazat hledání",
     "catalogueCommunityHeading": "Ostatní",
     "catalogueContinueWithCount": "{count, plural, one {Pokračovat s # nástrojem} few {Pokračovat se # nástroji} other {Pokračovat s # nástroji}}",
     "catalogueDetailAbout": "O nástroji",
@@ -6381,7 +6390,6 @@
         "year": "Rok"
       },
       "cannotDeleteRequired": "Je vyžadováno alespoň jedno zobrazení tohoto typu",
-      "clearFilters": "Vymazat filtry",
       "copySuffix": "{name} (kopie)",
       "deleteView": "Smazat zobrazení",
       "exportCsv": "Uložit CSV",

@@ -1273,6 +1273,11 @@
     "greeting": "¿En qué le gustaría trabajar?",
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",
+    "history": {
+      "matterUnavailable": "Este asunto no está disponible",
+      "older": "Más antiguas",
+      "previous7Days": "7 días anteriores"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {y # más} many {y # más} other {y # más}}"
@@ -1435,6 +1440,8 @@
     "sendPrompt": "Enviar mensaje",
     "sendQueuedMessageNow": "Enviar ahora",
     "sendWithoutAnonymization": "Enviar sin anonimización",
+    "signInToChat": "Inicia sesión para chatear sobre este documento",
+    "signInToChatAbout": "Inicia sesión para chatear sobre",
     "skills": {
       "scope": {
         "private": "Tus habilidades",
@@ -1765,6 +1772,8 @@
     "citations": "Citas",
     "clauses": "Cláusulas",
     "clearDate": "Borrar fecha",
+    "clearFilters": "Borrar filtros",
+    "clearSearch": "Borrar búsqueda",
     "close": "Cerrar",
     "closeAll": "Cerrar todo",
     "closeOthers": "Cerrar otros",
@@ -1795,6 +1804,7 @@
       "nextDecade": "Década siguiente",
       "nextMonth": "Mes siguiente",
       "nextYear": "Año siguiente",
+      "outOfRange": "Seleccione una fecha dentro del intervalo permitido.",
       "previousDecade": "Década anterior",
       "previousMonth": "Mes anterior",
       "previousYear": "Año anterior",
@@ -4120,7 +4130,6 @@
     "appsSubtitle": "stella también funciona fuera del navegador: en su escritorio y dentro de su asistente de IA. Puede volver a esta configuración en cualquier momento.",
     "appsTitle": "Obtenga stella en todas partes",
     "catalogueAlwaysOn": "Siempre activo",
-    "catalogueClearSearch": "Borrar búsqueda",
     "catalogueCommunityHeading": "Otros",
     "catalogueContinueWithCount": "{count, plural, one {Continuar con # herramienta} other {Continuar con # herramientas}}",
     "catalogueDetailAbout": "Acerca de",
@@ -6381,7 +6390,6 @@
         "year": "Año"
       },
       "cannotDeleteRequired": "Se requiere al menos una vista de este tipo",
-      "clearFilters": "Borrar filtros",
       "copySuffix": "{name} (copia)",
       "deleteView": "Eliminar vista",
       "exportCsv": "Exportar CSV",

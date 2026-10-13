@@ -1273,6 +1273,11 @@
     "greeting": "Min szeretne dolgozni?",
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",
+    "history": {
+      "matterUnavailable": "Ez az ügy nem érhető el",
+      "older": "Régebbi",
+      "previous7Days": "Előző 7 nap"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {és még #} other {és még #}}"
@@ -1435,6 +1440,8 @@
     "sendPrompt": "Üzenet küldése",
     "sendQueuedMessageNow": "Küldés most",
     "sendWithoutAnonymization": "Küldés anonimizálás nélkül",
+    "signInToChat": "Jelentkezzen be, hogy erről a dokumentumról csevegjen",
+    "signInToChatAbout": "Jelentkezzen be a csevegéshez:",
     "skills": {
       "scope": {
         "private": "Saját készségek",
@@ -1765,6 +1772,8 @@
     "citations": "Hivatkozások",
     "clauses": "Záradékok",
     "clearDate": "Dátum törlése",
+    "clearFilters": "Szűrők törlése",
+    "clearSearch": "Keresés törlése",
     "close": "Bezárás",
     "closeAll": "Összes bezárása",
     "closeOthers": "Többi bezárása",
@@ -1795,6 +1804,7 @@
       "nextDecade": "Következő évtized",
       "nextMonth": "Következő hónap",
       "nextYear": "Következő év",
+      "outOfRange": "Válasszon dátumot az engedélyezett tartományból.",
       "previousDecade": "Előző évtized",
       "previousMonth": "Előző hónap",
       "previousYear": "Előző év",
@@ -4120,7 +4130,6 @@
     "appsSubtitle": "A stella a böngészőn kívül is működik: az asztali gépén és az AI-asszisztensében. Ehhez a beállításhoz később bármikor visszatérhet.",
     "appsTitle": "Szerezze meg a stellát mindenhol",
     "catalogueAlwaysOn": "Mindig aktív",
-    "catalogueClearSearch": "Keresés törlése",
     "catalogueCommunityHeading": "Egyéb",
     "catalogueContinueWithCount": "{count, plural, one {Folytatás # eszközzel} other {Folytatás # eszközzel}}",
     "catalogueDetailAbout": "Leírás",
@@ -6381,7 +6390,6 @@
         "year": "Év"
       },
       "cannotDeleteRequired": "Legalább egy ilyen típusú nézet szükséges",
-      "clearFilters": "Szűrők törlése",
       "copySuffix": "{name} (másolat)",
       "deleteView": "Nézet törlése",
       "exportCsv": "CSV exportálása",

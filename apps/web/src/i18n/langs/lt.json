@@ -1273,6 +1273,11 @@
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
+    "history": {
+      "matterUnavailable": "Ši byla nepasiekiama",
+      "older": "Senesni",
+      "previous7Days": "Ankstesnės 7 dienos"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
@@ -1435,6 +1440,8 @@
     "sendPrompt": "Siųsti pranešimą",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
+    "signInToChat": "Prisijunkite, kad galėtumėte kalbėtis apie šį dokumentą",
+    "signInToChatAbout": "Prisijunkite, kad galėtumėte kalbėtis apie",
     "skills": {
       "scope": {
         "private": "Jūsų įgūdžiai",
@@ -1765,6 +1772,8 @@
     "citations": "Citavimai",
     "clauses": "Sąlygos",
     "clearDate": "Išvalyti datą",
+    "clearFilters": "Išvalyti filtrus",
+    "clearSearch": "Išvalyti paiešką",
     "close": "Uždaryti",
     "closeAll": "Uždaryti viską",
     "closeOthers": "Uždaryti kitus",
@@ -1795,6 +1804,7 @@
       "nextDecade": "Kitas dešimtmetis",
       "nextMonth": "Kitas mėnuo",
       "nextYear": "Kiti metai",
+      "outOfRange": "Pasirinkite datą leistiname intervale.",
       "previousDecade": "Ankstesnis dešimtmetis",
       "previousMonth": "Ankstesnis mėnuo",
       "previousYear": "Ankstesni metai",
@@ -4120,7 +4130,6 @@
     "appsSubtitle": "stella veikia ir už naršyklės ribų: jūsų kompiuteryje ir jūsų DI asistente. Prie šio nustatymo galite bet kada grįžti vėliau.",
     "appsTitle": "Gaukite stella visur",
     "catalogueAlwaysOn": "Visada įjungta",
-    "catalogueClearSearch": "Išvalyti paiešką",
     "catalogueCommunityHeading": "Kiti",
     "catalogueContinueWithCount": "{count, plural, one {Tęsti su # įrankiu} few {Tęsti su # įrankiais} other {Tęsti su # įrankių}}",
     "catalogueDetailAbout": "Apie",
@@ -6381,7 +6390,6 @@
         "year": "Metai"
       },
       "cannotDeleteRequired": "Reikalingas bent vienas šio tipo rodinys",
-      "clearFilters": "Išvalyti filtrus",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Ištrinti rodinį",
       "exportCsv": "Eksportuoti CSV",

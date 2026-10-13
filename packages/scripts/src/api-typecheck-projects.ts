@@ -2,6 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   apiTypecheckArtifact,
   usesGeneratedApiConfig,
@@ -64,7 +66,7 @@ export const missingPreparedApiTypecheckConfigs = (rootDir: string) => {
   return (["roots", "src", "tests"] as const)
     .map((name) => apiTypecheckArtifact(apiDir, name))
     .filter((artifact) => !existsSync(artifact))
-    .map((artifact) => path.relative(rootDir, artifact));
+    .map((artifact) => repoRelativePath(rootDir, artifact));
 };
 
 // Root membership comes from the compiler config parser, including inherited

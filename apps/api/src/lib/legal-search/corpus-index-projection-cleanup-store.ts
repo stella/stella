@@ -580,10 +580,9 @@ type ProveCorpusProjectionCleanupSettlementOptions = {
 };
 
 /**
- * When a survivor-shaped verdict may stand: once every split that existed
- * when the delete task was created has had its maturation period, the engine
- * has applied the task wherever it can, and a split the listing missed can no
- * longer be one it is still to reach.
+ * The age floor for a survivor-shaped verdict. Merges can restart split
+ * maturity beyond this instant, so the judgement must also check delete
+ * progress over both proving and excluded splits before confirming a survivor.
  */
 const survivorConfirmableAt = ({
   family,
