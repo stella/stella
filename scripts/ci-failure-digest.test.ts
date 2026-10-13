@@ -1106,3 +1106,25 @@ test("generic multiline annotations count only decoded diagnostics", () => {
     ).toEqual(messages.slice(0, MAX_LINES_PER_STEP));
   }
 });
+
+test("annotation details survive informational output beyond the closing window", () => {
+  for (const padding of [0, 100, 10_000]) {
+    for (const length of [2, MAX_LINES_PER_STEP, MAX_LINES_PER_STEP + 2]) {
+      const messages = [
+        "Validation failed:",
+        "expected 1, received 2",
+        ...Array.from({ length: length - 2 }, (_, index) => `context ${index}`),
+      ];
+      const lines = failureLines([
+        `::error::${messages.join("%0A")}`,
+        ...Array.from({ length: padding }, () => "timing notice"),
+      ]);
+      expect(
+        lines
+          .map(({ message }) => message)
+          .slice(0, Math.min(length, MAX_LINES_PER_STEP)),
+      ).toEqual(messages.slice(0, MAX_LINES_PER_STEP));
+      expect(lines.length).toBeLessThanOrEqual(MAX_LINES_PER_STEP);
+    }
+  }
+});

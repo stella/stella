@@ -673,9 +673,10 @@ export const failureLines = (
     () => tscLines(lines),
     () => oxlintLines(lines),
     () => {
-      const markers = lines.flatMap(({ text, scope, annotation }) => {
+      const markers = lines.flatMap(({ text, scope, annotation }, index) => {
         const trimmed = text.trimStart();
         if (
+          annotation === "continuation" ||
           (annotation !== "error" &&
             !/^(?:error:|::error(?: |::)|##\[error\])/iu.test(trimmed)) ||
           isRetrySummary(trimmed)
@@ -684,21 +685,40 @@ export const failureLines = (
         }
         const message = withoutErrorCommand(trimmed);
         if (
-          message === "" ||
+          (message === "" && annotation !== "error") ||
           isStackFrame(message) ||
           /^error: script ".*" exited with code \d+$/u.test(message)
         ) {
           return [];
         }
-        const location = findLocation(trimmed);
-        return [
-          {
-            message: truncate(`${scope === "" ? "" : `${scope}: `}${message}`),
-            ...(location === undefined
-              ? {}
-              : located(location.path, location.line)),
-          },
-        ];
+        const block = [{ text: message, scope }];
+        if (annotation === "error") {
+          for (const next of lines.slice(
+            index + 1,
+            index + MAX_LINES_PER_STEP,
+          )) {
+            if (next.annotation !== "continuation") {
+              break;
+            }
+            block.push(next);
+          }
+        }
+        return block.flatMap(({ text: detail, scope: detailScope }) => {
+          if (detail.trim() === "" || isStackFrame(detail)) {
+            return [];
+          }
+          const location = findLocation(detail);
+          return [
+            {
+              message: truncate(
+                `${detailScope === "" ? "" : `${detailScope}: `}${detail}`,
+              ),
+              ...(location === undefined
+                ? {}
+                : located(location.path, location.line)),
+            },
+          ];
+        });
       });
       const generic = genericLines(lines);
       const window = lines.slice(-TAIL_WINDOW);
@@ -712,7 +732,7 @@ export const failureLines = (
           (annotation === "error" || ANCHOR.test(message))
         );
       });
-      if (terminal !== -1) {
+      if (terminal !== -1 && (markers.length > 0 || generic.length === 0)) {
         return [
           ...closingLines(window.slice(terminal)),
           ...generic,
