@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
@@ -36,7 +35,8 @@ const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
 const { ssrCacheClassHeaders } = await import("@/route-response-policy");
 const { isWorkspaceDocumentRoutePath } =
   await import("@/components/workspaces/entity-utils");
-const { Route: robotsRoute } = await import("@/routes/robots[.]txt");
+const { Route: robotsRoute, robotsHandlers } =
+  await import("@/routes/robots[.]txt");
 
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../..");
 const readSource = async (path: string) =>
@@ -141,15 +141,8 @@ const requestUrlForTest = (input: Request | URL | string): string => {
 
 describe("public law sitemap", () => {
   test("app robots response blocks bulk and AI crawlers while retaining the deployment crawl policy", async () => {
-    const handlers = robotsRoute.options.server?.handlers;
-    if (handlers === undefined || typeof handlers === "function") {
-      panic("The robots route must register a GET handler record");
-    }
-    const response = await handlers.GET();
-    expect(response).toBeInstanceOf(Response);
-    if (!(response instanceof Response)) {
-      return;
-    }
+    expect(robotsRoute.options.server?.handlers).toBe(robotsHandlers);
+    const response = robotsHandlers.GET();
 
     const body = await response.text();
     const lines = body.split("\n");
