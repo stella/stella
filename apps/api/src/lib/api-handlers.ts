@@ -2164,14 +2164,25 @@ export type PublicHandlerContext<
  * mounted handler is in here, which a naming convention cannot guarantee:
  * a raw function passed to `.get()` reads the same at the call site.
  */
-const safePublicHandlers = new WeakMap<object, CachePolicy>();
+type PublicHandlerRegistration = {
+  cache: CachePolicy;
+  readTimeout: "route-class" | "none";
+};
+
+const safePublicHandlers = new WeakMap<object, PublicHandlerRegistration>();
 
 export const getPublicHandlerCachePolicy = (handler: unknown) =>
-  typeof handler === "function" ? safePublicHandlers.get(handler) : undefined;
+  typeof handler === "function"
+    ? safePublicHandlers.get(handler)?.cache
+    : undefined;
 
 /** Whether a mounted route handler came out of a public handler factory. */
 export const isSafePublicHandler = (handler: unknown): boolean =>
   typeof handler === "function" && safePublicHandlers.has(handler);
+
+export const isPublicReadBudgetHandler = (handler: unknown): boolean =>
+  typeof handler === "function" &&
+  safePublicHandlers.get(handler)?.readTimeout === "route-class";
 
 type SafePublicStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
   TStatusCode extends HandlerErrorStatusCode
@@ -2222,7 +2233,10 @@ export const createSafePublicHandler = <
       return response;
     },
   };
-  safePublicHandlers.set(definition.handler, config.cache);
+  safePublicHandlers.set(definition.handler, {
+    cache: config.cache,
+    readTimeout: "none",
+  });
   return recordSafeHandler(definition);
 };
 
@@ -2322,7 +2336,10 @@ export const createSafeUncheckedBoundedPublicHandler = <
       return response;
     },
   };
-  safePublicHandlers.set(definition.handler, config.cache);
+  safePublicHandlers.set(definition.handler, {
+    cache: config.cache,
+    readTimeout: "route-class",
+  });
   return recordSafeHandler(definition);
 };
 
