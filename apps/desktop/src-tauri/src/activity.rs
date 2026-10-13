@@ -518,7 +518,8 @@ pub fn format_date(date: NaiveDate) -> String {
 
 type ActivityInterval = (DateTime<Utc>, DateTime<Utc>);
 
-fn validate_draftable_range(
+fn validate_draftable_range<T: TimeZone>(
+  zone: &T,
   date: NaiveDate,
   start: &str,
   end: &str,
@@ -531,8 +532,11 @@ fn validate_draftable_range(
     .map_err(|_| "invalid activity range".to_string())?
     .with_timezone(&Utc);
   if start >= end
-    || local_date(start) != date
-    || local_date(end - chrono::Duration::nanoseconds(1)) != date
+    || start.with_timezone(zone).date_naive() != date
+    || (end - chrono::Duration::nanoseconds(1))
+      .with_timezone(zone)
+      .date_naive()
+      != date
   {
     return Err("invalid activity range".to_string());
   }
@@ -1662,6 +1666,15 @@ impl ActivityManager {
     date: NaiveDate,
     pending: ActivityPendingBatch,
   ) -> Result<(), BatchReservationError> {
+    self.reserve_batch_in(&Local, date, pending)
+  }
+
+  fn reserve_batch_in<T: TimeZone>(
+    &mut self,
+    zone: &T,
+    date: NaiveDate,
+    pending: ActivityPendingBatch,
+  ) -> Result<(), BatchReservationError> {
     self
       .require_writable()
       .map_err(BatchReservationError::NotWritable)?;
@@ -1708,7 +1721,7 @@ impl ActivityManager {
     let mut intervals = Vec::with_capacity(range_count);
     for range in pending.ranges.iter().flatten() {
       intervals.push(
-        validate_draftable_range(date, &range.start, &range.end, &drafted)
+        validate_draftable_range(zone, date, &range.start, &range.end, &drafted)
           .map_err(|_| BatchReservationError::InvalidRange)?,
       );
     }
@@ -1774,9 +1787,8 @@ impl ActivityManager {
     if expected != actual {
       return Err("activity batch receipts do not match".to_string());
     }
-    for marker in &markers {
-      self.require_draftable_range(date, &marker.start, &marker.end)?;
-    }
+    // The stored day and exact ranges were validated at reservation. Rechecking
+    // their local dates here would strand receipts after a timezone change.
     let mut entries = self.drafted_for_day(date)?;
     entries.extend(markers);
     if let ActivityPersistence::Encrypted(store) = &self.persistence {
@@ -1867,7 +1879,7 @@ impl ActivityManager {
     end: &str,
   ) -> Result<(), String> {
     self.require_writable()?;
-    validate_draftable_range(date, start, end, &self.drafted_intervals(date)?)
+    validate_draftable_range(&Local, date, start, end, &self.drafted_intervals(date)?)
       .map(|_| ())
   }
 
@@ -3255,6 +3267,80 @@ mod tests {
         .require_draftable_range(date, &at(60).to_rfc3339(), &at(90).to_rfc3339())
         .is_ok()
     );
+  }
+
+  #[test]
+  fn pending_receipts_keep_the_reserved_day_after_timezone_changes() {
+    let west = chrono::FixedOffset::west_opt(12 * 60 * 60).unwrap();
+    let east = chrono::FixedOffset::east_opt(14 * 60 * 60).unwrap();
+    let start = Utc.with_ymd_and_hms(2026, 1, 2, 0, 30, 0).unwrap();
+    let end = start + chrono::Duration::minutes(1);
+    for (original_zone, retry_zone) in [(west, east), (east, west)] {
+      for encrypted in [false, true] {
+        let root = std::env::temp_dir()
+          .join(format!("stella-timezone-receipts-{}", uuid::Uuid::new_v4()));
+        let store = ActivityStore::new([9; 32], root.clone());
+        let date = start.with_timezone(&original_zone).date_naive();
+        let wrong_date = start.with_timezone(&retry_zone).date_naive();
+        assert_ne!(date, wrong_date);
+        let range = ActivityRange {
+          start: start.to_rfc3339(),
+          end: end.to_rfc3339(),
+        };
+        let pending = ActivityPendingBatch {
+          idempotency_key: "timezone-retry-key".into(),
+          entries: serde_json::json!([{"matterId":"matter"}]),
+          ranges: vec![vec![range.clone()]],
+        };
+        let markers = vec![ActivityDraftedEntry {
+          start: range.start.clone(),
+          end: range.end.clone(),
+          entry_id: "entry".into(),
+        }];
+        let mut manager = ActivityManager::new();
+        manager.install(
+          if encrypted {
+            ActivityPersistence::Encrypted(store.clone())
+          } else {
+            ActivityPersistence::MemoryOnly
+          },
+          ActivitySettings::default(),
+          end,
+        );
+        manager
+          .reserve_batch_in(&original_zone, date, pending.clone())
+          .unwrap();
+        if encrypted {
+          manager = ActivityManager::new();
+          manager.install(
+            ActivityPersistence::Encrypted(store.clone()),
+            ActivitySettings::default(),
+            end,
+          );
+        }
+        assert!(
+          validate_draftable_range(&retry_zone, date, &range.start, &range.end, &[])
+            .is_err()
+        );
+        manager
+          .reserve_batch_in(&retry_zone, date, pending.clone())
+          .unwrap();
+        assert!(manager.finish_batch(wrong_date, markers.clone()).is_err());
+        assert_eq!(manager.pending_for_day(date).unwrap(), Some(pending));
+        assert_eq!(manager.pending_dates().unwrap(), BTreeSet::from([date]));
+        manager.finish_batch(date, markers.clone()).unwrap();
+        assert!(manager.pending_for_day(date).unwrap().is_none());
+        assert!(manager.pending_dates().unwrap().is_empty());
+        assert_eq!(manager.drafted_for_day(date).unwrap(), markers);
+        assert!(manager.drafted_for_day(wrong_date).unwrap().is_empty());
+        if encrypted {
+          assert!(store.load_pending(date).unwrap().is_none());
+          assert_eq!(store.load_drafted(date).unwrap(), markers);
+          assert!(store.load_drafted(wrong_date).unwrap().is_empty());
+        }
+        ActivityStore::remove(&root).unwrap();
+      }
+    }
   }
 
   #[test]
