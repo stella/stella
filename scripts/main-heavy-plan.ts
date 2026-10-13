@@ -56,6 +56,16 @@ export const mainHeavyJobs = (workflow: unknown) => {
     panic("ci-result dependencies and JOB_SCOPES disagree");
   }
   const thin = thinJobs(workflow);
+  const foldedJson = record(scopes)["FOLDED_SUITES"];
+  if (typeof foldedJson !== "string") {
+    panic("Expected FOLDED_SUITES JSON");
+  }
+  // Folded verdicts remain mandatory at full depth, including main-heavy.
+  for (const job of Object.keys(record(JSON.parse(foldedJson)))) {
+    if (!gated.includes(job) || thin.includes(job)) {
+      panic(`Folded suites require a main-heavy producer: ${job}`);
+    }
+  }
   for (const job of thin) {
     if (!gated.includes(job)) {
       panic(`Missing thin job: ${job}`);

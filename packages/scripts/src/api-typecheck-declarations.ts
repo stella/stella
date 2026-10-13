@@ -5,6 +5,8 @@ import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   apiTypecheckArtifact,
   readApiTypecheckConfig,
@@ -107,7 +109,7 @@ const apiDeclarationSurfaceFiles = (
       files
         .map((file) => ts.sys.realpath?.(file) ?? file)
         .filter((file) => file.startsWith(source) && /\.[cm]?tsx?$/u.test(file))
-        .map((file) => path.relative(api, file)),
+        .map((file) => repoRelativePath(api, file)),
     ),
   ].toSorted();
   if (roots.length === 0) {
@@ -126,7 +128,7 @@ export const writeApiDeclarationSurface = (
     const artifact = apiTypecheckArtifact(path.dirname(configPath), "roots");
     writeApiTypecheckArtifact(artifact, {
       files: roots.map((file) =>
-        path.relative(
+        repoRelativePath(
           path.dirname(artifact),
           path.resolve(path.dirname(configPath), file),
         ),
@@ -650,7 +652,7 @@ export const regenerateApiDeclarationSurface = async (
       requiredRoots: required.length,
     });
     const missing = required.filter(
-      (file) => !roots.includes(path.relative(api, file)),
+      (file) => !roots.includes(repoRelativePath(api, file)),
     );
     if (missing.length === 0) {
       return result;

@@ -45,6 +45,7 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: () => `/chat/${randomUUID()}`,
   },
   staticRoute("/chat/new", { expectation: { kind: "settles" } }),
+  staticRoute("/chat/history"),
   staticRoute("/contacts"),
   staticRoute("/knowledge"),
   staticRoute("/knowledge/clauses"),

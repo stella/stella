@@ -65,6 +65,8 @@ import type {
 } from "@oxlint/plugins";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   PUBLIC_CORPUS_BOOKKEEPING_TABLES,
   type PublicCorpusBookkeepingTable,
@@ -735,12 +737,10 @@ export const createAuditOnMutationPlugin = (
             Program(node) {
               const options = context.options.at(0);
               census = censusFromOptions(options);
-              const relative = path
-                .relative(
-                  rootFromOptions(options),
-                  path.resolve(filenameForContext(context)),
-                )
-                .replaceAll("\\", "/");
+              const relative = repoRelativePath(
+                rootFromOptions(options),
+                path.resolve(filenameForContext(context)),
+              );
               const systemActor =
                 systemModulesFromOptions(options).get(relative);
               if (systemActor !== undefined) {
