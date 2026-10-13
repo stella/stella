@@ -1,5 +1,5 @@
 import { attachTestProcessShutdown } from "../process-shutdown";
-import { spawnTestProcess } from "../test-process-spawn";
+import { spawnTestProcess } from "../process-spawn";
 
 const { child, windowsProcesses } = spawnTestProcess({
   limitBytes: 1024 ** 3,

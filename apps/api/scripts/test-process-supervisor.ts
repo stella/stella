@@ -9,7 +9,7 @@ import {
   testInvocationMemoryLimit,
   watchTestProcessMemory,
 } from "@stll/scripts/src/process-memory";
-import { spawnTestProcess } from "@stll/scripts/src/test-process-spawn";
+import { spawnTestProcess } from "@stll/scripts/src/process-spawn";
 import type { WindowsProcessOwnership } from "@stll/scripts/src/windows-process-ownership";
 
 // A measured CI solo batch (254 chat turn tests) took 250.9s. Ten minutes

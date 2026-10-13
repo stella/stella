@@ -8095,7 +8095,7 @@ jobs:
 
       - name: Test dev runner and process tree cleanup
         shell: pwsh
-        run: bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/test-process-spawn.test.ts scripts/ci-install.test.ts
+        run: bun test packages/scripts/src/dev-runner.test.ts packages/scripts/src/process-shutdown.test.ts packages/scripts/src/process-memory.test.ts packages/scripts/src/windows-process-ownership.test.ts packages/scripts/src/process-spawn.test.ts scripts/ci-install.test.ts
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'

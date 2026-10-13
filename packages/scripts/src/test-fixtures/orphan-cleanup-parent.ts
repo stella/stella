@@ -5,7 +5,7 @@ import {
   watchTestProcessMemory,
 } from "../process-memory";
 import { attachTestProcessShutdown } from "../process-shutdown";
-import { spawnTestProcess } from "../test-process-spawn";
+import { spawnTestProcess } from "../process-spawn";
 
 const readBytes = await createProcessMemoryReader();
 

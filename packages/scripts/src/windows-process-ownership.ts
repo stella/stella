@@ -23,55 +23,43 @@ class WindowsProcessOwnershipError extends TaggedError(
   cause?: unknown;
 }> {}
 
-const openWindowsJobLibrary = () =>
-  dlopen("kernel32.dll", {
-    CreateJobObjectW: {
-      args: [FFIType.ptr, FFIType.ptr],
-      returns: FFIType.u64,
-    },
-    OpenProcess: {
-      args: [FFIType.u32, FFIType.i32, FFIType.u32],
-      returns: FFIType.u64,
-    },
-    AssignProcessToJobObject: {
-      args: [FFIType.u64, FFIType.u64],
-      returns: FFIType.i32,
-    },
-    SetInformationJobObject: {
-      args: [FFIType.u64, FFIType.i32, FFIType.buffer, FFIType.u32],
-      returns: FFIType.i32,
-    },
-    QueryInformationJobObject: {
-      args: [
-        FFIType.u64,
-        FFIType.i32,
-        FFIType.buffer,
-        FFIType.u32,
-        FFIType.ptr,
-      ],
-      returns: FFIType.i32,
-    },
-    TerminateJobObject: {
-      args: [FFIType.u64, FFIType.u32],
-      returns: FFIType.i32,
-    },
-    CloseHandle: { args: [FFIType.u64], returns: FFIType.i32 },
-    GetLastError: { args: [], returns: FFIType.u32 },
-    CreateIoCompletionPort: {
-      args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u32],
-      returns: FFIType.u64,
-    },
-    GetQueuedCompletionStatus: {
-      args: [
-        FFIType.u64,
-        FFIType.buffer,
-        FFIType.buffer,
-        FFIType.buffer,
-        FFIType.u32,
-      ],
-      returns: FFIType.i32,
-    },
-  } as const);
+export const WINDOWS_JOB_SYMBOLS = {
+  CreateJobObjectW: {
+    args: [FFIType.ptr, FFIType.ptr],
+    returns: FFIType.u64,
+  },
+  OpenProcess: {
+    args: [FFIType.u32, FFIType.i32, FFIType.u32],
+    returns: FFIType.u64,
+  },
+  AssignProcessToJobObject: {
+    args: [FFIType.u64, FFIType.u64],
+    returns: FFIType.i32,
+  },
+  SetInformationJobObject: {
+    args: [FFIType.u64, FFIType.i32, FFIType.ptr, FFIType.u32],
+    returns: FFIType.i32,
+  },
+  QueryInformationJobObject: {
+    args: [FFIType.u64, FFIType.i32, FFIType.ptr, FFIType.u32, FFIType.ptr],
+    returns: FFIType.i32,
+  },
+  TerminateJobObject: {
+    args: [FFIType.u64, FFIType.u32],
+    returns: FFIType.i32,
+  },
+  CloseHandle: { args: [FFIType.u64], returns: FFIType.i32 },
+  GetLastError: { args: [], returns: FFIType.u32 },
+  CreateIoCompletionPort: {
+    args: [FFIType.u64, FFIType.u64, FFIType.u64, FFIType.u32],
+    returns: FFIType.u64,
+  },
+  GetQueuedCompletionStatus: {
+    args: [FFIType.u64, FFIType.ptr, FFIType.ptr, FFIType.ptr, FFIType.u32],
+    returns: FFIType.i32,
+  },
+} as const;
+const openWindowsJobLibrary = () => dlopen("kernel32.dll", WINDOWS_JOB_SYMBOLS);
 let jobLibrary: ReturnType<typeof openWindowsJobLibrary> | undefined;
 const windowsJobApi = () => (jobLibrary ??= openWindowsJobLibrary()).symbols;
 type NativeJobApi = ReturnType<typeof windowsJobApi>;

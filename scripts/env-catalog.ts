@@ -1348,6 +1348,9 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Invocation-local handoff values are removed before test/native entry points run.
+  "STELLA_TEST_PROCESS_STARTUP_GATE",
+  "STELLA_TEST_NATIVE_COMMAND",
   // Manual regeneration binds the requested PR and checks available job services.
   "PR_NUMBER",
   "JOB_SERVICES",

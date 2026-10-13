@@ -1,4 +1,5 @@
 import { Result } from "better-result";
+import { JSCallback, linkSymbols } from "bun:ffi";
 import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -9,9 +10,10 @@ import {
   TEST_INVOCATION_MEMORY_GIB_ENV,
   watchTestProcessMemory,
 } from "./process-memory";
-import { spawnTestProcess } from "./test-process-spawn";
+import { spawnTestProcess } from "./process-spawn";
 import {
   createWindowsProcessOwnership,
+  WINDOWS_JOB_SYMBOLS,
   type WindowsJobApi,
 } from "./windows-process-ownership";
 
@@ -116,6 +118,31 @@ windowsTest.each(["measurement", "hard-cap"] as const)(
 );
 
 const fakeJobApi = (expectedLimit = 1000) => {
+  // Compile the production loader table through Bun itself before faking calls.
+  // Type declarations alone cannot establish which ABI types this runtime accepts.
+  const callbacks = Object.entries(WINDOWS_JOB_SYMBOLS).map(
+    ([name, signature]) => ({
+      name,
+      signature,
+      callback: new JSCallback(() => 0, signature),
+    }),
+  );
+  try {
+    const symbols = Object.fromEntries(
+      callbacks.map(({ name, signature, callback }) => {
+        if (callback.ptr === null) {
+          throw new TypeError("Missing ABI callback pointer");
+        }
+        return [name, { ...signature, ptr: callback.ptr }];
+      }),
+    );
+    const library = linkSymbols(symbols);
+    library.close();
+  } finally {
+    for (const { callback } of callbacks) {
+      callback.close();
+    }
+  }
   let peak = 700;
   let terminated = 0;
   let accounting: "disabled" | "enabled" = "disabled";
@@ -127,6 +154,9 @@ const fakeJobApi = (expectedLimit = 1000) => {
     OpenProcess: () => 200n,
     AssignProcessToJobObject: () => 1,
     SetInformationJobObject: (_job, kind, buffer, length) => {
+      if (!ArrayBuffer.isView(buffer)) {
+        throw new TypeError("Job limit buffer must be a view");
+      }
       const view = new DataView(
         buffer.buffer,
         buffer.byteOffset,
@@ -147,6 +177,9 @@ const fakeJobApi = (expectedLimit = 1000) => {
       return 1;
     },
     QueryInformationJobObject: (_job, _kind, buffer) => {
+      if (!ArrayBuffer.isView(buffer)) {
+        throw new TypeError("Job information buffer must be a view");
+      }
       new DataView(
         buffer.buffer,
         buffer.byteOffset,
@@ -164,6 +197,9 @@ const fakeJobApi = (expectedLimit = 1000) => {
     },
     CreateIoCompletionPort: () => 300n,
     GetQueuedCompletionStatus: (_port, message) => {
+      if (!ArrayBuffer.isView(message)) {
+        throw new TypeError("Completion message buffer must be a view");
+      }
       const value = messages.shift();
       if (value === undefined) {
         return 0;

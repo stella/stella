@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { attachTestProcessShutdown } from "./process-shutdown";
-import { spawnTestProcess } from "./test-process-spawn";
+import { spawnTestProcess } from "./process-spawn";
 
 const SIGNAL_EXIT_CODES = { SIGINT: 130, SIGTERM: 143, SIGHUP: 129 } as const;
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP", "exit"] as const) {

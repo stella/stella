@@ -12,7 +12,7 @@ import {
   watchTestProcessMemory,
 } from "./process-memory";
 import { attachTestProcessShutdown } from "./process-shutdown";
-import { spawnTestProcess } from "./test-process-spawn";
+import { spawnTestProcess } from "./process-spawn";
 
 const posixTest = process.platform === "win32" ? test.skip : test;
 posixTest.each(["leader", "leader-exit"] as const)(

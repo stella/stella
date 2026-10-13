@@ -9,8 +9,8 @@ import {
   watchTestProcessMemory,
 } from "@stll/scripts/src/process-memory";
 import { attachTestProcessShutdown } from "@stll/scripts/src/process-shutdown";
+import { spawnTestProcess } from "@stll/scripts/src/process-spawn";
 import { forwardTestStderr } from "@stll/scripts/src/process-stderr";
-import { spawnTestProcess } from "@stll/scripts/src/test-process-spawn";
 
 import { planTestRuns } from "./test-run-plan";
 import type { PathKind } from "./test-run-plan";

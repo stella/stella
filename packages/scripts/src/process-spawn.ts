@@ -92,11 +92,15 @@ export const spawnGatedTestProcess = <
     if (windowsProcesses === undefined) {
       child?.kill("SIGKILL");
     } else {
-      windowsProcesses.signal("SIGKILL").unwrap();
+      windowsProcesses
+        .signal("SIGKILL")
+        .unwrap("Failed gated spawn must terminate its owned job");
     }
     rmSync(directory, { recursive: true, force: true });
   }
-  return spawned.unwrap();
+  return spawned.unwrap(
+    "Test invocation must acquire process ownership before entry execution",
+  );
 };
 
 export const spawnTestProcess = <

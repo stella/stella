@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { spawnGatedTestProcess } from "./test-process-spawn";
+import { spawnGatedTestProcess } from "./process-spawn";
 
 test.each(["eval", "test"] as const)(
   "%s entry point stays gated throughout slow ownership registration",
@@ -54,6 +54,7 @@ test.each(["eval", "test"] as const)(
 );
 
 test("failed leader registration never releases the entry point", async () => {
+  const warnings: string[] = [];
   const directory = mkdtempSync(path.join(tmpdir(), "stella-gate-failure-"));
   const marker = path.join(directory, "executed");
   try {
@@ -68,12 +69,15 @@ test("failed leader registration never releases the entry point", async () => {
           options: { stdout: "ignore", stderr: "inherit" },
           limitBytes: 1024 ** 3,
           onWarning: (message) => {
-            throw new TypeError(message);
+            warnings.push(message);
           },
         },
         () => Result.err(new TypeError("Registration failed")),
       ),
-    ).toThrow("Registration failed");
+    ).toThrow(
+      "Test invocation must acquire process ownership before entry execution",
+    );
+    expect(warnings).toEqual(["Registration failed"]);
     await Bun.sleep(100);
     expect(existsSync(marker)).toBe(false);
   } finally {
