@@ -1,5 +1,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 
+import { standardVatRateOn } from "@stll/invoicing";
+
 import type { Transaction } from "@/api/db/root";
 import {
   contacts,
@@ -15,7 +17,6 @@ import {
   EMPTY_BUYER_SNAPSHOT,
   invoiceDueDays,
 } from "./invoice-prefill.logic";
-import { vatRateOnDate } from "./vat-rates";
 
 type ResolveInvoicePrefillOptions = {
   organizationId: SafeId<"organization">;
@@ -25,6 +26,10 @@ type ResolveInvoicePrefillOptions = {
   /** The taxable supply date, which decides the VAT rate in force. */
   supplyDate: string;
 };
+
+// An organization keeps a handful of rate periods; the newest are kept if
+// this is ever exceeded.
+const VAT_RATE_PERIOD_LIMIT = 200;
 
 const SELLER_COLUMNS = {
   id: sellerProfiles.id,
@@ -89,18 +94,23 @@ export const resolveInvoicePrefill = async (
       ),
     )
     .limit(1);
-  const [standardRate] = await tx
-    .select({ rateBps: vatRates.rateBps })
+  // Every period is returned so a client can re-resolve the rate when the
+  // supply date moves with the selected work.
+  const vatRatePeriods = await tx
+    .select({
+      validFrom: vatRates.validFrom,
+      validTo: vatRates.validTo,
+      rateBps: vatRates.rateBps,
+    })
     .from(vatRates)
     .where(
       and(
         eq(vatRates.organizationId, organizationId),
         isNull(vatRates.archivedAt),
-        vatRateOnDate(supplyDate),
       ),
     )
-    .orderBy(desc(vatRates.rateBps))
-    .limit(1);
+    .orderBy(desc(vatRates.validFrom))
+    .limit(VAT_RATE_PERIOD_LIMIT);
 
   const buyer =
     matter?.clientName === null || matter?.clientName === undefined
@@ -131,8 +141,9 @@ export const resolveInvoicePrefill = async (
       seller: seller ?? null,
       buyerVatId: buyer.buyerVatId,
       buyerCountry: buyer.buyerCountry,
-      standardRateBps: standardRate?.rateBps ?? null,
+      standardRateBps: standardVatRateOn(vatRatePeriods, supplyDate),
     }),
+    vatRatePeriods,
     dueDays: due.days,
     dueDaysSource: due.source,
   };

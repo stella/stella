@@ -7,6 +7,7 @@ import {
   entryAdjustments,
   lastIncludedWorkDate,
   parseHoursInput,
+  vatOnSupplyDate,
 } from "./invoice-composer.logic";
 import type {
   ComposerEntry,
@@ -193,5 +194,42 @@ describe("flat-fee invoices", () => {
         includedExpenseCount: 1,
       }),
     ).toBe(true);
+  });
+});
+
+describe("VAT for the selected work", () => {
+  const periods = [
+    { validFrom: "2020-01-01", validTo: "2026-09-20", rateBps: 2100 },
+    { validFrom: "2026-09-20", validTo: null, rateBps: 2300 },
+  ];
+  const domestic = {
+    vatTreatment: "domestic_vat",
+    vatRateBps: 2300,
+    reason: "domestic_rate",
+  } as const;
+
+  test("re-resolves a domestic rate when the supply date moves before a change", () => {
+    expect(vatOnSupplyDate(domestic, periods, "2026-09-02")).toEqual({
+      ...domestic,
+      vatRateBps: 2100,
+    });
+    expect(vatOnSupplyDate(domestic, periods, "2026-09-30")).toEqual(domestic);
+  });
+
+  test("keeps a rate that does not depend on the date", () => {
+    const reverse = {
+      vatTreatment: "reverse_charge",
+      vatRateBps: 0,
+      reason: "reverse_charge",
+    } as const;
+    expect(vatOnSupplyDate(reverse, periods, "2026-09-02")).toEqual(reverse);
+  });
+
+  test("reports no rate before the first period", () => {
+    expect(vatOnSupplyDate(domestic, periods, "2019-06-01")).toEqual({
+      vatTreatment: "domestic_vat",
+      vatRateBps: 0,
+      reason: "no_vat_rate",
+    });
   });
 });

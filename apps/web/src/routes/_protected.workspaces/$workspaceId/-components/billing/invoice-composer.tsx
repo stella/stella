@@ -67,8 +67,12 @@ import {
   includedMinutes,
   lastIncludedWorkDate,
   parseHoursInput,
+  vatOnSupplyDate,
 } from "./invoice-composer.logic";
-import type { EntryChoice } from "./invoice-composer.logic";
+import type {
+  ComposerVatDecision,
+  EntryChoice,
+} from "./invoice-composer.logic";
 
 type ComposerStep = "items" | "details" | "issue";
 const COMPOSER_STEPS: readonly ComposerStep[] = ["items", "details", "issue"];
@@ -178,15 +182,13 @@ export const InvoiceComposer = ({
   const [issued, setIssued] = useState<IssuedInvoice | null>(null);
 
   const selection = { entries, choices, expenses, includedExpenseIds };
+  const supplyDate = lastIncludedWorkDate(selection) ?? invoiceDate;
+  const vat = vatOnSupplyDate(prefill.vat, prefill.vatRatePeriods, supplyDate);
   const totals = composeTotals({
     ...selection,
-    vat: {
-      vatTreatment: prefill.vat.vatTreatment,
-      vatRateBps: prefill.vat.vatRateBps,
-    },
+    vat: { vatTreatment: vat.vatTreatment, vatRateBps: vat.vatRateBps },
     flatFeeAmount: prefill.flatFeeAmount,
   });
-  const supplyDate = lastIncludedWorkDate(selection) ?? invoiceDate;
   const dueDate = dueDateFor(invoiceDate, dueDays);
   const includedEntryIds = entries
     .filter((entry) => entryChoice(choices, entry).included)
@@ -239,6 +241,7 @@ export const InvoiceComposer = ({
         invoiceDate,
         dueDate,
         taxableSupplyDate: supplyDate,
+        expectedTotalAmount: totals?.grossAmountMinor,
         currency,
         timeEntryIds: includedEntryIds.map((id) => toSafeId<"timeEntry">(id)),
         expenseIds: [...includedExpenseIds].map((id) =>
@@ -288,6 +291,7 @@ export const InvoiceComposer = ({
         )}
         {step === "details" && (
           <DetailsStep
+            vat={vat}
             currency={currency}
             dueDate={dueDate}
             dueDays={dueDays}
@@ -720,6 +724,7 @@ const ExpensesTable = ({
 
 type DetailsStepProps = {
   prefill: InvoicePrefill;
+  vat: ComposerVatDecision<InvoicePrefill["vat"]["reason"]>;
   currency: string;
   invoiceDate: string;
   supplyDate: string;
@@ -731,6 +736,7 @@ type DetailsStepProps = {
 
 const DetailsStep = ({
   prefill,
+  vat,
   currency,
   invoiceDate,
   supplyDate,
@@ -744,7 +750,7 @@ const DetailsStep = ({
   const dueChoices = [
     ...new Set([...INVOICE_DUE_DAY_PRESETS, prefill.dueDays]),
   ].toSorted((left, right) => left - right);
-  const { buyer, vat, seller } = prefill;
+  const { buyer, seller } = prefill;
   const buyerLines = [
     buyer.buyerAddressLine1,
     [buyer.buyerPostalCode, buyer.buyerCity]

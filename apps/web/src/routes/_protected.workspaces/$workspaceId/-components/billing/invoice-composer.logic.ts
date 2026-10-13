@@ -1,5 +1,9 @@
-import { calculateDocumentTotals } from "@stll/invoicing";
-import type { InvoiceTotals, VatTreatment } from "@stll/invoicing";
+import { calculateDocumentTotals, standardVatRateOn } from "@stll/invoicing";
+import type {
+  InvoiceTotals,
+  VatRatePeriod,
+  VatTreatment,
+} from "@stll/invoicing";
 import { applyMarkupCents, cents, timeEntryAmount } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
 import { parsePlainDate } from "@stll/time";
@@ -209,3 +213,40 @@ export const parseHoursInput = (text: string): number | null => {
 /** The issue date plus a payment term, as an ISO date. */
 export const dueDateFor = (invoiceDate: string, days: number) =>
   parsePlainDate(invoiceDate)?.add({ days }).toString() ?? null;
+
+export type ComposerVatDecision<TReason extends string> = {
+  vatTreatment: VatTreatment;
+  vatRateBps: number;
+  reason: TReason;
+};
+
+/**
+ * The prefill's VAT decision re-resolved for the supply date of the current
+ * selection: billing fewer items can move that date into another rate period.
+ * Only a domestic rate depends on the date, and the rule matches the server's.
+ */
+export const vatOnSupplyDate = <TReason extends string>(
+  vat: ComposerVatDecision<TReason>,
+  periods: readonly VatRatePeriod[],
+  supplyDate: string,
+): ComposerVatDecision<TReason | "no_vat_rate" | "domestic_rate"> => {
+  if (
+    vat.vatTreatment !== "domestic_vat" ||
+    vat.reason === "no_seller_profile"
+  ) {
+    return vat;
+  }
+  const rateBps = standardVatRateOn(periods, supplyDate);
+  if (rateBps === null) {
+    return {
+      vatTreatment: "domestic_vat",
+      vatRateBps: 0,
+      reason: "no_vat_rate",
+    };
+  }
+  return {
+    vatTreatment: "domestic_vat",
+    vatRateBps: rateBps,
+    reason: vat.reason === "no_vat_rate" ? "domestic_rate" : vat.reason,
+  };
+};

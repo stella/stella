@@ -50,9 +50,10 @@ const prefillInvoice = createSafeHandler(
       "and approved billable expenses, oldest first (a matter with more than 500 of either is refused); the proposed " +
       "currency, issue date (today in the organization's zone) and payment term; " +
       "the default seller profile (or sellerProfileId); the buyer copied from " +
-      "the matter's client; and the VAT treatment and rate the lines would get, " +
-      "each with where it came from. Pass the chosen ids to invoices.create, " +
-      "which applies the same prefill.",
+      "the matter's client; the VAT treatment and rate the lines would get, " +
+      "each with where it came from; and the organization's VAT rate periods, " +
+      "since billing fewer items can move the supply date into another rate. " +
+      "Pass the chosen ids to invoices.create, which applies the same prefill.",
     permissions: { invoice: ["create"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     featureAccess: { featureId: "time-billing", type: "required" },
@@ -213,6 +214,7 @@ const prefillInvoice = createSafeHandler(
       buyer: prefill.buyer,
       buyerSource: prefill.buyerSource,
       vat: prefill.vat,
+      vatRatePeriods: prefill.vatRatePeriods,
       billingMode: arrangement?.mode ?? "hourly",
       flatFeeAmount:
         arrangement?.mode === "flat_fee" ? arrangement.flatFeeAmount : null,

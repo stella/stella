@@ -93,6 +93,14 @@ const createInvoiceBodySchema = t.Object({
   ),
   sellerProfileId: t.Optional(tSafeId("sellerProfile")),
   taxableSupplyDate: t.Optional(t.Nullable(t.String({ format: "date" }))),
+  expectedTotalAmount: t.Optional(
+    t.Integer({
+      minimum: -Number.MAX_SAFE_INTEGER,
+      maximum: Number.MAX_SAFE_INTEGER,
+      description:
+        "Gross total in minor units that the caller reviewed; the invoice is not created when the computed total differs",
+    }),
+  ),
 });
 
 /** Each attached entry moves from approved to billed on this invoice. */
@@ -766,6 +774,19 @@ const billCreatedDraft = async (
     return Result.err(totals.error);
   }
   const totalAmount = totals.value.grossAmountMinor;
+  if (
+    body.expectedTotalAmount !== undefined &&
+    totalAmount !== body.expectedTotalAmount
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "invoice_total_changed",
+        message: `The invoice total is ${totalAmount} minor units, not the reviewed ${body.expectedTotalAmount}`,
+        hint: "Read invoices.prefill again; the VAT rate for the supply date or the selected items may differ from what was reviewed.",
+      }),
+    );
+  }
 
   return Result.ok({
     id: created.id,

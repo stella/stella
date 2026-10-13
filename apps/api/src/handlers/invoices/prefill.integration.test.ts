@@ -222,6 +222,27 @@ const seedVatRates = async () => {
   }
 };
 
+// The standard rate rises on 2026-09-20, between the two seeded work dates.
+const seedVatRateChange = async () => {
+  for (const [rateBps, validFrom, validTo] of [
+    [2100, "2020-01-01", "2026-09-20"],
+    [2300, "2026-09-20", null],
+  ] as const) {
+    const id = createSafeId<"vatRate">();
+    vatRateIds.push(id);
+    // db-await-in-loop: two fixture rows
+    await db.insert(vatRates).values({
+      id,
+      organizationId: ids.orgA,
+      code: "standard",
+      name: "standard",
+      rateBps,
+      validFrom,
+      validTo,
+    });
+  }
+};
+
 const setClient = async (taxId: string, country = "CZ") => {
   await db
     .update(contacts)
@@ -533,6 +554,55 @@ describe("invoice create with expenses and billed-time changes", () => {
     expect(result).toMatchObject({
       code: 400,
       response: { code: "invalid_entry_adjustments" },
+    });
+  });
+
+  test("billing only work before a rate change uses the earlier rate, and a stale reviewed total is refused", async () => {
+    await seedSeller("CZ12345678");
+    await seedVatRateChange();
+    await setClient("CZ87654321");
+    const early = await seedEntry("2026-09-02");
+    await seedEntry("2026-09-30");
+
+    const prefill = await prefillInvoice.handler(
+      context(prefillInvoice.handler, {}),
+    );
+    // All unbilled work ends on 2026-09-30, after the change.
+    expect(prefill).toMatchObject({
+      taxableSupplyDate: "2026-09-30",
+      vat: { vatTreatment: "domestic_vat", vatRateBps: 2300 },
+      vatRatePeriods: expect.arrayContaining([
+        { validFrom: "2020-01-01", validTo: "2026-09-20", rateBps: 2100 },
+        { validFrom: "2026-09-20", validTo: null, rateBps: 2300 },
+      ]),
+    });
+
+    // 1.5 h × 2,500.00 = 3,750.00 net. A total reviewed at 23 % is stale once
+    // the later entry is left out, so nothing is created.
+    const stale = await create({
+      timeEntryIds: [early],
+      taxableSupplyDate: "2026-09-02",
+      expectedTotalAmount: 461_250,
+    });
+    expect(stale).toMatchObject({
+      code: 409,
+      response: { code: "invoice_total_changed" },
+    });
+    expect(
+      await db.query.timeEntries.findFirst({ where: { id: { eq: early } } }),
+    ).toMatchObject({ status: "approved", invoiceId: null });
+
+    const id = createdId(
+      await create({
+        timeEntryIds: [early],
+        taxableSupplyDate: "2026-09-02",
+        expectedTotalAmount: 453_750,
+      }),
+    );
+    expect(await readInvoice(id)).toMatchObject({
+      taxableSupplyDate: "2026-09-02",
+      vatAmount: 78_750,
+      totalAmount: 453_750,
     });
   });
 });
