@@ -806,7 +806,8 @@ export const LIMITS = {
    *  inside the task's memory. A single file above it still runs alone. */
   uploadFinalizeInFlightBytes: 150 * 1024 * 1024,
   /** How long a finalization waits for that budget before it fails as
-   *  retryable; well inside the claim timeout so the claim never lapses. */
+   *  retryable. The wait comes before the upload is claimed, so it never
+   *  counts against the claim timeout. */
   uploadFinalizeAdmissionWaitMs: 20_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,

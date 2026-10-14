@@ -136,7 +136,7 @@ const finalizeUpload = createSafeHandler(
             userId: { eq: user.id },
             workspaceId: { eq: workspaceId },
           },
-          columns: { purpose: true },
+          columns: { purpose: true, declaredSize: true },
         }),
       ),
     );
@@ -153,206 +153,242 @@ const finalizeUpload = createSafeHandler(
       return Result.err(authorization.error);
     }
 
-    // 1. Claim — atomic transition into `scanning`. Re-claimable
-    //    if a previous holder either died (status='scanning' AND
-    //    claimed_at older than the timeout) or hit a transient
-    //    error (status='failed' AND past the cool-down).
-    const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
-    const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
-    const claimedRows = yield* Result.await(
+    // The staged file is read, scanned and may be rewritten in memory, so
+    // concurrent finalizations share one byte budget per process. Admission
+    // comes before the claim: waiting for capacity never runs the reclaim
+    // clock, and a request that is not admitted in time leaves the row as it
+    // was, so the retry can claim it at once.
+    const release = await UPLOAD_FINALIZE_ADMISSION.acquire(
+      pending.declaredSize,
+      LIMITS.uploadFinalizeAdmissionWaitMs,
+    );
+    if (release === null) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Upload processing is busy; retry shortly",
+        }),
+      );
+    }
+    try {
+      return yield* claimAndFinalize({
+        organizationId: session.activeOrganizationId,
+        workspaceId,
+        userId: user.id,
+        memberRole,
+        uploadId,
+        safeDb,
+        recordAuditEvent,
+      });
+    } finally {
+      release();
+    }
+  },
+);
+
+type ClaimAndFinalizeProps = {
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  userId: SafeId<"user">;
+  memberRole: AuthorizedMemberRole;
+  uploadId: SafeId<"pendingUpload">;
+  safeDb: SafeDb;
+  recordAuditEvent: AuditRecorder;
+};
+
+/**
+ * Claims the upload for this request, runs the finalization and records
+ * how it ended. The caller holds finalize admission for the whole call.
+ *
+ * @yields SafeDb errors out to the safe-handler runner.
+ */
+const claimAndFinalize = async function* ({
+  organizationId,
+  workspaceId,
+  userId,
+  memberRole,
+  uploadId,
+  safeDb,
+  recordAuditEvent,
+}: ClaimAndFinalizeProps): AsyncGenerator<
+  Err<never, SafeDbError>,
+  Result<{ finalizedResult: PendingUploadFinalizedResult }, HandlerError>,
+  unknown
+> {
+  // 1. Claim — atomic transition into `scanning`. Re-claimable
+  //    if a previous holder either died (status='scanning' AND
+  //    claimed_at older than the timeout) or hit a transient
+  //    error (status='failed' AND past the cool-down).
+  const timeoutSec = Math.floor(FINALIZE_CLAIM_TIMEOUT_MS / 1000);
+  const claimRequestId = Bun.randomUUIDv7().slice(0, 64);
+  const claimedRows = yield* Result.await(
+    safeDb((tx) =>
+      // audit: skip — claim FSM state transition on pending_uploads; ephemeral bookkeeping. The audit row for the resulting entity is emitted by `finalizeEntityCreate` inside the same domain transaction.
+      tx
+        .update(pendingUploads)
+        .set({
+          status: "scanning",
+          claimedAt: new Date(),
+          claimedByRequestId: claimRequestId,
+        })
+        .where(
+          sql`${pendingUploads.id} = ${uploadId}
+            AND ${pendingUploads.workspaceId} = ${workspaceId}
+            AND ${pendingUploads.userId} = ${userId}
+            AND ${pendingUploads.expiresAt} > NOW()
+            AND (
+              ${pendingUploads.status} = 'pending'
+              OR (
+                ${pendingUploads.status} IN ('failed', 'scanning')
+                AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSec} * interval '1 second'
+              )
+            )`,
+        )
+        .returning(),
+    ),
+  );
+  const claimed = claimedRows.at(0);
+
+  if (!claimed) {
+    // Claim missed: look up the row and replay or refuse.
+    const existing = yield* Result.await(
       safeDb((tx) =>
-        // audit: skip — claim FSM state transition on pending_uploads; ephemeral bookkeeping. The audit row for the resulting entity is emitted by `finalizeEntityCreate` inside the same domain transaction.
+        tx.query.pendingUploads.findFirst({
+          where: {
+            id: { eq: uploadId },
+            userId: { eq: userId },
+            workspaceId: { eq: workspaceId },
+          },
+        }),
+      ),
+    );
+    if (!existing) {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Upload not found" }),
+      );
+    }
+    if (existing.status === "finalized" && existing.finalizedResult) {
+      return Result.ok({ finalizedResult: existing.finalizedResult });
+    }
+    if (existing.status === "rejected") {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message: existing.rejectReason ?? "Upload was previously rejected",
+          ...existing.rejectionDetails,
+        }),
+      );
+    }
+    const expiredRows = yield* Result.await(
+      safeDb((tx) =>
+        // audit: skip — expiry transition on pending_uploads; the upload never became a durable entity.
         tx
           .update(pendingUploads)
           .set({
-            status: "scanning",
-            claimedAt: new Date(),
-            claimedByRequestId: claimRequestId,
+            status: "rejected",
+            rejectReason: "Upload URL expired",
+            finalizedAt: new Date(),
           })
           .where(
             sql`${pendingUploads.id} = ${uploadId}
               AND ${pendingUploads.workspaceId} = ${workspaceId}
-              AND ${pendingUploads.userId} = ${user.id}
-              AND ${pendingUploads.expiresAt} > NOW()
+              AND ${pendingUploads.userId} = ${userId}
+              AND ${pendingUploads.expiresAt} <= NOW()
               AND (
-                ${pendingUploads.status} = 'pending'
+                ${pendingUploads.status} IN ('pending', 'failed')
                 OR (
-                  ${pendingUploads.status} IN ('failed', 'scanning')
+                  ${pendingUploads.status} = 'scanning'
                   AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSec} * interval '1 second'
                 )
               )`,
           )
-          .returning(),
+          .returning({ id: pendingUploads.id }),
       ),
     );
-    const claimed = claimedRows.at(0);
-
-    if (!claimed) {
-      // Claim missed: look up the row and replay or refuse.
-      const existing = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.pendingUploads.findFirst({
-            where: {
-              id: { eq: uploadId },
-              userId: { eq: user.id },
-              workspaceId: { eq: workspaceId },
-            },
-          }),
-        ),
-      );
-      if (!existing) {
-        return Result.err(
-          new HandlerError({ status: 404, message: "Upload not found" }),
-        );
-      }
-      if (existing.status === "finalized" && existing.finalizedResult) {
-        return Result.ok({ finalizedResult: existing.finalizedResult });
-      }
-      if (existing.status === "rejected") {
-        return Result.err(
-          new HandlerError({
-            status: 422,
-            message: existing.rejectReason ?? "Upload was previously rejected",
-            ...existing.rejectionDetails,
-          }),
-        );
-      }
-      const expiredRows = yield* Result.await(
-        safeDb((tx) =>
-          // audit: skip — expiry transition on pending_uploads; the upload never became a durable entity.
-          tx
-            .update(pendingUploads)
-            .set({
-              status: "rejected",
-              rejectReason: "Upload URL expired",
-              finalizedAt: new Date(),
-            })
-            .where(
-              sql`${pendingUploads.id} = ${uploadId}
-                AND ${pendingUploads.workspaceId} = ${workspaceId}
-                AND ${pendingUploads.userId} = ${user.id}
-                AND ${pendingUploads.expiresAt} <= NOW()
-                AND (
-                  ${pendingUploads.status} IN ('pending', 'failed')
-                  OR (
-                    ${pendingUploads.status} = 'scanning'
-                    AND ${pendingUploads.claimedAt} < NOW() - ${timeoutSec} * interval '1 second'
-                  )
-                )`,
-            )
-            .returning({ id: pendingUploads.id }),
-        ),
-      );
-      if (expiredRows.at(0)) {
-        return Result.err(
-          new HandlerError({ status: 422, message: "Upload URL expired" }),
-        );
-      }
+    if (expiredRows.at(0)) {
       return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "Finalize already in progress for this upload",
-        }),
+        new HandlerError({ status: 422, message: "Upload URL expired" }),
       );
     }
-
-    // From here on we own the row. Any early return must transition
-    // the row to a terminal status; `scanning` left behind would
-    // block re-claim until the timeout.
-    const finalizeResult = yield* runAdmittedFinalize({
-      claimed,
-      organizationId: session.activeOrganizationId,
-      workspaceId,
-      userId: user.id,
-      memberRole,
-      uploadId,
-      claimRequestId,
-      safeDb,
-      recordAuditEvent,
-    });
-
-    if (Result.isError(finalizeResult)) {
-      const error = finalizeResult.error;
-      const terminalStatus = error.status === 500 ? "failed" : "rejected";
-      const failedRows = yield* Result.await(
-        safeDb((tx) =>
-          // audit: skip — terminal-state write on pending_uploads, no domain entity to attribute.
-          tx
-            .update(pendingUploads)
-            .set({
-              status: terminalStatus,
-              rejectReason: error.rejectReason ?? error.message,
-              rejectionDetails:
-                terminalStatus === "rejected"
-                  ? fileSecurityRejectionDetails(error)
-                  : null,
-              finalizedAt: terminalStatus === "rejected" ? new Date() : null,
-            })
-            .where(
-              and(
-                eq(pendingUploads.id, uploadId),
-                eq(pendingUploads.userId, user.id),
-                eq(pendingUploads.workspaceId, workspaceId),
-                eq(pendingUploads.status, "scanning"),
-                eq(pendingUploads.claimedByRequestId, claimRequestId),
-              ),
-            )
-            .returning({ id: pendingUploads.id }),
-        ),
-      );
-      if (!failedRows.at(0)) {
-        panic("Pending upload failure marker update returned no rows");
-      }
-      if (terminalStatus === "rejected") {
-        // Best-effort tmp cleanup only for terminal rejections.
-        // Transient failures keep tmp bytes so finalize can retry.
-        await deleteStagedUploadObjects({
-          organizationId: session.activeOrganizationId,
-          uploadId,
-          workspaceId,
-          stage: "tmp-cleanup-after-reject",
-        });
-      }
-      return Result.err(
-        new HandlerError({
-          status: error.status,
-          message: error.message,
-          code: error.code,
-          hint: error.hint,
-          issues: error.issues,
-        }),
-      );
-    }
-
-    return Result.ok({ finalizedResult: finalizeResult.value.finalizedResult });
-  },
-);
-
-// The staged file is read, scanned and may be rewritten in memory, so
-// concurrent finalizations share one byte budget per process. Admission is
-// released however the finalization ends; one that cannot be admitted in time
-// fails as retryable, keeping its staged bytes.
-const runAdmittedFinalize = async function* (
-  props: RunFinalizeProps,
-): ReturnType<typeof runFinalize> {
-  const release = await UPLOAD_FINALIZE_ADMISSION.acquire(
-    props.claimed.declaredSize,
-    LIMITS.uploadFinalizeAdmissionWaitMs,
-  );
-  if (release === null) {
     return Result.err(
-      new UploadFinalizeError({
-        status: 500,
-        message: "Upload processing is busy; retry shortly",
-        rejectReason: "finalize-busy",
+      new HandlerError({
+        status: 409,
+        message: "Finalize already in progress for this upload",
       }),
     );
   }
-  try {
-    return yield* runFinalize(props);
-  } finally {
-    release();
+
+  // From here on we own the row. Any early return must transition
+  // the row to a terminal status; `scanning` left behind would
+  // block re-claim until the timeout.
+  const finalizeResult = yield* runFinalize({
+    claimed,
+    organizationId,
+    workspaceId,
+    userId,
+    memberRole,
+    uploadId,
+    claimRequestId,
+    safeDb,
+    recordAuditEvent,
+  });
+
+  if (Result.isError(finalizeResult)) {
+    const error = finalizeResult.error;
+    const terminalStatus = error.status === 500 ? "failed" : "rejected";
+    const failedRows = yield* Result.await(
+      safeDb((tx) =>
+        // audit: skip — terminal-state write on pending_uploads, no domain entity to attribute.
+        tx
+          .update(pendingUploads)
+          .set({
+            status: terminalStatus,
+            rejectReason: error.rejectReason ?? error.message,
+            rejectionDetails:
+              terminalStatus === "rejected"
+                ? fileSecurityRejectionDetails(error)
+                : null,
+            finalizedAt: terminalStatus === "rejected" ? new Date() : null,
+          })
+          .where(
+            and(
+              eq(pendingUploads.id, uploadId),
+              eq(pendingUploads.userId, userId),
+              eq(pendingUploads.workspaceId, workspaceId),
+              eq(pendingUploads.status, "scanning"),
+              eq(pendingUploads.claimedByRequestId, claimRequestId),
+            ),
+          )
+          .returning({ id: pendingUploads.id }),
+      ),
+    );
+    if (!failedRows.at(0)) {
+      panic("Pending upload failure marker update returned no rows");
+    }
+    if (terminalStatus === "rejected") {
+      // Best-effort tmp cleanup only for terminal rejections.
+      // Transient failures keep tmp bytes so finalize can retry.
+      await deleteStagedUploadObjects({
+        organizationId,
+        uploadId,
+        workspaceId,
+        stage: "tmp-cleanup-after-reject",
+      });
+    }
+    return Result.err(
+      new HandlerError({
+        status: error.status,
+        message: error.message,
+        code: error.code,
+        hint: error.hint,
+        issues: error.issues,
+      }),
+    );
   }
+
+  return Result.ok({
+    finalizedResult: finalizeResult.value.finalizedResult,
+  });
 };
 
 type RunFinalizeProps = {
