@@ -147,7 +147,9 @@ if (import.meta.main) {
   const testPaths = args.some((argument) => argument !== "--parallel")
     ? []
     : [
-        ...new Bun.Glob("**/*").scanSync({
+        ...new Bun.Glob(
+          "**/*.{js,jsx,ts,tsx,cjs,cjsx,cts,ctsx,mjs,mjsx,mts,mtsx}",
+        ).scanSync({
           cwd: path.join(repoRoot, TEST_DIRECTORY),
           onlyFiles: true,
         }),
