@@ -3,7 +3,7 @@ import { loadCatalogue } from "@stll/catalogue";
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   toCaseLawCountryParam,
-} from "@/features/case-law/case-law-jurisdiction";
+} from "./features/case-law/case-law-jurisdiction";
 
 type PublicCrawlRoute = {
   path: `/${string}`;
