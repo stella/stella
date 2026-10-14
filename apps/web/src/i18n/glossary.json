@@ -909,7 +909,16 @@
       "en": "Playbook",
       "note": "A maintained legal-review and negotiation rule set: preferred positions, fallback wording, risk rules, and escalation guidance. Research across German, Czech, Slovak, Polish, Estonian, Hungarian, Spanish, French, and Brazilian legal-tech usage supports the declined English loanword; Arabic, Lithuanian, and Latvian use the established native review-guide term. Never render this named concept as a literal book of games.",
       "forbidden": {
-        "ar": ["كتاب اللعب", "كتب اللعب", "بلايبوك", "بلاي بوك"],
+        "ar": [
+          "كتاب اللعب",
+          "كتب اللعب",
+          "بلايبوك",
+          "بلاي بوك",
+          "دليل عمل",
+          "دليل العمل",
+          "بدليل عمل",
+          "أدلة العمل"
+        ],
         "cs": [
           "herní plán",
           "herního plánu",
@@ -940,7 +949,14 @@
           "mänguraamat",
           "mänguraamatu",
           "mänguraamatud",
-          "mänguraamatute"
+          "mänguraamatute",
+          "juhend",
+          "juhendi",
+          "juhendit",
+          "juhendile",
+          "juhendiga",
+          "juhendid",
+          "juhendite"
         ],
         "hu": ["játékkönyv", "játékkönyvet", "játékkönyvek", "játékkönyveket"],
         "lt": [
@@ -948,7 +964,13 @@
           "žaidimo knygos",
           "žaidimo knygą",
           "žaidimo knygoje",
-          "žaidimų knyga"
+          "žaidimų knyga",
+          "planas",
+          "planą",
+          "plano",
+          "plane",
+          "planai",
+          "planų"
         ],
         "lv": [
           "spēļu grāmata",
@@ -957,7 +979,13 @@
           "spēļu grāmatu",
           "spēļu grāmatā",
           "spēļu grāmatām",
-          "spēļu grāmatās"
+          "spēļu grāmatās",
+          "plāns",
+          "plānu",
+          "plānam",
+          "plānā",
+          "plāni",
+          "plānus"
         ]
       },
       "translations": {

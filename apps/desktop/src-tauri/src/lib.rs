@@ -29,6 +29,7 @@ mod e2e;
 mod feature_access;
 mod feature_gate;
 mod foreground_app;
+mod foreground_app_visual;
 mod handoff;
 mod http_client;
 mod i18n;
@@ -45,6 +46,8 @@ mod relaunch;
 mod session_manager;
 mod session_store;
 mod sse;
+mod time_entry_commands;
+mod time_entry_submit;
 mod tray;
 mod types;
 mod updater;
@@ -220,6 +223,10 @@ pub fn run() {
                 let snapshot = manager.lock().await.get_snapshot();
                 tray::refresh(&app, &snapshot);
               });
+            }
+            feature_gate::DesktopFeature::TimeBilling => {
+              use tauri::Emitter;
+              let _ = app.emit(activity::CHANGED_EVENT, ());
             }
           }),
         );

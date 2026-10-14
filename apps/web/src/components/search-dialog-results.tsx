@@ -8,22 +8,21 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { CommandItem } from "@stll/ui/command";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import {
-  FileTextIcon,
   HistoryIcon,
-  LandmarkIcon,
   MessageSquareIcon,
   MessagesSquareIcon,
   UserIcon,
   AiActionIcon,
 } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { MenuSection } from "@stll/ui/menu-section";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
-import { MatterIcon } from "@/components/matter-icon";
 import {
   compactMeta,
   KIND_TRANSLATION_KEYS,
@@ -41,7 +40,10 @@ import { formatHotkeyForPlatform } from "@/lib/hotkeys";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { resolveRecentFilePreviewFieldId } from "@/lib/search";
 import type { SearchAISummaryParams } from "@/lib/search";
-import type { RecentFile, RecentSearch } from "@/lib/search-recents";
+import type {
+  RecentFileWithIdentity,
+  RecentSearch,
+} from "@/lib/search-recents";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 
@@ -289,10 +291,10 @@ const SummaryBody = ({
 
 type SearchRecentsProps = {
   recentSearches: RecentSearch[];
-  recentFiles: RecentFile[];
+  recentFiles: RecentFileWithIdentity[];
   onSearchClick: (recent: RecentSearch) => void;
-  onFileClick: (file: RecentFile) => void;
-  onFilePreview: (file: RecentFile) => void;
+  onFileClick: (file: RecentFileWithIdentity) => void;
+  onFilePreview: (file: RecentFileWithIdentity) => void;
   previewedFileId: string | null;
 };
 
@@ -467,7 +469,19 @@ export const SearchResultItem = ({
   );
 };
 
-export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
+export const RecentFileIcon = ({ file }: { file: RecentFileWithIdentity }) => {
+  if (file.documentIdentity !== undefined) {
+    return (
+      <DocumentIdentityBadge
+        identity={file.documentIdentity}
+        title={file.title}
+      />
+    );
+  }
+  return <RecentFileTypeIcon file={file} />;
+};
+
+const RecentFileTypeIcon = ({ file }: { file: RecentFileWithIdentity }) => {
   // Recents store identifiers, not thumbnail availability. Observe metadata
   // already loaded by the file view without fetching every recent on open.
   const entityQuery = useQuery({
@@ -489,7 +503,12 @@ export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
   const content = field?.content.type === "file" ? field.content : null;
   const mimeType = content?.mimeType ?? file.mimeType;
   if (!mimeType) {
-    return <FileTextIcon className="text-muted-foreground size-4 shrink-0" />;
+    return (
+      <DocumentIdentityBadge
+        identity={{ kind: "unknown" }}
+        title={file.title}
+      />
+    );
   }
   return (
     <DocumentIcon
@@ -510,7 +529,6 @@ export const RecentFileIcon = ({ file }: { file: RecentFile }) => {
 
 const NON_ENTITY_KIND_ICONS = {
   contact: UserIcon,
-  "case-law": LandmarkIcon,
   chat: MessagesSquareIcon,
 } as const;
 
@@ -535,8 +553,17 @@ export const SearchHitIcon = ({ hit }: { hit: GlobalSearchHit }) => {
           matter={{ id: hit.workspaceId, color: hit.color }}
         />
       );
-    case "contact":
     case "case-law":
+      return (
+        <DocumentIdentityBadge
+          identity={{
+            kind: "decision",
+            courtAbbreviation: hit.courtAbbreviation,
+          }}
+          title={hit.title}
+        />
+      );
+    case "contact":
     case "chat": {
       const Icon = NON_ENTITY_KIND_ICONS[hit.type];
       return <Icon className="text-muted-foreground mt-0.5 size-4 shrink-0" />;

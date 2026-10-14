@@ -9,6 +9,7 @@ import {
   DEDICATED_CONNECTIONS_PER_PROCESS,
 } from "@/api/db/dedicated-connection-slots";
 import { terminateReserved } from "@/api/db/sql-close";
+import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
@@ -200,8 +201,10 @@ export const withLongRunningConnection = async <T>(
       cancelBackend: dedicated.cancelBackend,
       signal,
       work: async (reserved, setTransactionBudget) => {
+        const db = databaseFor(reserved);
+        await assertDatabaseLoginPosture(db);
         const workResult = await work({
-          db: databaseFor(reserved),
+          db,
           connection: reserved,
           setTransactionBudget: async ({
             statementTimeout: requestedStatementTimeout,

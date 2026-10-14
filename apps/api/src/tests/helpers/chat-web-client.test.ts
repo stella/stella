@@ -1,9 +1,15 @@
 import type { ToolCallState, UIMessage } from "@tanstack/ai-client";
 import { describe, expect, test } from "bun:test";
 
+import { nextMacrotask } from "@stll/concurrency/event-loop";
+
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { APPROVAL_TOOL_NAME } from "@/api/tests/helpers/chat-approval-harness";
-import { cardsOf, loadWebChat } from "@/api/tests/helpers/chat-web-client";
+import {
+  cardsOf,
+  createWebChatClient,
+  loadWebChat,
+} from "@/api/tests/helpers/chat-web-client";
 
 // `cardsOf` mirrors which parts the web app renders as cards the user can act
 // on. These cases run it on the web app's own predicates, loaded from
@@ -19,6 +25,43 @@ const STATES = [
   "input-complete",
   "input-streaming",
 ] as const satisfies readonly ToolCallState[];
+
+test("an idle page waits for server completion and releases its subscription on close", async () => {
+  const listeners = new Set<() => void>();
+  const page = { activeTurnId: null, messages: [] };
+  let requests = 1;
+  const client = await createWebChatClient({
+    inFlight: () => requests,
+    page,
+    reload: async () => page,
+    subscribeInFlight: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    threadId: "idle-notification-thread",
+  });
+  let settled = false;
+  const waiting = client.settle().then(() => {
+    settled = true;
+    return settled;
+  });
+  try {
+    await nextMacrotask();
+    expect(settled).toBe(false);
+    requests = 0;
+    for (const listener of listeners) {
+      listener();
+    }
+    await waiting;
+    expect(settled).toBe(true);
+    expect(client.messages()).toEqual([]);
+  } finally {
+    client.dispose();
+  }
+  expect(listeners.size).toBe(0);
+});
 
 const assistant = (part: UIMessage["parts"][number]): UIMessage[] => [
   { id: "message-1", parts: [part], role: "assistant" },

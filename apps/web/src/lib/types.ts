@@ -26,6 +26,7 @@ import {
   getNativeOfficeViewerFormat,
   isEmailFile,
   isMarkdownFile,
+  isPlainTextFile,
 } from "@/lib/consts";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
@@ -75,6 +76,10 @@ export const isFileDisplayable = (file: {
   }
 
   if (!file.encrypted && isMarkdownFile(file)) {
+    return true;
+  }
+
+  if (!file.encrypted && isPlainTextFile(file)) {
     return true;
   }
 

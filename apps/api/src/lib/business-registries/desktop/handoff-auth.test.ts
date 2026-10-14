@@ -9,6 +9,7 @@ import {
 
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import {
   claimFixtureDeviceProof,
@@ -131,6 +132,7 @@ test("supported protocols retain the authenticated account identity without a fa
       credential: "fixture-credential",
     }),
     keyId: "desktop-account-key",
+    memberRole: sessionMemberRole("member"),
     organizationId: mintAuthProviderId<"organization">(),
     userId: mintAuthProviderId<"user">(),
     scopedDb: async () =>

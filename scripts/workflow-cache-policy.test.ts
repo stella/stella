@@ -72,6 +72,70 @@ test("ordinary installs reject raw setup and accept the cached owner", () => {
   ).toEqual([]);
 });
 
+test("raw pinned Bun setup is allowed only alongside the scoped install owner", () => {
+  const pinnedRaw = {
+    uses: "oven-sh/setup-bun@0123456789abcdef0123456789abcdef01234567",
+  };
+  const owner = { uses: "./.github/actions/ci-install" };
+  const installWorkflow = { on: ["pull_request"] };
+  expect(
+    workflowCacheProblems({
+      ...installWorkflow,
+      jobs: { fixture: { steps: [pinnedRaw] } },
+    }),
+  ).toContain(
+    "job 'fixture': raw Bun setup needs the shared install-cache action",
+  );
+  expect(
+    workflowCacheProblems({
+      ...installWorkflow,
+      jobs: {
+        fixture: {
+          steps: [pinnedRaw, { uses: "./.github/actions/ci-install/" }],
+        },
+      },
+    }),
+  ).not.toEqual([]);
+  expect(
+    workflowCacheProblems({
+      ...installWorkflow,
+      jobs: { fixture: { steps: [pinnedRaw, owner] } },
+    }),
+  ).toEqual([]);
+  const forbidden = [
+    {
+      workflow: { on: ["workflow_run"] },
+      steps: [pinnedRaw, owner],
+      policy: "default-scope",
+    },
+    {
+      workflow: { on: ["pull_request"] },
+      steps: [{ uses: "./.github/actions/safe-chain" }, pinnedRaw, owner],
+      policy: "cold-install",
+    },
+    {
+      workflow: { on: ["pull_request"] },
+      steps: [{ ...raw, uses: pinnedRaw.uses }, owner],
+      policy: "no-cache",
+    },
+    {
+      workflow: { on: ["pull_request"] },
+      steps: [pinnedRaw, owner],
+      policy: "publish-chain",
+      permissions: { contents: "write" },
+    },
+  ] as const;
+  for (const { workflow, steps, policy, ...jobFields } of forbidden) {
+    const job = { ...jobFields, steps };
+    expect(jobCachePolicy({ workflow, job })).toBe(policy);
+    expect(
+      workflowCacheProblems({ ...workflow, jobs: { fixture: job } }),
+    ).toContain(
+      `job 'fixture': scoped install cache is forbidden by ${policy} policy`,
+    );
+  }
+});
+
 test("all committed workflows and composite actions obey the shared cache policy", () => {
   const root = fileURLToPath(new URL("../", import.meta.url));
   const files = [
@@ -210,17 +274,27 @@ test("dropping save from a real Bun caller violates the repository contract", ()
       ),
     ),
   );
-  const step = Object.values(workflow.jobs)
-    .flatMap((job) => job.steps ?? [])
-    .find((candidate) =>
-      candidate.uses?.startsWith("stella/.github/actions/setup-bun-cached@"),
-    );
-  if (!step?.with) {
+  const caller = Object.entries(workflow.jobs)
+    .flatMap(([id, job]) =>
+      (job.steps ?? [])
+        .filter((candidate) =>
+          candidate.uses?.startsWith(
+            "stella/.github/actions/setup-bun-cached@",
+          ),
+        )
+        .map((step) => ({ id, step })),
+    )
+    .at(0);
+  if (caller === undefined) {
+    expect.unreachable("Missing real Bun cache caller");
+  }
+  const { step, id } = caller;
+  if (!step.with) {
     expect.unreachable("Missing real Bun cache caller");
   }
   expect(workflowCacheProblems(workflow)).toEqual([]);
   delete step.with["save"];
   expect(workflowCacheProblems(workflow)).toContain(
-    "job 'ci-plan': Bun install cache saves must be main-only",
+    `job '${id}': Bun install cache saves must be main-only`,
   );
 });

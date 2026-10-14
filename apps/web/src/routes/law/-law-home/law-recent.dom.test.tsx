@@ -195,9 +195,13 @@ test("server recent rows render known court chips, unknown decision icons and st
   const unknown = screen.getByRole("link", { name: /47 C/u });
   expect(unknown.querySelector('[data-slot="court-badge"]')).toBeNull();
   expect(unknown.querySelector("svg")).not.toBeNull();
-  expect(
-    screen.getByRole("link", { name: /172\/26/u }).querySelector("svg"),
-  ).not.toBeNull();
+  const statute = screen.getByRole("link", { name: /172\/26/u });
+  const identity = statute.querySelector(
+    '[data-slot="document-identity-badge"][data-kind="statute"]',
+  );
+  expect(identity?.textContent).toContain("172/26");
+  expect(identity?.textContent).toContain("172/2026");
+  expect(statute.querySelector("svg")).toBeNull();
 });
 
 test("server recents filter, reopen queries and delete their server entry id", async () => {

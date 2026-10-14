@@ -4,6 +4,37 @@ class WorkflowStepsInvariantError extends Error {
   readonly _tag = "WorkflowStepsInvariantError";
 }
 
+/** Read the exact ordered install inputs from the shared CI owner. */
+export const workflowCiInstallFlags = (
+  step: Record<string, unknown>,
+): string[] => {
+  if (
+    step["uses"] !== "$/.github/actions/ci-install" &&
+    step["uses"] !== "./.github/actions/ci-install"
+  ) {
+    throw new WorkflowStepsInvariantError(
+      "Expected the shared CI install action",
+    );
+  }
+  const inputs = step["with"];
+  if (
+    typeof inputs !== "object" ||
+    inputs === null ||
+    !("flags" in inputs) ||
+    typeof inputs.flags !== "string"
+  ) {
+    throw new WorkflowStepsInvariantError("Missing CI install flags");
+  }
+  const flags: unknown = JSON.parse(inputs.flags);
+  if (
+    !Array.isArray(flags) ||
+    !flags.every((flag): flag is string => typeof flag === "string")
+  ) {
+    throw new WorkflowStepsInvariantError("CI install flags must be strings");
+  }
+  return flags;
+};
+
 /** Enumerate leaf steps without letting a parallel group hide checks from guards. */
 export const flattenWorkflowSteps = (
   steps: unknown,
