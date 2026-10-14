@@ -56,7 +56,7 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           `GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE`,
         );
         await client.unsafe(
-          `GRANT USAGE ON SCHEMA ${schema} TO stella, ${ownerRole}`,
+          `GRANT USAGE ON SCHEMA ${schema} TO stella, ${ownerRole}; GRANT CREATE ON SCHEMA ${schema} TO ${ownerRole}`,
         );
         await client.unsafe(
           `CREATE TABLE "user" (id text PRIMARY KEY, deleted_at timestamptz); GRANT SELECT, UPDATE ON "user" TO ${ownerRole}`,
