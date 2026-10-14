@@ -108,6 +108,7 @@ jobs:
           exit 1
 
       - name: Explore workspace interactions
+        timeout-minutes: 15
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
           E2E_SOAK_SEED: ${{ github.run_id }}
@@ -569,6 +570,7 @@ jobs:
         run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts
 
       - name: Rehearse exact-base migration upgrade
+        timeout-minutes: 12
         id: rehearsal
         env:
           BASE_SHA: ${{ steps.base.outputs.sha }}

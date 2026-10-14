@@ -10,9 +10,9 @@
 //   retried, and a curl or wget that only names a loopback address is a
 //   readiness probe, not a fetch. Repository shell scripts a step invokes are
 //   scanned too; a script invoked through retry.sh is retried as a whole.
-// - timeout: a workflow step whose own `run:` fetches, or that uses a
-//   repository composite action that fetches (in its steps or the scripts
-//   they invoke), declares its own `timeout-minutes`. The job deadline does not count: it bounds the whole
+// - timeout: a workflow step that fetches, in its own `run:`, in a script it
+//   invokes, or through a repository composite action, declares its own
+//   `timeout-minutes`. The job deadline does not count: it bounds the whole
 //   job, so a hung download would spend every other step's budget first.
 //   Composite steps cannot declare a timeout, so the calling step owns it.
 //
@@ -192,7 +192,7 @@ const RETRY_SCRIPTS = new Set(["scripts/retry.sh", "scripts/gh-retry.sh"]);
 // wrapper, an interpreter and a path prefix may precede it. A path quoted in
 // a scope list or a message is data.
 const INVOCATION_PREFIX =
-  /^(?:[A-Za-z_]\w*=(?:\$\(|"[^"]*"|'[^']*'|\S*)\s*)*(?:\S*(?:gh-)?retry\.sh["']?\s+|"?\$\{?\w*(?:retry|RETRY)\w*\}?"?\s+)?(?:(?:bash|sh|exec|source|\.)\s+(?:-\S+\s+)*)?["']?(?:\$\{?GITHUB_WORKSPACE\}?\/|\.[\w-]+\/|\.\/)*$/u;
+  /^(?:[A-Za-z_]\w*=(?:\$\(|"[^"]*"|'[^']*'|\S*)\s*)*(?:(?:(?:bash|sh)\s+)?(?:\S*(?:gh-)?retry\.sh["']?\s+|"?\$\{?\w*(?:retry|RETRY)\w*\}?"?\s+))?(?:(?:bash|sh|exec|source|\.)\s+(?:-\S+\s+)*)?["']?(?:\$\{?GITHUB_WORKSPACE\}?\/|\.[\w-]+\/|\.\/)*$/u;
 
 const ACTION_PATH =
   /["']?\$\{?\{?\s*(?:GITHUB_ACTION_PATH|github\.action_path)\s*\}?\}?$/u;
@@ -268,15 +268,18 @@ export const runFetches = (
       return;
     }
     for (const reference of scriptReferences(source, dir)) {
-      if (visited.has(reference.file)) {
+      const inherited = wrapped || reference.wrapped;
+      // A script reached once through retry.sh and once bare is scanned in
+      // both contexts, so the bare invocation still reports its fetches.
+      const visit = `${reference.file}\0${String(inherited)}`;
+      if (visited.has(visit)) {
         continue;
       }
-      visited.add(reference.file);
+      visited.add(visit);
       const script = repo.read(reference.file);
       if (script === null) {
         continue;
       }
-      const inherited = wrapped || reference.wrapped;
       for (const fetch of scanShell(script, reference.file)) {
         fetches.push({ ...fetch, wrapped: fetch.wrapped || inherited });
       }
@@ -419,11 +422,9 @@ export const networkViolations = (
         const run = step["run"];
         if (typeof run === "string") {
           const own = runFetches(repo, run, null, file);
-          // A shared script that fetches once and is then reused by later
-          // steps (an image pull guarded by `docker image inspect`) would put
-          // every caller under the timeout rule, so only fetches written in
-          // the step itself count here; scripts still have to retry.
-          fetches.push(...own.filter((fetch) => fetch.source === file));
+          // A download inside an invoked script hangs the step exactly like
+          // an inline one, so script fetches count for the timeout rule too.
+          fetches.push(...own);
           const unwrapped = own.filter((fetch) => !fetch.wrapped);
           if (unwrapped.length > 0) {
             add({

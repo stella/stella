@@ -127,6 +127,7 @@ describe("scripts and composite actions", () => {
   test("a script invoked through retry.sh is retried as a whole", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
         run: bash scripts/retry.sh bash scripts/install-tool.sh
 `),
       "scripts/install-tool.sh":
@@ -136,10 +137,42 @@ describe("scripts and composite actions", () => {
     expect(report.errors).toEqual([]);
   });
 
+  test("a fetch inside an invoked script needs the step timeout", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Install tool
+        run: bash scripts/retry.sh bash scripts/install-tool.sh
+`),
+      "scripts/install-tool.sh":
+        "curl -fsSL https://example.com/tool -o tool\n",
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Install tool: curl (scripts/install-tool.sh) needs a step timeout-minutes`,
+    ]);
+  });
+
   test("an unretried fetch inside an invoked script fails", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
         run: bash scripts/install-tool.sh
+`),
+      "scripts/install-tool.sh":
+        "curl -fsSL https://example.com/tool -o tool\n",
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Install tool: route curl (scripts/install-tool.sh) through scripts/retry.sh`,
+    ]);
+  });
+
+  test("a bare invocation after a retried one still reports the script's fetch", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
+        run: |
+          bash scripts/retry.sh bash scripts/install-tool.sh
+          bash scripts/install-tool.sh
 `),
       "scripts/install-tool.sh":
         "curl -fsSL https://example.com/tool -o tool\n",

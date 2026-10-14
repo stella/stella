@@ -123,6 +123,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull the pinned browser image and clear registry credentials
+        timeout-minutes: 2
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" --prepare
 
       - name: Log out of GitHub Container Registry
@@ -130,6 +131,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Record network baseline
+        timeout-minutes: 6
         env:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"

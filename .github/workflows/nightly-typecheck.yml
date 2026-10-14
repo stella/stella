@@ -108,6 +108,7 @@ jobs:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: package.json
       - name: Prove fresh web consumers and generator guards
+        timeout-minutes: 40
         run: bash scripts/check-fresh-web-sources.sh
         env:
           NPM_TOKEN: ""

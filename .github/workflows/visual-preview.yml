@@ -79,12 +79,14 @@ jobs:
         if: steps.scope.outputs.required == 'true'
         run: bun scripts/ci-service-images.ts --build apps/visual-preview/Dockerfile -- --platform linux/arm64 -f apps/visual-preview/Dockerfile -t visual-preview:test .
       - name: Pull the pinned browser image
+        timeout-minutes: 2
         if: steps.scope.outputs.required == 'true'
         run: bash .github/actions/setup-playwright/run-in-image.sh --prepare
       - name: Log out of GitHub Container Registry
         if: always()
         run: docker logout ghcr.io
       - name: Test preview in the pinned browser image
+        timeout-minutes: 2
         if: steps.scope.outputs.required == 'true'
         run: bash .github/actions/setup-playwright/run-in-image.sh --offline bun --filter @stll/visual-preview test:browser
       - name: Exercise Lambda image without network

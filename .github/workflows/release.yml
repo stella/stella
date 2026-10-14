@@ -237,6 +237,7 @@ jobs:
 
       # CI rehearses this same runtime contract before a VERSION bump merges.
       - name: Smoke release artifact
+        timeout-minutes: 2
         run: bash scripts/smoke-api-image.sh stella-api:smoke
 
   build:

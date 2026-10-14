@@ -2326,6 +2326,7 @@ jobs:
         run: bun scripts/check-published-exports.ts packages/mcp-kit
 
       - name: Load merge base measurement
+        timeout-minutes: 6
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bash scripts/prepare-typecheck-base.sh
         env:
@@ -3745,6 +3746,7 @@ jobs:
         run: bun test scripts/ci-store-save.test.ts
 
       - name: Workflow lint
+        timeout-minutes: 2
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -6316,6 +6318,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Rehearse the upgrade from the promoted release at scale
+        timeout-minutes: 9
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api
@@ -7199,6 +7202,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check route network baseline
+        timeout-minutes: 6
         id: network-baseline
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -7645,6 +7649,7 @@ jobs:
           browsers: firefox webkit
 
       - name: Test browser stack redaction
+        timeout-minutes: 2
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-browser-stack-redaction.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:stack-redaction
@@ -7827,6 +7832,7 @@ jobs:
         uses: ./.github/actions/setup-playwright
 
       - name: Run Vite dependency canary
+        timeout-minutes: 3
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-vite-dependency-canary.json
@@ -7838,6 +7844,7 @@ jobs:
           --project chromium
 
       - name: Test anonymized PDF export
+        timeout-minutes: 2
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-anonymized-pdf-export.json
@@ -7848,6 +7855,7 @@ jobs:
       # blob (testDir e2e/collab) breaks the merged specs report. Its failures
       # are uploaded separately with their traces and videos.
       - name: Run lockless collaboration browser suite
+        timeout-minutes: 3
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-lockless-collaboration-browser-suite.json
@@ -8049,6 +8057,7 @@ jobs:
           package-directory: apps/landing
 
       - name: Check landing islands
+        timeout-minutes: 2
         env:
           PLAYWRIGHT_PACKAGE_DIR: apps/landing
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-landing-islands.json
@@ -8449,6 +8458,7 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Rehearse migrations and boot packaged entrypoints
+        timeout-minutes: 2
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
@@ -9407,10 +9417,12 @@ jobs:
         if: ${{ !cancelled() }}
         uses: ./.github/actions/osv-scanner
       - name: Verify malware scanner fixtures
+        timeout-minutes: 2
         if: ${{ !cancelled() }}
         run: bash scripts/test-malware-scanners.sh
 
       - name: Scan dependency malware
+        timeout-minutes: 13
         if: ${{ !cancelled() }}
         run: bash scripts/scan-dependency-malware.sh
         env:
