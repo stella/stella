@@ -951,7 +951,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "ad6de4fa5e0a9b7136839d668635ed629373636953380d4714788a93630cb0d2",
+      "digest": "19d6951a7711a48ada5b6b3627819fc8fe5ddbfb618de5ec5357088e6ecee772",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
@@ -1108,7 +1108,7 @@
           "id": "e2e-production-shard",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "42c7bf24a35c318ed9cca5ad417f70da690206522efb98abcde71427d4b10bf3"
+          "digest": "ed3a737e062eb026b2ed7331023a5d51df4f2bbc2b1324e70b5126e1f440389a"
         },
         {
           "id": "stack-redaction-browsers",
@@ -1180,7 +1180,7 @@
           "id": "desktop-rust-tests",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "779f7c49e12ebb0f304702d31892a1d8f016400afad0917f8490525798cd1dc3"
+          "digest": "9363635a89ce709111c380b82c7f0817b2a42ec85c3c7e455aa9489a23647794"
         },
         {
           "id": "desktop-rust-lint",
@@ -1401,7 +1401,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/dependency-audit.yml",
-      "digest": "6e448966a8321c7ecfb821dfa45645cd2c4e584f3bbbc8f0b333d88ba44b1eb7",
+      "digest": "9dfa31d2c54284ba693d2fb50ee61f208d4ce86e6f9cef94b8e6ab038e637c54",
       "references": [],
       "jobs": [
         {
@@ -1415,12 +1415,22 @@
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
           "digest": "f2a179ca72f6bcb6a2c9294b23e90d49fb1734f36f871ec5bc277e863ddf79e4"
+        },
+        {
+          "id": "cargo-advisories",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "7943e53c02d07511f35bb2a6aff7ed3c872680280d8a6b90f052bcbb51a3750a"
         }
       ],
       "edges": {
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
         "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "./.github/actions/cargo-deny": "n0006",
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0116",
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0117",
+        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0118"
       }
     },
     {

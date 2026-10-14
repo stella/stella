@@ -87,7 +87,7 @@ export const sameMetadataOrigin = ({
       );
     default: {
       caller satisfies never;
-      panic("Unrecognized metadata origin");
+      return panic("Unrecognized metadata origin");
     }
   }
 };

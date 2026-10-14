@@ -185,6 +185,7 @@
     "Record static check receipts": ["**"],
     "Prepare environment": ["**"],
     "Restore generated sources": ["**"],
+    "Check workflow job classifications": ["**"],
     "Compute affected flag": ["**"],
     "Format": ["**"],
     "Test unsignalled skip detection": ["**"],
