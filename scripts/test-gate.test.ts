@@ -11,6 +11,8 @@ import {
   packageTestCollectionFailure,
   packageTestExecutionFailure,
   parseScenarioLedger,
+  parseDisabledLedger,
+  platformConditionalFailure,
   parseTestRegistrations,
   rootCommandExecutionFailure,
   scenarioLedgerGrowth,
@@ -1385,6 +1387,65 @@ jobs:
       }),
     ).toBeUndefined();
   });
+
+  check(
+    "platform conditionals require the exact skip and a non-Windows collector",
+    () => {
+      const file = "scripts/named.test.ts";
+      const source = `import { test } from "bun:test"; test.skipIf(process.platform === "win32")("platform probe", () => {});`;
+      const entry = {
+        identity: `${file}::platform probe`,
+        kind: "platform-conditional",
+        skippedOn: ["win32"],
+      } as const;
+      const workflowFor = (runner: string) => `jobs:
+  checks:
+    runs-on: ${runner}
+    shell: bash
+    steps:
+      - run: bun test scripts/named.test.ts
+  ci-result:
+    needs: [checks]
+`;
+      const validate = (candidateSource: string, runner: string) => {
+        const workflow = workflowFor(runner);
+        return platformConditionalFailure({
+          entry,
+          file,
+          source: candidateSource,
+          topology: {
+            workflow,
+            gatingJobs: analyzeGatingWorkflow(Bun.YAML.parse(workflow)).jobs,
+            shardedPackages: new Set<string>(),
+          },
+        });
+      };
+      expect(
+        parseDisabledLedger({ managedServiceGates: [], identities: [entry] })
+          .platformConditionals,
+      ).toEqual([entry]);
+      expect(validate(source, "ubuntu-latest")).toBeUndefined();
+      for (const condition of [
+        'process.platform !== "linux"',
+        "true",
+        "disabled",
+        'process.platform == "win32"',
+      ]) {
+        expect(
+          validate(
+            source.replace('process.platform === "win32"', () => condition),
+            "ubuntu-latest",
+          ),
+        ).toContain("skipIf must use literal");
+      }
+      expect(
+        validate(source.replace("skipIf", "skip"), "ubuntu-latest"),
+      ).toContain("skipIf must use literal");
+      expect(validate(source, "windows-latest")).toContain(
+        "no proven non-win32 gating collector",
+      );
+    },
+  );
 
   check("structured blockers expire with their named producer", () => {
     const workflow = `jobs:

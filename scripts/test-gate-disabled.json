@@ -178,6 +178,10 @@
     "scripts/capability-shard-pack.test.ts::capability shards preserve npm pack contents and the complete CLI contract",
     "scripts/ci-windows-dry-run-result.test.ts::the executable boundary runs fully on unreadable keys or receipts and records valid reuse",
     "scripts/cli-runtime-merge.test.ts::independent registry additions merge without derived runtime files and regenerate deterministically",
-    "scripts/code-quality-task-budget.test.ts::a quiet compiler with advancing CPU time survives beyond the stall window"
+    {
+      "identity": "scripts/code-quality-task-budget.test.ts::a quiet compiler with advancing CPU time survives beyond the stall window",
+      "kind": "platform-conditional",
+      "skippedOn": ["win32"]
+    }
   ]
 }

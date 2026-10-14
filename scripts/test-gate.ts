@@ -76,9 +76,16 @@ const REGISTRATION_MODIFIERS = new Set([
   "todoIf",
 ]);
 
+export type PlatformConditionalEntry = {
+  readonly identity: string;
+  readonly kind: "platform-conditional";
+  readonly skippedOn: readonly ["win32"];
+};
+
 type DisabledLedger = {
   readonly managedServiceGates: readonly string[];
   readonly identities: readonly string[];
+  readonly platformConditionals: readonly PlatformConditionalEntry[];
 };
 
 export type ScenarioBlocker = {
@@ -126,6 +133,7 @@ type DefaultOnContext = {
 export type RegistrationFinding =
   | {
       readonly identity: string;
+      readonly skippedOn?: readonly ["win32"];
       readonly managedServiceGate?: (typeof SERVICE_GATES)[number];
       readonly type: "disabled" | "only";
     }
@@ -148,22 +156,47 @@ const stringArray = (value: unknown, label: string): readonly string[] => {
   return value;
 };
 
-const readDisabledLedger = (): DisabledLedger => {
-  const value = readJson(DISABLED_LEDGER);
-  if (typeof value !== "object" || value === null) {
-    panic(`${DISABLED_LEDGER} must be an object`);
+export const parseDisabledLedger = (value: unknown): DisabledLedger => {
+  if (!isRecord(value) || !Array.isArray(value["identities"])) {
+    panic(`${DISABLED_LEDGER} must declare an identity inventory`);
   }
-  if (!("managedServiceGates" in value) || !("identities" in value)) {
-    panic(`${DISABLED_LEDGER} is missing required fields`);
+  const identities: string[] = [];
+  const platformConditionals: PlatformConditionalEntry[] = [];
+  for (const entry of value["identities"]) {
+    if (typeof entry === "string") {
+      identities.push(entry);
+      continue;
+    }
+    if (
+      !isRecord(entry) ||
+      entry["kind"] !== "platform-conditional" ||
+      typeof entry["identity"] !== "string" ||
+      !Array.isArray(entry["skippedOn"]) ||
+      entry["skippedOn"].length !== 1 ||
+      entry["skippedOn"][0] !== "win32"
+    ) {
+      panic(
+        `${DISABLED_LEDGER} contains an invalid platform-conditional entry`,
+      );
+    }
+    identities.push(entry["identity"]);
+    platformConditionals.push({
+      identity: entry["identity"],
+      kind: "platform-conditional",
+      skippedOn: ["win32"],
+    });
   }
   return {
     managedServiceGates: stringArray(
-      value.managedServiceGates,
+      value["managedServiceGates"],
       `${DISABLED_LEDGER}.managedServiceGates`,
     ),
-    identities: stringArray(value.identities, `${DISABLED_LEDGER}.identities`),
+    identities,
+    platformConditionals,
   };
 };
+
+const readDisabledLedger = () => parseDisabledLedger(readJson(DISABLED_LEDGER));
 
 export const parseScenarioLedger = (
   value: unknown,
@@ -687,6 +720,47 @@ const registrationAliases = (
   return aliases;
 };
 
+const literalWindowsSkip = (expression: ts.Expression): boolean => {
+  if (!ts.isCallExpression(expression) || expression.arguments.length !== 1) {
+    return false;
+  }
+  const condition = expression.arguments.at(0);
+  if (
+    condition === undefined ||
+    !ts.isBinaryExpression(condition) ||
+    condition.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken ||
+    !ts.isPropertyAccessExpression(condition.left) ||
+    !ts.isIdentifier(condition.left.expression) ||
+    condition.left.expression.text !== "process" ||
+    condition.left.name.text !== "platform" ||
+    !ts.isStringLiteral(condition.right) ||
+    condition.right.text !== "win32"
+  ) {
+    return false;
+  }
+  return true;
+};
+
+type PlatformSkipMetadataOptions = {
+  readonly name: string;
+  readonly expression: ts.Expression;
+  readonly callbackDisabled: boolean;
+  readonly conditionallyRegistered: boolean;
+};
+
+const platformSkipMetadata = ({
+  name,
+  expression,
+  callbackDisabled,
+  conditionallyRegistered,
+}: PlatformSkipMetadataOptions) =>
+  name === "test.skipIf" &&
+  !callbackDisabled &&
+  !conditionallyRegistered &&
+  literalWindowsSkip(expression)
+    ? { skippedOn: ["win32"] as const }
+    : {};
+
 export const parseTestRegistrations = (
   file: string,
   sourceText: string,
@@ -784,8 +858,15 @@ export const parseTestRegistrations = (
         );
     const callbackDisabled =
       callback !== undefined && containsEnvironmentReturn(callback);
+    const conditionallyRegistered = isConditionallyRegistered(node);
     const isDisabled =
-      calleeDisabled || callbackDisabled || isConditionallyRegistered(node);
+      calleeDisabled || callbackDisabled || conditionallyRegistered;
+    const platformMetadata = platformSkipMetadata({
+      name,
+      expression: node.expression,
+      callbackDisabled,
+      conditionallyRegistered,
+    });
     const unconditionallyDisabled = name
       .split(".")
       .some((part) => ["skip", "todo", "fixme"].includes(part));
@@ -827,7 +908,11 @@ export const parseTestRegistrations = (
     if (isDisabled) {
       findings.push(
         managedServiceGate === undefined
-          ? { identity, type: "disabled" }
+          ? {
+              identity,
+              type: "disabled",
+              ...platformMetadata,
+            }
           : { identity, managedServiceGate, type: "disabled" },
       );
     }
@@ -4484,6 +4569,51 @@ export const scenarioBlockerFailure = (
   }
 };
 
+type PlatformConditionalFailureOptions = {
+  readonly entry: PlatformConditionalEntry;
+  readonly file: string;
+  readonly source: string;
+  readonly topology: RepositoryTestExecutionTopology;
+};
+
+export const platformConditionalFailure = ({
+  entry,
+  file,
+  source,
+  topology,
+}: PlatformConditionalFailureOptions): string | undefined => {
+  const matching = parseTestRegistrations(file, source).filter(
+    (finding) => finding.identity === entry.identity,
+  );
+  const finding = matching.at(0);
+  if (
+    matching.length !== 1 ||
+    finding?.type !== "disabled" ||
+    finding.skippedOn?.at(0) !== "win32"
+  ) {
+    return "platform conditional: skipIf must use literal process.platform === win32";
+  }
+  const root = workflowRecord(Bun.YAML.parse(topology.workflow));
+  const jobs = workflowRecord(root?.["jobs"]) ?? {};
+  const gatingJobs = new Map(
+    [...topology.gatingJobs].filter(([name]) => {
+      const runner = workflowRecord(jobs[name])?.["runs-on"];
+      return (
+        typeof runner === "string" &&
+        /^(?:ubuntu|linux|macos)(?:-|$)/u.test(runner)
+      );
+    }),
+  );
+  const collection = firstCollectionFailure({
+    file,
+    scenarios: new Map(),
+    topology: { ...topology, gatingJobs },
+  });
+  return collection === undefined
+    ? undefined
+    : `platform conditional: no proven non-win32 gating collector; ${collection}`;
+};
+
 type ScenarioCollectionFailureOptions = {
   readonly file: string;
   readonly scenario: TestScenario;
@@ -4834,6 +4964,22 @@ const run = (): void => {
     }
   }
 
+  for (const entry of disabledLedger.platformConditionals) {
+    const file = entry.identity.split("::").at(0);
+    if (file === undefined || !files.includes(file)) {
+      errors.push(`${entry.identity}: platform conditional file is missing`);
+      continue;
+    }
+    const failure = platformConditionalFailure({
+      entry,
+      file,
+      source: readFileSync(path.join(ROOT, file), "utf-8"),
+      topology: repositoryTestExecutionTopology(),
+    });
+    if (failure !== undefined) {
+      errors.push(`${entry.identity}: ${failure}`);
+    }
+  }
   const managedGates = new Set(disabledLedger.managedServiceGates);
   const actualDisabled: string[] = [];
   for (const file of files) {
