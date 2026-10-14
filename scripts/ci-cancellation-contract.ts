@@ -56,3 +56,26 @@ export const isCanonicalFailureCancellation = (step: unknown) =>
     ...CANONICAL_CANCEL_STEP,
     if: "failure() && github.event_name == 'merge_group'",
   });
+
+// Lint and typecheck failures are the commonest reason a pull request run
+// fails, and every other job's result is moot once one is found. The code
+// quality jobs therefore stop the rest of a failed pull request run too,
+// freeing its runners, with the same failed-step evidence.
+export const PR_CODE_QUALITY_CANCEL_STEP = {
+  name: "Cancel pull request run after code quality failure",
+  if: "failure() && github.event_name == 'pull_request'",
+  uses: CANONICAL_CANCEL_STEP.uses,
+  with: {
+    retries: 0,
+    script: CANCEL_FAILURE_SCRIPT.replaceAll(
+      "cancelling failed merge group",
+      "cancelling the pull request run after a code quality failure",
+    ).replace("Merge group failed:", "Code quality failed:"),
+  },
+} as const;
+
+/** Jobs whose failure ends the rest of a pull request run. */
+export const PR_CODE_QUALITY_JOBS = [
+  "code-quality-api",
+  "code-quality-web-rest",
+] as const;
