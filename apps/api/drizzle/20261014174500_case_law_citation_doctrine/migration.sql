@@ -56,8 +56,10 @@ CREATE TABLE "case_law_citation_doctrine_reviews" (
 CREATE UNIQUE INDEX "case_law_citation_doctrine_reviews_citation_idx"
   ON "case_law_citation_doctrine_reviews" ("citing_decision_id", "citation_key");--> statement-breakpoint
 
--- Read by ingestion when it writes a decision's citations; written only by
--- the operator script on the owner connection. The request role gets nothing.
+-- Read by ingestion when it writes a decision's citations, and deleted by it
+-- when the citing decision is redacted (the evidence quote is its text);
+-- written only by the operator script on the owner connection. The request
+-- role gets nothing.
 ALTER TABLE "case_law_citation_doctrine_reviews" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "case_law_citation_doctrine_reviews" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access"
@@ -72,5 +74,5 @@ CREATE POLICY "citation_doctrine_reviews_owner_access" ON "case_law_citation_doc
 CREATE POLICY "public_law_reader_access" ON "case_law_citation_doctrine_reviews"
   FOR SELECT TO stella_public_law_reader USING (true);--> statement-breakpoint
 -- Public-reader column grants follow after this release accepts them as permitted.
-GRANT SELECT ON TABLE "case_law_citation_doctrine_reviews" TO stella_ingestion;--> statement-breakpoint
+GRANT SELECT, DELETE ON TABLE "case_law_citation_doctrine_reviews" TO stella_ingestion;--> statement-breakpoint
 REVOKE ALL PRIVILEGES ON TABLE "case_law_citation_doctrine_reviews" FROM stella;

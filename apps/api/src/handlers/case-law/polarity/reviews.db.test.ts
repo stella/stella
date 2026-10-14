@@ -318,6 +318,96 @@ const applyLabels = async (input: readonly unknown[]) => {
   return applied.value;
 };
 
+// Before the labels suite: its last test retires a shipped rule for the rest
+// of the file, and this one needs that rule to label the fixture citation.
+describe("independent doctrinal reviews", () => {
+  test("both axes commit, replay and survive refresh independently", async () => {
+    const cited = "sp. zn. 29 Cdo 9821/2015";
+    const options = {
+      caseNumber: "30 Cdo 9821/2026",
+      cited,
+      rawHash: "doctrine-before",
+    };
+    const labelled = await ingestRuleLabelled(options);
+    const doctrine = {
+      kind: "doctrine",
+      citationId: labelled.id,
+      doctrinalTreatment: "distinguishes",
+      evidenceQuote: "does not apply",
+      passage: "The earlier ruling does not apply to these facts.",
+      reviewRef: "doctrine-independent",
+      origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+    };
+    const entries = [labelFor(labelled, POLARITY.POSITIVE), doctrine];
+    const apply = async (input: readonly unknown[]) => {
+      const outcome = await applyReviewedCitationLabels({
+        transact: reviewedTransact,
+        input,
+        resultsPath: resultsPath(),
+        domain: DOCTRINE_LABEL_DOMAIN,
+      });
+      if (outcome.isErr()) {
+        throw outcome.error;
+      }
+      return outcome.value;
+    };
+    expect(await apply(entries)).toMatchObject({
+      summary: { applied: 2, invalid: 0 },
+      relabelled: 2,
+    });
+    expect(await apply(entries)).toMatchObject({
+      summary: { unchanged: 2 },
+      relabelled: 0,
+    });
+    const review = await db
+      .select()
+      .from(caseLawCitationDoctrineReviews)
+      .where(
+        eq(
+          caseLawCitationDoctrineReviews.citingDecisionId,
+          labelled.citingDecisionId,
+        ),
+      );
+    expect(review).toHaveLength(1);
+    expect(review.at(0)).toMatchObject({
+      doctrinalTreatment: "distinguishes",
+      evidenceQuote: doctrine.evidenceQuote,
+    });
+    const header = await tupleHeader(labelled.id);
+    await ingest({ ...options, rawHash: "doctrine-after" });
+    const [refreshed] = await db
+      .select()
+      .from(caseLawCitations)
+      .where(eq(caseLawCitations.id, labelled.id));
+    expect(refreshed).toMatchObject({
+      polarity: POLARITY.POSITIVE,
+      doctrinalTreatment: "distinguishes",
+    });
+    expect(await tupleHeader(labelled.id)).toEqual(header);
+    const lowerOrigin = {
+      ...doctrine,
+      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ADJUDICATED, "doctrine-lower"),
+      evidenceSha256: sha256Hex(doctrine.passage),
+      doctrinalTreatment: "limits",
+    };
+    expect(await apply([lowerOrigin])).toMatchObject({
+      summary: { "refused-precedence": 1 },
+      relabelled: 0,
+    });
+    expect(
+      await db
+        .select()
+        .from(caseLawCitationDoctrineReviews)
+        .where(
+          eq(
+            caseLawCitationDoctrineReviews.citingDecisionId,
+            labelled.citingDecisionId,
+          ),
+        ),
+    ).toEqual(review);
+  });
+});
+
 describe("reviewed citation labels", () => {
   test.each(CITATION_REVIEW_ORIGINS)(
     "review origin %s stores a PostgreSQL-width key with its provenance",
@@ -1085,93 +1175,5 @@ describe("reviewed citation labels", () => {
       polarity: POLARITY.NEUTRAL,
       polarityRuleId: null,
     });
-  });
-});
-
-describe("independent doctrinal reviews", () => {
-  test("both axes commit, replay and survive refresh independently", async () => {
-    const cited = "sp. zn. 29 Cdo 9821/2015";
-    const options = {
-      caseNumber: "30 Cdo 9821/2026",
-      cited,
-      rawHash: "doctrine-before",
-    };
-    const labelled = await ingestRuleLabelled(options);
-    const doctrine = {
-      kind: "doctrine",
-      citationId: labelled.id,
-      doctrinalTreatment: "distinguishes",
-      evidenceQuote: "does not apply",
-      passage: "The earlier ruling does not apply to these facts.",
-      reviewRef: "doctrine-independent",
-      origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
-    };
-    const entries = [labelFor(labelled, POLARITY.POSITIVE), doctrine];
-    const apply = async (input: readonly unknown[]) => {
-      const outcome = await applyReviewedCitationLabels({
-        transact: reviewedTransact,
-        input,
-        resultsPath: resultsPath(),
-        domain: DOCTRINE_LABEL_DOMAIN,
-      });
-      if (outcome.isErr()) {
-        throw outcome.error;
-      }
-      return outcome.value;
-    };
-    expect(await apply(entries)).toMatchObject({
-      summary: { applied: 2, invalid: 0 },
-      relabelled: 2,
-    });
-    expect(await apply(entries)).toMatchObject({
-      summary: { unchanged: 2 },
-      relabelled: 0,
-    });
-    const review = await db
-      .select()
-      .from(caseLawCitationDoctrineReviews)
-      .where(
-        eq(
-          caseLawCitationDoctrineReviews.citingDecisionId,
-          labelled.citingDecisionId,
-        ),
-      );
-    expect(review).toHaveLength(1);
-    expect(review.at(0)).toMatchObject({
-      doctrinalTreatment: "distinguishes",
-      evidenceQuote: doctrine.evidenceQuote,
-    });
-    const header = await tupleHeader(labelled.id);
-    await ingest({ ...options, rawHash: "doctrine-after" });
-    const [refreshed] = await db
-      .select()
-      .from(caseLawCitations)
-      .where(eq(caseLawCitations.id, labelled.id));
-    expect(refreshed).toMatchObject({
-      polarity: POLARITY.POSITIVE,
-      doctrinalTreatment: "distinguishes",
-    });
-    expect(await tupleHeader(labelled.id)).toEqual(header);
-    const lowerOrigin = {
-      ...doctrine,
-      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ADJUDICATED, "doctrine-lower"),
-      evidenceSha256: sha256Hex(doctrine.passage),
-      doctrinalTreatment: "limits",
-    };
-    expect(await apply([lowerOrigin])).toMatchObject({
-      summary: { "refused-precedence": 1 },
-      relabelled: 0,
-    });
-    expect(
-      await db
-        .select()
-        .from(caseLawCitationDoctrineReviews)
-        .where(
-          eq(
-            caseLawCitationDoctrineReviews.citingDecisionId,
-            labelled.citingDecisionId,
-          ),
-        ),
-    ).toEqual(review);
   });
 });

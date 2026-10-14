@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 
 import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
@@ -2703,6 +2704,63 @@ export const caseLawPolarityRules = p.pgTable(
   ],
 );
 
+/** Where a citation review is recorded and who produced it. */
+const citationReviewProvenanceColumns = () => ({
+  /** Opaque reference to where the review is recorded. */
+  reviewRef: p.varchar("review_ref", { length: 200 }).notNull(),
+  /**
+   * Who produced the label; decides which review stands when another
+   * arrives (`CITATION_REVIEW_ORIGIN_PRECEDENCE`). The provenance columns
+   * below are set exactly when a model produced it.
+   */
+  origin: p.text("origin", { enum: CITATION_REVIEW_ORIGINS }).notNull(),
+  model: p.text("model"),
+  promptVersion: p.text("prompt_version"),
+  promptSha256: p.varchar("prompt_sha256", { length: 64 }),
+  /** Digest of the passage the label was read from. */
+  evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
+  runId: p.text("run_id"),
+  producedAt: timestamptz("produced_at"),
+  /** When the current review was made; a changed review moves it. */
+  reviewedAt: timestamptz("reviewed_at").defaultNow().notNull(),
+  updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+});
+
+type CitationReviewProvenanceTable = Record<
+  | "reviewRef"
+  | "origin"
+  | "model"
+  | "promptVersion"
+  | "promptSha256"
+  | "evidenceSha256"
+  | "runId"
+  | "producedAt",
+  SQLWrapper
+>;
+
+/** A model-produced review carries its full provenance; a human one none. */
+const citationReviewProvenanceChecks = (
+  prefix: string,
+  t: CitationReviewProvenanceTable,
+) => [
+  p.check(`${prefix}_review_ref_non_empty`, sql`${t.reviewRef} <> ''`),
+  p.check(
+    `${prefix}_origin_values`,
+    sql`${t.origin} IN (${sql.join(CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})`,
+  ),
+  p.check(
+    `${prefix}_origin_provenance`,
+    sql`(${t.origin} IN (${sql.raw(`'${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}'`)})
+        AND ${t.model} IS NULL AND ${t.promptVersion} IS NULL
+        AND ${t.promptSha256} IS NULL AND ${t.evidenceSha256} IS NULL
+        AND ${t.runId} IS NULL AND ${t.producedAt} IS NULL)
+      OR (${t.origin} IN (${sql.join(AI_CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})
+        AND ${t.model} IS NOT NULL AND ${t.promptVersion} IS NOT NULL
+        AND ${t.promptSha256} IS NOT NULL AND ${t.evidenceSha256} IS NOT NULL
+        AND ${t.runId} IS NOT NULL AND ${t.producedAt} IS NOT NULL)`,
+  ),
+];
+
 /**
  * A reviewed polarity for one citation of one decision.
  *
@@ -2724,24 +2782,7 @@ export const caseLawCitationReviews = p.pgTable(
       .varchar("polarity", { length: 16 })
       .$type<ReviewablePolarity>()
       .notNull(),
-    /** Opaque reference to where the review is recorded. */
-    reviewRef: p.varchar("review_ref", { length: 200 }).notNull(),
-    /**
-     * Who produced the label; decides which review stands when another
-     * arrives (`CITATION_REVIEW_ORIGIN_PRECEDENCE`). The provenance columns
-     * below are set exactly when a model produced it.
-     */
-    origin: p.text("origin", { enum: CITATION_REVIEW_ORIGINS }).notNull(),
-    model: p.text("model"),
-    promptVersion: p.text("prompt_version"),
-    promptSha256: p.varchar("prompt_sha256", { length: 64 }),
-    /** Digest of the passage the label was read from. */
-    evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
-    runId: p.text("run_id"),
-    producedAt: timestamptz("produced_at"),
-    /** When the current review was made; a changed review moves it. */
-    reviewedAt: timestamptz("reviewed_at").defaultNow().notNull(),
-    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+    ...citationReviewProvenanceColumns(),
   },
   (t) => [
     p
@@ -2762,22 +2803,7 @@ export const caseLawCitationReviews = p.pgTable(
       "citation_reviews_citation_key_non_empty",
       sql`${t.citationKey} <> ''`,
     ),
-    p.check("citation_reviews_review_ref_non_empty", sql`${t.reviewRef} <> ''`),
-    p.check(
-      "citation_reviews_origin_values",
-      sql`${t.origin} IN (${sql.join(CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})`,
-    ),
-    p.check(
-      "citation_reviews_origin_provenance",
-      sql`(${t.origin} IN (${sql.raw(`'${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}'`)})
-        AND ${t.model} IS NULL AND ${t.promptVersion} IS NULL
-        AND ${t.promptSha256} IS NULL AND ${t.evidenceSha256} IS NULL
-        AND ${t.runId} IS NULL AND ${t.producedAt} IS NULL)
-      OR (${t.origin} IN (${sql.join(AI_CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})
-        AND ${t.model} IS NOT NULL AND ${t.promptVersion} IS NOT NULL
-        AND ${t.promptSha256} IS NOT NULL AND ${t.evidenceSha256} IS NOT NULL
-        AND ${t.runId} IS NOT NULL AND ${t.producedAt} IS NOT NULL)`,
-    ),
+    ...citationReviewProvenanceChecks("citation_reviews", t),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
@@ -2799,24 +2825,7 @@ export const caseLawCitationDoctrineReviews = p.pgTable.withRLS(
       .notNull(),
     /** Verbatim passage supporting a distinguishes or limits finding. */
     evidenceQuote: p.text("evidence_quote"),
-    /** Opaque reference to where the review is recorded. */
-    reviewRef: p.varchar("review_ref", { length: 200 }).notNull(),
-    /**
-     * Who produced the label; decides which review stands when another
-     * arrives (`CITATION_REVIEW_ORIGIN_PRECEDENCE`). The provenance columns
-     * below are set exactly when a model produced it.
-     */
-    origin: p.text("origin", { enum: CITATION_REVIEW_ORIGINS }).notNull(),
-    model: p.text("model"),
-    promptVersion: p.text("prompt_version"),
-    promptSha256: p.varchar("prompt_sha256", { length: 64 }),
-    /** Digest of the passage the label was read from. */
-    evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
-    runId: p.text("run_id"),
-    producedAt: timestamptz("produced_at"),
-    /** When the current review was made; a changed review moves it. */
-    reviewedAt: timestamptz("reviewed_at").defaultNow().notNull(),
-    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+    ...citationReviewProvenanceColumns(),
   },
   (t) => [
     p
@@ -2837,25 +2846,7 @@ export const caseLawCitationDoctrineReviews = p.pgTable.withRLS(
       "citation_doctrine_reviews_citation_key_non_empty",
       sql`${t.citationKey} <> ''`,
     ),
-    p.check(
-      "citation_doctrine_reviews_review_ref_non_empty",
-      sql`${t.reviewRef} <> ''`,
-    ),
-    p.check(
-      "citation_doctrine_reviews_origin_values",
-      sql`${t.origin} IN (${sql.join(CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})`,
-    ),
-    p.check(
-      "citation_doctrine_reviews_origin_provenance",
-      sql`(${t.origin} IN (${sql.raw(`'${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}'`)})
-        AND ${t.model} IS NULL AND ${t.promptVersion} IS NULL
-        AND ${t.promptSha256} IS NULL AND ${t.evidenceSha256} IS NULL
-        AND ${t.runId} IS NULL AND ${t.producedAt} IS NULL)
-      OR (${t.origin} IN (${sql.join(AI_CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})
-        AND ${t.model} IS NOT NULL AND ${t.promptVersion} IS NOT NULL
-        AND ${t.promptSha256} IS NOT NULL AND ${t.evidenceSha256} IS NOT NULL
-        AND ${t.runId} IS NOT NULL AND ${t.producedAt} IS NOT NULL)`,
-    ),
+    ...citationReviewProvenanceChecks("citation_doctrine_reviews", t),
     p.check(
       "citation_doctrine_reviews_evidence_quote_required",
       sql`${t.doctrinalTreatment} = 'not_stated' OR (${t.evidenceQuote} IS NOT NULL AND btrim(${t.evidenceQuote}) <> '')`,

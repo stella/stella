@@ -24,7 +24,11 @@ export const POLARITY_GUIDANCE = {
   rejecting it, most often as part of the procedural record. Phrases like
   "proti rozsudku", "vedené u", "veden pod". This is also the answer when
   the excerpt does not settle the question.`,
-  negative: `The court overrules, departs from, or
-  criticizes the cited decision. Phrases like
-  "překonán", "zrušen", "overruled".`,
+  // A court that declines to apply a precedent takes a stance against relying
+  // on it, which is what the seed rules' "na rozdíl od", "nelze aplikovat" and
+  // "odlišuje se" cues read. Whether that refusal is a distinguishing or a
+  // limiting is the reviewed doctrine axis, set apart from this reading.
+  negative: `The court overrules, departs from, declines to apply, or
+  criticizes the cited decision. Phrases like "na rozdíl od",
+  "nelze aplikovat", "odlišuje se", "překonán", "zrušen", "overruled".`,
 } as const satisfies Record<ClassifiablePolarity, string>;

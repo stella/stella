@@ -89,18 +89,35 @@ const canReadCitationDoctrine = async (tx: CaseLawPublicReadTransaction) => {
 };
 
 const doctrineOf = (
-  doctrine: DoctrineTreatment | "unavailable" | null,
+  doctrineAvailable: boolean,
+  doctrine: DoctrineTreatment | null,
 ): DoctrineTreatment | "unread" | null =>
-  doctrine === "unavailable" ? null : (doctrine ?? "unread");
+  doctrineAvailable ? (doctrine ?? "unread") : null;
 
-type DoctrineCounts = Record<DoctrineTreatment | "unread", number>;
+/**
+ * The stored doctrine when the reader may see it. Both branches share one
+ * SQL type so the subqueries built over it keep their field types.
+ */
+const doctrinalTreatmentField = (available: boolean) =>
+  (available
+    ? sql<DoctrineTreatment | null>`${caseLawCitations.doctrinalTreatment}`
+    : sql<DoctrineTreatment | null>`NULL::varchar`
+  ).as("doctrinal_treatment");
 
-const emptyDoctrineCounts = (): DoctrineCounts => ({
-  distinguishes: 0,
-  limits: 0,
-  not_stated: 0,
-  unread: 0,
-});
+/**
+ * The quote behind the citation's current doctrine. A correlated read rather
+ * than a join, so a reader without the review grants never names the table;
+ * the unique (citing decision, citation key) index makes it a point lookup.
+ */
+const doctrineEvidenceQuoteField = (available: boolean) =>
+  (available
+    ? sql<string | null>`(SELECT ${caseLawCitationDoctrineReviews.evidenceQuote}
+        FROM ${caseLawCitationDoctrineReviews}
+        WHERE ${caseLawCitationDoctrineReviews.citingDecisionId} = ${caseLawCitations.citingDecisionId}
+          AND ${caseLawCitationDoctrineReviews.citationKey} = ${caseLawCitations.citationKey}
+          AND ${caseLawCitationDoctrineReviews.doctrinalTreatment} = ${caseLawCitations.doctrinalTreatment})`
+    : sql<string | null>`NULL::text`
+  ).as("evidence_quote");
 
 export const listDecisionCitationsQuerySchema = t.Object({
   direction: t.UnionEnum(CITATION_DIRECTIONS),
@@ -211,13 +228,14 @@ type ScannedRow = {
   citationText: string;
   sectionIndex: number | null;
   polarity: string | null;
-  doctrinalTreatment: DoctrineTreatment | "unavailable" | null;
+  doctrinalTreatment: DoctrineTreatment | null;
   evidenceQuote: string | null;
   visible: boolean;
   decision: RankedRelatedDecisionRow | null;
 };
 
 type CreateScannedPageOptions = {
+  doctrineAvailable: boolean;
   rows: readonly ScannedRow[];
   limit: number;
   toRelatedDecision: (row: RankedRelatedDecisionRow) => RankedRelatedDecision;
@@ -229,6 +247,7 @@ type CreateScannedPageOptions = {
  * and a page may legitimately hold fewer than `limit` items.
  */
 const createScannedPage = ({
+  doctrineAvailable,
   rows,
   limit,
   toRelatedDecision,
@@ -244,7 +263,7 @@ const createScannedPage = ({
       citationText: row.citationText,
       sectionIndex: row.sectionIndex,
       treatment: treatmentOf(row.polarity),
-      doctrine: doctrineOf(row.doctrinalTreatment),
+      doctrine: doctrineOf(doctrineAvailable, row.doctrinalTreatment),
       evidenceQuote: row.evidenceQuote,
       decision: row.decision === null ? null : toRelatedDecision(row.decision),
     });
@@ -384,7 +403,12 @@ export const listDecisionCitationsHandler = async ({
   );
 
   return {
-    ...createScannedPage({ rows, limit: pageSize, toRelatedDecision }),
+    ...createScannedPage({
+      doctrineAvailable,
+      rows,
+      limit: pageSize,
+      toRelatedDecision,
+    }),
     doctrineAvailability: doctrineAvailable
       ? ("available" as const)
       : ("unavailable" as const),
@@ -392,7 +416,8 @@ export const listDecisionCitationsHandler = async ({
 };
 
 type DecisionCitationPageQueryOptions = {
-  doctrineAvailable?: boolean;
+  /** Whether this reader holds the doctrine grants. */
+  doctrineAvailable: boolean;
   cursorId: SafeId<"caseLawCitation"> | undefined;
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationDirection;
@@ -400,8 +425,8 @@ type DecisionCitationPageQueryOptions = {
   tx: CaseLawPublicReadTransaction;
 };
 
-export const decisionCitationPageQuery = async ({
-  doctrineAvailable: available,
+export const decisionCitationPageQuery = ({
+  doctrineAvailable,
   cursorId,
   decisionId,
   direction,
@@ -409,44 +434,18 @@ export const decisionCitationPageQuery = async ({
   tx,
 }: DecisionCitationPageQueryOptions) => {
   const spec = DIRECTION_SPECS[direction];
-  const doctrineAvailable = available ?? (await canReadCitationDoctrine(tx));
 
-  let candidateQuery = tx
+  const candidates = tx
     .select({
       id: caseLawCitations.id,
       citationText: caseLawCitations.citationText,
       relatedId: spec.related,
       sectionIndex: caseLawCitations.sectionIndex,
       polarity: caseLawCitations.polarity,
-      doctrinalTreatment: doctrineAvailable
-        ? caseLawCitations.doctrinalTreatment
-        : sql<"unavailable">`'unavailable'`.as("doctrinal_treatment"),
-      evidenceQuote: doctrineAvailable
-        ? caseLawCitationDoctrineReviews.evidenceQuote
-        : sql<null>`NULL::text`.as("evidence_quote"),
+      doctrinalTreatment: doctrinalTreatmentField(doctrineAvailable),
+      evidenceQuote: doctrineEvidenceQuoteField(doctrineAvailable),
     })
     .from(caseLawCitations)
-    .$dynamic();
-  if (doctrineAvailable) {
-    candidateQuery = candidateQuery.leftJoin(
-      caseLawCitationDoctrineReviews,
-      and(
-        eq(
-          caseLawCitationDoctrineReviews.citingDecisionId,
-          caseLawCitations.citingDecisionId,
-        ),
-        eq(
-          caseLawCitationDoctrineReviews.citationKey,
-          caseLawCitations.citationKey,
-        ),
-        eq(
-          caseLawCitationDoctrineReviews.doctrinalTreatment,
-          caseLawCitations.doctrinalTreatment,
-        ),
-      ),
-    );
-  }
-  const candidates = candidateQuery
     .where(
       and(
         sql`${spec.anchor} = ${decisionId}`,
@@ -732,9 +731,7 @@ export const decisionCitationSummaryQuery = ({
         id: caseLawCitations.id,
         relatedId: spec.related,
         polarity: caseLawCitations.polarity,
-        doctrinalTreatment: doctrineAvailable
-          ? caseLawCitations.doctrinalTreatment
-          : sql<null>`NULL::text`.as("doctrinal_treatment"),
+        doctrinalTreatment: doctrinalTreatmentField(doctrineAvailable),
         kind: caseLawCitations.kind,
       })
       .from(caseLawCitations)
@@ -914,19 +911,39 @@ export const summarizeDecisionDoctrineHandler = async ({
     tx,
     doctrineAvailable: true,
   }).summary;
-  const counts = {
-    incoming: emptyDoctrineCounts(),
-    outgoing: emptyDoctrineCounts(),
+  const countOf = (
+    direction: CitationDirection,
+    treatment: DoctrineTreatment | "unread",
+  ) => {
+    let total = 0;
+    for (const row of rows) {
+      if (
+        row.direction === direction &&
+        (row.doctrinalTreatment ?? "unread") === treatment
+      ) {
+        total += row.count;
+      }
+    }
+    return total;
   };
-  const capped = { incoming: false, outgoing: false };
-  for (const row of rows) {
-    counts[row.direction][row.doctrinalTreatment ?? "unread"] += row.count;
-    capped[row.direction] ||= row.capped;
-  }
+  const countsFor = (direction: CitationDirection) => ({
+    distinguishes: countOf(direction, "distinguishes"),
+    limits: countOf(direction, "limits"),
+    not_stated: countOf(direction, "not_stated"),
+    unread: countOf(direction, "unread"),
+  });
+  const cappedFor = (direction: CitationDirection) =>
+    rows.some((row) => row.direction === direction && row.capped);
   return {
     status: "available" as const,
-    counts,
-    capped,
+    counts: {
+      incoming: countsFor("incoming"),
+      outgoing: countsFor("outgoing"),
+    },
+    capped: {
+      incoming: cappedFor("incoming"),
+      outgoing: cappedFor("outgoing"),
+    },
     candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
   };
 };

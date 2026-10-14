@@ -1181,10 +1181,19 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read one page of citations and citing passages. `cited_by` reads decisions citing this one; `cites` reads what it cites. " +
-      "Polarity is a stance; doctrine is distinguishes or limits only where a reviewed reading found the court doing so in its own words; not_stated is not a finding that it was followed; unread means none was read. Null doctrine means doctrineAvailability is unavailable. " +
-      "`passage.evidenceQuote` gives verbatim evidence when text is available. 'unclassified' polarity means none was read; 'mixed' means mentions disagreed. " +
-      `Passage text is at most ${LIMITS.caseLawCitationPassageChars} characters; truncated marks a cut. Mention: sole, classified_section or latest_of_several (polarity may belong elsewhere). Pass nextCursor as cursor. Use url for the reader and source_url for the publisher.`,
+      "Read one page of citations with their citing passages. `cited_by` " +
+      "reads decisions citing this one, `cites` what it cites. `polarity` " +
+      "is a stance: 'unclassified' means none was read, 'mixed' that " +
+      "mentions disagreed. `doctrine` is 'distinguishes' or 'limits' only " +
+      "where a reviewed reading found the court doing so in its own words; " +
+      "'not_stated' is no finding that it was followed; 'unread' means none " +
+      "was read; null when `doctrineAvailability` is 'unavailable'. " +
+      "`passage.evidenceQuote` is the verbatim evidence when text is " +
+      `available. \`passage.text\` is at most ${LIMITS.caseLawCitationPassageChars} ` +
+      "characters, cut when `passage.truncated`; `passage.mention` is " +
+      "'sole', 'classified_section' (the mention polarity came from) or " +
+      "'latest_of_several' (it may not be). Pass nextCursor as cursor. Use " +
+      "`url` for the reader and `source_url` for the publisher.",
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     readClass: "public",

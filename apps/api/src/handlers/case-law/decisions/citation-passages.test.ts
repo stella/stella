@@ -125,7 +125,26 @@ describe("the excerpt a citation travels with", () => {
     });
   });
 
-  test("does not publish a quote absent from a citation paragraph", () => {
+  test("anchors a review quote in a paragraph that does not repeat the citation", () => {
+    const evidenceQuote = "That ruling concerned a different contract.";
+    const citing = "The court cites 21 Cdo 500/2019.";
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p1", text: citing },
+        { anchorId: "p2", text: `However, ${evidenceQuote}` },
+      ]),
+      citationText: "21 Cdo 500/2019",
+      sectionText: undefined,
+      evidenceQuote,
+    });
+    expect(passage).toMatchObject({
+      anchorId: "p1",
+      evidenceQuote,
+      evidenceAnchorId: "p2",
+    });
+  });
+
+  test("does not publish a quote absent from the decision text", () => {
     const passage = citationPassageIn({
       ast: astOf([{ anchorId: "p1", text: "21 Cdo 500/2019 is cited." }]),
       citationText: "21 Cdo 500/2019",

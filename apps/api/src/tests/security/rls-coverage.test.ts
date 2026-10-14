@@ -1388,7 +1388,7 @@ describe("policy coverage", () => {
     expect(privilegesForTable(privileges, "service_oauth_clients")).toEqual([]);
   });
 
-  test("doctrine reviews retain owner writes and ingestion reads", async () => {
+  test("doctrine reviews retain owner writes and ingestion reads and erasure", async () => {
     const policies = await fetchStellaIngestionPolicies(testDb);
     const ingestionPolicy = policies.find(
       (policy) =>
@@ -1401,7 +1401,7 @@ describe("policy coverage", () => {
     const ingestionGrants = await fetchStellaIngestionTablePrivileges(testDb);
     expect(
       privilegesForTable(ingestionGrants, "case_law_citation_doctrine_reviews"),
-    ).toEqual(["SELECT"]);
+    ).toEqual(["DELETE", "SELECT"]);
     const requestGrants = await fetchStellaTablePrivileges(testDb);
     expect(
       privilegesForTable(requestGrants, "case_law_citation_doctrine_reviews"),

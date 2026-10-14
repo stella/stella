@@ -217,22 +217,24 @@ export const citationPassageIn = ({
   if (match === null) {
     return null;
   }
-  const reviewMatch =
+  // The quote anchors to the paragraph that carries it, which need not repeat
+  // the citation: a court often discusses a precedent in the paragraph after
+  // the one naming it. The citing paragraph wins when it carries the quote.
+  const quoteBlocks =
     evidenceQuote === null || evidenceQuote === undefined
-      ? null
-      : findCitationPassage({
-          blocks: ast.blocks.filter(
-            (block) =>
-              hasBlockInlines(block) &&
-              plainTextOf(block.inlines).includes(evidenceQuote),
-          ),
-          citationText,
-          sectionText,
-        });
+      ? []
+      : ast.blocks.filter(
+          (block) =>
+            hasBlockInlines(block) &&
+            plainTextOf(block.inlines).includes(evidenceQuote),
+        );
+  const evidenceBlock =
+    quoteBlocks.find((block) => block.id === match.blockId) ??
+    quoteBlocks.at(0);
   if (
     evidenceQuote !== null &&
     evidenceQuote !== undefined &&
-    reviewMatch === null
+    evidenceBlock === undefined
   ) {
     logger.warn("case_law.citation_passage.doctrine_evidence_unavailable", {});
   }
@@ -246,11 +248,11 @@ export const citationPassageIn = ({
     text: excerpt.text,
     truncated: excerpt.truncated,
     mention: match.mention,
-    ...(reviewMatch === null ||
+    ...(evidenceBlock === undefined ||
     evidenceQuote === null ||
     evidenceQuote === undefined
       ? {}
-      : { evidenceQuote, evidenceAnchorId: reviewMatch.anchorId }),
+      : { evidenceQuote, evidenceAnchorId: evidenceBlock.anchorId }),
   };
 };
 

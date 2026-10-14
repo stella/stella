@@ -18,6 +18,7 @@ export type SafeIdType =
   | "savedTimeNarrative"
   | "caseLawCitation"
   | "caseLawCitationReview"
+  | "caseLawCitationDoctrineReview"
   | "caseLawCitationResolutionCensusRun"
   | "caseLawCoverageSlice"
   | "caseLawCourtWeight"
