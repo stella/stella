@@ -45,7 +45,9 @@ const fixture = async () => {
     oauthClientResource: [],
   };
   const records: LogRecord[] = [];
-  setLogSinkForTesting((record) => records.push(record));
+  setLogSinkForTesting((record) => {
+    records.push(record);
+  });
   const auth = betterAuth({
     baseURL: "http://localhost:3001",
     secret: "test-secret-that-is-long-enough-for-better-auth",
