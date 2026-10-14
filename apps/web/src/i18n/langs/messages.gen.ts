@@ -5991,6 +5991,7 @@ type Messages = {
     "leadPicker": {
       "noMatchingMembers": "No matching members";
     };
+    "leadReadOnly": "Only the current lead or an admin can change the lead.";
     "lockMatter": "Lock";
     "matterInfo": "Matter info";
     "mattersCount": "{count, plural, one {# matter} other {# matters}}";
@@ -6508,22 +6509,29 @@ type Messages = {
       "viewSettings": "View settings";
     };
     "visibility": {
-      "confirmAction": "Make visible";
-      "confirmCancel": "Keep private";
-      "confirmDescription": "Team owners and admins will be able to open <bdi>{matterName}</bdi> and everything in it: documents, tasks, time entries and AI chats linked to the matter.";
-      "confirmNote": "Current members keep their access. The change is recorded in the activity log, and you can make the matter private again.";
-      "confirmTitle": "Make this matter visible to the team?";
+      "adminsAndAssigned": "Admins and assigned members";
+      "adminsAndAssignedDescription": "Team owners and admins, and the people you add to this matter.";
+      "adminsAndAssignedSummary": "Team owners and admins, and this matter's members.";
+      "allMembers": "All internal team members";
+      "allMembersDescription": "Every internal team member can open it without being added. External users can't.";
+      "allMembersSummary": "Every internal team member, and this matter's members.";
+      "assignedOnly": "Assigned members only";
+      "assignedOnlyDescription": "Only the people you add to this matter. Owners and admins can't open it unless they're added.";
+      "assignedOnlySummary": "Only this matter's members.";
+      "badgeAllMembers": "Everyone";
+      "badgeAllMembersTitle": "Every internal team member can open this matter";
+      "badgeAssignedOnly": "Assigned only";
+      "badgeAssignedOnlyTitle": "Only the people added to this matter can open it";
+      "confirmAction": "Show to more people";
+      "confirmCancel": "Keep current access";
+      "confirmDescriptionAdmins": "Team owners and admins will be able to open <bdi>{matterName}</bdi> and everything in it: documents, tasks, time entries and AI chats linked to the matter.";
+      "confirmDescriptionAllMembers": "Every internal team member will be able to open <bdi>{matterName}</bdi> and everything in it: documents, tasks, time entries and AI chats linked to the matter.";
+      "confirmNote": "Current members keep their access. The change is recorded in the activity log, and you can narrow it again later.";
+      "confirmTitle": "Show this matter to more people?";
       "label": "Who can see this matter";
-      "madeOrganization": "Matter is visible to the team";
-      "madePrivate": "Matter is now private";
-      "organizationDescription": "Team owners and admins, and everyone you add as a member.";
-      "organizationSummary": "Team owners and admins, and this matter's members.";
-      "private": "Private";
-      "privateBadgeTitle": "Only this matter's members can see it";
-      "privateDescription": "Only you and the members you add. Owners and admins can't open it unless they're added.";
-      "privateSummary": "Only this matter's members.";
       "settingLabel": "Who can see";
       "summaryReadOnly": "{summary} Only the matter lead or an admin can change this.";
+      "updated": "Access updated";
     };
     "workflow": {
       "allManualInputsDescription": "Please add at least one AI property to start the workflow";

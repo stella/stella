@@ -2,9 +2,14 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import { MATTER_VISIBILITY } from "@stll/api-contract";
+import {
+  MATTER_VISIBILITIES,
+  MATTER_VISIBILITY,
+  widensMatterVisibility,
+} from "@stll/api-contract";
 import type { MatterVisibility } from "@stll/api-contract";
 import {
   AlertDialog,
@@ -16,7 +21,7 @@ import {
 } from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { BuildingIcon, LockIcon } from "@stll/ui/icons";
+import { BuildingIcon, LockIcon, UsersIcon } from "@stll/ui/icons";
 import {
   Select,
   SelectItem,
@@ -27,6 +32,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import type { TranslationKey } from "@/i18n/types";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -35,14 +41,49 @@ import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignm
 import { useQueryView } from "@/lib/use-query-view";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 
-const VISIBILITY_ICON = {
-  organization: BuildingIcon,
-  private: LockIcon,
-} as const satisfies Record<MatterVisibility, unknown>;
+/** Copy and icon for each level, widest first (the order MATTER_VISIBILITIES lists). */
+const VISIBILITY_COPY = {
+  all_members: {
+    icon: UsersIcon,
+    label: "workspaces.visibility.allMembers",
+    description: "workspaces.visibility.allMembersDescription",
+    summary: "workspaces.visibility.allMembersSummary",
+  },
+  admins_and_assigned: {
+    icon: BuildingIcon,
+    label: "workspaces.visibility.adminsAndAssigned",
+    description: "workspaces.visibility.adminsAndAssignedDescription",
+    summary: "workspaces.visibility.adminsAndAssignedSummary",
+  },
+  assigned_only: {
+    icon: LockIcon,
+    label: "workspaces.visibility.assignedOnly",
+    description: "workspaces.visibility.assignedOnlyDescription",
+    summary: "workspaces.visibility.assignedOnlySummary",
+  },
+} as const satisfies Record<
+  MatterVisibility,
+  {
+    icon: unknown;
+    label: TranslationKey;
+    description: TranslationKey;
+    summary: TranslationKey;
+  }
+>;
+
+/** What widening to a level exposes, named in the confirm step. */
+const WIDEN_DESCRIPTION = {
+  all_members: "workspaces.visibility.confirmDescriptionAllMembers",
+  admins_and_assigned: "workspaces.visibility.confirmDescriptionAdmins",
+  assigned_only: null,
+} as const satisfies Record<MatterVisibility, TranslationKey | null>;
+
+const isMatterVisibility = (value: unknown): value is MatterVisibility =>
+  MATTER_VISIBILITIES.some((visibility) => visibility === value);
 
 /**
- * Create-matter choice of who can see the matter. Two radio rows: the label
- * carries the meaning and the description says exactly who that is.
+ * Create-matter choice of who can see the matter. One radio row per level:
+ * the label carries the meaning and the description says exactly who that is.
  */
 export const MatterVisibilityChoice = ({
   value,
@@ -52,18 +93,6 @@ export const MatterVisibilityChoice = ({
   onChange: (value: MatterVisibility) => void;
 }) => {
   const t = useTranslations();
-  const options = [
-    {
-      value: MATTER_VISIBILITY.organization,
-      label: t("workspaces.team"),
-      description: t("workspaces.visibility.organizationDescription"),
-    },
-    {
-      value: MATTER_VISIBILITY.private,
-      label: t("workspaces.visibility.private"),
-      description: t("workspaces.visibility.privateDescription"),
-    },
-  ] as const;
 
   return (
     <fieldset className="flex flex-col gap-2">
@@ -71,33 +100,34 @@ export const MatterVisibilityChoice = ({
         {t("workspaces.visibility.label")}
       </legend>
       <div className="divide-y overflow-hidden rounded-lg border">
-        {options.map((option) => {
-          const Icon = VISIBILITY_ICON[option.value];
-          const checked = value === option.value;
+        {MATTER_VISIBILITIES.map((option) => {
+          const copy = VISIBILITY_COPY[option];
+          const Icon = copy.icon;
+          const checked = value === option;
           return (
             <label
-              aria-label={option.label}
+              aria-label={t(copy.label)}
               className={cn(
                 "grid min-h-11 cursor-pointer grid-cols-[1rem_minmax(0,1fr)] items-start gap-2.5 px-3 py-2.5",
                 checked && "bg-muted/60",
               )}
-              key={option.value}
+              key={option}
             >
               <input
                 checked={checked}
                 className="accent-primary mt-0.5 size-4"
                 name="matter-visibility"
-                onChange={() => onChange(option.value)}
+                onChange={() => onChange(option)}
                 type="radio"
-                value={option.value}
+                value={option}
               />
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span className="flex items-center gap-1.5 text-sm font-medium">
                   <Icon className="text-muted-foreground size-3.5" />
-                  {option.label}
+                  {t(copy.label)}
                 </span>
                 <span className="text-muted-foreground text-xs text-pretty">
-                  {option.description}
+                  {t(copy.description)}
                 </span>
               </span>
             </label>
@@ -109,27 +139,66 @@ export const MatterVisibilityChoice = ({
 };
 
 /**
- * Marks a private matter in matter lists. Organization is the norm, so an
- * organization matter carries no badge.
+ * Marks the two non-default levels in matter lists: a matter every internal
+ * member can open, and one only its assigned members can. The default level
+ * carries no badge.
  */
-export const PrivateMatterBadge = ({
+export const MatterVisibilityBadge = ({
   visibility,
 }: {
   visibility: MatterVisibility;
 }) => {
   const t = useTranslations();
-  if (visibility !== MATTER_VISIBILITY.private) {
+  const badge = (() => {
+    switch (visibility) {
+      case MATTER_VISIBILITY.allMembers:
+        return {
+          Icon: UsersIcon,
+          label: t("workspaces.visibility.badgeAllMembers"),
+          title: t("workspaces.visibility.badgeAllMembersTitle"),
+        };
+      case MATTER_VISIBILITY.assignedOnly:
+        return {
+          Icon: LockIcon,
+          label: t("workspaces.visibility.badgeAssignedOnly"),
+          title: t("workspaces.visibility.badgeAssignedOnlyTitle"),
+        };
+      case MATTER_VISIBILITY.adminsAndAssigned:
+        return null;
+      default:
+        visibility satisfies never;
+        return panic(`Unhandled matter visibility: ${String(visibility)}`);
+    }
+  })();
+  if (badge === null) {
     return null;
   }
   return (
     <span
       className="text-muted-foreground text-2xs inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 leading-4 font-medium"
-      title={t("workspaces.visibility.privateBadgeTitle")}
+      title={badge.title}
     >
-      <LockIcon aria-hidden className="size-2.5" />
-      {t("workspaces.visibility.private")}
+      <badge.Icon aria-hidden className="size-2.5" />
+      {badge.label}
     </span>
   );
+};
+
+/**
+ * Whether the signed-in user may change a matter's visibility or lead: its
+ * current lead, or a team owner/admin. The server decides; this only keeps
+ * the controls from inviting a change it would refuse.
+ */
+export const useCanStewardMatter = (leadUserId: string | null): boolean => {
+  const currentUser = useAuthenticatedUser();
+  const roleView = useQueryView(
+    useQuery({ ...roleOptions, staleTime: Number.POSITIVE_INFINITY }),
+  );
+  const role =
+    roleView.type === "items" && roleView.refetchError === undefined
+      ? roleView.items
+      : undefined;
+  return leadUserId === currentUser.id || hasOrganizationManagementAccess(role);
 };
 
 type VisibilitySectionProps = {
@@ -140,9 +209,9 @@ type VisibilitySectionProps = {
 };
 
 /**
- * Matter-settings row for who can see the matter. The matter lead and
- * organization owners and admins may change it; opening a private matter to
- * the organization asks first, since it exposes the matter's contents.
+ * Matter-settings row for who can see the matter. The matter lead and team
+ * owners and admins may change it; any change that shows the matter to more
+ * people asks first, since it exposes the matter's contents.
  */
 export const VisibilitySection = ({
   workspaceId,
@@ -151,32 +220,20 @@ export const VisibilitySection = ({
   leadUserId,
 }: VisibilitySectionProps) => {
   const t = useTranslations();
-  const currentUser = useAuthenticatedUser();
-  const roleView = useQueryView(
-    useQuery({ ...roleOptions, staleTime: Number.POSITIVE_INFINITY }),
-  );
-  const role =
-    roleView.type === "items" && roleView.refetchError === undefined
-      ? roleView.items
-      : undefined;
   const updateWorkspace = useUpdateWorkspace();
-  const [confirmingOpen, setConfirmingOpen] = useState(false);
-  // The server decides; this only keeps the control from inviting a change
-  // it would refuse.
-  const canChange =
-    leadUserId === currentUser.id || hasOrganizationManagementAccess(role);
+  const canChange = useCanStewardMatter(leadUserId);
+  const [pendingWiden, setPendingWiden] = useState<MatterVisibility | null>(
+    null,
+  );
 
   const save = (next: MatterVisibility) => {
     updateWorkspace.mutate(
       { workspaceId, update: { type: "visibility", value: next } },
       {
         onSuccess: () => {
-          setConfirmingOpen(false);
+          setPendingWiden(null);
           stellaToast.add({
-            title:
-              next === MATTER_VISIBILITY.organization
-                ? t("workspaces.visibility.madeOrganization")
-                : t("workspaces.visibility.madePrivate"),
+            title: t("workspaces.visibility.updated"),
             type: "success",
           });
         },
@@ -191,17 +248,16 @@ export const VisibilitySection = ({
     if (next === visibility) {
       return;
     }
-    if (next === MATTER_VISIBILITY.organization) {
-      setConfirmingOpen(true);
+    if (widensMatterVisibility(visibility, next)) {
+      setPendingWiden(next);
       return;
     }
     save(next);
   };
 
-  const summary =
-    visibility === MATTER_VISIBILITY.organization
-      ? t("workspaces.visibility.organizationSummary")
-      : t("workspaces.visibility.privateSummary");
+  const summary = t(VISIBILITY_COPY[visibility].summary);
+  const widenDescription =
+    pendingWiden === null ? null : WIDEN_DESCRIPTION[pendingWiden];
 
   return (
     <section className="grid shrink-0 grid-cols-[8rem_minmax(0,1fr)] items-center gap-x-3 border-b px-3">
@@ -214,10 +270,7 @@ export const VisibilitySection = ({
         <Select
           disabled={!canChange || updateWorkspace.isPending}
           onValueChange={(value) => {
-            if (
-              value === MATTER_VISIBILITY.organization ||
-              value === MATTER_VISIBILITY.private
-            ) {
+            if (isMatterVisibility(value)) {
               handleSelect(value);
             }
           }}
@@ -226,19 +279,18 @@ export const VisibilitySection = ({
           <SelectTrigger className="min-w-0 flex-1">
             <SelectValue>
               {(current) =>
-                current === MATTER_VISIBILITY.private
-                  ? t("workspaces.visibility.private")
-                  : t("workspaces.team")
+                isMatterVisibility(current)
+                  ? t(VISIBILITY_COPY[current].label)
+                  : null
               }
             </SelectValue>
           </SelectTrigger>
           <SelectPopup>
-            <SelectItem value={MATTER_VISIBILITY.organization}>
-              {t("workspaces.team")}
-            </SelectItem>
-            <SelectItem value={MATTER_VISIBILITY.private}>
-              {t("workspaces.visibility.private")}
-            </SelectItem>
+            {MATTER_VISIBILITIES.map((option) => (
+              <SelectItem key={option} value={option}>
+                {t(VISIBILITY_COPY[option].label)}
+              </SelectItem>
+            ))}
           </SelectPopup>
         </Select>
       </div>
@@ -250,24 +302,26 @@ export const VisibilitySection = ({
       <AlertDialog
         onOpenChange={(open) => {
           if (!open && !updateWorkspace.isPending) {
-            setConfirmingOpen(false);
+            setPendingWiden(null);
           }
         }}
-        open={confirmingOpen}
+        open={pendingWiden !== null}
       >
         <AlertDialogPopup>
           <AlertDialogHeader>
             <AlertDialogTitle>
               {t("workspaces.visibility.confirmTitle")}
             </AlertDialogTitle>
-            <AlertDialogDescription>
-              {t.rich("workspaces.visibility.confirmDescription", {
-                bdi: (chunks: ReactNode) => (
-                  <BidiText className="font-medium">{chunks}</BidiText>
-                ),
-                matterName,
-              })}
-            </AlertDialogDescription>
+            {widenDescription === null ? null : (
+              <AlertDialogDescription>
+                {t.rich(widenDescription, {
+                  bdi: (chunks: ReactNode) => (
+                    <BidiText className="font-medium">{chunks}</BidiText>
+                  ),
+                  matterName,
+                })}
+              </AlertDialogDescription>
+            )}
             <p className="text-muted-foreground text-xs text-pretty">
               {t("workspaces.visibility.confirmNote")}
             </p>
@@ -275,14 +329,18 @@ export const VisibilitySection = ({
           <AlertDialogFooter>
             <Button
               disabled={updateWorkspace.isPending}
-              onClick={() => setConfirmingOpen(false)}
+              onClick={() => setPendingWiden(null)}
               variant="ghost"
             >
               {t("workspaces.visibility.confirmCancel")}
             </Button>
             <Button
               loading={updateWorkspace.isPending}
-              onClick={() => save(MATTER_VISIBILITY.organization)}
+              onClick={() => {
+                if (pendingWiden !== null) {
+                  save(pendingWiden);
+                }
+              }}
             >
               {t("workspaces.visibility.confirmAction")}
             </Button>

@@ -67,7 +67,7 @@ describe("workspace update cache invalidation", () => {
         value: { clientId: "contact_test" },
       },
       reference: { type: "reference", value: "REF-42" },
-      visibility: { type: "visibility", value: "private" },
+      visibility: { type: "visibility", value: "assigned_only" },
     } as const satisfies {
       [Type in WorkspaceUpdate["type"]]: Extract<
         WorkspaceUpdate,
@@ -116,7 +116,7 @@ describe("workspace update cache invalidation", () => {
         },
       }),
       workspaceUpdateBody({ type: "reference", value: "REF-42" }),
-      workspaceUpdateBody({ type: "visibility", value: "organization" }),
+      workspaceUpdateBody({ type: "visibility", value: "all_members" }),
     ];
 
     expect(bodies).toEqual([
@@ -134,7 +134,7 @@ describe("workspace update cache invalidation", () => {
         },
       },
       { reference: "REF-42" },
-      { visibility: "organization" },
+      { visibility: "all_members" },
     ]);
   });
 
