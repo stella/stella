@@ -458,7 +458,7 @@ describe("list verification access grants across MCP tools", () => {
                   role: "owner",
                   workspaceId: matterId,
                   workspaceStatus: "active",
-                  workspaceVisibility: "private",
+                  workspaceVisibility: "assigned_only",
                   workspaceMemberId: resourceId,
                 },
               ]

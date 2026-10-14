@@ -8,7 +8,7 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "member",
         workspaceMemberId: null,
-        workspaceVisibility: "organization",
+        workspaceVisibility: "admins_and_assigned",
       }),
     ).toBe(false);
 
@@ -16,89 +16,99 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "member",
         workspaceMemberId: "workspace_member_test",
-        workspaceVisibility: "organization",
+        workspaceVisibility: "admins_and_assigned",
       }),
     ).toBe(true);
   });
 
   test("allows owner and admin roles without a workspace membership row", () => {
-    expect(
-      canWriteWorkspaceEntities({
-        organizationRole: "owner",
-        workspaceMemberId: null,
-        workspaceVisibility: "organization",
-      }),
-    ).toBe(true);
-
-    expect(
-      canWriteWorkspaceEntities({
-        organizationRole: "admin",
-        workspaceMemberId: null,
-        workspaceVisibility: "organization",
-      }),
-    ).toBe(true);
-  });
-
-  test("needs a membership row on a private matter, even for owners and admins", () => {
     for (const organizationRole of ["owner", "admin"]) {
       expect(
         canWriteWorkspaceEntities({
           organizationRole,
           workspaceMemberId: null,
-          workspaceVisibility: "private",
+          workspaceVisibility: "admins_and_assigned",
+        }),
+      ).toBe(true);
+    }
+  });
+
+  test("needs a membership row on an assigned-only matter, even for owners and admins", () => {
+    for (const organizationRole of ["owner", "admin"]) {
+      expect(
+        canWriteWorkspaceEntities({
+          organizationRole,
+          workspaceMemberId: null,
+          workspaceVisibility: "assigned_only",
         }),
       ).toBe(false);
       expect(
         canWriteWorkspaceEntities({
           organizationRole,
           workspaceMemberId: "workspace_member_test",
-          workspaceVisibility: "private",
+          workspaceVisibility: "assigned_only",
         }),
       ).toBe(true);
     }
   });
 
-  test("rejects roles without entity update permission", () => {
+  test("an all-members matter lets an unassigned member write, and narrowing it closes their session", () => {
     expect(
       canWriteWorkspaceEntities({
-        organizationRole: "intern",
-        workspaceMemberId: "workspace_member_test",
-        workspaceVisibility: "organization",
+        organizationRole: "member",
+        workspaceMemberId: null,
+        workspaceVisibility: "all_members",
       }),
-    ).toBe(false);
-
+    ).toBe(true);
+    // The same long-lived credential, re-evaluated after the matter is
+    // narrowed to admins and assigned members.
     expect(
       canWriteWorkspaceEntities({
-        organizationRole: "external",
-        workspaceMemberId: "workspace_member_test",
-        workspaceVisibility: "organization",
+        organizationRole: "member",
+        workspaceMemberId: null,
+        workspaceVisibility: "admins_and_assigned",
       }),
     ).toBe(false);
   });
 
+  test("an all-members matter never admits an external user, and an intern keeps the intern's read-only grant", () => {
+    expect(
+      canWriteWorkspaceEntities({
+        organizationRole: "external",
+        workspaceMemberId: null,
+        workspaceVisibility: "all_members",
+      }),
+    ).toBe(false);
+    expect(
+      canWriteWorkspaceEntities({
+        organizationRole: "intern",
+        workspaceMemberId: null,
+        workspaceVisibility: "all_members",
+      }),
+    ).toBe(false);
+  });
+
+  test("rejects roles without entity update permission", () => {
+    for (const organizationRole of ["intern", "external"]) {
+      expect(
+        canWriteWorkspaceEntities({
+          organizationRole,
+          workspaceMemberId: "workspace_member_test",
+          workspaceVisibility: "admins_and_assigned",
+        }),
+      ).toBe(false);
+    }
+  });
+
   test("rejects missing or unknown organization roles", () => {
-    expect(
-      canWriteWorkspaceEntities({
-        organizationRole: null,
-        workspaceMemberId: "workspace_member_test",
-        workspaceVisibility: "organization",
-      }),
-    ).toBe(false);
-
-    expect(
-      canWriteWorkspaceEntities({
-        organizationRole: "custom",
-        workspaceMemberId: "workspace_member_test",
-        workspaceVisibility: "organization",
-      }),
-    ).toBe(false);
-
-    expect(
-      canWriteWorkspaceEntities({
-        organizationRole: "toString",
-        workspaceMemberId: "workspace_member_test",
-        workspaceVisibility: "organization",
-      }),
-    ).toBe(false);
+    for (const organizationRole of [null, "custom", "toString"]) {
+      expect(
+        canWriteWorkspaceEntities({
+          organizationRole,
+          workspaceMemberId: "workspace_member_test",
+          workspaceVisibility: "all_members",
+        }),
+      ).toBe(false);
+    }
   });
 });

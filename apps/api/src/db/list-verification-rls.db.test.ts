@@ -166,7 +166,7 @@ describe.skipIf(!enabled)("list verification row security", () => {
         await client`INSERT INTO "user" VALUES (${userId}, 'member@example.test', true, null)`;
         await client`INSERT INTO member VALUES ('verification_member', ${userId}, ${organizationId}, 'owner')`;
         await client`INSERT INTO workspace_members VALUES (${Bun.randomUUIDv7()}, ${workspaceId}, ${userId})`;
-        await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId}, 'active', null, 'private')`;
+        await client`INSERT INTO workspaces VALUES (${workspaceId}, ${organizationId}, 'active', null, 'assigned_only')`;
         const runFixture = {
           id: runId,
           organizationId,

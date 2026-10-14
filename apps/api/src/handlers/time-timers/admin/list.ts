@@ -20,7 +20,7 @@ import type {
 } from "@/api/lib/projection-totality";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeTimerId } from "@/api/lib/safe-id-boundaries";
-import { isOrganizationVisibleMatter } from "@/api/lib/workspaces/visibility";
+import { isAdminReachableMatter } from "@/api/lib/workspaces/visibility";
 
 const ADMIN_TIMER_COLUMNS = {
   id: timeTimers.id,
@@ -131,7 +131,7 @@ const listRunningMemberTimers = createSafeRootHandler(
               eq(workspaces.id, timeTimers.workspaceId),
               eq(workspaces.organizationId, session.activeOrganizationId),
               eq(workspaces.status, "active"),
-              sql`CASE WHEN ${isOrganizationVisibleMatter()} THEN true
+              sql`CASE WHEN ${isAdminReachableMatter()} THEN true
                 ELSE EXISTS (
                   SELECT 1 FROM workspace_members AS workspace_member
                   WHERE workspace_member.workspace_id = ${workspaces.id}

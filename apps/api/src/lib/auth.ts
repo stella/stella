@@ -31,12 +31,7 @@ import {
 } from "@stll/api-contract/professional-use";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
-import {
-  ac,
-  assignableRoles,
-  ORGANIZATION_MATTER_ADMIN_ROLES,
-  roles,
-} from "@stll/permissions";
+import { ac, assignableRoles, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
@@ -278,7 +273,7 @@ import {
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
-import { isOrganizationVisibleMatter } from "@/api/lib/workspaces/visibility";
+import { reachesMatterWithoutAssignmentSql } from "@/api/lib/workspaces/visibility";
 import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
@@ -2544,13 +2539,7 @@ const memberWorkspaceAccess = (db: MemberAuthorizationDb) => {
       ),
   );
   // sql-perf-allow: bounded by one target workspace and organization membership keys
-  return or(
-    membershipExists,
-    and(
-      inArray(member.role, ORGANIZATION_MATTER_ADMIN_ROLES),
-      isOrganizationVisibleMatter(),
-    ),
-  );
+  return or(membershipExists, reachesMatterWithoutAssignmentSql(member.role));
 };
 
 type WorkspaceMemberLookup = {

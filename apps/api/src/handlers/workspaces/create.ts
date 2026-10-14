@@ -3,10 +3,7 @@ import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import {
-  DEFAULT_MATTER_VISIBILITY,
-  MATTER_VISIBILITY,
-} from "@stll/api-contract";
+import { DEFAULT_MATTER_VISIBILITY } from "@stll/api-contract";
 
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
@@ -49,8 +46,8 @@ import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { tMatterVisibility } from "@/api/lib/workspaces/visibility";
 
 // The client is optional and says nothing about who can see the matter:
-// `visibility` decides that (organization unless the creator chooses
-// private). `memberUserIds` adds members alongside the creator either way.
+// `visibility` decides that (DEFAULT_MATTER_VISIBILITY unless the creator
+// chooses). `memberUserIds` adds members alongside the creator either way.
 const createWorkspaceBodySchema = t.Object({
   id: tSafeId("workspace"),
   clientId: t.Optional(
@@ -68,8 +65,9 @@ const createWorkspaceBodySchema = t.Object({
   visibility: t.Optional(
     tMatterVisibility({
       description:
-        "Who can see the matter: organization (owners, admins and members; " +
-        "the default) or private (only its members)",
+        "Who can see the matter: all_members (every internal member), " +
+        "admins_and_assigned (owners, admins and assigned members; the " +
+        "default) or assigned_only (assigned members only)",
     }),
   ),
 });
@@ -80,9 +78,11 @@ const config = {
   description:
     "Create a new matter (name required; pass clientId to attach a client " +
     "contact). visibility decides who can see it, independent of the " +
-    "client: organization (the default) reaches the organization's owners " +
-    "and admins plus the matter's members; private reaches only its " +
-    "members. Returns the matter ID.",
+    "client: all_members reaches every internal member without an " +
+    "assignment (never external users); admins_and_assigned, the default, " +
+    "reaches owners, admins and the assigned members; assigned_only reaches " +
+    "only the assigned members. The creator becomes the matter lead. " +
+    "Returns the matter ID.",
   permissions: { workspace: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: organizationWorkspaceRealtimeUpdates,
@@ -243,12 +243,10 @@ export const createWorkspaceHandler = async function* ({
         name: newName,
         reference,
         visibility,
-        // A private matter is reachable only through its members, so its
-        // creator leads it: the lead (or an organization admin who is a
-        // member) is who may later open it to the organization.
-        ...(visibility === MATTER_VISIBILITY.private
-          ? { leadUserId: userId }
-          : {}),
+        // The creator leads the matter. Only the lead or an organization
+        // owner/admin may change who can see it or who leads it, so a matter
+        // created by a member is never left without someone who can.
+        leadUserId: userId,
       });
 
       // Append the new workspace ID to the RLS session variable

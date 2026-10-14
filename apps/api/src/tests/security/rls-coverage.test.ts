@@ -3,6 +3,7 @@ import { is, sql } from "drizzle-orm";
 import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 
 import {
+  INTERNAL_MEMBER_ROLES,
   ORGANIZATION_MATTER_ADMIN_ROLES,
   ORGANIZATION_MANAGEMENT_ROLES,
 } from "@stll/permissions";
@@ -537,7 +538,7 @@ describe("policy coverage", () => {
     });
   });
 
-  test("workspace access view grants organization-visible matters to ORGANIZATION_MATTER_ADMIN_ROLES", async () => {
+  test("workspace access view grants unassigned matters only to ORGANIZATION_MATTER_ADMIN_ROLES and INTERNAL_MEMBER_ROLES", async () => {
     const result = await testDb.execute<{ definition: string }>(sql`
       SELECT pg_catalog.pg_get_viewdef(
         ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`}::regclass
@@ -547,7 +548,12 @@ describe("policy coverage", () => {
 
     expect(roleListsIn(definition)).toEqual([
       new Set(ORGANIZATION_MATTER_ADMIN_ROLES),
+      new Set(INTERNAL_MEMBER_ROLES),
     ]);
+    // External members never reach a matter without an assignment.
+    expect(
+      INTERNAL_MEMBER_ROLES.some((role: string) => role === "external"),
+    ).toBe(false);
   });
 
   test("every policy role list is a named role set", async () => {

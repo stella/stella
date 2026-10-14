@@ -326,7 +326,7 @@ const saveMatterArgsSchema = nullAsAbsent(
         v.pipe(
           v.picklist(MATTER_VISIBILITIES),
           v.description(
-            "Who can see the matter, independent of its client: 'organization' (owners, admins and the matter's members; the default on create) or 'private' (only its members). On update only the matter lead or an organization owner or admin may change it.",
+            "Who can see the matter, independent of its client: 'all_members' (every internal member of the organization without being assigned; never external users), 'admins_and_assigned' (owners, admins and assigned members; the default on create) or 'assigned_only' (assigned members only). On update only the matter lead or an organization owner or admin may change it.",
           ),
         ),
       ),

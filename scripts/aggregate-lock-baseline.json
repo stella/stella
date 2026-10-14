@@ -2539,6 +2539,12 @@
   },
   {
     "file": "apps/api/src/lib/db/member-access-hold.ts",
+    "fingerprint": "7e5b7a62e12268f465b88320ece3fd0152fa1dad231113823571961ca4e2800d",
+    "count": 1,
+    "reason": "Same FOR SHARE on the unassigned matters the member's role may reach; their visibility decides it instead of the client."
+  },
+  {
+    "file": "apps/api/src/lib/db/member-access-hold.ts",
     "fingerprint": "854e3be7f649cd9bf2b939d828bc3afe157358bf51f9c2c7dc36ad10d49d9813",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/db/member-access-hold.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2548,12 +2554,6 @@
     "fingerprint": "9ad0805ba65355cbec6f574e9137e9de0453d7e6cecd9587105cdd849757dc4d",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/db/member-access-hold.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/db/member-access-hold.ts",
-    "fingerprint": "ff08b5e599801f6fe492f534e9697c0ee5193409dcdb19c59f2e3b2ac2367670",
-    "count": 1,
-    "reason": "Same FOR SHARE on the organization-visible matters an admin reaches; the filter reads visibility instead of the client."
   },
   {
     "file": "apps/api/src/lib/db/operator-registrations/read.ts",
@@ -4123,15 +4123,15 @@
   },
   {
     "file": "apps/api/src/lib/time-entry-timer-access.ts",
-    "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/time-entry-timer-access.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "fingerprint": "28fa91a890b17b0ccbee5d5354c7f39e4ef340e472d6eec3df82b4a3850aba7f",
+    "count": 2,
+    "reason": "Same FOR SHARE on the matter and member rows; the unassigned branch now reads the matter's visibility instead of its client."
   },
   {
     "file": "apps/api/src/lib/time-entry-timer-access.ts",
-    "fingerprint": "69252a8641beccdbbc279555bbaf0d68703db0f1eada9f1505a3ca5a3875dd87",
-    "count": 2,
-    "reason": "Same FOR SHARE on the matter and member rows; the admin branch now reads the matter's visibility instead of its client."
+    "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
+    "count": 1,
+    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/time-entry-timer-access.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/uploads/entity-create.ts",

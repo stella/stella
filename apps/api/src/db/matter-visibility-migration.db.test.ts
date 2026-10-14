@@ -32,6 +32,8 @@ const OWNER = "user_owner";
 const ADMIN = "user_admin";
 const MEMBER = "user_member";
 const OTHER_MEMBER = "user_other_member";
+const EXTERNAL = "user_external";
+const INTERN = "user_intern";
 
 const MATTER = {
   clientMatter: "00000000-0000-4000-8000-000000000001",
@@ -71,6 +73,8 @@ const seed = async (database: PGlite): Promise<void> => {
       ('m2', '${ORG}', '${ADMIN}', 'admin'),
       ('m3', '${ORG}', '${MEMBER}', 'member'),
       ('m4', '${ORG}', '${OTHER_MEMBER}', 'member'),
+      ('m6', '${ORG}', '${EXTERNAL}', 'external'),
+      ('m7', '${ORG}', '${INTERN}', 'intern'),
       ('m5', '${OTHER_ORG}', '${OWNER}', 'owner');
     INSERT INTO workspaces (id, organization_id, client_id) VALUES
       ('${MATTER.clientMatter}', '${ORG}', '${CLIENT}'),
@@ -116,14 +120,14 @@ const authorizedFor = async (
 };
 
 describe("matter visibility migration", () => {
-  test("backfill keeps every clientless matter private and every client matter visible to the organization", async () => {
+  test("backfill keeps every clientless matter assigned-only and every client matter admins-and-assigned; nothing becomes all-members", async () => {
     await using database = await migrated();
 
     expect(await visibilityById(database)).toEqual({
-      [MATTER.clientMatter]: "organization",
-      [MATTER.clientlessOfMember]: "private",
-      [MATTER.clientlessOfOther]: "private",
-      [MATTER.otherOrgClientMatter]: "organization",
+      [MATTER.clientMatter]: "admins_and_assigned",
+      [MATTER.clientlessOfMember]: "assigned_only",
+      [MATTER.clientlessOfOther]: "assigned_only",
+      [MATTER.otherOrgClientMatter]: "admins_and_assigned",
     });
   });
 
@@ -149,7 +153,7 @@ describe("matter visibility migration", () => {
     await seed(database);
     const before = Object.fromEntries(
       await Promise.all(
-        [OWNER, ADMIN, MEMBER, OTHER_MEMBER].map(
+        [OWNER, ADMIN, MEMBER, OTHER_MEMBER, EXTERNAL, INTERN].map(
           async (userId) =>
             [userId, await legacyRule(database, userId)] as const,
         ),
@@ -157,21 +161,28 @@ describe("matter visibility migration", () => {
     );
     await database.exec(migrationSql);
 
-    for (const userId of [OWNER, ADMIN, MEMBER, OTHER_MEMBER]) {
+    for (const userId of [
+      OWNER,
+      ADMIN,
+      MEMBER,
+      OTHER_MEMBER,
+      EXTERNAL,
+      INTERN,
+    ]) {
       expect(
         await authorizedFor(database, { organizationId: ORG, userId }),
       ).toEqual(before[userId]);
     }
   });
 
-  test("owners and admins reach organization matters with or without a client, never a private matter they are not on", async () => {
+  test("owners and admins reach admins-and-assigned matters with or without a client, never an assigned-only matter they are not on", async () => {
     await using database = await migrated();
     const clientlessOrganizationMatter = "00000000-0000-4000-8000-000000000005";
     const privateClientMatter = "00000000-0000-4000-8000-000000000006";
     await database.exec(`
       INSERT INTO workspaces (id, organization_id, client_id, visibility) VALUES
-        ('${clientlessOrganizationMatter}', '${ORG}', NULL, 'organization'),
-        ('${privateClientMatter}', '${ORG}', '${CLIENT}', 'private');
+        ('${clientlessOrganizationMatter}', '${ORG}', NULL, 'admins_and_assigned'),
+        ('${privateClientMatter}', '${ORG}', '${CLIENT}', 'assigned_only');
       INSERT INTO workspace_members VALUES
         ('wm4', '${privateClientMatter}', '${OTHER_MEMBER}');
     `);
@@ -188,8 +199,8 @@ describe("matter visibility migration", () => {
       expect(granted).not.toContain(MATTER.otherOrgClientMatter);
     }
 
-    // A plain member reaches only what they are assigned to, whatever the
-    // visibility: the organization rule widens access for owners and admins.
+    // A plain member reaches only what they are assigned to below the
+    // all-members level.
     expect(
       await authorizedFor(database, { organizationId: ORG, userId: MEMBER }),
     ).toEqual([MATTER.clientMatter, MATTER.clientlessOfMember].toSorted());
@@ -201,6 +212,42 @@ describe("matter visibility migration", () => {
     ).toEqual([MATTER.clientlessOfOther, privateClientMatter].toSorted());
   });
 
+  test("an all-members matter reaches every internal member without an assignment, never an external one", async () => {
+    await using database = await migrated();
+    const allMembersMatter = "00000000-0000-4000-8000-000000000007";
+    await database.exec(`
+      INSERT INTO workspaces (id, organization_id, client_id, visibility) VALUES
+        ('${allMembersMatter}', '${ORG}', NULL, 'all_members');
+    `);
+
+    for (const userId of [OWNER, ADMIN, MEMBER, OTHER_MEMBER, INTERN]) {
+      expect(
+        await authorizedFor(database, { organizationId: ORG, userId }),
+      ).toContain(allMembersMatter);
+    }
+    expect(
+      await authorizedFor(database, { organizationId: ORG, userId: EXTERNAL }),
+    ).toEqual([]);
+    // Another organization's owner never reaches it.
+    expect(
+      await authorizedFor(database, {
+        organizationId: OTHER_ORG,
+        userId: OWNER,
+      }),
+    ).not.toContain(allMembersMatter);
+
+    // Narrowed to admins and assigned members: unassigned members lose it.
+    await database.exec(
+      `UPDATE workspaces SET visibility = 'admins_and_assigned' WHERE id = '${allMembersMatter}'`,
+    );
+    expect(
+      await authorizedFor(database, { organizationId: ORG, userId: MEMBER }),
+    ).not.toContain(allMembersMatter);
+    expect(
+      await authorizedFor(database, { organizationId: ORG, userId: OWNER }),
+    ).toContain(allMembersMatter);
+  });
+
   test("a writer that omits visibility gets the visibility the old rule implied", async () => {
     await using database = await migrated();
     await database.exec(`
@@ -208,20 +255,24 @@ describe("matter visibility migration", () => {
         ('00000000-0000-4000-8000-0000000000a1', '${ORG}', NULL),
         ('00000000-0000-4000-8000-0000000000a2', '${ORG}', '${CLIENT}');
       INSERT INTO workspaces (id, organization_id, client_id, visibility) VALUES
-        ('00000000-0000-4000-8000-0000000000a3', '${ORG}', NULL, 'organization'),
-        ('00000000-0000-4000-8000-0000000000a4', '${ORG}', '${CLIENT}', 'private');
+        ('00000000-0000-4000-8000-0000000000a3', '${ORG}', NULL, 'all_members'),
+        ('00000000-0000-4000-8000-0000000000a4', '${ORG}', '${CLIENT}', 'assigned_only');
     `);
 
     const visibility = await visibilityById(database);
-    expect(visibility["00000000-0000-4000-8000-0000000000a1"]).toBe("private");
+    expect(visibility["00000000-0000-4000-8000-0000000000a1"]).toBe(
+      "assigned_only",
+    );
     expect(visibility["00000000-0000-4000-8000-0000000000a2"]).toBe(
-      "organization",
+      "admins_and_assigned",
     );
     // An explicit value always wins.
     expect(visibility["00000000-0000-4000-8000-0000000000a3"]).toBe(
-      "organization",
+      "all_members",
     );
-    expect(visibility["00000000-0000-4000-8000-0000000000a4"]).toBe("private");
+    expect(visibility["00000000-0000-4000-8000-0000000000a4"]).toBe(
+      "assigned_only",
+    );
   });
 
   test("the column refuses any other value and has no default", async () => {

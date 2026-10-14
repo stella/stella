@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import {
   MATTER_REFERENCE_RETIRED_CODE,
   MATTER_VISIBILITY,
+  widensMatterVisibility,
 } from "@stll/api-contract";
 import type { MatterVisibility } from "@stll/api-contract";
 
@@ -45,6 +46,7 @@ const updateWorkspaceBodySchema = t.Object({
   color: t.Optional(t.Nullable(t.String({ maxLength: 32 }))),
   // Pinned-first avatar on the matters list. Must be an existing
   // workspace member (validated at handler time); pass null to clear.
+  // Only the current lead or an organization owner/admin may change it.
   leadUserId: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
   // Who can see the matter. Only the matter lead or an organization
   // owner/admin may change it, and every change is audited.
@@ -73,10 +75,12 @@ const config = {
     "and must go through promote, which takes the client contact and " +
     "optionally the members to share it with at the same time; a bare " +
     "clientId on a personal matter, and any attempt to re-promote a matter " +
-    "that already has a client, are refused. visibility (organization or " +
-    "private) decides who can see the matter, independent of its client; " +
-    "only the matter lead or an organization owner or admin may change it, " +
-    "and a private matter must keep at least one member.",
+    "that already has a client, are refused. visibility decides who can " +
+    "see the matter, independent of its client: all_members (every internal " +
+    "member), admins_and_assigned (owners, admins and assigned members) or " +
+    "assigned_only (assigned members only, at least one). Only the matter " +
+    "lead or an organization owner or admin may change the visibility or " +
+    "the lead.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceRealtimeUpdates,
@@ -178,31 +182,50 @@ const checkReferenceNotRetired = async ({
 };
 
 /**
- * Who is changing the matter, as far as its visibility is concerned. An
- * organization owner or admin may change any matter they can reach; anyone
- * else only a matter they lead.
+ * Who is changing the matter, as far as its visibility and lead are
+ * concerned. An organization owner or admin may change them on any matter
+ * they can reach; anyone else only on a matter they lead.
  */
 export type WorkspaceUpdateActor = {
   userId: SafeId<"user">;
   managesOrganizationMatters: boolean;
 };
 
+type StewardshipFailure = {
+  ok: false;
+  status: 403;
+  message: "Only the matter lead or an organization admin can change who can see or lead this matter";
+};
+
 type VisibilityChangeFailure =
-  | {
-      ok: false;
-      status: 403;
-      message: "Only the matter lead or an organization admin can change who can see this matter";
-    }
+  | StewardshipFailure
   | {
       ok: false;
       status: 400;
-      message: "A private matter needs at least one member";
+      message: "A matter visible to assigned members only needs at least one member";
     };
 
 /**
+ * Visibility and lead are the matter's stewardship: only its current lead (as
+ * stored before this request, so naming yourself lead in the same request
+ * does not count) or an organization owner/admin may change them.
+ */
+const checkStewardship = (
+  actor: WorkspaceUpdateActor,
+  currentLeadUserId: string | null,
+): StewardshipFailure | null =>
+  actor.managesOrganizationMatters || currentLeadUserId === actor.userId
+    ? null
+    : {
+        ok: false,
+        status: 403,
+        message:
+          "Only the matter lead or an organization admin can change who can see or lead this matter",
+      };
+
+/**
  * Refuse a visibility change the actor may not make, or one that would leave
- * a private matter nobody can reach. Reads the lead from the row the caller
- * already locked, so a lead assigned in the same request does not count.
+ * an assigned-only matter nobody can reach.
  */
 const checkVisibilityChange = async ({
   tx,
@@ -217,15 +240,11 @@ const checkVisibilityChange = async ({
   currentLeadUserId: string | null;
   next: MatterVisibility;
 }): Promise<VisibilityChangeFailure | null> => {
-  if (!actor.managesOrganizationMatters && currentLeadUserId !== actor.userId) {
-    return {
-      ok: false,
-      status: 403,
-      message:
-        "Only the matter lead or an organization admin can change who can see this matter",
-    };
+  const stewardship = checkStewardship(actor, currentLeadUserId);
+  if (stewardship) {
+    return stewardship;
   }
-  if (next !== MATTER_VISIBILITY.private) {
+  if (next !== MATTER_VISIBILITY.assignedOnly) {
     return null;
   }
   // No lock: removing a member already refuses to remove the last one, so a
@@ -239,7 +258,8 @@ const checkVisibilityChange = async ({
     ? {
         ok: false,
         status: 400,
-        message: "A private matter needs at least one member",
+        message:
+          "A matter visible to assigned members only needs at least one member",
       }
     : null;
 };
@@ -383,6 +403,16 @@ export const updateWorkspaceHandler = async function* ({
       return leadCheck;
     }
 
+    if (
+      body.leadUserId !== undefined &&
+      body.leadUserId !== workspace.leadUserId
+    ) {
+      const stewardship = checkStewardship(actor, workspace.leadUserId);
+      if (stewardship) {
+        return stewardship;
+      }
+    }
+
     const visibilityChanged =
       body.visibility !== undefined && body.visibility !== workspace.visibility;
     if (body.visibility !== undefined && visibilityChanged) {
@@ -506,16 +536,18 @@ export const updateWorkspaceHandler = async function* ({
       resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
       resourceId: workspaceId,
       changes,
-      // Opening a private matter to the organization exposes its contents to
-      // people who could not see them before; mark it so the audit log can be
-      // filtered for exactly those events.
-      ...(visibilityChanged
+      // Widening exposes the matter's contents to people who could not see
+      // them before; mark every change so the audit log can be filtered for
+      // exactly those events.
+      ...(visibilityChanged && body.visibility !== undefined
         ? {
             metadata: {
-              visibilityChange:
-                body.visibility === MATTER_VISIBILITY.organization
-                  ? "opened_to_organization"
-                  : "made_private",
+              visibilityChange: widensMatterVisibility(
+                workspace.visibility,
+                body.visibility,
+              )
+                ? "widened"
+                : "narrowed",
             },
           }
         : {}),

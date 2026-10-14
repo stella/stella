@@ -202,7 +202,7 @@ const validRow = (overrides: Row = {}): Row => ({
   workspaceId,
   workspaceMemberId: null,
   workspaceStatus: "active",
-  workspaceVisibility: "organization",
+  workspaceVisibility: "admins_and_assigned",
   ...overrides,
 });
 
@@ -238,16 +238,53 @@ describe("authorizeFolioCollabRoom", () => {
     ).toEqual({ status: "workspace-access-revoked" });
   });
 
-  test("requires private-matter membership even for organization admins", async () => {
+  test("an all-members matter admits unassigned internal members, never externals", async () => {
     expect(
       await authorize(
-        validRow({ workspaceVisibility: "private", workspaceMemberId: null }),
+        validRow({
+          organizationRole: "member",
+          workspaceMemberId: null,
+          workspaceVisibility: "all_members",
+        }),
+      ),
+    ).toMatchObject({ status: "authorized" });
+    expect(
+      await authorize(
+        validRow({
+          organizationRole: "external",
+          workspaceMemberId: null,
+          workspaceVisibility: "all_members",
+        }),
+      ),
+    ).toEqual({ status: "workspace-access-revoked" });
+    // Narrowed to admins and assigned members: the same member is out.
+    expect(
+      await authorize(
+        validRow({
+          organizationRole: "member",
+          workspaceMemberId: null,
+          workspaceVisibility: "admins_and_assigned",
+        }),
+      ),
+    ).toEqual({ status: "workspace-access-revoked" });
+  });
+
+  test("requires assigned-only matter membership even for organization admins", async () => {
+    expect(
+      await authorize(
+        validRow({
+          workspaceVisibility: "assigned_only",
+          workspaceMemberId: null,
+        }),
       ),
     ).toEqual({ status: "workspace-access-revoked" });
 
     expect(
       await authorize(
-        validRow({ workspaceVisibility: "private", workspaceMemberId: "wm_1" }),
+        validRow({
+          workspaceVisibility: "assigned_only",
+          workspaceMemberId: "wm_1",
+        }),
       ),
     ).toMatchObject({ status: "authorized" });
   });
@@ -281,7 +318,7 @@ describe("authorizeFolioCollabRoom", () => {
         tokenGeneration: 3,
         workspaceMemberId: null,
         workspaceStatus: "active",
-        workspaceVisibility: "organization",
+        workspaceVisibility: "admins_and_assigned",
       }),
     ).toEqual({ status: "authorized", canEdit: false });
   });

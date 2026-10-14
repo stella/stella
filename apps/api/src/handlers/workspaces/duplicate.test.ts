@@ -247,7 +247,7 @@ describe("duplicateWorkspace", () => {
               billingReference: "BILL-123",
               color: "blue",
               leadUserId: "user_lead123",
-              visibility: "private",
+              visibility: "assigned_only",
             }),
           },
           properties: {
@@ -400,7 +400,7 @@ describe("duplicateWorkspace", () => {
           color: "blue",
           leadUserId: "user_lead123",
           name: "Smith v Jones",
-          visibility: "private",
+          visibility: "assigned_only",
         }),
       ]);
       expect(insertedWorkspaceMembers).toEqual([
@@ -442,7 +442,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
-            visibility: "organization",
+            visibility: "admins_and_assigned",
           }),
         },
         properties: {
@@ -594,7 +594,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
-            visibility: "organization",
+            visibility: "admins_and_assigned",
           }),
         },
         properties: {
@@ -855,7 +855,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
-            visibility: "organization",
+            visibility: "admins_and_assigned",
           }),
         },
         properties: {
@@ -1021,7 +1021,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
-            visibility: "organization",
+            visibility: "admins_and_assigned",
           }),
         },
         properties: {
@@ -1138,7 +1138,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
-            visibility: "organization",
+            visibility: "admins_and_assigned",
           }),
         },
         properties: { findMany: async () => [] },

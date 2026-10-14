@@ -474,6 +474,7 @@ export {
   DEFAULT_MATTER_VISIBILITY,
   MATTER_VISIBILITIES,
   MATTER_VISIBILITY,
+  widensMatterVisibility,
 } from "./matter-visibility";
 export type { MatterVisibility } from "./matter-visibility";
 export {

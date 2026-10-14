@@ -5,32 +5,40 @@ SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 --
 -- Until now a NULL client_id meant "personal": visible only to the matter's
 -- members, never to organization owners and admins. `visibility` carries that
--- decision explicitly so a matter can have no client and still be visible to
--- the organization (internal templates, know-how, firm administration), and a
--- matter with a client can be private.
+-- decision explicitly, in three levels, widest first:
+--   all_members          every internal member (owner, admin, member, intern)
+--   admins_and_assigned  owners and admins, plus assigned members (the old
+--                        client-matter rule)
+--   assigned_only        assigned members only (the old personal rule)
+-- So a matter can have no client and still be open to the organization
+-- (internal templates, know-how, internal administration), and a matter with
+-- a client can be closed to everyone not assigned. External members never
+-- reach a matter without an assignment.
 --
 -- Adding the column with a constant default is a metadata-only change; the
 -- CHECK is validated in the same statement against a table bounded by
 -- matters per organization.
 ALTER TABLE "workspaces"
-  ADD COLUMN "visibility" text DEFAULT 'organization' NOT NULL,
+  ADD COLUMN "visibility" text DEFAULT 'admins_and_assigned' NOT NULL,
   ADD CONSTRAINT "workspaces_visibility_check"
-    CHECK ("visibility" IN ('organization', 'private'));
+    CHECK ("visibility" IN ('all_members', 'admins_and_assigned', 'assigned_only'));
 --> statement-breakpoint
 
--- Preserve today's behaviour: every matter without a client stays private, so
--- nothing becomes visible to anyone who could not already see it. Bounded by
+-- Preserve today's behaviour: every matter without a client stays
+-- assigned_only and every other matter admins_and_assigned, so nothing becomes
+-- visible to anyone who could not already see it. all_members is never set
+-- here; only an explicit, audited change opens a matter that wide. Bounded by
 -- its WHERE clause to the clientless matters; workspaces scale with matters,
 -- not with the corpus.
-UPDATE "workspaces" SET "visibility" = 'private' WHERE "client_id" IS NULL;
+UPDATE "workspaces" SET "visibility" = 'assigned_only' WHERE "client_id" IS NULL;
 --> statement-breakpoint
 
 -- No database default: the application always states a visibility. A writer
 -- that predates this column (an API instance still rolling out) omits it, and
 -- the trigger below gives that row the visibility the old rule implied, so a
--- clientless matter created mid-rollout stays private rather than defaulting
--- to the organization. Drop the trigger and function once no such writer can
--- remain.
+-- clientless matter created mid-rollout stays assigned_only rather than
+-- defaulting to admins_and_assigned. CONTRACT STEP: drop the trigger and the
+-- function in a later release, once no such writer can remain.
 ALTER TABLE "workspaces" ALTER COLUMN "visibility" DROP DEFAULT;
 --> statement-breakpoint
 
@@ -38,8 +46,8 @@ CREATE FUNCTION public.workspaces_legacy_visibility() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
   NEW.visibility := CASE
-    WHEN NEW.client_id IS NULL THEN 'private'
-    ELSE 'organization'
+    WHEN NEW.client_id IS NULL THEN 'assigned_only'
+    ELSE 'admins_and_assigned'
   END;
   RETURN NEW;
 END;
@@ -53,9 +61,11 @@ WHEN (NEW.visibility IS NULL)
 EXECUTE FUNCTION public.workspaces_legacy_visibility();
 --> statement-breakpoint
 
--- Owners and admins reach organization-visible matters without an assignment;
--- private matters only through workspace_members. Same columns and order as
--- the view it replaces, so every policy that reads it keeps working.
+-- Without an assignment, owners and admins reach admins_and_assigned and
+-- all_members matters, and every internal member reaches all_members
+-- matters; assigned_only matters are reached only through workspace_members.
+-- Same columns and order as the view it replaces, so every policy that reads
+-- it keeps working.
 CREATE OR REPLACE VIEW public.stella_authorized_workspaces
 WITH (security_barrier = true, security_invoker = false)
 AS
@@ -103,5 +113,11 @@ SELECT w.id AS authorized_workspace_id, w.status AS workspace_status
 FROM current_member m
 JOIN public.workspaces w
   ON w.organization_id = m.organization_id
- AND w.visibility = 'organization'
-WHERE m.role IN ('owner', 'admin');
+WHERE (
+    m.role IN ('owner', 'admin')
+    AND w.visibility IN ('admins_and_assigned', 'all_members')
+  )
+  OR (
+    m.role IN ('owner', 'admin', 'member', 'intern')
+    AND w.visibility = 'all_members'
+  );

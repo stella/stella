@@ -8,7 +8,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -71,6 +71,7 @@ const ownerInFull = userId();
 const memberInFull = userId();
 const loneMemberInFull = userId();
 const assignedMemberInFull = userId();
+const externalInFull = userId();
 
 const orgEmpty = orgId();
 const ownerInEmpty = userId();
@@ -84,6 +85,8 @@ const memberPersonalWorkspaceId = workspaceId();
 // client, and a private matter with one.
 const clientlessOrganizationWorkspaceId = workspaceId();
 const privateClientWorkspaceId = workspaceId();
+// Open to every internal member of the organization, never to externals.
+const allMembersWorkspaceId = workspaceId();
 
 testState.beforeAll(async () => {
   testDb = await getTestDb();
@@ -94,6 +97,7 @@ testState.beforeAll(async () => {
       memberInFull,
       loneMemberInFull,
       assignedMemberInFull,
+      externalInFull,
       ownerInEmpty,
       memberInEmpty,
       strangerUser,
@@ -150,6 +154,13 @@ testState.beforeAll(async () => {
     },
     {
       id: tid(),
+      organizationId: orgFull,
+      userId: externalInFull,
+      role: "external",
+      createdAt: new Date(),
+    },
+    {
+      id: tid(),
       organizationId: orgEmpty,
       userId: ownerInEmpty,
       role: "owner",
@@ -184,15 +195,15 @@ testState.beforeAll(async () => {
       clientId: null,
       name: "Member personal matter",
       reference: "AUTH-PERSONAL",
-      visibility: "private",
+      visibility: "assigned_only",
     },
     {
       id: clientlessOrganizationWorkspaceId,
       organizationId: orgFull,
       clientId: null,
-      name: "Firm know-how",
+      name: "Internal know-how",
       reference: "AUTH-KNOW-HOW",
-      visibility: "organization",
+      visibility: "admins_and_assigned",
     },
     {
       id: privateClientWorkspaceId,
@@ -200,7 +211,15 @@ testState.beforeAll(async () => {
       clientId: clientContactId,
       name: "Private client matter",
       reference: "AUTH-PRIVATE-CLIENT",
-      visibility: "private",
+      visibility: "assigned_only",
+    },
+    {
+      id: allMembersWorkspaceId,
+      organizationId: orgFull,
+      clientId: null,
+      name: "Engagement letter templates",
+      reference: "AUTH-ALL-MEMBERS",
+      visibility: "all_members",
     },
   ]);
   await testDb.insert(workspaceMembers).values([
@@ -400,6 +419,20 @@ describe("resolveMemberAuthorization", () => {
       target: privateClientWorkspaceId,
       expected: null,
     },
+    // An all-members matter reaches every internal member without an
+    // assignment, and never an external one.
+    {
+      actor: memberInFull,
+      target: allMembersWorkspaceId,
+      expected: allMembersWorkspaceId,
+    },
+    {
+      actor: ownerInFull,
+      target: allMembersWorkspaceId,
+      expected: allMembersWorkspaceId,
+    },
+    { actor: externalInFull, target: allMembersWorkspaceId, expected: null },
+    { actor: externalInFull, target: clientWorkspaceId, expected: null },
   ])(
     "worker membership uses the session access rule under RLS: %p",
     async ({ actor, target, expected }) => {
@@ -459,6 +492,7 @@ describe("resolveWorkspaceRealtimeAudience", () => {
       memberInFull,
       loneMemberInFull,
       assignedMemberInFull,
+      externalInFull,
       ownerInEmpty,
       strangerUser,
     ];
@@ -488,6 +522,51 @@ describe("resolveWorkspaceRealtimeAudience", () => {
       new Set([ownerInFull, assignedMemberInFull]),
     );
     expect(privateClientAudience).toEqual(new Set([memberInFull]));
+
+    // Every internal member hears about an all-members matter; the external
+    // member, the other organization's owner and a stranger do not.
+    const allMembersAudience = await resolveWorkspaceRealtimeAudience(
+      { userIds: candidates, workspaceId: allMembersWorkspaceId },
+      testDb,
+    );
+    expect(allMembersAudience).toEqual(
+      new Set([
+        ownerInFull,
+        memberInFull,
+        loneMemberInFull,
+        assignedMemberInFull,
+      ]),
+    );
+
+    // Narrowing it to admins and assigned members takes it away from the
+    // unassigned internal members at once.
+    await testDb
+      .update(workspaces)
+      .set({ visibility: "admins_and_assigned" })
+      .where(eq(workspaces.id, allMembersWorkspaceId));
+    try {
+      expect(
+        await resolveWorkspaceRealtimeAudience(
+          { userIds: candidates, workspaceId: allMembersWorkspaceId },
+          testDb,
+        ),
+      ).toEqual(new Set([ownerInFull]));
+      expect(
+        await resolveMemberAuthorization(
+          {
+            organizationId: orgFull,
+            userId: memberInFull,
+            workspaceId: allMembersWorkspaceId,
+          },
+          testDb,
+        ),
+      ).toMatchObject({ workspace: null });
+    } finally {
+      await testDb
+        .update(workspaces)
+        .set({ visibility: "all_members" })
+        .where(eq(workspaces.id, allMembersWorkspaceId));
+    }
   });
 });
 

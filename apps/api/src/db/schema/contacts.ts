@@ -321,9 +321,9 @@ export const workspaces = p.pgTable(
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "restrict",
     }),
-    // Who can see the matter: `organization` reaches the organization's
-    // owners and admins plus the matter's members; `private` reaches only
-    // its members. The database has no default (a transitional insert
+    // Who can see the matter: `all_members` reaches every internal member,
+    // `admins_and_assigned` owners and admins plus assigned members,
+    // `assigned_only` assigned members only (see MATTER_VISIBILITIES). The database has no default (a transitional insert
     // trigger derives a value for writers that omit it); application inserts
     // always carry one.
     visibility: p

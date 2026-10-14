@@ -2,14 +2,14 @@
   {
     "file": "apps/api/src/lib/time-entry-timer-access.ts",
     "from": "e9cc074ef434731dee1ca517f7b19023a7e5bfe15b7113cc7a02d9f4f83a581d",
-    "to": "69252a8641beccdbbc279555bbaf0d68703db0f1eada9f1505a3ca5a3875dd87",
-    "reason": "Same FOR SHARE on the matter and member rows; the admin branch now reads the matter's visibility instead of its client."
+    "to": "28fa91a890b17b0ccbee5d5354c7f39e4ef340e472d6eec3df82b4a3850aba7f",
+    "reason": "Same FOR SHARE on the matter and member rows; the unassigned branch now reads the matter's visibility instead of its client."
   },
   {
     "file": "apps/api/src/lib/db/member-access-hold.ts",
     "from": "4d0ff3a1232e8708641540aea532d71a6edc4bfd90eee22ab25e7987991cbcb5",
-    "to": "ff08b5e599801f6fe492f534e9697c0ee5193409dcdb19c59f2e3b2ac2367670",
-    "reason": "Same FOR SHARE on the organization-visible matters an admin reaches; the filter reads visibility instead of the client."
+    "to": "7e5b7a62e12268f465b88320ece3fd0152fa1dad231113823571961ca4e2800d",
+    "reason": "Same FOR SHARE on the unassigned matters the member's role may reach; their visibility decides it instead of the client."
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",

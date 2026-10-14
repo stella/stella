@@ -9,6 +9,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import type { MatterVisibility } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -55,7 +57,7 @@ const createMatter = async ({
   visibility,
   members,
 }: {
-  visibility: "organization" | "private";
+  visibility: MatterVisibility;
   members: readonly SafeId<"user">[];
 }): Promise<SafeId<"workspace">> => {
   const workspaceId = createSafeId<"workspace">();
@@ -125,103 +127,181 @@ const statusOf = (result: Result<unknown, unknown>) =>
     ? result.error.status
     : null;
 
+const readLead = async (workspaceId: SafeId<"workspace">) =>
+  (
+    await testDb
+      .select({ leadUserId: workspaces.leadUserId })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+  ).at(0)?.leadUserId;
+
+const LEAD = () => ({ userId: ids.userA1, managesOrganizationMatters: false });
+const NON_LEAD_MEMBER = () => ({
+  userId: ids.userA2,
+  managesOrganizationMatters: false,
+});
+const ADMIN = () => ({
+  userId: ids.userAdmin,
+  managesOrganizationMatters: true,
+});
+
 describe("changing a matter's visibility", () => {
-  test("the matter lead may open a private matter to the organization, and the change is audited", async () => {
-    const workspaceId = await createMatter({
-      visibility: "private",
-      members: [ids.userA1, ids.userA2],
-    });
+  test.each([
+    ["assigned_only", "admins_and_assigned"],
+    ["assigned_only", "all_members"],
+    ["admins_and_assigned", "all_members"],
+  ] as const)(
+    "the matter lead may widen %s to %s, and the change is audited as widening",
+    async (from, to) => {
+      const workspaceId = await createMatter({
+        visibility: from,
+        members: [ids.userA1, ids.userA2],
+      });
 
-    const { result, events } = await changeVisibility({
-      actor: { userId: ids.userA1, managesOrganizationMatters: false },
-      workspaceId,
-      body: { visibility: "organization" },
-    });
+      const { result, events } = await changeVisibility({
+        actor: LEAD(),
+        workspaceId,
+        body: { visibility: to },
+      });
 
-    expect(Result.isOk(result)).toBe(true);
-    expect(await readVisibility(workspaceId)).toBe("organization");
-    expect(events).toEqual([
-      expect.objectContaining({
-        resourceId: workspaceId,
-        changes: {
-          visibility: { old: "private", new: "organization" },
-        },
-        metadata: { visibilityChange: "opened_to_organization" },
-      }),
-    ]);
-  });
+      expect(Result.isOk(result)).toBe(true);
+      expect(await readVisibility(workspaceId)).toBe(to);
+      expect(events).toEqual([
+        expect.objectContaining({
+          resourceId: workspaceId,
+          changes: { visibility: { old: from, new: to } },
+          metadata: { visibilityChange: "widened" },
+        }),
+      ]);
+    },
+  );
 
   test("a member who does not lead the matter cannot change it, even by naming themselves lead in the same request", async () => {
     const workspaceId = await createMatter({
-      visibility: "private",
+      visibility: "assigned_only",
       members: [ids.userA1, ids.userA2],
     });
 
     for (const body of [
-      { visibility: "organization" as const },
-      { visibility: "organization" as const, leadUserId: ids.userA2 },
+      { visibility: "all_members" as const },
+      { visibility: "admins_and_assigned" as const, leadUserId: ids.userA2 },
     ]) {
       const { result, events } = await changeVisibility({
-        actor: { userId: ids.userA2, managesOrganizationMatters: false },
+        actor: NON_LEAD_MEMBER(),
         workspaceId,
         body,
       });
       expect(statusOf(result)).toBe(403);
       expect(events).toEqual([]);
     }
-    expect(await readVisibility(workspaceId)).toBe("private");
+    expect(await readVisibility(workspaceId)).toBe("assigned_only");
+    expect(await readLead(workspaceId)).toBe(ids.userA1);
   });
 
-  test("an organization admin may make an organization matter private", async () => {
+  test("an organization admin may narrow an all-members matter, and the change is audited as narrowing", async () => {
     const workspaceId = await createMatter({
-      visibility: "organization",
+      visibility: "all_members",
       members: [ids.userA1],
     });
 
     const { result, events } = await changeVisibility({
-      actor: { userId: ids.userAdmin, managesOrganizationMatters: true },
+      actor: ADMIN(),
       workspaceId,
-      body: { visibility: "private" },
+      body: { visibility: "admins_and_assigned" },
     });
 
     expect(Result.isOk(result)).toBe(true);
-    expect(await readVisibility(workspaceId)).toBe("private");
+    expect(await readVisibility(workspaceId)).toBe("admins_and_assigned");
     expect(events.at(0)).toMatchObject({
-      changes: { visibility: { old: "organization", new: "private" } },
-      metadata: { visibilityChange: "made_private" },
+      changes: {
+        visibility: { old: "all_members", new: "admins_and_assigned" },
+      },
+      metadata: { visibilityChange: "narrowed" },
     });
   });
 
-  test("a matter with no members cannot be made private", async () => {
+  test("a matter with no members cannot be made assigned-only", async () => {
     const workspaceId = await createMatter({
-      visibility: "organization",
+      visibility: "admins_and_assigned",
       members: [],
     });
 
     const { result } = await changeVisibility({
-      actor: { userId: ids.userAdmin, managesOrganizationMatters: true },
+      actor: ADMIN(),
       workspaceId,
-      body: { visibility: "private" },
+      body: { visibility: "assigned_only" },
     });
 
     expect(statusOf(result)).toBe(400);
-    expect(await readVisibility(workspaceId)).toBe("organization");
+    expect(await readVisibility(workspaceId)).toBe("admins_and_assigned");
   });
 
   test("restating the current visibility is not a change and needs no permission", async () => {
     const workspaceId = await createMatter({
-      visibility: "private",
+      visibility: "assigned_only",
       members: [ids.userA1, ids.userA2],
     });
 
     const { result, events } = await changeVisibility({
-      actor: { userId: ids.userA2, managesOrganizationMatters: false },
+      actor: NON_LEAD_MEMBER(),
       workspaceId,
-      body: { visibility: "private", name: "Renamed" },
+      body: { visibility: "assigned_only", name: "Renamed" },
     });
 
     expect(Result.isOk(result)).toBe(true);
     expect(events.at(0)?.changes).not.toHaveProperty("visibility");
     expect(events.at(0)?.metadata).toBeUndefined();
+  });
+});
+
+describe("changing a matter's lead", () => {
+  test("a member who does not lead the matter cannot make themselves, or anyone, the lead", async () => {
+    const workspaceId = await createMatter({
+      visibility: "admins_and_assigned",
+      members: [ids.userA1, ids.userA2],
+    });
+
+    for (const leadUserId of [ids.userA2, null]) {
+      const { result, events } = await changeVisibility({
+        actor: NON_LEAD_MEMBER(),
+        workspaceId,
+        body: { leadUserId },
+      });
+      expect(statusOf(result)).toBe(403);
+      expect(events).toEqual([]);
+    }
+    expect(await readLead(workspaceId)).toBe(ids.userA1);
+  });
+
+  test("the current lead may hand the matter to another member", async () => {
+    const workspaceId = await createMatter({
+      visibility: "admins_and_assigned",
+      members: [ids.userA1, ids.userA2],
+    });
+
+    const { result } = await changeVisibility({
+      actor: LEAD(),
+      workspaceId,
+      body: { leadUserId: ids.userA2 },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(await readLead(workspaceId)).toBe(ids.userA2);
+  });
+
+  test("an organization admin may set the lead of a matter they do not lead", async () => {
+    const workspaceId = await createMatter({
+      visibility: "admins_and_assigned",
+      members: [ids.userA1, ids.userA2],
+    });
+
+    const { result } = await changeVisibility({
+      actor: ADMIN(),
+      workspaceId,
+      body: { leadUserId: ids.userA2 },
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    expect(await readLead(workspaceId)).toBe(ids.userA2);
   });
 });

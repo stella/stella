@@ -7,6 +7,8 @@ import {
   test,
 } from "bun:test";
 
+import { DEFAULT_MATTER_VISIBILITY } from "@stll/api-contract";
+
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
@@ -498,27 +500,34 @@ describe("every MCP tool's real output passes its output contract", () => {
     };
 
     const created = await call("save_matter", {
-      name: "Partner compensation review",
-      visibility: "private",
+      name: "Engagement letter templates",
+      visibility: "all_members",
     });
     const matterId = idAt(created, "matterId");
-    expect(await visibilityOf(matterId)).toBe("private");
+    expect(await visibilityOf(matterId)).toBe("all_members");
 
     const listed = await call("list_matters", {});
     const rows = Array.isArray(listed["matters"]) ? listed["matters"] : [];
     expect(
       rows.find((row) => isRecord(row) && row["id"] === matterId),
-    ).toMatchObject({ visibility: "private" });
+    ).toMatchObject({ visibility: "all_members" });
 
-    await call("save_matter", {
-      matter_id: matterId,
-      visibility: "organization",
-    });
-    expect(await visibilityOf(matterId)).toBe("organization");
+    // Every level the web app offers can be set through save_matter.
+    for (const visibility of [
+      "assigned_only",
+      "admins_and_assigned",
+      "all_members",
+    ] as const) {
+      await call("save_matter", { matter_id: matterId, visibility });
+      expect(await visibilityOf(matterId)).toBe(visibility);
+    }
 
-    // No client and no visibility: the organization default.
-    const internal = await call("save_matter", { name: "Firm know-how" });
-    expect(await visibilityOf(idAt(internal, "matterId"))).toBe("organization");
+    // No client and no visibility: the same default the web app preselects.
+    const internal = await call("save_matter", { name: "Internal know-how" });
+    expect(await visibilityOf(idAt(internal, "matterId"))).toBe(
+      DEFAULT_MATTER_VISIBILITY,
+    );
+    expect(DEFAULT_MATTER_VISIBILITY).toBe("admins_and_assigned");
   });
 
   test("a seeded organization drives each runnable tool", async () => {

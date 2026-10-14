@@ -2,13 +2,23 @@ import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
 import { MATTER_VISIBILITY } from "@stll/api-contract";
-import { ORGANIZATION_MATTER_ADMIN_ROLES } from "@stll/permissions";
+import {
+  INTERNAL_MEMBER_ROLES,
+  ORGANIZATION_MATTER_ADMIN_ROLES,
+} from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
+const roleList = (roles: readonly string[]) =>
+  sql.join(
+    roles.map((role) => sql`${role}`),
+    sql`, `,
+  );
+
+// Same rule as reachesMatterWithoutMembership, evaluated under the row locks.
 export const hasCurrentTimerMatterAccess = async ({
   organizationId,
   tx,
@@ -32,10 +42,12 @@ export const hasCurrentTimerMatterAccess = async ({
       AND workspace.organization_id = ${organizationId}
       AND workspace.status = 'active'
       AND CASE
-        WHEN organization_member.role IN (${sql.join(
-          ORGANIZATION_MATTER_ADMIN_ROLES.map((role) => sql`${role}`),
-          sql`, `,
-        )}) AND workspace.visibility = ${MATTER_VISIBILITY.organization} THEN true
+        WHEN organization_member.role IN (${roleList(
+          ORGANIZATION_MATTER_ADMIN_ROLES,
+        )}) AND workspace.visibility IN (${MATTER_VISIBILITY.adminsAndAssigned}, ${MATTER_VISIBILITY.allMembers}) THEN true
+        WHEN organization_member.role IN (${roleList(
+          INTERNAL_MEMBER_ROLES,
+        )}) AND workspace.visibility = ${MATTER_VISIBILITY.allMembers} THEN true
         ELSE EXISTS (
           SELECT 1 FROM workspace_members AS workspace_member
           WHERE workspace_member.workspace_id = workspace.id

@@ -1,26 +1,8 @@
-import { MATTER_VISIBILITY } from "@stll/api-contract";
 import type { MatterVisibility } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { isMemberRole } from "@/api/lib/member-roles";
-import type { MemberRole } from "@/api/lib/member-roles";
-
-/**
- * Whether a role reaches a workspace it is not a member of. Firm
- * owners/admins carry the deliberate organization-wide override, which
- * covers organization-visible matters only; everyone else, and everyone on a
- * private matter, needs a `workspace_members` row.
- */
-const WORKSPACE_ACCESS_BY_ROLE = {
-  owner: "organization-wide",
-  admin: "organization-wide",
-  external: "workspace-membership-required",
-  member: "workspace-membership-required",
-  intern: "workspace-membership-required",
-} as const satisfies Record<
-  MemberRole,
-  "organization-wide" | "workspace-membership-required"
->;
+import { reachesMatterWithoutMembership } from "@/api/lib/workspaces/visibility";
 
 /**
  * Whether a user may still write entity versions in a workspace.
@@ -47,10 +29,16 @@ export const canWriteWorkspaceEntities = ({
   const hasEntityUpdate = roles[organizationRole].authorize({
     entity: ["update"],
   }).success;
+  // Assignment, or the matter's visibility reaching the role without one
+  // (owners/admins on admins_and_assigned, every internal role on
+  // all_members). Re-read on every use, so narrowing a matter closes the
+  // credential of anyone it no longer reaches.
   const hasWorkspaceAccess =
-    (WORKSPACE_ACCESS_BY_ROLE[organizationRole] === "organization-wide" &&
-      workspaceVisibility === MATTER_VISIBILITY.organization) ||
-    workspaceMemberId !== null;
+    workspaceMemberId !== null ||
+    reachesMatterWithoutMembership({
+      role: organizationRole,
+      visibility: workspaceVisibility,
+    });
 
   return hasEntityUpdate && hasWorkspaceAccess;
 };

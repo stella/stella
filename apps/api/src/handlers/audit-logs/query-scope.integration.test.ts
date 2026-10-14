@@ -191,7 +191,7 @@ describe("audit log compliance filter", () => {
       name: "Matter C",
       reference: personalMatterId,
       status: "active",
-      visibility: "private",
+      visibility: "assigned_only",
     });
     seededWorkspaceIds.push(personalMatterId);
     await seedAuditEntry({
