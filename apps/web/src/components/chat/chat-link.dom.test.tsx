@@ -110,6 +110,8 @@ test("explicit mail and same-document destinations stay clickable while executab
     "mailto:contact@example.org",
     "#paragraph",
     "/law/cz/statutes",
+    "./document.pdf",
+    "../sources/decision",
   ]) {
     const view = render(<ChatLink href={href}>{label}</ChatLink>);
     expect(view.getByRole("link", { name: label }).getAttribute("href")).toBe(

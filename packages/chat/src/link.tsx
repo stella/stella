@@ -67,7 +67,8 @@ export const ChatLink = ({
   const target = normalizeChatLink(href);
   if (!target) {
     const parsed = URL.canParse(href) ? new URL(href) : null;
-    const safeLocal = href.startsWith("#") || /^\/(?![\\/])/u.test(href);
+    const safeLocal =
+      href.startsWith("#") || /^(?:\/(?![\\/])|\.{1,2}\/)/u.test(href);
     const safeMail = parsed?.protocol === "mailto:";
     if ((!safeLocal && !safeMail) || /[\p{Cc}\p{Cf}]/u.test(href)) {
       return <span>{children ?? href}</span>;

@@ -165,3 +165,13 @@ describe("inline citation chips draw the cited file's type", () => {
     ).toBe("true");
   });
 });
+
+test("dot-relative markdown destinations stay clickable with their original href", () => {
+  for (const href of ["./document.pdf", "../sources/decision"]) {
+    const view = renderChip(href);
+    expect(
+      view.getByRole("link", { name: CHIP_LABEL }).getAttribute("href"),
+    ).toBe(href);
+    cleanup();
+  }
+});
