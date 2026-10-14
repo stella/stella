@@ -8,11 +8,13 @@
  * index or to the generation whose projection state accepts a hit reads this
  * and nothing else (`corpus-index-jurisdiction-serving.guard.test.ts`).
  */
+import { panic } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import { corpusIndexJurisdictionServing } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";
 
@@ -28,16 +30,25 @@ export const readJurisdictionServingGenerationsTx = async (
   tx: ReadTransaction,
   family: CorpusFamily,
 ): Promise<JurisdictionServingGenerations> => {
-  const rows = await tx
-    .select({
-      jurisdiction: corpusIndexJurisdictionServing.jurisdiction,
-      generation: corpusIndexJurisdictionServing.generation,
-    })
-    .from(corpusIndexJurisdictionServing)
-    .where(eq(corpusIndexJurisdictionServing.family, family))
-    .limit(SERVING_ROWS_MAX);
+  const read = await readBounded(
+    tx
+      .select({
+        jurisdiction: corpusIndexJurisdictionServing.jurisdiction,
+        generation: corpusIndexJurisdictionServing.generation,
+      })
+      .from(corpusIndexJurisdictionServing)
+      .where(eq(corpusIndexJurisdictionServing.family, family)),
+    SERVING_ROWS_MAX,
+  );
+  if (read.type === "overflow") {
+    // One row per jurisdiction: more than a family declares cannot exist.
+    return panic("A family holds more serving pointers than jurisdictions", {
+      family,
+      cap: read.cap,
+    });
+  }
   return new Map(
-    rows.map(({ jurisdiction, generation }) => [jurisdiction, generation]),
+    read.rows.map(({ jurisdiction, generation }) => [jurisdiction, generation]),
   );
 };
 

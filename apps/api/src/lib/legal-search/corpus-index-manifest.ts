@@ -1171,12 +1171,15 @@ export const corpusIndexManifestIsPartial = (
 /** The jurisdictions a partial generation holds, or null for a whole one. */
 export const corpusIndexManifestScopeJurisdictions = (
   manifest: CorpusIndexManifest,
-): readonly CaseLawJurisdiction[] | null =>
-  manifest.route.type === "case_law_group" && manifest.route.scope !== undefined
+): readonly CaseLawJurisdiction[] | null => {
+  // Bound once: a property narrowing does not survive into the callback.
+  const { route } = manifest;
+  return route.type === "case_law_group" && route.scope !== undefined
     ? CASE_LAW_JURISDICTIONS.filter((jurisdiction) =>
-        Object.hasOwn(manifest.route.byJurisdiction, jurisdiction),
+        Object.hasOwn(route.byJurisdiction, jurisdiction),
       )
     : null;
+};
 
 /** How many jurisdictions this manifest routes into one physical index. */
 const manifestIndexJurisdictionCount = (
