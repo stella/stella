@@ -363,6 +363,8 @@
       "chooseList": "Vybrať zoznam",
       "createList": "Vytvoriť zoznam",
       "evidenceList": "Fakty zo zoznamu",
+      "loadSample": "Načítať ukážkový prípad",
+      "loadSampleFailed": "Ukážkový prípad sa nepodarilo načítať",
       "noLists": "Tento spis nemá žiadne zoznamy.",
       "pickList": "Vyberte zoznam, s ktorého faktami sa porovnávajú dokumenty tohto spisu."
     }
