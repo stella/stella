@@ -73,10 +73,10 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           publishedCaseLawDecisions,
           unredactedCaseLawDecisions,
         ]) {
+          // Both views are defined with `.as()`, so drizzle types the query
+          // as present; an `.existing()` view would fail to compile here.
           const config = getViewConfig(view);
-          const query =
-            config.query ?? panic(`Decision view ${config.name} has no query`);
-          const rendered = dialect.sqlToQuery(query);
+          const rendered = dialect.sqlToQuery(config.query);
           await db.execute(sql`CREATE VIEW ${schema}.${sql.identifier(config.name)}
             AS (${sql.raw(rendered.sql)})`);
         }

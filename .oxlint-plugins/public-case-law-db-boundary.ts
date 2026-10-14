@@ -45,6 +45,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT } from "../apps/api/src/lib/public-law-relations.ts";
 import {
   type AstNode,
@@ -100,12 +102,14 @@ const PUBLIC_LAW_BOUNDARY_OWNERS: readonly string[] = [
 ];
 
 const SCHEMA_MODULE = "apps/api/src/db/schema";
-const isSchemaModule = (moduleId: string | null): boolean => {
+// Module ids arrive repo-relative or absolute; compare them as portable
+// repo-relative identifiers so native separators never decide the match.
+export const isSchemaModule = (moduleId: string | null): boolean => {
   if (moduleId === null) {
     return false;
   }
   const normalized = path.isAbsolute(moduleId)
-    ? path.relative(REPOSITORY_ROOT, moduleId)
+    ? repoRelativePath(REPOSITORY_ROOT, moduleId)
     : moduleId;
   return (
     normalized === SCHEMA_MODULE || normalized.startsWith(`${SCHEMA_MODULE}/`)

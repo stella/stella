@@ -156,7 +156,7 @@
         "position": "root/0/1/0/1",
         "relation": "case_law_decisions",
         "nodeType": "Bitmap Heap Scan",
-        "index": "case_law_decisions_lang_group_idx, case_law_decisions_created_at_idx"
+        "index": "case_law_decisions_lang_group_idx, case_law_decisions_country_idx"
       }
     ]
   },
