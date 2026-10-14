@@ -1010,6 +1010,9 @@ struct BrowserConnection {
   device_key: crate::device_proof::DeviceKey,
   expires_at: std::time::Instant,
   redemption: LinkRedemption,
+  // The approval page URL, kept so a repeated request can show the same
+  // challenge again instead of minting a competing one.
+  browser_url: String,
 }
 
 enum LinkRedemption {
@@ -1075,6 +1078,7 @@ fn new_browser_connection_with_key(
       device_key,
       expires_at: std::time::Instant::now() + LINK_APPROVAL_TIMEOUT,
       redemption: LinkRedemption::Waiting { verifier },
+      browser_url: url.to_string(),
     },
     url.to_string(),
   ))
@@ -1088,6 +1092,9 @@ pub(crate) struct PreparedBrowserConnection {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ConnectionStart {
   Started,
+  /// A request for the same API and web origin while that attempt still waits
+  /// for approval: the existing approval page is shown again.
+  Resumed,
   SameOriginPending,
   DifferentOriginPending,
 }
@@ -1118,10 +1125,15 @@ fn reserve_browser_connection(
       LinkRedemption::Waiting { .. } | LinkRedemption::Redeeming
     )
   {
-    return if current.api_base_url == connection.api_base_url {
-      ConnectionStart::SameOriginPending
+    if current.api_base_url != connection.api_base_url {
+      return ConnectionStart::DifferentOriginPending;
+    }
+    return if current.web_origin == connection.web_origin
+      && matches!(current.redemption, LinkRedemption::Waiting { .. })
+    {
+      ConnectionStart::Resumed
     } else {
-      ConnectionStart::DifferentOriginPending
+      ConnectionStart::SameOriginPending
     };
   }
   *pending = Some(connection);
@@ -1140,6 +1152,18 @@ impl PreparedBrowserConnection {
       std::time::Instant::now(),
     ) {
       ConnectionStart::Started => {}
+      ConnectionStart::Resumed => {
+        let url = pending
+          .as_ref()
+          .map(|current| current.browser_url.clone())
+          .ok_or("Desktop connection is unavailable")?;
+        drop(pending);
+        app
+          .opener()
+          .open_url(url, None::<&str>)
+          .map_err(|_| "Could not open desktop connection")?;
+        return Ok(ConnectionStart::Resumed);
+      }
       outcome @ (ConnectionStart::SameOriginPending
       | ConnectionStart::DifferentOriginPending) => return Ok(outcome),
     }
@@ -1160,7 +1184,7 @@ pub async fn open_browser_connection(
     .await?
     .open(app)?
   {
-    ConnectionStart::Started => Ok(()),
+    ConnectionStart::Started | ConnectionStart::Resumed => Ok(()),
     ConnectionStart::SameOriginPending => Err(LINK_ALREADY_PENDING.into()),
     ConnectionStart::DifferentOriginPending => {
       Err(crate::i18n::t("dialog.handoffAccountMismatch").into())
@@ -1648,7 +1672,7 @@ mod tests {
 
   #[test]
   fn an_unexpired_connection_cannot_be_replaced() {
-    let (connection, _) =
+    let (connection, original_url) =
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     let original_id = connection.correlation_id.clone();
     let expires_at = connection.expires_at;
@@ -1657,7 +1681,26 @@ mod tests {
       new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
     assert_eq!(
       reserve_browser_connection(&mut pending, replacement, std::time::Instant::now()),
-      ConnectionStart::SameOriginPending
+      ConnectionStart::Resumed,
+      "a repeated request shows the waiting approval page again"
+    );
+    assert_eq!(pending.as_ref().unwrap().correlation_id, original_id);
+    assert_eq!(pending.as_ref().unwrap().browser_url, original_url);
+    let (other_web, _) =
+      new_browser_connection("https://api.stll.app", "https://web.example.test").unwrap();
+    assert_eq!(
+      reserve_browser_connection(&mut pending, other_web, std::time::Instant::now()),
+      ConnectionStart::SameOriginPending,
+      "another web origin never receives the waiting challenge"
+    );
+    assert_eq!(pending.as_ref().unwrap().correlation_id, original_id);
+    pending.as_mut().unwrap().redemption = LinkRedemption::Redeeming;
+    let (while_redeeming, _) =
+      new_browser_connection("https://api.stll.app", "https://my.stll.app").unwrap();
+    assert_eq!(
+      reserve_browser_connection(&mut pending, while_redeeming, std::time::Instant::now()),
+      ConnectionStart::SameOriginPending,
+      "a redemption in flight is not shown again"
     );
     assert_eq!(pending.as_ref().unwrap().correlation_id, original_id);
     let (other_server, _) =

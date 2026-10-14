@@ -1,4 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
+import * as v from "valibot";
 
 import { DESKTOP_ACCOUNT_POLICY } from "@stll/api-contract/desktop-registry";
 import type {
@@ -18,11 +19,13 @@ import {
   DESKTOP_HANDOFF_POLL_INTERVAL_MS,
   watchDesktopEditHandoff,
 } from "@/features/desktop/desktop-edit-handoff";
+import { browserStateStorage } from "@/lib/account/browser-storage";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
 import { unwrapEden } from "@/lib/errors/api";
 import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
+import { readStoredJson, serializeStoredJson } from "@/lib/stored-json";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
@@ -117,9 +120,67 @@ export const parseDesktopAccountChallenge = (hash: string) => {
   return { correlationId, verifierHash, deviceJkt, portSecret, protocol };
 };
 
-export const captureDesktopAccountLink = () => {
+const DESKTOP_ACCOUNT_LINK_STORAGE_KEY = "stella.desktop-account-link";
+
+const storedDesktopAccountLinkSchema = v.object({
+  hash: v.string(),
+  savedAt: v.number(),
+});
+
+const removeDesktopAccountLinkHash = () => {
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${window.location.search}`,
+  );
+};
+
+/**
+ * Moves a desktop linking challenge out of the address bar into this tab's
+ * session storage, so it survives a sign-in or organization redirect (which
+ * keep only the path and query). The desktop settings page consumes it once.
+ */
+export const stashDesktopAccountLink = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
   const hash = window.location.hash;
   if (!hash.startsWith(`${DESKTOP_ACCOUNT_LINK_HASH}?`)) {
+    return;
+  }
+  browserStateStorage("session").setItem(
+    DESKTOP_ACCOUNT_LINK_STORAGE_KEY,
+    serializeStoredJson({
+      hash,
+      savedAt: Temporal.Now.instant().epochMilliseconds,
+    }),
+  );
+  removeDesktopAccountLinkHash();
+};
+
+const takeStashedDesktopAccountLink = () => {
+  const storage = browserStateStorage("session");
+  const stored = readStoredJson(
+    storage.getItem(DESKTOP_ACCOUNT_LINK_STORAGE_KEY),
+    storedDesktopAccountLinkSchema,
+  );
+  storage.removeItem(DESKTOP_ACCOUNT_LINK_STORAGE_KEY);
+  if (
+    !stored ||
+    Temporal.Now.instant().epochMilliseconds - stored.savedAt >=
+      DESKTOP_ACCOUNT_CHALLENGE_TTL_MS
+  ) {
+    return null;
+  }
+  return stored.hash;
+};
+
+export const captureDesktopAccountLink = () => {
+  const addressHash = window.location.hash;
+  const hash = addressHash.startsWith(`${DESKTOP_ACCOUNT_LINK_HASH}?`)
+    ? addressHash
+    : takeStashedDesktopAccountLink();
+  if (!hash?.startsWith(`${DESKTOP_ACCOUNT_LINK_HASH}?`)) {
     return false;
   }
   const challenge = parseDesktopAccountChallenge(hash);
@@ -136,11 +197,9 @@ export const captureDesktopAccountLink = () => {
       },
     };
   }
-  window.history.replaceState(
-    null,
-    "",
-    `${window.location.pathname}${window.location.search}`,
-  );
+  if (hash === addressHash) {
+    removeDesktopAccountLinkHash();
+  }
   return true;
 };
 
