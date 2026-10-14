@@ -800,6 +800,12 @@ const stepFields = (step: Step | undefined) =>
 const baseSteps = legSteps(baseline, baselineIds).map((step) => {
   const fields = stepFields(step);
   const runnerMigrations = {
+    "Typecheck-cost baseline guard": {
+      before:
+        'bun scripts/typecheck-baseline.ts --self-test\nbun test scripts/typecheck-baseline.test.ts\nbun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"\n',
+      after:
+        'bun scripts/typecheck-baseline.ts --self-test\nbun test scripts/typecheck-baseline.test.ts scripts/pre-push-policy.test.ts\nbun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"\n',
+    },
     "Test oxlint plugins": {
       before:
         "bun test scripts/oxlint-plugin-test-coverage.test.ts\nfind ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test\n",

@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       sha:
-        description: Full lowercase commit SHA already on main
+        description: Full lowercase commit SHA on main or a same-repository release PR head
         required: true
         type: string
 
@@ -30,16 +30,54 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      pull-requests: read
+      issues: read
+      actions: read
     outputs:
       sha: ${{ steps.ancestor.outputs.sha }}
-      run: ${{ steps.selection.outputs.run }}
+      proof: ${{ steps.reuse.outputs.proof }}
+      main-base: ${{ steps.ancestor.outputs.main-base }}
+      run: ${{ steps.reuse.outputs.run || steps.selection.outputs.run }}
     steps:
+      - name: Checkout trusted release proof tooling
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: .release-proof
+          fetch-depth: 0
+          persist-credentials: false
+          sparse-checkout: scripts
+
+      - name: Reuse completed release proof
+        id: reuse
+        working-directory: .release-proof
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          if proof=$(bash scripts/verify-release-tree-proof.sh --find-proof "$GITHUB_REPOSITORY" "$SHA") && [[ -n "$proof" ]]; then
+            if bash scripts/check-release-main-health.sh "$GITHUB_REPOSITORY" "$SHA" "$proof"; then
+              echo "proof=$proof" >> "$GITHUB_OUTPUT"
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
       - name: Select untested PR-depth SHA
+        if: steps.reuse.outputs.run != 'false'
         id: selection
+        env:
+          REUSE_RUN: ${{ steps.reuse.outputs.run }}
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
           script: |
+            if (process.env.REUSE_RUN === "true") {
+              core.setOutput("run", "true");
+              return;
+            }
             if (context.eventName !== "schedule") {
               core.setOutput("run", "true");
               return;
@@ -47,9 +85,9 @@ jobs:
             const { data } = await github.rest.repos.listCommitStatusesForRef({
               ...context.repo, ref: context.sha, per_page: 100,
             });
-            const tested = data.some(status => status.context === "main/pr-depth"
-              && status.creator?.login === "github-actions[bot]"
-              && status.state === "success");
+            const latest = data.find(status => status.context === "main/pr-depth");
+            const tested = latest?.creator?.login === "github-actions[bot]"
+              && latest.state === "success";
             core.setOutput("run", String(!tested));
             await core.summary.addRaw(tested
               ? "Main PR-depth SHA is already green; skipping checks."
@@ -79,6 +117,8 @@ jobs:
           auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
           echo "::add-mask::$auth"
           git -C "$directory" -c "http.extraheader=AUTHORIZATION: basic $auth" fetch --no-tags origin main:refs/remotes/origin/main
+          git -C "$directory" show origin/main:scripts/verify-release-tree-proof.sh > "$RUNNER_TEMP/verify-release-tree-proof.sh"
+          git -C "$directory" show origin/main:scripts/gh-retry.sh > "$RUNNER_TEMP/gh-retry.sh"
 
       - name: Verify main ancestry
         if: steps.selection.outputs.run == 'true'
@@ -86,11 +126,10 @@ jobs:
         working-directory: ${{ runner.temp }}/main-pr-depth-validation
         env:
           SHA: ${{ inputs.sha || github.sha }}
+          GH_TOKEN: ${{ github.token }}
+          GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
         run: |
-          if ! git cat-file -e "$SHA^{commit}" || ! git merge-base --is-ancestor "$SHA" origin/main; then
-            echo "::error::SHA must name a commit already on main."
-            exit 1
-          fi
+          bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA" >> "$GITHUB_OUTPUT"
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
   suites:
@@ -112,7 +151,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   status:
-    if: always() && needs.validate.result != 'skipped' && needs.validate.outputs.run != 'false'
+    if: always() && needs.validate.result != 'skipped' && needs.validate.outputs.run != 'false' && !needs.validate.outputs.proof
     needs: [validate, suites]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -140,6 +179,7 @@ jobs:
           # because a cancelled earlier run for the same commit defers to it.
           SHA: ${{ needs.validate.outputs.sha || (github.event_name == 'schedule' && github.sha) || '' }}
           RESULTS: ${{ toJSON(needs) }}
+          PROOF_MAIN_BASE: ${{ needs.validate.outputs.main-base }}
           RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: bash "$GITHUB_WORKSPACE/.gh-retry/scripts/main-pr-depth-status.sh"

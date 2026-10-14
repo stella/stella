@@ -594,6 +594,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
             RESULTS: results,
             RUN_URL: runUrl,
             SHA: sha,
+            PROOF_MAIN_BASE: validatedSha,
           },
         });
         expect(process.exitCode).toBe(exit);
@@ -608,7 +609,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
           "-f",
           `state=${expected}`,
           "-f",
-          `description=Main heavy suites: ${expected}`,
+          `description=Main heavy suites: ${expected}; main=${validatedSha}`,
           "-f",
           `target_url=${runUrl}`,
         ]);

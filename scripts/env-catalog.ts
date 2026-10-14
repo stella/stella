@@ -1358,8 +1358,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "WINDOWS_WORKFLOW_SHA",
   // Ordered frozen install flags shared by the scoped CI cache and installer.
   "STELLA_CI_INSTALL_FLAGS",
-  // Optional smaller process cap leaves room inside the composite caller deadline.
+  // Installer budgets warn; verified restore outcome and key identify timing.
   "STELLA_CI_INSTALL_BUDGET_MS",
+  "STELLA_CI_INSTALL_RESTORE",
+  "STELLA_CI_INSTALL_KEY",
   // Scoped install-store ownership and phase measurement.
   "BUN_INSTALL_GLOBAL_STORE",
   "CACHE_HIT",
@@ -1559,6 +1561,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  // Trusted release-proof controls passed between workflow steps.
+  "PROOF_MAIN_BASE",
+  "RELEASE_PR_HEAD",
+  "RELEASE_PROOF_REPOSITORY",
+  "RELEASE_TREE_PROOF_VERIFIER",
+  "REUSE_RUN",
   "RELEASE_REF",
   "REPO",
   "REPOSITORY",
