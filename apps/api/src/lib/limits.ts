@@ -800,6 +800,14 @@ export const LIMITS = {
   chatSendHistoryWindowMax: 500,
   /** Max DOCX size for stamp injection (bytes). */
   docxStampMaxBytes: 50 * 1024 * 1024,
+  /** Staged file bytes all in-flight upload finalizations of one API process
+   *  may hold at once. Finalizing reads, scans and may rewrite the whole file,
+   *  peaking near six copies, so this keeps a burst of large uploads well
+   *  inside the task's memory. A single file above it still runs alone. */
+  uploadFinalizeInFlightBytes: 150 * 1024 * 1024,
+  /** How long a finalization waits for that budget before it fails as
+   *  retryable; well inside the claim timeout so the claim never lapses. */
+  uploadFinalizeAdmissionWaitMs: 20_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */

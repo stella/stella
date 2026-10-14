@@ -49,11 +49,13 @@ import {
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import { storedDocumentBytes } from "@/api/lib/files/stored-document-bytes";
+import { LIMITS } from "@/api/lib/limits";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { getS3, readS3ArrayBuffer } from "@/api/lib/s3";
 import type { HeadObjectResult, S3PresignError } from "@/api/lib/s3-presign";
 import { headObject } from "@/api/lib/s3-presign";
 import { finalizeEntityCreate } from "@/api/lib/uploads/entity-create";
+import { UPLOAD_FINALIZE_ADMISSION } from "@/api/lib/uploads/finalize-admission";
 import { promoteTmpObjectWithUsage } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -257,7 +259,7 @@ const finalizeUpload = createSafeHandler(
     // From here on we own the row. Any early return must transition
     // the row to a terminal status; `scanning` left behind would
     // block re-claim until the timeout.
-    const finalizeResult = yield* runFinalize({
+    const finalizeResult = yield* runAdmittedFinalize({
       claimed,
       organizationId: session.activeOrganizationId,
       workspaceId,
@@ -325,6 +327,33 @@ const finalizeUpload = createSafeHandler(
     return Result.ok({ finalizedResult: finalizeResult.value.finalizedResult });
   },
 );
+
+// The staged file is read, scanned and may be rewritten in memory, so
+// concurrent finalizations share one byte budget per process. Admission is
+// released however the finalization ends; one that cannot be admitted in time
+// fails as retryable, keeping its staged bytes.
+const runAdmittedFinalize = async function* (
+  props: RunFinalizeProps,
+): ReturnType<typeof runFinalize> {
+  const release = await UPLOAD_FINALIZE_ADMISSION.acquire(
+    props.claimed.declaredSize,
+    LIMITS.uploadFinalizeAdmissionWaitMs,
+  );
+  if (release === null) {
+    return Result.err(
+      new UploadFinalizeError({
+        status: 500,
+        message: "Upload processing is busy; retry shortly",
+        rejectReason: "finalize-busy",
+      }),
+    );
+  }
+  try {
+    return yield* runFinalize(props);
+  } finally {
+    release();
+  }
+};
 
 type RunFinalizeProps = {
   claimed: ClaimedRow;
