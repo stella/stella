@@ -18,7 +18,6 @@ import {
   legalLists,
 } from "@/api/db/schema";
 import { taskCreateRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
-import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -49,6 +48,8 @@ import {
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { ensureFileProperty } from "@/api/lib/properties/ensure-file-property";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -57,6 +58,23 @@ import { SAMPLE_FACTS } from "./sample-case.data";
 import sampleDocumentPath from "./whitfield-witness-statement.docx" with { type: "file" };
 
 const SAMPLE_LIST_NAME = "Whitfield sample facts";
+const SAMPLE_COMPETING_LOAD_REFUSED = failureSink({
+  event: "lists.sample_case.competing_load_refused",
+  expected: [],
+});
+const reportCompetingLoadRefusal = (
+  error: unknown,
+  workspaceId: SafeId<"workspace">,
+) => {
+  observeFailure(error, {
+    sink: SAMPLE_COMPETING_LOAD_REFUSED,
+    ctx: { workspaceId },
+  });
+};
+const SAMPLE_LOAD_FAILED = failureSink({
+  event: "lists.sample_case.load_failed",
+  expected: [],
+});
 const SAMPLE_DOCUMENT_NAME = "Whitfield witness statement (sample).docx";
 
 const config = {
@@ -345,7 +363,7 @@ export const loadSampleCase = async ({
       );
       if (winner !== undefined) {
         if (attempted.isErr()) {
-          captureError(attempted.error, { workspaceId });
+          reportCompetingLoadRefusal(attempted.error, workspaceId);
         }
         return Result.ok(winner);
       }
@@ -419,7 +437,10 @@ export default createSafeHandler(
       filePropertyName: body.filePropertyName,
     });
     if (result.isErr()) {
-      captureError(result.error, { workspaceId });
+      observeFailure(result.error, {
+        sink: SAMPLE_LOAD_FAILED,
+        ctx: { workspaceId },
+      });
     }
     return yield* Result.await(Promise.resolve(result));
   },
