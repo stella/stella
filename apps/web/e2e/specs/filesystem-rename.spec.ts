@@ -22,12 +22,12 @@ test.describe("filesystem rename", () => {
     workspace = await createTestWorkspace(request, "filesystem-rename");
   });
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }) => {
     if (workspace === null) {
       return;
     }
 
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, { page });
     workspace = null;
   });
 

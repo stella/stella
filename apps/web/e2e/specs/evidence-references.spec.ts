@@ -149,8 +149,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       if (workspace === null) {
         return;
       }
-      await page.goto("about:blank", { waitUntil: "commit" });
-      await deleteTestWorkspace(request, workspace.id);
+      await deleteTestWorkspace(request, workspace.id, { page });
       workspace = null;
     });
 

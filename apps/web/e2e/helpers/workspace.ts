@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from "@playwright/test";
+import { expect, type APIRequestContext, type Page } from "@playwright/test";
 import { Result, panic } from "better-result";
 import { randomUUID } from "node:crypto";
 
@@ -108,10 +108,20 @@ export const createTestWorkspaceWithOperations = async (
   throw initialized.error.cause;
 };
 
+type DeleteTestWorkspaceOptions = {
+  /** A page still open on the workspace. It leaves first, so refetches it
+   * starts during teardown cannot read storage the deletion removes. */
+  page?: Page;
+};
+
 export const deleteTestWorkspace = async (
   request: APIRequestContext,
   workspaceId: string,
+  { page }: DeleteTestWorkspaceOptions = {},
 ): Promise<void> => {
+  if (page !== undefined && !page.isClosed()) {
+    await page.goto("about:blank", { waitUntil: "commit" });
+  }
   const path = `/workspaces/${workspaceId}`;
   const outcome: { failure: Error | null } = { failure: null };
   await expect

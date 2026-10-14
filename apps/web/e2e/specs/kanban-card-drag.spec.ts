@@ -41,11 +41,11 @@ const findKanbanViewId = async (
 test.describe("kanban card drag", () => {
   let workspace: TestWorkspace | null = null;
 
-  test.afterEach(async ({ request }) => {
+  test.afterEach(async ({ page, request }) => {
     if (workspace === null) {
       return;
     }
-    await deleteTestWorkspace(request, workspace.id);
+    await deleteTestWorkspace(request, workspace.id, { page });
     workspace = null;
   });
 
