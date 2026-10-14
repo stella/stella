@@ -14,6 +14,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { rootCheckGate } from "./ci-root-checks";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -873,7 +874,40 @@ describe("detect-e2e-changes", () => {
     expect(driftGuardCondition).toMatch(
       /needs\.ci-plan\.outputs\.package_checks_required == 'true'\s*&&\s*needs\.ci-plan\.outputs\.model_catalog_drift_required == 'true'/u,
     );
-    expect(driftGuardCondition).not.toContain("||");
+    expect(driftGuardCondition).toBe(
+      githubExpression(
+        `!cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') && ${rootCheckGate({ job: "ci-checks-rest", name: "Model catalog snapshot drift check" })}`,
+      ),
+    );
+  });
+
+  test("every root-check selection clause is the owner-generated required operand", () => {
+    const gatedSteps = Object.entries(ciContract.jobs).flatMap(
+      ([job, value]) =>
+        value.steps === undefined
+          ? []
+          : workflowJobSteps(ciWorkflow, job)
+              .filter(
+                (step) =>
+                  typeof step["if"] === "string" &&
+                  step["if"].includes("needs.ci-plan.outputs.root_checks"),
+              )
+              .map((step) => ({ job, step })),
+    );
+    expect(gatedSteps.length).toBeGreaterThan(0);
+    for (const { job, step } of gatedSteps) {
+      const condition = requiredExpression(step["if"]);
+      const gate = rootCheckGate({
+        job,
+        name: requiredExpression(step["name"]),
+      });
+      const operands = condition.split(` && ${gate}`);
+      expect(operands).toHaveLength(2);
+      expect(operands.at(1)).toBe(" }}");
+      const prerequisites = requiredExpression(operands.at(0));
+      expect(prerequisites).not.toContain("needs.ci-plan.outputs.root_checks");
+      expect(prerequisites).not.toContain("||");
+    }
   });
 
   test("checks shipped product screenshots on planned releases", () => {
