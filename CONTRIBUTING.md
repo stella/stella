@@ -139,7 +139,7 @@ to explore the codebase.
 ### Reading a CI failure
 
 When CI fails, the `ci-result` check lists every failed step as one
-annotation: job, step, kind (`test`, `typecheck`, `lint`, `ratchet`,
+annotation: job, step, kind (`infra`, `test`, `typecheck`, `lint`, `ratchet`,
 `policy`, `build` or `other`) and the first error lines with `file:line`.
 Only steps that actually failed are listed. One call fetches them for a
 pull request (replace `123`):
