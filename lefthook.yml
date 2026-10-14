@@ -31,6 +31,9 @@ pre-commit:
     ai-skills:
       glob: "{.agents/skills,.ai/local-skills,.ai/shared/skills,.claude/skills}/**"
       run: bash scripts/check-ai-skill-sources.sh
+    tracked-symlinks:
+      # Match the archive's staged tree, never ignored or unstaged targets.
+      run: bun scripts/check-tracked-symlinks.ts
     lockfiles:
       # Reads the index, so a lockfile staged in this commit is checked too.
       run: bun run check:standalone-lockfiles

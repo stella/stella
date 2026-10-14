@@ -106,8 +106,19 @@ const fixtureSelect =
         (column) => column === user.email || column === user.emailVerified,
       )
     ) {
-      const { identity } = options.featureAccess;
-      const query = createSelectQueryMock(identity === null ? [] : [identity]);
+      const { identity, enrolments = [] } = options.featureAccess;
+      const query = createSelectQueryMock(
+        identity === null
+          ? []
+          : [
+              {
+                ...identity,
+                enrolledFeatureIds: enrolments.map(
+                  ({ featureId }) => featureId,
+                ),
+              },
+            ],
+      );
       return {
         from: (table: unknown) => {
           if (table !== member) {

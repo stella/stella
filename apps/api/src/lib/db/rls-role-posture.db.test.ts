@@ -6,17 +6,29 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+import { RUNTIME_MODE } from "@stll/runtime-mode";
+
 import { rootDb } from "@/api/db/root";
+import { envBase } from "@/api/env-base";
 import {
-  assertApplicationRlsRolePosture,
-  reportDatabaseLoginPosture,
-} from "@/api/lib/db/assert-migrations-applied";
+  assertDatabaseLoginPosture,
+  readDatabaseLoginPosture,
+} from "@/api/lib/db/assert-database-login-posture";
+import { assertApplicationRlsRolePosture } from "@/api/lib/db/assert-migrations-applied";
+import {
+  DatabaseLoginPostureError,
+  UNSAFE_DATABASE_LOGIN_LOCAL_DEV_ENV,
+} from "@/api/lib/db/rls-role-posture";
+import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
   withGatedTestClients,
   type GatedTestDb,
 } from "@/api/tests/gated-test-database";
+import { createTestState } from "@/api/tests/helpers/test-state";
 
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+const testState = createTestState({ file: import.meta.path, config: envBase });
 
 const capturePostureRejection = async (database = rootDb) =>
   await assertApplicationRlsRolePosture(database).then(
@@ -233,11 +245,74 @@ if (!runPostgresTests) {
       });
     }, 30_000);
 
+    test("admits demoted authenticated logins and requires a local development opt-in for elevated attributes", async () => {
+      await withElevatedApplicationRole(async (db, admin) => {
+        for (const attributes of [
+          { isSuperuser: false, bypassesRls: false, admitted: true },
+          { isSuperuser: true, bypassesRls: false, admitted: false },
+          { isSuperuser: false, bypassesRls: true, admitted: false },
+          { isSuperuser: true, bypassesRls: true, admitted: false },
+        ]) {
+          await admin.unsafe(
+            `ALTER ROLE fixture_owner ${attributes.isSuperuser ? "SUPERUSER" : "NOSUPERUSER"} ${attributes.bypassesRls ? "BYPASSRLS" : "NOBYPASSRLS"}`,
+          );
+          expect(await readDatabaseLoginPosture(db)).toEqual({
+            loginName: "fixture_owner",
+            isSuperuser: attributes.isSuperuser,
+            bypassesRls: attributes.bypassesRls,
+            ownedPolicyTables: 0,
+          });
+          for (const mode of Object.values(RUNTIME_MODE)) {
+            const restoreRuntime = setRuntimeModeForTesting({ mode });
+            try {
+              for (const unsafeLocalDevOptIn of [undefined, "1", "true"]) {
+                testState.setConfig(
+                  UNSAFE_DATABASE_LOGIN_LOCAL_DEV_ENV,
+                  unsafeLocalDevOptIn,
+                );
+                const admitted =
+                  unsafeLocalDevOptIn === undefined
+                    ? attributes.admitted
+                    : unsafeLocalDevOptIn === "1" && mode === RUNTIME_MODE.open;
+                if (admitted) {
+                  await assertDatabaseLoginPosture(db);
+                  continue;
+                }
+                expect(
+                  await rejectionOf(assertDatabaseLoginPosture(db)),
+                ).toBeInstanceOf(DatabaseLoginPostureError);
+              }
+            } finally {
+              restoreRuntime();
+            }
+          }
+        }
+      });
+    }, 30_000);
+
+    test("inspects the authenticated login while a transaction assumes another role", async () => {
+      await withElevatedApplicationRole(async (db) => {
+        await db.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL ROLE stella`);
+          const current = await tx.execute<{ name: string }>(
+            sql`SELECT CURRENT_USER AS name`,
+          );
+          expect(current.at(0)?.name).toBe("stella");
+          expect(await readDatabaseLoginPosture(tx)).toEqual({
+            loginName: "fixture_owner",
+            isSuperuser: false,
+            bypassesRls: false,
+            ownedPolicyTables: 0,
+          });
+        });
+      });
+    }, 30_000);
+
     test("reports the connecting login's attributes", async () => {
       const [current] = await rootDb.execute<{ name: string }>(
         sql`SELECT CURRENT_USER AS name`,
       );
-      const posture = await reportDatabaseLoginPosture();
+      const posture = await readDatabaseLoginPosture(rootDb);
 
       expect(posture?.loginName).toBe(current?.name);
       // Tests run as the login that applied the migrations, which owns them.

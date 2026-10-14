@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "The invoice renderer lays out PDFs with the Typst compiler (@myriaddreamin/typst-ts-web-compiler) and renders the same template to SVG for the browser preview (@myriaddreamin/typst-ts-renderer); both are WASM builds with no file system access, which the sandbox for editable templates relies on."
+}

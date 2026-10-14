@@ -16,6 +16,8 @@ import {
   InspectorRailIconButton,
 } from "@stll/ui/inspector";
 import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
+import { getMatterSwatch } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
@@ -45,7 +47,6 @@ import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
-import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -54,7 +55,6 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
-import { getMatterSwatch } from "@/lib/matter-colors";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 export const InspectorRail = ({

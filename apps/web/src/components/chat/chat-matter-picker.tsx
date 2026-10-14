@@ -8,6 +8,8 @@ import { useTranslations } from "use-intl";
 import { compareByLocale } from "@stll/collation";
 import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
 import { ChevronDownIcon, ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuCheckboxItem,
@@ -20,11 +22,9 @@ import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
 import { COMPOSER_LIST_VIEWPORT_CLASS_NAME } from "@/components/chat/composer-submenu-search";
-import { MatterIcon } from "@/components/matter-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 

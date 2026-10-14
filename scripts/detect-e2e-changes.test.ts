@@ -1436,9 +1436,7 @@ describe("detect-e2e-changes", () => {
       ciBrowser,
       "Restore Bun install cache",
     );
-    expect(cachedSetup["uses"]).toMatch(
-      /^stella\/\.github\/actions\/setup-bun-cached@/u,
-    );
+    expect(cachedSetup["uses"]).toMatch(/^oven-sh\/setup-bun@[a-f0-9]{40}$/u);
     expect(contractRecord(cachedSetup["with"])["bun-version-file"]).toBe(
       "package.json",
     );

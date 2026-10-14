@@ -455,10 +455,31 @@ for (const [key, value] of Object.entries(expectedApiReferenceVariables)) {
   );
 }
 
+const postgresBuild = getRecord(postgresTemplate, "build");
+expect(
+  postgresTemplate["volumeMountPath"] === "/var/lib/postgresql",
+  "Postgres manifest must declare its persistent volume mount",
+);
+expect(
+  postgresBuild["builder"] === "DOCKERFILE" &&
+    postgresBuild["dockerfilePath"] === "docker/postgres/Dockerfile",
+  "Postgres template must build the initialized database image",
+);
+expect(
+  postgresTemplate["configFile"] === "/railway/postgres.railway.json",
+  "Postgres template must select its service config",
+);
+const postgresConfig = readJson("railway/postgres.railway.json");
+expect(
+  getRecord(postgresConfig, "deploy")["requiredMountPath"] ===
+    "/var/lib/postgresql",
+  "Postgres service must require its persistent volume mount",
+);
+
 const expectedPostgresVariables: Record<string, string> = {
   DATABASE_PUBLIC_URL: `postgresql://${railwayTemplateReference("PGUSER")}:${railwayTemplateReference("POSTGRES_PASSWORD")}@${railwayTemplateReference("RAILWAY_TCP_PROXY_DOMAIN")}:${railwayTemplateReference("RAILWAY_TCP_PROXY_PORT")}/${railwayTemplateReference("PGDATABASE")}`,
   DATABASE_URL: `postgresql://${railwayTemplateReference("PGUSER")}:${railwayTemplateReference("POSTGRES_PASSWORD")}@${railwayTemplateReference("RAILWAY_PRIVATE_DOMAIN")}:5432/${railwayTemplateReference("PGDATABASE")}`,
-  PGDATA: "/var/lib/postgresql/data/pgdata",
+  PGDATA: "/var/lib/postgresql/18/docker",
   PGDATABASE: railwayTemplateReference("POSTGRES_DB"),
   PGHOST: railwayTemplateReference("RAILWAY_PRIVATE_DOMAIN"),
   PGPASSWORD: railwayTemplateReference("POSTGRES_PASSWORD"),
@@ -471,7 +492,6 @@ const expectedPostgresVariables: Record<string, string> = {
   ),
   POSTGRES_USER: "postgres",
   RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "60",
-  SSL_CERT_DAYS: "820",
 };
 for (const [key, value] of Object.entries(expectedPostgresVariables)) {
   expect(
