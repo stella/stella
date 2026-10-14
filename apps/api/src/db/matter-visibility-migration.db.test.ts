@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -171,7 +172,9 @@ describe("matter visibility migration", () => {
     ]) {
       expect(
         await authorizedFor(database, { organizationId: ORG, userId }),
-      ).toEqual(before[userId]);
+      ).toEqual(
+        before[userId] ?? panic(`No pre-migration access set for ${userId}`),
+      );
     }
   });
 
