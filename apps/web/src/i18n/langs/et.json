@@ -363,6 +363,8 @@
       "chooseList": "Vali loend",
       "createList": "Loo loend",
       "evidenceList": "Faktid allikast",
+      "loadSample": "Laadi näidisjuhtum",
+      "loadSampleFailed": "Näidisjuhtumi laadimine ebaõnnestus",
       "noLists": "Sellel toimikul pole ühtegi loendit.",
       "pickList": "Valige loend, mille faktide alusel selle toimiku dokumente kontrollitakse."
     }
@@ -4521,6 +4523,8 @@
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
+    "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
     "dateTo": "Kuni",
