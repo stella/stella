@@ -145,40 +145,54 @@ jobs:
               core.info("Merge queue still has waiting work; deferred pull request runs stay deferred.");
               return;
             }
-            // No age cutoff: a run may stay deferred for as long as the queue is busy.
-            const cancelledRuns = [];
-            for (let page = 1; page <= 5; page += 1) {
-              const { data } = await github.rest.actions.listWorkflowRuns({
-                ...repo, workflow_id: "ci.yml", event: "pull_request", status: "cancelled",
-                per_page: 100, page,
-              });
-              cancelledRuns.push(...data.workflow_runs);
-              if (data.workflow_runs.length < 100) break;
-            }
-            const seen = new Set();
+            // Open pull requests whose head carries a pending yield status are the
+            // durable record of deferred work, however long the queue stayed busy.
+            const deferredPulls = [];
+            let after = null;
+            do {
+              const page = await github.graphql(
+                `query($owner: String!, $repo: String!, $after: String) {
+                  repository(owner: $owner, name: $repo) {
+                    pullRequests(states: OPEN, first: 100, after: $after) {
+                      pageInfo { hasNextPage endCursor }
+                      nodes {
+                        number
+                        isDraft
+                        headRefOid
+                        headRepository { nameWithOwner }
+                        commits(last: 1) {
+                          nodes { commit { status { context(name: "ci/merge-queue-yield") { state } } } }
+                        }
+                      }
+                    }
+                  }
+                }`,
+                { owner: repo.owner, repo: repo.repo, after },
+              );
+              const pulls = page.repository.pullRequests;
+              for (const pull of pulls.nodes) {
+                const state = pull.commits.nodes[0]?.commit.status?.context?.state;
+                if (state === "PENDING" && !pull.isDraft
+                    && pull.headRepository?.nameWithOwner === `${repo.owner}/${repo.repo}`) {
+                  deferredPulls.push(pull);
+                }
+              }
+              after = pulls.pageInfo.hasNextPage ? pulls.pageInfo.endCursor : null;
+            } while (after);
             let resumed = 0;
-            for (const run of cancelledRuns) {
+            for (const pull of deferredPulls) {
               if (resumed >= RESUMES_PER_TICK) break;
-              if (seen.has(run.head_sha)) continue;
-              seen.add(run.head_sha);
-              const pull = run.pull_requests?.[0];
-              if (!pull?.number) continue;
-              const { data: current } = await github.rest.pulls.get({ ...repo, pull_number: pull.number });
-              if (current.state !== "open" || current.draft || current.head.sha !== run.head_sha) continue;
-              const { data: statuses } = await github.rest.repos.listCommitStatusesForRef({
-                ...repo, ref: run.head_sha, per_page: 100,
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...repo, workflow_id: "ci.yml", head_sha: pull.headRefOid, per_page: 1,
               });
-              const latest = statuses.find((status) => status.context === YIELD_CONTEXT);
-              if (latest?.state !== "pending") continue;
-              const { data: newer } = await github.rest.actions.listWorkflowRuns({
-                ...repo, workflow_id: "ci.yml", head_sha: run.head_sha, per_page: 1,
-              });
-              if (newer.workflow_runs[0]?.id !== run.id) continue;
+              const run = data.workflow_runs[0];
+              // Only the head's latest run, and only once its cancellation settled.
+              if (!run || run.status !== "completed" || run.conclusion !== "cancelled") continue;
               const target_url = `${context.serverUrl}/${repo.owner}/${repo.repo}/actions/runs/${run.id}`;
               // Mark the head resumed before dispatching: if the re-run defers
               // again, its newer pending status lands after this one.
               await github.rest.repos.createCommitStatus({
-                ...repo, sha: run.head_sha, state: "success", context: YIELD_CONTEXT,
+                ...repo, sha: pull.headRefOid, state: "success", context: YIELD_CONTEXT,
                 description: "Resumed after the merge queue cleared", target_url,
               });
               try {
@@ -187,7 +201,7 @@ jobs:
                 });
               } catch (error) {
                 await github.rest.repos.createCommitStatus({
-                  ...repo, sha: run.head_sha, state: "pending", context: YIELD_CONTEXT,
+                  ...repo, sha: pull.headRefOid, state: "pending", context: YIELD_CONTEXT,
                   description: "Deferred while the merge queue runs; resumes automatically", target_url,
                 });
                 throw error;
