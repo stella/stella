@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { repoRelativePath } from "@stll/portable-path";
+import { sha256Hex } from "@stll/sha256/bun";
 
 import { IN_PROCESS_DEPENDENCIES } from "../packages/external-contracts/src/dependency-dispositions";
 import {
@@ -38,6 +39,7 @@ import {
   readPin,
   uncharacterisedFromSource,
 } from "./check-external-contracts";
+import { createLocalRuntimeClosureReader } from "./external-contract-evidence";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
   type OutboundTransportCensusEntry,
@@ -1022,3 +1024,391 @@ test.each(["package.json", "new-package.json"])(
     }
   },
 );
+
+test("snapshot SDK closures accept native checker options without hiding invalid configuration", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import { payload } from "request-helper"; sdk.send(payload);',
+    ],
+    ["helper.ts", 'export const payload = "old";'],
+    [
+      "tsconfig.json",
+      JSON.stringify({
+        compilerOptions: {
+          checkers: 1,
+          paths: { "request-helper": ["./helper.ts"] },
+        },
+      }),
+    ],
+  ]);
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === "helper.ts"
+          ? 'export const payload = "new";'
+          : files.get(file),
+    }),
+  ).toBe(true);
+  for (const invalid of [
+    {
+      compilerOptions: {
+        chekcers: 1,
+        paths: { "request-helper": ["./helper.ts"] },
+      },
+    },
+    {
+      extends: "./missing-config.json",
+      compilerOptions: { paths: { "request-helper": ["./helper.ts"] } },
+    },
+  ]) {
+    expect(
+      hasChangedLocalRuntimeClosure({
+        ...options,
+        current: (file: string) =>
+          file === "tsconfig.json" ? JSON.stringify(invalid) : files.get(file),
+      }),
+    ).toBe(true);
+  }
+});
+
+test("literal text assets remain in the SDK runtime closure", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import payload from "./request.html.txt" with { type: "text" }; sdk.send(payload);',
+    ],
+    ["request.html.txt", "old payload"],
+  ]);
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === "request.html.txt" ? "new payload" : files.get(file),
+    }),
+  ).toBe(true);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === "request.html.txt" ? undefined : files.get(file),
+    }),
+  ).toBe(true);
+});
+
+test("published packages with workspace-like names stop the local closure", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import { helper } from "@stll/published-helper"; sdk.send(helper());',
+    ],
+    [
+      "package.json",
+      JSON.stringify({ dependencies: { "@stll/published-helper": "1.0.0" } }),
+    ],
+  ]);
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  files.set(
+    "package.json",
+    JSON.stringify({
+      dependencies: { "@stll/published-helper": "workspace:*" },
+    }),
+  );
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(true);
+});
+
+test("a main-side helper move already present in both snapshots preserves dated debt", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import { payload } from "./moved/helper"; sdk.send(payload);',
+    ],
+    ["moved/helper.ts", 'export const payload = "old";'],
+  ]);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      root: "/fixture",
+      owners: ["owner.ts"],
+      sdks: ["vendor"],
+      baseline: (file: string) => files.get(file),
+      current: (file: string) => files.get(file),
+    }),
+  ).toBe(false);
+});
+
+test("generated SDK closure leaves compare declared tracked inputs without running a generator", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import "./generated/adapter"; sdk.send();',
+    ],
+    ["generator.ts", 'export const generate = () => "output";'],
+    ["inputs/payload.json", '{"message":"old"}'],
+  ]);
+  const read = Object.assign((file: string) => files.get(file), {
+    files: [...files.keys()],
+  });
+  const generators = [
+    {
+      id: "adapter",
+      outputKind: "derived",
+      outputs: ["generated/adapter.ts"],
+      inputs: ["generator.ts", "inputs/*.json"],
+      write: ["bun", "generator.ts"],
+    },
+  ] as const;
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: read,
+    current: read,
+    generators,
+    registryFiles: [],
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: Object.assign(
+        (file: string) =>
+          file === "inputs/payload.json"
+            ? '{"message":"new"}'
+            : files.get(file),
+        { files: read.files },
+      ),
+    }),
+  ).toBe(true);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: Object.assign(
+        (file: string) =>
+          file === "generator.ts"
+            ? 'export const generate = () => "changed";'
+            : files.get(file),
+        { files: read.files },
+      ),
+    }),
+  ).toBe(true);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: Object.assign(
+        (file: string) =>
+          file === "generator.ts"
+            ? '// comment\nexport const generate = (): string => "output";'
+            : files.get(file),
+        { files: read.files },
+      ),
+    }),
+  ).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: Object.assign((file: string) => files.get(file), {
+        files: ["owner.ts", "generator.ts"],
+      }),
+    }),
+  ).toBe(true);
+});
+
+test("generated imports without a registered generator or declared inputs fail closed with a named reason", () => {
+  const files = new Map([
+    ["owner.ts", 'import "./generated/unregistered";'],
+    [
+      "generated/unregistered.ts",
+      "// GENERATED by a generator.\nexport const value = true;",
+    ],
+  ]);
+  const read = Object.assign((file: string) => files.get(file), {
+    files: [...files.keys()],
+  });
+  const options = { root: "/fixture", read, generators: [], registryFiles: [] };
+  expect(
+    createLocalRuntimeClosureReader(options)(["owner.ts"]).problems,
+  ).toContain(
+    "Generated module generated/unregistered.ts has no registered generator",
+  );
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      owners: ["owner.ts"],
+      sdks: ["vendor"],
+      baseline: read,
+      current: read,
+    }),
+  ).toBe(true);
+  const generators = [
+    {
+      id: "unregistered",
+      outputKind: "derived",
+      outputs: ["generated/unregistered.ts"],
+      inputs: [],
+      write: ["bun", "generator.ts"],
+    },
+  ] as const;
+  expect(
+    createLocalRuntimeClosureReader({ ...options, generators })(["owner.ts"])
+      .problems,
+  ).toContain(
+    "Generated module generated/unregistered.ts has no unique generator with declared inputs",
+  );
+});
+
+test("private package imports stop at external assets and track their alias manifest", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import asset from "#runtime.wasm" with { type: "file" }; sdk.send(asset);',
+    ],
+    [
+      "package.json",
+      JSON.stringify({
+        imports: { "#runtime.wasm": "@stll/published-runtime/wasm" },
+        dependencies: { "@stll/published-runtime": "1.0.0" },
+      }),
+    ],
+  ]);
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === "package.json"
+          ? JSON.stringify({
+              imports: {
+                "#runtime.wasm": "@stll/published-runtime/changed-wasm",
+              },
+              dependencies: { "@stll/published-runtime": "1.0.0" },
+            })
+          : files.get(file),
+    }),
+  ).toBe(true);
+});
+
+test("generated data inputs compare original bytes rather than lossy decoded text", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import "./generated/adapter"; sdk.send();',
+    ],
+    ["generator.ts", 'export const generate = () => "output";'],
+    ["input.bin", "\uFFFD"],
+  ]);
+  const read = (bytes: Uint8Array) =>
+    Object.assign((file: string) => files.get(file), {
+      files: [...files.keys()],
+      digest: (file: string) =>
+        file === "input.bin"
+          ? sha256Hex(bytes)
+          : sha256Hex(files.get(file) ?? ""),
+    });
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: read(new Uint8Array([255])),
+    current: read(new Uint8Array([254])),
+    generators: [
+      {
+        id: "adapter",
+        outputKind: "derived",
+        outputs: ["generated/adapter.ts"],
+        inputs: ["generator.ts", "input.bin"],
+        write: ["bun", "generator.ts"],
+      },
+    ] as const,
+    registryFiles: [],
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(true);
+});
+
+test("private imports expose pinned SDK reachability to the changed usage guard", () => {
+  const files = new Map([
+    ["owner.ts", 'import sdk from "#sdk"; sdk.send("old");'],
+    [
+      "package.json",
+      JSON.stringify({
+        imports: { "#sdk": "vendor" },
+        dependencies: { vendor: "1.0.0" },
+      }),
+    ],
+  ]);
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === "owner.ts"
+          ? 'import sdk from "#sdk"; sdk.send("new");'
+          : files.get(file),
+    }),
+  ).toBe(true);
+});
+
+test("private import maps with unproved branches cannot hide pinned SDK reachability", () => {
+  const files = new Map([
+    ["owner.ts", 'import sdk from "#sdk"; sdk.send("old");'],
+    ["fallback.ts", "export default { send() {} };"],
+    [
+      "package.json",
+      JSON.stringify({
+        imports: { "#sdk": { bun: "vendor", default: "./fallback.ts" } },
+        dependencies: { vendor: "1.0.0" },
+      }),
+    ],
+  ]);
+  const read = (file: string) => files.get(file);
+  expect(
+    createLocalRuntimeClosureReader({ root: "/fixture", read })(["owner.ts"])
+      .problems,
+  ).toContain("Cannot prove literal private import #sdk from package.json");
+  expect(
+    hasChangedLocalRuntimeClosure({
+      root: "/fixture",
+      owners: ["owner.ts"],
+      sdks: ["vendor"],
+      baseline: read,
+      current: read,
+    }),
+  ).toBe(true);
+});

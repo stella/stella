@@ -31,12 +31,16 @@ import {
   createLocalRuntimeClosureReader,
   readFixtureEvidence,
   runtimeModuleReferences,
+  type RuntimeSnapshotReader,
 } from "./external-contract-evidence";
 import {
   EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
   readExternalContractPinAllowances,
 } from "./external-contract-pin-allowances";
-import { createGitBaselineReader } from "./offline-git-read";
+import {
+  createGitBaselineReader,
+  readGitTrackedFiles,
+} from "./offline-git-read";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
   type OutboundTransportCensusEntry,
@@ -898,8 +902,14 @@ type ChangedLocalRuntimeClosureOptions = {
   root: string;
   owners: readonly string[];
   sdks: readonly string[];
-  baseline: (file: string) => string | undefined;
-  current: (file: string) => string | undefined;
+  baseline: RuntimeSnapshotReader;
+  current: RuntimeSnapshotReader;
+  generators?: Parameters<
+    typeof createLocalRuntimeClosureReader
+  >[0]["generators"];
+  registryFiles?: Parameters<
+    typeof createLocalRuntimeClosureReader
+  >[0]["registryFiles"];
 };
 
 export const hasChangedLocalRuntimeClosure = ({
@@ -908,14 +918,20 @@ export const hasChangedLocalRuntimeClosure = ({
   sdks,
   baseline,
   current,
+  generators,
+  registryFiles,
 }: ChangedLocalRuntimeClosureOptions): boolean => {
   const previousClosure = createLocalRuntimeClosureReader({
     root,
     read: baseline,
+    generators,
+    registryFiles,
   });
   const currentClosure = createLocalRuntimeClosureReader({
     root,
     read: current,
+    generators,
+    registryFiles,
   });
   const emitted = new Map<string, string>();
   const executable = (file: string, text: string) => {
@@ -945,24 +961,33 @@ export const hasChangedLocalRuntimeClosure = ({
     if (previous.problems.length > 0 || present.problems.length > 0) {
       return true;
     }
-    const reachesPinnedSdk = [
-      ...previous.references,
-      ...present.references,
-    ].some((reference) => {
-      switch (reference.type) {
-        case "literal":
-          return sdks.some(
-            (sdk) =>
-              reference.specifier === sdk ||
-              reference.specifier.startsWith(`${sdk}/`),
-          );
-        case "dynamic":
-          return true;
-        default:
-          reference satisfies never;
-          return panic("Unhandled runtime module reference");
+    if (previous.generated.size !== present.generated.size) {
+      return true;
+    }
+    for (const [file, identity] of previous.generated) {
+      if (present.generated.get(file) !== identity) {
+        return true;
       }
-    });
+    }
+    // Generated leaves stand for inputs, so their untraversed runtime edges cannot rule out SDK reachability.
+    const reachesPinnedSdk =
+      previous.generated.size > 0 ||
+      present.generated.size > 0 ||
+      [...previous.references, ...present.references].some((reference) => {
+        switch (reference.type) {
+          case "literal":
+            return sdks.some(
+              (sdk) =>
+                reference.specifier === sdk ||
+                reference.specifier.startsWith(`${sdk}/`),
+            );
+          case "dynamic":
+            return true;
+          default:
+            reference satisfies never;
+            return panic("Unhandled runtime module reference");
+        }
+      });
     // An unresolved edge can hide SDK reachability, so check problems before scope.
     if (!reachesPinnedSdk) {
       continue;
@@ -974,6 +999,7 @@ export const hasChangedLocalRuntimeClosure = ({
       const next = present.files.get(file);
       if (
         next === undefined ||
+        previous.dataHashes.get(file) !== present.dataHashes.get(file) ||
         executable(file, source) !== executable(file, next)
       ) {
         return true;
@@ -1016,7 +1042,7 @@ type ContractEntryCheckOptions = {
   root: string;
   system: string;
   entry: ExternalContractEntry;
-  baseline: ((file: string) => string | undefined) | undefined;
+  baseline: RuntimeSnapshotReader | undefined;
   admitted:
     | ReturnType<typeof readExternalContractPinAllowances>[number]
     | undefined;
@@ -1042,15 +1068,26 @@ export const checkContractEntry = ({
     baseline === undefined || admitted === undefined
       ? current
       : readBaselinePins(entry, baseline);
+  const currentBytes = new Map<string, Uint8Array | undefined>();
   const currentSources = new Map<string, string | undefined>();
-  const currentSource = (file: string) => {
-    if (!currentSources.has(file)) {
+  const readBytes = (file: string) => {
+    if (!currentBytes.has(file)) {
       const absolute = path.join(root, file);
-      currentSources.set(
+      currentBytes.set(
         file,
         existsSync(absolute) && statSync(absolute).isFile()
-          ? readFileSync(absolute, "utf-8")
+          ? readFileSync(absolute)
           : undefined,
+      );
+    }
+    return currentBytes.get(file);
+  };
+  const currentSource = (file: string) => {
+    if (!currentSources.has(file)) {
+      const bytes = readBytes(file);
+      currentSources.set(
+        file,
+        bytes === undefined ? undefined : new TextDecoder().decode(bytes),
       );
     }
     return currentSources.get(file);
@@ -1063,7 +1100,14 @@ export const checkContractEntry = ({
       owners: entry.owners.map(({ path: file }) => file),
       sdks: entry.sdks,
       baseline,
-      current: currentSource,
+      current: Object.assign(currentSource, {
+        files:
+          baseline?.files === undefined ? undefined : readGitTrackedFiles(root),
+        digest: (file: string) => {
+          const bytes = readBytes(file);
+          return bytes === undefined ? undefined : hash(bytes);
+        },
+      }),
     });
   const admittedPins =
     admitted === undefined
@@ -1129,7 +1173,7 @@ type ExternalContractCheckOptions = {
   inProcess?: Readonly<Record<string, string>>;
   census?: readonly OutboundTransportCensusEntry[];
   sdks?: readonly string[];
-  baseline?: (file: string) => string | undefined;
+  baseline?: RuntimeSnapshotReader;
   now?: Date;
 };
 

@@ -27,17 +27,11 @@
         "bun.lock#@tanstack/ai-openrouter": "@tanstack/ai-openrouter@0.21.1",
         "package.json#patchedDependencies.@tanstack/ai-openrouter@0.21.1": "f492b1647a0e7d1fc2ec0e8efa694dfa5907a7c9d00aba3ae6852068b4f6f321",
         "bun.lock#@google/genai": "@google/genai@2.27.0",
-        "bun.lock#@aws-sdk/client-bedrock-runtime": "@aws-sdk/client-bedrock-runtime@3.1147.0",
-        "package.json#patchedDependencies.@tanstack/ai-anthropic@0.19.1": "<removed>",
-        "package.json#patchedDependencies.@tanstack/ai-bedrock@0.3.15": "<removed>",
-        "package.json#patchedDependencies.@tanstack/ai-gemini@0.33.1": "<removed>",
-        "package.json#patchedDependencies.@tanstack/ai-mistral@0.6.10": "<removed>",
-        "package.json#patchedDependencies.@tanstack/ai-openrouter@0.19.20": "<removed>",
-        "package.json#patchedDependencies.@tanstack/ai@0.61.0": "<removed>"
+        "bun.lock#@aws-sdk/client-bedrock-runtime": "@aws-sdk/client-bedrock-runtime@3.1147.0"
       },
       "checkedAt": "2026-10-13T23:28:29.000Z",
       "expiresAt": "2026-10-20T23:28:29.000Z",
-      "reason": "Existing SDK and patch pin drift requires offline replay characterisation."
+      "reason": "Inherited SDK and patch pin drift from main requires re-characterisation from a recorded harness run."
     },
     {
       "id": "s3-compatible-2026-10-14",

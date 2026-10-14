@@ -11,7 +11,15 @@ import path from "node:path";
 import ts from "typescript";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
+import { sha256Hex } from "@stll/sha256/bun";
 
+import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options";
+import {
+  GENERATORS,
+  matchesGeneratedGlob,
+  type Generator,
+} from "./generated-files";
+import { isGeneratedCandidate } from "./generated-source-identification";
 import { parseSource } from "./parse-memo";
 
 const MAX_FILES = 8192;
@@ -348,9 +356,120 @@ export const runtimeModuleReferences = ({
   return references;
 };
 
+export type RuntimeSnapshotReader = ((file: string) => string | undefined) & {
+  files?: readonly string[] | undefined;
+  digest?: ((file: string) => string | undefined) | undefined;
+};
+type GeneratedClosureDefinition = Pick<
+  Generator,
+  "id" | "outputs" | "inputs" | "write" | "outputKind"
+>;
 type LocalRuntimeSnapshotOptions = {
   root: string;
-  read: (file: string) => string | undefined;
+  read: RuntimeSnapshotReader;
+  generators?: readonly GeneratedClosureDefinition[] | undefined;
+  registryFiles?: readonly string[] | undefined;
+};
+
+const createGeneratedClosureReader = ({
+  read,
+  generators = GENERATORS,
+  registryFiles = [
+    "scripts/generated-files.ts",
+    "packages/scripts/src/generated-files.ts",
+  ],
+}: LocalRuntimeSnapshotOptions) => {
+  const registrationCache = new Map<string, GeneratedClosureDefinition[]>();
+  const registered = (file: string) => {
+    const cached = registrationCache.get(file);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const matches = generators.filter((generator) =>
+      generator.outputs.some((glob) => matchesGeneratedGlob(glob, file)),
+    );
+    registrationCache.set(file, matches);
+    return matches;
+  };
+  const derivedOutputs = generators
+    .filter(({ outputKind }) => outputKind === "derived")
+    .flatMap(({ outputs }) => outputs);
+  const derived = (file: string) =>
+    derivedOutputs.some((output) =>
+      /[*?[\]{}]/u.test(output)
+        ? matchesGeneratedGlob(output, file)
+        : output === file,
+    );
+  const collectInputs = (file: string) => {
+    const matches = registered(file).filter(
+      ({ outputKind }) => outputKind === "derived",
+    );
+    const generator = matches.at(0);
+    if (
+      matches.length !== 1 ||
+      generator === undefined ||
+      generator.inputs.length === 0
+    ) {
+      return {
+        type: "invalid",
+        reason: `Generated module ${file} has no unique generator with declared inputs`,
+      } as const;
+    }
+    const selected = new Set(registryFiles);
+    for (const input of generator.inputs) {
+      if (/[*?[\]{}]/u.test(input)) {
+        if (read.files === undefined) {
+          return {
+            type: "invalid",
+            reason: `Generated module ${file} lacks a tracked input inventory for ${generator.id}`,
+          } as const;
+        }
+        const files = read.files.filter(
+          (candidate) =>
+            matchesGeneratedGlob(input, candidate) &&
+            !generator.outputs.some((output) =>
+              matchesGeneratedGlob(output, candidate),
+            ),
+        );
+        if (files.length === 0) {
+          return {
+            type: "invalid",
+            reason: `Generated module ${file} has no tracked matches for ${input}`,
+          } as const;
+        }
+        for (const candidate of files) {
+          selected.add(candidate);
+        }
+      } else {
+        selected.add(input);
+      }
+    }
+    for (const argument of generator.write) {
+      if (/\.[cm]?[jt]s$/u.test(argument)) {
+        selected.add(argument);
+      }
+    }
+    return {
+      type: "inputs",
+      files: [...selected].toSorted(),
+      identity: JSON.stringify({
+        id: generator.id,
+        inputs: generator.inputs,
+        write: generator.write,
+      }),
+    } as const;
+  };
+  const inputCache = new Map<string, ReturnType<typeof collectInputs>>();
+  const inputs = (file: string) => {
+    const cached = inputCache.get(file);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const source = collectInputs(file);
+    inputCache.set(file, source);
+    return source;
+  };
+  return { registered, derived, inputs };
 };
 
 const matchesSnapshotAlias = (specifier: string, options: ts.CompilerOptions) =>
@@ -369,8 +488,7 @@ const SNAPSHOT_COMPILER_OPTIONS = {
   customConditions: ["bun"],
 } satisfies ts.CompilerOptions;
 
-/** Resolve only repository runtime sources against one immutable snapshot. */
-const createLocalSnapshotResolver = ({
+const createSnapshotFileReader = ({
   root,
   read,
 }: LocalRuntimeSnapshotOptions) => {
@@ -378,8 +496,6 @@ const createLocalSnapshotResolver = ({
   const metadataProblems: string[] = [];
   const reads = new Map<string, string | undefined>();
   const workspaces = new Map<string, string | undefined>();
-  const configs = new Map<string, ts.CompilerOptions>();
-  const resolutions = new Map<string, LocalImportResolution>();
   const readRelative = (file: string) => {
     if (!reads.has(file)) {
       reads.set(file, read(file));
@@ -448,9 +564,148 @@ const createLocalSnapshotResolver = ({
     }
     return readRelative(repoRelativePath(repositoryRoot, absolute));
   };
+  const localReferences = new Map<string, boolean>();
+  const declaresLocalPackage = ({
+    identity,
+    importer,
+  }: {
+    identity: string;
+    importer: string;
+  }) => {
+    const key = `${importer}\0${identity}`;
+    const cached = localReferences.get(key);
+    if (cached !== undefined) {
+      return cached;
+    }
+    let directory = path.dirname(importer);
+    while (isPathInside(repositoryRoot, directory)) {
+      const file = path.join(directory, "package.json");
+      const text = readAbsolute(file);
+      if (text !== undefined) {
+        const parsed = Result.try((): unknown => JSON.parse(text));
+        if (
+          parsed.isErr() ||
+          typeof parsed.value !== "object" ||
+          parsed.value === null
+        ) {
+          metadataProblems.push(
+            `Cannot read package manifest ${repoRelativePath(repositoryRoot, file)}`,
+          );
+          return false;
+        }
+        for (const [section, dependencies] of Object.entries(parsed.value)) {
+          if (
+            ![
+              "dependencies",
+              "devDependencies",
+              "optionalDependencies",
+              "peerDependencies",
+            ].includes(section) ||
+            typeof dependencies !== "object" ||
+            dependencies === null
+          ) {
+            continue;
+          }
+          const value: unknown = Object.entries(dependencies)
+            .find(([name]) => name === identity)
+            ?.at(1);
+          if (typeof value === "string") {
+            const local = /^(?:workspace|file|link):/u.test(value);
+            localReferences.set(key, local);
+            return local;
+          }
+        }
+      }
+      const parent = path.dirname(directory);
+      if (parent === directory) {
+        break;
+      }
+      directory = parent;
+    }
+    localReferences.set(key, false);
+    return false;
+  };
+  const privateImport = ({
+    specifier,
+    importer,
+  }: {
+    specifier: string;
+    importer: string;
+  }) => {
+    let directory = path.dirname(importer);
+    while (isPathInside(repositoryRoot, directory)) {
+      const file = path.join(directory, "package.json");
+      const text = readAbsolute(file);
+      if (text !== undefined) {
+        const parsed = Result.try((): unknown => JSON.parse(text));
+        if (
+          parsed.isErr() ||
+          typeof parsed.value !== "object" ||
+          parsed.value === null
+        ) {
+          metadataProblems.push(
+            `Cannot read package manifest ${repoRelativePath(repositoryRoot, file)}`,
+          );
+          return undefined;
+        }
+        const imports: unknown = Object.entries(parsed.value)
+          .find(([name]) => name === "imports")
+          ?.at(1);
+        if (typeof imports !== "object" || imports === null) {
+          return undefined;
+        }
+        const target: unknown = Object.entries(imports)
+          .find(([name]) => name === specifier)
+          ?.at(1);
+        if (typeof target !== "string") {
+          metadataProblems.push(
+            `Cannot prove literal private import ${specifier} from ${repoRelativePath(repositoryRoot, file)}`,
+          );
+          return undefined;
+        }
+        return {
+          specifier: target,
+          manifest: repoRelativePath(repositoryRoot, file),
+        };
+      }
+      const parent = path.dirname(directory);
+      if (parent === directory) {
+        break;
+      }
+      directory = parent;
+    }
+    return undefined;
+  };
+  return {
+    repositoryRoot,
+    metadataProblems,
+    canonical,
+    readAbsolute,
+    workspaceRoot,
+    declaresLocalPackage,
+    privateImport,
+  };
+};
+
+/** Resolve only repository runtime sources against one immutable snapshot. */
+const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
+  const {
+    repositoryRoot,
+    metadataProblems,
+    canonical,
+    readAbsolute,
+    workspaceRoot,
+    declaresLocalPackage,
+    privateImport,
+  } = createSnapshotFileReader(snapshot);
+  const configs = new Map<string, ts.CompilerOptions>();
+  const resolutions = new Map<string, LocalImportResolution>();
+  const generated = createGeneratedClosureReader(snapshot);
   const host = {
     fileExists: (file: string) =>
-      !DECLARATION_SOURCE.test(file) && readAbsolute(file) !== undefined,
+      !DECLARATION_SOURCE.test(file) &&
+      (readAbsolute(file) !== undefined ||
+        generated.derived(repoRelativePath(repositoryRoot, canonical(file)))),
     readFile: readAbsolute,
     directoryExists: (directory: string) =>
       isPathInside(repositoryRoot, canonical(directory)),
@@ -484,7 +739,9 @@ const createLocalSnapshotResolver = ({
           },
         );
         if (
-          config?.errors.some(({ code }) => code !== 18_002 && code !== 18_003)
+          withoutTsgoOnlyOptionDiagnostics(config?.errors ?? []).some(
+            ({ code }) => code !== 18_002 && code !== 18_003,
+          )
         ) {
           metadataProblems.push(
             `Invalid local runtime configuration ${repoRelativePath(repositoryRoot, configFile)}`,
@@ -508,10 +765,11 @@ const createLocalSnapshotResolver = ({
     configs.set(start, options);
     return options;
   };
-  type LocalImportResolution =
-    | { type: "external" }
+  type LocalImportResolution = (
+    | { type: "external"; specifier: string }
     | { type: "resolved"; file: string }
-    | { type: "unresolved" };
+    | { type: "unresolved" }
+  ) & { inputs?: readonly string[] };
   type LocalImportOptions = { specifier: string; importer: string };
   const resolveImport = ({
     specifier,
@@ -522,22 +780,55 @@ const createLocalSnapshotResolver = ({
       specifier === "bun" ||
       specifier.startsWith("bun:")
     ) {
-      return { type: "external" };
+      return { type: "external", specifier };
     }
     const options = optionsAt(importer);
-    const identity = packageIdentity(specifier);
+    const alias = specifier.startsWith("#")
+      ? privateImport({ specifier, importer })
+      : undefined;
+    const target = alias?.specifier ?? specifier;
+    const support = alias === undefined ? {} : { inputs: [alias.manifest] };
+    const identity = packageIdentity(target);
+    if (
+      alias !== undefined &&
+      identity !== undefined &&
+      !localSpecifier(target) &&
+      !target.startsWith("#") &&
+      workspaceRoot(identity) === undefined &&
+      !declaresLocalPackage({ identity, importer })
+    ) {
+      return { type: "external", specifier: target, ...support };
+    }
     const local =
       localSpecifier(specifier) ||
       specifier.startsWith("#") ||
       matchesSnapshotAlias(specifier, options) ||
-      identity?.startsWith("@stll/");
+      (identity !== undefined &&
+        (workspaceRoot(identity) !== undefined ||
+          declaresLocalPackage({ identity, importer })));
     if (!local) {
-      return { type: "external" };
+      return { type: "external", specifier };
     }
     const key = `${importer}\0${specifier}`;
     const cached = resolutions.get(key);
     if (cached) {
       return cached;
+    }
+    const asset = specifier.startsWith(".")
+      ? path.resolve(path.dirname(importer), specifier)
+      : undefined;
+    if (
+      asset !== undefined &&
+      /\.(?:css|html|txt|svg|typ|md|graphql)$/u.test(asset) &&
+      readAbsolute(asset) !== undefined
+    ) {
+      const result = {
+        type: "resolved",
+        file: canonical(asset),
+        ...support,
+      } as const;
+      resolutions.set(key, result);
+      return result;
     }
     const resolved = ts.resolveModuleName(
       specifier,
@@ -553,8 +844,8 @@ const createLocalSnapshotResolver = ({
       !repoRelativePath(repositoryRoot, file)
         .split("/")
         .includes("node_modules")
-        ? ({ type: "resolved", file } as const)
-        : ({ type: "unresolved" } as const);
+        ? ({ type: "resolved", file, ...support } as const)
+        : ({ type: "unresolved", ...support } as const);
     resolutions.set(key, result);
     return result;
   };
@@ -564,6 +855,7 @@ const createLocalSnapshotResolver = ({
     readAbsolute,
     resolveImport,
     metadataProblems,
+    generated,
   };
 };
 
@@ -576,14 +868,23 @@ export const createLocalRuntimeClosureReader = (
     readAbsolute,
     resolveImport,
     metadataProblems,
+    generated,
   } = createLocalSnapshotResolver(options);
   return (roots: readonly string[]) => {
     const files = new Map<string, string>();
+    const generatedLeaves = new Map<string, string>();
+    const dataHashes = new Map<string, string>();
+    const visited = new Set<string>();
     const references: RuntimeModuleReference[] = [];
     const problems: string[] = [];
-    const pending = roots.map((file) => ({
+    const pending: {
+      file: string;
+      depth: number;
+      mode: "runtime" | "input";
+    }[] = roots.map((file) => ({
       file: path.resolve(repositoryRoot, file),
       depth: 0,
+      mode: "runtime",
     }));
     let bytes = 0;
     for (const entry of pending) {
@@ -600,7 +901,31 @@ export const createLocalRuntimeClosureReader = (
         continue;
       }
       const relative = repoRelativePath(repositoryRoot, file);
-      if (files.has(relative)) {
+      const visitKey = `${entry.mode}\0${relative}`;
+      if (visited.has(visitKey)) {
+        continue;
+      }
+      if (visited.size >= MAX_FILES || entry.depth > MAX_DEPTH) {
+        problems.push(
+          `Local runtime closure exceeds its traversal bound at ${relative}`,
+        );
+        break;
+      }
+      visited.add(visitKey);
+      if (generated.derived(relative)) {
+        const source = generated.inputs(relative);
+        if (source.type === "invalid") {
+          problems.push(source.reason);
+          continue;
+        }
+        generatedLeaves.set(relative, source.identity);
+        for (const input of source.files) {
+          pending.push({
+            file: path.resolve(repositoryRoot, input),
+            depth: entry.depth + 1,
+            mode: "input",
+          });
+        }
         continue;
       }
       const text = readAbsolute(file);
@@ -621,6 +946,29 @@ export const createLocalRuntimeClosureReader = (
       }
       files.set(relative, text);
       if (!RUNTIME_SOURCE.test(file)) {
+        const digest =
+          options.read.digest === undefined
+            ? sha256Hex(text)
+            : options.read.digest(relative);
+        if (digest === undefined) {
+          problems.push(`Cannot fingerprint runtime data input ${relative}`);
+          continue;
+        }
+        dataHashes.set(relative, digest);
+      }
+      if (entry.mode === "input") {
+        continue;
+      }
+      if (
+        isGeneratedCandidate(relative, text) &&
+        generated.registered(relative).length === 0
+      ) {
+        problems.push(
+          `Generated module ${relative} has no registered generator`,
+        );
+        continue;
+      }
+      if (!RUNTIME_SOURCE.test(file)) {
         continue;
       }
       for (const reference of runtimeModuleReferences({
@@ -637,8 +985,21 @@ export const createLocalRuntimeClosureReader = (
           case "literal": {
             const specifier = reference.specifier;
             const resolution = resolveImport({ specifier, importer: file });
+            for (const input of resolution.inputs ?? []) {
+              pending.push({
+                file: path.resolve(repositoryRoot, input),
+                depth: entry.depth + 1,
+                mode: "input",
+              });
+            }
             switch (resolution.type) {
               case "external":
+                if (resolution.specifier !== specifier) {
+                  references.push({
+                    type: "literal",
+                    specifier: resolution.specifier,
+                  });
+                }
                 break;
               case "unresolved":
                 problems.push(
@@ -646,7 +1007,11 @@ export const createLocalRuntimeClosureReader = (
                 );
                 break;
               case "resolved":
-                pending.push({ file: resolution.file, depth: entry.depth + 1 });
+                pending.push({
+                  file: resolution.file,
+                  depth: entry.depth + 1,
+                  mode: "runtime",
+                });
                 break;
               default:
                 resolution satisfies never;
@@ -660,7 +1025,13 @@ export const createLocalRuntimeClosureReader = (
         }
       }
     }
-    return { files, references, problems: [...problems, ...metadataProblems] };
+    return {
+      files,
+      generated: generatedLeaves,
+      dataHashes,
+      references,
+      problems: [...problems, ...metadataProblems],
+    };
   };
 };
 

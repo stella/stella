@@ -34,7 +34,11 @@ invalidate the allowance, including calls through derived clients and aliases.
 Unresolved local imports and non-literal runtime module references fail closed
 in every owner closure, including those without known SDK reachability.
 Pins absent from the merge base are additions: they cannot receive a dated
-allowance, and their current receipts must cover them. Comments and type-only
+allowance, and their current receipts must cover them. Derived generated modules are closure leaves represented by their tracked
+generator inputs from `scripts/generated-files.ts`; checks never run generators
+on the merge-base tree. Code inputs use the executable comparison, and data
+inputs compare their original-byte digests. Unknown generated modules or
+generators without declared inputs fail closed. Comments and type-only
 changes keep the allowance. New unregistered SDK
 usage still fails the closed census. Removed patch pins use the explicit
 `<removed>` value. The existing `dated-waiver-expiry` job rejects an elapsed

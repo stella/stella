@@ -3747,6 +3747,8 @@ jobs:
 
       - name: External service contracts
         env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Compares merge-base SDK pins and runtime usage, and checks dated allowance expiry."
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || 'origin/main' }}
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -3761,7 +3763,7 @@ jobs:
           git ls-tree -r --name-only "$base" > "$RUNNER_TEMP/external-contract-baseline-paths"
           while IFS= read -r file; do
             case "$file" in
-              *.ts|*.tsx|*.js|*.jsx|*.mts|*.cts|*.mjs|*.cjs|*.json|bun.lock)
+              *.ts|*.tsx|*.js|*.jsx|*.mts|*.cts|*.mjs|*.cjs|*.json|*.css|*.html|*.txt|*.svg|*.typ|*.md|*.graphql|bun.lock)
                 printf '%s:%s\n' "$base" "$file" ;;
             esac
           done < "$RUNNER_TEMP/external-contract-baseline-paths" > "$RUNNER_TEMP/external-contract-baseline-objects"

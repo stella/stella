@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 // The preload imports this owner before denying general subprocess access.
 // Keep the captured primitive private: callers can only read baseline objects.
 const spawnGit = Bun.spawnSync.bind(Bun);
@@ -43,10 +45,7 @@ const validateObjectPath = ({
   }
 };
 
-export const readOfflineGit = ({
-  root,
-  operation,
-}: OfflineGitReadOptions): string => {
+const readOfflineGitBytes = ({ root, operation }: OfflineGitReadOptions) => {
   const args = (() => {
     switch (operation.type) {
       case "merge-base":
@@ -90,8 +89,11 @@ export const readOfflineGit = ({
       `Offline Git ${operation.type} failed: ${result.stderr.toString()}${operation.type === "show" ? "\nBaseline blob must be present locally; hydrate it before the offline check." : ""}`,
     );
   }
-  return result.stdout.toString();
+  return result.stdout;
 };
+
+export const readOfflineGit = (options: OfflineGitReadOptions): string =>
+  new TextDecoder().decode(readOfflineGitBytes(options));
 
 type GitBaselineReaderOptions = { root: string; base: string };
 
@@ -108,17 +110,50 @@ export const createGitBaselineReader = ({
       .trim()
       .split("\n"),
   );
+  const bytes = new Map<string, Uint8Array | undefined>();
   const contents = new Map<string, string | undefined>();
-  return (file: string) => {
+  const digests = new Map<string, string | undefined>();
+  const readBytes = (file: string) => {
     validateObjectPath({ commit, file });
-    if (!contents.has(file)) {
-      contents.set(
+    if (!bytes.has(file)) {
+      bytes.set(
         file,
         files.has(file)
-          ? readOfflineGit({ root, operation: { type: "show", commit, file } })
+          ? readOfflineGitBytes({
+              root,
+              operation: { type: "show", commit, file },
+            })
           : undefined,
+      );
+    }
+    return bytes.get(file);
+  };
+  const read = (file: string) => {
+    if (!contents.has(file)) {
+      const value = readBytes(file);
+      contents.set(
+        file,
+        value === undefined ? undefined : new TextDecoder().decode(value),
       );
     }
     return contents.get(file);
   };
+  const digest = (file: string) => {
+    if (!digests.has(file)) {
+      const value = readBytes(file);
+      digests.set(file, value === undefined ? undefined : sha256Hex(value));
+    }
+    return digests.get(file);
+  };
+  return Object.assign(read, { files: [...files], digest });
+};
+
+export const readGitTrackedFiles = (root: string): string[] => {
+  const commit = readOfflineGit({
+    root,
+    operation: { type: "merge-base", ref: "HEAD" },
+  }).trim();
+  return readOfflineGit({ root, operation: { type: "files", commit } })
+    .trim()
+    .split("\n");
 };
