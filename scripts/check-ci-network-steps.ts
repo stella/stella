@@ -67,11 +67,6 @@ const FETCH_PATTERNS: readonly { kind: string; pattern: RegExp }[] = [
     pattern:
       /\b(?:npm\s+(?:install|i|ci|add)|pnpm\s+(?:install|i|add)|yarn\s+(?:install|add))(?=\s|$)/u,
   },
-  {
-    kind: "remote package runner",
-    pattern:
-      /\b(?:npx|bunx|bun\s+x)\s+(?:(?:--yes|-y|--package|-p)(?=[\s=])|(?:-\S+\s+)*@?[\w.-]+(?:\/[\w.-]+)?@[\w^~.-]+)/u,
-  },
   { kind: "docker pull", pattern: /\bdocker\s+(?:image\s+)?pull(?=\s|$)/u },
   { kind: "playwright install", pattern: /\bplaywright\s+install(?=\s|$)/u },
   {
@@ -242,32 +237,95 @@ const segments = (line: string): string[] => {
     .filter((part) => part !== "");
 };
 
+const PACKAGE_RUNNER =
+  /\b(?:(?<dlx>pnpm\s+dlx|yarn\s+dlx)|npx|bunx|bun\s+x)\s+(?<rest>.*)$/u;
+const RUNNER_INSTALL_FLAGS = new Set(["--yes", "-y", "--package", "-p"]);
+
+/**
+ * Whether a package runner downloads. dlx always installs into a temporary
+ * directory; npx and bunx run a local binary when the package is a declared
+ * dependency, and download it otherwise, or when a version or an install flag
+ * is given. Binary aliases are matched by package name only.
+ */
+const runnerFetches = (
+  segment: string,
+  declared: ReadonlySet<string>,
+): boolean => {
+  const match = PACKAGE_RUNNER.exec(segment);
+  if (match === null) {
+    return false;
+  }
+  if (match.groups?.["dlx"] !== undefined) {
+    return true;
+  }
+  for (const token of (match.groups?.["rest"] ?? "").split(/\s+/u)) {
+    const flag = token.split("=")[0] ?? token;
+    if (RUNNER_INSTALL_FLAGS.has(flag)) {
+      return true;
+    }
+    if (token.startsWith("-") || token === "") {
+      continue;
+    }
+    const name = token.replaceAll(/["']/gu, "");
+    // `@scope/name@1` and `name@1` carry a version; `@scope/name` does not.
+    if (name.lastIndexOf("@") > 0) {
+      return true;
+    }
+    return !declared.has(name);
+  }
+  return false;
+};
+
 /** The fetches one shell source runs, and whether each one retries. */
-export const scanShell = (source: string, label: string): NetworkFetch[] =>
+export const scanShell = (
+  source: string,
+  label: string,
+  declared: ReadonlySet<string> = new Set(),
+): NetworkFetch[] =>
   logicalLines(source).flatMap((line) =>
     segments(line).flatMap((segment): NetworkFetch[] => {
       if (PROSE.test(segment)) {
         return [];
       }
-      return FETCH_PATTERNS.flatMap(({ kind, pattern }) => {
-        const match = pattern.exec(segment);
-        if (match === null) {
-          return [];
-        }
-        if (
-          (kind === "curl" || kind === "wget") &&
-          LOOPBACK.test(segment) &&
-          !REMOTE_URL.test(segment)
-        ) {
-          return [];
-        }
-        const wrapped =
-          startsWithRetry(segment) ||
-          (kind === "curl" &&
-            NATIVE_CURL_RETRY.test(segment) &&
-            segment.includes("--retry-all-errors"));
-        return [{ kind, wrapped, command: segment, source: label }];
-      });
+      const wrapped = startsWithRetry(segment);
+      const runner: NetworkFetch[] = runnerFetches(segment, declared)
+        ? [
+            {
+              kind: "remote package runner",
+              wrapped,
+              command: segment,
+              source: label,
+            },
+          ]
+        : [];
+      return [
+        ...runner,
+        ...FETCH_PATTERNS.flatMap(({ kind, pattern }) => {
+          const match = pattern.exec(segment);
+          if (match === null) {
+            return [];
+          }
+          if (
+            (kind === "curl" || kind === "wget") &&
+            LOOPBACK.test(segment) &&
+            !REMOTE_URL.test(segment)
+          ) {
+            return [];
+          }
+          return [
+            {
+              kind,
+              wrapped:
+                wrapped ||
+                (kind === "curl" &&
+                  NATIVE_CURL_RETRY.test(segment) &&
+                  segment.includes("--retry-all-errors")),
+              command: segment,
+              source: label,
+            },
+          ];
+        }),
+      ];
     }),
   );
 
@@ -332,12 +390,54 @@ const scriptReferences = (
 
 type Repository = {
   read: (file: string) => string | null;
+  glob: (pattern: string) => string[];
+};
+
+const DEPENDENCY_FIELDS = [
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+] as const;
+
+/** Dependency names declared by the root and every workspace manifest. */
+export const declaredDependencies = (repo: Repository): Set<string> => {
+  const names = new Set<string>();
+  const manifest = (file: string): Record<string, unknown> | null => {
+    const text = repo.read(file);
+    if (text === null) {
+      return null;
+    }
+    const parsed: unknown = JSON.parse(text);
+    return record(parsed) ? parsed : null;
+  };
+  const root = manifest("package.json");
+  const workspaces = Array.isArray(root?.["workspaces"])
+    ? root["workspaces"].filter((entry) => typeof entry === "string")
+    : [];
+  const files = [
+    "package.json",
+    ...workspaces.flatMap((pattern) => repo.glob(`${pattern}/package.json`)),
+  ];
+  for (const file of files) {
+    const parsed = manifest(file);
+    for (const field of DEPENDENCY_FIELDS) {
+      const deps = parsed?.[field];
+      if (record(deps)) {
+        for (const name of Object.keys(deps)) {
+          names.add(name);
+        }
+      }
+    }
+  }
+  return names;
 };
 
 const MAX_SCRIPT_DEPTH = 4;
 
 /** Fetches in a run step, including the repository scripts it invokes. */
 type RunContext = {
+  /** Packages a runner resolves locally instead of downloading. */
+  declared: ReadonlySet<string>;
   /** Directory of the composite action that owns the step, if any. */
   actionDir: string | null;
   /** File reported as the source of fetches written in the step. */
@@ -349,9 +449,9 @@ type RunContext = {
 export const runFetches = (
   repo: Repository,
   run: string,
-  { actionDir, label, cwd = "." }: RunContext,
+  { actionDir, label, cwd = ".", declared }: RunContext,
 ): NetworkFetch[] => {
-  const fetches = scanShell(run, label);
+  const fetches = scanShell(run, label, declared);
   const visited = new Set<string>();
   const follow = (
     source: string,
@@ -375,7 +475,7 @@ export const runFetches = (
       if (script === null) {
         continue;
       }
-      for (const fetch of scanShell(script, reference.file)) {
+      for (const fetch of scanShell(script, reference.file, declared)) {
         fetches.push({ ...fetch, wrapped: fetch.wrapped || inherited });
       }
       follow(script, path.posix.dirname(reference.file), inherited, depth + 1);
@@ -470,6 +570,7 @@ export const networkViolations = (
     }
   };
   const actionCache = new Map<string, ActionSummary>();
+  const declared = declaredDependencies(repo);
 
   const summarizeAction = (dir: string, stack: Set<string>): ActionSummary => {
     const cached = actionCache.get(dir);
@@ -497,7 +598,11 @@ export const networkViolations = (
       const name = stepName(rawStep, index);
       const run = rawStep["run"];
       if (typeof run === "string") {
-        const fetches = runFetches(repo, run, { actionDir: dir, label: file });
+        const fetches = runFetches(repo, run, {
+          actionDir: dir,
+          label: file,
+          declared,
+        });
         summary.fetches.push(...fetches);
         const unwrapped = fetches.filter((fetch) => !fetch.wrapped);
         if (unwrapped.length > 0) {
@@ -541,6 +646,7 @@ export const networkViolations = (
         const run = step["run"];
         if (typeof run === "string") {
           const own = runFetches(repo, run, {
+            declared,
             actionDir: null,
             label: file,
             cwd: workingDirectory(parsed, rawJob, step),
@@ -653,6 +759,7 @@ export const diskRepository = (root: string): Repository => ({
     const absolute = path.join(root, file);
     return existsSync(absolute) ? readFileSync(absolute, "utf-8") : null;
   },
+  glob: (pattern) => [...new Bun.Glob(pattern).scanSync({ cwd: root })],
 });
 
 const baseAllowlist = (root: string, ref: string): string[] | null => {

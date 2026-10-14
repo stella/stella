@@ -13,6 +13,8 @@ type Files = Record<string, string>;
 
 const repository = (files: Files) => ({
   read: (file: string) => files[file] ?? null,
+  glob: (pattern: string) =>
+    Object.keys(files).filter((file) => new Bun.Glob(pattern).match(file)),
 });
 
 const workflow = (steps: string) => `name: Fixture
@@ -116,10 +118,46 @@ describe("shell detection", () => {
 
   test("a versioned remote package runner is a fetch, a local binary is not", () => {
     expect(
-      scanShell("bunx turbo run build\nnpx cowsay@1.6.0 hi", "runner").map(
-        (fetch) => fetch.kind,
-      ),
+      scanShell(
+        "bunx turbo run build\nnpx cowsay@1.6.0 hi",
+        "runner",
+        new Set(["turbo"]),
+      ).map((fetch) => fetch.kind),
     ).toEqual(["remote package runner"]);
+  });
+});
+
+describe("package runners", () => {
+  const manifests = {
+    "package.json": JSON.stringify({ workspaces: ["packages/*"] }),
+    "packages/tool/package.json": JSON.stringify({
+      devDependencies: { turbo: "2.0.0" },
+    }),
+  };
+
+  test("an unversioned package that is not a declared dependency is a fetch", () => {
+    const report = check({
+      ...manifests,
+      [WORKFLOW]: workflow(`      - name: Greet
+        run: npx cowsay hello
+`),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Greet: route remote package runner (${WORKFLOW}) through scripts/retry.sh`,
+      `${WORKFLOW}: build: Greet: remote package runner (${WORKFLOW}) needs a step timeout-minutes`,
+    ]);
+  });
+
+  test("an unversioned declared dependency runs locally", () => {
+    const report = check({
+      ...manifests,
+      [WORKFLOW]: workflow(`      - name: Build
+        run: bunx turbo run build
+`),
+    });
+
+    expect(report.errors).toEqual([]);
   });
 });
 
