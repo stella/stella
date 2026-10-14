@@ -223,8 +223,13 @@ export const resolveDecision = async ({
       // A printed sheet no stored decision is known to carry. One decision
       // in the file is the one the reader asked for; several are left open.
       if (resolution.reason === "selector_unmatched") {
+        // Only a printed sheet narrows the open candidates to decisions with
+        // no recorded sheet; a part selector leaves the whole file open, so a
+        // lone candidate may be a sibling under another part.
         const [only, ...rest] = resolution.candidates;
-        return only !== undefined && rest.length === 0
+        const printedSheet =
+          intent.kind === "docket" && intent.selector.kind === "sheet";
+        return printedSheet && only !== undefined && rest.length === 0
           ? await resolvedDecision(only, read)
           : { status: "not_found", reason: "no_exact_identity" };
       }

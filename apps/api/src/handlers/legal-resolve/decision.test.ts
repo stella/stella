@@ -414,6 +414,20 @@ describe("decision legal resolution", () => {
     });
   });
 
+  test("never resolves a printed part to the one decision of its file", async () => {
+    // A part selector leaves the whole file open, so a lone candidate may be
+    // a sibling under another part.
+    const bare = { ...row("3 Afs 41/2008"), ecli: null };
+    expect(
+      await resolveDecision({
+        admission,
+        country: "CZE",
+        identifier: "3 Afs 41/2008 - II.",
+        dependencies: { lookup: lookupRows([bare]), read: readableDecision },
+      }),
+    ).toEqual({ status: "not_found", reason: "no_exact_identity" });
+  });
+
   test("never picks one of several unrecorded sheets for a printed sheet", async () => {
     const first = { ...row("3 Afs 41/2008"), ecli: null };
     const second = { ...row("3 Afs 41/2008"), ecli: null };
