@@ -69,6 +69,25 @@ AS $$
   )
 $$;--> statement-breakpoint
 
+-- The same test for a new comment, holding the claim FOR KEY SHARE until the
+-- insert's transaction ends. A deletion of the claim then either waits for
+-- the comment, whose cleanup trigger removes it once committed, or has
+-- already removed the claim and the insert is refused: no comment outlives
+-- its claim. VOLATILE because it locks; only the insert check calls it.
+CREATE FUNCTION public.legal_reader_annotation_claim_held(uuid, uuid, uuid)
+RETURNS boolean
+LANGUAGE sql
+VOLATILE
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.legal_list_claims claim
+    WHERE claim.id = $1 AND claim.run_id = $2 AND claim.workspace_id = $3
+    FOR KEY SHARE
+  )
+$$;--> statement-breakpoint
+
 -- Every application policy now also holds a note that sits in a matter to
 -- that matter: the caller must be able to open it, and the claim the note is
 -- on must be visible to them (the claim's own policies carry the matter's
@@ -94,7 +113,7 @@ ALTER POLICY "organization_select" ON "legal_reader_annotations"
     AND (visibility = 'shared' OR user_id = (SELECT current_setting('app.user_id', true)))
   );--> statement-breakpoint
 
--- stella-migration-safety: reviewed alter-policy - narrows the author insert check with the same optional matter and claim check
+-- stella-migration-safety: reviewed alter-policy - narrows the author insert check with the optional matter check and holds the claim for the insert
 ALTER POLICY "author_insert" ON "legal_reader_annotations"
   WITH CHECK (
     organization_id = (SELECT current_setting('app.organization_id', true))
@@ -110,7 +129,7 @@ ALTER POLICY "author_insert" ON "legal_reader_annotations"
         SELECT aw.authorized_workspace_id
         FROM public.stella_authorized_workspaces aw
       )
-    END AND public.legal_reader_annotation_claim_visible("legal_reader_annotations"."verification_claim_id", "legal_reader_annotations"."verification_run_id", "legal_reader_annotations"."workspace_id")))
+    END AND public.legal_reader_annotation_claim_held("legal_reader_annotations"."verification_claim_id", "legal_reader_annotations"."verification_run_id", "legal_reader_annotations"."workspace_id")))
     AND user_id = (SELECT current_setting('app.user_id', true))
   );--> statement-breakpoint
 

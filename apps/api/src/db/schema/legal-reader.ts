@@ -54,12 +54,23 @@ const tableOwnerCheck = sql.raw(
  * than in this module: the public-law reader routes reach this table but
  * never a claim's comment, and are not part of the verification feature.
  */
-const verificationClaimVisible = (t: {
+type VerificationClaimColumns = {
   verificationClaimId: AnyPgColumn;
   verificationRunId: AnyPgColumn;
   workspaceId: AnyPgColumn;
-}) =>
+};
+
+const verificationClaimVisible = (t: VerificationClaimColumns) =>
   sql`public.legal_reader_annotation_claim_visible(${t.verificationClaimId}, ${t.verificationRunId}, ${t.workspaceId})`;
+
+/**
+ * The same test for a new comment, holding the claim `FOR KEY SHARE` until
+ * the insert commits: a deletion of the claim then either waits for the
+ * comment (and its cleanup trigger removes it) or has already removed the
+ * claim, and the insert is refused. No comment can outlive its claim.
+ */
+const verificationClaimHeld = (t: VerificationClaimColumns) =>
+  sql`public.legal_reader_annotation_claim_held(${t.verificationClaimId}, ${t.verificationRunId}, ${t.workspaceId})`;
 
 /**
  * A reader's highlights and comments on a legal document: a case-law decision
@@ -202,7 +213,10 @@ export const legalReaderAnnotations = p.pgTable(
       `${LEGAL_READER_ANNOTATIONS}_span_shape`,
       sql`${t.startOffset} >= 0 AND ${t.endOffset} > ${t.startOffset} AND ${t.quote} <> ''`,
     ),
-    ...authoredOptionalMatterNotePolicies(verificationClaimVisible(t)),
+    ...authoredOptionalMatterNotePolicies({
+      matterRowCheck: verificationClaimVisible(t),
+      matterRowHold: verificationClaimHeld(t),
+    }),
     ...reviewResetOwnerPolicies(LEGAL_READER_ANNOTATIONS),
     // The claim-cleanup trigger runs as the owner and removes every author's
     // comments on the claims a statement deleted.

@@ -599,10 +599,19 @@ export const authoredNotePolicies = () => [
  * workspace is an organization note exactly as in `authoredNotePolicies`; one
  * with a workspace is reachable only while the caller may open that matter
  * and `matterRowCheck` (the row the note sits on) admits it, so the matter's
- * walls bind every author, a shared note included.
+ * walls bind every author, a shared note included. A new note checks
+ * `matterRowHold` instead: the same test, holding the row until the insert's
+ * transaction ends so the row cannot be deleted under a note being written.
  */
-export const authoredOptionalMatterNotePolicies = (matterRowCheck: SQL) => {
+export const authoredOptionalMatterNotePolicies = ({
+  matterRowCheck,
+  matterRowHold,
+}: {
+  matterRowCheck: SQL;
+  matterRowHold: SQL;
+}) => {
   const scope = sql`${organizationCheck} AND (workspace_id IS NULL OR (${workspaceCheck} AND ${matterRowCheck}))`;
+  const insertScope = sql`${organizationCheck} AND (workspace_id IS NULL OR (${workspaceCheck} AND ${matterRowHold}))`;
   return [
     p.pgPolicy("organization_select", {
       for: "select",
@@ -612,7 +621,7 @@ export const authoredOptionalMatterNotePolicies = (matterRowCheck: SQL) => {
     p.pgPolicy("author_insert", {
       for: "insert",
       to: stella,
-      withCheck: sql`${scope} AND ${userCheck}`,
+      withCheck: sql`${insertScope} AND ${userCheck}`,
     }),
     p.pgPolicy("author_update", {
       for: "update",

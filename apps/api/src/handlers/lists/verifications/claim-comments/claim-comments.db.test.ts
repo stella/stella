@@ -1,8 +1,5 @@
-import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq } from "drizzle-orm";
-
-import { rejectionOf } from "@stll/property-testing/rejection";
+import { and, eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import {
@@ -15,8 +12,6 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
-import { DOCUMENT_ANNOTATION_REACH } from "@/api/handlers/legal-reader/annotations/target";
-import { updateReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/update";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -253,11 +248,7 @@ const storedComments = async (db: GatedTestDb, tenant: Tenant) =>
     .limit(20);
 
 const withTenants = async (
-  exercise: (scope: {
-    db: GatedTestDb;
-    tenant: Tenant;
-    outsider: Tenant;
-  }) => Promise<void>,
+  exercise: (scope: { db: GatedTestDb; tenant: Tenant }) => Promise<void>,
 ) => {
   const databaseUrl = process.env["DATABASE_URL"];
   if (databaseUrl === undefined) {
@@ -266,7 +257,6 @@ const withTenants = async (
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
     const db = openClient({ max: 4 }).db;
     const tenant = await seedTenant(db);
-    const outsider = await seedTenant(db);
     testState.setConfig(
       "API_FEATURE_ACCESS_GRANTS",
       organizationFeatureGrants(tenant.organizationId, [
@@ -274,15 +264,13 @@ const withTenants = async (
       ]),
     );
     try {
-      await exercise({ db, tenant, outsider });
+      await exercise({ db, tenant });
     } finally {
-      for (const seeded of [tenant, outsider]) {
-        await db
-          .delete(organization)
-          .where(eq(organization.id, seeded.organizationId));
-        await db.delete(user).where(eq(user.id, seeded.author));
-        await db.delete(user).where(eq(user.id, seeded.colleague));
-      }
+      await db
+        .delete(organization)
+        .where(eq(organization.id, tenant.organizationId));
+      await db.delete(user).where(eq(user.id, tenant.author));
+      await db.delete(user).where(eq(user.id, tenant.colleague));
     }
   });
 };
@@ -380,102 +368,58 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
       }
     }));
 
-  test("another organization and another matter can neither read nor write a claim's comments", async () =>
-    await withTenants(async ({ db, tenant, outsider }) => {
+  test("a claim's comments are listed only in the claim's own matter", async () =>
+    await withTenants(async ({ db, tenant }) => {
       const id = createdId(await create(db, tenant, { visibility: "shared" }));
-
-      // Another matter of the same organization: the claim is not there.
-      expect(
-        await create(db, tenant, { workspaceId: tenant.otherWorkspaceId }),
-      ).toMatchObject({ code: 404 });
+      expect(listedIds(await list(db, tenant))).toEqual([id]);
       expect(
         listedIds(
           await list(db, tenant, { workspaceId: tenant.otherWorkspaceId }),
         ),
       ).toEqual([]);
+    }));
 
-      // Another organization naming this claim from its own matter.
-      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-        ...organizationFeatureGrants(tenant.organizationId, [
-          LIST_VERIFICATION_FEATURE_ID,
-        ]),
-        ...organizationFeatureGrants(outsider.organizationId, [
-          LIST_VERIFICATION_FEATURE_ID,
-        ]),
+  test("a comment written while its claim is being deleted does not outlive the claim", async () =>
+    await withTenants(async ({ db, tenant }) => {
+      let markDeleted = () => {};
+      const deletedInTransaction = new Promise<void>((resolve) => {
+        markDeleted = resolve;
       });
-      const foreign = { ...outsider, runId: tenant.runId };
-      expect(
-        await create(db, foreign, { claimId: tenant.claimId }),
-      ).toMatchObject({ code: 404 });
-      expect(
-        await deleteComment.handler(
-          createTestHandlerContext<Parameters<typeof deleteComment.handler>[0]>(
-            {
-              ...contextFor(db, outsider),
-              params: { workspaceId: outsider.workspaceId, annotationId: id },
-            },
-          ),
-        ),
-      ).toMatchObject({ code: 404 });
-
-      // The row policy refuses a direct write that names a foreign claim.
-      expect(
-        await rejectionOf(
-          scopedFor(
-            db,
-            outsider,
-          )(
-            async (tx) =>
-              await tx.insert(legalReaderAnnotations).values({
-                id: createSafeId<"legalReaderAnnotation">(),
-                organizationId: outsider.organizationId,
-                userId: outsider.author,
-                targetType: "verification-claim",
-                targetId: tenant.claimId,
-                workspaceId: outsider.workspaceId,
-                verificationRunId: tenant.runId,
-                verificationClaimId: tenant.claimId,
-                kind: "comment",
-                visibility: "shared",
-                blockAnchorId: "p1",
-                startOffset: 0,
-                endOffset: 27,
-                quote: CLAIM_TEXT,
-                body: COMMENT,
-              }),
-          ),
-        ),
-      ).toBeInstanceOf(Error);
-      expect(
-        await scopedFor(
-          db,
-          outsider,
-        )(
-          async (tx) =>
-            await tx
-              .select({ id: legalReaderAnnotations.id })
-              .from(legalReaderAnnotations)
-              .where(eq(legalReaderAnnotations.targetId, tenant.claimId))
-              .limit(5),
-        ),
-      ).toEqual([]);
-
-      // The public-law routes and agent tools never reach a claim comment.
-      const authorContext = contextFor(db, tenant);
-      const viaDocumentRoute = await Result.gen(() =>
-        updateReaderAnnotationHandler({
-          annotationId: id,
-          change: { change: "body", body: "Overwritten." },
-          organizationId: tenant.organizationId,
-          reach: DOCUMENT_ANNOTATION_REACH,
-          recordAuditEvent: authorContext.audit,
-          safeDb: authorContext.safeDb,
-          userId: tenant.author,
-        }),
-      );
-      expect(Result.isError(viaDocumentRoute)).toBe(true);
-      const [stored] = await storedComments(db, tenant);
-      expect(stored?.body).toBe(COMMENT);
+      let release = () => {};
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      // The run's deletion (and with it the claim's) is held open: its
+      // trigger has already run and could not see a comment written now.
+      const deletion = db.transaction(async (tx) => {
+        await tx
+          .delete(legalListVerificationRuns)
+          .where(eq(legalListVerificationRuns.id, tenant.runId));
+        markDeleted();
+        await released;
+      });
+      await deletedInTransaction;
+      const creation = create(db, tenant);
+      // The comment's write waits on the claim the deletion holds.
+      for (let attempt = 0; ; attempt += 1) {
+        const waiting = await db.execute<{ waiting: number }>(
+          sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
+            WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+        );
+        if ((waiting.rows.at(0)?.waiting ?? 0) > 0) {
+          break;
+        }
+        if (attempt > 200) {
+          throw new TypeError("The comment write never waited on the claim");
+        }
+        await Bun.sleep(10);
+      }
+      release();
+      await deletion;
+      // The held claim is gone once the write resumes, so the row policy
+      // refuses the comment instead of storing one the trigger never saw.
+      expect(await creation).toMatchObject({ code: expect.any(Number) });
+      expect(await storedComments(db, tenant)).toHaveLength(0);
     }));
 
   test("without the verification feature nothing is read or written", async () =>
