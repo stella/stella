@@ -782,16 +782,31 @@ context("test registration census", () => {
   });
 
   check.each([
-    [
-      'bun test x.test.ts || { status=$?; echo failed; exit "$status"; }',
-      false,
-    ],
+    ['bun test x.test.ts || { status=$?; echo failed; exit "$status"; }', true],
     ['bun test x.test.ts || { status=$?; status=0; exit "$status"; }', false],
     [
       'bun test x.test.ts || { status=$?; if false; then exit "$status"; fi; }',
       false,
     ],
-    ['bun test x.test.ts || { status=$?; exit "$status"; }', false],
+    [
+      'bun test x.test.ts || { echo failed; status=$?; exit "$status"; }',
+      false,
+    ],
+    [
+      'bun test x.test.ts || { status=$?; unset status; exit "$status"; }',
+      false,
+    ],
+    [
+      'bun test x.test.ts || { status=$?; if true; then exit "$status"; fi; }',
+      false,
+    ],
+    ['bun test x.test.ts || { status=$?; set -e; exit "$status"; }', false],
+    [
+      'bun test x.test.ts || { status=$?; trap : EXIT; exit "$status"; }',
+      false,
+    ],
+    ['bun test x.test.ts || { status=$?; exit 0; exit "$status"; }', false],
+    ['bun test x.test.ts || { rc=$?; echo failed || true; exit "$rc"; }', true],
   ])(
     "fails closed on captured failure status fallbacks: %s",
     (command, gates) => {
@@ -1025,7 +1040,14 @@ context("test registration census", () => {
     "run_runner() { RUNNER; }; run_runner",
     "RUNNER || { if false; then exit 1; fi; }",
     "RUNNER || { if true; then exit 1; fi; }",
-    'RUNNER || { status=$?; exit "$status"; }',
+    'RUNNER || { echo failed; status=$?; exit "$status"; }',
+    'RUNNER || { status=$?; status=0; exit "$status"; }',
+    'RUNNER || { status=$?; echo "$((status=0))"; exit "$status"; }',
+    'RUNNER || { status=$?; unset status; exit "$status"; }',
+    'RUNNER || { status=$?; if true; then exit "$status"; fi; }',
+    'RUNNER || { status=$?; set -e; exit "$status"; }',
+    'RUNNER || { status=$?; trap : EXIT; exit "$status"; }',
+    'RUNNER || { status=$?; exit 0; exit "$status"; }',
     "RUNNER || false",
     "RUNNER || { false; }",
   ])("fails closed on shell control flow: %s", (shape) => {
@@ -1064,6 +1086,8 @@ context("test registration census", () => {
     "echo set +e; RUNNER",
     "RUNNER || { exit 1; }",
     "RUNNER || { true; exit 1; }",
+    'RUNNER || { status=$?; echo failed; exit "$status"; }',
+    'RUNNER || { rc=$?; echo failed || true; exit "$rc"; }',
   ])("preserves failure-propagating runners: %s", (shape) => {
     const serviceCommand = "bun run test:postgres";
     expect([
@@ -1085,7 +1109,13 @@ context("test registration census", () => {
           ["service-suites", [shape.replace("RUNNER", () => serviceCommand)]],
         ]),
       }),
-    ]).toEqual([undefined, undefined]);
+      rootCommandExecutionFailure({
+        command: "bun scripts/test-gate.ts",
+        gatingJobs: bashJobs([
+          ["checks", [shape.replace("RUNNER", "bun scripts/test-gate.ts")]],
+        ]),
+      }),
+    ]).toEqual([undefined, undefined, undefined]);
   });
 
   check("ignores package commands in statically disabled steps", () => {

@@ -881,22 +881,121 @@ const shellPrefixFailure = (
   return undefined;
 };
 
-const approvedFailureFallbackEnd = (
+const capturedVariableChanges = (token: ShellToken, name: string): boolean =>
+  token.value.startsWith(`${name}=`) ||
+  token.value.startsWith(`${name}+=`) ||
+  token.value.startsWith(`${name}[`) ||
+  token.value.includes("$(") ||
+  token.value.includes("`") ||
+  token.value.includes(`\${${name}=`) ||
+  token.value.includes(`\${${name}:=`);
+
+const unsupportedCaptureDiagnostic = ({ role, value }: ShellToken): boolean =>
+  role === "command" &&
+  (SHELL_CONTEXT_MUTATORS.has(value) ||
+    [
+      "set",
+      "unset",
+      "read",
+      "declare",
+      "typeset",
+      "local",
+      "readonly",
+      "export",
+      "let",
+      "printf",
+    ].includes(value));
+
+type CapturedStatusExitOptions = {
+  readonly tokens: readonly ShellToken[];
+  readonly cursor: number;
+  readonly name: string;
+};
+
+const capturedStatusExitEnd = ({
+  tokens,
+  cursor,
+  name,
+}: CapturedStatusExitOptions): number | undefined => {
+  if (!separatorToken(tokens[cursor - 1])) {
+    return undefined;
+  }
+  const status = tokens[cursor + 1];
+  if (
+    status?.role !== "argument" ||
+    ![`$${name}`, `\${${name}}`].includes(status.value)
+  ) {
+    return undefined;
+  }
+  let end = cursor + 2;
+  while (separatorToken(tokens[end])) {
+    end += 1;
+  }
+  return tokens[end]?.role === "operator" && tokens[end]?.value === "}"
+    ? end + 1
+    : undefined;
+};
+
+const capturedFailureFallbackEnd = (
   tokens: readonly ShellToken[],
   start: number,
 ): number | undefined => {
+  let first = start;
+  while (tokens[first]?.role === "operator" && tokens[first]?.value === "\n") {
+    first += 1;
+  }
+  const capture = tokens[first];
+  const name =
+    capture?.role === "assignment"
+      ? /^([A-Za-z_][A-Za-z0-9_]*)=\$\?$/u.exec(capture.value)?.[1]
+      : undefined;
+  if (name === undefined || !separatorToken(tokens[first + 1])) {
+    return undefined;
+  }
+  for (let cursor = first + 2; cursor < tokens.length; cursor += 1) {
+    const token = tokens[cursor];
+    if (
+      token === undefined ||
+      capturedVariableChanges(token, name) ||
+      unsupportedCaptureDiagnostic(token)
+    ) {
+      return undefined;
+    }
+    if (token.role === "operator" && ![";", "\n", "||"].includes(token.value)) {
+      return undefined;
+    }
+    if (token.role === "operator" && token.value === "||") {
+      const fallback = tokens[cursor + 1];
+      if (
+        fallback?.role !== "command" ||
+        fallback.value !== "true" ||
+        !separatorToken(tokens[cursor + 2])
+      ) {
+        return undefined;
+      }
+      cursor += 1;
+      continue;
+    }
+    if (token.role !== "command" || token.value !== "exit") {
+      continue;
+    }
+    return capturedStatusExitEnd({ tokens, cursor, name });
+  }
+  return undefined;
+};
+
+type LiteralFailureFallbackOptions = {
+  readonly tokens: readonly ShellToken[];
+  readonly start: number;
+  readonly grouped: boolean;
+};
+
+const literalFailureFallbackEnd = ({
+  tokens,
+  start,
+  grouped,
+}: LiteralFailureFallbackOptions): number | undefined => {
   let cursor = start;
-  while (
-    tokens[cursor]?.role === "operator" &&
-    tokens[cursor]?.value === "\n"
-  ) {
-    cursor += 1;
-  }
-  const grouped =
-    tokens[cursor]?.role === "operator" && tokens[cursor]?.value === "{";
-  if (grouped) {
-    cursor += 1;
-  }
   const bodyStart = cursor;
   for (; cursor < tokens.length; cursor += 1) {
     const token = tokens[cursor];
@@ -935,6 +1034,28 @@ const approvedFailureFallbackEnd = (
       : undefined;
   }
   return undefined;
+};
+
+const approvedFailureFallbackEnd = (
+  tokens: readonly ShellToken[],
+  start: number,
+): number | undefined => {
+  let cursor = start;
+  while (
+    tokens[cursor]?.role === "operator" &&
+    tokens[cursor]?.value === "\n"
+  ) {
+    cursor += 1;
+  }
+  const grouped =
+    tokens[cursor]?.role === "operator" && tokens[cursor]?.value === "{";
+  if (grouped) {
+    cursor += 1;
+  }
+  return (
+    (grouped ? capturedFailureFallbackEnd(tokens, cursor) : undefined) ??
+    literalFailureFallbackEnd({ tokens, start: cursor, grouped })
+  );
 };
 
 type ApprovedInvocationOptions = {
