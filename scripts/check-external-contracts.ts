@@ -1016,8 +1016,10 @@ type ContractEntryCheckOptions = {
   root: string;
   system: string;
   entry: ExternalContractEntry;
-  baseline?: (file: string) => string | undefined;
-  admitted?: ReturnType<typeof readExternalContractPinAllowances>[number];
+  baseline: ((file: string) => string | undefined) | undefined;
+  admitted:
+    | ReturnType<typeof readExternalContractPinAllowances>[number]
+    | undefined;
   now: Date;
 };
 

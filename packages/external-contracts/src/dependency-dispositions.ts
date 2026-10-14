@@ -147,6 +147,8 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/locales":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
+  "@stll/mcp-apps":
+    "Local MCP app frontends and protocol UI; outbound upload runtimes are inventoried separately.",
   "@stll/mojibake":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/money":

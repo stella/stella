@@ -463,7 +463,7 @@ export const EXTERNAL_CONTRACTS = {
         role: "primary",
       },
       {
-        path: "apps/api/src/mcp/apps/document-upload/app.ts",
+        path: "packages/mcp-apps/src/document-upload/runtime.ts",
         role: "primary",
       },
       {
@@ -541,7 +541,7 @@ export const EXTERNAL_CONTRACTS = {
             "The S3 fake and presign replays do not import this storage transport owner.",
         },
         {
-          path: "apps/api/src/mcp/apps/document-upload/app.ts",
+          path: "packages/mcp-apps/src/document-upload/runtime.ts",
           reason:
             "The S3 fake and presign replays do not import this storage transport owner.",
         },
@@ -1535,7 +1535,7 @@ export const EXTERNAL_CONTRACTS = {
         role: "primary",
       },
       {
-        path: "apps/api/src/mcp/apps/file-comparison/app.ts",
+        path: "packages/mcp-apps/src/file-comparison/runtime.ts",
         role: "primary",
       },
       {

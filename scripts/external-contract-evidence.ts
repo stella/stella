@@ -476,10 +476,11 @@ const createLocalSnapshotResolver = ({
             ...ts.sys,
             ...host,
             readDirectory: () => [],
-            onUnRecoverableConfigFileDiagnostic: (diagnostic) =>
+            onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
               metadataProblems.push(
                 `Cannot read ${repoRelativePath(repositoryRoot, configFile)}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")}`,
-              ),
+              );
+            },
           },
         );
         if (
@@ -529,7 +530,7 @@ const createLocalSnapshotResolver = ({
       localSpecifier(specifier) ||
       specifier.startsWith("#") ||
       matchesSnapshotAlias(specifier, options) ||
-      (identity !== undefined && identity.startsWith("@stll/"));
+      identity?.startsWith("@stll/");
     if (!local) {
       return { type: "external" };
     }
