@@ -18,6 +18,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { CLAIM_STATE } from "@/api/lib/lists/verification/contract";
 import type { ClaimState } from "@/api/lib/lists/verification/contract";
+import { verificationRunListIdColumn } from "@/api/lib/lists/verification/read-run";
 import { createCursorPage } from "@/api/lib/pagination";
 import type { Page } from "@/api/lib/pagination";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
@@ -43,9 +44,7 @@ export const RUN_SUMMARY_COLUMNS = {
   status: legalListVerificationRuns.status,
   errorCode: legalListVerificationRuns.errorCode,
   entityVersionId: legalListVerificationRuns.entityVersionId,
-  listId: sql<
-    SafeId<"legalList">
-  >`(${legalListVerificationRuns.evidence} ->> 'listId')`,
+  listId: verificationRunListIdColumn,
   createdAt: legalListVerificationRuns.createdAt,
   finishedAt: legalListVerificationRuns.finishedAt,
 } as const;

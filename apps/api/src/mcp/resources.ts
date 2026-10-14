@@ -15,6 +15,7 @@ import {
   DECISION_READER_APP,
   DOCUMENT_UPLOAD_APP,
   FILE_COMPARISON_APP,
+  STATUTE_TIMELINE_APP,
 } from "@stll/mcp-apps/manifest";
 import {
   listSkillMetadata,
@@ -125,6 +126,22 @@ const buildProductIdentity = (): string =>
   JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: STATUTE_TIMELINE_APP.uri,
+    name: "statute-timeline",
+    title: "Provision history",
+    description: "View provision version windows and compare adjacent wording.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    requiredTools: sameRequiredTools(STATUTE_TIMELINE_APP.linkedTools),
+    read: () => MCP_APP_BUNDLES["statute-timeline"],
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: DECISION_READER_APP.uri,
     name: "decision-reader",

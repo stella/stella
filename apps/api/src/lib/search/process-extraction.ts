@@ -26,7 +26,6 @@ import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueu
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
-import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -92,16 +91,19 @@ export const requiresDurableNativeExtraction = (
   if (fileField.encrypted) {
     return false;
   }
-  if (
-    fileField.pdfFileId === null &&
-    shouldGeneratePdfDerivative({
-      encrypted: fileField.encrypted,
-      mimeType: fileField.mimeType,
-    })
-  ) {
-    return false;
-  }
-  return canExtractMimeType(pickExtractionSource(fileField).extractionMimeType);
+
+  // A parser reads the original bytes (`pickExtractionSource`), so it never
+  // waits for the PDF preview: a failed conversion would otherwise leave the
+  // body out of search for good. Formats with no parser have the rendered
+  // PDF as their only text layer, so they become extractable once it exists.
+  return (
+    canExtractMimeType(
+      resolveExtractionMimeType({
+        fileName: fileField.fileName,
+        mimeType: fileField.mimeType,
+      }),
+    ) || fileField.pdfFileId !== null
+  );
 };
 
 /**

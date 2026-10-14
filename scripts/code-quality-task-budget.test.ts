@@ -18,6 +18,7 @@ import { ownsCodeCheckPath } from "../packages/scripts/src/code-quality-partitio
 import { planCheck, scopedCommands } from "./code-check-affected";
 import {
   createTaskExecutionTracker,
+  createTaskProgressWatchdog,
   DEFAULT_TASK_BUDGETS,
   evaluateTaskBudgets,
   ownedProcessGroupMembers,
@@ -466,7 +467,131 @@ test("streamed miss headers retain starts until summary confirms completion, inc
 
 const scratch = async () =>
   await mkdtemp(path.join(tmpdir(), "code-quality-budget-"));
-const run = (command: string[], cwd: string, timeoutMs = 5000) => {
+
+test("slow task progress warns once beyond its budget and finishing stops the watchdog", () => {
+  let now = 0;
+  const events: string[] = [];
+  const watchdog = createTaskProgressWatchdog({
+    budgetMs: 90,
+    stallMs: 120,
+    now: () => now,
+    warn: () => {
+      events.push("warning");
+    },
+    kill: () => {
+      events.push("stall");
+    },
+  });
+  for (now = 50; now <= 500; now += 50) {
+    watchdog.progress();
+    watchdog.tick();
+  }
+  watchdog.finish();
+  now = 1000;
+  watchdog.tick();
+  expect(events).toEqual(["warning"]);
+  expect(watchdog.wasStalled()).toBe(false);
+});
+
+test("silent task hangs warn then kill exactly once at the stall threshold", () => {
+  let now = 0;
+  const events: string[] = [];
+  const watchdog = createTaskProgressWatchdog({
+    budgetMs: 90,
+    stallMs: 120,
+    now: () => now,
+    warn: () => {
+      events.push("warning");
+    },
+    kill: () => {
+      events.push("stall");
+    },
+  });
+  now = 90;
+  watchdog.tick();
+  now = 119;
+  watchdog.tick();
+  expect(events).toEqual(["warning"]);
+  now = 120;
+  watchdog.tick();
+  now = 500;
+  watchdog.tick();
+  watchdog.finish();
+  expect(events).toEqual(["warning", "stall"]);
+  expect(watchdog.wasStalled()).toBe(true);
+});
+
+test.each([0, 7])(
+  "progressing tasks preserve exit %i after their warning budget",
+  async (exitCode) => {
+    const cwd = await scratch();
+    try {
+      const check = run(
+        [
+          process.execPath,
+          "-e",
+          `const timer = setInterval(() => console.log('progress'), 10); setTimeout(() => { clearInterval(timer); process.exit(${exitCode}); }, 100);`,
+        ],
+        cwd,
+        10,
+        1000,
+      );
+      const result = await check.result;
+      expect(result.exitCode, result.output).toBe(exitCode);
+      expect(result.outcome).toBe("completed");
+      expect(result.output).toContain("::warning title=task-budget::");
+      expect(result.output).not.toContain("class=task-stall");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  },
+);
+
+test.skipIf(process.platform === "win32")(
+  "a quiet compiler with advancing CPU time survives beyond the stall window",
+  async () => {
+    const cwd = await scratch();
+    const stdout: string[] = [];
+    try {
+      const result = await runBudgetedCheck({
+        command: [
+          process.execPath,
+          "-e",
+          `const fs = require("node:fs"); const end = Date.now() + 6000; while (Date.now() < end) {} const cpu = process.cpuUsage(); fs.writeFileSync("cpu-ms", String((cpu.user + cpu.system) / 1000));`,
+        ],
+        cwd,
+        timeoutMs: 20,
+        stallMs: 4000,
+        graceMs: 200,
+        summary: "none",
+        writeStdout: (text) => {
+          stdout.push(text);
+        },
+        writeStderr: () => {},
+        writeSummary: () => {},
+      });
+      expect(result.exitCode, result.output).toBe(0);
+      expect(result.outcome).toBe("completed");
+      expect(stdout.join("")).toBe("");
+      expect(result.output).toContain("::warning title=task-budget::");
+      expect(result.output).not.toContain("class=task-stall");
+      expect(result.output).not.toContain("task-progress-probe");
+      expect(
+        Number(await readFile(path.join(cwd, "cpu-ms"), "utf-8")),
+      ).toBeGreaterThan(1000);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  },
+  15_000,
+);
+
+const run = (
+  command: string[],
+  cwd: string,
+  timeoutMs = 5000,
+  stallMs = timeoutMs,
+) => {
   const markdown: string[] = [];
   const stderr: string[] = [];
   return {
@@ -476,6 +601,7 @@ const run = (command: string[], cwd: string, timeoutMs = 5000) => {
       command,
       cwd,
       timeoutMs,
+      stallMs,
       graceMs: 200,
       writeStdout: () => {},
       writeStderr: (text) => {
@@ -506,7 +632,8 @@ test("fresh Turbo summaries are enforced and stale or missing summaries cannot v
     await rm(path.join(cwd, ".turbo/runs/new.json"));
     await writeFile(file, source(241));
     const mutation = await run([process.execPath, file], cwd).result;
-    expect(mutation.exitCode).toBe(1);
+    expect(mutation.exitCode).toBe(0);
+    expect(mutation.output).toContain("::warning title=task-budget::");
     expect(mutation.output).toContain("241.000s exceeds 240s");
     await writeFile(file, "process.exit(0)");
     const missing = await run([process.execPath, file], cwd).result;
@@ -517,7 +644,7 @@ test("fresh Turbo summaries are enforced and stale or missing summaries cannot v
   }
 });
 
-test("execution deadline kills a real command group and reports unconfirmed streamed starts", async () => {
+test("progress stall kills a real command group and reports unconfirmed streamed starts", async () => {
   const cwd = await scratch();
   try {
     const grandchild =
@@ -538,7 +665,8 @@ test("execution deadline kills a real command group and reports unconfirmed stre
     );
     const result = await child.result;
     expect(result.exitCode).toBe(124);
-    expect(result.output).toContain("execution deadline exceeded");
+    expect(result.outcome).toBe("stalled");
+    expect(result.output).toContain("class=task-stall");
     expect(result.output).not.toContain("Cannot terminate command group");
     expect(result.output).toContain(
       "@stll/web#lint: started without confirmed completion",
@@ -551,7 +679,7 @@ test("execution deadline kills a real command group and reports unconfirmed stre
   }
 });
 
-test("a delegated fallback cannot orphan a TERM-resistant descendant after the outer deadline", async () => {
+test("a delegated fallback cannot orphan a TERM-resistant descendant after the outer stall", async () => {
   const cwd = await scratch();
   const pidFile = Bun.file(path.join(cwd, "delegated-descendant-pid"));
   try {
@@ -587,7 +715,7 @@ test("a delegated fallback cannot orphan a TERM-resistant descendant after the o
       .result;
     expect(result.exitCode).toBe(124);
     expect(result.output).toContain("delegated descendant ready");
-    expect(result.output).toContain("execution deadline exceeded");
+    expect(result.output).toContain("class=task-stall");
     const pid = Number(await pidFile.text());
     expect(Number.isSafeInteger(pid) && pid > 0).toBe(true);
     const state = Bun.spawnSync(["ps", "-p", String(pid), "-o", "stat="], {
@@ -709,7 +837,9 @@ test("only a missing summary directory permits starting the command; other files
       cwd,
     ).result;
     expect(started.exitCode).toBe(0);
-    expect(started.output).toBe("started");
+    expect(started.output).toStartWith("started");
+    expect(started.output).toContain("Code-quality timing:");
+    expect(started.output).not.toContain("::error");
     await mkdir(path.join(cwd, ".turbo"));
     await writeFile(path.join(cwd, ".turbo/runs"), "not a directory");
     expect(
@@ -725,7 +855,39 @@ test("only a missing summary directory permits starting the command; other files
   }
 });
 
-test("leader exit audits and terminates an inherited-pipe descendant without waiting for the deadline", async () => {
+test("leader exit lets a short-lived descendant finish without a cleanup diagnostic", async () => {
+  const cwd = await scratch();
+  try {
+    const descendant =
+      "process.stdout.write('ready'); setTimeout(()=>process.exit(0),200)";
+    const leader = `
+      const {spawn}=require('child_process');
+      const nested=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:['ignore','pipe','inherit']});
+      nested.stdout.once('data',()=>process.exit(0));
+    `;
+    const result = await runBudgetedCheck({
+      command: [process.execPath, "-e", leader],
+      cwd,
+      timeoutMs: 5000,
+      graceMs: 500,
+      writeStdout: () => {},
+      writeStderr: () => {},
+      writeSummary: () => {},
+    });
+    expect(result.exitCode, result.output).toBe(0);
+    expect(result.outcome).toBe("completed");
+    expect(result.output).toContain("Code-quality timing:");
+    expect(result.output).toContain("exit=0");
+    expect(result.output).not.toContain("::error");
+    expect(result.output).not.toContain(
+      "Owned process remained after leader exit",
+    );
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("leader exit audits and terminates an inherited-pipe descendant without waiting for a stall", async () => {
   const cwd = await scratch();
   try {
     const descendant =
@@ -751,7 +913,7 @@ test("leader exit audits and terminates an inherited-pipe descendant without wai
       `Owned process remained after leader exit: pid=${pid}`,
     );
     expect(result.output).toContain("command=");
-    expect(result.output).not.toContain("execution deadline exceeded");
+    expect(result.output).not.toContain("class=task-stall");
     const state = Bun.spawnSync(["ps", "-p", String(pid), "-o", "stat="], {
       stdout: "pipe",
       stderr: "pipe",
@@ -760,6 +922,98 @@ test("leader exit audits and terminates an inherited-pipe descendant without wai
       .trim();
     // An adopted zombie is no longer executing and has closed its inherited pipes.
     expect(state === "" || state.startsWith("Z")).toBe(true);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("a progress stall interrupts a longer group drain window", async () => {
+  const cwd = await scratch();
+  try {
+    const descendant =
+      "process.stdout.write('ready'); setTimeout(()=>process.exit(0),5000)";
+    const leader = `
+      const {spawn}=require('child_process');
+      const nested=spawn(process.execPath,['-e',${JSON.stringify(descendant)}],{stdio:['ignore','pipe','inherit']});
+      nested.stdout.once('data',()=>process.exit(0));
+    `;
+    const started = Date.now();
+    const result = await runBudgetedCheck({
+      command: [process.execPath, "-e", leader],
+      cwd,
+      timeoutMs: 1000,
+      stallMs: 1000,
+      graceMs: 2000,
+      writeStdout: () => {},
+      writeStderr: () => {},
+      writeSummary: () => {},
+    });
+    expect(result.exitCode).toBe(124);
+    expect(result.outcome).toBe("stalled");
+    expect(result.output).toContain("class=task-stall");
+    expect(Date.now() - started).toBeLessThan(3800);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("an empty group skips the drain window", async () => {
+  const cwd = await scratch();
+  try {
+    const started = Date.now();
+    const result = await runBudgetedCheck({
+      command: [process.execPath, "-e", "process.exit(0)"],
+      cwd,
+      timeoutMs: 5000,
+      graceMs: 3000,
+      writeStdout: () => {},
+      writeStderr: () => {},
+      writeSummary: () => {},
+    });
+    expect(result.exitCode, result.output).toBe(0);
+    expect(result.outcome).toBe("completed");
+    expect(result.output).toContain("Code-quality timing:");
+    expect(result.output).toContain("exit=0");
+    expect(result.output).not.toContain("::error");
+    expect(result.output).not.toContain(
+      "Owned process remained after leader exit",
+    );
+    expect(Date.now() - started).toBeLessThan(2000);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
+test("owned group inspection errors fail closed", async () => {
+  const cwd = await scratch();
+  try {
+    await writeFile(path.join(cwd, "ps"), "#!/bin/sh\nexit 7\n", {
+      mode: 0o755,
+    });
+    const module = path.join(
+      import.meta.dirname,
+      "code-quality-task-budget.ts",
+    );
+    const runner = Bun.spawn(
+      [
+        process.execPath,
+        "--eval",
+        `
+        import { runBudgetedCheck } from ${JSON.stringify(module)};
+        const result = await runBudgetedCheck({
+          command: [process.execPath, '-e', 'process.exit(0)'],
+          cwd: ${JSON.stringify(cwd)}, timeoutMs: 5000, graceMs: 200,
+          writeStdout: () => {}, writeStderr: text => process.stdout.write(text),
+          writeSummary: () => {},
+        });
+        process.exit(result.exitCode);
+      `,
+      ],
+      { env: { ...process.env, PATH: cwd }, stdout: "pipe", stderr: "pipe" },
+    );
+    const output = await new Response(runner.stdout).text();
+    expect(await runner.exited, output).toBe(1);
+    expect(output).toContain("Cannot inspect owned process group");
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }

@@ -24,7 +24,7 @@ import {
   ownsCodeCheckPath,
   type CodeCheckLeg,
 } from "../packages/scripts/src/code-quality-partition";
-import { runBudgetedCheck } from "./code-quality-task-budget";
+import { runBudgetedCheck, TASK_STALL_MS } from "./code-quality-task-budget";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import { isChangedLintPath } from "./lint-paths";
 import { measureResultBoundaryDebt } from "./ratchet";
@@ -656,7 +656,7 @@ type ExecuteCheckCommandsOptions = {
   ) => Result<void, CodeCheckError> | Promise<Result<void, CodeCheckError>>;
   write?: (output: string) => void;
   dryRun?: boolean;
-  deadlineMs?: number;
+  budgetDeadlineMs?: number;
   now?: () => number;
 };
 
@@ -668,18 +668,21 @@ export const executeCheckCommands = async ({
   },
   dryRun = false,
   now = Date.now,
-  deadlineMs = now() + CODE_CHECK_EXECUTION_BUDGET_MS,
+  budgetDeadlineMs = now() + CODE_CHECK_EXECUTION_BUDGET_MS,
 }: ExecuteCheckCommandsOptions): Promise<number> => {
   const failures: CodeCheckError[] = [];
+  let warned = false;
   for (const command of commands) {
     if (dryRun) {
       write(`  ${command.join(" ")}\n`);
       continue;
     }
-    const timeoutMs = deadlineMs - now();
-    if (timeoutMs <= 0) {
-      write("code-check: execution deadline exceeded before next command\n");
-      return 1;
+    const timeoutMs = Math.max(0, budgetDeadlineMs - now());
+    if (timeoutMs === 0 && !warned) {
+      warned = true;
+      write(
+        "::warning title=task-budget::code-check execution warning budget exceeded; continuing checks\n",
+      );
     }
     const result = await (runner === undefined
       ? runCheck(command, timeoutMs)
@@ -773,6 +776,7 @@ type DiscoverAffectedWorkspacesOptions = {
   command?: readonly string[];
   cwd?: string;
   timeoutMs?: number;
+  stallMs?: number;
   report?: (diagnostic: string) => void;
 };
 
@@ -781,6 +785,7 @@ export const discoverAffectedWorkspaces = async ({
   command = ["bun", "--bun", "turbo", "ls", "--affected", "--output=json"],
   cwd = REPO_ROOT,
   timeoutMs = planningCommandTimeout(),
+  stallMs = TASK_STALL_MS,
   report = (diagnostic) => {
     process.stdout.write(diagnostic);
   },
@@ -794,6 +799,7 @@ export const discoverAffectedWorkspaces = async ({
     command,
     cwd,
     timeoutMs,
+    stallMs,
     summary: "none",
     env: { TURBO_SCM_BASE: mergeBase, TURBO_SCM_HEAD: "HEAD" },
     writeStdout: (text) => {
@@ -808,13 +814,13 @@ export const discoverAffectedWorkspaces = async ({
   });
   const diagnostic = `code-check: planner ${command.join(" ")} elapsed=${Date.now() - startedAt}ms budget=${timeoutMs}ms exit=${result.exitCode} outcome=${result.outcome}\n`;
   report(diagnostic);
-  if (result.outcome === "deadline") {
+  if (result.outcome === "stalled") {
     report(
-      `${stderr.join("")}code-check: affected planner timed out; using full check scope\n`,
+      `${stderr.join("")}code-check: affected planner stalled; using full check scope\n`,
     );
     return Result.ok({
       type: "fallback",
-      reason: "affected workspace planner timeout",
+      reason: "affected workspace planner stall",
     });
   }
   if (result.exitCode !== 0) {
@@ -1158,13 +1164,13 @@ const planScope = async (
 type CodeCheckError = CommandFailedError;
 
 const main = async (): Promise<Result<number, CommandFailedError>> => {
-  const deadlineMs = Date.now() + CODE_CHECK_EXECUTION_BUDGET_MS;
+  const budgetDeadlineMs = Date.now() + CODE_CHECK_EXECUTION_BUDGET_MS;
   const options = parseArgs(process.argv.slice(2));
   // Verify the narrow runtime pin before even the Turbo affected/dry-run query:
   // a stale projection must fail before any old-runtime cache can be replayed.
   const toolchain = await runCheck(
     ["bun", "scripts/generate-bun-toolchain.ts"],
-    Math.min(30_000, Math.max(0, deadlineMs - Date.now())),
+    Math.min(30_000, Math.max(0, budgetDeadlineMs - Date.now())),
   );
   if (toolchain.isErr()) {
     return toolchain;
@@ -1187,7 +1193,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
           cwd: REPO_ROOT,
           stdout: "pipe",
           stderr: "pipe",
-          timeout: planningCommandTimeout(deadlineMs - Date.now()),
+          timeout: planningCommandTimeout(budgetDeadlineMs - Date.now()),
           killSignal: "SIGKILL",
         });
       // Only a missing comparison ref means "no base"; any other Git failure
@@ -1241,7 +1247,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
       await executeCheckCommands({
         commands,
         dryRun: options.dryRun,
-        deadlineMs,
+        budgetDeadlineMs,
       }),
     );
   }
@@ -1268,7 +1274,7 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
     await executeCheckCommands({
       commands,
       dryRun: options.dryRun,
-      deadlineMs,
+      budgetDeadlineMs,
     }),
   );
 };

@@ -93,3 +93,13 @@ export const AUDIT_RESOURCE_TYPE = {
 
 export type AuditResourceType =
   (typeof AUDIT_RESOURCE_TYPE)[keyof typeof AUDIT_RESOURCE_TYPE];
+
+/** Account events describe the export lifecycle without carrying export contents. */
+export const ACCOUNT_AUDIT_EVENT_TYPES = [
+  "account.data_export.requested",
+  "account.data_export.ready",
+  "account.data_export.downloaded",
+  "account.data_export.expired",
+] as const;
+
+export type AccountAuditEventType = (typeof ACCOUNT_AUDIT_EVENT_TYPES)[number];

@@ -164,6 +164,10 @@ await Bun.write(
   `${fonts}\n${styles.css}`,
 );
 
+if (Bun.argv.includes("--shared-assets-only")) {
+  process.exit(0);
+}
+
 const MCP_APP_DIRECTORIES = MCP_APPS.map(({ directory }) => directory);
 const MCP_APP_INPUTS = ["app.html"] as const;
 const readerInputGraphs = new Map<string, string[]>();
@@ -183,6 +187,7 @@ const buildMcpApp = async ({
     plugins: [reactCompiler, inlineReaderFonts],
     entrypoints: [path.join(appRoot, input)],
     minify: true,
+    define: { "process.env.NODE_ENV": JSON.stringify("production") },
     target: "browser",
   });
   if (!result.success) {
@@ -192,6 +197,14 @@ const buildMcpApp = async ({
 
   const graph =
     result.metafile ?? panic("MCP app build did not report reachable inputs");
+  const developmentInputs = Object.keys(graph.inputs).filter((file) =>
+    /[/\\]react(?:-dom)?[/\\].*\.development\.js$/u.test(file),
+  );
+  if (developmentInputs.length > 0) {
+    panic(
+      `MCP app ${app} includes React development modules: ${developmentInputs.join(", ")}`,
+    );
+  }
   const apiInputs = Object.keys(graph.inputs).filter((file) =>
     repoRelativePath(repoRoot, path.resolve(file)).startsWith("apps/api/"),
   );

@@ -4,10 +4,12 @@ import {
   EML_MIME,
   MARKDOWN_MIME,
   MSG_MIME,
+  PLAIN_TEXT_MIME,
   PPTX_MIME,
   XLSX_MIME,
   isEmailFile,
   isMarkdownFile,
+  isPlainTextFile,
 } from "@/lib/consts";
 import { isFileDisplayable } from "@/lib/types";
 
@@ -62,6 +64,51 @@ describe("markdown file displayability", () => {
       isFileDisplayable({
         fileName: "notes.md",
         mimeType: MARKDOWN_MIME,
+        pdfFileId: null,
+        encrypted: true,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("plain text file displayability", () => {
+  test("detects plain text from MIME type and filename", () => {
+    expect(
+      isPlainTextFile({
+        fileName: "notes.bin",
+        mimeType: `${PLAIN_TEXT_MIME}; charset=utf-8`,
+      }),
+    ).toBe(true);
+    expect(
+      isPlainTextFile({
+        fileName: "Notes.TXT",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe(true);
+    expect(
+      isPlainTextFile({
+        fileName: "notes.md",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe(false);
+  });
+
+  test("allows non-encrypted plain text to open without a PDF derivative", () => {
+    expect(
+      isFileDisplayable({
+        fileName: "notes.txt",
+        mimeType: "application/octet-stream",
+        pdfFileId: null,
+        encrypted: false,
+      }),
+    ).toBe(true);
+  });
+
+  test("does not open encrypted plain text without a PDF derivative", () => {
+    expect(
+      isFileDisplayable({
+        fileName: "notes.txt",
+        mimeType: PLAIN_TEXT_MIME,
         pdfFileId: null,
         encrypted: true,
       }),

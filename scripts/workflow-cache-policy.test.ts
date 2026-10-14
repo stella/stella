@@ -1,8 +1,13 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import * as v from "valibot";
 
+import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
+import { CACHE_SAVE_REVISION } from "./ci-store-save";
+import { storeSaverCensus } from "./ci-store-save-policy";
+import { mainHeavyJobs } from "./main-heavy-plan";
 import {
   MAIN_ONLY_BUN_CACHE_SAVE,
   jobCachePolicy,
@@ -70,6 +75,70 @@ test("ordinary installs reject raw setup and accept the cached owner", () => {
       jobs: { fixture: { steps: [cached] } },
     }),
   ).toEqual([]);
+});
+
+test("raw pinned Bun setup is allowed only alongside the scoped install owner", () => {
+  const pinnedRaw = {
+    uses: "oven-sh/setup-bun@0123456789abcdef0123456789abcdef01234567",
+  };
+  const owner = { uses: "./.github/actions/ci-install" };
+  const installWorkflow = { on: ["pull_request"] };
+  expect(
+    workflowCacheProblems({
+      ...installWorkflow,
+      jobs: { fixture: { steps: [pinnedRaw] } },
+    }),
+  ).toContain(
+    "job 'fixture': raw Bun setup needs the shared install-cache action",
+  );
+  expect(
+    workflowCacheProblems({
+      ...installWorkflow,
+      jobs: {
+        fixture: {
+          steps: [pinnedRaw, { uses: "./.github/actions/ci-install/" }],
+        },
+      },
+    }),
+  ).not.toEqual([]);
+  expect(
+    workflowCacheProblems({
+      ...installWorkflow,
+      jobs: { fixture: { steps: [pinnedRaw, owner] } },
+    }),
+  ).toEqual([]);
+  const forbidden = [
+    {
+      workflow: { on: ["workflow_run"] },
+      steps: [pinnedRaw, owner],
+      policy: "default-scope",
+    },
+    {
+      workflow: { on: ["pull_request"] },
+      steps: [{ uses: "./.github/actions/safe-chain" }, pinnedRaw, owner],
+      policy: "cold-install",
+    },
+    {
+      workflow: { on: ["pull_request"] },
+      steps: [{ ...raw, uses: pinnedRaw.uses }, owner],
+      policy: "no-cache",
+    },
+    {
+      workflow: { on: ["pull_request"] },
+      steps: [pinnedRaw, owner],
+      policy: "publish-chain",
+      permissions: { contents: "write" },
+    },
+  ] as const;
+  for (const { workflow, steps, policy, ...jobFields } of forbidden) {
+    const job = { ...jobFields, steps };
+    expect(jobCachePolicy({ workflow, job })).toBe(policy);
+    expect(
+      workflowCacheProblems({ ...workflow, jobs: { fixture: job } }),
+    ).toContain(
+      `job 'fixture': scoped install cache is forbidden by ${policy} policy`,
+    );
+  }
 });
 
 test("all committed workflows and composite actions obey the shared cache policy", () => {
@@ -210,17 +279,251 @@ test("dropping save from a real Bun caller violates the repository contract", ()
       ),
     ),
   );
-  const step = Object.values(workflow.jobs)
-    .flatMap((job) => job.steps ?? [])
-    .find((candidate) =>
-      candidate.uses?.startsWith("stella/.github/actions/setup-bun-cached@"),
-    );
-  if (!step?.with) {
+  const caller = Object.entries(workflow.jobs)
+    .flatMap(([id, job]) =>
+      (job.steps ?? [])
+        .filter((candidate) =>
+          candidate.uses?.startsWith(
+            "stella/.github/actions/setup-bun-cached@",
+          ),
+        )
+        .map((step) => ({ id, step })),
+    )
+    .at(0);
+  if (caller === undefined) {
+    expect.unreachable("Missing real Bun cache caller");
+  }
+  const { step, id } = caller;
+  if (!step.with) {
     expect.unreachable("Missing real Bun cache caller");
   }
   expect(workflowCacheProblems(workflow)).toEqual([]);
   delete step.with["save"];
   expect(workflowCacheProblems(workflow)).toContain(
-    "job 'ci-plan': Bun install cache saves must be main-only",
+    `job '${id}': Bun install cache saves must be main-only`,
   );
+});
+
+const storeWorkflows = () =>
+  Object.fromEntries(
+    readdirSync(new URL("../.github/workflows", import.meta.url))
+      .filter((file) => /\.ya?ml$/u.test(file))
+      .map((file) => [
+        file,
+        Bun.YAML.parse(
+          readFileSync(
+            new URL(`../.github/workflows/${file}`, import.meta.url),
+            "utf-8",
+          ),
+        ),
+      ]),
+  );
+const census = (workflows: Record<string, unknown>) =>
+  storeSaverCensus({
+    workflows,
+    root: fileURLToPath(new URL("..", import.meta.url)),
+  });
+
+test("every scoped install key has exactly one declared saver across all workflows and matrix rows", () => {
+  const workflows = storeWorkflows();
+  const groups = census(workflows);
+  expect(groups.length).toBeGreaterThan(0);
+  for (const group of groups) {
+    expect(group.savers, group.scope).toHaveLength(1);
+  }
+  // Main can reuse the queued proof and skip generated-sources. The browser
+  // store must still have a writer in the main-heavy partition itself.
+  const browserStore = groups.find((group) =>
+    group.callers.some((caller) => caller.startsWith("ci.yml/ci-browser ")),
+  );
+  if (browserStore === undefined) {
+    expect.unreachable("Missing browser store callers");
+  }
+  const saver = browserStore.savers.at(0);
+  if (saver === undefined) {
+    expect.unreachable("Missing browser store saver");
+  }
+  expect(mainHeavyJobs(workflows["ci.yml"])).toContain(
+    saver.replace("ci.yml/", ""),
+  );
+});
+
+test("the census catches duplicate writers, missing writers and per-row mode drift", () => {
+  const install = (write: string) => ({
+    uses: "./.github/actions/ci-install",
+    with: {
+      flags: '["--frozen-lockfile","--ignore-scripts"]',
+      "cache-write": write,
+    },
+  });
+  const job = (write: string) => ({
+    "runs-on": "ubuntu-latest",
+    steps: [
+      {
+        uses: "oven-sh/setup-bun@fixture",
+        with: { "bun-version-file": "package.json" },
+      },
+      install(write),
+    ],
+  });
+  expect(
+    census({
+      fixture: { jobs: { first: job("save"), second: job("save") } },
+    }).at(0)?.savers,
+  ).toHaveLength(2);
+  expect(
+    census({ fixture: { jobs: { first: job("restore") } } }).at(0)?.savers,
+  ).toHaveLength(0);
+  expect(
+    census({
+      fixture: {
+        jobs: {
+          first: { ...job("save"), if: "github.ref != 'refs/heads/main'" },
+          second: job("restore"),
+        },
+      },
+    }).at(0)?.savers,
+  ).toHaveLength(0);
+  expect(() =>
+    census({
+      fixture: {
+        jobs: {
+          first: {
+            ...job("save"),
+            steps: [
+              {
+                uses: "oven-sh/setup-bun@fixture",
+                with: { "bun-version": "different" },
+              },
+              install("save"),
+            ],
+          },
+        },
+      },
+    }),
+  ).toThrow("must share the pinned package.json Bun runtime");
+  const matrixJob = {
+    ...job("save"),
+    strategy: { matrix: { mode: ["0", "1"] } },
+    env: { BUN_INSTALL_GLOBAL_STORE: `\${{ matrix.mode }}` },
+  };
+  expect(
+    census({ fixture: { jobs: { matrix: matrixJob } } }).map(
+      (group) => group.savers.length,
+    ),
+  ).toEqual([1, 1]);
+  expect(
+    census({
+      fixture: {
+        jobs: {
+          matrix: { ...matrixJob, env: { BUN_INSTALL_GLOBAL_STORE: "0" } },
+        },
+      },
+    }).at(0)?.savers,
+  ).toHaveLength(2);
+  const dynamicJob = {
+    ...job("save"),
+    strategy: {
+      matrix: {
+        shard: `\${{ fromJSON(needs.plan.outputs.matrix).shard }}`,
+      },
+    },
+  };
+  expect(() => census({ fixture: { jobs: { dynamic: dynamicJob } } })).toThrow(
+    "dynamic matrices must only restore stores",
+  );
+});
+
+test("scoped store saves are non-fatal post hooks, and containers cannot restore a gzip-only version", () => {
+  const action = v.parse(
+    v.object({
+      inputs: v.object({
+        "cache-write": v.object({ default: v.literal("restore") }),
+      }),
+      runs: v.object({ steps: v.array(v.record(v.string(), v.unknown())) }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/actions/ci-install/action.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  const save = action.runs.steps.find(
+    (step) => step["uses"] === "$/.github/actions/ci-store-save",
+  );
+  expect(save).toBeDefined();
+  expect(save?.["continue-on-error"]).toBe(true);
+  expect(save).not.toHaveProperty("timeout-minutes");
+  expect(save?.["if"]).toContain("inputs.cache-write == 'save'");
+  expect(save?.["if"]).toContain("github.ref == 'refs/heads/main'");
+  expect(save?.["if"]).toContain("steps.cache.outputs.cache-hit != 'true'");
+  expect(
+    action.runs.steps.some((step) =>
+      String(step["uses"]).startsWith("actions/cache/save@"),
+    ),
+  ).toBe(false);
+  const compression = action.runs.steps.find(
+    (step) => step["id"] === "compression",
+  );
+  const restore = action.runs.steps.find((step) => step["id"] === "cache");
+  expect(restore?.["uses"]).toBe(
+    `actions/cache/restore@${CACHE_SAVE_REVISION}`,
+  );
+  expect(compression?.["run"]).toContain(
+    "apt-get install -y --no-install-recommends zstd",
+  );
+  expect(compression?.["run"]).toContain("zstd --version");
+  expect(compression?.["continue-on-error"]).toBe(true);
+  expect(restore?.["if"]).toBe("steps.compression.outcome == 'success'");
+  const cleanup = v.parse(
+    v.object({
+      runs: v.object({
+        using: v.literal("node24"),
+        main: v.string(),
+        post: v.string(),
+        "post-if": v.literal("always()"),
+      }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/actions/ci-store-save/action.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  expect(cleanup.runs.main).toBe("index.mjs");
+  expect(cleanup.runs.post).toBe(cleanup.runs.main);
+  const project = ts.getParsedCommandLineOfConfigFile(
+    fileURLToPath(new URL("../tsconfig.scripts.json", import.meta.url)),
+    {},
+    {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+        expect.unreachable(
+          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+        );
+      },
+    },
+  );
+  if (project === undefined) {
+    expect.unreachable("Missing CI scripts typecheck project");
+  }
+  expect(
+    withoutTsgoOnlyOptionDiagnostics(project.errors).map((diagnostic) =>
+      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    ),
+  ).toEqual([]);
+  expect(project.options.allowJs).toBe(true);
+  expect(project.options.checkJs).toBe(true);
+  for (const entrypoint of [cleanup.runs.main, cleanup.runs.post]) {
+    expect(project.fileNames).toContain(
+      fileURLToPath(
+        new URL(
+          `../.github/actions/ci-store-save/${entrypoint}`,
+          import.meta.url,
+        ),
+      ),
+    );
+  }
 });

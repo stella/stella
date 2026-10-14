@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import { generateCapabilityRuntime } from "../apps/api/scripts/generate-capability-runtime";
 import { pinnedParserInputs } from "../packages/catalogue/scripts/pinned-content-facts";
+import { repoRelativePath } from "../packages/portable-path/src/index";
 import { API_TYPECHECK_REGENERATION_COMMANDS } from "../packages/scripts/src/api-typecheck-regenerate";
 import {
   GENERATORS,
@@ -115,6 +116,48 @@ test("generation owners have unique identifiers", () => {
   expect(new Set(ids).size).toBe(ids.length);
 });
 
+test("glossary and catalogue generation inputs cover their runtime import closures", () => {
+  const repoRoot = nodePath.resolve(import.meta.dir, "..");
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  for (const { id, entry } of [
+    { id: "i18n-glossary", entry: "packages/scripts/src/glossary-gen.ts" },
+    {
+      id: "catalogue",
+      entry: "packages/catalogue/scripts/generate-manifest.ts",
+    },
+  ]) {
+    const inputs = generator(id).inputs;
+    const pending = [entry];
+    const visited = new Set<string>();
+    while (pending.length > 0) {
+      const file = pending.pop() ?? panic("Missing import closure entry");
+      if (visited.has(file)) {
+        continue;
+      }
+      visited.add(file);
+      expect(
+        inputs.some((glob) => matchesGeneratedGlob(glob, file)),
+        `${id}: ${file}`,
+      ).toBe(true);
+      for (const { path: specifier } of transpiler.scanImports(
+        readFileSync(nodePath.join(repoRoot, file), "utf-8").replace(
+          /^#![^\n]*/u,
+          "",
+        ),
+      )) {
+        if (!specifier.startsWith(".") && !specifier.startsWith("@stll/")) {
+          continue;
+        }
+        const resolved = Bun.resolveSync(
+          specifier,
+          nodePath.join(repoRoot, nodePath.dirname(file)),
+        );
+        pending.push(repoRelativePath(repoRoot, resolved));
+      }
+    }
+  }
+});
+
 test("pinned facts generation inputs cover the derived parser graph", () => {
   const inputs = generator("catalogue-pinned-facts").inputs;
   const parserInputs = pinnedParserInputs();
@@ -141,6 +184,48 @@ test("visual source changes select the frame bundle before API catalog generatio
   expect(generator("visual-sandbox-bundle").outputs).toEqual([
     "apps/api/src/handlers/visual-sandbox/generated/runtime.js.txt",
   ]);
+});
+
+test("MCP app parser schema imports are registered generation inputs", () => {
+  const repoRoot = nodePath.resolve(import.meta.dir, "..");
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  const pending = [
+    ...new Bun.Glob("packages/mcp-apps/src/*/parse.ts").scanSync(repoRoot),
+  ];
+  const visited = new Set<string>();
+  while (pending.length > 0) {
+    const file = pending.pop();
+    if (file === undefined || visited.has(file)) {
+      continue;
+    }
+    visited.add(file);
+    for (const { path: specifier } of transpiler.scanImports(
+      readFileSync(nodePath.join(repoRoot, file), "utf-8").replace(
+        /^#![^\n]*/u,
+        "",
+      ),
+    )) {
+      if (!specifier.startsWith(".")) {
+        continue;
+      }
+      const dependency = repoRelativePath(
+        repoRoot,
+        nodePath.resolve(repoRoot, nodePath.dirname(file), `${specifier}.ts`),
+      );
+      if (!dependency.startsWith("apps/api/src/lib/")) {
+        continue;
+      }
+      for (const id of ["mcp-app-bundles", "cli-registry"]) {
+        expect(
+          generator(id).inputs.some((glob) =>
+            matchesGeneratedGlob(glob, dependency),
+          ),
+          `${id} covers ${dependency} imported by ${file}`,
+        ).toBe(true);
+      }
+      pending.push(dependency);
+    }
+  }
 });
 
 test("generation metadata loads without dependencies in a reduced checkout", async () => {
@@ -461,7 +546,6 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     "capability-runtime",
     "cli-registry",
     "cli-runtime",
-    "mcp-surface",
     "api-typecheck-projects",
   ] satisfies readonly (typeof GENERATORS)[number]["id"][];
   expect(
@@ -969,4 +1053,33 @@ test("API compiler input regeneration uses the restricted autofix output contrac
     expect(ids).toContain(prerequisite);
     expect(ids.indexOf(prerequisite)).toBeLessThan(ids.indexOf(owner.id));
   }
+});
+
+test("cloud setup has one generator owner and checks shared policy output", () => {
+  const owners = GENERATORS.filter(({ outputs }) =>
+    outputs.some((glob) =>
+      matchesGeneratedGlob(glob, ".agents/cloud-setup.sh"),
+    ),
+  );
+  expect(owners).toHaveLength(1);
+  expect(owners.at(0)).toMatchObject({
+    id: "cloud-setup",
+    inputs: [
+      "stll-toolchain.json",
+      ".node-version",
+      "package.json",
+      "bun.lock",
+      "scripts/generate-cloud-setup.ts",
+      "scripts/generated-artifacts.ts",
+    ],
+    write: ["bun", "scripts/generate-cloud-setup.ts", "--write"],
+    check: ["bun", "scripts/generate-cloud-setup.ts"],
+    autofix: true,
+  });
+  expect(
+    isUnregisteredGeneratedFile(
+      ".agents/cloud-setup.sh",
+      "# Generated by stll-cloud-setup.",
+    ),
+  ).toBe(false);
 });

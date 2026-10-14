@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
+import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { propertyConfig } from "@stll/property-testing";
 
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
@@ -11,7 +12,6 @@ import {
   decodeGlobalSearchCursor,
   encodeGlobalSearchCursor,
   GLOBAL_SEARCH_HIT_ID_PREFIXES,
-  GLOBAL_SEARCH_RESULT_LIMIT,
   globalSearchCursorSql,
   isAfterGlobalSearchCursor,
   paginateScoredSearchHits,

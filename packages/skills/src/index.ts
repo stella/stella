@@ -18,7 +18,7 @@ export {
   normalizeResourcePath,
   readSkillResource,
 } from "./loader";
-export type { SkillResource, StellaSkill } from "./loader";
+export type { BuiltInSkillId, SkillResource, StellaSkill } from "./loader";
 export {
   hashSkillEntrypoint,
   hashSkillPackage,

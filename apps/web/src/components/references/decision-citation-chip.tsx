@@ -8,7 +8,7 @@ import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-lin
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { CourtBadge } from "@stll/ui/court-badge";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ExternalLinkIcon, LandmarkIcon } from "@stll/ui/icons";
 import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -57,13 +57,21 @@ const DecisionCitationLabel = ({
         {t("caseLaw.citation.paragraphMark", { paragraph: paragraphNumber })}
       </span>
     );
+  const badge = (
+    <DocumentIdentityBadge
+      identity={{
+        kind: "decision",
+        courtAbbreviation: decision.courtShortCode,
+      }}
+    />
+  );
   switch (presentation) {
     case DECISION_CITATION_PRESENTATION.compact:
       return paragraph === null ? (
-        <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+        badge
       ) : (
         <span className="inline-flex items-center gap-1">
-          <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+          {badge}
           {paragraph}
         </span>
       );
@@ -71,7 +79,7 @@ const DecisionCitationLabel = ({
       return (
         <span className="inline-flex items-center gap-1">
           <LandmarkIcon aria-hidden="true" className="size-3 shrink-0" />
-          <CourtBadge abbreviation={decision.courtShortCode} weight="outline" />
+          {badge}
           <BidiText as="span">{decision.caseNumber}</BidiText>
           {paragraph}
         </span>
@@ -128,6 +136,10 @@ export const DecisionCitationChip = ({
   if (links.type !== "decision") {
     return panic("Decision citation must resolve to its internal reader");
   }
+  const readerUrl = new URL(links.url);
+  // The resolver validates a served reader route; native navigation stays on
+  // this deployment even when source metadata names the public app origin.
+  const readerHref = `${readerUrl.pathname}${readerUrl.search}${readerUrl.hash}`;
   const originalUrl = sanitizeHref(links.source_url ?? "");
 
   return (
@@ -143,16 +155,21 @@ export const DecisionCitationChip = ({
             setOpen(true);
           }
         }}
+        onClick={containedEventHandler((event) => {
+          // Focus or hover may already have opened the preview. A primary
+          // press opens it explicitly instead of toggling it closed.
+          event.preventBaseUIHandler();
+          if (!isPlainPrimaryClick(event)) {
+            return;
+          }
+          event.preventDefault();
+          setOpen(true);
+        })}
         render={
           <a
             className="focus-visible:ring-ring inline-flex rounded align-baseline focus-visible:ring-2 focus-visible:outline-none"
-            href={sanitizeHref(links.url)}
+            href={sanitizeHref(readerHref)}
             ref={triggerRef}
-            onClick={containedEventHandler((event) => {
-              if (isPlainPrimaryClick(event)) {
-                event.preventDefault();
-              }
-            })}
           />
         }
         tooltip={false}
@@ -200,7 +217,7 @@ export const DecisionCitationChip = ({
         )}
         <div className="flex flex-wrap gap-2">
           <Button
-            render={<a href={sanitizeHref(links.url)} />}
+            render={<a href={sanitizeHref(readerHref)} />}
             onClick={(event) => {
               if (onOpen !== undefined && isPlainPrimaryClick(event)) {
                 event.preventDefault();

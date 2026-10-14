@@ -15,6 +15,7 @@ import { publicCountryUnavailable } from "@stll/api-contract/public-country-capa
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
@@ -23,8 +24,10 @@ import type { LegislationProvisionVersion } from "@/api/handlers/legislation/pro
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
   READ_PROVISION_HISTORY_PROJECTION,
-  READ_STATUTE_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
+} from "@/api/lib/chat/legislation-result-projections";
+import {
+  READ_STATUTE_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -475,6 +478,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: { ui: { resourceUri: STATUTE_TIMELINE_RESOURCE_URI } },
     name: "read_provision_history",
     scope: "stella:read",
   }),

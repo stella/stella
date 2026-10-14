@@ -8,6 +8,7 @@ import {
   getNativeOfficeViewerFormat,
   isEmailFile,
   isMarkdownFile,
+  isPlainTextFile,
   PDF_MIME,
 } from "@/lib/consts";
 import { getDesktopEditFileType } from "@/lib/desktop-edit-formats";
@@ -45,7 +46,12 @@ export const shouldRunFileAnonymizationPipeline = ({
   isMounted &&
   !isNativeDocxDisplay;
 
-export type FileTabNativePreviewKind = "email" | "markdown" | "office" | "pdf";
+export type FileTabNativePreviewKind =
+  | "email"
+  | "markdown"
+  | "office"
+  | "pdf"
+  | "text";
 
 export const getFileTabNativePreviewKind = ({
   fileName,
@@ -62,6 +68,9 @@ export const getFileTabNativePreviewKind = ({
   }
   if (getNativeOfficeViewerFormat(mimeType) !== null) {
     return "office";
+  }
+  if (isPlainTextFile({ fileName, mimeType })) {
+    return "text";
   }
   return "pdf";
 };
@@ -100,8 +109,11 @@ export const getFileTabDisplayState = ({
     isNativeDocxDisplay,
     isOfficeDisplay: nativePreviewKind === "office",
     isPdfDisplay: tab.mimeType === PDF_MIME,
+    isPlainTextDisplay: nativePreviewKind === "text",
     requiresPdfMeasurement:
-      !isNativeDocxDisplay && nativePreviewKind !== "office",
+      !isNativeDocxDisplay &&
+      nativePreviewKind !== "office" &&
+      nativePreviewKind !== "text",
     needsPropertyResolution:
       isNativeDocxDisplay && tab.propertyId === undefined,
     officeViewerFormat: getNativeOfficeViewerFormat(tab.mimeType),
