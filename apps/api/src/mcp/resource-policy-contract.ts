@@ -123,6 +123,31 @@ export const MCP_MODES = [
 type MissingMcpMode = Exclude<McpMode, (typeof MCP_MODES)[number]>;
 true satisfies MissingMcpMode extends never ? true : never;
 
+/**
+ * Resource names released deployments stored before the configured names
+ * above, per audience. A resource row's name is policy written by Stella's own
+ * seeding, so renaming an audience in code needs the deploy repair to carry
+ * stored rows over; it renames a row only from a name listed here, and any
+ * other stored name stays a conflict it refuses.
+ */
+const RELEASED_MCP_RESOURCE_NAMES = {
+  advanced: ["Stella MCP advanced"],
+  default: ["Stella MCP"],
+  documents: ["Stella MCP documents"],
+  anonymized: ["Stella MCP anonymized"],
+  law: ["Stella MCP law"],
+} as const satisfies Record<McpMode, readonly string[]>;
+
+export const releasedOAuthResourceNames = (
+  configuredName: string,
+): readonly string[] => {
+  const mode = MCP_MODES.find(
+    (candidate) =>
+      MCP_RESOURCE_MODE_CONFIG[candidate].resourceName === configuredName,
+  );
+  return mode === undefined ? [] : RELEASED_MCP_RESOURCE_NAMES[mode];
+};
+
 export const getMcpResourceModeConfig = (mode: McpMode) =>
   MCP_RESOURCE_MODE_CONFIG[mode];
 
