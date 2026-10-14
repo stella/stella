@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Read-only release gate, run again immediately before the tag push: the commit
 # needs staging/verified plus either a merge-group ci-result receipt on the
-# commit itself or trusted main/heavy and main/pr-depth success, and sparse or
-# skipped heavy runs provide no green evidence.
+# commit itself whose queue history since the previous release tag is fully
+# validated (check-release-receipt-coverage.sh), or trusted main/heavy and
+# main/pr-depth success; sparse or skipped heavy runs provide no green evidence.
 set -euo pipefail
 
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
 repo="${1:?repository is required}"
 sha="${2:?commit SHA is required}"
@@ -19,16 +21,14 @@ bash "$tree_proof_verifier" "$repo" "$sha" "$proof" >/dev/null
   echo '::error::RELEASE_HEAVY_NOT_GREEN: invalid repository or SHA' >&2; exit 1;
 }
 refuse() { echo "::error::$1" >&2; exit 1; }
-# The receipt is read on the release commit itself, never on a reused proof.
-# Output stays on stderr: callers forward stdout to step outputs.
+# The receipt is read on the release commit itself, never on a reused proof,
+# and counts only when no commit since the previous release bypassed the merge
+# queue. Output stays on stderr: callers forward stdout to step outputs.
 required_contexts='["staging/verified","main/heavy","main/pr-depth"]'
 receipt=false
-if bash "$tree_proof_verifier" --merge-group-receipt "$repo" "$sha"; then
+if bash "$script_dir/check-release-receipt-coverage.sh" "$repo" "$sha"; then
   receipt=true
   required_contexts='["staging/verified"]'
-  echo "Merge-group receipt on $sha stands in for main/heavy and main/pr-depth." >&2
-else
-  echo "No merge-group receipt on $sha; main/heavy and main/pr-depth are required." >&2
 fi
 if [[ "$proof" != "$sha" ]]; then
   target_statuses=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/statuses?per_page=100")

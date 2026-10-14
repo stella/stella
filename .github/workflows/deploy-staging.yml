@@ -135,6 +135,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # Bun runs the release queue history check the pinned-proof health gate
+      # needs before a merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        if: inputs.proof_sha != ''
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
       - name: Resolve the commit to deploy
         id: resolve
         env:

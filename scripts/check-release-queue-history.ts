@@ -1,6 +1,11 @@
 #!/usr/bin/env bun
 
-// The tag gate (check-release-main-health.sh) enforces; this check reports.
+// Two modes. By default the check reports: pull request and merge-group CI and
+// maintenance preparation print a warning and continue. With --require it
+// enforces: the release gate (check-release-main-health.sh, through
+// check-release-receipt-coverage.sh) runs it before it lets a merge-group
+// receipt on the release commit stand in for main/heavy and main/pr-depth,
+// and any unvalidated or unreadable history keeps both statuses required.
 
 import nodePath from "node:path";
 
@@ -48,6 +53,12 @@ type MergedPullRequest = PullRequest & {
 type QueueHistoryOptions = {
   baseSha: string;
   previousTag: string;
+  // Strict mode answers only whether the merge queue validated every commit;
+  // a green main heavy run on the base does not count, because the release
+  // gate validates that status itself when it falls back to it.
+  strict?: boolean;
+  // Checkout whose history is read; defaults to the one holding this script.
+  repoDir?: string;
 };
 
 export type ReleaseQueueHistoryReport = {
@@ -65,19 +76,21 @@ export class ReleaseQueueHistoryError extends Error {
   }
 }
 
-const runCommand: CommandRunner = (command) => {
-  const result = Bun.spawnSync([...command], {
-    cwd: ROOT_DIR,
-    stderr: "pipe",
-    stdout: "pipe",
-  });
-  if (!result.success) {
-    throw new ReleaseQueueHistoryError(
-      `Command failed: ${command.join(" ")}\n${result.stderr.toString().trim()}`,
-    );
-  }
-  return result.stdout.toString().trim();
-};
+const commandRunner =
+  (cwd: string): CommandRunner =>
+  (command) => {
+    const result = Bun.spawnSync([...command], {
+      cwd,
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    if (!result.success) {
+      throw new ReleaseQueueHistoryError(
+        `Command failed: ${command.join(" ")}\n${result.stderr.toString().trim()}`,
+      );
+    }
+    return result.stdout.toString().trim();
+  };
 
 // This script runs before dependencies are installed: built-ins only.
 const parseJson = (value: string, source: string): unknown => {
@@ -295,7 +308,9 @@ const hasSuccessfulHeavyRun = (
 export const assertReleaseQueueHistory = ({
   baseSha,
   previousTag,
-  command = runCommand,
+  strict = false,
+  repoDir = ROOT_DIR,
+  command = commandRunner(repoDir),
   ghRetryScript = process.env["GH_RETRY_SCRIPT"] ??
     nodePath.join(ROOT_DIR, "scripts/gh-retry.sh"),
 }: QueueHistoryOptions & {
@@ -308,7 +323,10 @@ export const assertReleaseQueueHistory = ({
     "--verify",
     `${baseSha}^{commit}`,
   ]).trim();
-  if (hasSuccessfulHeavyRun(resolvedBaseSha, command, ghRetryScript)) {
+  if (
+    !strict &&
+    hasSuccessfulHeavyRun(resolvedBaseSha, command, ghRetryScript)
+  ) {
     return {
       validated: true,
       bypassingPullRequests: [],
@@ -436,31 +454,44 @@ export const formatReleaseQueueHistoryNotice = (
     "  gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -f release_candidate=true",
   ].join("\n");
 
+const USAGE =
+  "Usage: check-release-queue-history.ts --from <tag> --base <sha> [--require] [--repo-dir <path>]";
+const VALUE_OPTIONS = new Set(["--from", "--base", "--repo-dir"]);
+
 export const parseOptions = (args: readonly string[]): QueueHistoryOptions => {
-  const previousTagIndex = args.indexOf("--from");
-  const baseIndex = args.indexOf("--base");
-  const previousTag = args.at(previousTagIndex + 1);
-  const baseSha = args.at(baseIndex + 1);
-  if (
-    args.length !== 4 ||
-    previousTagIndex === -1 ||
-    baseIndex === -1 ||
-    !previousTag ||
-    !baseSha ||
-    previousTag.startsWith("-") ||
-    baseSha.startsWith("-")
-  ) {
-    throw new ReleaseQueueHistoryError(
-      "Usage: check-release-queue-history.ts --from <tag> --base <sha>",
-    );
+  const values = new Map<string, string>();
+  let strict = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] ?? "";
+    if (arg === "--require" && !strict) {
+      strict = true;
+      continue;
+    }
+    const value = args[index + 1];
+    if (
+      !VALUE_OPTIONS.has(arg) ||
+      values.has(arg) ||
+      !value ||
+      value.startsWith("-")
+    ) {
+      throw new ReleaseQueueHistoryError(USAGE);
+    }
+    values.set(arg, value);
+    index += 1;
   }
-  return { baseSha, previousTag };
+  const previousTag = values.get("--from");
+  const baseSha = values.get("--base");
+  const repoDir = values.get("--repo-dir");
+  if (!previousTag || !baseSha) {
+    throw new ReleaseQueueHistoryError(USAGE);
+  }
+  return { baseSha, previousTag, strict, ...(repoDir ? { repoDir } : {}) };
 };
 
 /**
- * Advisory only: the tag gate enforces validated history, so every caller
- * (the CLI and maintenance preparation) reports problems and continues,
- * including when the history cannot be read at all.
+ * Turns a check into a notice: null when the history is validated, otherwise
+ * what is unvalidated, or why the history could not be read at all. The
+ * caller decides what a notice means; only strict mode treats it as fatal.
  */
 export const releaseQueueHistoryWarning = (
   readOptions: () => QueueHistoryOptions,
@@ -475,18 +506,25 @@ export const releaseQueueHistoryWarning = (
   }
 };
 
+/**
+ * Advisory by default: prints a warning and exits 0. With --require, an
+ * unvalidated or unreadable history (unknown is not safe), or unusable
+ * arguments, print the same notice as an error and exit 1.
+ */
 export const runReleaseQueueHistoryCli = (
   args: readonly string[],
   writeWarning = (message: string) => process.stdout.write(`${message}\n`),
   check = assertReleaseQueueHistory,
 ): number => {
+  const strict = args.includes("--require");
   const message = releaseQueueHistoryWarning(() => parseOptions(args), check);
-  if (message !== null) {
-    writeWarning(
-      `::warning::${message.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}`,
-    );
+  if (message === null) {
+    return 0;
   }
-  return 0;
+  writeWarning(
+    `::${strict ? "error" : "warning"}::${message.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}`,
+  );
+  return strict ? 1 : 0;
 };
 
 if (import.meta.main) {

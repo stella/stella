@@ -17,6 +17,11 @@ case "$*" in
     jq --argjson heavy "$TEST_HEAVY_STATUS" --argjson depth "$TEST_PR_DEPTH_STATUS" '.[0] += [$heavy, $depth]' <<< "$TEST_STATUSES" ;;
   *"/commits/${TEST_LATER:-none}/statuses?per_page=100"*) printf '%s\n' "$TEST_LATER_STATUSES" ;;
   *"/statuses?per_page=100"*) echo '[[]]' ;;
+  # The release queue history check reads single pages, never --slurp.
+  "api repos/stella/stella/commits/$TEST_CANDIDATE/pulls?per_page=100") printf '%s\n' "$TEST_CANDIDATE_PULLS" ;;
+  "api graphql "*"number=1") printf '%s\n' "$TEST_TIMELINE" ;;
+  *"/actions/workflows/ci.yml/runs?head_sha=$TEST_CANDIDATE&event=merge_group&"*) printf '%s\n' "$TEST_MG_RUNS" ;;
+  *"/actions/workflows/ci.yml/runs?"*) echo '{"workflow_runs":[]}' ;;
   *"/pulls?per_page=100"*) echo '[[]]' ;;
   *"/commits/"*)
     commit="${!#}"
@@ -34,6 +39,7 @@ esac
 STUB
 chmod +x "$fixture/bin/gh"
 export PATH="$fixture/bin:$PATH"
+export TEST_CANDIDATE_PULLS TEST_TIMELINE TEST_MG_RUNS
 export TEST_CANDIDATE TEST_CHECK_RUNS TEST_MG_RUN TEST_MG_JOB TEST_HEAVY_RUN TEST_COMPARISON TEST_HEAVY_STATUS TEST_PR_DEPTH_STATUS TEST_PR_DEPTH_RUN TEST_STATUSES TEST_REAL_GIT
 export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 git init -q "$fixture/repo"
@@ -42,6 +48,11 @@ git config user.name test
 git config user.email test@example.com
 git config commit.gpgsign false
 git config tag.gpgsign false
+# The previous release; queue history is read from its tag to the candidate.
+printf '1.2.2\n' > VERSION
+git add VERSION
+git commit -qm 'previous release'
+git tag v1.2.2
 printf '1.2.3\n' > VERSION
 mkdir .changeset
 printf '# Changesets\n' > .changeset/README.md
@@ -58,7 +69,12 @@ reset_health() {
   TEST_COMPARISON=$(jq -nc --arg sha "$TEST_CANDIDATE" '{status:"ahead",merge_base_commit:{sha:$sha}}')
   export TEST_INCIDENTS='[[]]' TEST_API_ERROR=''
   TEST_CHECK_RUNS='[{"total_count":0,"check_runs":[]}]'
-  TEST_MG_RUN='{}' TEST_MG_JOB='{}'
+  TEST_MG_RUN='{}' TEST_MG_JOB='{}' TEST_MG_RUNS='{"workflow_runs":[]}'
+  TEST_CANDIDATE_PULLS=$(jq -nc --arg sha "$TEST_CANDIDATE" '[{html_url:"https://github.com/stella/stella/pull/1",merge_commit_sha:$sha,merged_at:"2026-01-01T00:00:00Z",number:1,title:"Candidate"}]')
+  TEST_TIMELINE=$(queue_timeline AddedToMergeQueueEvent MergedEvent)
+}
+queue_timeline() {
+  jq -nc '{data:{repository:{pullRequest:{timelineItems:{pageInfo:{hasPreviousPage:false},nodes:([$ARGS.positional[] | {__typename:.}])}}}}}' --args "$@"
 }
 # A merge-group ci-result receipt on the candidate itself. The run link names
 # Actions job 6, whose check_run_url points at check run 4.
@@ -66,6 +82,7 @@ use_receipt() {
   TEST_MG_JOB=$(jq -nc --arg sha "$TEST_CANDIDATE" '{id:6,run_id:5,head_sha:$sha,check_run_url:"https://api.github.com/repos/stella/stella/check-runs/4"}')
   TEST_MG_RUN=$(jq -nc --arg sha "$TEST_CANDIDATE" '{id:5,repository:{full_name:"stella/stella"},path:".github/workflows/ci.yml",event:"merge_group",head_sha:$sha,head_branch:"gh-readonly-queue/main/pr-1-base",status:"completed",conclusion:"success",check_suite_id:3}')
   TEST_CHECK_RUNS=$(jq -nc --arg sha "$TEST_CANDIDATE" '[{total_count:1,check_runs:[{id:4,name:"ci-result",head_sha:$sha,status:"completed",conclusion:"success",app:{slug:"github-actions"},check_suite:{id:3},details_url:"https://github.com/stella/stella/actions/runs/5/job/6"}]}]')
+  TEST_MG_RUNS=$(jq -nc --arg sha "$TEST_CANDIDATE" '{workflow_runs:[{head_sha:$sha,event:"merge_group",conclusion:"success"}]}')
 }
 reset_health
 git update-ref refs/remotes/origin/main "$main"
@@ -134,6 +151,22 @@ use_receipt
 bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output"
 grep -qx "sha=$TEST_CANDIDATE" "$fixture/output"
 echo 'ok   merge-group receipt replaces both heavy statuses'
+# The receipt covers only its own group: an admin merge since the previous
+# tag, or history that cannot be read, keeps both heavy statuses required.
+use_receipt
+TEST_TIMELINE=$(queue_timeline MergedEvent)
+expect_failure 'receipt with an admin merge since the previous tag' 'merge-group receipt = not covering unvalidated or unreadable queue history' "$TEST_CANDIDATE"
+TEST_TIMELINE='not json'
+expect_failure 'receipt with unreadable queue history' 'merge-group receipt = not covering unvalidated or unreadable queue history' "$TEST_CANDIDATE"
+reset_health
+use_receipt
+TEST_TIMELINE=$(queue_timeline MergedEvent)
+bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output"
+grep -qx "sha=$TEST_CANDIDATE" "$fixture/output"
+echo 'ok   an admin merge still releases with green heavy statuses'
+reset_health
+TEST_HEAVY_STATUS=$(jq '.state="failure"' <<< "$TEST_HEAVY_STATUS")
+TEST_PR_DEPTH_STATUS=$(jq '.context="other"' <<< "$TEST_PR_DEPTH_STATUS")
 for expression in '.[0].check_runs[0].conclusion="failure"' '.[0].check_runs[0].conclusion="neutral"' '.[0].check_runs[0].conclusion="skipped"' '.[0].check_runs[0].app.slug="other"' '.[0].check_runs = []' '.[0].check_runs += [.[0].check_runs[0] | .conclusion="failure"]'; do
   use_receipt
   TEST_CHECK_RUNS=$(jq -c "$expression" <<< "$TEST_CHECK_RUNS")
@@ -214,6 +247,8 @@ export RUNNER_TEMP="$fixture" RELEASE_HEALTH_TOKEN=fixture
 export GH_RETRY_SCRIPT="$script_dir/gh-retry.sh"
 cp "$script_dir/check-release-main-health.sh" "$RUNNER_TEMP/check-release-main-health.sh"
 cp "$script_dir/verify-release-tree-proof.sh" "$RUNNER_TEMP/verify-release-tree-proof.sh"
+cp "$script_dir/check-release-receipt-coverage.sh" "$RUNNER_TEMP/check-release-receipt-coverage.sh"
+cp "$script_dir/check-release-queue-history.ts" "$RUNNER_TEMP/check-release-queue-history.ts"
 export RELEASE_TREE_PROOF_VERIFIER="$RUNNER_TEMP/verify-release-tree-proof.sh" PROOF_SHA=""
 export TAG=v1.2.3 RELEASE_SHA="$TEST_CANDIDATE" GH_TOKEN=fixture GITHUB_REPOSITORY=stella/stella
 # The run block ends at the first line outside its indentation; later jobs are
@@ -287,6 +322,20 @@ bash -e "$fixture/push.sh"
 [[ "$(git --git-dir="$fixture/remote" rev-parse 'refs/tags/v1.2.3^{}')" == "$TEST_CANDIDATE" ]]
 echo 'ok   push accepts the merge-group receipt'
 git tag -d v1.2.3 >/dev/null
+git --git-dir="$fixture/remote" tag -d v1.2.3 >/dev/null
+# The push re-applies the history rule: an admin merge since the previous tag
+# turns the receipt back into a requirement for main/heavy.
+TEST_TIMELINE=$(queue_timeline MergedEvent)
+if bash -e "$fixture/push.sh" > "$fixture/output" 2> "$fixture/error"; then
+  echo 'FAIL receipt over an admin merge pushed a tag' >&2; exit 1
+fi
+grep -q 'RELEASE_HEAVY_NOT_GREEN' "$fixture/error"
+grep -q 'history since v1.2.2 is not validated through the merge queue' "$fixture/error"
+if "$TEST_REAL_GIT" --git-dir="$fixture/remote" show-ref --verify --quiet refs/tags/v1.2.3; then
+  echo "FAIL unexpected release tag" >&2
+  exit 1
+fi
+echo 'ok   push re-checks the history behind the receipt'
 printf '%s\n' '---' '"@stll/example": patch' '---' 'Pending note' > .changeset/pending.md
 git add .changeset/pending.md
 git commit -qm changeset

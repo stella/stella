@@ -64,12 +64,14 @@ type ReleaseProofSources = {
   release: string;
   prepare: string;
   health: string;
+  coverage: string;
 };
 const policyProblems = ({
   staging,
   release,
   prepare,
   health,
+  coverage,
 }: ReleaseProofSources) => {
   const problems: string[] = [];
   const stagingRuns = workflowSteps(staging)
@@ -91,17 +93,36 @@ const policyProblems = ({
     if (!source.includes("RELEASE_TREE_PROOF_VERIFIER")) {
       problems.push(`${name} must support the trusted verifier path`);
     }
-    // The merge-group receipt has one owner: the shared verifier.
+    // The merge-group receipt has one owner: the shared verifier, reached
+    // only through the coverage check that also enforces queue history.
     if (
-      !/bash\s+"\$tree_proof_verifier"\s+--merge-group-receipt\s+"\$repo"/u.test(
+      !/bash\s+"[^"\n]*\/check-release-receipt-coverage\.sh"\s+"\$repo"/u.test(
         source,
       ) ||
-      /check-runs/u.test(source)
+      /--merge-group-receipt|check-runs/u.test(source)
     ) {
       problems.push(
         `${name} must read the receipt through the shared verifier`,
       );
     }
+  }
+  const coverageSource = activeShell(coverage);
+  if (
+    !/bash\s+"\$tree_proof_verifier"\s+--merge-group-receipt\s+"\$repo"/u.test(
+      coverageSource,
+    ) ||
+    !coverageSource.includes("RELEASE_TREE_PROOF_VERIFIER") ||
+    /check-runs/u.test(coverageSource)
+  ) {
+    problems.push("coverage must read the receipt through the shared verifier");
+  }
+  if (
+    !/bun\s+"\$queue_history"\s+--require(?:\s|$)/u.test(coverageSource) ||
+    !coverageSource.includes(
+      'queue_history="$script_dir/check-release-queue-history.ts"',
+    )
+  ) {
+    problems.push("coverage must enforce the strict queue history check");
   }
   const releaseWorkflow: unknown = Bun.YAML.parse(release);
   if (field(field(releaseWorkflow, "permissions"), "checks") !== "read") {
@@ -126,6 +147,28 @@ const policyProblems = ({
       "release must preserve the trusted verifier before candidate checkout",
     );
   }
+  for (const guard of [
+    "check-release-receipt-coverage.sh",
+    "check-release-queue-history.ts",
+  ]) {
+    const preserved = steps.findIndex(({ run }) =>
+      run.includes(`cp scripts/${guard} "$RUNNER_TEMP/${guard}"`),
+    );
+    if (preserved === -1 || checkout === -1 || preserved >= checkout) {
+      problems.push(`release must preserve ${guard} before candidate checkout`);
+    }
+  }
+  // Selection already applies the queue history rule, so Bun comes first.
+  const setupBun = steps.findIndex(
+    ({ uses }) =>
+      typeof uses === "string" && uses.includes("/setup-bun-cached@"),
+  );
+  const selection = steps.findIndex(({ run }) =>
+    run.includes("bash scripts/prepare-release-tag.sh"),
+  );
+  if (setupBun === -1 || selection === -1 || setupBun >= selection) {
+    problems.push("release must set up Bun before selecting the candidate");
+  }
   const push = steps.find(({ run }) => run.includes("git push"));
   const healthCall =
     push?.run.indexOf('bash "$RUNNER_TEMP/check-release-main-health.sh"') ?? -1;
@@ -146,6 +189,7 @@ const sources = {
   release: read(".github/workflows/release-tag.yml"),
   prepare: read("scripts/prepare-release-tag.sh"),
   health: read("scripts/check-release-main-health.sh"),
+  coverage: read("scripts/check-release-receipt-coverage.sh"),
 };
 
 test("every release gate uses the shared tree proof verifier", () => {
@@ -377,7 +421,11 @@ test("removing verifier delegation from any release gate violates policy", () =>
 test("the merge-group receipt is read only through the shared verifier", () => {
   for (const name of ["prepare", "health"] as const) {
     for (const mutated of [
-      sources[name].replaceAll("--merge-group-receipt", "--unverified-receipt"),
+      sources[name].replaceAll(
+        "check-release-receipt-coverage.sh",
+        "unverified-receipt.sh",
+      ),
+      `${sources[name]}\nbash "$tree_proof_verifier" --merge-group-receipt "$repo" "$sha"\n`,
       `${sources[name]}\ngh api "repos/$repo/commits/$sha/check-runs"\n`,
     ]) {
       expect(mutated).not.toBe(sources[name]);
@@ -386,6 +434,26 @@ test("the merge-group receipt is read only through the shared verifier", () => {
       );
     }
   }
+  for (const coverage of [
+    sources.coverage.replaceAll(
+      "--merge-group-receipt",
+      "--unverified-receipt",
+    ),
+    `${sources.coverage}\ngh api "repos/$repo/commits/$sha/check-runs"\n`,
+  ]) {
+    expect(coverage).not.toBe(sources.coverage);
+    expect(policyProblems({ ...sources, coverage })).toContain(
+      "coverage must read the receipt through the shared verifier",
+    );
+  }
+  const advisory = sources.coverage.replace(
+    'bun "$queue_history" --require',
+    'bun "$queue_history"',
+  );
+  expect(advisory).not.toBe(sources.coverage);
+  expect(policyProblems({ ...sources, coverage: advisory })).toContain(
+    "coverage must enforce the strict queue history check",
+  );
   const release = sources.release.replace("  checks: read\n", "");
   expect(release).not.toBe(sources.release);
   expect(policyProblems({ ...sources, release })).toContain(
@@ -410,6 +478,14 @@ test("release checkout cannot replace the trusted pre-push verifier", () => {
     sources.release.replace(
       "bash scripts/prepare-release-tag.sh",
       "bash scripts/unverified-candidate.sh",
+    ),
+    sources.release.replace(
+      'cp scripts/check-release-queue-history.ts "$RUNNER_TEMP/check-release-queue-history.ts"',
+      "true",
+    ),
+    sources.release.replace(
+      'cp scripts/check-release-receipt-coverage.sh "$RUNNER_TEMP/check-release-receipt-coverage.sh"',
+      "true",
     ),
   ];
   for (const release of mutations) {

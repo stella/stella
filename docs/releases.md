@@ -161,6 +161,14 @@ or change deployed feature flags.
    receipt is refused and the two statuses are required. `staging/verified` is
    required either way.
 
+   A merge-group run validates only its own group's diff, so the receipt also
+   needs every commit since the previous release tag to have reached `main`
+   through a validated merge group. The gate runs
+   `bun scripts/check-release-queue-history.ts --require` over that range; an
+   admin merge, a direct push, or history that cannot be read keeps
+   `main/heavy` and `main/pr-depth` required, and the log names the commits
+   the receipt does not cover.
+
 7. Tag the commit once `staging/verified` is green and it carries either the
    merge-group receipt or green `main/heavy` and `main/pr-depth`:
 

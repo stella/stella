@@ -21,7 +21,9 @@ done
 
 # All status gates must succeed on one verified proof commit. A merge-group
 # ci-result receipt on the release commit itself stands in for main/heavy and
-# main/pr-depth; staging/verified is always required.
+# main/pr-depth when the queue validated every commit since the previous
+# release tag (check-release-receipt-coverage.sh); staging/verified is always
+# required.
 required_contexts='["staging/verified","main/heavy","main/pr-depth"]'
 gates_message='staging/verified plus either main/heavy and main/pr-depth or a merge-group ci-result receipt'
 
@@ -36,11 +38,18 @@ release_states() {
         | "\($context) = \(([$all[] | select(.context == $context)][0].state) // "missing")"') || return 1
   if all_success "$states"; then
     printf '%s\n' "$states"
-  elif grep -qx 'staging/verified = success' <<< "$states" \
-    && bash "$tree_proof_verifier" --merge-group-receipt "$repo" "$target_sha" 2>/dev/null; then
-    printf '%s\n' 'staging/verified = success' 'merge-group receipt = success'
-  else
+  elif ! grep -qx 'staging/verified = success' <<< "$states"; then
     printf '%s\n' "$states" 'merge-group receipt = missing'
+  else
+    # Same rule as the health gate: the receipt counts only when the queue
+    # validated every commit since the previous release tag.
+    local coverage=0
+    bash "$script_dir/check-release-receipt-coverage.sh" "$repo" "$target_sha" 2>/dev/null || coverage=$?
+    case "$coverage" in
+      0) printf '%s\n' 'staging/verified = success' 'merge-group receipt = success' ;;
+      2) printf '%s\n' "$states" 'merge-group receipt = not covering unvalidated or unreadable queue history' ;;
+      *) printf '%s\n' "$states" 'merge-group receipt = missing' ;;
+    esac
   fi
 }
 

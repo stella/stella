@@ -49,6 +49,14 @@ jobs:
           persist-credentials: false
           sparse-checkout: scripts
 
+      # Bun runs the release queue history check the health gate needs before
+      # a merge-group receipt may stand in for the heavy statuses.
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: ".release-proof/package.json"
+
       - name: Reuse completed release proof
         id: reuse
         working-directory: .release-proof

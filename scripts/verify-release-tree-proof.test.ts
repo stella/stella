@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  existsSync,
   mkdtempSync,
   mkdirSync,
   readFileSync,
@@ -200,6 +201,8 @@ const createRepository = (directory: string) => {
     return git("rev-parse", "HEAD");
   };
   const base = commit("a", "base");
+  // The previous release: queue history is read from here to the target.
+  git("tag", "v1.2.2", base);
   git("checkout", "--quiet", "-b", "release");
   writeFileSync(path.join(directory, "VERSION"), "1.2.3\n");
   const proof = commit("b", "release proof");
@@ -220,6 +223,7 @@ const createRepository = (directory: string) => {
     publishCommit(sha);
   }
   const mergedPullRequest = {
+    html_url: `https://github.com/${repository}/pull/1`,
     number: 1,
     title: "chore: release v1.2.3",
     state: "closed",
@@ -239,6 +243,26 @@ const createRepository = (directory: string) => {
   };
   publishPullRequests(target, [mergedPullRequest]);
   publishPullRequests(proof, [mergedPullRequest]);
+  // Pull request #1 reached main through the merge queue unless a test says
+  // otherwise; an admin merge has no queue events.
+  const publishQueueTimeline = (events: readonly string[]) => {
+    writeFileSync(
+      path.join(responses, "timeline-1"),
+      JSON.stringify({
+        data: {
+          repository: {
+            pullRequest: {
+              timelineItems: {
+                pageInfo: { hasPreviousPage: false },
+                nodes: events.map((__typename) => ({ __typename })),
+              },
+            },
+          },
+        },
+      }),
+    );
+  };
+  publishQueueTimeline(["AddedToMergeQueueEvent", "MergedEvent"]);
   writeFileSync(
     path.join(responses, "pull-files"),
     JSON.stringify([
@@ -295,7 +319,23 @@ case "$endpoint" in
   repos/stella/stella/commits/*/pulls?per_page=100)
     sha="\${endpoint#repos/stella/stella/commits/}"
     sha="\${sha%%/*}"
-    cat "$PROOF_TEST_RESPONSES/$sha-pulls"
+    if [[ " $* " == *" --slurp "* ]]; then
+      cat "$PROOF_TEST_RESPONSES/$sha-pulls"
+    else
+      jq -c 'add // []' "$PROOF_TEST_RESPONSES/$sha-pulls"
+    fi
+    ;;
+  number=*)
+    cat "$PROOF_TEST_RESPONSES/timeline-\${endpoint#number=}"
+    ;;
+  repos/stella/stella/actions/workflows/ci.yml/runs?*)
+    sha="\${endpoint#*head_sha=}"
+    sha="\${sha%%&*}"
+    if [[ -f "$PROOF_TEST_RESPONSES/$sha-merge-group-runs" ]]; then
+      cat "$PROOF_TEST_RESPONSES/$sha-merge-group-runs"
+    else
+      printf '{"workflow_runs":[]}\\n'
+    fi
     ;;
   repos/stella/stella/commits/*)
     sha="\${endpoint##*/}"
@@ -455,6 +495,15 @@ esac
         { total_count: checkRuns.length, check_runs: checkRuns },
       ]),
     );
+    // The queue history check finds the same merge-group run by commit.
+    writeFileSync(
+      path.join(responses, `${sha}-merge-group-runs`),
+      JSON.stringify({
+        workflow_runs: [
+          { head_sha: sha, event: "merge_group", conclusion: "success" },
+        ],
+      }),
+    );
   };
   const checkReceipt = (sha = target) =>
     Bun.spawnSync(
@@ -493,6 +542,7 @@ esac
     proof,
     publishCommit,
     publishPullRequests,
+    publishQueueTimeline,
     publishReceipts,
     publishStatuses,
     publishTargetStatus,
@@ -946,40 +996,44 @@ describe("merge-group receipt in place of the heavy statuses", () => {
       expect(fixture.checkHealth().exitCode).not.toBe(0);
     }));
 
-  test("a squashed release head needs only its bound staging proof when the merged commit carries a receipt", async () =>
-    withRepository((fixture) => {
-      fixture.publishStatuses();
-      const statusesPath = path.join(
-        fixture.responses,
-        `${fixture.proof}-statuses`,
-      );
-      // Loose objects keep every other status field for the rewrite below.
-      const [statuses] = v.parse(
-        v.tuple([v.array(v.looseObject({ context: v.string() }))]),
-        JSON.parse(readFileSync(statusesPath, "utf-8")),
-      );
-      writeFileSync(
-        statusesPath,
-        JSON.stringify([
-          statuses.filter(({ context }) => context === "staging/verified"),
-        ]),
-      );
-      expect(fixture.verify().exitCode).not.toBe(0);
-      expect(fixture.discoverProof().stdout.toString().trim()).toBe("");
-      fixture.publishReceipts(fixture.target);
-      const verified = fixture.verify();
-      expect(verified.exitCode, verified.stderr.toString()).toBe(0);
-      expect(fixture.discoverProof().stdout.toString().trim()).toBe(
-        fixture.proof,
-      );
-      expect(fixture.checkHealth(true).exitCode).toBe(0);
-      const tag = fixture.prepareReleaseTag();
-      expect(tag.exitCode, tag.stderr.toString()).toBe(0);
-      expect(tag.stdout.toString()).toContain(`proof-sha=${fixture.proof}\n`);
-      // The staging proof keeps its binding to the squash parent.
-      fixture.recordTestedBase(fixture.proof);
-      expect(fixture.verify().exitCode).not.toBe(0);
-    }));
+  test(
+    "a squashed release head needs only its bound staging proof when the merged commit carries a receipt",
+    async () =>
+      withRepository((fixture) => {
+        fixture.publishStatuses();
+        const statusesPath = path.join(
+          fixture.responses,
+          `${fixture.proof}-statuses`,
+        );
+        // Loose objects keep every other status field for the rewrite below.
+        const [statuses] = v.parse(
+          v.tuple([v.array(v.looseObject({ context: v.string() }))]),
+          JSON.parse(readFileSync(statusesPath, "utf-8")),
+        );
+        writeFileSync(
+          statusesPath,
+          JSON.stringify([
+            statuses.filter(({ context }) => context === "staging/verified"),
+          ]),
+        );
+        expect(fixture.verify().exitCode).not.toBe(0);
+        expect(fixture.discoverProof().stdout.toString().trim()).toBe("");
+        fixture.publishReceipts(fixture.target);
+        const verified = fixture.verify();
+        expect(verified.exitCode, verified.stderr.toString()).toBe(0);
+        expect(fixture.discoverProof().stdout.toString().trim()).toBe(
+          fixture.proof,
+        );
+        expect(fixture.checkHealth(true).exitCode).toBe(0);
+        const tag = fixture.prepareReleaseTag();
+        expect(tag.exitCode, tag.stderr.toString()).toBe(0);
+        expect(tag.stdout.toString()).toContain(`proof-sha=${fixture.proof}\n`);
+        // The staging proof keeps its binding to the squash parent.
+        fixture.recordTestedBase(fixture.proof);
+        expect(fixture.verify().exitCode).not.toBe(0);
+      }),
+    30_000,
+  );
 
   test("a receipt on the release head instead of the merged commit is not accepted", async () =>
     withRepository((fixture) => {
@@ -987,6 +1041,119 @@ describe("merge-group receipt in place of the heavy statuses", () => {
       fixture.publishReceipts(fixture.proof);
       expect(fixture.checkReceipt().exitCode).not.toBe(0);
       expect(fixture.checkHealth(true).exitCode).not.toBe(0);
+    }));
+});
+
+describe("merge-group receipt and the history since the previous release", () => {
+  // A receipt validates only its own group's diff. It stands in for the heavy
+  // statuses only when every commit since the previous tag was queue-validated.
+  const receiptOnly = (fixture: ReturnType<typeof createRepository>) => {
+    writeFileSync(
+      path.join(fixture.responses, `${fixture.target}-statuses`),
+      JSON.stringify([[{ context: "staging/verified", state: "success" }]]),
+    );
+    fixture.publishReceipts(fixture.target);
+  };
+  const withoutBun = (environment: Record<string, string | undefined>) => ({
+    ...environment,
+    PATH: (environment["PATH"] ?? "")
+      .split(path.delimiter)
+      .filter((directory) => !existsSync(path.join(directory, "bun")))
+      .join(path.delimiter),
+  });
+
+  test("validated history: neither main/heavy nor main/pr-depth is required", async () =>
+    withRepository((fixture) => {
+      receiptOnly(fixture);
+      const health = fixture.checkHealth(true);
+      expect(health.exitCode, health.stderr.toString()).toBe(0);
+      expect(health.stderr.toString()).toContain(
+        "validated queue history since v1.2.2 stand in for main/heavy and main/pr-depth",
+      );
+      expect(health.stdout.toString()).toBe("");
+      const tag = fixture.prepareReleaseTag();
+      expect(tag.exitCode, tag.stderr.toString()).toBe(0);
+      expect(tag.stdout.toString()).toContain(`sha=${fixture.target}\n`);
+    }));
+
+  test(
+    "an admin merge since the previous tag keeps both statuses required",
+    async () =>
+      withRepository((fixture) => {
+        receiptOnly(fixture);
+        fixture.publishQueueTimeline(["MergedEvent"]);
+        const refused = fixture.checkHealth(true);
+        expect(refused.exitCode).not.toBe(0);
+        expect(refused.stderr.toString()).toContain(
+          "history since v1.2.2 is not validated through the merge queue",
+        );
+        expect(refused.stderr.toString()).toContain("#1 chore: release v1.2.3");
+        expect(refused.stderr.toString()).toContain("RELEASE_HEAVY_NOT_GREEN");
+        expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
+        // Trusted main/heavy and main/pr-depth still release the commit.
+        fixture.publishStatuses();
+        const health = fixture.checkHealth();
+        expect(health.exitCode, health.stderr.toString()).toBe(0);
+        fixture.publishStatuses("main/pr-depth");
+        const missing = fixture.checkHealth();
+        expect(missing.exitCode).not.toBe(0);
+        expect(missing.stderr.toString()).toContain(
+          "RELEASE_PR_DEPTH_NOT_GREEN",
+        );
+      }),
+    30_000,
+  );
+
+  test("a pull request removed from the queue before a direct merge keeps both statuses required", async () =>
+    withRepository((fixture) => {
+      receiptOnly(fixture);
+      fixture.publishQueueTimeline([
+        "AddedToMergeQueueEvent",
+        "RemovedFromMergeQueueEvent",
+        "MergedEvent",
+      ]);
+      const health = fixture.checkHealth(true);
+      expect(health.exitCode).not.toBe(0);
+      expect(health.stderr.toString()).toContain("RELEASE_HEAVY_NOT_GREEN");
+    }));
+
+  test.each<[string, (fixture: ReturnType<typeof createRepository>) => void]>([
+    [
+      "an unreadable pull request timeline",
+      ({ responses }) => {
+        writeFileSync(path.join(responses, "timeline-1"), "not json");
+      },
+    ],
+    [
+      "no previous release tag in the checkout",
+      ({ git }) => {
+        git("tag", "--delete", "v1.2.2");
+      },
+    ],
+  ])("%s keeps both statuses required", async (_name, breakHistory) =>
+    withRepository((fixture) => {
+      receiptOnly(fixture);
+      breakHistory(fixture);
+      const health = fixture.checkHealth(true);
+      expect(health.exitCode).not.toBe(0);
+      expect(health.stderr.toString()).toContain(
+        "does not stand in for main/heavy and main/pr-depth",
+      );
+      expect(health.stderr.toString()).toContain("RELEASE_HEAVY_NOT_GREEN");
+      expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
+    }),
+  );
+
+  test("without Bun the history cannot be checked, so both statuses stay required", async () =>
+    withRepository((fixture) => {
+      receiptOnly(fixture);
+      const health = Bun.spawnSync(
+        ["bash", healthGate, repository, fixture.target],
+        { cwd: fixture.directory, env: withoutBun(fixture.environment) },
+      );
+      expect(health.exitCode).not.toBe(0);
+      expect(health.stderr.toString()).toContain("Bun is not available");
+      expect(health.stderr.toString()).toContain("RELEASE_HEAVY_NOT_GREEN");
     }));
 });
 
