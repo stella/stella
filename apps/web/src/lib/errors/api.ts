@@ -227,15 +227,7 @@ const validationIssueMessage = (issue: ApiValidationIssue): string => {
   }
 };
 
-const hasValidationIssues = (
-  code: string | undefined,
-  details: Record<string, unknown> | undefined,
-): boolean =>
-  code === API_VALIDATION_ERROR_CODE &&
-  parseApiValidationIssues(details).length > 0;
-
 export const isDisplayableAPIError = (error: APIError): boolean =>
-  hasValidationIssues(error.code, error.details) ||
   isActionAdmissionCode(error.code) ||
   (typeof error.code === "string" && isKnownErrorCode(error.code)) ||
   (error.status === 402 &&

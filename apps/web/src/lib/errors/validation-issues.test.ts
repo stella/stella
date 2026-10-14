@@ -35,15 +35,21 @@ describe("a rejected request's field issues", () => {
     );
   });
 
-  test("a validation answer without readable issues keeps the caller's fallback", () => {
-    expect(userErrorFromThrown(rejected([]), "Action failed")).toBe(
-      "Action failed",
-    );
+  test("a validation answer without readable issues asks to check the request", () => {
+    const generic = userErrorFromThrown(rejected([]), "Action failed");
+
+    expect(generic).not.toBe("Action failed");
     expect(
       userErrorFromThrown(
         rejected([{ field: "name", constraint: "unknown-kind" }]),
         "Action failed",
       ),
-    ).toBe("Action failed");
+    ).toBe(generic);
+    expect(
+      userErrorFromThrown(
+        rejected([{ field: "name", constraint: "maxLength", limit: 256 }]),
+        "Action failed",
+      ),
+    ).not.toBe(generic);
   });
 });
