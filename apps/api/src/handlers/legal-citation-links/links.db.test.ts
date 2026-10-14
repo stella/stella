@@ -2,10 +2,15 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
-import { legalCitationLinksHandler } from "@/api/handlers/legal-citation-links/links";
+import {
+  legalCitationLinksHandler,
+  locateStatutes,
+} from "@/api/handlers/legal-citation-links/links";
 import type { LegalCitationLink } from "@/api/handlers/legal-citation-links/links";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -25,6 +30,7 @@ import {
 
 const LABOUR_CODE_ELI = "https://www.e-sbirka.cz/eli/cz/sb/2006/262";
 const CHARTER_ELI = "https://www.e-sbirka.cz/eli/cz/sb/1993/2";
+const SK_LABOUR_CODE_ELI = "/eli/sk/zz/2001/311";
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let legislationDb: LegislationReadDb;
@@ -36,6 +42,7 @@ const sourceId = createSafeId<"legislationSource">();
 const labourCode2007 = createSafeId<"legislationDocument">();
 const labourCode2024 = createSafeId<"legislationDocument">();
 const charter = createSafeId<"legislationDocument">();
+const skLabourCode = createSafeId<"legislationDocument">();
 
 const NO_DECISIONS = async (): Promise<DecisionIdentityRow[]> =>
   await Promise.resolve([]);
@@ -55,20 +62,24 @@ testState.beforeAll(async () => {
     slug,
     from,
     to,
+    country = "CZE",
+    language = "cs",
   }: {
     id: SafeId<"legislationDocument">;
     eli: string;
     slug: string;
     from: string;
     to: string | null;
+    country?: string;
+    language?: string;
   }) => ({
     id,
     sourceId,
     eli,
     slug,
     title: `Act ${slug}`,
-    country: "CZE",
-    language: "cs",
+    country,
+    language,
     documentType: "act",
     status: "current",
     versionValidFrom: from,
@@ -91,6 +102,15 @@ testState.beforeAll(async () => {
       slug: "zakonik-prace",
       from: "2024-01-01",
       to: null,
+    }),
+    row({
+      id: skLabourCode,
+      eli: SK_LABOUR_CODE_ELI,
+      slug: "zakonnik-prace",
+      from: "2002-04-01",
+      to: null,
+      country: "SVK",
+      language: "sk",
     }),
     row({
       id: charter,
@@ -200,6 +220,45 @@ describe("statute citation links", () => {
       expect(end).toBeLessThanOrEqual(text.length);
     }
     expect(text).toBe("Viz § 55 odst. 1 písm. b) ZP.");
+  });
+
+  test("a Slovak citation is read to its Slov-Lex ELI on a Slovak-preferred request", () => {
+    const text = "Podľa § 2 ods. 1 zákona č. 311/2001 Z. z. platí…";
+    const located = locateStatutes({
+      text,
+      asOf: "2025-03-01",
+      countries: ["SVK", "CZE"],
+    });
+    expect(
+      located.map(({ start, end, country, eli }) => ({
+        cited: text.slice(start, end),
+        country,
+        eli,
+      })),
+    ).toEqual([
+      {
+        cited: "§ 2 ods. 1 zákona č. 311/2001 Z. z.",
+        country: "SVK",
+        eli: SK_LABOUR_CODE_ELI,
+      },
+    ]);
+  });
+
+  test("Slovak law stays unlinked while its public corpus is not admitted", async () => {
+    const text = "Podľa § 2 ods. 1 zákona č. 311/2001 Z. z. platí…";
+    const { links } = await legalCitationLinksHandler(
+      { text, asOf: "2025-03-01", countries: ["SVK", "CZE"] },
+      { legislationDb, lookup: NO_DECISIONS },
+    );
+    expect(
+      PUBLIC_LEGISLATION_COUNTRIES.some((country) => country === "SVK")
+        ? linkedText(text, links)
+        : links,
+    ).toEqual(
+      PUBLIC_LEGISLATION_COUNTRIES.some((country) => country === "SVK")
+        ? ["§ 2 ods. 1 zákona č. 311/2001 Z. z."]
+        : [],
+    );
   });
 
   test("a country without a profile links nothing", async () => {

@@ -27,6 +27,8 @@ const CZE = STATUTE_ACTS.cze;
 export const CZ_STATUTE_COLLECTION = {
   canonical: "Sb.",
   spellings: ["Sb.", "Sb", "sb.", "SB.", "SB"],
+  eli: ({ number, year }: { number: number; year: number }) =>
+    `https://www.e-sbirka.cz/eli/cz/sb/${String(year)}/${String(number)}`,
 } as const satisfies CollectionSpec;
 
 const SB = CZ_STATUTE_COLLECTION.canonical;

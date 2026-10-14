@@ -34,6 +34,32 @@ type LookupDecisionIdentityOptions = {
   country: string;
   identifier: string;
   lookup?: typeof lookupDecisionsByIdentity;
+  /**
+   * How a docket that names a whole file may still name one decision, for a
+   * caller that reads a citation in context rather than an identifier alone:
+   * the decision dated as the text dates it, or, with no date written, the
+   * file's only decision. Absent, such a docket stays incomplete.
+   */
+  docketFamily?: { citedDecisionDate: string | null };
+};
+
+/**
+ * The one decision of a docket's file a citation names: the one dated as
+ * the citation dates it, or the only one when it names no date. Null when
+ * the file's decisions leave it open.
+ */
+const familyDecision = (
+  candidates: readonly DecisionIdentityRow[],
+  citedDecisionDate: string | null,
+): DecisionIdentityRow | null => {
+  const named =
+    citedDecisionDate === null
+      ? candidates
+      : candidates.filter(
+          ({ decisionDate }) => decisionDate === citedDecisionDate,
+        );
+  const [only, ...rest] = named;
+  return only !== undefined && rest.length === 0 ? only : null;
 };
 
 /**
@@ -49,6 +75,7 @@ export const lookupDecisionIdentity = async ({
   country: countryInput,
   identifier,
   lookup = lookupDecisionsByIdentity,
+  docketFamily,
 }: LookupDecisionIdentityOptions): Promise<DecisionIdentityLookup> => {
   if (identifier.trim().length === 0) {
     return { status: "incomplete_identifier", missing: ["identifier"] };
@@ -79,14 +106,35 @@ export const lookupDecisionIdentity = async ({
   switch (resolution.status) {
     case "none":
       return { status: "not_found" };
-    case "ambiguous":
-      return resolution.reason === "selector_unmatched"
-        ? { status: "not_found" }
-        : { status: "ambiguous", candidates: resolution.candidates };
+    case "ambiguous": {
+      if (resolution.reason === "selector_unmatched") {
+        return { status: "not_found" };
+      }
+      const decision =
+        docketFamily === undefined
+          ? null
+          : familyDecision(
+              resolution.candidates,
+              docketFamily.citedDecisionDate,
+            );
+      return decision === null
+        ? { status: "ambiguous", candidates: resolution.candidates }
+        : { status: "unique", decision };
+    }
     case "unique":
       return { status: "unique", decision: resolution.decision };
-    case "incomplete_identifier":
-      return { status: "incomplete_identifier", missing: resolution.missing };
+    case "incomplete_identifier": {
+      const decision =
+        docketFamily === undefined
+          ? null
+          : familyDecision(
+              resolution.candidates,
+              docketFamily.citedDecisionDate,
+            );
+      return decision === null
+        ? { status: "incomplete_identifier", missing: resolution.missing }
+        : { status: "unique", decision };
+    }
     default:
       resolution satisfies never;
       return panic("Unhandled decision identity resolution");

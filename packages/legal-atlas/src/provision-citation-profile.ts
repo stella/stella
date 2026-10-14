@@ -91,6 +91,12 @@ export type CollectionSpec = {
   canonical: string;
   /** Every spelling accepted in text, including the canonical one. */
   spellings: readonly string[];
+  /**
+   * The ELI the corpus stores a work of this collection under, absent for a
+   * collection whose works the corpus does not hold as statutes (treaties,
+   * the EU Official Journal).
+   */
+  eli?: (work: { number: number; year: number }) => string;
 };
 
 /**

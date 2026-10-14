@@ -757,6 +757,18 @@ export const resolveProvisionCitation = ({
   };
 };
 
+/**
+ * The ELI the corpus stores a resolved work under, read from the profile's
+ * own collection, or null for a collection the corpus holds no statutes of.
+ */
+export const provisionWorkEli = (
+  profile: JurisdictionProfile,
+  work: WorkIdentifier,
+): string | null =>
+  profile.collections
+    .find(({ canonical }) => canonical === work.collection)
+    ?.eli?.(work) ?? null;
+
 /** One provision a running text cites, resolved, with where it stands. */
 export type LocatedProvisionCitationSpan = {
   /** UTF-16 offsets into the text as given, end exclusive. */

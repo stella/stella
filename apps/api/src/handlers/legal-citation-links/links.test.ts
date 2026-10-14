@@ -93,39 +93,86 @@ describe("decision citation links", () => {
     expect(new Set(links.map(({ url }) => url)).size).toBe(1);
   });
 
-  test.each([
-    [
-      "Rozsudek Nejvyššího soudu ze dne 1. 2. 2017, sp. zn. 21 Cdo 4733/2015, uvedl…",
-      row({
-        caseNumber: "21 Cdo 4733/2015",
-        ecli: null,
-        court: "Nejvyšší soud",
-      }),
-    ],
-    [
-      "Ústavní soud v nálezu Pl. ÚS 1/20 uvedl…",
-      row({ caseNumber: "Pl. ÚS 1/20", ecli: null, court: "Ústavní soud" }),
-    ],
-  ])(
-    "a bare docket of a file that may hold several decisions stays plain: %p",
-    async (text, decision) => {
-      let lookups = 0;
-      const { links } = await legalCitationLinksHandler(
-        { text, asOf: "2025-03-01", countries: ["CZE"] },
-        {
-          legislationDb: NO_STATUTE_READ,
-          lookup: async () => {
-            lookups += 1;
-            return await Promise.resolve([decision]);
-          },
-        },
-      );
-      // Read by identity, found, and still left unlinked: the file is named
-      // without the sheet that picks one of its decisions.
-      expect(lookups).toBe(1);
-      expect(links).toEqual([]);
+  const fileDecision = ({
+    caseNumber,
+    court,
+    decisionDate,
+  }: {
+    caseNumber: string;
+    court: string;
+    decisionDate: string;
+  }) => ({ ...row({ caseNumber, ecli: null, court }), decisionDate });
+
+  const linkedDecisionIds = async (
+    text: string,
+    rows: readonly DecisionIdentityRow[],
+  ) => {
+    const urlById = new Map(
+      rows.map((decision) => [
+        buildCaseLawDecisionAppUrl({
+          caseNumber: decision.caseNumber,
+          country: decision.country,
+          court: decision.court,
+          decisionId: decision.id,
+          language: decision.language,
+          languageAlternates: decision.languageAlternates,
+          slug: decision.slug,
+        }),
+        decision.id,
+      ]),
+    );
+    return (await linksIn(text, rows)).map(({ url }) => urlById.get(url));
+  };
+
+  describe.each([
+    {
+      docket: "21 Cdo 4733/2015",
+      court: "Nejvyšší soud",
+      cited: (date: string) =>
+        date === ""
+          ? "Nejvyšší soud ve věci sp. zn. 21 Cdo 4733/2015 uvedl…"
+          : `Nejvyšší soud v rozsudku ze dne ${date}, sp. zn. 21 Cdo 4733/2015, uvedl…`,
     },
-  );
+    {
+      docket: "Pl. ÚS 1/20",
+      court: "Ústavní soud",
+      cited: (date: string) =>
+        date === ""
+          ? "Ústavní soud v nálezu sp. zn. Pl. ÚS 1/20 uvedl…"
+          : `Ústavní soud v nálezu ze dne ${date}, sp. zn. Pl. ÚS 1/20, uvedl…`,
+    },
+  ])("a bare docket $docket", ({ docket, court, cited }) => {
+    const first = fileDecision({
+      caseNumber: docket,
+      court,
+      decisionDate: "2017-02-01",
+    });
+    const second = fileDecision({
+      caseNumber: docket,
+      court,
+      decisionDate: "2018-06-12",
+    });
+
+    test("links the file's only decision", async () => {
+      expect(await linkedDecisionIds(cited(""), [first])).toEqual([first.id]);
+    });
+
+    test("links the decision dated as the text dates it", async () => {
+      expect(
+        await linkedDecisionIds(cited("12. 6. 2018"), [first, second]),
+      ).toEqual([second.id]);
+    });
+
+    test("stays plain when the file holds several and no date picks one", async () => {
+      expect(await linkedDecisionIds(cited(""), [first, second])).toEqual([]);
+    });
+
+    test("stays plain when the written date matches none of them", async () => {
+      expect(
+        await linkedDecisionIds(cited("3. 3. 2019"), [first, second]),
+      ).toEqual([]);
+    });
+  });
 
   test("an ambiguous or unknown citation stays plain text", async () => {
     const text = "Viz rozsudek č. j. 3 Afs 41/2008 - 98.";

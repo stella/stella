@@ -4,9 +4,11 @@ import type { Static } from "elysia";
 
 import { ADMITTED_PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { PROVISION_CITATION_GRAMMARS } from "@stll/legal-atlas/provision-citation-grammars";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { locateProvisionCitations } from "@stll/legal-atlas/provision-citation-resolve";
+import {
+  locateProvisionCitations,
+  provisionWorkEli,
+} from "@stll/legal-atlas/provision-citation-resolve";
 import type { LocatedProvisionCitationSpan } from "@stll/legal-atlas/provision-citation-resolve";
 
 import { legislationDocuments } from "@/api/db/schema";
@@ -107,32 +109,12 @@ type LocatedStatute = LocatedProvisionCitationSpan & {
 };
 
 /**
- * The ELI of a resolved work in the country's own gazette, or null for a
- * work outside it (an EU regulation cited in Czech prose) or a country whose
- * gazette has no ELI grammar here.
- */
-const gazetteEli = (
-  country: string,
-  span: LocatedProvisionCitationSpan,
-): string | null => {
-  const grammar = Object.entries(PROVISION_CITATION_GRAMMARS).find(
-    ([jurisdiction]) => jurisdiction === country,
-  )?.[1];
-  if (grammar?.status !== "supported") {
-    return null;
-  }
-  const parsed = grammar.gazette.parse(span.citation.workIdentifier);
-  return parsed?.identifier === span.citation.workIdentifier
-    ? parsed.eli
-    : null;
-};
-
-/**
  * Every provision the text cites with its act, read with each country's
  * profile in the caller's order: the first profile that resolves a stretch of
- * text claims it, so a later country never relinks it.
+ * text claims it, so a later country never relinks it. The caller passes
+ * only countries whose public law this surface reads.
  */
-const locateStatutes = ({
+export const locateStatutes = ({
   text,
   asOf,
   countries,
@@ -155,7 +137,9 @@ const locateStatutes = ({
       if (overlaps(span, located)) {
         continue;
       }
-      const eli = gazetteEli(country, span);
+      // A work outside the country's statute collections (an EU regulation
+      // cited in Czech prose) has no ELI here and stays plain text.
+      const eli = provisionWorkEli(profile, span.citation.work);
       if (eli !== null) {
         located.push({ ...span, country, eli });
       }
@@ -291,9 +275,10 @@ const withSheet = (text: string, span: Span, sheet: string | null): Span => {
 /**
  * The decision links: each docket, reporter number or ECLI the text names,
  * resolved by exact identity in the caller's countries in order. The first
- * country with any answer decides: only a unique decision is linked, and an
- * ambiguous or incomplete identifier (a file that may hold several decisions
- * and names no sheet) stays plain text rather than linking a guess.
+ * country with any answer decides: only a unique decision is linked. A
+ * docket naming a whole file links to the decision dated as the text dates
+ * it, or to the file's only decision when no date is written; any other
+ * ambiguous or incomplete identifier stays plain text rather than a guess.
  */
 const linkDecisions = async ({
   text,
@@ -309,6 +294,7 @@ const linkDecisions = async ({
   const citations = extractCitations([{ index: 0, text }])
     .map((citation) => ({
       identifier: citationIdentifier(citation),
+      citedDecisionDate: citation.citedDecisionDate,
       spans: occurrencesOf(text, citationSpelling(citation))
         .map((span) => withSheet(text, span, citation.citedSheetNumber))
         .filter((span) => !overlaps(span, taken)),
@@ -317,7 +303,7 @@ const linkDecisions = async ({
     .slice(0, LIMITS.legalCitationLinksDecisionsMax);
 
   const resolved = await Promise.all(
-    citations.map(async ({ identifier, spans }) => {
+    citations.map(async ({ citedDecisionDate, identifier, spans }) => {
       for (const country of countries) {
         // db-await-in-loop: countries are tried in order and the first answer
         // decides; bounded by legalCitationLinksCountriesMax
@@ -325,6 +311,7 @@ const linkDecisions = async ({
           country,
           identifier,
           lookup,
+          docketFamily: { citedDecisionDate },
         });
         if (identity.status === "not_found") {
           continue;

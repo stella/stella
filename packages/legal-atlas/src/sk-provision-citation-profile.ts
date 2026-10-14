@@ -21,6 +21,10 @@ import type {
 
 const SVK = STATUTE_ACTS.svk;
 
+/** The ELI the corpus stores a Slovak act under. */
+const slovLexEli = ({ number, year }: { number: number; year: number }) =>
+  `/eli/sk/zz/${String(year)}/${String(number)}`;
+
 const zz = (number: number, year: number): WorkIdentifier => ({
   number,
   year,
@@ -145,9 +149,15 @@ export const SK_PROFILE = {
   rangeConnectors: ["až", "do"],
   andFollowingMarkers: ["a nasl.", "a nasledujúce", "a nasledujúcich"],
 
+  // The corpus keeps both collections under Slov-Lex's one `zz` ELI series:
+  // 40/1964 Zb. is `/eli/sk/zz/1964/40`.
   collections: [
-    { canonical: "Z. z.", spellings: ["Z. z.", "Z.z.", "Z. z", "z. z."] },
-    { canonical: "Zb.", spellings: ["Zb.", "Zb", "zb."] },
+    {
+      canonical: "Z. z.",
+      spellings: ["Z. z.", "Z.z.", "Z. z", "z. z."],
+      eli: slovLexEli,
+    },
+    { canonical: "Zb.", spellings: ["Zb.", "Zb", "zb."], eli: slovLexEli },
   ],
 
   actLeadIns: [

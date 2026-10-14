@@ -603,7 +603,10 @@ export const PROVISION_CITATION_GRAMMARS = {
     connectors: [",", String.raw`a(?=\s)`, String.raw`ve\s+spojení\s+s(?=\s)`],
     gazette: {
       eli: ({ number, year }) =>
-        `https://www.e-sbirka.cz/eli/cz/sb/${year}/${String(Number(number))}`,
+        CZ_STATUTE_COLLECTION.eli({
+          number: Number(number),
+          year: Number(year),
+        }),
       identifier: ({ number, year }) =>
         formatWorkIdentifier({
           number: Number(number),
