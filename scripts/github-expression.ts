@@ -198,7 +198,7 @@ const negateOutputCondition = (node: OutputCondition): OutputCondition => {
 
 const outputAtom = (
   tokens: readonly Token[],
-  outputs: ReadonlySet<string>,
+  outputs: ReadonlyMap<string, string>,
 ): OutputCondition => {
   const first = tokens.at(0);
   if (tokens.length === 1 && first?.kind === "word") {
@@ -208,7 +208,13 @@ const outputAtom = (
     if (outputs.has(first.value)) {
       return {
         type: "constraint",
-        constraint: { output: first.value, operator: "!=", value: "" },
+        constraint: {
+          output:
+            outputs.get(first.value) ??
+            panic("Trusted output has no producer identity"),
+          operator: "!=",
+          value: "",
+        },
       };
     }
   }
@@ -229,7 +235,9 @@ const outputAtom = (
       return {
         type: "constraint",
         constraint: {
-          output: reference.value,
+          output:
+            outputs.get(reference.value) ??
+            panic("Trusted output has no producer identity"),
           operator: operator.value,
           value: literal.value.toLowerCase(),
         },
@@ -241,7 +249,7 @@ const outputAtom = (
 
 const parseOutputCondition = (
   input: readonly Token[],
-  outputs: ReadonlySet<string>,
+  outputs: ReadonlyMap<string, string>,
 ): OutputCondition => {
   const tokens = ungroupTokens(input);
   if (tokens.length === 0) {
@@ -353,7 +361,7 @@ const outputConstraintConflict = (
 
 type ConjunctiveOutputConditionsOptions = {
   readonly conditions: readonly string[];
-  readonly outputs: ReadonlySet<string>;
+  readonly outputs: ReadonlyMap<string, string>;
 };
 
 type ConjunctiveOutputConditionsResult =

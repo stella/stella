@@ -3576,27 +3576,46 @@ const registeredJobOutputs = (
   jobs: Record<string, unknown>,
   stepReferences: ReadonlyMap<string, ReadonlySet<string>>,
 ) => {
-  const jobReferences = new Set<string>();
-  for (const [name, value] of Object.entries(jobs)) {
+  const references = new Set<string>();
+  const producers = new Map<string, string>();
+  const opaque = new Map<string, string>();
+  for (const [job, value] of Object.entries(jobs)) {
     const outputs = workflowRecord(workflowRecord(value)?.["outputs"]) ?? {};
     for (const [output, expression] of Object.entries(outputs)) {
+      const reference = `needs.${job}.outputs.${output}`;
       if (typeof expression !== "string") {
+        opaque.set(
+          reference,
+          "job output is not a single plain producer reference",
+        );
         continue;
       }
-      const references = referencedContexts(expression).filter((reference) =>
-        reference.includes(".outputs."),
+      const source = conditionExpression(expression);
+      const dependencies = referencedContexts(expression).filter((dependency) =>
+        dependency.includes(".outputs."),
       );
       if (
-        references.length > 0 &&
-        references.every((reference) =>
-          stepReferences.get(name)?.has(reference),
+        dependencies.length > 0 &&
+        dependencies.every((dependency) =>
+          stepReferences.get(job)?.has(dependency),
         )
       ) {
-        jobReferences.add(`needs.${name}.outputs.${output}`);
+        references.add(reference);
+      }
+      if (
+        /^steps\.[\w-]+\.outputs\.[\w-]+$/u.test(source) &&
+        stepReferences.get(job)?.has(source)
+      ) {
+        producers.set(reference, `${job}/${source}`);
+      } else if (!/^steps\.[\w-]+\.outputs\.[\w-]+$/u.test(source)) {
+        opaque.set(
+          reference,
+          "job output is not a single plain producer reference",
+        );
       }
     }
   }
-  return jobReferences;
+  return { references, producers, opaque };
 };
 
 export const referencedCollectorOutputs = (
@@ -3776,11 +3795,28 @@ export const validateTrustedOutputProducers = ({
       (name) =>
         [
           name,
-          new Set([...jobReferences, ...(stepReferences.get(name) ?? [])]),
+          new Set([
+            ...jobReferences.references,
+            ...(stepReferences.get(name) ?? []),
+          ]),
         ] as const,
     ),
   );
-  return { references, findings };
+  const producers = new Map(
+    Object.keys(jobs).map(
+      (name) =>
+        [
+          name,
+          new Map([
+            ...jobReferences.producers,
+            ...[...(stepReferences.get(name) ?? [])].map(
+              (reference) => [reference, `${name}/${reference}`] as const,
+            ),
+          ]),
+        ] as const,
+    ),
+  );
+  return { references, producers, opaque: jobReferences.opaque, findings };
 };
 
 export type GatingWorkflowAnalysis = {
@@ -3791,11 +3827,13 @@ export type GatingWorkflowAnalysis = {
 type CollectorOutputConditionOptions = {
   readonly conditions: readonly unknown[];
   readonly outputs: ReadonlySet<string>;
+  readonly producers: ReadonlyMap<string, string>;
 };
 
 const collectorOutputConditionFailure = ({
   conditions,
   outputs,
+  producers,
 }: CollectorOutputConditionOptions): string | undefined => {
   const expressions = conditions.flatMap((condition) => {
     if (typeof condition === "string") {
@@ -3814,7 +3852,7 @@ const collectorOutputConditionFailure = ({
   }
   const result = conjunctiveOutputConditions({
     conditions: expressions,
-    outputs,
+    outputs: producers,
   });
   return result.type === "consistent" ? undefined : result.reason;
 };
@@ -3893,9 +3931,21 @@ const analyzeWorkflowWithProducerDeclarations = (
         }
         const trustedOutputs =
           registered.references.get(name) ?? new Set<string>();
+        for (const reference of [root?.["if"], job["if"], step["if"]].flatMap(
+          (condition) =>
+            typeof condition === "string" ? referencedContexts(condition) : [],
+        )) {
+          const reason = registered.opaque.get(reference);
+          if (reason !== undefined) {
+            findings.add(
+              `job condition: ${name}/step-${stepIndex + 1} uses opaque output ${reference}: ${reason}`,
+            );
+          }
+        }
         const outputFailure = collectorOutputConditionFailure({
           conditions: [root?.["if"], job["if"], step["if"]],
           outputs: trustedOutputs,
+          producers: registered.producers.get(name) ?? new Map(),
         });
         if (outputFailure !== undefined) {
           findings.add(

@@ -1684,6 +1684,74 @@ jobs:
     ).toThrow("invalid structured blocker");
   });
 
+  check.each(["true", "false", "composite"])(
+    "job output aliases share producer constraints: %s",
+    (value) => {
+      const registry = [
+        {
+          workflow: ".github/workflows/ci.yml",
+          job: "ci-plan",
+          stepId: "selection",
+          outputNames: ["required"],
+          semantics: "selection",
+          proofTest: "scripts/ci-plan.test.ts",
+        },
+      ] as const satisfies readonly TrustedOutputProducer[];
+      const source = `jobs:
+  ci-plan:
+    outputs:
+      selected_a: \${{ steps.selection.outputs.required }}
+      selected_b: \${{ ${value === "composite" ? "steps.selection.outputs.required == 'true'" : "steps.selection.outputs.required"} }}
+    steps:
+      - id: selection
+        run: echo 'required=true' >> "$GITHUB_OUTPUT"
+  checks:
+    if: needs.ci-plan.outputs.selected_a == 'true'
+    steps:
+      - if: needs.ci-plan.outputs.selected_b == '${value === "true" ? "true" : "false"}'
+        run: bun test scripts/named.test.ts
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bun test scripts/ci-plan.test.ts
+  ci-result:
+    needs: [ci-plan, checks, proof]
+`;
+      const workflow = Bun.YAML.parse(source);
+      const analysis = analyzeGatingWorkflow(workflow, registry);
+      const declarations = validateTrustedOutputProducers({
+        workflow,
+        registry,
+      });
+      const producers = declarations.producers.get("checks");
+      if (value === "composite") {
+        expect(producers?.has("needs.ci-plan.outputs.selected_b")).toBe(false);
+        expect(analysis.findings.join("\n")).toContain(
+          "uses opaque output needs.ci-plan.outputs.selected_b: job output is not a single plain producer reference",
+        );
+      } else {
+        expect(producers?.get("needs.ci-plan.outputs.selected_a")).toBe(
+          producers?.get("needs.ci-plan.outputs.selected_b"),
+        );
+      }
+      expect(analysis.jobs.has("checks")).toBe(value !== "false");
+      const failure = firstCollectionFailure({
+        file: "scripts/named.test.ts",
+        scenarios: new Map(),
+        topology: {
+          workflow: source,
+          gatingJobs: analysis.jobs,
+          shardedPackages: new Set<string>(),
+        },
+      });
+      if (value === "false") {
+        expect(failure).toBeDefined();
+      } else {
+        expect(failure).toBeUndefined();
+      }
+    },
+  );
+
   check("trusted output producers keep their named producer and proof", () => {
     const registry = [
       {

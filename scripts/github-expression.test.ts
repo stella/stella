@@ -13,7 +13,11 @@ const none = { values: {} };
 
 describe("bounded output condition conjunctions", () => {
   const output = "needs.plan.outputs.selected";
-  const outputs = new Set([output, "needs.plan.outputs.other"]);
+  const outputs = new Map(
+    [output, "needs.plan.outputs.other"].map(
+      (reference) => [reference, reference] as const,
+    ),
+  );
   test.each([
     [[`${output} == 'true'`, `${output} == 'false'`], "contradictory"],
     [[`${output} == 'true'`, `${output} != 'true'`], "contradictory"],
@@ -51,13 +55,15 @@ describe("bounded output condition conjunctions", () => {
     "needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser')",
     "needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')",
   ])("keeps the real workflow alternatives consistent: %s", (condition) => {
-    const registered = new Set([
-      "steps.check.outputs.trusted",
-      "needs.ci-plan.outputs.coverage_profile",
-      "needs.ci-plan.outputs.pilot_fast_jobs",
-      "needs.ci-plan.outputs.suite_depth",
-      "needs.ci-plan.outputs.service_suites_pr_required",
-    ]);
+    const registered = new Map(
+      [
+        "steps.check.outputs.trusted",
+        "needs.ci-plan.outputs.coverage_profile",
+        "needs.ci-plan.outputs.pilot_fast_jobs",
+        "needs.ci-plan.outputs.suite_depth",
+        "needs.ci-plan.outputs.service_suites_pr_required",
+      ].map((reference) => [reference, reference] as const),
+    );
     expect(
       conjunctiveOutputConditions({
         conditions: [condition],
@@ -87,6 +93,27 @@ describe("bounded output condition conjunctions", () => {
           ),
         ],
         outputs,
+      }).type,
+    ).toBe("consistent");
+  });
+
+  test("producer identities bind constraints across output aliases", () => {
+    const first = "needs.plan.outputs.selected_a";
+    const second = "needs.plan.outputs.selected_b";
+    const aliases = new Map([
+      [first, "plan/steps.selection.outputs.required"],
+      [second, "plan/steps.selection.outputs.required"],
+    ]);
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [`${first} == 'true'`, `${second} == 'false'`],
+        outputs: aliases,
+      }).type,
+    ).toBe("contradictory");
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [`${first} == 'true'`, `${second} == 'true'`],
+        outputs: aliases,
       }).type,
     ).toBe("consistent");
   });
