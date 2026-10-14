@@ -17,6 +17,12 @@ export type Generator = {
   blocks?: readonly { path: string; begin: string; end: string }[];
   inputs: readonly string[];
   write: readonly string[];
+  /**
+   * Whether the autofix workflow may run `write` and push its outputs. Only a
+   * pure function of committed source qualifies: no network, secrets, clock,
+   * randomness, or untracked machine state. `autofix-pure-generators.test.ts`
+   * records what was checked for the ones enabled after the first pass.
+   */
   autofix: boolean;
   after: readonly string[];
 } & GeneratorCheck &
@@ -391,7 +397,8 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--write"],
     check: ["bun", "--cwd=apps/api", "run", "mcp:surface-baseline", "--check"],
-    autofix: true,
+    // Its output is a protected baseline: autofix may never write it.
+    autofix: false,
     after: ["capability-catalog", "cli-registry"],
   },
   {
@@ -568,7 +575,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/src/i18n/langs",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -590,7 +597,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/landing/src/i18n/messages",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -612,7 +619,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/transactional/i18n/langs",
       "--check",
     ],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -667,7 +674,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "apps/web/scripts/sync-prepaint-locales.ts"],
     check: ["bun", "apps/web/scripts/sync-prepaint-locales.ts", "--check"],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -686,10 +693,16 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/env*.ts",
       "apps/web/src/env*.ts",
       "apps/collab/src/env*.ts",
+      // Read by the generator: build args and catalog helpers.
+      "apps/web/Dockerfile",
+      "apps/api/src/db-url.ts",
+      "apps/api/src/lib/configuration-placeholders.ts",
+      "apps/api/src/lib/rate-limit/budget-config-schema.ts",
+      "packages/runtime-mode/src/index.ts",
     ],
     write: ["bun", "run", "env:generate"],
     check: ["bun", "run", "env:check"],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -722,6 +735,8 @@ const GENERATOR_DECLARATIONS = [
       "scripts/selfhost-contract.ts",
       "scripts/selfhost-tool.ts",
       "scripts/generated-artifacts.ts",
+      "packages/scripts/src/generated-artifact-format.ts",
+      "apps/api/src/db/role-names.ts",
       ".oxfmtrc.json",
       "scripts/env-catalog.ts",
       "scripts/env-tool.ts",
@@ -731,7 +746,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "run", "selfhost:generate"],
     check: ["bun", "run", "selfhost:check"],
-    autofix: false,
+    autofix: true,
     after: [],
   },
   {
@@ -911,6 +926,29 @@ const GENERATOR_DECLARATIONS = [
     unchecked:
       "Integration tests exercise recordings without a dedicated CI output check",
     autofix: false,
+    after: [],
+  },
+  {
+    // Re-parses the seeded case-law archives through the current parsers
+    // (rows with recorded raw) or applies the read-time AST repairs (rows
+    // without). It fails instead of re-stamping a stored analysis whose
+    // input would change; see apps/api/scripts/reparse-case-law-fixtures.ts.
+    id: "case-law-fixture-reparse",
+    outputKind: "committed",
+    outputs: ["apps/api/scripts/__fixtures__/case-law/*.json.gz"],
+    // The re-parse imports the adapters, which reach most of the API source
+    // and several packages; any of it can shape the output. A test walks the
+    // import graph and fails when a reachable module is not covered here.
+    inputs: [
+      "apps/api/scripts/reparse-case-law-fixtures.ts",
+      "apps/api/scripts/lib/case-law-fixture-reparse.ts",
+      "apps/api/scripts/lib/case-law-fixture-analyses.ts",
+      "apps/api/src/**",
+      "packages/**",
+    ],
+    write: ["bun", "apps/api/scripts/reparse-case-law-fixtures.ts", "--write"],
+    check: ["bun", "apps/api/scripts/reparse-case-law-fixtures.ts", "--check"],
+    autofix: true,
     after: [],
   },
   {
