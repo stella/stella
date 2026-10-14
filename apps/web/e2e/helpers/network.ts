@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import type { Page, Request, Response } from "@playwright/test";
 import {
   existsSync,
@@ -1126,8 +1126,15 @@ export const assertNetworkBaseline = (
       `\n### Network comparison\n\n\`\`\`json\n${JSON.stringify({ problems, notices }).replaceAll("`", "\\u0060")}\n\`\`\`\n`,
     );
   }
-  for (const notice of notices) {
-    console.log(`[network-baseline] ${notice}`);
+  if (notices.length > 0) {
+    test.info().attachments.push({
+      name: "network-comparison.json",
+      contentType: "application/json",
+      body: Buffer.from(JSON.stringify({ problems, notices }, null, 2)),
+    });
+    console.log(
+      `[network-baseline] ${notices.length} informational notice(s); full notes in network-comparison.json in the test artifact.`,
+    );
   }
 
   expect(

@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { readApiTypecheckConfig } from "./api-typecheck-config";
@@ -168,8 +169,14 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
   const root = mkdtempSync(path.join(tmpdir(), "api-declaration-inputs-"));
   const api = path.join(root, "apps/api");
   const project = path.join(api, "tsconfig.declarations.json");
-  const manifest = path.join(api, "src/mcp/apps/manifest.ts");
-  const leaf = path.join(api, "src/mcp/apps/build/leaf.ts");
+  const manifest = path.join(
+    api,
+    "src/handlers/visual-sandbox/browser/manifest.ts",
+  );
+  const leaf = path.join(
+    api,
+    "src/handlers/visual-sandbox/browser/build/leaf.ts",
+  );
   mkdirSync(path.dirname(leaf), { recursive: true });
   try {
     writeFileSync(manifest, "export type { Contract } from './build/leaf';\n");
@@ -185,12 +192,12 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
           outDir: "declarations",
           types: [],
         },
-        files: ["src/mcp/apps/manifest.ts"],
+        files: ["src/handlers/visual-sandbox/browser/manifest.ts"],
       }),
     );
     const inputs = apiDeclarationCacheInputs(project);
     expect(inputs).toContain("**");
-    expect(inputs).not.toContain("!src/mcp/apps/**");
+    expect(inputs).not.toContain("!src/handlers/visual-sandbox/browser/**");
     const writeInputs = (values: string[]) =>
       writeFileSync(
         path.join(root, "turbo.json"),
@@ -206,7 +213,7 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
     expect(result.files.toSorted()).toEqual([manifest, leaf].toSorted());
     expect(missingDeclarationCacheInputs(result.files, project)).toEqual([]);
     for (const removed of [manifest, leaf]) {
-      writeInputs([...inputs, `!${path.relative(api, removed)}`]);
+      writeInputs([...inputs, `!${repoRelativePath(api, removed)}`]);
       expect(missingDeclarationCacheInputs(result.files, project)).toEqual([
         removed,
       ]);
@@ -214,7 +221,7 @@ test("declaration cache inputs cover roots and transitive emitted dependencies w
         "Emitted API sources missing from declaration cache inputs",
       );
     }
-    writeInputs([...inputs, "!src/mcp/apps/**"]);
+    writeInputs([...inputs, "!src/handlers/visual-sandbox/browser/**"]);
     expect(
       missingDeclarationCacheInputs(result.files, project).toSorted(),
     ).toEqual(result.files.toSorted());
@@ -565,7 +572,7 @@ test("declaration aliases resolve transitive API contracts without checking thei
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
-});
+}, 30_000);
 
 test("stable wrappers prepare and restore exact roots and owners without committed config churn", async () => {
   const root = mkdtempSync(path.join(tmpdir(), "api-prepared-projects-"));

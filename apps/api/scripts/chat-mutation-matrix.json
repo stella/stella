@@ -638,8 +638,8 @@
       "behaviour": "A message sent while cards wait resets the client's interrupt state first, so the send is posted.",
       "status": "active",
       "file": "../web/src/features/chat/chat-runtime.ts",
-      "search": "    supersedePendingInterrupts();\n    const stream = client.sendMessage(message, options?.body);",
-      "replace": "    const stream = client.sendMessage(message, options?.body);",
+      "search": "    supersedePendingInterrupts();\n",
+      "replace": "",
       "scenario": {
         "file": "src/handlers/chat/live-reload-parity.integration.test.ts",
         "test": "lets a new message replace an approval that still waits"

@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
 import { pgTable, text, integer, primaryKey } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -22,6 +21,7 @@ import {
 } from "@/api/lib/db/transitions";
 import { isPgError } from "@/api/lib/pg-error";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { createTestRawExecute } from "@/api/tests/helpers/raw-execute";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const organizationId = mintAuthProviderId<"organization">();
@@ -34,7 +34,9 @@ let db: ReturnType<typeof drizzle>;
 type PGliteTransaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // The production Bun driver returns rows directly; PGlite wraps them in `rows`.
 const withBunRows = (tx: PGliteTransaction) => ({
-  execute: async (query: SQL) => (await tx.execute(query)).rows,
+  execute: createTestRawExecute(
+    async (query) => (await tx.execute(query)).rows,
+  ),
   rollback: () => tx.rollback(),
   insert: tx.insert.bind(tx),
   select: tx.select.bind(tx),

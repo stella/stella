@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  missingPreparedApiTypecheckConfigs,
   typecheckOwnershipIssues,
   validateApiTypecheckProjects,
 } from "./api-typecheck-projects";
@@ -78,6 +79,59 @@ test("every API TypeScript source has exactly one compiler project owner", () =>
         message.includes("found 2"),
       ),
     ).toBe(true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("unprepared generated API configs skip ownership at install and fail when required", () => {
+  const root = realpathSync(
+    mkdtempSync(path.join(tmpdir(), "api-unprepared-")),
+  );
+  const api = path.join(root, "apps/api");
+  const write = (file: string, contents: unknown) => {
+    const destination = path.join(api, file);
+    mkdirSync(path.dirname(destination), { recursive: true });
+    writeFileSync(
+      destination,
+      typeof contents === "string" ? contents : JSON.stringify(contents),
+    );
+  };
+  try {
+    write("package.json", {
+      scripts: {
+        "typecheck:src": "bun check --project=tsconfig.src.json",
+        "typecheck:tests": "bun check --project=tsconfig.tests.json",
+      },
+    });
+    write("tsconfig.json", { compilerOptions: { types: [] }, include: [] });
+    for (const name of ["declarations", "src", "tests"]) {
+      const generated = name === "declarations" ? "roots" : name;
+      write(`tsconfig.${name}.json`, {
+        extends: [
+          "./tsconfig.json",
+          `./.cache/typecheck-declarations/${generated}.json`,
+        ],
+      });
+    }
+    write("src/value.ts", "export const value = 1;\n");
+
+    expect(missingPreparedApiTypecheckConfigs(root)).toEqual([
+      "apps/api/.cache/typecheck-declarations/roots.json",
+      "apps/api/.cache/typecheck-declarations/src.json",
+      "apps/api/.cache/typecheck-declarations/tests.json",
+    ]);
+    expect(validateApiTypecheckProjects(root)).toEqual([]);
+    expect(
+      validateApiTypecheckProjects(root, { requirePrepared: true }),
+    ).toEqual([
+      {
+        path: "apps/api/.cache/typecheck-declarations",
+        message: expect.stringContaining(
+          "prepared API typecheck configs are missing",
+        ),
+      },
+    ]);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

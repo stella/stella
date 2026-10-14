@@ -29,6 +29,7 @@ import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
+import { APIError, toAPIError } from "@/lib/errors/api";
 import { ProviderDiagnosticError } from "@/lib/errors/provider-diagnostic";
 
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -1297,6 +1298,56 @@ describe("chat thread messages", () => {
     expect(html).toContain("Resend");
     expect(html).not.toContain("provider details must stay hidden");
   });
+
+  test.each([
+    { status: 401, copy: messages.errors.api.unauthorized },
+    { status: 403, copy: messages.errors.api.forbidden },
+    { status: 404, copy: messages.errors.api.notFound },
+    { status: 409, copy: messages.errors.api.conflict },
+    { status: 429, copy: messages.errors.api.rateLimited },
+    { status: 500, copy: messages.errors.api.server },
+    { status: 503, copy: messages.errors.api.serviceUnavailable },
+  ])(
+    "an HTTP $status refusal keeps localized copy through transport wrappers",
+    ({ status, copy }) => {
+      const refusal = toAPIError({
+        status,
+        value: {
+          code: "unrecognized_http_refusal",
+          message: "Private request diagnostics",
+        },
+      });
+      const html = renderWithProviders(
+        <ChatErrorMessage
+          error={new Error("Stream read failed", { cause: refusal })}
+          isGenerating={false}
+          onResend={() => {}}
+        />,
+      );
+
+      expect(html).toContain(copy);
+      expect(html).toContain("Resend");
+      expect(html).not.toContain(messages.chat.sendError);
+      expect(html).not.toContain("Private request diagnostics");
+    },
+  );
+
+  test.each([400, 422])(
+    "an HTTP %s input rejection asks the user to check the request",
+    (status) => {
+      const html = renderWithProviders(
+        <ChatErrorMessage
+          error={
+            new APIError({ status, message: messages.errors.api.badRequest })
+          }
+          isGenerating={false}
+          onResend={() => {}}
+        />,
+      );
+      expect(html).toContain(messages.errors.api.validation);
+      expect(html).not.toContain(messages.chat.sendError);
+    },
+  );
 
   test("maps model-unavailable stream errors to admin-facing copy", () => {
     const html = renderWithProviders(

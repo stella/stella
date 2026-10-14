@@ -66,6 +66,12 @@ type KnownGap = {
  */
 const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
   {
+    table: "account_audit_logs",
+    column: "user_id",
+    onDelete: "restrict",
+    note: "Append-only account lifecycle events retain the soft-deleted account identifier for historical attribution; no exported content is recorded.",
+  },
+  {
     table: "account_deletion_requests",
     column: "user_id",
     onDelete: "restrict",

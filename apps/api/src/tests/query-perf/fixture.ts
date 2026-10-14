@@ -3,10 +3,8 @@ import { sql } from "drizzle-orm";
 
 import { withTimeout } from "@stll/concurrency/with-timeout";
 
-import {
-  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-  withGatedTestClients,
-} from "@/api/tests/gated-test-database";
+import { forceClosePool } from "@/api/db/sql-close";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import { createQueryPerfDeadline, type QueryPerfDeadline } from "./deadline";
@@ -66,7 +64,7 @@ const dumpQueryPerfDiagnostics = async ({
         { label: `query perf ${profileId}: diagnostics`, timeoutMs: 5000 },
       );
     },
-    { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
+    { closeMode: "force" },
   ).then(
     () => ({ status: "done" }) as const,
     (error: unknown) => ({ status: "failed", error }) as const,
@@ -117,12 +115,13 @@ export const withQueryPerfFixture = async <T>({
       });
       const outcome = await (async () => {
         try {
-          // An interrupted run can leave the fixed-name clone behind.
+          // An interrupted run can leave the fixed-name clone behind. Live sessions
+          // must close themselves before another invocation can reuse its name.
           await deadline.run(
             "DROP DATABASE stale fixture",
             async () =>
               await admin.execute(
-                sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)} WITH (FORCE)`,
+                sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)}`,
               ),
           );
           await deadline.run(
@@ -154,21 +153,17 @@ export const withQueryPerfFixture = async <T>({
               throw error;
             } finally {
               // Do not wait for a stalled driver promise after the deadline rejects.
-              await client.close({
-                timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-              });
+              await forceClosePool(client);
             }
           },
-          { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
+          { closeMode: "force" },
         );
       })().then(
         (value) => ({ status: "fulfilled", value }) as const,
         (error: unknown) => ({ status: "rejected", error }) as const,
       );
       const cleanupOutcome = await (async () => {
-        await adminClient.close({
-          timeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-        });
+        await forceClosePool(adminClient);
         // Cleanup uses a fresh connection after an overdue admin statement is cancelled.
         await withGatedTestClients(
           adminUrl.toString(),
@@ -188,7 +183,7 @@ export const withQueryPerfFixture = async <T>({
               await withTimeout(
                 async () =>
                   await db.execute(
-                    sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)} WITH (FORCE)`,
+                    sql`DROP DATABASE IF EXISTS ${sql.identifier(fixtureName)}`,
                   ),
                 {
                   label: `query perf ${profileId}: DROP DATABASE teardown`,
@@ -208,7 +203,7 @@ export const withQueryPerfFixture = async <T>({
               throw error;
             }
           },
-          { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
+          { closeMode: "force" },
         );
       })().then(
         () => ({ status: "fulfilled" }) as const,
@@ -229,6 +224,6 @@ export const withQueryPerfFixture = async <T>({
       }
       return outcome.value;
     },
-    { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
+    { closeMode: "force" },
   );
 };

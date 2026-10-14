@@ -514,14 +514,14 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     ],
   },
   {
-    path: "apps/api/src/mcp/apps/document-upload/app.ts",
+    path: "packages/mcp-apps/src/document-upload/runtime.ts",
     class: "operator-configured-infrastructure",
     reason:
       "Uploads documents to reserved object storage URLs in the browser app.",
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/api/src/mcp/apps/file-comparison/app.ts",
+    path: "packages/mcp-apps/src/file-comparison/runtime.ts",
     class: "operator-configured-infrastructure",
     reason:
       "Uploads comparison inputs to reserved object storage URLs in the browser app.",
@@ -980,6 +980,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     class: "operator-configured-infrastructure",
     reason:
       "Downloads entity archives and OCR exports from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
+    path: "apps/web/src/features/avt/use-load-sample-case.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Downloads the bundled sample statement from the web app's origin.",
     transports: ["module:@stll/fetch"],
   },
   {
