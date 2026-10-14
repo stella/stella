@@ -1,4 +1,5 @@
 import { startTransition, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
@@ -7,6 +8,7 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
+import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -125,7 +127,7 @@ const getAccountInitials = (linkedAccount: LinkedAccountSnapshot | null) => {
 type SettingRowProps = {
   helper?: string;
   label: string;
-  value: string;
+  value: ReactNode;
 };
 
 const SettingRow = ({ helper, label, value }: SettingRowProps) => (
@@ -381,26 +383,36 @@ const GeneralPane = ({
                 linkedAccount?.email ||
                 t("stellaDesktop")}
             </p>
+            {linkedAccount?.name?.trim() ? (
+              <p className="text-muted-foreground truncate text-xs">
+                <UserText direction="ltr">{linkedAccount.email}</UserText>
+              </p>
+            ) : null}
           </div>
           <span
             className={cn(
-              "text-2xs inline-flex rounded-full border px-2 py-0.5 font-medium",
-              presentation.status === "linked"
-                ? "border-success/20 bg-success/10 text-success-foreground"
-                : "bg-muted text-muted-foreground border-border",
+              "text-2xs inline-flex shrink-0 rounded-full border px-2 py-0.5 font-medium",
+              presentation.status === "linked" &&
+                "border-success/20 bg-success/10 text-success-foreground",
+              presentation.status === "attention" &&
+                "border-warning/20 bg-warning/10 text-warning-foreground",
+              presentation.status !== "linked" &&
+                presentation.status !== "attention" &&
+                "bg-muted text-muted-foreground border-border",
             )}
           >
             {t(presentation.statusKey)}
           </span>
         </div>
-        <p className="text-muted-foreground px-4 pb-4 text-sm leading-relaxed wrap-break-word">
-          {linkedAccount?.email ??
-            t(
-              accountState.status === "expired"
-                ? "connectionExpiredDescription"
-                : "desktopBenefit",
-            )}
-        </p>
+        {presentation.host ? (
+          <>
+            <Separator />
+            <SettingRow
+              label={t("serverLabel")}
+              value={<bdi dir="ltr">{presentation.host}</bdi>}
+            />
+          </>
+        ) : null}
         {linkedAccount ? (
           <>
             <Separator />
@@ -423,19 +435,20 @@ const GeneralPane = ({
         ) : null}
         <Separator />
         <div className="flex items-center justify-between gap-4 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">{t(presentation.webTitleKey)}</p>
-            <p className="text-muted-foreground mt-1 text-sm leading-relaxed">
-              {t(presentation.webDescriptionKey)}
-            </p>
-          </div>
+          <p className="text-muted-foreground min-w-0 flex-1 text-sm leading-relaxed">
+            {presentation.descriptionKey
+              ? t(presentation.descriptionKey, {
+                  host: presentation.host ?? "",
+                })
+              : null}
+          </p>
           <Button
             disabled={presentation.status === "loading"}
             onClick={onAccountAction}
             size="sm"
-            variant="outline"
+            variant={presentation.actionVariant}
           >
-            {t(presentation.actionKey)}
+            {t(presentation.actionKey, { host: presentation.host ?? "" })}
           </Button>
         </div>
         <Separator />
@@ -857,7 +870,10 @@ const App = () => {
     try {
       if (accountState.status === "reconnectRequired") {
         await invoke("account_disconnect");
-        setAccountState({ status: "disconnected" });
+        setAccountState({
+          status: "disconnected",
+          server: accountState.server,
+        });
       }
       await invoke("open_stella_account");
       setError(null);
@@ -933,7 +949,10 @@ const App = () => {
                       if (accountState.status === "connected") {
                         void invoke("account_disconnect")
                           .then(() => {
-                            setAccountState({ status: "disconnected" });
+                            setAccountState({
+                              status: "disconnected",
+                              server: accountState.server,
+                            });
                             setError(null);
                             return;
                           })

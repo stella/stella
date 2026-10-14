@@ -9,9 +9,10 @@ use crate::types::{AppSnapshot, DesktopNotificationPreferences};
 pub type AppState = Arc<Mutex<SessionManager>>;
 
 fn stella_account_url(linked_self_host_origin: Option<&str>) -> String {
+  let default_web_origin = crate::config::default_connect_target().1;
   format!(
     "{}/settings/account/desktop",
-    linked_self_host_origin.unwrap_or(crate::config::PRODUCTION_WEB_ORIGIN)
+    linked_self_host_origin.unwrap_or(&default_web_origin)
   )
 }
 
@@ -39,19 +40,16 @@ pub async fn open_stella_account(
     if selected_self_host.is_none() && remembered_self_host {
       return Err("Reconnect the self-hosted desktop server to select its API".into());
     }
-    let (api_base_url, origin) = selected_self_host.as_ref().map_or(
-      (
-        crate::config::PRODUCTION_API_BASE_URL,
-        crate::config::PRODUCTION_WEB_ORIGIN,
-      ),
+    let (api_base_url, origin) = selected_self_host.as_ref().map_or_else(
+      crate::config::default_connect_target,
       |connection| {
         (
-          connection.api_base_url.as_str(),
-          connection.web_origin.as_str(),
+          connection.api_base_url.clone(),
+          connection.web_origin.clone(),
         )
       },
     );
-    return crate::account::open_browser_connection(&app, api_base_url, origin).await;
+    return crate::account::open_browser_connection(&app, &api_base_url, &origin).await;
   }
   let web_origin = linked.as_ref().map(|account| account.web_origin.as_str());
   app

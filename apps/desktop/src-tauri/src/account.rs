@@ -182,6 +182,7 @@ impl LinkedAccount {
       account: self.account,
       identity: self.identity,
       expires_at: self.credential.expires_at,
+      server: self.web_origin,
     }
   }
 }
@@ -896,6 +897,21 @@ pub async fn invalidate(
   Ok(())
 }
 
+// Whether the saved link can no longer be used. The tray offers a visible
+// way back instead of features silently disappearing.
+static RECONNECT_NEEDED: std::sync::atomic::AtomicBool =
+  std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn reconnect_needed() -> bool {
+  RECONNECT_NEEDED.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub(crate) fn set_reconnect_needed(app: &tauri::AppHandle, needed: bool) {
+  if RECONNECT_NEEDED.swap(needed, std::sync::atomic::Ordering::Relaxed) != needed {
+    crate::activity::refresh_tray(app);
+  }
+}
+
 pub fn notify(app: &tauri::AppHandle) {
   crate::feature_access::account_changed(app, crate::activity::unload_account);
   if let Err(error) = app.emit(CHANGED_EVENT, ()) {
@@ -912,22 +928,31 @@ fn require_account_window(window: &WebviewWindow) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn account_get_state(
+  app: tauri::AppHandle,
   window: WebviewWindow,
   state: State<'_, AccountState>,
 ) -> Result<DesktopAccountSnapshot, String> {
   require_account_window(&window)?;
-  match current(&state).await {
+  let current = current(&state).await;
+  set_reconnect_needed(
+    &app,
+    matches!(&current, Err(error) if error == crate::device_proof::RECONNECT),
+  );
+  match current {
     Ok(Some(saved)) => return Ok(saved.snapshot()),
     Err(error) if error == crate::device_proof::RECONNECT => {
-      return Ok(DesktopAccountSnapshot::ReconnectRequired);
+      return Ok(DesktopAccountSnapshot::ReconnectRequired {
+        server: crate::config::default_connect_target().1,
+      });
     }
     Err(error) => return Err(error),
     Ok(None) => {}
   }
+  let server = crate::config::default_connect_target().1;
   if state.lock().await.expired().await? {
-    return Ok(DesktopAccountSnapshot::Expired);
+    return Ok(DesktopAccountSnapshot::Expired { server });
   }
-  Ok(DesktopAccountSnapshot::Disconnected)
+  Ok(DesktopAccountSnapshot::Disconnected { server })
 }
 
 #[tauri::command]
