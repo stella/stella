@@ -14,7 +14,6 @@
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
 import type { ActiveLegalDocument } from "@/components/ai-suggestions/active-legal-document";
-import { skillLabel } from "@/components/inspector/inspector-store-types";
 import type { ChatTab } from "@/components/inspector/inspector-store-types";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 
@@ -43,12 +42,9 @@ export const railChatOpenArgs = ({
     legalDocument === undefined
       ? {}
       : { activeLegalKey: activeLegalDocumentRef(legalDocument).key };
-  // A skill open from the rail keeps naming its skill: the reader picked the
-  // skill, and the document is only where they happen to be standing.
-  const skillContext =
-    activeSkill === undefined
-      ? {}
-      : { activeSkill, label: skillLabel(activeSkill) };
+  // No label travels with the skill either: an untitled tab names its skill
+  // where it is drawn, so a built-in title follows the reader's language.
+  const skillContext = activeSkill === undefined ? {} : { activeSkill };
   const matterContext =
     workspaceId === undefined
       ? {}

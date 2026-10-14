@@ -30,6 +30,7 @@ export type ViewerSurface =
   | "email-attachment-pdf"
   | "external-reference-pdf"
   | "inspector-pdf"
+  | "inspector-text"
   | "search-preview-pdf";
 
 /**
