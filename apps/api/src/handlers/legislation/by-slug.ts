@@ -3,7 +3,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT } from "@stll/api-contract/legislation-expression";
-import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { PUBLIC_LEGISLATION_PAGE_COUNTRIES } from "@stll/api-contract/legislation-publication";
 import {
   isStatuteSlug,
   STATUTE_SLUG_MAX_LENGTH,
@@ -73,7 +73,8 @@ export const readStatuteBySlugHandler = async ({
   }
 
   const countryRead = readPublicLawCountry(query.country, {
-    admitted: PUBLIC_LEGISLATION_COUNTRIES,
+    admitted: PUBLIC_LEGISLATION_PAGE_COUNTRIES,
+    surface: "pages",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;

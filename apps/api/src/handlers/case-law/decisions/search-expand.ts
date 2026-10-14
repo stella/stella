@@ -184,6 +184,7 @@ const expandCaseLawSearch = createSafeRootHandler(
   }): SafeHandlerGenerator<ExpansionAnswer | PublicCountryUnavailableAnswer> {
     const countryRead = readPublicLawCountry(body.country, {
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
+      surface: "search",
     });
     if (countryRead.kind === "unavailable") {
       return Result.ok(countryRead.answer);

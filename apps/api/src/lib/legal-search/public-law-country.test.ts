@@ -125,7 +125,9 @@ describe("typed public country unavailability through the request lifecycle", ()
       );
 
       expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
-      expect(await response.json()).toEqual(publicCountryUnavailable(country));
+      expect(await response.json()).toEqual(
+        publicCountryUnavailable(country, "search"),
+      );
       expectAnsweredClientOutcome();
     },
   );

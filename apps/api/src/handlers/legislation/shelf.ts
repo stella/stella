@@ -189,6 +189,7 @@ export const readLegislationShelfHandler = async (
 ) => {
   const countryRead = readPublicLawCountry(country, {
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
+    surface: "search",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;

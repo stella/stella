@@ -2333,7 +2333,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   if (pageError !== undefined) {
     return pageError;
   }
-  const unavailable = publicCountryUnavailable(country);
+  const unavailable = publicCountryUnavailable(country, "search");
   if (unavailable !== null) {
     return toolDataResult(unavailable);
   }

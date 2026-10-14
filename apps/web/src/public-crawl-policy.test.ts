@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { loadCatalogue } from "@stll/catalogue";
 
 import {
-  PUBLIC_CASE_LAW_COUNTRIES,
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 import type { FileRouteTypes } from "@/routeTree.gen";
@@ -39,13 +39,13 @@ describe("public crawl policy", () => {
     }
   });
 
-  test("opens the law pages of admitted jurisdictions only", () => {
+  test("opens the law pages of pages-public jurisdictions only", () => {
     const rules = createPublicCrawlRules(options).filter(
       ({ path }) => path === "/law" || path.startsWith("/law/"),
     );
     expect(rules).toEqual([
       { path: "/law", scope: "exact" },
-      ...PUBLIC_CASE_LAW_COUNTRIES.map(
+      ...PUBLIC_CASE_LAW_PAGE_COUNTRIES.map(
         (country) =>
           ({
             path: `/law/${toCaseLawCountryParam(country)}`,
@@ -53,14 +53,14 @@ describe("public crawl policy", () => {
           }) as const,
       ),
     ]);
-    // The admitted corpus today, and what stays closed beside it.
+    // The pages-public corpus today, and what stays closed beside it.
     expect(isPublicCrawlPath("/law/cze/cases/nejvyssi-soud/x", options)).toBe(
-      PUBLIC_CASE_LAW_COUNTRIES.includes("CZE"),
+      PUBLIC_CASE_LAW_PAGE_COUNTRIES.includes("CZE"),
     );
     for (const country of ["svk", "usa", "gbr", "eu", "pol", "hun", "aut"]) {
       if (
-        PUBLIC_CASE_LAW_COUNTRIES.some(
-          (admitted) => toCaseLawCountryParam(admitted) === country,
+        PUBLIC_CASE_LAW_PAGE_COUNTRIES.some(
+          (open) => toCaseLawCountryParam(open) === country,
         )
       ) {
         continue;

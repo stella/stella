@@ -1,10 +1,44 @@
 // parser-output-unchanged: public admission metadata does not change parsed decision records.
 import * as v from "valibot";
 
+/**
+ * How far a country is open to the public.
+ *
+ * - `pending_public`: nothing is public.
+ * - `pages_public`: the country's decision and statute pages are served,
+ *   listed in the sitemaps and open to crawlers, but the country is not yet
+ *   part of search, the API search surfaces or MCP.
+ * - `admitted`: pages are public and the country is admitted to search, the
+ *   API search surfaces and MCP.
+ * - `withdrawn`: nothing is public any more.
+ */
 export type PublicCountryCapability =
   | "admitted"
+  | "pages_public"
   | "pending_public"
   | "withdrawn";
+
+/** The public surfaces a capability gates. A new surface needs a decision per state. */
+export type PublicCountrySurface = "pages" | "search";
+
+/** Total on both axes: a new state or surface cannot compile without a decision. */
+export const PUBLIC_COUNTRY_SURFACE_OPEN = {
+  pages: {
+    admitted: true,
+    pages_public: true,
+    pending_public: false,
+    withdrawn: false,
+  },
+  search: {
+    admitted: true,
+    pages_public: false,
+    pending_public: false,
+    withdrawn: false,
+  },
+} as const satisfies Record<
+  PublicCountrySurface,
+  Record<PublicCountryCapability, boolean>
+>;
 
 /** Public admission, independent of whether ingestion holds rows for a country. */
 export const PUBLIC_COUNTRY_CAPABILITIES = {
@@ -40,6 +74,20 @@ export const ADMITTED_PUBLIC_COUNTRIES = PUBLIC_COUNTRIES.filter(
     PUBLIC_COUNTRY_CAPABILITIES[country] === "admitted",
 );
 
+type PublicCountryOnSurface<Surface extends PublicCountrySurface> = {
+  [
+    Country in PublicCountry
+  ]: (typeof PUBLIC_COUNTRY_SURFACE_OPEN)[Surface][(typeof PUBLIC_COUNTRY_CAPABILITIES)[Country]] extends true
+    ? Country
+    : never;
+}[PublicCountry];
+
+/** Countries whose decision and statute pages are served, listed and crawlable. */
+export const PAGES_PUBLIC_COUNTRIES = PUBLIC_COUNTRIES.filter(
+  (country): country is PublicCountryOnSurface<"pages"> =>
+    PUBLIC_COUNTRY_SURFACE_OPEN.pages[PUBLIC_COUNTRY_CAPABILITIES[country]],
+);
+
 export const PUBLIC_COUNTRY_UNAVAILABLE_CODE = "public_country_unavailable";
 
 // parser-output-unchanged: the refusal's HTTP status affects responses only, not parsed records.
@@ -54,7 +102,7 @@ export const publicCountryUnavailableSchema = v.strictObject({
   code: v.literal(PUBLIC_COUNTRY_UNAVAILABLE_CODE),
   status: v.literal("unavailable"),
   country: v.picklist(PUBLIC_COUNTRIES),
-  reason: v.picklist(["pending_public", "withdrawn"]),
+  reason: v.picklist(["pages_public", "pending_public", "withdrawn"]),
   message: v.string(),
   hint: v.string(),
 });
@@ -63,16 +111,17 @@ export type PublicCountryUnavailable = v.InferOutput<
   typeof publicCountryUnavailableSchema
 >;
 
-/** Unknown countries remain input errors; advertised countries explain admission. */
+/** Unknown countries remain input errors; advertised countries explain admission on the named surface. */
 export const publicCountryUnavailable = (
   input: string,
+  surface: PublicCountrySurface,
 ): PublicCountryUnavailable | null => {
   const country = input.trim().toUpperCase();
   if (!isPublicCountry(country)) {
     return null;
   }
   const capability = PUBLIC_COUNTRY_CAPABILITIES[country];
-  if (capability === "admitted") {
+  if (PUBLIC_COUNTRY_SURFACE_OPEN[surface][capability]) {
     return null;
   }
   return {
@@ -81,6 +130,6 @@ export const publicCountryUnavailable = (
     country,
     reason: capability,
     message: "Public law for this country is not available.",
-    hint: `Choose an admitted country: ${ADMITTED_PUBLIC_COUNTRIES.join(", ")}.`,
+    hint: `Choose an available country: ${(surface === "pages" ? PAGES_PUBLIC_COUNTRIES : ADMITTED_PUBLIC_COUNTRIES).join(", ")}.`,
   };
 };

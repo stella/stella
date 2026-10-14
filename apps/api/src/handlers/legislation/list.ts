@@ -268,6 +268,7 @@ export const listStatutesHandler = async (
 ) => {
   const countryRead = readPublicLawCountry(query.country, {
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
+    surface: "search",
   });
   if (countryRead.kind === "unavailable") {
     return countryRead.answer;

@@ -1,7 +1,7 @@
 import { loadCatalogue } from "@stll/catalogue";
 
 import {
-  PUBLIC_CASE_LAW_COUNTRIES,
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
   toCaseLawCountryParam,
 } from "@/features/case-law/case-law-jurisdiction";
 
@@ -9,9 +9,9 @@ type PublicCrawlRoute = {
   path: `/${string}`;
   route: `/${string}`;
   /**
-   * `jurisdictions`: the path itself, plus a subtree per jurisdiction the
-   * public case-law corpus admits. A country that is not admitted stays
-   * outside the crawl, whatever pages it may serve.
+   * `jurisdictions`: the path itself, plus a subtree per jurisdiction whose
+   * pages are public. A country whose pages are not public stays outside the
+   * crawl, whatever it may serve.
    */
   scope: "exact" | "subtree" | "catalogue" | "jurisdictions";
   permission: "law" | "tools" | "knowledge";
@@ -75,9 +75,9 @@ export type PublicCrawlRule = {
   scope: "exact" | "subtree";
 };
 
-/** The admitted jurisdictions' law subtrees, read from the admission state. */
+/** The pages-public jurisdictions' law subtrees, read from the capability state. */
 export const publicLawJurisdictionCrawlPaths = (): readonly `/${string}`[] =>
-  PUBLIC_CASE_LAW_COUNTRIES.map(
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES.map(
     (country): `/${string}` => `/law/${toCaseLawCountryParam(country)}`,
   );
 

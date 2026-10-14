@@ -28,6 +28,7 @@ import {
   PUBLIC_COUNTRY_UNAVAILABLE_STATUS,
   publicCountryUnavailable,
   publicCountryUnavailableSchema,
+  type PublicCountrySurface,
   type PublicCountryUnavailable,
 } from "@stll/api-contract/public-country-capability";
 
@@ -66,8 +67,9 @@ export type PublicCountryUnavailableAnswer = ReturnType<
  *  or not advertised at all. */
 export const publicLawCountryUnavailable = (
   input: string,
+  surface: PublicCountrySurface,
 ): PublicCountryUnavailableAnswer | null => {
-  const response = publicCountryUnavailable(input);
+  const response = publicCountryUnavailable(input, surface);
   return response === null ? null : publicCountryUnavailableAnswer(response);
 };
 
@@ -127,6 +129,9 @@ type PublicLawCountryOptions = {
   /** The canonical codes this surface holds law for, named in the ask so a
    *  caller that guessed wrong can see what there is to ask for. */
   admitted: readonly string[];
+  /** Which public surface is asking: `pages` serves decision and statute pages
+   *  and sitemaps, `search` is search, listing and the agent surfaces. */
+  surface: PublicCountrySurface;
   /** The query property, which is `jurisdiction` on the provision surfaces. */
   parameter?: string;
 };
@@ -140,7 +145,7 @@ type PublicLawCountryOptions = {
  */
 export const readPublicLawCountry = (
   input: unknown,
-  { admitted, parameter }: PublicLawCountryOptions,
+  { admitted, parameter, surface }: PublicLawCountryOptions,
 ): PublicLawCountryRead => {
   const normalized = normalizeCountry(input, {
     spelling: "alpha-3",
@@ -148,7 +153,10 @@ export const readPublicLawCountry = (
     parameter,
   });
   if (normalized.ok) {
-    const answer = publicLawCountryUnavailable(normalized.value.alpha3);
+    const answer = publicLawCountryUnavailable(
+      normalized.value.alpha3,
+      surface,
+    );
     if (answer !== null) {
       return { kind: "unavailable", answer };
     }
