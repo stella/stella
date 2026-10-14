@@ -19,13 +19,11 @@ import {
   DEFAULT_CHAT_EDIT_APPLY_MODE,
   DEFAULT_DOCX_EDIT_REPRESENTATION,
   DOCX_EDIT_REPRESENTATION,
-  formatChatCorpusId,
   isSafeIdValue,
   parseResourceRef,
   resourceRef,
   RESOURCE_TYPE,
   type BrowserClientCapability,
-  type ChatCorpusScope,
   type ChatEditApplyMode,
   type ChatRunMode,
   type DocxEditRepresentation,
@@ -2111,8 +2109,6 @@ type ParseMessageProps = {
 };
 
 type ParseMessageResult = {
-  /** Corpus chips on a user message; they scope the turn, not its data. */
-  corpusScopes: ChatCorpusScope[];
   mentions: ChatMention[];
   message: PersistableChatMessage;
 };
@@ -2123,7 +2119,6 @@ export const parseMessage = ({
 }: ParseMessageProps): ParseMessageResult => {
   if (message.role !== "user") {
     return {
-      corpusScopes: [],
       message,
       mentions: [],
     };
@@ -2131,7 +2126,6 @@ export const parseMessage = ({
 
   const normalizedParts: ChatPart[] = [];
   const mentions: ChatMention[] = [];
-  const corpusScopes = new Map<string, ChatCorpusScope>();
 
   for (const part of message.parts) {
     // Pasted text is plain text, rather than editor HTML; preserve it verbatim.
@@ -2152,9 +2146,6 @@ export const parseMessage = ({
           ...normalizedText.mentions.slice(0, remainingMentionCapacity),
         );
       }
-      for (const scope of normalizedText.corpusScopes) {
-        corpusScopes.set(formatChatCorpusId(scope), scope);
-      }
       normalizedParts.push({
         ...part,
         content: normalizedText.text,
@@ -2166,7 +2157,6 @@ export const parseMessage = ({
   }
 
   return {
-    corpusScopes: [...corpusScopes.values()],
     message: {
       ...message,
       parts: normalizedParts,

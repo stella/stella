@@ -27,8 +27,8 @@ import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-cont
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
 import {
+  corpusScopeDroppedTools,
   corpusScopeUnavailableReason,
-  OUT_OF_SCOPE_CORPUS_DIRECT_TOOLS,
   restrictChatToolsToCorpusScope,
 } from "@/api/handlers/chat/tools/corpus-scope";
 import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
@@ -1351,12 +1351,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...Object.keys(registered)
         .filter((name) => !(name in projected))
         .map((name) => [name, "subagents cannot call it"] as const),
-      ...(corpusScopes.length === 0
-        ? []
-        : [...OUT_OF_SCOPE_CORPUS_DIRECT_TOOLS].map(
-            (name) =>
-              [name, corpusScopeUnavailableReason(corpusScopes)] as const,
-          )),
+      ...corpusScopeDroppedTools(corpusScopes).map(
+        (name) => [name, corpusScopeUnavailableReason(corpusScopes)] as const,
+      ),
     ]),
   };
   return tools;

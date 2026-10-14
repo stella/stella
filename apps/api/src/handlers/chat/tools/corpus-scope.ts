@@ -59,24 +59,50 @@ const CORPUS_READ_TOOLS = {
 } as const satisfies Record<CorpusReadToolName, CorpusReadTool>;
 
 /**
- * Public-corpus sources outside the corpora a chip can name (Spain's BOE,
- * Czech court-proceedings lookups). A scoped turn asked for stella's own
- * corpus for the named countries, so these are out of scope for any chip.
+ * Other public sources (direct tools and script reads alike), each with the
+ * corpus and jurisdiction it reads. A scoped turn keeps one only when a chip
+ * names that corpus for that country: InfoSoud stays beside a Czech case-law
+ * chip, and Spain's BOE and BORME go under any chip, since none names Spain.
  */
-const OUT_OF_SCOPE_CORPUS_READ_TOOLS = new Set<RegistryReadToolName>([
-  "search_boe_legislation",
-]);
+export const PUBLIC_SOURCE_JURISDICTIONS = {
+  boe_search_legislation: { corpus: "legislation", country: "ESP" },
+  boe_get_law: { corpus: "legislation", country: "ESP" },
+  boe_get_law_structure: { corpus: "legislation", country: "ESP" },
+  boe_get_law_block: { corpus: "legislation", country: "ESP" },
+  boe_find_related_laws: { corpus: "legislation", country: "ESP" },
+  borme_get_summary: { corpus: "legislation", country: "ESP" },
+  search_boe_legislation: { corpus: "legislation", country: "ESP" },
+  infosoud_lookup_case: { corpus: "case_law", country: "CZE" },
+} as const satisfies Record<string, { corpus: ChatCorpus; country: string }>;
 
-/** The direct (non-script) chat tools over public corpora a chip cannot name. */
-export const OUT_OF_SCOPE_CORPUS_DIRECT_TOOLS: ReadonlySet<string> = new Set([
-  "boe_search_legislation",
-  "boe_get_law",
-  "boe_get_law_structure",
-  "boe_get_law_block",
-  "boe_find_related_laws",
-  "borme_get_summary",
-  "infosoud_lookup_case",
-]);
+const isPublicSourceName = (
+  name: string,
+): name is keyof typeof PUBLIC_SOURCE_JURISDICTIONS =>
+  Object.hasOwn(PUBLIC_SOURCE_JURISDICTIONS, name);
+
+/** Whether a scoped turn keeps this public source. */
+const scopeAdmitsPublicSource = (
+  scopes: readonly ChatCorpusScope[],
+  name: keyof typeof PUBLIC_SOURCE_JURISDICTIONS,
+): boolean => {
+  const source: { corpus: ChatCorpus; country: string } =
+    PUBLIC_SOURCE_JURISDICTIONS[name];
+  return scopes.some(
+    ({ corpus, country }) =>
+      corpus === source.corpus && country === source.country,
+  );
+};
+
+/** The public sources a scoped turn drops. Empty for an unscoped turn. */
+export const corpusScopeDroppedTools = (
+  scopes: readonly ChatCorpusScope[],
+): string[] =>
+  scopes.length === 0
+    ? []
+    : Object.keys(PUBLIC_SOURCE_JURISDICTIONS).filter(
+        (name) =>
+          isPublicSourceName(name) && !scopeAdmitsPublicSource(scopes, name),
+      );
 
 const isCorpusReadToolName = (name: string): name is CorpusReadToolName =>
   Object.hasOwn(CORPUS_READ_TOOLS, name);
@@ -112,14 +138,15 @@ const outOfScopeError = (scopes: readonly ChatCorpusScope[]): ChatToolError =>
 export const restrictChatToolsToCorpusScope = (
   tools: ChatToolMap,
   scopes: readonly ChatCorpusScope[],
-): ChatToolMap =>
-  scopes.length === 0
-    ? tools
-    : Object.fromEntries(
-        Object.entries(tools).filter(
-          ([name]) => !OUT_OF_SCOPE_CORPUS_DIRECT_TOOLS.has(name),
-        ),
-      );
+): ChatToolMap => {
+  if (scopes.length === 0) {
+    return tools;
+  }
+  const dropped = new Set(corpusScopeDroppedTools(scopes));
+  return Object.fromEntries(
+    Object.entries(tools).filter(([name]) => !dropped.has(name)),
+  );
+};
 
 /** Why a dropped direct tool is missing, for a script that tries to call it. */
 export const corpusScopeUnavailableReason = (
@@ -149,8 +176,10 @@ export const scopeCorpusRead = ({
   if (scopes.length === 0) {
     return Result.ok(args);
   }
-  if (OUT_OF_SCOPE_CORPUS_READ_TOOLS.has(toolName)) {
-    return Result.err(outOfScopeError(scopes));
+  if (isPublicSourceName(toolName)) {
+    return scopeAdmitsPublicSource(scopes, toolName)
+      ? Result.ok(args)
+      : Result.err(outOfScopeError(scopes));
   }
   if (!isCorpusReadToolName(toolName)) {
     return Result.ok(args);

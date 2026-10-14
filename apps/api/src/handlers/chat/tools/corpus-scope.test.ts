@@ -7,7 +7,8 @@ import type { ChatCorpusScope } from "@stll/api-contract";
 
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import {
-  OUT_OF_SCOPE_CORPUS_DIRECT_TOOLS,
+  corpusScopeDroppedTools,
+  PUBLIC_SOURCE_JURISDICTIONS,
   restrictChatToolsToCorpusScope,
   scopeCorpusRead,
 } from "@/api/handlers/chat/tools/corpus-scope";
@@ -165,22 +166,50 @@ describe("restrictChatToolsToCorpusScope", () => {
     "infosoud_lookup_case",
   ]);
 
-  it("drops other public-corpus tools and keeps tenant tools on a scoped turn", () => {
+  it("keeps InfoSoud beside a Czech case-law chip and drops Spain's BOE", () => {
     expect(
       Object.keys(restrictChatToolsToCorpusScope(tools, CZECH_CASE_LAW)),
-    ).toEqual(["execute_typescript", "list_matters_direct"]);
+    ).toEqual([
+      "execute_typescript",
+      "list_matters_direct",
+      "infosoud_lookup_case",
+    ]);
+  });
+
+  it("drops InfoSoud when no chip names Czech case law", () => {
+    for (const scopes of [
+      [{ corpus: "legislation", country: "CZE" }],
+      [{ corpus: "case_law", country: "SVK" }],
+    ] satisfies ChatCorpusScope[][]) {
+      expect(
+        Object.keys(restrictChatToolsToCorpusScope(tools, scopes)),
+      ).toEqual(["execute_typescript", "list_matters_direct"]);
+    }
   });
 
   it("keeps every tool on an unscoped turn", () => {
     expect(restrictChatToolsToCorpusScope(tools, [])).toBe(tools);
+    expect(corpusScopeDroppedTools([])).toEqual([]);
   });
 
-  it("names every native BOE and InfoSoud tool", () => {
+  it("holds script reads of other sources to the same jurisdictions", () => {
+    expect(
+      Result.isError(
+        scopeCorpusRead({
+          scopes: [{ corpus: "legislation", country: "CZE" }],
+          toolName: "search_boe_legislation",
+          args: {},
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("gives every native BOE, BORME and InfoSoud tool a jurisdiction", () => {
     for (const name of Object.keys({
       ...createBoeTools(),
       ...createInfosoudTools(),
     })) {
-      expect(OUT_OF_SCOPE_CORPUS_DIRECT_TOOLS.has(name)).toBe(true);
+      expect(Object.hasOwn(PUBLIC_SOURCE_JURISDICTIONS, name)).toBe(true);
     }
   });
 });
