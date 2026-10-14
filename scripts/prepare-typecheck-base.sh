@@ -2,6 +2,8 @@
 set -euo pipefail
 
 gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
+# Resolved before entering the base checkout, which may predate the helper.
+retry_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry.sh"
 base_sha=$(git merge-base "${CHECK_BASE_REF:-origin/main}" HEAD)
 name="typecheck-base-v1-$base_sha"
 base_dir="$RUNNER_TEMP/typecheck-base"
@@ -64,12 +66,12 @@ git -C "$base_dir" submodule update --init --recursive
       installer+=("$arg")
     done < "$STELLA_WORKTREE_INSTALLER_ARGS_FILE"
     if (( ${#installer[@]} == 0 )); then
-      bash scripts/retry.sh bun install --frozen-lockfile
+      bash "$retry_script" bun install --frozen-lockfile
     else
       "${installer[@]}" "$base_dir"
     fi
   else
-    bash scripts/retry.sh bun ci --ignore-scripts
+    bash "$retry_script" bun ci --ignore-scripts
   fi
   # Older merge bases still commit the runtime aggregates.
   if [[ -f apps/api/scripts/generate-capability-runtime.ts ]]; then
