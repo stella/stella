@@ -12,12 +12,12 @@ import {
 
 describe("reviewed doctrine vocabulary", () => {
   test("binds persisted domains and every reading criterion to the contract", () => {
-    expect(caseLawCitations.doctrinalTreatment.enumValues).toEqual(
-      DOCTRINAL_TREATMENTS,
-    );
-    expect(
-      caseLawCitationDoctrineReviews.doctrinalTreatment.enumValues,
-    ).toEqual(DOCTRINAL_TREATMENTS);
+    expect([...caseLawCitations.doctrinalTreatment.enumValues]).toEqual([
+      ...DOCTRINAL_TREATMENTS,
+    ]);
+    expect([
+      ...caseLawCitationDoctrineReviews.doctrinalTreatment.enumValues,
+    ]).toEqual([...DOCTRINAL_TREATMENTS]);
     expect(Object.keys(DOCTRINE_GUIDANCE).toSorted()).toEqual(
       [...DOCTRINAL_TREATMENTS].toSorted(),
     );

@@ -383,8 +383,8 @@ export const redactCaseLawDecision = async ({
       .returning({ key: caseLawDecisionSupplements.sourceRawS3Key });
     // A doctrine review quotes the citing decision's own text as evidence,
     // so it goes with that text. Re-reviewing a redacted decision has no
-    // text to quote from, so nothing re-creates it.
-    // audit: skip — GDPR redaction; recorded in case_law_index_jobs below
+    // text to quote from, so nothing re-creates it. Covered by this fence's
+    // redaction exemption above, recorded in case_law_index_jobs below.
     await tx
       .delete(caseLawCitationDoctrineReviews)
       .where(eq(caseLawCitationDoctrineReviews.citingDecisionId, decisionId));

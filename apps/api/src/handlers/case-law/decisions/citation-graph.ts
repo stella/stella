@@ -899,11 +899,22 @@ export const decisionCitationSummaryQuery = ({
   };
 };
 
+type DoctrineCounts = Record<DoctrineTreatment | "unread", number>;
+
+export type DecisionDoctrineSummary =
+  | { status: "unavailable" }
+  | {
+      status: "available";
+      counts: Record<CitationDirection, DoctrineCounts>;
+      capped: Record<CitationDirection, boolean>;
+      candidateWindow: typeof CITATION_SUMMARY_SCAN_LIMIT;
+    };
+
 export const summarizeDecisionDoctrineHandler = async ({
   subject: { id: decisionId, tx },
-}: SummarizeDecisionCitationsOptions) => {
+}: SummarizeDecisionCitationsOptions): Promise<DecisionDoctrineSummary> => {
   if (!(await canReadCitationDoctrine(tx))) {
-    return { status: "unavailable" as const };
+    return { status: "unavailable" };
   }
   const rows = await decisionCitationSummaryQuery({
     currentYear: 0,
@@ -926,7 +937,7 @@ export const summarizeDecisionDoctrineHandler = async ({
     }
     return total;
   };
-  const countsFor = (direction: CitationDirection) => ({
+  const countsFor = (direction: CitationDirection): DoctrineCounts => ({
     distinguishes: countOf(direction, "distinguishes"),
     limits: countOf(direction, "limits"),
     not_stated: countOf(direction, "not_stated"),
@@ -935,7 +946,7 @@ export const summarizeDecisionDoctrineHandler = async ({
   const cappedFor = (direction: CitationDirection) =>
     rows.some((row) => row.direction === direction && row.capped);
   return {
-    status: "available" as const,
+    status: "available",
     counts: {
       incoming: countsFor("incoming"),
       outgoing: countsFor("outgoing"),
