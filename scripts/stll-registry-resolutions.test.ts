@@ -9,6 +9,16 @@ import { describe, expect, test } from "bun:test";
 // forces a deliberate decision: widen the range, release the package, or
 // update this pin with the reasoning in the PR.
 const EXPECTED_REGISTRY_RESOLVED = [
+  // The API's tenant-id guard uses the published @stll/text-search matcher
+  // and its native engines (aho-corasick, regex-set); the repository has no
+  // workspace for them to link instead.
+  "@stll/aho-corasick",
+  "@stll/aho-corasick-darwin-arm64",
+  "@stll/aho-corasick-darwin-x64",
+  "@stll/aho-corasick-linux-arm64-gnu",
+  "@stll/aho-corasick-linux-x64-gnu",
+  "@stll/aho-corasick-wasm32-wasi",
+  "@stll/aho-corasick-win32-x64-msvc",
   "@stll/anonymize",
   "@stll/anonymize-darwin-arm64",
   "@stll/anonymize-darwin-x64",
@@ -29,6 +39,13 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/fuzzy-search-wasm32-wasi",
   "@stll/fuzzy-search-win32-x64-msvc",
   "@stll/oxlint-config",
+  "@stll/regex-set",
+  "@stll/regex-set-darwin-arm64",
+  "@stll/regex-set-darwin-x64",
+  "@stll/regex-set-linux-arm64-gnu",
+  "@stll/regex-set-linux-x64-gnu",
+  "@stll/regex-set-wasm32-wasi",
+  "@stll/regex-set-win32-x64-msvc",
   "@stll/stdnum",
   "@stll/stdnum-darwin-arm64",
   "@stll/stdnum-darwin-x64",
@@ -36,6 +53,7 @@ const EXPECTED_REGISTRY_RESOLVED = [
   "@stll/stdnum-linux-x64-gnu",
   "@stll/stdnum-wasm",
   "@stll/stdnum-win32-x64-msvc",
+  "@stll/text-search",
 ] as const;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

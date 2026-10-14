@@ -117,8 +117,9 @@ describe("literal tenant id matching", () => {
 
   test("an updated id array refreshes matching across surfaces", () => {
     const workspaceIds = [WS_A];
+    const text: string = WS_A;
     expect(
-      redactTenantIdsDeep({ value: { text: WS_A }, workspaceIds }).value.text,
+      redactTenantIdsDeep({ value: { text }, workspaceIds }).value.text,
     ).toBe(TENANT_ID_REDACTION_PLACEHOLDER);
     workspaceIds[0] = WS_B;
     expect(
@@ -131,7 +132,9 @@ describe("literal tenant id matching", () => {
       guardModelSystemPrompt({ system: WS_B, workspaceIds }),
     ).toThrow("Model-bound system-prompt embeds a tenant workspace id");
     workspaceIds.length = 0;
-    expect(redactModelSystemPrompt({ system: WS_B, workspaceIds })).toBe(WS_B);
+    expect<string>(
+      redactModelSystemPrompt({ system: WS_B, workspaceIds }),
+    ).toBe(WS_B);
   });
 });
 
