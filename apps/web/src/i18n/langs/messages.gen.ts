@@ -2379,6 +2379,25 @@ type Messages = {
     };
     "backToList": "Back to correspondence";
     "createAddress": "Create address";
+    "dataBox": {
+      "acceptedAt": "Accepted on";
+      "acceptedByFiction": "by deemed delivery";
+      "acceptedByLogin": "by login";
+      "channel": "Data box";
+      "contact": "Contact: {name}";
+      "deliveredAt": "Delivered to the box";
+      "delivery": "Delivery terms";
+      "messageId": "Message ID";
+      "openFile": "Open .zfo file";
+      "personalDelivery": "To the addressee in person";
+      "recipient": "Recipient";
+      "recipientReference": "Recipient’s reference";
+      "sealNotVerified": "The file’s electronic seal is kept with it and not verified.";
+      "senderReference": "Sender’s reference";
+      "statedInFile": "Data-box message (as stated in the file)";
+      "toHands": "To the attention of {name}";
+      "uploaded": "Uploaded data-box message";
+    };
     "deliveredBy": "Delivered by <address>{sender}</address>";
     "deliveredByAuthenticated": "Delivered by <address>{sender}</address> · authenticated";
     "deliveryAuthentication": "Delivery authentication";

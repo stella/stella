@@ -218,7 +218,9 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
             <span className="min-w-0 flex-1">
               <CorrespondenceProvenance record={item} />
               <span className="mt-2 block">
-                <AssertedHeadersLabel record={item} />
+                {item.channel === "email" && (
+                  <AssertedHeadersLabel record={item} />
+                )}
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="truncate text-sm font-medium">
                     <bdi dir="auto">
@@ -228,14 +230,33 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                   <span className="text-muted-foreground text-xs">
                     {t(CORRESPONDENCE_STATE_LABEL_KEYS[item.handlingState])}
                   </span>
-                </span>
-                <span className="text-muted-foreground mt-1 block truncate text-xs">
-                  {t(
-                    correspondenceProvenancePresentation(item)
-                      .originalSenderLabel,
+                  {item.channel === "data_box" && (
+                    <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-xs">
+                      {t("correspondence.dataBox.channel")}
+                    </span>
                   )}
-                  : <bdi dir="ltr">{item.from.address}</bdi>
                 </span>
+                {item.channel === "data_box" ? (
+                  <span className="text-muted-foreground mt-1 block truncate text-xs">
+                    {t("emailViewer.from")}:{" "}
+                    {item.from.name && (
+                      <bdi className="me-1" dir="auto">
+                        {item.from.name}
+                      </bdi>
+                    )}
+                    <bdi className="font-mono" dir="ltr">
+                      {item.from.address}
+                    </bdi>
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground mt-1 block truncate text-xs">
+                    {t(
+                      correspondenceProvenancePresentation(item)
+                        .originalSenderLabel,
+                    )}
+                    : <bdi dir="ltr">{item.from.address}</bdi>
+                  </span>
+                )}
                 <span className="text-muted-foreground mt-1 block truncate text-xs">
                   {t("emailViewer.to")}:{" "}
                   {uniqueCorrespondenceAddresses(item.to).map((recipient) => (
