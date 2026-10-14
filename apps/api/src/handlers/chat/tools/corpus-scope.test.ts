@@ -34,8 +34,8 @@ const SLOVAK_ELI =
 
 const lookup =
   (rows: Record<string, string>) =>
-  (keys: readonly string[]): Promise<ReadonlyMap<string, string>> =>
-    Promise.resolve(
+  async (keys: readonly string[]): Promise<ReadonlyMap<string, string>> =>
+    await Promise.resolve(
       new Map(
         keys.flatMap((key) => {
           const country = rows[key];
