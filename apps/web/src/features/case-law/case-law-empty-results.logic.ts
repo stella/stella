@@ -23,16 +23,21 @@ export const isQuestionLike = (query: string): boolean => {
 
 /**
  * What a rewrite that just landed is for. The box stays editable while the
- * model answers, so a rewrite of an entry the reader has since changed, or of
- * another jurisdiction, is stale and dropped rather than written over what
- * they typed; one that says the same words would search the same nothing
- * again.
+ * model answers, so a rewrite of an entry the reader has since changed, of
+ * another jurisdiction, or of a search they have since asked to require every
+ * word of, is stale and dropped rather than written over their choice; one
+ * that says the same words would search the same nothing again.
  */
 export type RefineOutcome = "stale" | "unchanged" | "manual" | "automatic";
 
 type RefineOutcomeInput = {
-  asked: { country: string; entry: string; automatic: boolean };
-  current: { country: string; query: string };
+  asked: {
+    country: string;
+    entry: string;
+    strict: boolean;
+    automatic: boolean;
+  };
+  current: { country: string; query: string; strict: boolean };
   refined: string;
 };
 
@@ -43,7 +48,8 @@ export const refineOutcome = ({
 }: RefineOutcomeInput): RefineOutcome => {
   if (
     asked.entry !== current.query.trim() ||
-    asked.country !== current.country
+    asked.country !== current.country ||
+    asked.strict !== current.strict
   ) {
     return "stale";
   }

@@ -891,6 +891,7 @@ const useCaseLawRewriteFlow = ({
   const refine = useCaseLawRefine({
     country,
     query,
+    strict: isStrictSearch(search.strict),
     onRefined: searchRefinedQuery,
     onAutoRefined: (refined, original) => {
       setQuery(refined);

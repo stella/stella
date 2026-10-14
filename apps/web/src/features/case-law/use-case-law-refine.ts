@@ -14,6 +14,8 @@ type CaseLawRefineOptions = {
   country: string;
   /** What the box holds now: a rewrite of anything else is stale. */
   query: string;
+  /** The search requires every word: a choice a late rewrite must not undo. */
+  strict: boolean;
   /** A rewrite the reader asked for landed: search for it. */
   onRefined: (refined: string) => void;
   /**
@@ -32,6 +34,7 @@ type CaseLawRefineOptions = {
 export const useCaseLawRefine = ({
   country,
   query,
+  strict,
   onRefined,
   onAutoRefined,
 }: CaseLawRefineOptions) => {
@@ -41,6 +44,7 @@ export const useCaseLawRefine = ({
   const mutation = useMutation({
     mutationFn: async (asked: {
       country: string;
+      strict: boolean;
       entry: string;
       automatic: boolean;
     }) =>
@@ -52,7 +56,7 @@ export const useCaseLawRefine = ({
     onSuccess: (refined, asked) => {
       const outcome = refineOutcome({
         asked,
-        current: { country, query },
+        current: { country, query, strict },
         refined: refined.query,
       });
       switch (outcome) {
@@ -82,7 +86,7 @@ export const useCaseLawRefine = ({
     if (mutation.isPending) {
       return;
     }
-    mutation.mutate({ country, entry: query.trim(), automatic });
+    mutation.mutate({ country, entry: query.trim(), strict, automatic });
   };
 
   return {

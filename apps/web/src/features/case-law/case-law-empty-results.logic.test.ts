@@ -62,8 +62,13 @@ describe("rewriting a search by itself", () => {
 });
 
 describe("a rewrite that lands", () => {
-  const ASKED = { country: "cze", entry: "kauce nájem", automatic: false };
-  const CURRENT = { country: "cze", query: "kauce nájem " };
+  const ASKED = {
+    country: "cze",
+    entry: "kauce nájem",
+    strict: false,
+    automatic: false,
+  };
+  const CURRENT = { country: "cze", query: "kauce nájem ", strict: false };
 
   test("searches when the box still holds what was asked", () => {
     expect(
@@ -81,6 +86,7 @@ describe("a rewrite that lands", () => {
   test.each([
     ["the reader typed on", { ...CURRENT, query: "kauce nájem byt" }],
     ["the reader switched jurisdiction", { ...CURRENT, country: "svk" }],
+    ["the reader asked for every word", { ...CURRENT, strict: true }],
   ])("is dropped when %s before it landed", (_reason, current) => {
     expect(refineOutcome({ asked: ASKED, current, refined: "jistota" })).toBe(
       "stale",
