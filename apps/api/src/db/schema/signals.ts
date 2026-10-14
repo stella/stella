@@ -252,7 +252,12 @@ export const signalEvents = p.pgTable(
     )`;
 
     return [
-      ...systemScopePolicies(table),
+      // Events carry no workspace column; their matter is the parent signal's.
+      ...systemScopePolicies(
+        table,
+        "write",
+        sql`EXISTS (SELECT 1 FROM public.signals scope_signal WHERE scope_signal.id = signal_id)`,
+      ),
       p
         .foreignKey({
           columns: [table.signalId, table.organizationId],

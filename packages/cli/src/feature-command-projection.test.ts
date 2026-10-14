@@ -14,6 +14,7 @@ import {
   hasFeatureCommands,
   projectFeatureCommands,
 } from "./feature-command-projection.js";
+import type { CallerFeatureAccess } from "./feature-command-projection.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
@@ -189,12 +190,13 @@ test("conditional catalog commands require current input projection or admission
     entries: parsed,
     annotations: generatedToolAnnotations,
   }).tree;
-  for (const featureAccess of [
+  const accessCases: readonly (CallerFeatureAccess | undefined)[] = [
     undefined,
     { capabilities: [], tools: [] },
     { capabilities: [CAPABILITY], tools: [] },
     { capabilities: [], tools: [], conditionalInputs: { [CAPABILITY]: {} } },
-  ]) {
+  ];
+  for (const featureAccess of accessCases) {
     expect(
       leafIds(
         projectFeatureCommands({ tree: conditionalTree, featureAccess }),

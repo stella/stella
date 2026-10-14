@@ -1,14 +1,20 @@
 import { panic } from "better-result";
 import { getColumnTable, getTableName, is, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { PgTable, pgPolicy } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { stellaSystem } from "@/api/db/rls";
 
-/** System permissions remain bounded by the row organization and explicit matter set. */
+/**
+ * System permissions remain bounded by the row organization and explicit matter set.
+ * A table without its own workspace column may pass the predicate that reaches
+ * its parent row's matter; the owning schema module states that predicate.
+ */
 export const systemScopePolicies = (
   columns: Record<string, AnyPgColumn>,
   access: "read" | "write" = "write",
+  parentMatter?: SQL,
 ) => {
   const entries = Object.values(columns);
   const first = entries.at(0) ?? panic("System scope requires table columns");
@@ -36,8 +42,8 @@ export const systemScopePolicies = (
     return panic("System scope requires organization ownership");
   })();
   const matter = (() => {
-    if (tableName === "signal_events") {
-      return sql`EXISTS (SELECT 1 FROM public.signals scope_signal WHERE scope_signal.id = signal_id)`;
+    if (parentMatter !== undefined) {
+      return parentMatter;
     }
     if (workspace === undefined) {
       return sql`true`;

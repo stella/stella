@@ -61,7 +61,13 @@ describe("manual flow start admission response", () => {
                   where: () => chain,
                   limit: async () =>
                     "email" in projection
-                      ? [{ email: "flow@example.test", emailVerified: true }]
+                      ? [
+                          {
+                            email: "flow@example.test",
+                            emailVerified: true,
+                            enrolledFeatureIds: ["flows"],
+                          },
+                        ]
                       : [{ featureId: "flows", organizationId, userId }],
                 };
                 return chain;

@@ -631,6 +631,91 @@ const isDynamicModuleImport = (
   );
 };
 
+// `const { name } = await import("…")`: the destructured member of a
+// matching module.
+const destructuredDynamicImportValue = (
+  parent: ts.BindingElement,
+  modulePattern: RegExp,
+): ImportedValue | undefined => {
+  const pattern = parent.parent;
+  const declaration = pattern.parent;
+  if (
+    !ts.isObjectBindingPattern(pattern) ||
+    !ts.isVariableDeclaration(declaration) ||
+    declaration.initializer === undefined ||
+    !isDynamicModuleImport(declaration.initializer, modulePattern)
+  ) {
+    return undefined;
+  }
+  const name = parent.propertyName ?? parent.name;
+  return ts.isIdentifier(name) || ts.isStringLiteralLike(name)
+    ? { type: "member", name: name.text }
+    : undefined;
+};
+
+// A runtime named or namespace import from a matching module.
+const staticImportValue = (
+  parent: ts.ImportSpecifier | ts.NamespaceImport,
+  modulePattern: RegExp,
+): ImportedValue | undefined => {
+  const imported = ts.findAncestor(parent, ts.isImportDeclaration);
+  if (
+    imported === undefined ||
+    !ts.isImportDeclaration(imported) ||
+    !ts.isStringLiteralLike(imported.moduleSpecifier) ||
+    !modulePattern.test(imported.moduleSpecifier.text) ||
+    imported.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
+    (ts.isImportSpecifier(parent) && parent.isTypeOnly)
+  ) {
+    return undefined;
+  }
+  return ts.isImportSpecifier(parent)
+    ? { type: "member", name: (parent.propertyName ?? parent.name).text }
+    : { type: "namespace" };
+};
+
+// A `const` alias of a dynamic module import or of another imported value.
+const constAliasValue = (
+  parent: ts.VariableDeclaration,
+  modulePattern: RegExp,
+  seen: Set<ts.Identifier>,
+): ImportedValue | undefined => {
+  if (
+    parent.initializer === undefined ||
+    !ts.isVariableDeclarationList(parent.parent) ||
+    !hasNodeFlag(parent.parent.flags, ts.NodeFlags.Const)
+  ) {
+    return undefined;
+  }
+  if (isDynamicModuleImport(parent.initializer, modulePattern)) {
+    return { type: "namespace" };
+  }
+  return importedValue(parent.initializer, modulePattern, seen);
+};
+
+const identifierImportedValue = (
+  value: ts.Identifier,
+  modulePattern: RegExp,
+  seen: Set<ts.Identifier>,
+): ImportedValue | undefined => {
+  const declaration = resolveDeclaration(value);
+  if (declaration === undefined || seen.has(declaration)) {
+    return undefined;
+  }
+  seen.add(declaration);
+  const parent = declaration.parent;
+  if (ts.isBindingElement(parent)) {
+    return destructuredDynamicImportValue(parent, modulePattern);
+  }
+  if (ts.isImportSpecifier(parent) || ts.isNamespaceImport(parent)) {
+    return staticImportValue(parent, modulePattern);
+  }
+  if (ts.isVariableDeclaration(parent)) {
+    return constAliasValue(parent, modulePattern, seen);
+  }
+  return undefined;
+};
+
 // Resolve imports and immutable aliases using the same lexical declarations
 // as the owner-handle scanner. Mutable aliases never establish admission.
 const importedValue = (
@@ -640,66 +725,19 @@ const importedValue = (
 ): ImportedValue | undefined => {
   const value = unwrap(expression);
   if (ts.isIdentifier(value)) {
-    const declaration = resolveDeclaration(value);
-    if (declaration === undefined || seen.has(declaration)) {
-      return undefined;
-    }
-    seen.add(declaration);
-    const parent = declaration.parent;
-    if (
-      ts.isBindingElement(parent) &&
-      ts.isObjectBindingPattern(parent.parent) &&
-      ts.isVariableDeclaration(parent.parent.parent) &&
-      parent.parent.parent.initializer !== undefined &&
-      isDynamicModuleImport(parent.parent.parent.initializer, modulePattern)
-    ) {
-      const name = parent.propertyName ?? parent.name;
-      return ts.isIdentifier(name) || ts.isStringLiteralLike(name)
-        ? { type: "member", name: name.text }
-        : undefined;
-    }
-    if (ts.isImportSpecifier(parent) || ts.isNamespaceImport(parent)) {
-      const imported = ts.findAncestor(parent, ts.isImportDeclaration);
-      if (
-        imported === undefined ||
-        !ts.isImportDeclaration(imported) ||
-        !ts.isStringLiteralLike(imported.moduleSpecifier) ||
-        !modulePattern.test(imported.moduleSpecifier.text) ||
-        imported.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
-        (ts.isImportSpecifier(parent) && parent.isTypeOnly)
-      ) {
-        return undefined;
-      }
-      return ts.isImportSpecifier(parent)
-        ? { type: "member", name: (parent.propertyName ?? parent.name).text }
-        : { type: "namespace" };
-    }
-    if (
-      ts.isVariableDeclaration(parent) &&
-      parent.initializer !== undefined &&
-      ts.isVariableDeclarationList(parent.parent) &&
-      hasNodeFlag(parent.parent.flags, ts.NodeFlags.Const)
-    ) {
-      if (isDynamicModuleImport(parent.initializer, modulePattern)) {
-        return { type: "namespace" };
-      }
-      return importedValue(parent.initializer, modulePattern, seen);
-    }
-    return undefined;
+    return identifierImportedValue(value, modulePattern, seen);
   }
   if (
-    ts.isPropertyAccessExpression(value) ||
-    ts.isElementAccessExpression(value)
+    !ts.isPropertyAccessExpression(value) &&
+    !ts.isElementAccessExpression(value)
   ) {
-    const name = accessName(value);
-    if (
-      name !== undefined &&
-      importedValue(value.expression, modulePattern, seen)?.type === "namespace"
-    ) {
-      return { type: "member", name };
-    }
+    return undefined;
   }
-  return undefined;
+  const name = accessName(value);
+  return name !== undefined &&
+    importedValue(value.expression, modulePattern, seen)?.type === "namespace"
+    ? { type: "member", name }
+    : undefined;
 };
 
 const resolvesToBinding = (

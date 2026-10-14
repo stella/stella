@@ -222,11 +222,15 @@ describe("resolveCommandTree (S5.3)", () => {
       if (refreshed.status !== "refreshed") {
         panic("Conditional registry fixture requires a current response");
       }
+      const callerAccess =
+        refreshed.featureAccess === undefined
+          ? {}
+          : { featureAccess: refreshed.featureAccess };
       const resolved = await resolveCommandTree({
         serverOrigin: ORIGIN,
         env,
         registry: refreshed.registry,
-        featureAccess: refreshed.featureAccess,
+        ...callerAccess,
         bakedTree,
         annotations: {},
         loadCatalog: () => [entry],
@@ -255,7 +259,7 @@ describe("resolveCommandTree (S5.3)", () => {
         serverOrigin: ORIGIN,
         env,
         registry: refreshed.registry,
-        featureAccess: refreshed.featureAccess,
+        ...callerAccess,
         bakedTree,
         loadCatalog: () => null,
       });
