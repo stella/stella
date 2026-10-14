@@ -1229,14 +1229,14 @@ describe("detect-e2e-changes", () => {
 
   test("no step is gated on a setup action's readiness output", () => {
     const root = path.join(import.meta.dirname, "..");
-    const files = [
-      ...new Bun.Glob(
-        ".github/{workflows/*.yml,actions/*/action.yml}",
-      ).scanSync(root),
-    ].map((file) => ({
-      path: file,
-      source: readFileSync(path.join(root, file), "utf-8"),
-    }));
+    const files = [".github/workflows/*.yml", ".github/actions/*/action.yml"]
+      .flatMap((pattern) => [
+        ...new Bun.Glob(pattern).scanSync({ cwd: root, dot: true }),
+      ])
+      .map((file) => ({
+        path: file,
+        source: readFileSync(path.join(root, file), "utf-8"),
+      }));
     expect(files.length).toBeGreaterThan(10);
     expect(setupReadinessViolations(files)).toEqual([]);
   });
@@ -1244,13 +1244,16 @@ describe("detect-e2e-changes", () => {
   test("failure diagnostics run whenever the stack setup was attempted", () => {
     const root = path.join(import.meta.dirname, "..");
     const conditions = [
-      ...new Bun.Glob(".github/workflows/*.yml").scanSync(root),
+      ...new Bun.Glob(".github/workflows/*.yml").scanSync({
+        cwd: root,
+        dot: true,
+      }),
     ].flatMap((file) =>
       [
         ...readFileSync(path.join(root, file), "utf-8").matchAll(
           /if: (failure\(\) && steps\.e2e-stack\.outcome [!=]= '\w+')/gu,
         ),
-      ].map((match) => `${file}: ${match.at(1)}`),
+      ].map((match) => `${file}: ${match.at(1) ?? ""}`),
     );
     expect(conditions.length).toBeGreaterThan(0);
     for (const condition of conditions) {
