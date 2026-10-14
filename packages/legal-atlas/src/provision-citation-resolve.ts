@@ -151,6 +151,8 @@ type CompiledResolver = {
    * as a further provision.
    */
   sentenceDesignator: RegExp;
+  /** A year the profile's version wording introduces, global. */
+  versionYear: RegExp;
   sectionUnits: ReadonlyMap<string, SectionUnit>;
   subdivisions: readonly {
     pattern: RegExp;
@@ -194,6 +196,10 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
     andFollowing: new RegExp(
       String.raw`(?<![\p{L}\p{N}])(?:${alternation(profile.andFollowingMarkers)})`,
       "iu",
+    ),
+    versionYear: new RegExp(
+      String.raw`(?<![\p{L}\p{N}])(?:${alternation(profile.versionYearLeadIns)})\s+(?:(?:roku|r\.)\s+)?(?:1[89]|20)\d{2}(?!\d)`,
+      "giu",
     ),
     sentenceDesignator: new RegExp(
       String.raw`(?<![\p{L}\p{N}])(?:${profile.subdivisionTerms
@@ -468,7 +474,6 @@ const renderAnchor = (
 };
 
 const DATE_PATTERN = /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/gu;
-const YEAR_PATTERN = /(?<!\d)(?:1[89]|20)\d{2}(?!\d)/gu;
 const LETTERED_ITEM = new RegExp(
   String.raw`(?<![\p{L}\p{N}])${LETTER}\)`,
   "iu",
@@ -499,7 +504,8 @@ const namesFurtherProvision = (
   residual = residual
     .replace(resolver.sentenceDesignator, (match) => " ".repeat(match.length))
     .replace(DATE_PATTERN, (match) => " ".repeat(match.length))
-    .replace(YEAR_PATTERN, (match) => " ".repeat(match.length));
+    // Only a year the version wording introduces: `plus 2021` is a number.
+    .replace(resolver.versionYear, (match) => " ".repeat(match.length));
   return (
     /\d/u.test(residual) ||
     LETTERED_ITEM.test(residual) ||

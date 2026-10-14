@@ -332,6 +332,19 @@ describe("every act spelling in the profile resolves", () => {
   });
 });
 
+describe("version years", () => {
+  test("a year only counts as a version after version wording", () => {
+    expect(resolve("§ 2910 OZ plus 2021").status).toBe("multiple_provisions");
+    expect(resolve("§ 2910 OZ a 2012").status).toBe("multiple_provisions");
+    expect(resolved("§ 2910 OZ ve znění z roku 2021")).toMatchObject({
+      section: 2910,
+    });
+    expect(resolved("§ 2910 OZ (stav k roku 2021)")).toMatchObject({
+      section: 2910,
+    });
+  });
+});
+
 describe("letters and canonical wording", () => {
   test("Czech `ch` is one letter, not `c` followed by more text", () => {
     expect(resolved("§ 10 písm. ch) ZP")).toMatchObject({

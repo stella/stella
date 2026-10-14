@@ -231,6 +231,12 @@ export type JurisdictionProfile = {
   /** BCP-47 primary subtag of the language the profile's vocabulary is in. */
   language: string;
   citationTerms: CitationTerms;
+  /**
+   * The words that put a bare year as a version of the act (`stav k roku
+   * 2021`, `ve znění z 2012`). A year after anything else is a number, and a
+   * number after the first provision names a further one.
+   */
+  versionYearLeadIns: readonly string[];
   sectionTerms: readonly SectionTermSpec[];
   subdivisionTerms: readonly SubdivisionTermSpec[];
   /** `,` and `;` are always connectors; these are the word-shaped ones. */

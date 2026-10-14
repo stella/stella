@@ -198,6 +198,18 @@ export const CZ_PROFILE = {
     letter: "písm.",
     point: "bod",
   },
+  versionYearLeadIns: [
+    "roku",
+    "rok",
+    "r.",
+    "znění",
+    "účinném",
+    "stav k",
+    "k",
+    "od",
+    "do",
+    "z",
+  ],
   versionGrammar: {
     dateStatements: [
       { prefix: "ve znění účinném do", relation: "until" },

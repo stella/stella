@@ -75,6 +75,18 @@ export const SK_PROFILE = {
     letter: "písm.",
     point: "bod",
   },
+  versionYearLeadIns: [
+    "roku",
+    "rok",
+    "r.",
+    "znení",
+    "účinnom",
+    "stav k",
+    "k",
+    "od",
+    "do",
+    "z",
+  ],
   versionGrammar: {
     dateStatements: [
       { prefix: "v znení účinnom do", relation: "until" },
