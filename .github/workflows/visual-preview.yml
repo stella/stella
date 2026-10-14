@@ -58,8 +58,9 @@ jobs:
           bun-version-file: package.json
           save: ${{ github.ref == 'refs/heads/main' }}
       - name: Install renderer and browser harness dependencies
+        timeout-minutes: 2
         if: steps.scope.outputs.required == 'true'
-        run: bun install --frozen-lockfile --ignore-scripts --filter @stll/visual-preview --filter @stll/web --filter @stll/api
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter @stll/visual-preview --filter @stll/web --filter @stll/api
       - name: Test renderer validation
         if: steps.scope.outputs.required == 'true'
         run: bun --filter @stll/visual-preview test

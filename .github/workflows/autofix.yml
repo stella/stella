@@ -92,6 +92,7 @@ jobs:
           submodules: true
 
       - name: Install regeneration dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
@@ -456,6 +457,7 @@ jobs:
           fi
 
       - name: Install dependencies
+        timeout-minutes: 5
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           # .npmrc references NPM_TOKEN; pull request installs get none.

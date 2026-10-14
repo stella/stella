@@ -206,6 +206,7 @@ jobs:
       # Smoke the artifact that was actually pushed (with its release build
       # args baked in), not a local rebuild that could drift from it.
       - name: Pull pushed image by digest
+        timeout-minutes: 3
         env:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           IMAGE_DIGEST: ${{ needs.build.outputs.digest-arm64 }}
@@ -219,6 +220,7 @@ jobs:
           docker tag "${IMAGE}@${IMAGE_DIGEST}" stella-api:smoke
 
       - name: Pull smoke service images
+        timeout-minutes: 2
         env:
           CI_IMAGE_MIRROR_ENABLED: ${{ github.event.pull_request.head.repo.fork != true && github.token != '' }}
         run: |

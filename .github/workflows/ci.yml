@@ -1243,6 +1243,7 @@ jobs:
             bun scripts/query-perf-scope.ts >> "$GITHUB_OUTPUT"
 
       - name: Install API test planner dependencies
+        timeout-minutes: 3
         id: api-test-deps
         # Both planners retain full coverage when installation is unavailable.
         continue-on-error: true
@@ -5274,6 +5275,7 @@ jobs:
           echo "required=false" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
+        timeout-minutes: 2
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         env:
           NPM_TOKEN: ""
@@ -5283,7 +5285,7 @@ jobs:
           version=$(node -p 'require("./package.json").packageManager.split("@")[1]')
           bootstrap="$RUNNER_TEMP/bun-bootstrap"
           bin="$HOME/.bun/bin"
-          npm install --prefix "$bootstrap" --ignore-scripts --no-audit --no-fund --no-save "@oven/bun-linux-x64@$version"
+          bash scripts/retry.sh npm install --prefix "$bootstrap" --ignore-scripts --no-audit --no-fund --no-save "@oven/bun-linux-x64@$version"
           mkdir -p "$bin"
           ln -s "$bootstrap/node_modules/@oven/bun-linux-x64/bin/bun" "$bin/bun"
           ln -s "$bin/bun" "$bin/bunx"
@@ -5324,6 +5326,7 @@ jobs:
           cp .env.example .env
 
       - name: Install UI browser test runtime
+        timeout-minutes: 2
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: ./.github/actions/setup-playwright
         with:
@@ -6290,6 +6293,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Pull the promoted release's API image
+        timeout-minutes: 3
         env:
           BASE_IMAGE: ghcr.io/${{ github.repository_owner }}/stella-api:${{ steps.base.outputs.ref }}
         run: |
@@ -7150,6 +7154,7 @@ jobs:
 
       # The recorder uses this exact setup, build artifact, seed and browser.
       - name: Setup production browser stack
+        timeout-minutes: 8
         id: e2e-stack
         uses: ./.github/actions/setup-production-e2e
         with:
@@ -7623,6 +7628,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify Firefox and WebKit in the pinned image
+        timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
         with:
           browsers: firefox webkit
@@ -7805,6 +7811,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browsers
+        timeout-minutes: 3
         if: steps.e2e-stack.outputs.status == 'ready'
         uses: ./.github/actions/setup-playwright
 
@@ -8025,6 +8032,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browsers
+        timeout-minutes: 4
         uses: ./.github/actions/setup-playwright
         with:
           package-directory: apps/landing
@@ -8417,6 +8425,7 @@ jobs:
             --tag stella-api-release:ci . 2>&1 | tee "$RUNNER_TEMP/api-image-build.log"
 
       - name: Pull API smoke service images
+        timeout-minutes: 2
         env:
           POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           REDIS_IMAGE: ${{ needs.ci-plan.outputs.redis }}
@@ -9258,6 +9267,7 @@ jobs:
           wait "$server_pid"
 
       - name: Install cargo-deny
+        timeout-minutes: 10
         if: matrix.os == 'macos'
         uses: ./.github/actions/cargo-deny
 
@@ -9379,8 +9389,10 @@ jobs:
         with:
           bun-version-file: "package.json"
       - name: Install Safe Chain
+        timeout-minutes: 2
         uses: ./.github/actions/safe-chain
       - name: Install OSV-Scanner
+        timeout-minutes: 2
         if: ${{ !cancelled() }}
         uses: ./.github/actions/osv-scanner
       - name: Verify malware scanner fixtures

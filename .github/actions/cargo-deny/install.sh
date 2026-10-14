@@ -24,7 +24,8 @@ trap 'rm -rf "$work"' EXIT
 # Only transport errors permit the source build. A hash mismatch always fails.
 if ! fetch "${release}/${name}.tar.gz" "${work}/archive.tar.gz"; then
   echo "::warning::cargo-deny release download failed; building ${CARGO_DENY_VERSION} from source"
-  cargo install cargo-deny --version "$CARGO_DENY_VERSION" --locked --root "${HOME}/.cargo-deny"
+  bash "$(dirname "${BASH_SOURCE[0]}")/../../../scripts/retry.sh" \
+    cargo install cargo-deny --version "$CARGO_DENY_VERSION" --locked --root "${HOME}/.cargo-deny"
 else
   actual="$(shasum -a 256 "${work}/archive.tar.gz" | cut -d' ' -f1)"
   if [[ "$actual" != "$CARGO_DENY_SHA256" ]]; then
