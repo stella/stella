@@ -198,7 +198,7 @@ export type RunRegistryReadToolProps = {
   scopeArgs?:
     | ((
         args: Record<string, unknown>,
-      ) => Result<Record<string, unknown>, ChatToolError>)
+      ) => Promise<Result<Record<string, unknown>, ChatToolError>>)
     | undefined;
 };
 
@@ -341,7 +341,7 @@ export const runRegistryReadTool = async ({
   const scoped =
     scopeArgs === undefined
       ? Result.ok(normalized.value)
-      : scopeArgs(normalized.value);
+      : await scopeArgs(normalized.value);
   if (Result.isError(scoped)) {
     return Result.err(scoped.error);
   }

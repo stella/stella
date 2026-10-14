@@ -8,17 +8,78 @@ import type { ChatCorpusScope } from "@stll/api-contract";
 import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import {
   corpusScopeDroppedTools,
+  type CorpusResourceCountryResolver,
   PUBLIC_SOURCE_JURISDICTIONS,
   restrictChatToolsToCorpusScope,
   scopeCorpusRead,
 } from "@/api/handlers/chat/tools/corpus-scope";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
+import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 const CZECH_CASE_LAW: ChatCorpusScope[] = [
   { corpus: "case_law", country: "CZE" },
 ];
+const CZECH_LEGISLATION: ChatCorpusScope[] = [
+  { corpus: "legislation", country: "CZE" },
+];
+
+const CZECH_DECISION = "0f6c2a1e-5b7d-4c1e-9a7b-1d2e3f4a5b6c";
+const SLOVAK_DECISION = "7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+const UNKNOWN_DECISION = "11111111-2222-4333-8444-555555555555";
+const CZECH_ELI = "https://www.e-sbirka.cz/eli/cz/sb/2012/89";
+const SLOVAK_ELI =
+  "https://www.slov-lex.sk/ezbierky/pravne-predpisy/SK/ZZ/1964/40";
+
+const lookup =
+  (rows: Record<string, string>) =>
+  (keys: readonly string[]): Promise<ReadonlyMap<string, string>> =>
+    Promise.resolve(
+      new Map(
+        keys.flatMap((key) => {
+          const country = rows[key];
+          return country === undefined ? [] : [[key, country] as const];
+        }),
+      ),
+    );
+
+/** The stored countries a keyed read is checked against. */
+const RESOLVER: CorpusResourceCountryResolver = {
+  decisions: lookup({ [CZECH_DECISION]: "CZE", [SLOVAK_DECISION]: "SVK" }),
+  statutes: lookup({ [CZECH_ELI]: "CZE", [SLOVAK_ELI]: "SVK" }),
+};
+
+const scope = async (props: {
+  scopes: readonly ChatCorpusScope[];
+  toolName: RegistryReadToolName;
+  args: Record<string, unknown>;
+}) => await scopeCorpusRead({ ...props, resolveCountries: RESOLVER });
+
+/** The refusal's hint, failing the test when the read was not refused. */
+const refusalHint = (
+  read: Awaited<ReturnType<typeof scope>>,
+): { kind: string; code: unknown; hint: unknown } => {
+  if (!Result.isError(read)) {
+    throw new TypeError("expected the read to be refused");
+  }
+  const body: unknown = JSON.parse(read.error.message);
+  const error =
+    typeof body === "object" && body !== null && "error" in body
+      ? body.error
+      : null;
+  return {
+    kind: read.error.kind,
+    code:
+      typeof error === "object" && error !== null && "code" in error
+        ? error.code
+        : null,
+    hint:
+      typeof error === "object" && error !== null && "hint" in error
+        ? error.hint
+        : null,
+  };
+};
 
 const toolMap = (names: readonly string[]): ChatToolMap =>
   Object.fromEntries(
@@ -33,18 +94,18 @@ const toolMap = (names: readonly string[]): ChatToolMap =>
   );
 
 describe("scopeCorpusRead", () => {
-  it("passes every read through on an unscoped turn", () => {
-    const read = scopeCorpusRead({
+  it("passes every read through on an unscoped turn", async () => {
+    const read = await scope({
       scopes: [],
-      toolName: "search_legislation",
-      args: { query: "nájem", country: "SVK" },
+      toolName: "read_case_law_decision",
+      args: { decision_ids: [SLOVAK_DECISION] },
     });
 
-    expect(read.unwrap()).toEqual({ query: "nájem", country: "SVK" });
+    expect(read.unwrap()).toEqual({ decision_ids: [SLOVAK_DECISION] });
   });
 
-  it("keeps a call that names the scoped country", () => {
-    const read = scopeCorpusRead({
+  it("keeps a call that names the scoped country", async () => {
+    const read = await scope({
       scopes: CZECH_CASE_LAW,
       toolName: "search_case_law",
       args: { queries: ["nájem"], country: "CZE" },
@@ -53,8 +114,8 @@ describe("scopeCorpusRead", () => {
     expect(read.unwrap()).toEqual({ queries: ["nájem"], country: "CZE" });
   });
 
-  it("pins an omitted optional country to the single scoped one", () => {
-    const read = scopeCorpusRead({
+  it("pins an omitted optional country to the single scoped one", async () => {
+    const read = await scope({
       scopes: CZECH_CASE_LAW,
       toolName: "case_law_coverage",
       args: {},
@@ -63,8 +124,8 @@ describe("scopeCorpusRead", () => {
     expect(read.unwrap()).toEqual({ country: "CZE" });
   });
 
-  it("refuses an omitted optional country when several are scoped", () => {
-    const read = scopeCorpusRead({
+  it("refuses an omitted optional country when several are scoped", async () => {
+    const read = await scope({
       scopes: [...CZECH_CASE_LAW, { corpus: "case_law", country: "SVK" }],
       toolName: "case_law_coverage",
       args: {},
@@ -73,55 +134,135 @@ describe("scopeCorpusRead", () => {
     expect(Result.isError(read)).toBe(true);
   });
 
-  it("refuses a foreign country with a hint naming the allowed ones", () => {
-    const read = scopeCorpusRead({
+  it("refuses a foreign country with a hint naming the allowed ones", async () => {
+    const read = await scope({
       scopes: CZECH_CASE_LAW,
       toolName: "search_case_law",
       args: { queries: ["nájem"], country: "SVK" },
     });
 
-    if (!Result.isError(read)) {
-      throw new TypeError("expected the foreign country to be refused");
+    expect(refusalHint(read)).toEqual({
+      kind: "invalid-input",
+      code: "validation_error",
+      hint: "Set `country` to CZE.",
+    });
+  });
+
+  it("keeps decision reads whose stored country is in scope", async () => {
+    for (const [toolName, args] of [
+      ["read_case_law_decision", { decision_ids: [CZECH_DECISION] }],
+      [
+        "read_case_law_citations",
+        { decision_id: CZECH_DECISION, direction: "cited_by" },
+      ],
+    ] as const) {
+      const read = await scope({ scopes: CZECH_CASE_LAW, toolName, args });
+
+      expect(read.unwrap()).toEqual(args);
     }
-    expect(read.error.kind).toBe("invalid-input");
-    expect(JSON.parse(read.error.message)).toMatchObject({
-      error: {
+  });
+
+  it("refuses a foreign decision id under a Czech chip, citations included", async () => {
+    for (const [toolName, args] of [
+      [
+        "read_case_law_decision",
+        { decision_ids: [CZECH_DECISION, SLOVAK_DECISION] },
+      ],
+      [
+        "read_case_law_citations",
+        { decision_id: SLOVAK_DECISION, direction: "cites" },
+      ],
+    ] as const) {
+      const refusal = refusalHint(
+        await scope({ scopes: CZECH_CASE_LAW, toolName, args }),
+      );
+
+      expect(refusal.code).toBe("validation_error");
+      expect(refusal.hint).toContain("SVK");
+      expect(refusal.hint).toContain("search_case_law in CZE");
+    }
+  });
+
+  it("refuses a decision id the store does not know", async () => {
+    for (const id of [UNKNOWN_DECISION, "not-a-uuid"]) {
+      const refusal = refusalHint(
+        await scope({
+          scopes: CZECH_CASE_LAW,
+          toolName: "read_case_law_decision",
+          args: { decision_ids: [id] },
+        }),
+      );
+
+      expect(refusal).toEqual({
+        kind: "invalid-input",
         code: "validation_error",
-        hint: "Set `country` to CZE.",
+        hint: "Find it with search_case_law in CZE first.",
+      });
+    }
+  });
+
+  it("holds statute reads to the stored country of their ELI", async () => {
+    expect(
+      (
+        await scope({
+          scopes: CZECH_LEGISLATION,
+          toolName: "read_statute",
+          args: { eli: CZECH_ELI },
+        })
+      ).unwrap(),
+    ).toEqual({ eli: CZECH_ELI });
+    expect(
+      refusalHint(
+        await scope({
+          scopes: CZECH_LEGISLATION,
+          toolName: "read_statute",
+          args: { eli: SLOVAK_ELI },
+        }),
+      ).hint,
+    ).toContain("SVK");
+    expect(
+      refusalHint(
+        await scope({
+          scopes: CZECH_LEGISLATION,
+          toolName: "read_provision_history",
+          args: { eli: "https://example.com/eli/unknown", anchor: "p1" },
+        }),
+      ).hint,
+    ).toBe("Find it with search_legislation in CZE first.");
+  });
+
+  it("refuses a provision batch when any entry is foreign", async () => {
+    const read = await scope({
+      scopes: CZECH_LEGISLATION,
+      toolName: "read_statute_provisions",
+      args: {
+        items: [
+          { eli: CZECH_ELI, anchor: "p1" },
+          { eli: SLOVAK_ELI, anchor: "p2" },
+        ],
       },
     });
+
+    expect(refusalHint(read).hint).toContain("SVK");
   });
 
-  it("keeps id-keyed reads of the scoped corpus", () => {
-    const read = scopeCorpusRead({
-      scopes: CZECH_CASE_LAW,
-      toolName: "read_case_law_citations",
-      args: { decision_id: "id", direction: "cited_by" },
-    });
-
-    expect(Result.isOk(read)).toBe(true);
-  });
-
-  it("refuses the other corpus and other public corpora", () => {
+  it("refuses the other corpus and other public corpora", async () => {
     for (const toolName of [
       "search_legislation",
       "read_statute",
       "search_boe_legislation",
     ] as const) {
-      const read = scopeCorpusRead({
+      const read = await scope({
         scopes: CZECH_CASE_LAW,
         toolName,
         args: {},
       });
 
-      if (!Result.isError(read)) {
-        throw new TypeError(`expected ${toolName} to be refused`);
-      }
-      expect(read.error.kind).toBe("unavailable");
+      expect(Result.isError(read) && read.error.kind).toBe("unavailable");
     }
   });
 
-  it("holds each corpus to its own countries when both are scoped", () => {
+  it("holds each corpus to its own countries when both are scoped", async () => {
     const scopes: ChatCorpusScope[] = [
       ...CZECH_CASE_LAW,
       { corpus: "legislation", country: "SVK" },
@@ -129,7 +270,7 @@ describe("scopeCorpusRead", () => {
 
     expect(
       Result.isOk(
-        scopeCorpusRead({
+        await scope({
           scopes,
           toolName: "search_legislation",
           args: { query: "q", country: "SVK" },
@@ -138,7 +279,7 @@ describe("scopeCorpusRead", () => {
     ).toBe(true);
     expect(
       Result.isError(
-        scopeCorpusRead({
+        await scope({
           scopes,
           toolName: "search_legislation",
           args: { query: "q", country: "CZE" },
@@ -147,8 +288,8 @@ describe("scopeCorpusRead", () => {
     ).toBe(true);
   });
 
-  it("leaves tenant reads alone", () => {
-    const read = scopeCorpusRead({
+  it("leaves tenant reads alone", async () => {
+    const read = await scope({
       scopes: CZECH_CASE_LAW,
       toolName: "list_matters",
       args: { limit: 5 },
@@ -178,7 +319,7 @@ describe("restrictChatToolsToCorpusScope", () => {
 
   it("drops InfoSoud when no chip names Czech case law", () => {
     for (const scopes of [
-      [{ corpus: "legislation", country: "CZE" }],
+      CZECH_LEGISLATION,
       [{ corpus: "case_law", country: "SVK" }],
     ] satisfies ChatCorpusScope[][]) {
       expect(
@@ -192,11 +333,11 @@ describe("restrictChatToolsToCorpusScope", () => {
     expect(corpusScopeDroppedTools([])).toEqual([]);
   });
 
-  it("holds script reads of other sources to the same jurisdictions", () => {
+  it("holds script reads of other sources to the same jurisdictions", async () => {
     expect(
       Result.isError(
-        scopeCorpusRead({
-          scopes: [{ corpus: "legislation", country: "CZE" }],
+        await scope({
+          scopes: CZECH_LEGISLATION,
           toolName: "search_boe_legislation",
           args: {},
         }),

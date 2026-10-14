@@ -6,6 +6,7 @@ import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-ad
 import { toRegistryChatToolError } from "@/api/handlers/chat/tools/registry-adapter/registry-tool-error";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Per-turn corpus scope. A corpus chip in the latest user message
@@ -15,14 +16,43 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
  * alone, since the same message may also mention a matter.
  */
 
+/**
+ * Where a read's country comes from: its own country argument, or, for a read
+ * keyed by decision ids or statute ELIs, the resources it names. A keyed read
+ * can follow an id from an earlier, unscoped turn, so the resource's stored
+ * country is checked, never the model's word for it.
+ */
+type CorpusReadCountry =
+  | { type: "argument"; field: string; optional: boolean }
+  | { type: "decision"; keys: (args: Record<string, unknown>) => unknown[] }
+  | { type: "statute"; keys: (args: Record<string, unknown>) => unknown[] };
+
 type CorpusReadTool = {
   corpus: ChatCorpus;
-  /**
-   * The tool's country property, or null for a read keyed by a decision or
-   * statute id. Such a read follows an id the model already holds, so the
-   * scope has no country to compare it with.
-   */
-  country: { field: string; optional: boolean } | null;
+  country: CorpusReadCountry;
+};
+
+/**
+ * Looks up the stored country of the public resources a keyed read names.
+ * An id missing from the answer is unknown and the read is refused.
+ */
+export type CorpusResourceCountryResolver = {
+  decisions: (ids: readonly string[]) => Promise<ReadonlyMap<string, string>>;
+  statutes: (elis: readonly string[]) => Promise<ReadonlyMap<string, string>>;
+};
+
+/** One field's value as a list: a single key, or a batch of them. */
+const keysAt = (args: Record<string, unknown>, field: string): unknown[] => {
+  const value = args[field];
+  return Array.isArray(value) ? value : [value];
+};
+
+/** The ELI of every entry of a provision batch. */
+const batchElis = (args: Record<string, unknown>): unknown[] => {
+  const items = args["items"];
+  return Array.isArray(items)
+    ? items.map((item: unknown) => (isRecord(item) ? item["eli"] : undefined))
+    : [undefined];
 };
 
 /** The registry reads over the corpora a chip can name. */
@@ -41,21 +71,36 @@ type CorpusReadToolName = Extract<
 const CORPUS_READ_TOOLS = {
   search_case_law: {
     corpus: "case_law",
-    country: { field: "country", optional: false },
+    country: { type: "argument", field: "country", optional: false },
   },
   case_law_coverage: {
     corpus: "case_law",
-    country: { field: "country", optional: true },
+    country: { type: "argument", field: "country", optional: true },
   },
-  read_case_law_decision: { corpus: "case_law", country: null },
-  read_case_law_citations: { corpus: "case_law", country: null },
+  read_case_law_decision: {
+    corpus: "case_law",
+    country: { type: "decision", keys: (args) => keysAt(args, "decision_ids") },
+  },
+  read_case_law_citations: {
+    corpus: "case_law",
+    country: { type: "decision", keys: (args) => keysAt(args, "decision_id") },
+  },
   search_legislation: {
     corpus: "legislation",
-    country: { field: "country", optional: false },
+    country: { type: "argument", field: "country", optional: false },
   },
-  read_statute: { corpus: "legislation", country: null },
-  read_statute_provisions: { corpus: "legislation", country: null },
-  read_provision_history: { corpus: "legislation", country: null },
+  read_statute: {
+    corpus: "legislation",
+    country: { type: "statute", keys: (args) => keysAt(args, "eli") },
+  },
+  read_statute_provisions: {
+    corpus: "legislation",
+    country: { type: "statute", keys: batchElis },
+  },
+  read_provision_history: {
+    corpus: "legislation",
+    country: { type: "statute", keys: (args) => keysAt(args, "eli") },
+  },
 } as const satisfies Record<CorpusReadToolName, CorpusReadTool>;
 
 /**
@@ -158,21 +203,94 @@ type ScopeCorpusReadProps = {
   toolName: RegistryReadToolName;
   /** The read's arguments after boundary normalization (canonical alpha-3). */
   args: Record<string, unknown>;
+  resolveCountries: CorpusResourceCountryResolver;
+};
+
+type ScopedRead = Result<Record<string, unknown>, ChatToolError>;
+
+const foreignCountryError = ({
+  corpus,
+  allowed,
+  hint,
+}: {
+  corpus: ChatCorpus;
+  allowed: readonly string[];
+  hint: string;
+}): ChatToolError =>
+  toRegistryChatToolError({
+    type: "structured",
+    code: "validation_error",
+    message: `The user limited ${CORPUS_LABELS[corpus]} to ${allowed.join(", ")} for this turn.`,
+    hint,
+    retryable: false,
+  });
+
+const SEARCH_TOOL = {
+  case_law: "search_case_law",
+  legislation: "search_legislation",
+} as const satisfies Record<ChatCorpus, string>;
+
+/**
+ * Hold a keyed read to the scope by the stored country of every resource it
+ * names. An id the store does not know is refused too: nothing shows its
+ * country is in scope.
+ */
+const scopeKeyedRead = async ({
+  args,
+  allowed,
+  corpus,
+  keys,
+  resolve,
+}: {
+  args: Record<string, unknown>;
+  allowed: readonly string[];
+  corpus: ChatCorpus;
+  keys: readonly unknown[];
+  resolve: (keys: readonly string[]) => Promise<ReadonlyMap<string, string>>;
+}): Promise<ScopedRead> => {
+  const searchInScope = `Find it with ${SEARCH_TOOL[corpus]} in ${allowed.join(" or ")} first.`;
+  const ids = keys.filter((key): key is string => typeof key === "string");
+  if (ids.length === 0 || ids.length !== keys.length) {
+    return Result.err(
+      foreignCountryError({ corpus, allowed, hint: searchInScope }),
+    );
+  }
+  const countries = await resolve([...new Set(ids)]);
+  for (const id of ids) {
+    const country = countries.get(id);
+    if (country === undefined) {
+      return Result.err(
+        foreignCountryError({ corpus, allowed, hint: searchInScope }),
+      );
+    }
+    if (!allowed.includes(country)) {
+      return Result.err(
+        foreignCountryError({
+          corpus,
+          allowed,
+          hint: `${id} is from ${country}; this turn reads only ${allowed.join(" or ")}. ${searchInScope}`,
+        }),
+      );
+    }
+  }
+  return Result.ok(args);
 };
 
 /**
  * Hold one registry read to the turn's corpus scope: refuse a read of a
  * corpus no chip names, refuse a country outside the chips for its corpus
  * (naming the allowed ones, never rewriting the call), and fill an omitted
- * optional country when exactly one is scoped. It runs after boundary
- * normalization, so a required country is already present and every country
- * is in its canonical spelling.
+ * optional country when exactly one is scoped. A read keyed by decision ids
+ * or ELIs is held to the stored country of what it names. It runs after
+ * boundary normalization, so ids are dehydrated, a required country is
+ * present and every country is in its canonical spelling.
  */
-export const scopeCorpusRead = ({
+export const scopeCorpusRead = async ({
   scopes,
   toolName,
   args,
-}: ScopeCorpusReadProps): Result<Record<string, unknown>, ChatToolError> => {
+  resolveCountries,
+}: ScopeCorpusReadProps): Promise<ScopedRead> => {
   if (scopes.length === 0) {
     return Result.ok(args);
   }
@@ -189,8 +307,17 @@ export const scopeCorpusRead = ({
   if (allowed.length === 0) {
     return Result.err(outOfScopeError(scopes));
   }
-  if (tool.country === null) {
-    return Result.ok(args);
+  if (tool.country.type !== "argument") {
+    return await scopeKeyedRead({
+      args,
+      allowed,
+      corpus: tool.corpus,
+      keys: tool.country.keys(args),
+      resolve:
+        tool.country.type === "decision"
+          ? resolveCountries.decisions
+          : resolveCountries.statutes,
+    });
   }
 
   const { field, optional } = tool.country;
@@ -210,12 +337,10 @@ export const scopeCorpusRead = ({
     return Result.ok(args);
   }
   return Result.err(
-    toRegistryChatToolError({
-      type: "structured",
-      code: "validation_error",
-      message: `The user limited ${CORPUS_LABELS[tool.corpus]} to ${allowed.join(", ")} for this turn.`,
+    foreignCountryError({
+      corpus: tool.corpus,
+      allowed,
       hint: `Set \`${field}\` to ${allowed.join(" or ")}.`,
-      retryable: false,
     }),
   );
 };
