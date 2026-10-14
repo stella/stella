@@ -256,13 +256,49 @@ const ownerProvenance = ({
       ]);
     }
   }
+  // An alias shares its source's object: `const alias = ids` (or
+  // `= holder.value`) followed by `alias.push(other)` mutates `ids` /
+  // `holder` too. Close the mutated set backwards over every alias edge.
+  const aliasRoot = (node: ts.Node | null): string | undefined => {
+    if (node === null) {
+      return undefined;
+    }
+    if (
+      ts.isParenthesizedExpression(node) ||
+      ts.isAwaitExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isSatisfiesExpression(node) ||
+      ts.isNonNullExpression(node) ||
+      ts.isPropertyAccessExpression(node) ||
+      ts.isElementAccessExpression(node)
+    ) {
+      return aliasRoot(node.expression);
+    }
+    return ts.isIdentifier(node) ? node.text : undefined;
+  };
+  const mutated = new Set(mutatedNames);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const { names, from } of derivations) {
+      const root = aliasRoot(from);
+      if (
+        root !== undefined &&
+        !mutated.has(root) &&
+        names.some((name) => mutated.has(name))
+      ) {
+        mutated.add(root);
+        grew = true;
+      }
+    }
+  }
   let changed = true;
   while (changed) {
     changed = false;
     for (const [name, sources] of assignmentsByName) {
       if (
         !derived.has(name) &&
-        !mutatedNames.has(name) &&
+        !mutated.has(name) &&
         sources.every((from) => from !== null && derivesFromOwner(from))
       ) {
         derived.add(name);

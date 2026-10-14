@@ -216,6 +216,9 @@ describe("matter access census self-test", () => {
       // mutated in place
       "const ids = [...(await authorizedWorkspaceIds(tx)).value]; ids.push(...other);",
       "const ids = [...(await authorizedWorkspaceIds(tx)).value]; ids[0] = other[0];",
+      // mutated through an alias
+      "const ids = (await authorizedWorkspaceIds(tx)).value; const alias = ids; alias.push(...other);",
+      "const result = await authorizedWorkspaceIds(tx); const ids = result.value; const alias = result.value; alias.push(...other);",
       // a projection that can return anything
       "const ids = (await authorizedWorkspaceIds(tx)).value.map(() => other[0]);",
     ]) {
