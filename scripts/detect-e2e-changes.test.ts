@@ -731,12 +731,17 @@ describe("detect-e2e-changes", () => {
     for (const stepName of [
       "Run Playwright shard",
       "Upload Playwright blob report",
-      "Upload server logs",
     ]) {
       expect(
         requiredExpression(workflowStepValue(productionJob, stepName)["if"]),
       ).toContain("steps.e2e-stack.outcome == 'success'");
     }
+    // A setup that fails after starting its servers still leaves logs.
+    expect(
+      requiredExpression(
+        workflowStepValue(productionJob, "Upload server logs")["if"],
+      ),
+    ).toBe("failure() && steps.e2e-stack.outcome != 'skipped'");
     const canary = workflowJob("e2e-vite-canary");
     expect(
       workflowStepValue(canary, "Start docker stack and API server")["id"],
@@ -749,7 +754,6 @@ describe("detect-e2e-changes", () => {
       "Guard against mid-test Vite re-optimize",
       "Stop web dev server",
       "Upload Playwright blob report",
-      "Upload server logs",
     ]) {
       expect(
         requiredExpression(workflowStepValue(canary, stepName)["if"]),
@@ -1235,6 +1239,23 @@ describe("detect-e2e-changes", () => {
     }));
     expect(files.length).toBeGreaterThan(10);
     expect(setupReadinessViolations(files)).toEqual([]);
+  });
+
+  test("failure diagnostics run whenever the stack setup was attempted", () => {
+    const root = path.join(import.meta.dirname, "..");
+    const conditions = [
+      ...new Bun.Glob(".github/workflows/*.yml").scanSync(root),
+    ].flatMap((file) =>
+      [
+        ...readFileSync(path.join(root, file), "utf-8").matchAll(
+          /if: (failure\(\) && steps\.e2e-stack\.outcome [!=]= '\w+')/gu,
+        ),
+      ].map((match) => `${file}: ${match.at(1)}`),
+    );
+    expect(conditions.length).toBeGreaterThan(0);
+    for (const condition of conditions) {
+      expect(condition).toEndWith("outcome != 'skipped'");
+    }
   });
 
   test("the setup readiness guard rejects a status-gated test step", () => {

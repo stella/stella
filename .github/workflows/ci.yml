@@ -7171,7 +7171,7 @@ jobs:
           retention-days: 7
 
       - name: Upload server logs
-        if: failure() && steps.e2e-stack.outcome == 'success'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: server-logs-route-smoke
@@ -7470,7 +7470,7 @@ jobs:
 
       - name: Upload server logs
         timeout-minutes: 1
-        if: failure() && steps.e2e-stack.outcome == 'success'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: server-logs-production-${{ matrix.shard }}
@@ -7804,7 +7804,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:collab -- --project chromium
 
       - name: Show API errors after a Vite canary failure
-        if: failure() && steps.e2e-stack.outcome == 'success'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         run: tail -200 /tmp/api.log
 
       # These imports load only through cold lazy routes; a mid-test optimizer
@@ -7840,7 +7840,7 @@ jobs:
           retention-days: 7
 
       - name: Upload collaboration failure artifacts
-        if: failure() && steps.e2e-stack.outcome == 'success'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-collab-vite-canary
@@ -7848,7 +7848,7 @@ jobs:
           retention-days: 7
 
       - name: Upload server logs
-        if: failure() && steps.e2e-stack.outcome == 'success'
+        if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: server-logs-vite-canary
