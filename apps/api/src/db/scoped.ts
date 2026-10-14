@@ -21,7 +21,6 @@ import {
 } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
-import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -29,6 +28,7 @@ import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/feature-access/live-snapshot";
 import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   getPgDriverErrorCode,

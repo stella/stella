@@ -955,8 +955,7 @@ const readScanDeclarations = (ast: ts.SourceFile) => {
       const variableList = node.parent;
       const functionScoped =
         ts.isVariableDeclarationList(variableList) &&
-        variableList.flags % (ts.NodeFlags.BlockScoped + 1) ===
-          Number(ts.NodeFlags.None);
+        variableList.flags % (ts.NodeFlags.BlockScoped + 1) === 0;
       for (const name of readScanBindingNames(node.name)) {
         add(name, node.parent, functionScoped);
       }

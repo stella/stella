@@ -12,16 +12,14 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import {
-  buildFeatureAccessSnapshot,
-  resolveFeatureAccess,
-} from "@/api/lib/auth/feature-access/context";
+import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readCursorPage } from "@/api/lib/db/read-bounded";
 import { timestampCasToken } from "@/api/lib/db/timestamp-cas";
 import type { TimestampCasToken } from "@/api/lib/db/timestamp-cas";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 type BackgroundFeatureAccessOptions = {
