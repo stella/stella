@@ -2,6 +2,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import {
+  PUBLIC_LEGISLATION_COUNTRIES,
+  PUBLIC_LEGISLATION_PAGE_COUNTRIES,
+} from "@stll/api-contract/legislation-publication";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -231,4 +235,70 @@ test("the fallback read stops serving a version whose source was revoked", async
       id: documentId,
     }),
   ).toBeNull();
+});
+
+/**
+ * Each surface reads its own country list in SQL: a pages-public country's
+ * stored version is served to its pages and refused to search, an admitted one
+ * is served to both, and a closed one to neither.
+ */
+test("the stored version read gates each surface by its own country list", async () => {
+  const legislationDb: LegislationReadDb = async (fn) =>
+    await db.transaction(
+      async (tx) => await fn(asTestRaw<LegislationReadTransaction>(tx)),
+    );
+  const sourceId = toSafeId<"legislationSource">(
+    "0198e331-e578-7000-8000-0000000002c0",
+  );
+  await db.insert(legislationSources).values({
+    id: sourceId,
+    adapterKey: "version-ast-surfaces",
+    name: "Version AST surfaces",
+  });
+  const closed = "AUT";
+  expect(PUBLIC_LEGISLATION_PAGE_COUNTRIES).not.toContain(closed);
+  const countries = [
+    ...new Set<string>([
+      ...PUBLIC_LEGISLATION_COUNTRIES,
+      ...PUBLIC_LEGISLATION_PAGE_COUNTRIES,
+      closed,
+    ]),
+  ];
+
+  for (const [index, country] of countries.entries()) {
+    const id = toSafeId<"legislationDocument">(
+      `0198e331-e578-7000-8000-0000000002${(0xd0 + index).toString(16)}`,
+    );
+    await db.insert(legislationDocuments).values({
+      id,
+      sourceId,
+      eli: `eli/${country.toLowerCase()}/test/${index}`,
+      title: `Surface statute ${country}`,
+      country,
+      language: "cs",
+      contentHash: index.toString(16).padStart(64, "0"),
+      astS3Key: null,
+      documentAst: DOCUMENT_AST,
+    });
+
+    const served = (list: readonly string[]) =>
+      list.some((candidate) => candidate === country) ? DOCUMENT_AST : null;
+    expect({
+      country,
+      pages: await readStoredVersionAst({
+        surface: "pages",
+        legislationDb,
+        id,
+      }),
+      search: await readStoredVersionAst({
+        surface: "search",
+        legislationDb,
+        id,
+      }),
+    }).toEqual({
+      country,
+      pages: served(PUBLIC_LEGISLATION_PAGE_COUNTRIES),
+      search: served(PUBLIC_LEGISLATION_COUNTRIES),
+    });
+  }
 });
