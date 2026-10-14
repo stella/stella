@@ -125,7 +125,9 @@ test.describe("reader chat decision citations", () => {
     );
     await openDecision(page, canonicalPath);
     const panel = page.locator('[data-slot="inspector"]');
-    const chips = panel.locator('[data-slot="inspector-rail-tab"]');
+    const chips = panel
+      .locator('[data-slot="inspector-rail"]')
+      .locator('button[draggable="true"]');
     await expect(
       page
         .locator(`[data-decision-citation="${decision.id}"]`)
@@ -154,6 +156,7 @@ test.describe("reader chat decision citations", () => {
     await expect(
       chat.locator(`[data-decision-citation="${otherDecision.id}"]`),
     ).toBeVisible();
+    await expect(chips).not.toHaveCount(0);
     const chipCount = await chips.count();
     const mainReader = page.locator(".reader-scroll").first();
     const paragraph = mainReader.locator('[data-anchor="p-28"]');
@@ -230,7 +233,7 @@ test.describe("reader chat decision citations", () => {
     await panel
       .locator('[data-slot="scroll-area-viewport"]')
       .filter({
-        has: panel.locator("main.reader-paper"),
+        has: page.locator("main.reader-paper"),
       })
       .hover();
     await page.mouse.wheel(0, -100_000);
