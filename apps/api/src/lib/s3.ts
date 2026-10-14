@@ -1172,6 +1172,115 @@ export const putTemporaryS3ObjectWithSignal = async (
   );
 };
 
+export type S3ObjectStream = {
+  sizeBytes: number;
+  chunks: AsyncIterable<Uint8Array>;
+};
+
+const readableChunks = async function* (
+  stream: ReadableStream<Uint8Array>,
+): AsyncGenerator<Uint8Array> {
+  const reader = stream.getReader();
+  try {
+    for (;;) {
+      // db-await-in-loop: sequential reads of one response body; each read waits for the next chunk
+      const { done, value } = await reader.read();
+      if (done) {
+        return;
+      }
+      yield value;
+    }
+  } finally {
+    // A consumer that stops early (abort, error) must not leave the
+    // response body flowing; after EOF the cancel is a no-op.
+    try {
+      await reader.cancel();
+    } finally {
+      reader.releaseLock();
+    }
+  }
+};
+
+/**
+ * Open one object as a stream of chunks, or `null` when the store confirms
+ * it holds no such key. Memory holds one network chunk at a time, so a
+ * caller can pass files of any size through; `signal` cancels the body.
+ */
+export const openS3ObjectStream = async ({
+  key,
+  signal,
+}: {
+  key: string;
+  signal: AbortSignal;
+}): Promise<S3ObjectStream | null> =>
+  await presentOrNull(
+    async () =>
+      await documentsCredentials.run(async () => {
+        const response = await getAbortableS3().send(
+          new GetObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
+          { abortSignal: signal },
+        );
+        if (response.ContentLength === undefined || !response.Body) {
+          throw new S3ObjectReadError({
+            message: `Object read for ${key} returned no body or length`,
+          });
+        }
+        return {
+          sizeBytes: response.ContentLength,
+          chunks: readableChunks(response.Body.transformToWebStream()),
+        };
+      }),
+  );
+
+/** Size of one multipart part; S3 allows at most 10,000 per object. */
+const STREAMING_UPLOAD_PART_BYTES = 16 * 1024 * 1024;
+const STREAMING_UPLOAD_QUEUE_SIZE = 4;
+const STREAMING_UPLOAD_PART_RETRIES = 3;
+
+export type S3StreamingUpload = {
+  /** Resolves once the chunk is buffered; applies backpressure. */
+  write: (chunk: Uint8Array) => Promise<void>;
+  /** Completes the multipart upload; the object exists only after this. */
+  end: () => Promise<void>;
+};
+
+type OpenS3StreamingUploadOptions = {
+  key: string;
+  contentType: string;
+  /** The key must live under a prefix whose owner deletes it. */
+  ownership: { type: "lifecycle-prefix"; prefix: string };
+};
+
+/**
+ * Stream an object too large to hold in memory to `key` as a multipart
+ * upload (16 MiB parts, at most 4 in flight, each part retried). Nothing is
+ * visible at `key` until `end()` resolves; an upload that never ends leaves
+ * only incomplete parts, which the bucket's multipart cleanup removes.
+ */
+export const openS3StreamingUpload = ({
+  key,
+  contentType,
+  ownership,
+}: OpenS3StreamingUploadOptions): S3StreamingUpload => {
+  if (!key.startsWith(ownership.prefix)) {
+    return panic("Object key is outside its cleanup lifecycle prefix");
+  }
+  const writer = getS3().file(key).writer({
+    type: contentType,
+    partSize: STREAMING_UPLOAD_PART_BYTES,
+    queueSize: STREAMING_UPLOAD_QUEUE_SIZE,
+    retry: STREAMING_UPLOAD_PART_RETRIES,
+  });
+  return {
+    write: async (chunk) => {
+      await writer.write(chunk);
+    },
+    end: async () => {
+      await writer.end();
+    },
+  };
+};
+
 type ListS3ObjectKeysOptions = {
   bucket: string;
   prefix: string;

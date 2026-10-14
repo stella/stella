@@ -206,6 +206,10 @@ const DOMAIN_SCOPE: Record<string, string> = {
   // Organization-wide address-book mutations cross matter boundaries, so
   // they require their own consent instead of borrowing a workspace write.
   contacts: "stella:contacts_write",
+  // A full copy of the organization's data, held by owners and admins only:
+  // starting one and minting its download links are administrative actions,
+  // so they take the admin consent rather than a matter write.
+  "data-exports": "stella:admin_write",
   "document-types": "stella:matters_write",
   // A translation run reads a matter document and writes the translated one
   // back as a new document, so it takes the workspace write bucket.

@@ -69,6 +69,10 @@ import {
   backfillCorpusIndexJobDetail,
 } from "@/api/lib/scheduler/tasks/corpus-index-job-detail-backfill";
 import {
+  MAINTAIN_DATA_EXPORTS_TASK,
+  maintainDataExports,
+} from "@/api/lib/scheduler/tasks/data-export-maintenance";
+import {
   EXPIRE_DESKTOP_EDIT_SESSIONS_TASK,
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
@@ -270,6 +274,7 @@ const SCHEDULER_TASKS = {
   [RECONCILE_BILINGUAL_RUNS_TASK]: reconcileBilingualRuns,
   [RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK]: reconcileStyleSetPackageCleanups,
   [RECONCILE_REPORT_EXPORTS_TASK]: reconcileReportExports,
+  [MAINTAIN_DATA_EXPORTS_TASK]: maintainDataExports,
   [RECOVER_DOCUMENT_DEADLINE_SCOUTS_TASK]: recoverDocumentDeadlineScouts,
 } as const satisfies Record<
   string,
