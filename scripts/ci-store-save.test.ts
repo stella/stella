@@ -1,11 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -57,14 +51,19 @@ test("the native Node entry registers post state and converts preparation failur
 
 const runFixture = async (source: string) => {
   const directory = mkdtempSync(path.join(tmpdir(), "cache-save-test-"));
+  const inheritedTemp = mkdtempSync(path.join(tmpdir(), "cache-save-parent-"));
   const entry = path.join(directory, "worker.cjs");
   writeFileSync(entry, source);
-  mkdirSync(path.join(directory, "archive"));
   try {
     return await runCacheSave({
       entry,
       directory,
-      env: process.env,
+      env: {
+        ...process.env,
+        TMPDIR: inheritedTemp,
+        TEMP: inheritedTemp,
+        TMP: inheritedTemp,
+      },
       progress: createSaveProgress(Date.now()),
       executable: node,
       stallMs: 1000,
@@ -72,6 +71,7 @@ const runFixture = async (source: string) => {
     });
   } finally {
     rmSync(directory, { recursive: true, force: true });
+    rmSync(inheritedTemp, { recursive: true, force: true });
   }
 };
 
@@ -121,21 +121,42 @@ test("only increasing byte counters reset stall time, independently of total dur
   expect(progress.stalled(602_100, 1000)).toBe(true);
 });
 
-test("archive growth keeps a silent compression worker alive beyond the stall interval", async () => {
-  expect(
-    await runFixture(`
+test.each(["cache.tzst", "cache.tar"])(
+  "%s growth under os.tmpdir keeps silent compression alive beyond the stall interval",
+  async (filename) => {
+    expect(
+      await runFixture(`
     const fs = require('node:fs');
+    const path = require('node:path');
+    const directory = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'archive-'));
+    const archive = path.join(directory, ${JSON.stringify(filename)});
     let ticks = 0;
     const timer = setInterval(() => {
-      fs.appendFileSync('archive/cache.tzst', 'payload');
+      fs.appendFileSync(archive, 'payload');
       if (++ticks === 8) {
         clearInterval(timer);
         console.log('Cache saved with key: fixture');
       }
     }, 200);
   `),
-  ).toBe("saved");
-});
+    ).toBe("saved");
+  },
+);
+
+test.each(["cache.tzst", "cache.tar"])(
+  "%s under os.tmpdir is stopped when archive growth stalls",
+  async (filename) => {
+    expect(
+      await runFixture(`
+    const fs = require('node:fs');
+    const path = require('node:path');
+    const directory = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'archive-'));
+    fs.writeFileSync(path.join(directory, ${JSON.stringify(filename)}), 'payload');
+    setInterval(() => {}, 200);
+  `),
+    ).toBe("stalled");
+  },
+);
 
 test("upload bytes reset the watchdog even when progress lines arrive in separate chunks", async () => {
   expect(

@@ -101,8 +101,15 @@ export const runCacheSave = async ({
     const child = spawn(executable, [entry], {
       cwd: directory,
       // The upstream cache tool places its archive in one UUID subdirectory.
+      // Bind every os.tmpdir() override to the monitored root on Unix and Windows.
       // Owning that temp root bounds monitoring to a few files, not the store.
-      env: { ...env, RUNNER_TEMP: directory },
+      env: {
+        ...env,
+        RUNNER_TEMP: directory,
+        TMPDIR: directory,
+        TEMP: directory,
+        TMP: directory,
+      },
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
