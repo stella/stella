@@ -30,6 +30,7 @@ import { selectDefaultVersionId } from "@/api/handlers/legislation/work-key";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { legislationCountriesFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceOn,
@@ -399,10 +400,18 @@ const resolveOne = async (eli: string, asOf: string) => {
   return { id: item.statute?.id ?? null, reason: item.unresolvedReason };
 };
 
-const worksAtDate = async (eli: string, asOf: string) =>
+const worksAtDate = async (
+  eli: string,
+  asOf: string,
+  countries: readonly string[] = legislationCountriesFor("search"),
+) =>
   await legislationDb(
     async (tx) =>
-      await resolveWorksAtDate(tx, [{ key: eli, country: "CZE", eli, asOf }]),
+      await resolveWorksAtDate(
+        tx,
+        [{ key: eli, country: "CZE", eli, asOf }],
+        countries,
+      ),
   );
 
 const listPageSchema = v.object({
@@ -589,6 +598,28 @@ describe("the dated canaries", () => {
       id: canary.middle,
       reason: null,
     });
+  });
+});
+
+describe("the country list a surface resolves to", () => {
+  // No production country is pages-only today, so the lists are passed as a
+  // page read and a search read would pass them when one is.
+  test("a version answers only for a caller whose surface publishes its country", async () => {
+    const asOf = "2021-01-01";
+    const pagesOnly = ["CZE"];
+    const searchWithout = ["SVK"];
+    expect(
+      (await worksAtDate(CANARY_ELI, asOf, pagesOnly)).idByKey.get(CANARY_ELI),
+    ).toBe(canary.middle);
+    expect(
+      (await worksAtDate(CANARY_ELI, asOf, searchWithout)).idByKey.size,
+    ).toBe(0);
+    // The gap reason is read against the same list: an excluded country
+    // reports no reason either.
+    expect(
+      (await worksAtDate(NO_SUCCESSOR_ELI, asOf, searchWithout))
+        .inconsistentKeys.size,
+    ).toBe(0);
   });
 });
 

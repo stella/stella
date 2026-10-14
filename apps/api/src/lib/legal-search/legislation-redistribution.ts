@@ -23,6 +23,22 @@ const LEGISLATION_COUNTRIES_BY_SURFACE = {
   search: PUBLIC_LEGISLATION_COUNTRIES,
 } as const satisfies Record<PublicCountrySurface, readonly string[]>;
 
+/** The countries whose legislation the surface serves. */
+export const legislationCountriesFor = (
+  surface: PublicCountrySurface,
+): readonly string[] => LEGISLATION_COUNTRIES_BY_SURFACE[surface];
+
+/**
+ * Source permission and admission among the given countries, for a read
+ * that carries the country list its caller's surface resolved to.
+ */
+export const publishedLegislationDocumentIn = (
+  countries: readonly string[],
+) => sql`(
+  ${redistributableLegislationSource}
+  AND ${inArray(legislationDocuments.country, [...countries])}
+)`;
+
 /** Accepts the real country column, including an aliased search projection. */
 export const publishedLegislationCountryFor = (
   country: SQLWrapper,

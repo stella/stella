@@ -15,6 +15,7 @@ import {
   previewVersionColumns,
 } from "@/api/lib/legal-search/legislation-provision-preview";
 import type { ProvisionPreview } from "@/api/lib/legal-search/legislation-provision-preview";
+import { legislationCountriesFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   readVersionBlocks,
   versionAstColumns,
@@ -113,6 +114,7 @@ type ResolvedWorks = {
 const resolveWorkVersions = async (
   requests: readonly WorkRequest[],
   legislationDb: LegislationReadDb,
+  surface: PublicCountrySurface,
 ): Promise<ResolvedWorks> => {
   const versionByWork = new Map<string, ResolvedVersion>();
   if (requests.length === 0) {
@@ -122,7 +124,11 @@ const resolveWorkVersions = async (
   const { works, versions } = await legislationDb(async (tx) => {
     // Linking follows applicable versions only: a Work a publisher
     // inconsistency leaves unanswered at that date gets no preview.
-    const { idByKey: idByWork } = await resolveWorksAtDate(tx, requests);
+    const { idByKey: idByWork } = await resolveWorksAtDate(
+      tx,
+      requests,
+      legislationCountriesFor(surface),
+    );
 
     const ids = [...new Set(idByWork.values())];
     if (ids.length === 0) {
@@ -187,7 +193,11 @@ export const attachDecisionProvisionPreviews = async <
   surface,
 }: PreviewsForPageOptions<TRow>): Promise<PreviewsForPage<TRow>> => {
   const requests = workRequestsFor(page.items, decisionDate);
-  const { versionByWork } = await resolveWorkVersions(requests, legislationDb);
+  const { versionByWork } = await resolveWorkVersions(
+    requests,
+    legislationDb,
+    surface,
+  );
 
   // One read per consolidation, outside any transaction: corpus payloads are
   // whole objects in storage, so a block range is sliced from the version the
