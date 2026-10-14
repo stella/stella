@@ -780,7 +780,7 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.nonEmpty(),
         v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
         v.description(
-          'Only decisions citing this statutory provision, written as a lawyer cites it: "§ 316 odst. 2 ZP", "§ 2910 OZ", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "§ 316 zákona č. 262/2006 Sb.". A section matches every subsection of it; a subsection or letter narrows. Combine it with queries to find decisions on a topic that apply the provision. An abbreviation or title is read as the act in force today; name the act by number (č. 65/1965 Sb.) for an earlier one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
+          'Only decisions citing this statutory provision, written as a lawyer cites it: "§ 316 odst. 2 ZP", "§ 2910 OZ", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "§ 316 zákona č. 262/2006 Sb.". A section matches every subsection of it; a subsection or letter narrows. Combine it with queries to find decisions on a topic that apply the provision. An abbreviation or title is read as the act in force today; name the act by number (č. 65/1965 Sb.) for an earlier one. Facets and total stay available while the citing decisions fit one search; a more widely cited provision is checked against ranked candidates, without facets and with a provision_cited_widely warning. Without queries the list is complete, with an exact total.',
         ),
       ),
     ),
