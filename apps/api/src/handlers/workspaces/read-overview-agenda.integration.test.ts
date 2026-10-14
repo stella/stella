@@ -26,7 +26,7 @@ beforeAll(async () => {
   testDb = fixture.testDb;
   ids = fixture.ids;
   scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
   );
 });
 
@@ -133,7 +133,7 @@ test("the agenda keeps an older open task that newer activity would push out", a
     },
     {
       id: otherMatterTaskId,
-      workspaceId: ids.wsB1,
+      workspaceId: ids.wsA2,
       kind: "task",
       name: "Other matter deadline",
       dueDate: "2998-01-01",
