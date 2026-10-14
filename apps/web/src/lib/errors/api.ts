@@ -223,7 +223,9 @@ const validationIssueMessage = (issue: ApiValidationIssue): string => {
       return t("errors.apiCodes.validationInvalid");
     default:
       issue.constraint satisfies never;
-      return panic(`Unhandled validation constraint: ${String(issue)}`);
+      return panic(
+        `Unhandled validation constraint: ${String(issue.constraint)}`,
+      );
   }
 };
 

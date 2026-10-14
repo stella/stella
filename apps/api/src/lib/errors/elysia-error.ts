@@ -9,11 +9,13 @@
 
 import { ValidationError } from "elysia";
 
+import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
 import type {
   ApiValidationConstraint,
   ApiValidationIssue,
 } from "@stll/api-contract";
 
+import { httpError } from "@/api/lib/errors/http-error";
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import type { FrameworkFailure } from "@/api/lib/observability/failure";
 
@@ -140,6 +142,16 @@ export const elysiaErrorAnswer = (
       return INTERNAL_ANSWER;
   }
 };
+
+/**
+ * The JSON body for an answer: the sanitized message, plus the failing
+ * fields when a request failed its schema. Every place that answers a
+ * framework-raised error sends this, so the shape cannot drift.
+ */
+export const elysiaErrorBody = ({ message, issues }: ElysiaErrorAnswer) =>
+  issues !== undefined && issues.length > 0
+    ? { ...httpError(message, API_VALIDATION_ERROR_CODE), issues }
+    : httpError(message);
 
 /**
  * What a framework-raised error was, for the failure grader. Decided beside

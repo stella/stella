@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { Elysia, t } from "elysia";
 
-import { elysiaErrorAnswer } from "@/api/lib/errors/elysia-error";
-import { httpError } from "@/api/lib/errors/http-error";
+import {
+  elysiaErrorAnswer,
+  elysiaErrorBody,
+} from "@/api/lib/errors/elysia-error";
 
 // A body whose declared type matches the response schema and whose runtime
 // value does not: the drift a response schema exists to catch, and the only
@@ -13,9 +15,9 @@ const driftedBody = (): { ok: string } => JSON.parse('{"unexpected":true}');
 // actually raises rather than to a hand-written stand-in for them.
 const app = new Elysia()
   .onError(({ code, error, set }) => {
-    const { status, message } = elysiaErrorAnswer(code, error);
-    set.status = status;
-    return httpError(message);
+    const answer = elysiaErrorAnswer(code, error);
+    set.status = answer.status;
+    return elysiaErrorBody(answer);
   })
   .post("/typed-body", () => "ok", {
     body: t.Object({ name: t.String() }),

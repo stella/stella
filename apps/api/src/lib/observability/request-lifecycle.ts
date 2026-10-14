@@ -9,7 +9,6 @@ import type { Context } from "elysia";
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
@@ -20,9 +19,9 @@ import {
 } from "@/api/lib/db-query-counter";
 import {
   elysiaErrorAnswer,
+  elysiaErrorBody,
   elysiaFailureReason,
 } from "@/api/lib/errors/elysia-error";
-import { httpError } from "@/api/lib/errors/http-error";
 import { errorTag } from "@/api/lib/errors/utils";
 import { identityFields } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
@@ -224,9 +223,7 @@ export const answerRequestError = ({
   // Elysia's default would serialize error.message, which
   // may contain DB internals, file names, or document content.
   set.status = statusCode;
-  return issues !== undefined && issues.length > 0
-    ? { ...httpError(errorMessage, API_VALIDATION_ERROR_CODE), issues }
-    : httpError(errorMessage);
+  return elysiaErrorBody({ status: statusCode, message: errorMessage, issues });
 };
 
 type RequestCompletionContext = {
