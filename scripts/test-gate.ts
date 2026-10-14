@@ -23,6 +23,7 @@ import {
 } from "./test-gate-service";
 import {
   TEST_JOB_SHARDS,
+  TEST_SHARD_IDS,
   shardPackages,
   workspacePackages,
 } from "./test-shards";
@@ -603,7 +604,7 @@ type PackageTestExecutionOptions = {
     readonly candidate: string;
     readonly scripts: PackageScripts;
   };
-  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
+  readonly gatingJobs: ReadonlyMap<string, readonly GatingCommand[]>;
   readonly packageDirectory: string;
   readonly packageName: string;
   readonly scriptName?: string;
@@ -611,8 +612,8 @@ type PackageTestExecutionOptions = {
 };
 
 type GatingCommandExecutionOptions = {
-  readonly commandMatches: (command: string) => boolean;
-  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
+  readonly commandMatches: (command: GatingCommand) => boolean;
+  readonly gatingJobs: ReadonlyMap<string, readonly GatingCommand[]>;
   readonly missingMessage: string;
 };
 
@@ -631,6 +632,12 @@ const gatingCommandExecutionFailure = ({
 type ShellPropagation = {
   readonly pipefail: boolean;
   readonly errexit: boolean;
+};
+
+type GatingCommand = {
+  readonly command: string;
+  readonly environment: Readonly<Record<string, unknown>>;
+  readonly propagation: ShellPropagation;
 };
 
 const PACKAGE_SCRIPT_PROPAGATION: ShellPropagation = {
@@ -1106,6 +1113,68 @@ class ShellExecutablePositionState {
 const shellExecutablePositions = (options: ShellExecutablePositionsOptions) =>
   new ShellExecutablePositionState(options).scan();
 
+type CapturedFailureStatusOptions = {
+  readonly tokens: readonly ShellToken[];
+  readonly start: number;
+  readonly cursor: number;
+};
+
+const exitsWithCapturedFailure = ({
+  tokens,
+  start,
+  cursor,
+}: CapturedFailureStatusOptions): boolean => {
+  const before = tokens.slice(start, cursor);
+  const first = before.find(
+    (token) =>
+      !(token.role === "operator" && [";", "\n"].includes(token.value)),
+  );
+  const name =
+    first?.role === "assignment"
+      ? /^([A-Za-z_][A-Za-z0-9_]*)=\$\?$/u.exec(first.value)?.[1]
+      : undefined;
+  if (name === undefined) {
+    return false;
+  }
+  if (
+    before.some(
+      (token) =>
+        token.role === "operator" && ![";", "\n", "||"].includes(token.value),
+    )
+  ) {
+    return false;
+  }
+  if (
+    before.some(
+      (token) =>
+        token !== first &&
+        token.role === "assignment" &&
+        token.value.startsWith(`${name}=`),
+    )
+  ) {
+    return false;
+  }
+  if (
+    before.some(
+      (token) =>
+        token.role === "command" &&
+        ["eval", "source", ".", "read", "unset", "export"].includes(
+          token.value,
+        ),
+    )
+  ) {
+    return false;
+  }
+  const separator = tokens[cursor - 1];
+  const argument = tokens[cursor + 1];
+  return (
+    separator?.role === "operator" &&
+    [";", "\n"].includes(separator.value) &&
+    argument?.role === "argument" &&
+    [`$${name}`, `\${${name}}`].includes(argument.value)
+  );
+};
+
 const shellInvocationGates = ({
   command,
   matches,
@@ -1188,7 +1257,13 @@ const shellInvocationGates = ({
           suffixTokens[cursor]?.role === "command" &&
           word === "exit" &&
           status !== undefined &&
-          /^[1-9]\d*$/u.test(status)
+          (/^[1-9]\d*$/u.test(status) ||
+            (grouped &&
+              exitsWithCapturedFailure({
+                tokens: suffixTokens,
+                start,
+                cursor,
+              })))
         ) {
           return true;
         }
@@ -1359,15 +1434,24 @@ const repositoryRootScripts = (): PackageScripts => {
 type RootCommand = {
   readonly command: string;
   readonly packageScript: boolean;
+  readonly propagation: ShellPropagation;
 };
 
-const expandRootScripts = (
-  command: string,
-  scripts: PackageScripts,
-  visited: ReadonlySet<string> = new Set(),
-): RootCommand[] => {
+type RootScriptExpansionOptions = {
+  readonly command: string;
+  readonly scripts: PackageScripts;
+  readonly propagation: ShellPropagation;
+  readonly visited?: ReadonlySet<string>;
+};
+
+const expandRootScripts = ({
+  command,
+  scripts,
+  propagation,
+  visited = new Set(),
+}: RootScriptExpansionOptions): RootCommand[] => {
   const packageScript = visited.size > 0;
-  const expanded: RootCommand[] = [{ command, packageScript }];
+  const expanded: RootCommand[] = [{ command, packageScript, propagation }];
   const commandWords = shellWords(command, "include");
   const invokedNames = new Set(
     commandWords.flatMap((word, index) => {
@@ -1395,17 +1479,18 @@ const expandRootScripts = (
           .some((token) => token.role === "command" && token.value === "cd")
           ? index + 3
           : undefined,
-      ...(packageScript ? { propagation: PACKAGE_SCRIPT_PROPAGATION } : {}),
+      propagation: packageScript ? PACKAGE_SCRIPT_PROPAGATION : propagation,
     });
     for (const arguments_ of invocations) {
       const forwarded =
         arguments_.at(0) === "--" ? arguments_.slice(1) : arguments_;
       expanded.push(
-        ...expandRootScripts(
-          `${body} ${forwarded.map((word) => JSON.stringify(word)).join(" ")}`,
+        ...expandRootScripts({
+          command: `${body} ${forwarded.map((word) => JSON.stringify(word)).join(" ")}`,
           scripts,
-          new Set([...visited, name]),
-        ),
+          propagation: PACKAGE_SCRIPT_PROPAGATION,
+          visited: new Set([...visited, name]),
+        }),
       );
     }
   }
@@ -1417,7 +1502,7 @@ const expandedRootCommands = new WeakMap<
   Map<string, readonly RootCommand[]>
 >();
 const rootScriptCommands = (
-  command: string,
+  workflowCommand: GatingCommand,
   scripts: PackageScripts,
 ): readonly RootCommand[] => {
   let commands = expandedRootCommands.get(scripts);
@@ -1425,13 +1510,246 @@ const rootScriptCommands = (
     commands = new Map();
     expandedRootCommands.set(scripts, commands);
   }
-  const cached = commands.get(command);
+  const cacheKey = `${workflowCommand.propagation.errexit}:${workflowCommand.propagation.pipefail}:${workflowCommand.command}`;
+  const cached = commands.get(cacheKey);
   if (cached !== undefined) {
     return cached;
   }
-  const expanded = expandRootScripts(command, scripts);
-  commands.set(command, expanded);
+  const expanded = expandRootScripts({
+    command: workflowCommand.command,
+    scripts,
+    propagation: workflowCommand.propagation,
+  });
+  commands.set(cacheKey, expanded);
   return expanded;
+};
+
+type TurboSelection =
+  | { readonly type: "selected"; readonly forwarded: readonly string[] }
+  | { readonly type: "not-selected" }
+  | { readonly type: "unresolved"; readonly reason: string };
+
+type ShardedSelectionOptions = {
+  readonly arguments_: readonly string[];
+  readonly run: GatingCommand;
+  readonly packageName: string;
+  readonly packageDirectory: string;
+  readonly shardedPackages: ReadonlySet<string>;
+};
+
+type TurboFilterOptions = {
+  readonly filter: string;
+  readonly packageName: string;
+  readonly packageDirectory: string;
+};
+
+const turboFilterMatches = ({
+  filter,
+  packageName,
+  packageDirectory,
+}: TurboFilterOptions): boolean => {
+  const candidate = filter.startsWith("./") ? packageDirectory : packageName;
+  return new Bun.Glob(filter.replace(/^\.\//u, "")).match(candidate);
+};
+
+const runtimeScopeArguments = (command: string): boolean => {
+  const prefix = command.split(/^\s*bun run test\b/mu).at(0) ?? "";
+  const lines = prefix.split("\n").map((line) => line.trim());
+  return (
+    lines.filter((line) => line.startsWith("args=")).join("") === "args=()" &&
+    lines.filter((line) => line.startsWith("scope=")).join("") ===
+      'scope=$(bun scripts/test-scope.ts --base "origin/$BASE_REF")' &&
+    lines.filter((line) => line.startsWith("read -r -a args ")).join("") ===
+      'read -r -a args <<<"$scope"' &&
+    !lines.some((line) =>
+      /\b(?:eval|source)\b|^\.\s|args\+=|args\[[^\]]+\]=/u.test(line),
+    )
+  );
+};
+
+const runtimeShardSelected = ({
+  run,
+  packageName,
+  shardedPackages,
+}: Omit<
+  ShardedSelectionOptions,
+  "arguments_" | "packageDirectory"
+>): boolean => {
+  const prefix = run.command.split(/^\s*bun run test\b/mu).at(0) ?? "";
+  if (/\bSHARD(?:\+?=|\[)|\bunset\s+SHARD\b/u.test(prefix)) {
+    return false;
+  }
+  const reads = prefix
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith("read -r -a shard_args "));
+  if (
+    reads.join("") !==
+      'read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"' ||
+    /shard_args(?:\+?=|\[[^\]]+\]=)/u.test(prefix)
+  ) {
+    return false;
+  }
+  const raw = run.environment["SHARD"];
+  if (typeof raw !== "string") {
+    return false;
+  }
+  const values = raw.startsWith("${{")
+    ? Object.keys(TEST_JOB_SHARDS).map((shard) =>
+        evaluate(
+          conditionExpression(raw),
+          contextFromNested({ matrix: { shard } }),
+        ),
+      )
+    : [raw];
+  return values.some((value) => {
+    const shard = TEST_SHARD_IDS.find((id) => id === value);
+    return (
+      shard !== undefined &&
+      shardPackages({ packageNames: [...shardedPackages], shard }).includes(
+        packageName,
+      )
+    );
+  });
+};
+
+const shardedTestSelection = ({
+  arguments_,
+  run,
+  packageName,
+  packageDirectory,
+  shardedPackages,
+}: ShardedSelectionOptions): TurboSelection => {
+  const positive: string[] = [];
+  const negative: string[] = [];
+  let forwarded: readonly string[] = [];
+  for (let index = 0; index < arguments_.length; index += 1) {
+    const argument = arguments_[index];
+    if (argument === undefined) {
+      continue;
+    }
+    if (argument === "--") {
+      forwarded = arguments_.slice(index + 1);
+      break;
+    }
+    if (/^--(?:dry(?:-run)?|graph)(?:=|$)/u.test(argument)) {
+      return { type: "not-selected" };
+    }
+    if (
+      ["--concurrency=2", "--output-logs=full", "--log-order=stream"].includes(
+        argument,
+      )
+    ) {
+      continue;
+    }
+    if (argument === `\${args[@]}`) {
+      if (runtimeScopeArguments(run.command)) {
+        continue;
+      }
+      return {
+        type: "unresolved",
+        reason: "runner selection: scope arguments have no recognized producer",
+      };
+    }
+    if (argument === `\${shard_args[@]}`) {
+      if (runtimeShardSelected({ run, packageName, shardedPackages })) {
+        continue;
+      }
+      return { type: "not-selected" };
+    }
+    let filter: string | undefined;
+    if (argument.startsWith("--filter=")) {
+      filter = argument.slice("--filter=".length);
+    }
+    if (argument === "--filter") {
+      index += 1;
+      filter = arguments_[index];
+    }
+    if (
+      filter === undefined ||
+      filter.length === 0 ||
+      /[$`[\]{}]|\.\.\./u.test(filter)
+    ) {
+      return {
+        type: "unresolved",
+        reason: `runner selection: unsupported Turbo argument ${argument}`,
+      };
+    }
+    if (filter.startsWith("!")) {
+      negative.push(filter.slice(1));
+    } else {
+      positive.push(filter);
+    }
+  }
+  const matches = (filter: string) =>
+    turboFilterMatches({ filter, packageName, packageDirectory });
+  if (
+    negative.some(matches) ||
+    (positive.length > 0 && !positive.some(matches))
+  ) {
+    return { type: "not-selected" };
+  }
+  return { type: "selected", forwarded };
+};
+
+type ShardedExecutionOptions = ShardedSelectionOptions & {
+  readonly rootScripts: PackageScripts;
+  readonly collection: PackageTestExecutionOptions["collection"];
+};
+
+const shardedExecutionFailure = ({
+  run,
+  rootScripts,
+  collection,
+  packageName,
+  packageDirectory,
+  shardedPackages,
+}: Omit<ShardedExecutionOptions, "arguments_">): string | undefined => {
+  if (rootScripts["test"] !== "turbo run test") {
+    return "runner command: root test script is not the workspace test task";
+  }
+  const invocations = gatingArguments({
+    command: run.command,
+    propagation: run.propagation,
+    invocationEnd: ({ words, index }) =>
+      words[index] === "bun" &&
+      words[index + 1] === "run" &&
+      words[index + 2] === "test" &&
+      words[index + 3] === "--"
+        ? index + 4
+        : undefined,
+  });
+  let failure =
+    "runner selection: workspace test command does not select the package";
+  for (const arguments_ of invocations) {
+    const selection = shardedTestSelection({
+      arguments_,
+      run,
+      packageName,
+      packageDirectory,
+      shardedPackages,
+    });
+    if (selection.type === "not-selected") {
+      continue;
+    }
+    if (selection.type === "unresolved") {
+      failure = selection.reason;
+      continue;
+    }
+    if (collection === undefined) {
+      return undefined;
+    }
+    const collectionFailure = packageTestCollectionFailure({
+      ...collection,
+      packageDirectory,
+      forwardedArguments: selection.forwarded,
+    });
+    if (collectionFailure === undefined) {
+      return undefined;
+    }
+    failure = collectionFailure;
+  }
+  return failure;
 };
 
 export const packageTestExecutionFailure = ({
@@ -1445,12 +1763,13 @@ export const packageTestExecutionFailure = ({
 }: PackageTestExecutionOptions): string | undefined => {
   let directExecutionFailure = `job condition: no gating job executes ${packageName} ${scriptName}`;
   for (const commands of gatingJobs.values()) {
-    for (const { command, packageScript } of commands.flatMap(
+    for (const { command, packageScript, propagation } of commands.flatMap(
       (workflowCommand) => rootScriptCommands(workflowCommand, rootScripts),
     )) {
       const conditions: string[] = [];
       const invocations = gatingArguments({
         command,
+        ...(!packageScript ? { propagation } : {}),
         onUnresolved: (reason) => conditions.push(reason),
         invocationEnd: ({ words, tokens, index }) =>
           packageInvocationEnd({
@@ -1488,32 +1807,21 @@ export const packageTestExecutionFailure = ({
     }
   }
   const testJob = gatingJobs.get("ci-tests");
-  if (
-    scriptName === "test" &&
-    shardedPackages.has(packageName) &&
-    testJob?.some((command) =>
-      shellInvocationGates({
-        command,
-        matches: ({ words, index }) =>
-          words[index] === "bun" &&
-          words[index + 1] === "run" &&
-          words[index + 2] === "test" &&
-          words[index + 3] === "--" &&
-          words[index + 4] === "--concurrency=2",
-      }),
-    ) === true &&
-    testJob.some((command) => command.includes("bun scripts/test-scope.ts")) &&
-    testJob.some((command) =>
-      command.includes("bun scripts/test-shards.ts --filters"),
-    )
-  ) {
-    return collection === undefined
-      ? undefined
-      : packageTestCollectionFailure({
-          ...collection,
-          packageDirectory,
-          scriptName,
-        });
+  if (scriptName === "test" && shardedPackages.has(packageName)) {
+    for (const run of testJob ?? []) {
+      const failure = shardedExecutionFailure({
+        run,
+        rootScripts,
+        collection,
+        packageName,
+        packageDirectory,
+        shardedPackages,
+      });
+      if (failure === undefined) {
+        return undefined;
+      }
+      directExecutionFailure = failure;
+    }
   }
   return directExecutionFailure;
 };
@@ -1521,7 +1829,7 @@ export const packageTestExecutionFailure = ({
 type ManagedServiceRunnerOptions = {
   readonly command: string;
   readonly gate: (typeof SERVICE_GATES)[number];
-  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
+  readonly gatingJobs: ReadonlyMap<string, readonly GatingCommand[]>;
 };
 
 export const managedServiceRunnerFailure = ({
@@ -1532,9 +1840,10 @@ export const managedServiceRunnerFailure = ({
   const runner = shellWords(command);
   let condition: string | undefined;
   const failure = gatingCommandExecutionFailure({
-    commandMatches: (candidate) =>
+    commandMatches: ({ command: candidate, propagation }) =>
       shellInvocationGates({
         command: candidate,
+        propagation,
         onUnresolved: (reason) => {
           condition ??= reason;
         },
@@ -1551,7 +1860,7 @@ export const managedServiceRunnerFailure = ({
 
 type RootCommandOptions = {
   readonly command: string;
-  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
+  readonly gatingJobs: ReadonlyMap<string, readonly GatingCommand[]>;
 };
 
 /** A required root collector counts only when a gating step runs it and its failure propagates. */
@@ -1562,9 +1871,10 @@ export const rootCommandExecutionFailure = ({
   const runner = shellWords(command);
   let condition: string | undefined;
   const failure = gatingCommandExecutionFailure({
-    commandMatches: (candidate) =>
+    commandMatches: ({ command: candidate, propagation }) =>
       shellInvocationGates({
         command: candidate,
+        propagation,
         onUnresolved: (reason) => {
           condition ??= reason;
         },
@@ -2498,9 +2808,120 @@ const executableShell = (source: string): string =>
     })
     .join("\n");
 
+type WorkflowShell =
+  | { readonly type: "supported"; readonly propagation: ShellPropagation }
+  | { readonly type: "unsupported"; readonly name: string };
+
+const BASH_PROPAGATION: ShellPropagation = { errexit: true, pipefail: true };
+
+const shellPropagation = (shell: string): WorkflowShell => {
+  const [executable, ...arguments_] = shell.trim().split(/\s+/u);
+  if (executable !== "bash") {
+    return { type: "unsupported", name: shell };
+  }
+  if (arguments_.length === 0) {
+    return { type: "supported", propagation: BASH_PROPAGATION };
+  }
+  if (
+    arguments_.at(-1) !== "{0}" ||
+    arguments_.filter((arg) => arg === "{0}").length !== 1
+  ) {
+    return { type: "unsupported", name: shell };
+  }
+  let errexit = false;
+  let pipefail = false;
+  for (let index = 0; index < arguments_.length - 1; index += 1) {
+    const argument = arguments_[index];
+    if (argument === undefined) {
+      return { type: "unsupported", name: shell };
+    }
+    if (argument === "--noprofile" || argument === "--norc") {
+      continue;
+    }
+    if (/^[-+][eu]+$/u.test(argument)) {
+      if (argument.includes("e")) {
+        errexit = argument.startsWith("-");
+      }
+      continue;
+    }
+    if (/^[-+][eu]*o$/u.test(argument)) {
+      if (argument.includes("e")) {
+        errexit = argument.startsWith("-");
+      }
+      const option = arguments_[index + 1];
+      if (!new Set(["errexit", "nounset", "pipefail"]).has(option ?? "")) {
+        return { type: "unsupported", name: shell };
+      }
+      if (option === "errexit") {
+        errexit = argument.startsWith("-");
+      }
+      if (option === "pipefail") {
+        pipefail = argument.startsWith("-");
+      }
+      index += 1;
+      continue;
+    }
+    return { type: "unsupported", name: shell };
+  }
+  return {
+    type: "supported",
+    propagation: { errexit, pipefail },
+  };
+};
+
+type EffectiveWorkflowShellOptions = {
+  readonly root: Record<string, unknown> | undefined;
+  readonly job: Record<string, unknown>;
+  readonly step: Record<string, unknown>;
+  readonly legs: readonly MatrixLeg[];
+};
+
+const effectiveWorkflowShell = ({
+  root,
+  job,
+  step,
+  legs,
+}: EffectiveWorkflowShellOptions): WorkflowShell => {
+  const stepShell = step["shell"];
+  const jobDefaults = workflowRecord(job["defaults"]);
+  const jobRunDefaults = workflowRecord(jobDefaults?.["run"]);
+  const rootDefaults = workflowRecord(root?.["defaults"]);
+  const rootRunDefaults = workflowRecord(rootDefaults?.["run"]);
+  const shell =
+    stepShell ?? jobRunDefaults?.["shell"] ?? rootRunDefaults?.["shell"];
+  if (typeof shell === "string") {
+    return shellPropagation(shell);
+  }
+  const runsOn = job["runs-on"];
+  const matrixRunners = legs.flatMap((leg) => {
+    const runner = leg["runner"] ?? leg["os"];
+    return typeof runner === "string" ? [runner] : [];
+  });
+  let platforms: readonly unknown[] = matrixRunners;
+  if (platforms.length === 0) {
+    platforms = Array.isArray(runsOn) ? runsOn : [runsOn];
+  }
+  if (runsOn === undefined && matrixRunners.length === 0) {
+    return { type: "supported", propagation: BASH_PROPAGATION };
+  }
+  if (
+    platforms.every(
+      (value) =>
+        typeof value === "string" &&
+        /^(?:ubuntu|linux|macos)(?:-|$)/u.test(value),
+    )
+  ) {
+    return { type: "supported", propagation: BASH_PROPAGATION };
+  }
+  return {
+    type: "unsupported",
+    name: typeof runsOn === "string" ? `default on ${runsOn}` : "default shell",
+  };
+};
+
 export type GatingWorkflowAnalysis = {
   readonly findings: readonly string[];
-  readonly jobs: ReadonlyMap<string, readonly string[]>;
+  readonly jobs: ReadonlyMap<string, readonly GatingCommand[]>;
 };
 
 export const analyzeGatingWorkflow = (
@@ -2543,7 +2964,7 @@ export const analyzeGatingWorkflow = (
     ]),
   );
   const findings = new Set<string>();
-  const gating = new Map<string, readonly string[]>();
+  const gating = new Map<string, readonly GatingCommand[]>();
   for (const name of names) {
     const job = workflowRecord(jobs[name]);
     if (job === undefined) {
@@ -2604,7 +3025,35 @@ export const analyzeGatingWorkflow = (
             );
           }
         }
-        return blocksMerge ? [executableShell(step["run"])] : [];
+        if (!blocksMerge) {
+          return [];
+        }
+        const shell = effectiveWorkflowShell({ root, job, step, legs });
+        if (shell.type === "unsupported") {
+          if (
+            shellTokens(step["run"]).some(
+              (token) =>
+                token.role === "command" &&
+                ["bun", "playwright"].includes(token.value),
+            )
+          ) {
+            findings.add(
+              `job condition: ${name}/step-${stepIndex + 1} uses unsupported shell ${shell.name}`,
+            );
+          }
+          return [];
+        }
+        return [
+          {
+            command: executableShell(step["run"]),
+            environment: {
+              ...workflowRecord(root?.["env"]),
+              ...workflowRecord(job["env"]),
+              ...workflowRecord(step["env"]),
+            },
+            propagation: shell.propagation,
+          },
+        ];
       },
     );
     if (commands.length > 0) {
@@ -2619,12 +3068,12 @@ export const analyzeGatingWorkflow = (
 
 export const gatingWorkflowJobs = (
   workflow: unknown,
-): ReadonlyMap<string, readonly string[]> =>
+): ReadonlyMap<string, readonly GatingCommand[]> =>
   analyzeGatingWorkflow(workflow).jobs;
 
 type RepositoryTestExecutionTopology = {
   readonly workflow: string;
-  readonly gatingJobs: ReadonlyMap<string, readonly string[]>;
+  readonly gatingJobs: ReadonlyMap<string, readonly GatingCommand[]>;
   readonly shardedPackages: ReadonlySet<string>;
 };
 
@@ -2645,7 +3094,11 @@ const repositoryTestExecutionTopology = (): RepositoryTestExecutionTopology => {
     .map(({ name }) => name);
   const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
   const gatingJobs = analysis.jobs;
-  const planJob = gatingJobs.get("ci-plan")?.join("\n") ?? "";
+  const planJob =
+    gatingJobs
+      .get("ci-plan")
+      ?.map(({ command }) => command)
+      .join("\n") ?? "";
   cachedRepositoryTestExecutionTopology = {
     workflow,
     gatingJobs,
@@ -3145,23 +3598,26 @@ export const gatingPlaywrightCollection = ({
           : undefined,
     });
     for (const commands of topology.gatingJobs.values()) {
-      const invocations = commands.flatMap((workflowCommand) =>
-        gatingArguments({
-          command: workflowCommand,
-          invocationEnd: ({ words, tokens, index }) =>
-            packageInvocationEnd({
-              words,
-              tokens,
-              index,
-              packageDirectory,
-              packageName,
-              scriptName,
-            }),
-        }).map((arguments_) => ({
-          workflowCommand,
-          arguments_:
-            arguments_.at(0) === "--" ? arguments_.slice(1) : arguments_,
-        })),
+      const invocations = commands.flatMap(
+        ({ command: workflowCommand, propagation }) =>
+          gatingArguments({
+            command: workflowCommand,
+            propagation,
+            invocationEnd: ({ words, tokens, index }) =>
+              packageInvocationEnd({
+                words,
+                tokens,
+                index,
+                packageDirectory,
+                packageName,
+                scriptName,
+                propagation,
+              }),
+          }).map((arguments_) => ({
+            workflowCommand,
+            arguments_:
+              arguments_.at(0) === "--" ? arguments_.slice(1) : arguments_,
+          })),
       );
       for (const body of bodies) {
         const selections = invocations.map(({ workflowCommand, arguments_ }) =>
@@ -3244,13 +3700,18 @@ export const firstCollectionFailure = ({
     const isUnlistedScript =
       new Bun.Glob("scripts/**/*.test.ts").match(file) &&
       unlistedTests([file], topology.workflow).length === 1;
-    const commandMatches = (command: string): boolean =>
-      shellInvocationGates({
+    const commandMatches = (gatingCommand: GatingCommand): boolean => {
+      const { command, propagation } = gatingCommand;
+      return shellInvocationGates({
         command,
+        propagation,
         matches: ({ words, tokens, index }) => {
           if (words[index] === "bash" && words[index + 1] === "-c") {
             const body = words[index + 2];
-            return body !== undefined && commandMatches(body);
+            return (
+              body !== undefined &&
+              commandMatches({ ...gatingCommand, command: body })
+            );
           }
           if (
             isUnlistedScript &&
@@ -3350,6 +3811,7 @@ export const firstCollectionFailure = ({
           );
         },
       });
+    };
     return gatingCommandExecutionFailure({
       commandMatches,
       gatingJobs: topology.gatingJobs,

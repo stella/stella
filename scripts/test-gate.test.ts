@@ -13,6 +13,18 @@ import {
   rootCommandExecutionFailure,
 } from "./test-gate";
 
+const bashJobs = (entries: readonly (readonly [string, readonly string[]])[]) =>
+  new Map(
+    entries.map(([name, commands]) => [
+      name,
+      commands.map((command) => ({
+        command,
+        environment: {},
+        propagation: { errexit: true, pipefail: true },
+      })),
+    ]),
+  );
+
 context("test registration census", () => {
   check(
     "resolves aliases and conditional registrations to stable titles",
@@ -464,7 +476,7 @@ context("test registration census", () => {
       }
       expect(
         packageTestExecutionFailure({
-          gatingJobs: new Map([
+          gatingJobs: bashJobs([
             ["checks", [`bun --filter @stll/fixture test -- '${operator}'`]],
           ]),
           packageDirectory: "packages/fixture",
@@ -483,7 +495,7 @@ context("test registration census", () => {
     const failure = (body: string) =>
       packageTestExecutionFailure({
         rootScripts: { check: body },
-        gatingJobs: new Map([["ci-checks-rest", ["bun run check"]]]),
+        gatingJobs: bashJobs([["ci-checks-rest", ["bun run check"]]]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
@@ -510,7 +522,7 @@ context("test registration census", () => {
       ]) {
         expect(
           packageTestExecutionFailure({
-            gatingJobs: new Map([["checks", [command]]]),
+            gatingJobs: bashJobs([["checks", [command]]]),
             packageDirectory: "packages/fixture",
             packageName: "@stll/fixture",
             shardedPackages: new Set<string>(),
@@ -520,7 +532,7 @@ context("test registration census", () => {
       expect(
         packageTestExecutionFailure({
           rootScripts: { check: "bun --filter @stll/fixture test" },
-          gatingJobs: new Map([["checks", [": cd && bun run check"]]]),
+          gatingJobs: bashJobs([["checks", [": cd && bun run check"]]]),
           packageDirectory: "packages/fixture",
           packageName: "@stll/fixture",
           shardedPackages: new Set<string>(),
@@ -536,13 +548,13 @@ context("test registration census", () => {
         expect(
           packageTestExecutionFailure({
             ...options,
-            gatingJobs: new Map([["checks", [command]]]),
+            gatingJobs: bashJobs([["checks", [command]]]),
           }),
         ).toBeUndefined();
         const packageFailure = packageTestExecutionFailure({
           ...options,
           rootScripts: { check: command },
-          gatingJobs: new Map([["checks", ["bun run check"]]]),
+          gatingJobs: bashJobs([["checks", ["bun run check"]]]),
         });
         if (separator === "&&") {
           expect(packageFailure).toBeUndefined();
@@ -566,7 +578,9 @@ context("test registration census", () => {
     ).toBeUndefined();
     expect(
       packageTestExecutionFailure({
-        gatingJobs: new Map([["ci-checks-rest", ["bun scripts/test-gate.ts"]]]),
+        gatingJobs: bashJobs([
+          ["ci-checks-rest", ["bun scripts/test-gate.ts"]],
+        ]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
@@ -580,7 +594,7 @@ context("test registration census", () => {
     "cd packages/orphan && bun run test -- one.test.ts",
   ])("combines package collection with forwarded filters: %s", (command) => {
     const options = {
-      gatingJobs: new Map([["package-check", [command]]]),
+      gatingJobs: bashJobs([["package-check", [command]]]),
       packageDirectory: "packages/orphan",
       packageName: "@stll/orphan",
       shardedPackages: new Set<string>(),
@@ -617,7 +631,7 @@ context("test registration census", () => {
     (body, forwarded, collectsTwo) => {
       const command = `bun --filter @stll/orphan test -- ${forwarded}`;
       const options = {
-        gatingJobs: new Map([["package-check", [command]]]),
+        gatingJobs: bashJobs([["package-check", [command]]]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
@@ -645,7 +659,7 @@ context("test registration census", () => {
     (forwarded) => {
       const command = `bun --filter @stll/orphan test -- ${forwarded}`;
       const failure = packageTestExecutionFailure({
-        gatingJobs: new Map([["package-check", [command]]]),
+        gatingJobs: bashJobs([["package-check", [command]]]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
         shardedPackages: new Set(),
@@ -659,12 +673,139 @@ context("test registration census", () => {
     },
   );
 
+  check.each([
+    ["--filter=@stll/one", true, false],
+    ["--filter @stll/two", false, true],
+    ["--filter=!@stll/one", false, true],
+    ["--filter=./packages/one", true, false],
+    ["--filter=@stll/*", true, true],
+    ["--filter=@stll/* --filter=!@stll/two", true, false],
+    ["--dry=json", false, false],
+    ["--unknown-selector", false, false],
+  ])("sharded tests honor actual selection %s", (selection, one, two) => {
+    const failure = (name: string) =>
+      packageTestExecutionFailure({
+        rootScripts: { test: "turbo run test" },
+        gatingJobs: bashJobs([
+          [
+            "ci-tests",
+            [
+              "bun scripts/test-scope.ts",
+              "bun scripts/test-shards.ts --filters rest",
+              `bun run test -- --concurrency=2 ${selection}`,
+            ],
+          ],
+        ]),
+        packageName: `@stll/${name}`,
+        packageDirectory: `packages/${name}`,
+        shardedPackages: new Set(["@stll/one", "@stll/two"]),
+      });
+    expect(failure("one") === undefined).toBe(one);
+    expect(failure("two") === undefined).toBe(two);
+  });
+
+  check("sharded forwarded paths must collect the requested file", () => {
+    const options = {
+      rootScripts: { test: "turbo run test" },
+      gatingJobs: bashJobs([
+        [
+          "ci-tests",
+          [
+            "bun run test -- --concurrency=2 --filter=@stll/one -- src/one.test.ts",
+          ],
+        ],
+      ]),
+      packageName: "@stll/one",
+      packageDirectory: "packages/one",
+      shardedPackages: new Set(["@stll/one", "@stll/two"]),
+    };
+    expect(
+      packageTestExecutionFailure({
+        ...options,
+        collection: {
+          candidate: "packages/one/src/one.test.ts",
+          scripts: { test: "bun test" },
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      packageTestExecutionFailure({
+        ...options,
+        collection: {
+          candidate: "packages/one/src/two.test.ts",
+          scripts: { test: "bun test" },
+        },
+      }),
+    ).toContain("does not collect");
+  });
+
+  check("the web shard runtime selection cannot credit the API package", () => {
+    const workflow = Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/ci.yml", import.meta.url),
+        "utf-8",
+      ),
+    );
+    const webRuns = (
+      analyzeGatingWorkflow(workflow).jobs.get("ci-tests") ?? []
+    ).filter(({ environment }) => environment["SHARD"] === "web");
+    expect(webRuns.length).toBeGreaterThan(0);
+    const failure = (name: string) =>
+      packageTestExecutionFailure({
+        rootScripts: { test: "turbo run test" },
+        gatingJobs: new Map([["ci-tests", webRuns]]),
+        packageName: `@stll/${name}`,
+        packageDirectory: `apps/${name}`,
+        shardedPackages: new Set(["@stll/api", "@stll/web"]),
+      });
+    expect(failure("web")).toBeUndefined();
+    expect(failure("api")).toBeDefined();
+  });
+
+  check("sharded runtime arguments require a recognized producer", () => {
+    expect(
+      packageTestExecutionFailure({
+        rootScripts: { test: "turbo run test" },
+        gatingJobs: bashJobs([
+          [
+            "ci-tests",
+            [
+              `bun run test -- --concurrency=2 "\${args[@]}" "\${shard_args[@]}"`,
+            ],
+          ],
+        ]),
+        packageName: "@stll/one",
+        packageDirectory: "packages/one",
+        shardedPackages: new Set(["@stll/one", "@stll/two"]),
+      }),
+    ).toContain("recognized producer");
+  });
+
+  check.each([
+    ['bun test x.test.ts || { status=$?; echo failed; exit "$status"; }', true],
+    ['bun test x.test.ts || { status=$?; status=0; exit "$status"; }', false],
+    [
+      'bun test x.test.ts || { status=$?; if false; then exit "$status"; fi; }',
+      false,
+    ],
+  ])(
+    "captured failure status must propagate unconditionally: %s",
+    (command, gates) => {
+      expect(
+        rootCommandExecutionFailure({
+          command: "bun test x.test.ts",
+          gatingJobs: bashJobs([["checks", [command]]]),
+        }) === undefined,
+      ).toBe(gates);
+    },
+  );
+
   check(
     "resolves the root query-cache check without broadening its forwarded selection",
     () => {
       const topology = {
         workflow: "",
-        gatingJobs: new Map([
+        gatingJobs: bashJobs([
           ["package-check", ["bun run check:query-cache-types"]],
         ]),
         shardedPackages: new Set<string>(),
@@ -702,7 +843,7 @@ context("test registration census", () => {
   check("requires the gating job to invoke the exact test script", () => {
     expect(
       packageTestExecutionFailure({
-        gatingJobs: new Map([
+        gatingJobs: bashJobs([
           ["package-check", ["bun --filter @stll/orphan test:smoke"]],
         ]),
         packageDirectory: "packages/orphan",
@@ -731,7 +872,7 @@ context("test registration census", () => {
     const serviceCommand = "bun run test:postgres";
     expect([
       packageTestExecutionFailure({
-        gatingJobs: new Map([["package-check", [packageCommand]]]),
+        gatingJobs: bashJobs([["package-check", [packageCommand]]]),
         packageDirectory: "packages/orphan",
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
@@ -739,7 +880,7 @@ context("test registration census", () => {
       managedServiceRunnerFailure({
         command: serviceCommand,
         gate: "STELLA_RUN_POSTGRES_TESTS",
-        gatingJobs: new Map([
+        gatingJobs: bashJobs([
           ["service-suites", [shape.replace("RUNNER", () => serviceCommand)]],
         ]),
       }),
@@ -770,7 +911,7 @@ context("test registration census", () => {
     "'RUNNER",
   ])("command text does not execute a runner: %s", (shape) => {
     const gatingJobs = (runner: string) =>
-      new Map([["checks", [shape.replace("RUNNER", () => runner)]]]);
+      bashJobs([["checks", [shape.replace("RUNNER", () => runner)]]]);
     expect(
       packageTestExecutionFailure({
         gatingJobs: gatingJobs("bun --filter @stll/orphan test"),
@@ -809,7 +950,7 @@ context("test registration census", () => {
     expect(
       rootCommandExecutionFailure({
         command: "bun scripts/test-gate.ts",
-        gatingJobs: new Map([
+        gatingJobs: bashJobs([
           ["checks", [`${prefix} && bun scripts/test-gate.ts`]],
         ]),
       }),
@@ -856,7 +997,7 @@ context("test registration census", () => {
     "false; RUNNER",
   ])("does not credit a runner in a skipped shell branch: %s", (shape) => {
     const gatingJobs = (runner: string) =>
-      new Map([["checks", [shape.replace("RUNNER", () => runner)]]]);
+      bashJobs([["checks", [shape.replace("RUNNER", () => runner)]]]);
     expect(
       packageTestExecutionFailure({
         gatingJobs: gatingJobs("bun --filter @stll/orphan test"),
@@ -900,7 +1041,7 @@ context("test registration census", () => {
     const serviceCommand = "bun run test:postgres";
     expect([
       packageTestExecutionFailure({
-        gatingJobs: new Map([
+        gatingJobs: bashJobs([
           [
             "package-check",
             [shape.replace("RUNNER", "bun --filter @stll/orphan test")],
@@ -913,7 +1054,7 @@ context("test registration census", () => {
       managedServiceRunnerFailure({
         command: serviceCommand,
         gate: "STELLA_RUN_POSTGRES_TESTS",
-        gatingJobs: new Map([
+        gatingJobs: bashJobs([
           ["service-suites", [shape.replace("RUNNER", () => serviceCommand)]],
         ]),
       }),
@@ -1117,6 +1258,181 @@ jobs:
         shardedPackages: new Set<string>(),
       }),
     ).toBeUndefined();
+  });
+
+  check(
+    "resolves effective workflow shells and their failure propagation",
+    () => {
+      const command = "bun --filter @stll/orphan test | cat";
+      const run = (defaults: string, stepShell: string) =>
+        Bun.YAML.parse(`
+defaults:
+  run:
+    shell: ${defaults}
+jobs:
+  package-check:
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - run: ${command}
+        shell: ${stepShell}
+  ci-result:
+    needs: [package-check]
+`);
+      const bashZero = Bun.YAML.parse(`
+jobs:
+  package-check:
+    defaults:
+      run:
+        shell: bash {0}
+    steps:
+      - run: ${command}
+  ci-result:
+    needs: [package-check]
+`);
+      expect(
+        packageTestExecutionFailure({
+          gatingJobs: gatingWorkflowJobs(bashZero),
+          packageDirectory: "packages/orphan",
+          packageName: "@stll/orphan",
+          shardedPackages: new Set<string>(),
+        }),
+      ).toBe("job condition: no gating job executes @stll/orphan test");
+
+      const literalBash = Bun.YAML.parse(`
+jobs:
+  package-check:
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: ${command}
+  ci-result:
+    needs: [package-check]
+`);
+      expect(
+        packageTestExecutionFailure({
+          gatingJobs: gatingWorkflowJobs(literalBash),
+          packageDirectory: "packages/orphan",
+          packageName: "@stll/orphan",
+          shardedPackages: new Set<string>(),
+        }),
+      ).toBeUndefined();
+
+      const precedence = analyzeGatingWorkflow(
+        run("bash {0}", "bash {0}"),
+      ).jobs.get("package-check");
+      expect(precedence?.map(({ propagation }) => propagation)).toEqual([
+        { errexit: false, pipefail: false },
+      ]);
+      expect(
+        analyzeGatingWorkflow(
+          run("bash {0}", "bash --noprofile --norc -eo pipefail {0}"),
+        )
+          .jobs.get("package-check")
+          ?.at(0)?.propagation,
+      ).toEqual({ errexit: true, pipefail: true });
+      const jobShell = analyzeGatingWorkflow(
+        Bun.YAML.parse(`
+defaults:
+  run:
+    shell: bash {0}
+jobs:
+  package-check:
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - run: ${command}
+  ci-result:
+    needs: [package-check]
+`),
+      ).jobs.get("package-check");
+      expect(jobShell?.at(0)?.propagation).toEqual({
+        errexit: true,
+        pipefail: false,
+      });
+      const workflowShell = analyzeGatingWorkflow(
+        Bun.YAML.parse(`
+defaults:
+  run:
+    shell: bash {0}
+jobs:
+  package-check:
+    steps:
+      - run: ${command}
+  ci-result:
+    needs: [package-check]
+`),
+      ).jobs.get("package-check");
+      expect(workflowShell?.at(0)?.propagation).toEqual({
+        errexit: false,
+        pipefail: false,
+      });
+      const shellWorkflow = (shell: string, runCommand = command) =>
+        Bun.YAML.parse(`
+jobs:
+  package-check:
+    defaults:
+      run:
+        shell: ${shell}
+    steps:
+      - run: ${runCommand}
+  ci-result:
+    needs: [package-check]
+`);
+      for (const shell of [
+        "bash +o pipefail {0}",
+        "bash --noprofile --norc +o pipefail {0}",
+      ]) {
+        expect(
+          packageTestExecutionFailure({
+            gatingJobs: gatingWorkflowJobs(shellWorkflow(shell)),
+            packageDirectory: "packages/orphan",
+            packageName: "@stll/orphan",
+            shardedPackages: new Set<string>(),
+          }),
+          shell,
+        ).toBe("job condition: no gating job executes @stll/orphan test");
+      }
+      expect(
+        packageTestExecutionFailure({
+          gatingJobs: gatingWorkflowJobs(
+            shellWorkflow(
+              "bash +e {0}",
+              "bun --filter @stll/orphan test; echo finished",
+            ),
+          ),
+          packageDirectory: "packages/orphan",
+          packageName: "@stll/orphan",
+          shardedPackages: new Set<string>(),
+        }),
+      ).toBe("job condition: no gating job executes @stll/orphan test");
+      expect(
+        analyzeGatingWorkflow(shellWorkflow("bash notpipefail {0}")).findings,
+      ).toEqual([
+        "job condition: package-check/step-1 uses unsupported shell bash notpipefail {0}",
+      ]);
+    },
+  );
+
+  check("names workflow steps whose shell is unsupported", () => {
+    const analysis = analyzeGatingWorkflow(
+      Bun.YAML.parse(`
+jobs:
+  package-check:
+    steps:
+      - run: bun --filter @stll/orphan test
+        shell: sh {0}
+  ci-result:
+    needs: [package-check]
+`),
+    );
+    expect(analysis.findings).toEqual([
+      "job condition: package-check/step-1 uses unsupported shell sh {0}",
+    ]);
+    expect(analysis.jobs.size).toBe(0);
   });
 
   check(
@@ -1600,7 +1916,7 @@ context("suppressed collection", () => {
               file: "scripts/named.test.ts",
               nonGatingFiles: new Set(),
               topology: {
-                gatingJobs: new Map([["root-tests", [command]]]),
+                gatingJobs: bashJobs([["root-tests", [command]]]),
                 shardedPackages: new Set<string>(),
                 workflow,
               },
@@ -1612,7 +1928,7 @@ context("suppressed collection", () => {
     check(`rejects a package script body ${shape}`, () => {
       expect(
         packageTestExecutionFailure({
-          gatingJobs: new Map([
+          gatingJobs: bashJobs([
             ["package-tests", ["bun --filter @stll/orphan test"]],
           ]),
           packageDirectory: "packages/orphan",
@@ -1664,7 +1980,7 @@ context("Playwright failure propagation", () => {
         packageFile: "apps/desktop/package.json",
         scripts: { "test:browser": body },
         topology: {
-          gatingJobs: new Map([["browser-tests", [invocation]]]),
+          gatingJobs: bashJobs([["browser-tests", [invocation]]]),
           shardedPackages: new Set<string>(),
           workflow: invocation,
         },
@@ -1683,7 +1999,7 @@ context("Playwright configuration filters", () => {
       packageFile: "apps/desktop/package.json",
       scripts: { "test:browser": "playwright test" },
       topology: {
-        gatingJobs: new Map([
+        gatingJobs: bashJobs([
           ["browser-tests", ["bun --filter @stll/desktop test:browser"]],
         ]),
         shardedPackages: new Set<string>(),
@@ -1793,7 +2109,7 @@ context("Playwright CLI selection", () => {
           packageFile: "apps/desktop/package.json",
           scripts: { "test:browser": body },
           topology: {
-            gatingJobs: new Map([["browser-tests", [invocation]]]),
+            gatingJobs: bashJobs([["browser-tests", [invocation]]]),
             shardedPackages: new Set<string>(),
             workflow: invocation,
           },
@@ -1821,7 +2137,7 @@ context("Playwright selector contracts", () => {
       packageFile: "apps/desktop/package.json",
       scripts: { "test:browser": "playwright test" },
       topology: {
-        gatingJobs: new Map([["browser-tests", [invocation]]]),
+        gatingJobs: bashJobs([["browser-tests", [invocation]]]),
         shardedPackages: new Set<string>(),
         workflow: invocation,
       },
