@@ -1,5 +1,5 @@
 import type React from "react";
-import { Fragment, isValidElement, useState } from "react";
+import { Fragment, isValidElement } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -8,11 +8,11 @@ import {
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
 import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
+import { ChatLink } from "@stll/chat/link";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { isFolioBlockId } from "@stll/folio-react";
-import { GlobeIcon, MailIcon } from "@stll/ui/icons";
+import { MailIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import {
   ChatDecisionCitation,
@@ -275,27 +275,18 @@ export const StreamdownMentionLink = ({
       : null);
   if (httpUrl) {
     return (
-      <FaviconCitationChip
+      <ExternalCitationLink
         href={href}
         interactive={interactive}
         url={httpUrl}
         workspaceId={workspaceId ?? null}
       >
         {children}
-      </FaviconCitationChip>
+      </ExternalCitationLink>
     );
   }
 
-  return (
-    <a
-      href={sanitizeHref(href)}
-      rel="noopener noreferrer"
-      target="_blank"
-      {...props}
-    >
-      {children}
-    </a>
-  );
+  return <ChatLink href={href}>{children}</ChatLink>;
 };
 
 const SourceCitationChip = ({
@@ -669,133 +660,36 @@ const FOOTNOTE_LABEL_RE = /^[([]?\s*\d{1,3}\s*[)\]]?$/u;
 const isFootnoteLabel = (label: string, hostname: string): boolean =>
   FOOTNOTE_LABEL_RE.test(label) || label.toLowerCase() === hostname;
 
-const FaviconCitationChip = ({
+const ExternalCitationLink = ({
   children,
   href,
-  interactive,
   url,
   workspaceId,
+  interactive,
 }: {
   children: React.ReactNode;
   href: string;
-  interactive: boolean;
   url: URL;
   workspaceId: string | null;
+  interactive: boolean;
 }) => {
   const hostname = url.hostname.replace(/^www\./u, "");
   const inlineLabel = (getPlainText(children) ?? "").trim();
   const source = useExternalSourceStore(
     (state) => state.getSource(href) ?? state.getSource(url.toString()),
   );
-  const showInlineLabel =
-    inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname);
-  const hoverTitle = source?.title || inlineLabel || hostname;
+  const label =
+    inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname)
+      ? children
+      : (source?.title ?? hostname);
   return (
     <LegalCitationLink
       appearance="inline"
-      externalIcon={
-        <FaviconChip hostname={hostname} inline tooltipTitle={hoverTitle} />
-      }
       interactive={interactive}
-      source={source ?? { title: hoverTitle, url: url.toString() }}
+      source={source ?? { title: inlineLabel || hostname, url: url.toString() }}
       workspaceId={workspaceId}
     >
-      {showInlineLabel ? children : (source?.title ?? hostname)}
+      {label}
     </LegalCitationLink>
-  );
-};
-
-const FaviconChip = ({
-  hostname,
-  onClick,
-  inline = false,
-  tooltipTitle,
-}: {
-  hostname: string;
-  onClick?: () => void;
-  inline?: boolean;
-  tooltipTitle: string;
-}) => {
-  const Wrapper = onClick ? "button" : "span";
-  // Defer the favicon GET until the user reveals intent on this
-  // specific chip — see <FaviconImage> above for the rationale.
-  const [faviconRequested, setFaviconRequested] = useState(false);
-  const revealFavicon = () => setFaviconRequested(true);
-  return (
-    <span
-      className={cn(
-        "group/citation relative inline-block size-[1em]",
-        inline ? "" : "mx-0.5 align-[-0.2em]",
-      )}
-      onFocus={revealFavicon}
-      onMouseEnter={revealFavicon}
-    >
-      <Wrapper
-        aria-label={onClick ? tooltipTitle : undefined}
-        className={cn(
-          "border-border bg-muted/30",
-          "absolute inset-0 grid place-items-center",
-          "overflow-hidden rounded-full border",
-          onClick
-            ? "hover:bg-muted/60 focus-visible:ring-ring/50 cursor-pointer focus-visible:ring-2 focus-visible:outline-none"
-            : "",
-        )}
-        onClick={onClick}
-        type={onClick ? "button" : undefined}
-      >
-        <FaviconImage hostname={hostname} loaded={faviconRequested} />
-      </Wrapper>
-      <span
-        className={cn(
-          "border-border bg-popover text-popover-foreground",
-          "pointer-events-none absolute start-[calc(100%+0.25em)] top-1/2",
-          "z-10 max-w-[20em] -translate-y-1/2 wrap-break-word whitespace-normal",
-          "rounded-md border px-1.5 py-0.5 text-[0.78em] leading-none shadow-sm",
-          "opacity-0 transition-opacity duration-150",
-          "group-focus-within/citation:opacity-100 group-hover/citation:opacity-100",
-        )}
-        aria-hidden="true"
-        role="tooltip"
-      >
-        {tooltipTitle}
-      </span>
-    </span>
-  );
-};
-
-/**
- * Renders the cited domain's favicon ONLY after the parent chip
- * reveals user intent (the `loaded` flag is flipped by the chip
- * wrapper's hover/focus handler). Default render is the bundled
- * GlobeIcon so merely scrolling past a chat message never sends a
- * GET to the cited domain — that passive disclosure is the lever
- * the Codex review flagged.
- */
-const FaviconImage = ({
-  hostname,
-  loaded,
-}: {
-  hostname: string;
-  loaded: boolean;
-}) => {
-  const [errored, setErrored] = useState(false);
-  if (!loaded || errored) {
-    return (
-      <GlobeIcon
-        aria-hidden="true"
-        className="text-muted-foreground size-[0.85em]"
-      />
-    );
-  }
-  return (
-    <img
-      alt=""
-      aria-hidden="true"
-      className="size-[0.85em] object-contain"
-      loading="lazy"
-      onError={() => setErrored(true)}
-      referrerPolicy="no-referrer"
-      src={`https://${hostname}/favicon.ico`}
-    />
   );
 };

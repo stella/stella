@@ -32,7 +32,11 @@
     "./runtime": "./src/runtime.ts",
     "./stream": "./src/stream.tsx",
     "./durable-transport": "./src/durable-transport.ts",
-    "./resume-contract": "./src/resume-contract.ts"
+    "./resume-contract": "./src/resume-contract.ts",
+    "./link": "./src/link.tsx",
+    "./link-detection": "./src/link-detection.ts",
+    "./link-editor": "./src/link-editor.ts",
+    "./link-markdown": "./src/link-markdown.ts"
   },
   "publishConfig": {
     "access": "public"
@@ -54,13 +58,18 @@
     "@stll/ai-catalog": "workspace:^",
     "@stll/ui": "workspace:^",
     "@tanstack/ai-client": "catalog:",
+    "@types/hast": "^3.0.5",
     "better-result": "catalog:",
+    "linkify-it": "6.1.0",
+    "tldts": "7.4.16",
     "valibot": "catalog:",
     "zod": "^4.5.4"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
+    "@tiptap/core": "^3.31.4",
+    "@tiptap/pm": "^3.31.4",
     "@types/react": "catalog:react19",
     "bun-types": "catalog:",
     "fast-check": "catalog:",
@@ -69,10 +78,18 @@
   },
   "peerDependencies": {
     "@base-ui/react": "^1.7.0",
+    "@tiptap/core": "^3.31.4",
+    "@tiptap/pm": "^3.31.4",
     "@types/react": ">=19",
     "react": ">=19"
   },
   "peerDependenciesMeta": {
+    "@tiptap/core": {
+      "optional": true
+    },
+    "@tiptap/pm": {
+      "optional": true
+    },
     "@types/react": {
       "optional": true
     }
