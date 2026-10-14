@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
 import path from "node:path";
+
+import { sourceFileIndex } from "@stll/scripts/src/source-file-index";
 
 // Every form that creates something submits through `useSingleFlight`, so a
 // second click or Enter in the same frame cannot create twice. This finds the
@@ -24,17 +25,23 @@ const GUARD = /\buseSingleFlight\(/u;
 // Declaring the hook is not enough: the submit has to run through it.
 const GUARDED_SUBMIT = /\.(?:run|runSettled)\(/u;
 
-const sourceFiles = () =>
-  [...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: SRC })].filter(
-    (file) => !file.includes(".test.") && !file.endsWith(".gen.ts"),
+/** Every source below `src`, by path, read once through the shared index. */
+const productionSources = () =>
+  new Map(
+    sourceFileIndex(SRC)
+      .filter(
+        ({ relativePath }) =>
+          !relativePath.includes(".test.") && !relativePath.endsWith(".gen.ts"),
+      )
+      .map(
+        ({ relativePath, sourceText }) => [relativePath, sourceText] as const,
+      ),
   );
 
-const read = (file: string) => readFileSync(path.join(SRC, file), "utf-8");
-
-const createHooks = (files: readonly string[]) =>
+const createHooks = (sources: ReadonlyMap<string, string>) =>
   new Set(
-    files.flatMap((file) =>
-      [...read(file).matchAll(CREATE_HOOK_DEFINITION)].flatMap((match) =>
+    [...sources.values()].flatMap((source) =>
+      [...source.matchAll(CREATE_HOOK_DEFINITION)].flatMap((match) =>
         match[1] === undefined ? [] : [match[1]],
       ),
     ),
@@ -59,8 +66,8 @@ const unguardedCreateForms = (
 };
 
 describe("create forms submit once", () => {
-  const files = sourceFiles();
-  const hooks = createHooks(files);
+  const sources = productionSources();
+  const hooks = createHooks(sources);
   // A store, not a mutation: it opens the dialog rather than creating.
   hooks.delete("useCreateMatterStore");
 
@@ -70,18 +77,13 @@ describe("create forms submit once", () => {
   });
 
   test("every create form uses the guard or says why it need not", () => {
-    const sources = new Map(
-      files
-        .filter((file) => file.endsWith(".tsx"))
-        .map((file) => [file, read(file)] as const),
-    );
     expect(unguardedCreateForms(sources, hooks)).toEqual(
       Object.keys(UNGUARDED_CREATE_FORMS).toSorted(),
     );
   });
 
   test("flags a create form that skips the guard", () => {
-    const sources = new Map([
+    const fixtures = new Map([
       [
         "fixture/unguarded.tsx",
         "const create = useCreateThing();\nreturn <Dialog onSubmit={() => create.mutate()} />;",
@@ -95,9 +97,8 @@ describe("create forms submit once", () => {
         "const create = useCreateThing();\nconst once = useSingleFlight();\nreturn <Dialog onSubmit={() => once.run(async () => await create.mutateAsync())} />;",
       ],
     ]);
-    expect(unguardedCreateForms(sources, new Set(["useCreateThing"]))).toEqual([
-      "fixture/declared-only.tsx",
-      "fixture/unguarded.tsx",
-    ]);
+    expect(unguardedCreateForms(fixtures, new Set(["useCreateThing"]))).toEqual(
+      ["fixture/declared-only.tsx", "fixture/unguarded.tsx"],
+    );
   });
 });
