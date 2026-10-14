@@ -290,27 +290,40 @@ const reconcileStoredScopes = async (
         .map(({ identifier: to }) => ({ from, scope, to })),
     ),
   );
-  for (const { from, scope, to } of moves) {
-    const extended = await transaction.execute(sql`
-      UPDATE oauth_consent
-         SET resources = array_append(resources, ${to}::text),
-             updated_at = now()
-       WHERE ${from} = ANY(resources)
-         AND ${scope} = ANY(scopes)
-         AND NOT (${to} = ANY(resources))
-      RETURNING id, client_id AS "clientId"
-    `);
-    for (const row of executedRows(extended)) {
-      if (isRecord(row)) {
-        writeRepairEvent({
-          clientId: row["clientId"],
-          consentId: row["id"],
-          event: "oauth_consent_resource_extended",
-          from,
-          scope,
-          to,
-        });
-      }
+  if (moves.length === 0) {
+    return;
+  }
+  // One statement for every move: a consent gains each audience that one of
+  // its approved scopes moved to from an audience it already covers.
+  const extended = await transaction.execute(sql`
+    WITH move AS (
+      SELECT * FROM jsonb_to_recordset(${JSON.stringify(moves)}::text::jsonb)
+        AS move("from" text, scope text, "to" text)
+    ),
+    gained AS (
+      SELECT consent.id, array_agg(DISTINCT move."to" ORDER BY move."to") AS targets
+        FROM oauth_consent consent
+        JOIN move
+          ON move."from" = ANY(consent.resources)
+         AND move.scope = ANY(consent.scopes)
+         AND NOT (move."to" = ANY(consent.resources))
+       GROUP BY consent.id
+    )
+    UPDATE oauth_consent target
+       SET resources = target.resources || gained.targets,
+           updated_at = now()
+      FROM gained
+     WHERE target.id = gained.id
+    RETURNING target.id, target.client_id AS "clientId", gained.targets
+  `);
+  for (const row of executedRows(extended)) {
+    if (isRecord(row)) {
+      writeRepairEvent({
+        added: row["targets"],
+        clientId: row["clientId"],
+        consentId: row["id"],
+        event: "oauth_consent_resource_extended",
+      });
     }
   }
 };
