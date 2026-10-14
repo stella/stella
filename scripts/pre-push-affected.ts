@@ -117,11 +117,18 @@ export const prePushCommands = ({
     : [["bun", "test", "--timeout", SCRIPT_TEST_TIMEOUT_MS, ...scriptTests]]),
 ];
 
-/** Changed paths against the merge base, or null when Git cannot answer. */
-const changedPaths = (base: string): string[] | null => {
+/**
+ * Changed paths against the merge base, including deletions (deleting a module
+ * that is still imported must still run the checks), or null when Git cannot
+ * answer.
+ */
+export const changedPaths = (
+  base: string,
+  cwd = REPO_ROOT,
+): string[] | null => {
   const git = (args: string[]): string | null => {
     const result = Bun.spawnSync(["git", ...args], {
-      cwd: REPO_ROOT,
+      cwd,
       stdout: "pipe",
       stderr: "pipe",
     });
@@ -137,14 +144,7 @@ const changedPaths = (base: string): string[] | null => {
   if (mergeBase === undefined) {
     return null;
   }
-  const diff = git([
-    "diff",
-    "--name-only",
-    "-z",
-    "--diff-filter=d",
-    mergeBase,
-    "HEAD",
-  ]);
+  const diff = git(["diff", "--name-only", "-z", mergeBase, "HEAD"]);
   return diff === null ? null : diff.split("\0").filter((file) => file !== "");
 };
 

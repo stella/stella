@@ -1,7 +1,16 @@
 import { describe, expect, test } from "bun:test";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
+  changedPaths,
   parsePrePushArgs,
   PRE_PUSH_EXIT,
   prePushCommands,
@@ -75,6 +84,47 @@ describe("pre-push affected checks", () => {
     expect(result.stdout.toString()).toBe(
       "pre-push affected: no changes against the base\n",
     );
+  });
+
+  test("a deletion-only push still selects the checks", () => {
+    const repo = mkdtempSync(path.join(tmpdir(), "pre-push-affected-"));
+    try {
+      const git = (...args: string[]) => {
+        const result = Bun.spawnSync(["git", "-C", repo, ...args], {
+          stdout: "pipe",
+          stderr: "pipe",
+          env: {
+            PATH: process.env["PATH"],
+            HOME: repo,
+            GIT_CONFIG_NOSYSTEM: "1",
+            GIT_AUTHOR_NAME: "test",
+            GIT_AUTHOR_EMAIL: "test@example.invalid",
+            GIT_COMMITTER_NAME: "test",
+            GIT_COMMITTER_EMAIL: "test@example.invalid",
+          },
+        });
+        expect(result.exitCode).toBe(0);
+      };
+      git("init", "-q", "-b", "main");
+      mkdirSync(path.join(repo, "scripts"));
+      writeFileSync(path.join(repo, "scripts/tool.ts"), "export {};\n");
+      writeFileSync(path.join(repo, "scripts/tool.test.ts"), "export {};\n");
+      git("add", ".");
+      git("commit", "-q", "--no-gpg-sign", "-m", "base");
+      git("branch", "base");
+      git("rm", "-q", "scripts/tool.ts");
+      git("commit", "-q", "--no-gpg-sign", "-m", "delete");
+
+      const changed = changedPaths("base", repo);
+      expect(changed).toEqual(["scripts/tool.ts"]);
+      expect(
+        rootScriptTests(changed ?? [], (file) =>
+          existsSync(path.join(repo, file)),
+        ),
+      ).toEqual(["scripts/tool.test.ts"]);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
   });
 
   test("the total time cap is ten minutes", () => {
