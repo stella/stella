@@ -1806,6 +1806,64 @@ context("root test runner coverage", () => {
     ).toContain(`job condition: no gating job collects ${file}`);
   });
 
+  check(
+    "nested shell commands retain only their own failure guarantees",
+    () => {
+      const file = "scripts/named.test.ts";
+      const commands: readonly (readonly [string, boolean])[] = [
+        ["bash -c 'bun test scripts/named.test.ts; echo done'", false],
+        ["bash -c 'bun test scripts/named.test.ts'", true],
+        [
+          "bash -eo pipefail -c 'bun test scripts/named.test.ts | cat; echo done'",
+          true,
+        ],
+        ["bash -c 'bun test scripts/named.test.ts | cat'", false],
+        ["sh -c 'echo setup; bun test scripts/named.test.ts'", true],
+        ['bash -c "$COMMAND"', false],
+        ["bash -c 'bun test \"$TEST_FILE\"'", false],
+        [
+          "xargs -I{} bash -c 'bun test scripts/named.test.ts' <<< runner",
+          false,
+        ],
+        ["nice bash -c 'bun test scripts/named.test.ts'", false],
+        ["env FOO=bar bash -c 'bun test scripts/named.test.ts'", true],
+        [
+          "env FOO=bar bash -c 'bun test scripts/named.test.ts; echo done'",
+          false,
+        ],
+        ["timeout 30s bash -c 'bun test scripts/named.test.ts'", true],
+        ["timeout 30s bash -c 'bun test scripts/named.test.ts | cat'", false],
+      ];
+      for (const [command, gates] of commands) {
+        const workflow = `jobs:
+  root-tests:
+    steps:
+      - run: |
+          ${command}
+  ci-result:
+    needs: [root-tests]
+`;
+        const failure = firstCollectionFailure({
+          file,
+          nonGatingFiles: new Set(),
+          topology: {
+            gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
+            shardedPackages: new Set<string>(),
+            workflow,
+          },
+        });
+        if (gates) {
+          expect(failure, command).toBeUndefined();
+        } else {
+          expect(failure, command).toContain(
+            `job condition: no gating job collects ${file}`,
+          );
+          expect(failure, command).toContain("shell condition:");
+        }
+      }
+    },
+  );
+
   check("custom lint runner selections bound collection", () => {
     const selected = ".oxlint-plugins/__tests__/selected.test.ts";
     const other = ".oxlint-plugins/__tests__/other.test.ts";

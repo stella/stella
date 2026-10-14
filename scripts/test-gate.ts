@@ -1288,8 +1288,16 @@ const turboFilterMatches = ({
   return new Bun.Glob(filter.replace(/^\.\//u, "")).match(candidate);
 };
 
+const beforeWorkspaceTest = (command: string): string => {
+  const lines = command.split("\n");
+  const first = lines.findIndex((line) =>
+    line.trimStart().startsWith("bun run test "),
+  );
+  return lines.slice(0, first === -1 ? 0 : first).join("\n");
+};
+
 const runtimeScopeArguments = (command: string): boolean => {
-  const prefix = command.split(/^\s*bun run test\b/mu).at(0) ?? "";
+  const prefix = beforeWorkspaceTest(command);
   const lines = prefix.split("\n").map((line) => line.trim());
   return (
     lines.filter((line) => line.startsWith("args=")).join("") === "args=()" &&
@@ -1311,7 +1319,7 @@ const runtimeShardSelected = ({
   ShardedSelectionOptions,
   "arguments_" | "packageDirectory"
 >): boolean => {
-  const prefix = run.command.split(/^\s*bun run test\b/mu).at(0) ?? "";
+  const prefix = beforeWorkspaceTest(run.command);
   if (/\bSHARD(?:\+?=|\[)|\bunset\s+SHARD\b/u.test(prefix)) {
     return false;
   }
@@ -1506,7 +1514,9 @@ export const packageTestExecutionFailure = ({
       const invocations = gatingArguments({
         command,
         ...(!packageScript ? { propagation } : {}),
-        onUnresolved: (reason) => conditions.push(reason),
+        onUnresolved: (reason) => {
+          conditions.push(reason);
+        },
         invocationEnd: ({ words, tokens, index }) =>
           packageInvocationEnd({
             words,
@@ -1521,8 +1531,9 @@ export const packageTestExecutionFailure = ({
           }),
         ...(packageScript ? { propagation: PACKAGE_SCRIPT_PROPAGATION } : {}),
       });
-      if (conditions.length > 0) {
-        directExecutionFailure += `; ${conditions[0]}`;
+      const condition = conditions.at(0);
+      if (condition !== undefined) {
+        directExecutionFailure += `; ${condition}`;
       }
       for (const arguments_ of invocations) {
         if (collection === undefined) {
@@ -2056,7 +2067,9 @@ export const packageTestCollectionFailure = ({
             scripts,
             visited: new Set([...visited, scriptName]),
           }),
-        onUnresolved: (reason) => conditions.push(`runner command: ${reason}`),
+        onUnresolved: (reason) => {
+          conditions.push(`runner command: ${reason}`);
+        },
       })
     ) {
       continue;
@@ -3428,6 +3441,94 @@ type FirstCollectionOptions = {
   readonly topology?: RepositoryTestExecutionTopology;
 };
 
+type NestedShell =
+  | { readonly type: "none" }
+  | { readonly type: "unsupported"; readonly reason: string }
+  | {
+      readonly type: "supported";
+      readonly body: string;
+      readonly propagation: ShellPropagation;
+    };
+
+const nestedShellInvocation = ({
+  words,
+  tokens,
+  index,
+}: ShellInvocation): NestedShell => {
+  let start = index;
+  if (words[start] === "env") {
+    start += 1;
+    while (/^[A-Za-z_][A-Za-z0-9_]*=/u.test(words[start] ?? "")) {
+      const assignment = words[start] ?? "";
+      if (
+        !literalShellWord(assignment) ||
+        /^(?:BASH_ENV|ENV|SHELLOPTS|BASHOPTS)=/u.test(assignment)
+      ) {
+        return {
+          type: "unsupported",
+          reason: "shell condition: unresolved nested shell environment",
+        };
+      }
+      start += 1;
+    }
+  }
+  if (!["bash", "sh"].includes(words[start] ?? "")) {
+    const children = tokens
+      .slice(index + 1)
+      .filter((token) => ["bash", "sh"].includes(token.value));
+    if (children.some((token) => token.role === "argument")) {
+      return {
+        type: "unsupported",
+        reason: "shell condition: unsupported nested shell wrapper",
+      };
+    }
+    return { type: "none" };
+  }
+  const flags: string[] = [];
+  for (let cursor = start + 1; cursor < words.length; cursor += 1) {
+    if (tokens[cursor]?.role !== "argument") {
+      break;
+    }
+    const argument = words[cursor];
+    if (argument === undefined) {
+      break;
+    }
+    if (!/^-[eu]*c$/u.test(argument)) {
+      flags.push(argument);
+      continue;
+    }
+    const short = argument.slice(1, -1);
+    if (short.length > 0) {
+      flags.push(`-${short}`);
+    }
+    const body = words[cursor + 1];
+    if (
+      tokens[cursor + 1]?.role !== "argument" ||
+      body === undefined ||
+      !literalShellWord(body) ||
+      tokens[cursor + 2]?.role === "argument"
+    ) {
+      return {
+        type: "unsupported",
+        reason:
+          "shell condition: nested shell body and arguments must be literal",
+      };
+    }
+    const shell = shellPropagation(`bash ${flags.join(" ")} {0}`);
+    if (shell.type === "unsupported") {
+      return {
+        type: "unsupported",
+        reason: "shell condition: unsupported nested shell options",
+      };
+    }
+    return { type: "supported", body, propagation: shell.propagation };
+  }
+  return {
+    type: "unsupported",
+    reason: "shell condition: nested shell requires a literal -c body",
+  };
+};
+
 export const firstCollectionFailure = ({
   file,
   nonGatingFiles,
@@ -3440,18 +3541,27 @@ export const firstCollectionFailure = ({
     const isUnlistedScript =
       new Bun.Glob("scripts/**/*.test.ts").match(file) &&
       unlistedTests([file], topology.workflow).length === 1;
+    const conditions: string[] = [];
     const commandMatches = (gatingCommand: GatingCommand): boolean => {
       const { command, propagation } = gatingCommand;
       return shellInvocationGates({
         command,
         propagation,
+        onUnresolved: (reason) => {
+          conditions.push(reason);
+        },
         matches: ({ words, tokens, index }) => {
-          if (words[index] === "bash" && words[index + 1] === "-c") {
-            const body = words[index + 2];
-            return (
-              body !== undefined &&
-              commandMatches({ ...gatingCommand, command: body })
-            );
+          const nested = nestedShellInvocation({ words, tokens, index });
+          if (nested.type === "unsupported") {
+            conditions.push(nested.reason);
+            return false;
+          }
+          if (nested.type === "supported") {
+            return commandMatches({
+              command: nested.body,
+              propagation: nested.propagation,
+              environment: gatingCommand.environment,
+            });
           }
           if (
             isUnlistedScript &&
@@ -3463,23 +3573,7 @@ export const firstCollectionFailure = ({
           if (words[index] !== "bun") {
             return false;
           }
-          const start = words.findLastIndex(
-            (word, cursor) =>
-              tokens[cursor]?.role === "operator" &&
-              cursor < index &&
-              (word === ";" || word === "\n" || word === "&&" || word === "||"),
-          );
-          if (
-            tokens
-              .slice(start + 1, index)
-              .some((token) => token.role === "operator" && token.value === "|")
-          ) {
-            return false;
-          }
-          const { words: invocation, end } = shellCommandSpan(tokens, index);
-          if (end !== -1 && tokens[end]?.value === "|") {
-            return false;
-          }
+          const { words: invocation } = shellCommandSpan(tokens, index);
           if (words[index + 1] === "scripts/run-custom-lint-tests.ts") {
             const args = invocation.slice(2);
             if (
@@ -3552,11 +3646,15 @@ export const firstCollectionFailure = ({
         },
       });
     };
-    return gatingCommandExecutionFailure({
+    const failure = gatingCommandExecutionFailure({
       commandMatches,
       gatingJobs: topology.gatingJobs,
       missingMessage: `job condition: no gating job collects ${file}`,
     });
+    const condition = conditions.at(0);
+    return failure !== undefined && condition !== undefined
+      ? `${failure}; ${condition}`
+      : failure;
   }
   const packageFile = nearestPackage(file);
   if (packageFile === undefined) {
