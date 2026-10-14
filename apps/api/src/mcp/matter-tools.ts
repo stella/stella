@@ -441,6 +441,7 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     const isPureUnarchive =
       input.status === "active" &&
       input.name === undefined &&
+      input.client_id === undefined &&
       input.reference === undefined &&
       input.billing_reference === undefined;
     if (!isPureUnarchive) {
