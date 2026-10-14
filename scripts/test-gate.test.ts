@@ -860,6 +860,53 @@ context("test registration census", () => {
     expect(failure("api")).toBeDefined();
   });
 
+  check("matrix shard selection credits only command-executing legs", () => {
+    const workflowFor = (shards: readonly string[], condition = "true") =>
+      Bun.YAML.parse(`jobs:
+  ci-tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: ${JSON.stringify(shards)}
+    steps:
+      - if: ${condition}
+        env:
+          SHARD: \${{ matrix.shard }}
+        run: |
+          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
+          bun run test -- --concurrency=2 "\${shard_args[@]}"
+  ci-result:
+    needs: [ci-tests]
+`);
+    const selected = (workflow: unknown, name: string) =>
+      packageTestExecutionFailure({
+        rootScripts: { test: "turbo run test" },
+        gatingJobs: analyzeGatingWorkflow(workflow).jobs,
+        packageName: `@stll/${name}`,
+        packageDirectory: `apps/${name}`,
+        shardedPackages: new Set(["@stll/api", "@stll/web"]),
+      });
+    expect(selected(workflowFor(["web"]), "web")).toBeUndefined();
+    expect(selected(workflowFor(["web"]), "api")).toBeDefined();
+    expect(
+      selected(workflowFor(["api-1", "web"], "matrix.shard == 'web'"), "api"),
+    ).toBeDefined();
+    expect(selected(workflowFor(["api-1", "web"]), "api")).toBeUndefined();
+    const unknown = Bun.YAML.parse(`jobs:
+  ci-tests:
+    strategy:
+      matrix: \${{ fromJSON(needs.other.outputs.matrix) }}
+    steps:
+      - run: bun --filter @stll/api test
+  ci-result:
+    needs: [ci-tests]
+`);
+    expect(analyzeGatingWorkflow(unknown).findings.join("\n")).toContain(
+      "no proven shard set",
+    );
+    expect(selected(unknown, "api")).toBeDefined();
+  });
+
   check("sharded runtime arguments require a recognized producer", () => {
     expect(
       packageTestExecutionFailure({
@@ -1556,9 +1603,12 @@ jobs:
     if: needs.ci-plan.outputs.selected == 'true'
     steps:
       - run: bun test scripts/named.test.ts
+  proof:
+    runs-on: ubuntu-latest
+    steps:
       - run: bun test scripts/ci-plan.test.ts
   ci-result:
-    needs: [ci-plan, checks]
+    needs: [ci-plan, checks, proof]
 `;
     const intact = Bun.YAML.parse(source);
     expect(
@@ -1578,12 +1628,26 @@ jobs:
         registry,
       }).findings.join("\n"),
     ).toContain("output has no collector condition reader");
+    const circular = Bun.YAML.parse(
+      source
+        .replace("required=true", "required=false")
+        .replace(
+          "      - run: bun test scripts/ci-plan.test.ts",
+          "      - if: needs.ci-plan.outputs.selected == 'true'\n        run: bun test scripts/ci-plan.test.ts",
+        ),
+    );
+    expect(
+      analyzeGatingWorkflow(circular, registry).findings.join("\n"),
+    ).toContain("no independent gating collector");
+    expect(analyzeGatingWorkflow(circular, registry).jobs.has("checks")).toBe(
+      false,
+    );
     const withoutProof = Bun.YAML.parse(
       source.replace("      - run: bun test scripts/ci-plan.test.ts\n", ""),
     );
     expect(
       analyzeGatingWorkflow(withoutProof, registry).findings.join("\n"),
-    ).toContain("proof test has no gating collector");
+    ).toContain("proof test has no independent gating collector");
     expect(
       analyzeGatingWorkflow(withoutProof, registry).jobs.has("checks"),
     ).toBe(false);

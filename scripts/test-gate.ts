@@ -1860,14 +1860,7 @@ const runtimeShardSelected = ({
   if (typeof raw !== "string") {
     return false;
   }
-  const values = raw.startsWith("${{")
-    ? Object.keys(TEST_JOB_SHARDS).map((shard) =>
-        evaluate(
-          conditionExpression(raw),
-          contextFromNested({ matrix: { shard } }),
-        ),
-      )
-    : [raw];
+  const values = raw.startsWith("${{") ? [] : [raw];
   return values.some((value) => {
     const shard = TEST_SHARD_IDS.find((id) => id === value);
     return (
@@ -1918,6 +1911,14 @@ const shardedTestSelection = ({
       };
     }
     if (argument === `\${shard_args[@]}`) {
+      const shard = run.environment["SHARD"];
+      if (typeof shard !== "string" || shard.startsWith("${{")) {
+        return {
+          type: "unresolved",
+          reason:
+            "runner selection: shard environment has no executable matrix leg",
+        };
+      }
       if (runtimeShardSelected({ run, packageName, shardedPackages })) {
         continue;
       }
@@ -2872,6 +2873,78 @@ const matrixLegs = (job: Record<string, unknown>): readonly MatrixLeg[] => {
   return legs;
 };
 
+type ExecutableMatrixLegsOptions = {
+  readonly job: Record<string, unknown>;
+  readonly root: Record<string, unknown>;
+  readonly registry: readonly TrustedOutputProducer[];
+};
+
+const executableMatrixLegs = ({
+  job,
+  root,
+  registry,
+}: ExecutableMatrixLegsOptions) => {
+  const matrix = workflowRecord(job["strategy"])?.["matrix"];
+  if (matrix === undefined) {
+    return { type: "resolved", legs: [{}] } as const;
+  }
+  if (isRecord(matrix) && !hasDynamicMatrix(job)) {
+    return { type: "resolved", legs: matrixLegs(job) } as const;
+  }
+  if (typeof matrix !== "string") {
+    return {
+      type: "unresolved",
+      reason:
+        "job matrix: selection is not literal or a registered shard producer",
+    } as const;
+  }
+  const reference =
+    /^fromJSON\(needs\.(?<job>[\w-]+)\.outputs\.(?<output>[\w-]+)\)$/u.exec(
+      conditionExpression(matrix),
+    )?.groups;
+  const jobName = reference?.["job"];
+  const output = reference?.["output"];
+  if (jobName === undefined || output === undefined) {
+    return {
+      type: "unresolved",
+      reason: "job matrix: shard selection expression is unsupported",
+    } as const;
+  }
+  const jobs = workflowRecord(root["jobs"]);
+  const alias = workflowRecord(workflowRecord(jobs?.[jobName])?.["outputs"])?.[
+    output
+  ];
+  const exported =
+    typeof alias === "string"
+      ? /^steps\.(?<step>[\w-]+)\.outputs\.(?<output>[\w-]+)$/u.exec(
+          conditionExpression(alias),
+        )?.groups
+      : undefined;
+  const producer = registry.find(
+    (entry) =>
+      entry.job === jobName &&
+      entry.stepId === exported?.["step"] &&
+      entry.outputNames.includes(exported?.["output"] ?? "") &&
+      entry.declaredShards !== undefined,
+  );
+  if (
+    producer?.declaredShards === undefined ||
+    producer.declaredShards.length === 0 ||
+    !producer.declaredShards.every((shard) =>
+      Object.hasOwn(TEST_JOB_SHARDS, shard),
+    )
+  ) {
+    return {
+      type: "unresolved",
+      reason: "job matrix: registered producer has no proven shard set",
+    } as const;
+  }
+  return {
+    type: "resolved",
+    legs: producer.declaredShards.map((shard) => ({ shard })),
+  } as const;
+};
+
 const hasDynamicMatrix = (job: Record<string, unknown>): boolean => {
   const matrix = workflowRecord(workflowRecord(job["strategy"])?.["matrix"]);
   if (matrix === undefined) {
@@ -3325,6 +3398,7 @@ export const referencedCollectorOutputs = (
         continue;
       }
       collect(name, job["if"]);
+      collect(name, workflowRecord(job["strategy"])?.["matrix"]);
       collect(name, step["if"]);
     }
   }
@@ -3509,14 +3583,24 @@ const analyzeWorkflowWithProducerDeclarations = (
     if (!Array.isArray(job["steps"])) {
       continue;
     }
-    const dynamicMatrix = hasDynamicMatrix(job);
-    const legs = matrixLegs(job);
+    const matrixResolution = executableMatrixLegs({
+      job,
+      root: root ?? {},
+      registry,
+    });
+    if (matrixResolution.type === "unresolved") {
+      findings.add(`job condition: ${name} ${matrixResolution.reason}`);
+      continue;
+    }
+    const dynamicMatrix = false;
+    const legs = matrixResolution.legs;
     const commands = flattenWorkflowSteps(job["steps"]).flatMap(
       (step, stepIndex) => {
-        if (typeof step["run"] !== "string") {
+        const command = step["run"];
+        if (typeof command !== "string") {
           return [];
         }
-        let blocksMerge = false;
+        const executingLegs = new Map<string, MatrixLeg>();
         const unresolvedContexts = new Set<string>();
         for (const eventName of GATING_EVENTS) {
           for (const matrix of legs) {
@@ -3554,40 +3638,59 @@ const analyzeWorkflowWithProducerDeclarations = (
               !ignoresFailure(job["continue-on-error"], contextOptions) &&
               !ignoresFailure(step["continue-on-error"], contextOptions)
             ) {
-              blocksMerge = true;
+              executingLegs.set(JSON.stringify(matrix), matrix);
             }
           }
         }
-        if (!blocksMerge) {
+        if (executingLegs.size === 0) {
           for (const context of unresolvedContexts) {
             findings.add(
               `job condition: ${name}/step-${stepIndex + 1} has unresolved context ${context}`,
             );
           }
         }
-        if (!blocksMerge) {
+        if (executingLegs.size === 0) {
           return [];
         }
-        const shell = effectiveWorkflowShell({ root, job, step, legs });
+        const shell = effectiveWorkflowShell({
+          root,
+          job,
+          step,
+          legs: [...executingLegs.values()],
+        });
         if (shell.type === "unsupported") {
-          if (hasTestCollector(step["run"])) {
+          if (hasTestCollector(command)) {
             findings.add(
               `job condition: ${name}/step-${stepIndex + 1} uses unsupported shell ${shell.name}`,
             );
           }
           return [];
         }
-        return [
-          {
-            command: executableShell(step["run"]),
-            environment: {
-              ...workflowRecord(root?.["env"]),
-              ...workflowRecord(job["env"]),
-              ...workflowRecord(step["env"]),
-            },
-            propagation: shell.propagation,
-          },
-        ];
+        const environment = {
+          ...workflowRecord(root?.["env"]),
+          ...workflowRecord(job["env"]),
+          ...workflowRecord(step["env"]),
+        };
+        return [...executingLegs.values()].map((leg) => ({
+          command: executableShell(command),
+          environment: Object.fromEntries(
+            Object.entries(environment).map(([key, value]) => [
+              key,
+              typeof value === "string" &&
+              value.startsWith("${{") &&
+              value.indexOf("}}") === value.length - 2 &&
+              referencedContexts(value).every((reference) =>
+                reference.startsWith("matrix."),
+              )
+                ? evaluate(
+                    conditionExpression(value),
+                    contextFromNested({ matrix: leg }),
+                  )
+                : value,
+            ]),
+          ),
+          propagation: shell.propagation,
+        }));
       },
     );
     if (commands.length > 0) {
@@ -3606,56 +3709,39 @@ export const analyzeGatingWorkflow = (
 ): GatingWorkflowAnalysis => {
   const workflowText = JSON.stringify(workflow);
   const jobs = workflowRecord(workflowRecord(workflow)?.["jobs"]) ?? {};
-  let creditedRegistry = registry;
-  const rejectedProofs = new Set<string>();
-  while (true) {
-    const analysis = analyzeWorkflowWithProducerDeclarations(
-      workflow,
-      creditedRegistry,
-    );
-    const declarations = validateTrustedOutputProducers({
-      workflow,
-      registry: creditedRegistry,
-      scope: "present-jobs",
-    });
-    const remaining = creditedRegistry.filter((producer) => {
-      if (
-        !(producer.job in jobs) ||
-        !producer.outputNames.some((output) =>
-          declarations.references
-            .get(producer.job)
-            ?.has(`steps.${producer.stepId}.outputs.${output}`),
-        )
-      ) {
-        return true;
-      }
-      const failure = firstCollectionFailure({
-        file: producer.proofTest,
-        scenarios: new Map(),
-        topology: {
-          workflow: workflowText,
-          gatingJobs: analysis.jobs,
-          shardedPackages: new Set<string>(),
-        },
-      });
-      if (failure === undefined) {
-        return true;
-      }
-      rejectedProofs.add(
-        `trusted output producer: ${producer.job}/${producer.stepId} proof test has no gating collector: ${producer.proofTest}; ${failure}`,
-      );
-      return false;
-    });
-    if (remaining.length === creditedRegistry.length) {
-      return {
-        jobs: analysis.jobs,
-        findings: [
-          ...new Set([...analysis.findings, ...rejectedProofs]),
-        ].toSorted(compareCodeUnit),
-      };
+  const independent = analyzeWorkflowWithProducerDeclarations(workflow, []);
+  const rejectedProofs: string[] = [];
+  const creditedRegistry = registry.filter((producer) => {
+    if (!(producer.job in jobs)) {
+      return true;
     }
-    creditedRegistry = remaining;
-  }
+    const failure = firstCollectionFailure({
+      file: producer.proofTest,
+      scenarios: new Map(),
+      topology: {
+        workflow: workflowText,
+        gatingJobs: independent.jobs,
+        shardedPackages: new Set<string>(),
+      },
+    });
+    if (failure === undefined) {
+      return true;
+    }
+    rejectedProofs.push(
+      `trusted output producer: ${producer.job}/${producer.stepId} proof test has no independent gating collector: ${producer.proofTest}; ${failure}`,
+    );
+    return false;
+  });
+  const analysis = analyzeWorkflowWithProducerDeclarations(
+    workflow,
+    creditedRegistry,
+  );
+  return {
+    jobs: analysis.jobs,
+    findings: [...new Set([...analysis.findings, ...rejectedProofs])].toSorted(
+      compareCodeUnit,
+    ),
+  };
 };
 
 export const gatingWorkflowJobs = (

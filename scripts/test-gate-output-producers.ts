@@ -5,6 +5,7 @@ export type TrustedOutputProducer = {
   readonly outputNames: readonly string[];
   readonly semantics: "selection" | "content-reuse";
   readonly proofTest: string;
+  readonly declaredShards?: readonly string[];
 };
 
 export const TRUSTED_OUTPUT_PRODUCERS = [
@@ -90,6 +91,15 @@ export const TRUSTED_OUTPUT_PRODUCERS = [
     outputNames: ["required"],
     semantics: "selection",
     proofTest: "scripts/detect-e2e-changes.test.ts",
+  },
+  {
+    workflow: ".github/workflows/ci.yml",
+    job: "ci-plan",
+    stepId: "api-tests",
+    outputNames: ["ci_tests_matrix"],
+    semantics: "selection",
+    proofTest: "scripts/ci-plan.test.ts",
+    declaredShards: ["api-1", "api-2", "api-3", "api-4", "rest-web"],
   },
   {
     workflow: ".github/workflows/ci.yml",

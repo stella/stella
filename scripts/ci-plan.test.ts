@@ -6314,6 +6314,25 @@ test("API planning only loads dependencies after installation and emits install-
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       const values = readFileSync(output, "utf-8");
       expect(values).toContain(`api_test_shards=${String(expected)}\n`);
+      const matrixLine = values
+        .split("\n")
+        .find((line) => line.startsWith("ci_tests_matrix="));
+      expect(matrixLine).toBeDefined();
+      const declared = TRUSTED_OUTPUT_PRODUCERS.find(
+        (producer) => producer.stepId === "api-tests",
+      );
+      const emittedMatrix = v.parse(
+        v.object({ shard: v.array(v.string()) }),
+        JSON.parse(matrixLine?.slice("ci_tests_matrix=".length) ?? "null"),
+      );
+      expect(
+        emittedMatrix.shard.every((shard) =>
+          declared?.declaredShards?.some((candidate) => candidate === shard),
+        ),
+      ).toBe(true);
+      if (!selected && expected === "4") {
+        expect(emittedMatrix.shard).toEqual(declared?.declaredShards);
+      }
       if (selected) {
         expect(values).toContain(`ci_tests_matrix=${selected}\n`);
         expect(values).toContain(

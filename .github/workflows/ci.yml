@@ -9432,6 +9432,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+          filter: blob:none
+          submodules: true
           ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
 
       - name: Setup Bun for dated waiver guard
@@ -9455,6 +9458,18 @@ jobs:
           path: ${{ runner.temp }}/bun-install/*.log
           retention-days: 7
           if-no-files-found: ignore
+
+      - name: Test CI output producer proofs
+        if: ${{ !cancelled() }}
+        run: >-
+          bun test --timeout 50000
+          scripts/ci-plan.test.ts
+          scripts/ci-pr-pilot.test.ts
+          scripts/ci-completed-depth.test.ts
+          scripts/workflow-run-trust.test.ts
+          scripts/detect-e2e-changes.test.ts
+          scripts/ci-static-checks.test.ts
+          scripts/test-gate.test.ts
 
       - name: List tracked files for dated waiver guard
         if: ${{ !cancelled() }}
