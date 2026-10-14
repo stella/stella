@@ -99,12 +99,11 @@ type SourceScopeToolsInput = {
  * - Public sources outside the corpus chips (`corpusScopeDroppedTools`).
  * - `business_registry_lookup` when no named registry is enabled: the lookup
  *   itself is held to the named ones (`scopeBusinessRegistryLookup`).
- * - The counterparty check when no chip names a registry. It screens the
- *   subject against public registers and sanctions lists that have no chip of
- *   their own and takes no registry argument, so it cannot be pinned to one.
- *   A registry chip is the reader opting the turn into company diligence,
- *   which is what the check is; any other scope says the turn is about
- *   something else, and dropping it keeps that turn off those lists.
+ * - The counterparty check, under every chip, a registry chip included. It
+ *   screens the subject against the insolvency and VAT registers and the
+ *   sanctions lists, none of which a chip can name, and it takes no registry
+ *   argument, so it cannot be held to the named sources. A screening is asked
+ *   for without chips.
  * - Every external MCP tool that is not one of a named connector's tools.
  *   Tools are matched through each connector's own `toolNames`, never by
  *   reading a connector out of a tool's name.
@@ -128,9 +127,7 @@ export const sourceScopeDroppedTools = ({
     ...(registries === null || registries.length === 0
       ? [BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]
       : []),
-    ...(namedRegistries(scopes).length === 0
-      ? [COUNTERPARTY_CHECK_TOOL_NAME]
-      : []),
+    COUNTERPARTY_CHECK_TOOL_NAME,
     ...externalToolNames.filter((name) => !keptExternal.has(name)),
   ];
 };

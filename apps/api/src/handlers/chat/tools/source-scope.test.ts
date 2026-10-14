@@ -224,12 +224,12 @@ describe("restrictChatToolsToSourceScope", () => {
     ).toBe(TOOLS);
   });
 
-  it("keeps the registry tools and drops corpora and connectors under a registry chip", () => {
+  it("keeps the lookup and drops corpora, connectors and the counterparty check under a registry chip", () => {
+    // The check reads insolvency, VAT and sanctions sources no chip names.
     expect(restrict([{ kind: "registry", registry: "ares" }])).toEqual([
       "execute_typescript",
       "list_matters_direct",
       "business_registry_lookup",
-      "counterparty_check",
     ]);
   });
 
@@ -254,19 +254,14 @@ describe("restrictChatToolsToSourceScope", () => {
       "execute_typescript",
       "list_matters_direct",
       "business_registry_lookup",
-      "counterparty_check",
       "infosoud_lookup_case",
     ]);
   });
 
-  it("drops the lookup when no named registry is enabled, and the check when none is named", () => {
-    const names = restrict([{ kind: "registry", registry: "krs" }]);
-
-    expect(names).not.toContain("business_registry_lookup");
-    expect(names).toContain("counterparty_check");
-    expect(
-      restrict([{ kind: "corpus", corpus: "case_law", country: "CZE" }]),
-    ).not.toContain("counterparty_check");
+  it("drops the lookup when no named registry is enabled", () => {
+    expect(restrict([{ kind: "registry", registry: "krs" }])).not.toContain(
+      "business_registry_lookup",
+    );
   });
 
   it("reports what it drops, for script calls", () => {
