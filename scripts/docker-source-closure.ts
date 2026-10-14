@@ -605,8 +605,8 @@ export const updateInstallToolingCopies = (root: string, write: boolean) => {
     ({ id }) => id === INSTALL_TOOLING_GENERATOR,
   );
   const block = generator?.blocks?.at(0);
-  if (block === undefined) {
-    panic("Missing API install tooling generator block");
+  if (generator === undefined || block === undefined) {
+    return panic("Missing API install tooling generator block");
   }
   const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
   if (tracked.exitCode !== 0) {
