@@ -9,6 +9,8 @@ import {
 } from "@/components/public-law-table/public-law-results-toolbar";
 import { NO_COLUMN_SIZING } from "@/components/public-law-table/public-law-table-layout.logic";
 import type { PublicLawTableLayout } from "@/components/public-law-table/public-law-table-layout.logic";
+import { SearchWidenedLine } from "@/features/case-law/components/search-widened-line";
+import type { CaseLawResultsLine } from "@/features/case-law/search-warnings.logic";
 
 /**
  * Pane widths the results toolbar is measured at: a phone, a split pane and
@@ -26,6 +28,14 @@ const BENCH_LAYOUT: PublicLawTableLayout = {
 
 const BENCH_QUERY =
   "kdy je možné pro opilost vyhodit zaměstnance bez výpovědní doby a jaké důkazy o opilosti musí zaměstnavatel předložit soudu";
+
+/** The case-law page's own widened-search line, so the bench measures it. */
+const BENCH_RESULTS_LINE: CaseLawResultsLine = {
+  surface: "resultsLine",
+  messageKey: "caseLaw.searchWarnings.resultsFor",
+  actionKey: "caseLaw.searchWarnings.searchEveryWord",
+  query: BENCH_QUERY,
+};
 
 const SORT_OPTIONS = [
   { value: "relevance", label: "Relevance" },
@@ -91,9 +101,10 @@ const BenchToolbar = () => {
       summary={
         <div className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5">
           <p className="text-xs tabular-nums">Page 1 · about 1,000 results</p>
-          <p className="min-w-0 truncate" title={BENCH_QUERY}>
-            Results for: {BENCH_QUERY}
-          </p>
+          <SearchWidenedLine
+            line={BENCH_RESULTS_LINE}
+            onSearchEveryWord={null}
+          />
         </div>
       }
     />
