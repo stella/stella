@@ -17,6 +17,7 @@ import { Button } from "@stll/ui/button";
 import { BookTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -27,13 +28,14 @@ import {
   createCaseDecisionViewTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
+import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
-import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
   AiHeadnotes,
@@ -126,6 +128,8 @@ type DecisionWorkspaceBaseProps = {
   decisionId: SafeId<"caseLawDecision">;
   /** The block the URL names, which the reader arrived at from a result row. */
   initialAnchorId?: string | undefined;
+  /** A repeated citation is a fresh landing on the same passage. */
+  landingSessionId?: string | undefined;
 };
 
 /**
@@ -181,8 +185,69 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   );
 };
 
+type ParagraphLanding = ReturnType<typeof decisionParagraphLanding>;
+
+const ReaderStatusNotices = ({
+  answersError,
+  foreignDecisionFailed,
+  isCreatingAnswer,
+  paragraphLanding,
+}: {
+  answersError: unknown;
+  foreignDecisionFailed: boolean;
+  isCreatingAnswer: boolean;
+  paragraphLanding: ParagraphLanding;
+}) => {
+  const t = useTranslations();
+  return (
+    <>
+      {answersError !== null && (
+        <p role="alert" className="text-destructive px-4 py-2 text-sm">
+          {readerAnswerFailureKind(answersError) === "budget"
+            ? t("readerAnswers.budgetError")
+            : t("readerAnswers.networkError")}
+        </p>
+      )}
+      {foreignDecisionFailed && (
+        <p role="alert" className="text-destructive px-4 py-2 text-sm">
+          {t("errors.actionFailed")}
+        </p>
+      )}
+      {isCreatingAnswer && (
+        <p role="status" className="text-muted-foreground px-4 py-2 text-sm">
+          {t("readerAnswers.loading")}
+        </p>
+      )}
+      {(paragraphLanding.type === "range" ||
+        paragraphLanding.type === "not-found") && (
+        <p
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+          className={cn(
+            paragraphLanding.type === "range"
+              ? "sr-only"
+              : "bg-muted text-muted-foreground px-4 py-2 text-sm",
+          )}
+        >
+          {t(
+            paragraphLanding.type === "range"
+              ? "caseLaw.paragraphRangeSelected"
+              : "caseLaw.paragraphRangeNotFound",
+            {
+              range: formatDecisionParagraphRange(paragraphLanding.range),
+              count:
+                paragraphLanding.range.to - paragraphLanding.range.from + 1,
+            },
+          )}
+        </p>
+      )}
+    </>
+  );
+};
+
 const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialAnchorId } = props;
+  const { decision, decisionId, initialAnchorId, landingSessionId } = props;
   const t = useTranslations();
   const provisions = useReaderProvisionMode();
   const ast = parseDocumentAst(decision.documentAst);
@@ -394,6 +459,9 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
 
   const [panelWidth, setPanelWidth] = useState(220);
+  // The same per-browser size the inspector's readers step, so a size chosen
+  // in either place holds in both.
+  const textScale = useWebReaderTextScale();
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
@@ -462,7 +530,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   // goes. A new decision starts the question over, and so does a new fragment
   // on the same one: stepping back to `#p-1` from `#p-2` keeps this component
   // mounted, so the decision alone cannot tell the two landings apart.
-  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}`;
+  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}#${landingSessionId ?? ""}`;
   const paragraphLanding = decisionParagraphLanding(ast, initialAnchorId);
   const resolvedLandingAnchorId =
     paragraphLanding.type === "anchor" ? paragraphLanding.anchorId : undefined;
@@ -479,6 +547,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
     containerRef: mainRef,
     documentAst: decision.documentAst,
     fragment: initialAnchorId,
+    sessionId: landingSessionId,
   });
 
   const jumpToAnchor = (anchorId: string) => {
@@ -624,6 +693,13 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ChromeHeaderActions>
+        <ZoomControls
+          atMax={textScale.atMax}
+          atMin={textScale.atMin}
+          level={textScale.level}
+          onReset={textScale.reset}
+          onZoom={textScale.zoom}
+        />
         <Button
           aria-label={t("caseLaw.reader.expandProvisions")}
           aria-pressed={provisions.expandProvisions}
@@ -739,62 +815,17 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
               />
             )}
             <div className="reader-scroll h-full overflow-y-auto" ref={mainRef}>
-              {answers.error !== null && (
-                <p role="alert" className="text-destructive px-4 py-2 text-sm">
-                  {readerAnswerFailureKind(answers.error) === "budget"
-                    ? t("readerAnswers.budgetError")
-                    : t("readerAnswers.networkError")}
-                </p>
-              )}
-              {foreignDecisionError !== undefined && (
-                <p role="alert" className="text-destructive px-4 py-2 text-sm">
-                  {t("errors.actionFailed")}
-                </p>
-              )}
-              {answers.isCreating && (
-                <p
-                  role="status"
-                  className="text-muted-foreground px-4 py-2 text-sm"
-                >
-                  {t("readerAnswers.loading")}
-                </p>
-              )}
-              {(paragraphLanding.type === "range" ||
-                paragraphLanding.type === "not-found") && (
-                <p
-                  role="status"
-                  aria-live="polite"
-                  aria-atomic="true"
-                  className={cn(
-                    paragraphLanding.type === "range"
-                      ? "sr-only"
-                      : "bg-muted text-muted-foreground px-4 py-2 text-sm",
-                  )}
-                >
-                  {paragraphLanding.type === "range"
-                    ? t("caseLaw.paragraphRangeSelected", {
-                        range: formatDecisionParagraphRange(
-                          paragraphLanding.range,
-                        ),
-                        count:
-                          paragraphLanding.range.to -
-                          paragraphLanding.range.from +
-                          1,
-                      })
-                    : t("caseLaw.paragraphRangeNotFound", {
-                        range: formatDecisionParagraphRange(
-                          paragraphLanding.range,
-                        ),
-                        count:
-                          paragraphLanding.range.to -
-                          paragraphLanding.range.from +
-                          1,
-                      })}
-                </p>
-              )}
+              <ReaderStatusNotices
+                answersError={answers.error}
+                foreignDecisionFailed={foreignDecisionError !== undefined}
+                isCreatingAnswer={answers.isCreating}
+                paragraphLanding={paragraphLanding}
+              />
               <div
                 className="grid max-lg:!grid-cols-[1fr]"
+                {...textScale.rootProps}
                 style={{
+                  ...textScale.rootProps.style,
                   gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
                 }}
               >
@@ -903,6 +934,17 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                   className="reader-paper min-w-0 py-8"
                   data-slot="reader-document-column"
                 >
+                  {/* Below lg the analysis column, and the offer in it, is
+                      not drawn; a visitor still has to learn the layer
+                      exists and that signing in opens it. */}
+                  {showAiNotes &&
+                    props.aiMode === "gated" &&
+                    props.onRequestAnalysis !== undefined &&
+                    analysisState.status === "idle" && (
+                      <NarrowGatedAnalysisInvitation
+                        onRequest={props.onRequestAnalysis}
+                      />
+                    )}
                   <DecisionText
                     surface="full-reader"
                     aiHeadnotes={aiHeadnotes}
@@ -936,6 +978,7 @@ const DecisionWorkspaceContent = (props: DecisionWorkspaceProps) => {
                           )
                         : undefined
                     }
+                    landingSessionId={landingSessionId}
                     provisionAnchors={provisionAnchors}
                     sectionMap={showAiNotes ? sectionMap : undefined}
                     statuteCitationAnchors={statuteCitationAnchors}
@@ -998,6 +1041,37 @@ const AnalysisLoader = () => {
           )}
         </div>
       ))}
+    </div>
+  );
+};
+
+/**
+ * The analysis column's offer, above the text where that column is not drawn.
+ */
+const NarrowGatedAnalysisInvitation = ({
+  onRequest,
+}: {
+  onRequest: () => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <div
+      aria-label={t("caseLaw.notesFilter.ai")}
+      className="reader-chrome mx-auto mb-6 flex max-w-(--reader-measure) flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5 lg:hidden"
+      data-slot="gated-analysis-invitation-narrow"
+      role="region"
+    >
+      <SparklesIcon
+        aria-hidden="true"
+        className="text-muted-foreground size-4 shrink-0"
+      />
+      <p className="text-foreground-strong-muted min-w-0 flex-1 text-sm leading-snug">
+        {t("caseLaw.analysis.invitation")}
+      </p>
+      <Button onClick={onRequest} size="sm" variant="muted">
+        {t("auth.signIn")}
+      </Button>
     </div>
   );
 };

@@ -15,7 +15,10 @@
 //    by hand. The pairing is checked per file, so a glyph bound to a variable
 //    first (`const icon = <MatterIcon … />`) is still caught. Shells alone
 //    (anonymization pills, citation chips with file/mail/globe glyphs, paste
-//    chips) and glyphs alone (tables, pickers, headers) stay legal.
+//    chips) and glyphs alone (tables, pickers, headers) stay legal. A
+//    citation chip that draws a file-type glyph takes it from the references
+//    module's `ReferenceFileTypeIcon`, which is not a reference glyph here, so
+//    the file stays legal while the glyph still follows the shared rule.
 // 2. The reference href codec. Parsing or building `#stella-entity=`,
 //    `#stella-workspace=`, `#stella-decision…` or `#stella-user=` links (the
 //    `@stll/api-contract` codec, or a string or template literal that spells
@@ -43,7 +46,7 @@ const FIXTURE_SUFFIX =
 
 // module specifier -> exported names that draw a reference's glyph
 const REFERENCE_GLYPHS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ["@/components/matter-icon", new Set(["MatterIcon"])],
+  ["@stll/ui/matter-icon", new Set(["MatterIcon"])],
   [
     "@/components/workspaces/entity-kind-icon",
     new Set(["EntityIcon", "EntityKindIcon"]),

@@ -1,6 +1,7 @@
 import * as v from "valibot";
 
 import {
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
   ENTITY_KINDS,
   NUMBER_SERIES_DOCUMENT_TYPES,
   TIME_ENTRY_ACTIVITY_GROUPS,
@@ -18,11 +19,6 @@ import {
   READER_ANNOTATION_STYLES,
   READER_ANNOTATION_VISIBILITIES,
 } from "@stll/api-contract/legal-reader-annotations";
-import {
-  LEGISLATION_EXPRESSION_KINDS,
-  LEGISLATION_WINDOW_DISPOSITION_BASES,
-  LEGISLATION_WINDOW_DISPOSITIONS,
-} from "@stll/api-contract/legislation-expression";
 import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
 import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
 import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
@@ -60,10 +56,6 @@ import {
 } from "@/api/lib/document-processing-contract";
 import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
 import {
-  PROVISION_ABSENCE_STATUSES,
-  PROVISION_STATUS,
-} from "@/api/lib/legal-search/legislation-provision-vocabulary";
-import {
   SANCTIONS_CLASSIFICATIONS,
   SANCTIONS_ENTITY_TYPES,
   SANCTIONS_FIELD_COMPARISONS,
@@ -79,6 +71,7 @@ import {
   caseNumberTypeProjection,
   searchTotalProjection,
 } from "./case-law-result-projections";
+import { statuteExpressionLabel } from "./legislation-result-projections";
 import {
   chatEntityRef,
   chatRef,
@@ -90,9 +83,11 @@ import {
 } from "./projection-schema";
 
 export {
-  SEARCH_CASE_LAW_PROJECTION,
-  LOOKUP_CASE_LAW_PROJECTION,
-} from "./case-law-result-projections";
+  READ_STATUTE_PROVISIONS_PROJECTION,
+  READ_PROVISION_HISTORY_PROJECTION,
+} from "./legislation-result-projections";
+
+export { SEARCH_CASE_LAW_PROJECTION } from "./case-law-result-projections";
 
 /**
  * Per-tool chat projection schemas, one artifact per projected registry tool.
@@ -1515,28 +1510,40 @@ const citationTreatmentCountsProjection = v.strictObject({
   v.OptionalSchema<v.NumberSchema<undefined>, undefined>
 >);
 
+const topCitingItemsProjection = v.array(
+  v.strictObject({
+    url: v.optional(v.string()),
+    caseNumber: v.string(),
+    court: v.string(),
+    date: v.optional(v.string()),
+    decisionId: passthroughId(),
+  }),
+);
+
 // A citing or cited decision as the summary names it: no row ids, and an id
 // only where another tool can act on it.
 const caseLawCitationSummaryProjection = v.strictObject({
   citedBy: v.strictObject({
     // Citing references: a decision citing this one twice counts twice.
     count: v.number(),
-    // The scan behind the count stopped at its cap: the count is a lower
-    // bound, and `top` ranks only the citations it read.
+    // A lower-bound count. Ranking precision is carried independently by top.
     capped: v.optional(v.literal(true)),
     polarity: v.optional(citationTreatmentCountsProjection),
-    top: v.optional(
-      v.array(
+    top: v.variant("precision", [
+      projectionBranch(
         v.strictObject({
-          url: v.optional(v.string()),
-          caseNumber: v.string(),
-          court: v.string(),
-          date: v.optional(v.string()),
-          // Always held: read_case_law_decision takes it.
-          decisionId: passthroughId(),
+          precision: v.literal("exact"),
+          items: topCitingItemsProjection,
         }),
       ),
-    ),
+      projectionBranch(
+        v.strictObject({
+          precision: v.literal("bounded"),
+          candidateWindow: v.literal(CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT),
+          items: topCitingItemsProjection,
+        }),
+      ),
+    ]),
   }),
   cites: v.strictObject({
     count: v.number(),
@@ -1774,19 +1781,6 @@ export const READ_CASE_LAW_CITATIONS_PROJECTION = v.strictObject({
 });
 
 /**
- * What a version's dates mean: its kind, and whether its window is one the
- * text applied in. A window labelled anything but `effective` never applied,
- * however its dates read.
- */
-const statuteExpressionLabel = {
-  expressionKind: v.picklist(LEGISLATION_EXPRESSION_KINDS),
-  windowDisposition: v.picklist(LEGISLATION_WINDOW_DISPOSITIONS),
-  windowDispositionBasis: v.nullable(
-    v.picklist(Object.values(LEGISLATION_WINDOW_DISPOSITION_BASES).flat()),
-  ),
-} as const;
-
-/**
  * The window of a Work's consolidated versions a statute read returns.
  * Newest validity window first, bounded by the versions page size: enough to
  * see which consolidations exist, not the whole amendment history.
@@ -1892,110 +1886,6 @@ export const READ_STATUTE_PROJECTION = v.strictObject({
     ...statuteExpressionLabel,
     versions: v.array(STATUTE_VERSION_PROJECTION),
   }),
-});
-
-const provisionEntrySubject = {
-  // The publisher's anchor, echoed so a batch reply says which entry it is.
-  anchor: passthroughId(),
-  eli: v.string(),
-} as const;
-
-/**
- * read_statute_provisions. Source of truth:
- * `handleReadStatuteProvisionsTool` (`legislation-tools.ts`). One entry per
- * requested item, in input order: a batch read reports per entry rather than
- * failing whole, so the union is discriminated on `status` and every absence
- * carries its own message.
- */
-export const READ_STATUTE_PROVISIONS_PROJECTION = v.strictObject({
-  items: v.array(
-    v.variant("status", [
-      projectionBranch(
-        v.strictObject({
-          ...provisionEntrySubject,
-          appUrl: v.nullable(v.string()),
-          url: v.nullable(publicUrl()),
-          source_url: v.optional(publicUrl()),
-          documentId: passthroughId(),
-          resourceName: passthroughId(),
-          status: v.literal(PROVISION_STATUS.found),
-          text: v.string(),
-          truncated: v.boolean(),
-          versionValidFrom: v.nullable(v.string()),
-          versionValidTo: v.nullable(v.string()),
-        }),
-      ),
-      ...PROVISION_ABSENCE_STATUSES.map((status) =>
-        projectionBranch(
-          v.strictObject({
-            ...provisionEntrySubject,
-            appUrl: v.optional(v.nullable(v.string())),
-            url: v.optional(v.nullable(publicUrl())),
-            source_url: v.optional(publicUrl()),
-            message: v.string(),
-            status: v.literal(status),
-          }),
-        ),
-      ),
-      // An entry the input schema refused. It carries its position and its
-      // issues rather than the subject fields, because the subject is what
-      // failed to parse; the entries beside it are still answered.
-      projectionBranch(
-        v.strictObject({
-          index: v.number(),
-          issues: v.array(
-            v.strictObject({ message: v.string(), path: v.string() }),
-          ),
-          message: v.string(),
-          status: v.literal(PROVISION_STATUS.invalid),
-        }),
-      ),
-    ]),
-  ),
-});
-
-const statuteProvisionVersion = {
-  appUrl: v.nullable(v.string()),
-  url: v.nullable(publicUrl()),
-  source_url: v.optional(publicUrl()),
-  documentId: passthroughId(),
-  resourceName: passthroughId(),
-  versionValidFrom: v.nullable(v.string()),
-  versionValidTo: v.nullable(v.string()),
-  ...statuteExpressionLabel,
-} as const;
-
-/**
- * read_provision_history. Source of truth: `handleReadProvisionHistoryTool`
- * (`legislation-tools.ts`) over `readProvisionHistoryHandler`. A version in
- * which the anchor is absent is dropped by that handler, so every item here
- * has an occurrence; whether its wording travels is a separate publisher
- * permission, so the items are discriminated on the same `status` vocabulary
- * the batch provision read answers in.
- */
-export const READ_PROVISION_HISTORY_PROJECTION = v.strictObject({
-  ...provisionEntrySubject,
-  items: v.array(
-    v.variant("status", [
-      projectionBranch(
-        v.strictObject({
-          ...statuteProvisionVersion,
-          status: v.literal(PROVISION_STATUS.found),
-          text: v.string(),
-          truncated: v.boolean(),
-        }),
-      ),
-      projectionBranch(
-        v.strictObject({
-          ...statuteProvisionVersion,
-          message: v.string(),
-          status: v.literal(PROVISION_STATUS.textWithheld),
-        }),
-      ),
-    ]),
-  ),
-  // Opaque `[versionValidFrom, documentId]` cursor, base64url-encoded.
-  nextCursor: v.nullable(passthroughId()),
 });
 
 /**

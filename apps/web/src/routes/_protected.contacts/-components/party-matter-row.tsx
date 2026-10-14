@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
-import { MatterIcon } from "@/components/matter-icon";
+import { MatterIcon } from "@stll/ui/matter-icon";
+
 import { MatterRefLink } from "@/components/matter-ref-link";
 import {
   PARTY_ROLE_LABEL_KEYS,

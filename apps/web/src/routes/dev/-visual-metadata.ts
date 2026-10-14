@@ -23,6 +23,7 @@ export const playbookEditorStates = Object.keys(playbookEditorFixtures);
 
 // Browser tests share the fixture census without importing the app graph.
 export const visualRegistry = {
+  "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },

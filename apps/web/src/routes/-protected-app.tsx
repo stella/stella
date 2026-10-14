@@ -1,11 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useCallback, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -14,19 +7,15 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  CogIcon,
-  NewChatIcon,
-  PanelRightIcon,
-  PinIcon,
-  PinOffIcon,
-} from "@stll/ui/icons";
+import { CogIcon, PanelRightIcon, PinIcon, PinOffIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
 } from "@stll/ui/inspector";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
+import type { MatterChromeStyle } from "@stll/ui/matter-colors";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -50,12 +39,10 @@ import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
-import {
-  initializeInspectorTabBroadcast,
-  useInspectorTabsStore,
-} from "@/components/inspector/inspector-tabs-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
+import { useInspectorTabPersistence } from "@/components/inspector/use-inspector-tab-persistence";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { QuickEntry } from "@/components/quick-entry";
@@ -79,16 +66,12 @@ import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInboxPreviewEnabled } from "@/hooks/use-inbox-preview";
 import { useI18nStore } from "@/i18n/i18n-store";
-import { useStorageOwner } from "@/lib/account/use-owner-scoped-state";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
-import type { MatterChromeStyle } from "@/lib/matter-colors";
-import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -97,6 +80,7 @@ import {
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
+import { ChatMenuContent } from "@/routes/-protected-app/-components/chat-menu-content";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
@@ -110,6 +94,12 @@ const LazyInspectorPanel = lazy(
       default: m.InspectorPanel,
     })),
 );
+
+const LazyNewChatMenuItem = lazy(async () => {
+  const module =
+    await import("@/routes/-protected-app/-components/new-chat-menu-item");
+  return { default: module.NewChatMenuItem };
+});
 
 // Visual shell for the inspector rail while the panel chunk is
 // loading. Mirrors the real rail's chrome (top toggle, bottom
@@ -203,7 +193,6 @@ export const ProtectedAppFrame = ({
     };
   });
   const analyticsUser = user;
-  const inspectorOwner = useStorageOwner();
   const inspectorBroadcastUserId = user.id;
   const inspectorBroadcastOrganizationId = user.activeOrganizationId;
   const workspaceMatch = useMatch({
@@ -248,22 +237,10 @@ export const ProtectedAppFrame = ({
   });
 
   // Restore the authenticated tab scope before any previous scope can paint.
-  useLayoutEffect(() => {
-    if (
-      inspectorOwner.kind !== "user" ||
-      inspectorOwner.userId !== inspectorBroadcastUserId
-    ) {
-      return undefined;
-    }
-    return initializeInspectorTabBroadcast({
-      organizationId: inspectorBroadcastOrganizationId,
-      userId: inspectorBroadcastUserId,
-    });
-  }, [
-    inspectorBroadcastOrganizationId,
-    inspectorBroadcastUserId,
-    inspectorOwner,
-  ]);
+  useInspectorTabPersistence({
+    organizationId: inspectorBroadcastOrganizationId,
+    userId: inspectorBroadcastUserId,
+  });
 
   // Mod+J — toggles the inspector pane. With tabs already open it
   // restores or hides the pane regardless of route, so users can
@@ -524,17 +501,12 @@ function ProtectedContent() {
           />
           {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
           <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
-            <CapabilityAction action={{ capability: "ai" }} surface="menu">
-              {(capabilityProps) => (
-                <MenuItem
-                  onClick={handleOpenNewChatFromMenu}
-                  {...capabilityProps}
-                >
-                  <NewChatIcon />
-                  {t("chat.newChat")}
-                </MenuItem>
-              )}
-            </CapabilityAction>
+            <ChatMenuContent label={t("chat.newChat")}>
+              <LazyNewChatMenuItem
+                label={t("chat.newChat")}
+                onClick={handleOpenNewChatFromMenu}
+              />
+            </ChatMenuContent>
           </MenuPopup>
         </Menu>
       </header>

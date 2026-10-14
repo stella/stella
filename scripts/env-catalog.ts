@@ -204,6 +204,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "SESSION_LIFETIME_CAP_ENABLED",
   "SES_CONFIGURATION_SET",
   "SES_REGION",
+  "STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV",
   "SKIP_MIGRATION_CHECK",
   "SMTP_HOST",
   "SMTP_PORT",
@@ -303,6 +304,8 @@ const requestBudgetUnitDescription = (name: string): string => {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV:
+    "Unsafe local development opt-in: set to 1 only with an explicitly enabled local development runtime. Strict runtimes refuse this setting.",
   ...Object.fromEntries(
     Object.keys(rateLimitBudgetEnvSchema).map((name) => {
       const unit = requestBudgetUnitDescription(name);
@@ -594,9 +597,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   STELLA_CLIENT_ADDRESS_FORMAT:
     "How STELLA_CLIENT_ADDRESS_HEADER spells the address: with-port (default, e.g. cloudfront-viewer-address) or bare.",
   STELLA_ORIGIN_VERIFY_SECRET:
-    "Comma-separated values the edge sends in x-stella-origin-verify (current, then next during a rotation). When set, the client address header is read only from requests carrying one of them.",
-  STELLA_FRONTEND_VERIFY_SECRET:
-    "Comma-separated values the frontend edge sends in x-stella-frontend-verify (current, then next during a rotation). From STELLA_TRUSTED_PROXY_CIDRS peers carrying one, the browser's bare address in x-stella-viewer-address is read first; unset, that header is never read.",
+    "Current value the edge sends in x-stella-origin-verify. One value of at least 32 characters; the client address header accepts this or STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS.",
+  STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS:
+    "Optional previous origin value accepted during a rotation. One value of at least 32 characters, stored separately from STELLA_ORIGIN_VERIFY_SECRET.",
   STELLA_TRUSTED_PROXY_CIDRS:
     "Comma-separated CIDRs for proxies directly in front of the API. Never trust public client ranges.",
   STELLA_ANNOUNCEMENT_OPERATOR_USER_IDS:
@@ -931,6 +934,8 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   SES_CONFIGURATION_SET: ENV_CREDENTIAL_KIND.notCredential,
   SES_REGION: ENV_CREDENTIAL_KIND.notCredential,
   SES_SECRET_ACCESS_KEY: ENV_CREDENTIAL_KIND.credential,
+  STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV:
+    ENV_CREDENTIAL_KIND.notCredential,
   SKIP_MIGRATION_CHECK: ENV_CREDENTIAL_KIND.notCredential,
   SMOKE_SESSION_SECRET: ENV_CREDENTIAL_KIND.credential,
   SMTP_HOST: ENV_CREDENTIAL_KIND.notCredential,
@@ -948,9 +953,9 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   STELLA_COLLAB_SERVICE_TOKEN: ENV_CREDENTIAL_KIND.credential,
   OPERATOR_API_TOKEN: ENV_CREDENTIAL_KIND.credential,
   STELLA_COMMIT_SHA: ENV_CREDENTIAL_KIND.notCredential,
-  STELLA_FRONTEND_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
   STELLA_OCR_PDF_FONT_PATH: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_ORIGIN_VERIFY_SECRET: ENV_CREDENTIAL_KIND.credential,
+  STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS: ENV_CREDENTIAL_KIND.credential,
   STELLA_SIGNUP_RATE_LIMIT_IP_SOURCE: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_TRUSTED_PROXY_CIDRS: ENV_CREDENTIAL_KIND.notCredential,
   STELLA_USAGE_POLICY_SEEDS: ENV_CREDENTIAL_KIND.notCredential,
@@ -1348,6 +1353,32 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Windows dry-run receipts bind the build profile and executed workflow revision.
+  "WINDOWS_BUILD_PROFILE",
+  "WINDOWS_WORKFLOW_SHA",
+  // Ordered frozen install flags shared by the scoped CI cache and installer.
+  "STELLA_CI_INSTALL_FLAGS",
+  // Installer budgets warn; verified restore outcome and key identify timing.
+  "STELLA_CI_INSTALL_BUDGET_MS",
+  "STELLA_CI_INSTALL_RESTORE",
+  "STELLA_CI_INSTALL_KEY",
+  // Scoped install-store ownership and phase measurement.
+  "BUN_INSTALL_GLOBAL_STORE",
+  "CACHE_HIT",
+  "STORE_KEY",
+  "START_MS",
+  "INSTALL_LOG",
+  "RESTORE_MS",
+  "INSTALL_MS",
+  "INSTALL_OUTCOME",
+  // Manual regeneration binds the requested PR and checks available job services.
+  "PR_NUMBER",
+  "JOB_SERVICES",
+  // Workflow lint resolves the checksum-verified actionlint executable.
+  "ACTIONLINT_BIN",
+  // CI verification steps set it; workspace hygiene then requires prepared
+  // API typecheck configs instead of skipping their install-time absence.
+  "STELLA_VERIFY",
   "QUERY_PERF_BASELINE_MODE",
   "QUERY_PERF_BASE_REF",
   "QUERY_PERF_CHANGED_PATHS",
@@ -1495,6 +1526,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
+  // Worker-local custom lint reports, merged before the coverage census.
+  "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
   "PRODUCT_MEDIA_S3_BUCKET",
@@ -1530,15 +1563,27 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
+  // Trusted release-proof controls passed between workflow steps.
+  "PROOF_MAIN_BASE",
+  "RELEASE_PR_HEAD",
+  "RELEASE_PROOF_REPOSITORY",
+  "RELEASE_TREE_PROOF_VERIFIER",
+  "REUSE_RUN",
   "RELEASE_REF",
   "REPO",
   "REPOSITORY",
+  // Main PR-depth status publisher inputs.
+  "RESULTS",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // scripts/retry.sh: `warning` for callers that tolerate the failure.
+  "RETRY_FAILURE_LEVEL",
   // Credential used only by the restricted account canary.
   "REVIEW_ACCOUNT_PASSWORD",
+  "RUN_ID",
   // Nightly issue reporter: workflow run linked from the failure issue.
   "RUN_URL",
+  "SHA",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
@@ -1560,6 +1605,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DESKTOP_RETRY_PAUSE_SECONDS",
   "STELLA_DESKTOP_SMOKE_API_URL",
   "STELLA_DEV_INSTANCE",
+  "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
   "STELLA_MERGE_HOLD",
   "STELLA_PORT_OFFSET",
@@ -1581,6 +1627,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Queue proof outcomes and resolved hosted-runner image for static receipts.
+  "CHECK_OUTCOMES",
+  "ImageOS",
+  "ImageVersion",
+  // Internal handoff between the code-quality supervisor and its process group.
+  "CODE_QUALITY_PROCESS_GROUP",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",
@@ -1618,12 +1670,19 @@ export const AMBIENT_ENV_KEYS = new Set([
   "CARGO_MANIFEST_DIR",
   "CARGO_PKG_VERSION",
   "CI",
-  // Read by the Docker CLI; fixtures point it at an empty config.
+  // Captured by the Docker transport owner and consumed by the Docker CLI.
   "DOCKER_CONFIG",
+  "DOCKER_HOST",
+  "DOCKER_CONTEXT",
+  "DOCKER_TLS",
+  "DOCKER_TLS_VERIFY",
+  "DOCKER_CERT_PATH",
   "ECS_CONTAINER_METADATA_URI_V4",
   "GITHUB_TOKEN",
   "GH_REPO",
   "GH_TOKEN",
+  // Test seam: the GitHub retry wrapper a status script calls.
+  "GH_RETRY",
   "HOSTNAME",
   "NODE_ENV",
   // Read by the provider SDK; managed request tests verify it cannot enable logging.

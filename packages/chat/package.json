@@ -1,6 +1,6 @@
 {
   "name": "@stll/chat",
-  "version": "0.1.39",
+  "version": "0.1.40",
   "description": "Typed React chat composer, message stream, model selector, and transport runtime primitives.",
   "keywords": [
     "ai",
@@ -50,7 +50,7 @@
     "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')"
   },
   "dependencies": {
-    "@ag-ui/core": "1.0.0",
+    "@ag-ui/core": "1.0.2",
     "@stll/ai-catalog": "workspace:^",
     "@stll/ui": "workspace:^",
     "@tanstack/ai-client": "catalog:",

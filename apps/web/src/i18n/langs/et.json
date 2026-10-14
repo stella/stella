@@ -535,6 +535,16 @@
       "createInvoice": "Loo arve",
       "dueDate": "Tähtaeg",
       "editInvoice": "Muuda arvet",
+      "export": {
+        "accounting": "Raamatupidamise import",
+        "eBilling": "E-arveldus",
+        "eso9": "ESO9 impordileht (XLSX)",
+        "exporting": "Eksporti valmistatakse ette…",
+        "isdoc": "ISDOC e-arve (ABRA Gen jt)",
+        "spreadsheets": "Tabelid",
+        "xlsx": "Arved (XLSX)",
+        "xlsxLines": "Arveread (XLSX)"
+      },
       "finalize": "Lõpeta",
       "invoiceDate": "Arve kuupäev",
       "invoiceDetail": "Arve detailid",
@@ -776,6 +786,9 @@
       "none": "Viiteid pole veel salvestatud.",
       "openAtCitation": "Ava viite kohal",
       "openDecision": "Ava lahend",
+      "paragraphLabel": "Punkt {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, punkt {paragraph}",
       "partialSummary": "Viidete koguarvud ja ajajoon on osalised.",
       "passageNotFound": "Viitavat lõiku tekstist ei leitud",
       "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
@@ -1270,6 +1283,11 @@
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
+    "history": {
+      "matterUnavailable": "See toimik pole saadaval",
+      "older": "Vanemad",
+      "previous7Days": "Eelmised 7 päeva"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
@@ -1421,17 +1439,23 @@
     },
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
+    "sendErrorConnectionFailed": "Vestlusega ühenduse loomine ebaõnnestus. Kontrollige ühendust ja proovige uuesti.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
     "sendErrorModelUnavailable": "Seadistatud AI-mudel pole enam saadaval. Palu töökoha administraatoril mudelit organisatsiooni seadetes uuendada.",
+    "sendErrorNotStarted": "Vestlus on veel hõivatud. Oodake veidi ja proovige uuesti.",
+    "sendErrorPreparationFailed": "Sõnumit ei õnnestunud ette valmistada. Avage vestlus uuesti ja proovige veel kord.",
     "sendErrorProviderBilling": "AI-teenusepakkuja teatas arveldusprobleemist. Võta ühendust tööruumi administraatoriga.",
     "sendErrorProviderCredentialsRejected": "AI-teenusepakkuja lükkas seadistatud mandaadi tagasi. Palu töökoha administraatoril kontrollida API-võtit organisatsiooni seadetes.",
     "sendErrorProviderUnavailable": "AI-teenusepakkuja pole hetkel saadaval. Proovi hetke pärast uuesti.",
     "sendErrorQuotaExhausted": "AI teenusepakkuja kvoot on täis. Proovi minuti pärast uuesti või võta ühendust tööruumi administraatoriga.",
     "sendErrorStreamIncomplete": "AI vastus katkes enne, kui see valmis sai. Proovi uuesti.",
+    "sendErrorTimedOut": "Vestlusteenus ei vastanud õigel ajal. Proovige uuesti.",
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
+    "signInToChat": "Logi sisse, et sellest dokumendist vestelda",
+    "signInToChatAbout": "Logi sisse, et vestelda:",
     "skills": {
       "scope": {
         "private": "Sinu AI oskused",
@@ -1762,6 +1786,8 @@
     "citations": "Viited",
     "clauses": "Klauslid",
     "clearDate": "Tühjenda kuupäev",
+    "clearFilters": "Tühjenda filtrid",
+    "clearSearch": "Tühjenda otsing",
     "close": "Sulge",
     "closeAll": "Sulge kõik",
     "closeOthers": "Sulge teised",
@@ -1792,6 +1818,7 @@
       "nextDecade": "Järgmine kümnend",
       "nextMonth": "Järgmine kuu",
       "nextYear": "Järgmine aasta",
+      "outOfRange": "Valige kuupäev lubatud vahemikust.",
       "previousDecade": "Eelmine kümnend",
       "previousMonth": "Eelmine kuu",
       "previousYear": "Eelmine aasta",
@@ -2093,28 +2120,27 @@
     "showAllPermissions": "{count, plural, one {Näita õigust} other {Näita kõiki # õigust}}",
     "signedInAs": "Sisse logitud kui <email>{accountEmail}</email>",
     "summaryAdminRead": "auditilogi",
-    "summaryAdminWrite": "organisatsiooni liikmed ja seaded, sealhulgas nende kustutamine",
-    "summaryBillingWrite": "ajakirjed, sealhulgas nende kustutamine",
-    "summaryChat": "vestlused, sealhulgas nende kustutamine",
-    "summaryContactsWrite": "kontaktid, sealhulgas nende kustutamine",
-    "summaryDocumentsWrite": "dokumendid, sealhulgas nende kustutamine",
+    "summaryAdminWrite": "organisatsiooni liikmed ja seaded",
+    "summaryBillingWrite": "ajakirjed",
+    "summaryChat": "vestlused",
+    "summaryContactsWrite": "kontaktid",
+    "summaryDocumentsWrite": "dokumendid",
     "summaryExternalMcps": "ühendatud välised tööriistad",
-    "summaryFeedback": "tagasiside",
-    "summaryKnowledgeWrite": "klauslid ja playbookid, sealhulgas klauslite kustutamine",
+    "summaryKnowledgeWrite": "klauslid ja playbookid",
     "summaryLawRead": "avalikke õigusakte ja kohtupraktikat",
-    "summaryLineChange": "<group>Saab muuta:</group> {items} ({count})",
+    "summaryLineChange": "<group>Loomine ja muutmine:</group> {items}",
     "summaryLineOther": "<group>Lisaks:</group> {items}",
-    "summaryLineRead": "<group>Saab lugeda:</group> {items} ({count})",
-    "summaryMattersWrite": "toimikud ja ülesanded, sealhulgas nende kustutamine",
-    "summaryOfflineAccess": "sisselogituks jäämine",
-    "summaryOnboarding": "praktikajurisdiktsioonid",
+    "summaryLineRead": "<group>Lugemine:</group> {items}",
+    "summaryLineUse": "<group>Kasutamine:</group> {items}",
+    "summaryMattersWrite": "toimikud ja ülesanded",
     "summaryProfile": "profiil",
     "summaryRead": "dokumendid, toimikud ja kontaktid",
     "summaryReadAnonymized": "anonüümitud dokumendid ja toimikud",
     "summarySearch": "otsing",
     "summarySearchAnonymized": "anonüümitud otsing",
-    "summarySkills": "oskused, sealhulgas nende kustutamine",
-    "summaryTemplates": "dokumendimallid, sealhulgas nende kustutamine",
+    "summarySkills": "oskused",
+    "summaryStaySignedIn": "Jääda sisselogituks",
+    "summaryTemplates": "dokumendimallid",
     "summaryTemplatesAnonymized": "anonüümitud dokumendimallid",
     "title": "Anna juurdepääs",
     "unverifiedApp": "Kinnitamata rakendus",
@@ -3142,14 +3168,14 @@
         "steps": {
           "basics": {
             "body": "Lisa nimi ja kirjeldus. Vajadusel piira see ühe dokumendiliigiga.",
-            "title": "Anna juhendile nimi"
+            "title": "Anna playbookile nimi"
           },
           "create": {
-            "body": "Alusta tühja juhendiga.",
-            "title": "Loo juhend"
+            "body": "Alusta tühja playbookiga.",
+            "title": "Loo playbook"
           },
           "overview": {
-            "body": "Juhend säilitab küsimused ja reeglid teiste dokumentide jaoks.",
+            "body": "Playbook säilitab küsimused ja reeglid teiste dokumentide jaoks.",
             "title": "Salvesta ülevaatamise käik"
           },
           "positions": {
@@ -3157,7 +3183,7 @@
             "title": "Lisa ülevaatuse reeglid"
           }
         },
-        "title": "Loo juhend"
+        "title": "Loo playbook"
       },
       "tabularReview": {
         "description": "Eralda vastused paljudest failidest korraga",
@@ -3590,6 +3616,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Looge lepingute ülevaatamise playbook seisukoht seisukoha haaval, tuginedes oma varem allkirjastatud lepingutele, lühikesele intervjuule ja turul tavapärastele standarditele.",
+          "name": "Loo playbook"
+        }
+      },
       "builtInSection": "Sisseehitatud oskused",
       "deleteFile": "Kustuta fail",
       "deleteFileConfirm": "Kas kustutada fail? Seda ei saa tagasi võtta.",
@@ -4117,7 +4149,6 @@
     "appsSubtitle": "stella töötab ka väljaspool brauserit: teie töölaual ja teie AI-assistendis. Selle seadistuse juurde saate alati hiljem tagasi tulla.",
     "appsTitle": "Hankige stella igale poole",
     "catalogueAlwaysOn": "Alati sees",
-    "catalogueClearSearch": "Tühjenda otsing",
     "catalogueCommunityHeading": "Muud",
     "catalogueContinueWithCount": "{count, plural, one {Jätka # tööriistaga} other {Jätka # tööriistaga}}",
     "catalogueDetailAbout": "Teave",
@@ -4419,7 +4450,7 @@
         "governingLaw": "Kohaldatav õigus",
         "liabilityCap": "Vastutuse ülempiir",
         "missing": "Puudub",
-        "outsidePlaybook": "Ei vasta juhendile",
+        "outsidePlaybook": "Ei vasta playbookile",
         "termination": "Lepingu lõpetamine"
       },
       "searchPlaceholder": "Mida sa tegema pead?",
@@ -6397,7 +6428,6 @@
         "year": "Aasta"
       },
       "cannotDeleteRequired": "Vähemalt üks seda tüüpi vaade on nõutav",
-      "clearFilters": "Tühjenda filtrid",
       "copySuffix": "{name} (koopia)",
       "deleteView": "Kustuta vaade",
       "exportCsv": "Ekspordi CSV",

@@ -328,28 +328,29 @@ test("registration settings supply bounded operator defaults", () => {
 
 test("the client address header cannot reuse a header the API owns", () => {
   const schema = envApiServerSchema.STELLA_CLIENT_ADDRESS_HEADER;
-  // The frontend address header is trusted only beside the frontend value;
-  // naming it here would trust a browser-set value beside the origin value.
-  for (const name of [
-    "x-stella-client-address",
-    "X-Stella-Origin-Verify",
-    "x-stella-frontend-verify",
-    "X-Stella-Viewer-Address",
-  ]) {
+  for (const name of ["x-stella-client-address", "X-Stella-Origin-Verify"]) {
     expect(v.safeParse(schema, name).success).toBe(false);
   }
   expect(v.safeParse(schema, "cloudfront-viewer-address").success).toBe(true);
 });
 
-test("edge verify values must each be long enough not to be guessed", () => {
-  const long = "a".repeat(32);
+test("origin verify values are single values of at least 32 characters", () => {
+  const current = "a".repeat(32);
+  const previous = "b".repeat(32);
   for (const schema of [
     envApiServerSchema.STELLA_ORIGIN_VERIFY_SECRET,
-    envApiServerSchema.STELLA_FRONTEND_VERIFY_SECRET,
+    envApiServerSchema.STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS,
   ]) {
     expect(v.safeParse(schema, undefined).success).toBe(true);
-    expect(v.safeParse(schema, `${long},${"b".repeat(32)}`).success).toBe(true);
-    for (const invalid of ["a".repeat(31), `${long},short`, `${long},`]) {
+    expect(v.safeParse(schema, current).success).toBe(true);
+    expect(v.safeParse(schema, previous).success).toBe(true);
+    expect(v.parse(schema, `${current}\n`)).toBe(current);
+    expect(v.parse(schema, ` ${previous} `)).toBe(previous);
+    for (const invalid of [
+      "a".repeat(31),
+      `${"a".repeat(31)}\n`,
+      `${current},${previous}`,
+    ]) {
       expect(v.safeParse(schema, invalid).success).toBe(false);
     }
   }

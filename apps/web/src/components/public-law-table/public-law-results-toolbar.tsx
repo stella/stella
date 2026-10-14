@@ -260,7 +260,7 @@ export const PublicLawFilterChips = ({
         type="button"
         variant="ghost"
       >
-        {t("workspaces.views.clearFilters")}
+        {t("common.clearFilters")}
       </Button>
     </div>
   );
