@@ -1,12 +1,9 @@
 import { panic } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import { listSkillMetadata } from "@stll/skills";
-
 import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
 import { chatThreadOptions } from "@/features/chat/queries";
 import {
-  PLAYBOOK_BUILDER_SKILL_NAME,
   resolveThreadActiveSkill,
   setThreadActiveSkill,
   useThreadActiveSkillStore,
@@ -140,10 +137,4 @@ test("a thread's skill leaves its cache key unchanged", () => {
   expect(
     queryKey({ allowMissingThread: true, getActiveSkill: () => SKILL }),
   ).toEqual(queryKey({ allowMissingThread: true }));
-});
-
-test("the playbook builder's name names a shipped built-in skill", () => {
-  expect(listSkillMetadata().map(({ name }) => name)).toContain(
-    PLAYBOOK_BUILDER_SKILL_NAME,
-  );
 });

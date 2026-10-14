@@ -5,9 +5,8 @@ import type { IntlConfig } from "use-intl";
 import type { LocaleMessages } from "@/i18n/i18n-store";
 import type I18nMessages from "@/i18n/langs/messages.gen";
 
-type LocalizedIntlProviderProps = Omit<IntlConfig, "locale" | "messages"> & {
+type LocalizedIntlProviderProps = Omit<IntlConfig, "messages"> & {
   children: ReactNode;
-  locale: string;
   messages: LocaleMessages;
 };
 

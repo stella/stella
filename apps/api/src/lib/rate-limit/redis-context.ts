@@ -6,12 +6,14 @@ import { detached } from "@/api/lib/analytics/capture";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import type {
+  RateLimitContextConfig,
+  RateLimitGenerator,
+  RateLimitOptions,
+  ReadableRateLimitContext,
+} from "@/api/lib/rate-limit/contracts";
 import {
   InMemoryRateLimitContext,
-  type RateLimitContextConfig,
-  type RateLimitGenerator,
-  type RateLimitOptions,
-  type ReadableRateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import {

@@ -103,6 +103,7 @@ export const runReaderAnswerModel = async (
     dataClass: "customer",
     feature: "case-law.reader-answer",
     modelRole: "chat",
+    modelTier: input.admission.modelTier,
     selectedModelId: input.modelId,
     orgAIConfig: input.orgAIConfig,
     traceId: Bun.randomUUIDv7(),

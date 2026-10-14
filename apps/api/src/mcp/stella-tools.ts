@@ -3,7 +3,11 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
@@ -31,6 +35,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -102,6 +107,7 @@ import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
@@ -173,6 +179,7 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolErrorResult,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
@@ -199,6 +206,7 @@ import {
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
+  searchIndexUnavailableResult,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
@@ -213,7 +221,6 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-import { CASE_LAW_RESULTS_RESOURCE_URI } from "./apps/resource-uri";
 import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
@@ -1140,7 +1147,9 @@ export const STELLA_TOOL_DEFINITIONS = [
       "`query` returns matches and neighbours with position, publisher label, " +
       "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
       "`source_url` publisher), metadata, textFields and citation summaries " +
-      "(citedBy count, polarity, top 5 citers; cites with held decisionIds). " +
+      "(citedBy reference counts, polarity, top citers: exact " +
+      `or bounded by candidateWindow ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges; ` +
+      "cites with held decisionIds). " +
       "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
       "direction: 'cited_by' }). One id gets an outline with pages and links. " +
       "`include` picks fields; [] returns text and identity only.",
@@ -2088,6 +2097,37 @@ type CaseLawQueryOutcome =
   | { exhausted: true }
   | { exhausted: false; page: SearchCaseLawSuccess };
 
+type CaseLawSearchAnswer =
+  | { type: "page"; page: SearchCaseLawSuccess }
+  | { type: "failed"; result: InternalToolErrorResult };
+
+/** One query's handler answer read as its page or the tool's refusal. */
+const readCaseLawSearchAnswer = (
+  answer: Parameters<typeof isSearchCaseLawSuccess>[0],
+  cursor: string | undefined,
+): CaseLawSearchAnswer => {
+  if (isSearchIndexUnavailable(answer)) {
+    return { type: "failed", result: searchIndexUnavailableResult(answer) };
+  }
+  const resultMessage = handlerResultMessage(answer);
+  if (resultMessage === INVALID_CURSOR_MESSAGE) {
+    return {
+      type: "failed",
+      result: invalidCursorResult({
+        cursor: cursor ?? "",
+        tool: SEARCH_CASE_LAW_TOOL,
+      }),
+    };
+  }
+  if (resultMessage) {
+    return { type: "failed", result: errorResult(resultMessage) };
+  }
+  if (!isSearchCaseLawSuccess(answer)) {
+    return { type: "failed", result: errorResult("Case-law search failed") };
+  }
+  return { type: "page", page: answer };
+};
+
 const caseLawSearchRequestFilters = ({
   category,
   has_legal_sentence: hasLegalSentence,
@@ -2400,20 +2440,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       pages.push({ exhausted: true });
       continue;
     }
-    const resultMessage = handlerResultMessage(outcome.result);
-    if (resultMessage === INVALID_CURSOR_MESSAGE) {
-      return invalidCursorResult({
-        cursor: cursor ?? "",
-        tool: SEARCH_CASE_LAW_TOOL,
-      });
+    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
+    if (answer.type === "failed") {
+      return answer.result;
     }
-    if (resultMessage) {
-      return errorResult(resultMessage);
-    }
-    if (!isSearchCaseLawSuccess(outcome.result)) {
-      return errorResult("Case-law search failed");
-    }
-    pages.push({ exhausted: false, page: outcome.result });
+    pages.push({ exhausted: false, page: answer.page });
   }
 
   const merged = mergeCaseLawSearchHits(

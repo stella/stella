@@ -8,7 +8,7 @@ import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability
 import type {
   RateLimitGenerator,
   RateLimitOptions,
-} from "@/api/lib/rate-limit/rate-limit";
+} from "@/api/lib/rate-limit/contracts";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 import {
   MCP_ADVANCED_HTTP_PATH,

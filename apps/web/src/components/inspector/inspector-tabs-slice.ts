@@ -3,6 +3,12 @@ import { current, type Draft } from "immer";
 
 import { forgetDocxDocuments } from "@/components/docx/docx-document-cache";
 import {
+  CASE_DECISION_VIEW,
+  CASE_DECISION_PLACEMENT,
+  isCaseDecisionViewPayload,
+  caseDecisionTabId,
+} from "@/components/inspector/case-decision-view";
+import {
   getInspectorTabGroupId,
   normalizeInspectorGroupAssignments,
 } from "@/components/inspector/inspector-groups.logic";
@@ -18,6 +24,7 @@ import type {
   SkillResourceTabId,
   TaskTab,
 } from "@/components/inspector/inspector-store-types";
+import { mainDecisionReaderStore } from "@/components/inspector/main-decision-reader";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 import {
@@ -524,7 +531,6 @@ export const createInspectorTabsSlice = (
 
   openSkillResourceTab: ({
     skillName,
-    skillDisplayName,
     resourcePath,
     label,
     mimeType,
@@ -542,7 +548,6 @@ export const createInspectorTabsSlice = (
         id,
         label,
         skillName,
-        ...(skillDisplayName === undefined ? {} : { skillDisplayName }),
         target,
         resourcePath,
         mimeType,
@@ -586,8 +591,12 @@ export const createInspectorTabsSlice = (
           contextMatterIds: normalizeOptionalArray(args.contextMatterIds),
           activeLegalKey: args.activeLegalKey,
           activeSkill: args.activeSkill,
+          started: args.started,
         });
       } else if (existing.type === "chat") {
+        if (args.started !== undefined) {
+          existing.started = args.started;
+        }
         if (args.label !== undefined) {
           existing.label = args.label;
         }
@@ -612,6 +621,14 @@ export const createInspectorTabsSlice = (
     });
   },
 
+  markChatStarted: (tabId) =>
+    set((state) => {
+      const tab = state.tabs.find((candidate) => candidate.id === tabId);
+      if (tab?.type === "chat" && tab.started !== true) {
+        tab.started = true;
+      }
+    }),
+
   setChatContext: (tabId, matterIds) =>
     set((state) => {
       const tab = state.tabs.find((candidate) => candidate.id === tabId);
@@ -627,6 +644,8 @@ export const createInspectorTabsSlice = (
       if (tab?.type === "chat") {
         rotatedLegalKey = tab.activeLegalKey;
         tab.id = newId;
+        // Another conversation: whether it has begun is for it to say.
+        tab.started = undefined;
         if (Object.hasOwn(state.groupAssignments, oldId)) {
           state.groupAssignments[newId] = state.groupAssignments[oldId] ?? null;
           removeGroupAssignment(state, oldId);
@@ -649,12 +668,28 @@ export const createInspectorTabsSlice = (
 
   openView: ({
     type,
-    id,
+    id: requestedId,
     label,
     payload,
     ownerRouteId,
+    decisionPlacement = CASE_DECISION_PLACEMENT.mainIfOpen,
     pane = INSPECTOR_PANE_INTENT.expand,
   }) => {
+    const decision =
+      type === CASE_DECISION_VIEW && isCaseDecisionViewPayload(payload)
+        ? payload
+        : null;
+    const reader = mainDecisionReaderStore.getState().reader;
+    if (
+      decisionPlacement === CASE_DECISION_PLACEMENT.mainIfOpen &&
+      decision !== null &&
+      reader?.decisionId === decision.decisionId
+    ) {
+      reader.openPassage(decision);
+      return;
+    }
+    const id =
+      decision === null ? requestedId : caseDecisionTabId(decision.decisionId);
     const proceed = () => {
       if (get().tabs.find((tab) => tab.id === id) !== existing) {
         return;

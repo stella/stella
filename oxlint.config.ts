@@ -31,6 +31,7 @@ import { withCanonicalDisableRuleIds } from "./scripts/oxlint-disable-rule-ids.t
 import core from "./scripts/oxlint-presets/core.mjs";
 import react from "./scripts/oxlint-presets/react.mjs";
 import shadcn from "./scripts/oxlint-presets/shadcn.mjs";
+import { PRODUCT_FRONTEND_FILES } from "./scripts/product-frontend-files.ts";
 import {
   DECLARATION_FILE_GLOB,
   RESULT_CONVENTION_ENABLED_GLOBS,
@@ -268,6 +269,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-inline-endpoint-in-routes.fixture.ts", [
     "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes",
   ]),
+  fixtureRuleOverride("no-hand-built-date-range-filter.fixture.tsx", [
+    "no-hand-built-date-range-filter/no-hand-built-date-range-filter",
+  ]),
   fixtureRuleOverride("no-ad-hoc-inline-rename.fixture.tsx", [
     "no-ad-hoc-inline-rename/no-ad-hoc-inline-rename",
   ]),
@@ -441,6 +445,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-identical-title",
     "bun-test-hygiene/no-promise-matchers",
     "bun-test-hygiene/no-unmanaged-database-client",
+    "bun-test-hygiene/no-forced-database-drop",
   ]),
   fixtureRuleOverride("no-same-fixture-member-oracle.fixture.ts", [
     "no-same-fixture-member-oracle/no-same-fixture-member-oracle",
@@ -463,6 +468,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
+  ]),
+  fixtureRuleOverride("require-worker-database-login-posture.fixture.ts", [
+    "require-worker-database-login-posture/require-worker-database-login-posture",
   ]),
   fixtureRuleOverride("require-audit-on-mutation.fixture.ts", [
     "require-audit-on-mutation/require-audit-on-mutation",
@@ -567,7 +575,7 @@ const toolingScriptFiles = [
 // Product UI that renders to a reader: the web app, the desktop shell, and the
 // shared component packages they compose.
 const productUiFiles = [
-  "apps/web/src/**/*.{ts,tsx}",
+  ...PRODUCT_FRONTEND_FILES,
   "apps/desktop/src/**/*.{ts,tsx}",
   "packages/ui/src/**/*.{ts,tsx}",
   "packages/workspace-ui/src/**/*.{ts,tsx}",
@@ -901,6 +909,10 @@ const config = defineConfig({
     },
     tailwindcss: {
       entryPoint: [
+        {
+          files: "packages/mcp-apps/**",
+          use: "packages/mcp-apps/src/shared/style.css",
+        },
         { files: "apps/web/**", use: "apps/web/src/styles/app.css" },
         {
           files: "apps/desktop/**",
@@ -1219,6 +1231,7 @@ const config = defineConfig({
     ],
     "no-nanoid/no-nanoid": "error",
     "no-section-sign-glyph/no-section-sign-glyph": "error",
+    "no-hand-built-date-range-filter/no-hand-built-date-range-filter": "error",
     "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
@@ -1388,6 +1401,8 @@ const config = defineConfig({
     "**/routeTree.gen.ts",
     // Printed API types, bound to the API by the generator's identity check.
     "apps/web/src/generated/api-routes.gen.ts",
+    // Bundled API-owned schemas: validate their source and regenerate this artifact.
+    "packages/mcp-apps/src/shared/generated/contracts.js",
     "**/*.config.js",
     // Module-augmentation files must use `interface` for declaration
     // merging; oxlint's --fix would rewrite it to `type` and break it.
@@ -1462,6 +1477,7 @@ const config = defineConfig({
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-section-sign-glyph.ts",
+    "./.oxlint-plugins/no-hand-built-date-range-filter.ts",
     "./.oxlint-plugins/no-direct-matter-glyph.ts",
     "./.oxlint-plugins/no-direct-entity-glyph.ts",
     "./.oxlint-plugins/no-direct-lucide-import.ts",
@@ -1490,6 +1506,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
+    "./.oxlint-plugins/require-matter-option-label.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-discarded-toast-error.ts",
     "./.oxlint-plugins/no-direct-error-toast.ts",
@@ -1546,6 +1563,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
+    "./.oxlint-plugins/require-worker-database-login-posture.ts",
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
@@ -1619,7 +1637,9 @@ const config = defineConfig({
     "./.oxlint-plugins/require-stream-reader-disposal.ts",
     "./.oxlint-plugins/no-auth-token-in-web-storage.ts",
     "./.oxlint-plugins/no-path-prefix-containment.ts",
+    "./.oxlint-plugins/no-raw-path-relative.ts",
     "./.oxlint-plugins/no-direct-unicode-normalize.ts",
+    "./.oxlint-plugins/no-ambient-dev-docker.ts",
     "./.oxlint-plugins/no-eager-singleton.ts",
     "./.oxlint-plugins/no-network-await-in-loop.ts",
     "./.oxlint-plugins/require-cached-collator.ts",
@@ -1656,6 +1676,18 @@ const config = defineConfig({
   ],
 
   overrides: [
+    {
+      files: [
+        "packages/scripts/src/dev-*.ts",
+        "packages/scripts/src/agent-session.ts",
+        ".oxlint-plugins/__fixtures__/no-ambient-dev-docker.fixture.ts",
+      ],
+      excludeFiles: [
+        "packages/scripts/src/*.test.ts",
+        "packages/scripts/src/dev-docker.ts",
+      ],
+      rules: { "no-ambient-dev-docker/no-ambient-dev-docker": "error" },
+    },
     {
       files: [
         "apps/**/*.{ts,tsx,js,mjs}",
@@ -1780,6 +1812,7 @@ const config = defineConfig({
         "bun-test-hygiene/no-disabled-tests": "error",
         "bun-test-hygiene/no-identical-title": "error",
         "bun-test-hygiene/no-promise-matchers": "error",
+        "bun-test-hygiene/no-forced-database-drop": "error",
         "no-same-fixture-member-oracle/no-same-fixture-member-oracle": "error",
       },
     },
@@ -1965,13 +1998,13 @@ const config = defineConfig({
       },
     },
     {
-      // The comparison's owners: the helper and its web twin, which check
+      // The comparison's owners: the helper and its browser twin, which check
       // eligibility first; the schema's partial unique indexes; the writer's
       // identity lookup and junction report, which place the version being
       // stored; and tests, which build and assert windows by hand.
       files: [
         "apps/api/src/lib/legal-search/legislation-validity-window.ts",
-        "apps/web/src/features/case-law/statute-version.ts",
+        "packages/api-contract/src/statute-version.ts",
         "apps/api/src/db/schema/legislation.ts",
         "apps/api/src/handlers/legislation/ingestion.ts",
         "apps/api/src/**/*.test.ts",
@@ -2436,6 +2469,22 @@ const config = defineConfig({
       },
     },
     {
+      // Repository-relative strings are portable identifiers, whose separator
+      // must not vary with the operating system running the code.
+      files: [
+        "apps/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "packages/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        "scripts/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+        ".oxlint-plugins/**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}",
+      ],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "error" },
+    },
+    {
+      // published package cannot depend on the private portable-path owner until it is publishable; tracked follow-up
+      files: ["packages/start-runtime/src/local-module-loader.ts"],
+      rules: { "no-raw-path-relative/no-raw-path-relative": "off" },
+    },
+    {
       // String normalization belongs to @stll/text-normalize. The owner is
       // excluded because its implementation must call the native primitive.
       files: [
@@ -2543,6 +2592,30 @@ const config = defineConfig({
           "error",
           {
             approvedAdapters: [
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/batch.ts",
+                binding: "responseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/batch-status.ts",
+                binding: "responseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/candidates.ts",
+                binding: "responseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/matters.ts",
+                binding: "mattersResponseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
               {
                 path: "apps/api/src/handlers/chat/messages/revisions/accept.ts",
                 binding: "acceptedEditSchema",
@@ -3356,7 +3429,7 @@ const config = defineConfig({
       },
     },
     {
-      files: ["apps/web/src/**/*.{ts,tsx}"],
+      files: [...PRODUCT_FRONTEND_FILES],
       rules: {
         "require-cn-for-classname-composition/require-cn-for-classname-composition":
           "error",
@@ -3424,6 +3497,28 @@ const config = defineConfig({
         // re-render surfaces that churn can interleave with ProseMirror's
         // DOMObserver and loop into "Maximum update depth exceeded".
         "require-stable-editor-options/require-stable-editor-options": "error",
+        "no-raw-api-url/no-direct-api-env": "error",
+        "no-raw-api-url/no-raw-api-url": "error",
+        // Catch raw JSX copy across product UI. Use narrow disables only for
+        // non-user-facing literals such as technical fixtures or brand marks.
+        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
+          "error",
+          { allowedText: ["Anthropic", "Google AI", "OpenAI"] },
+        ],
+        "require-router-select/require-router-select": "error",
+        "no-optional-mutation-command/no-optional-mutation-command": "error",
+        "no-discarded-toast-error/no-discarded-toast-error": "error",
+        "no-direct-error-toast/no-direct-error-toast": "error",
+        "no-raw-router-invalidation/no-raw-router-invalidation": "error",
+        "require-matter-affordance/require-matter-affordance": "error",
+        "require-matter-option-label/require-matter-option-label": "error",
+        "security-guards/no-unsanitized-href": "error",
+        "stella-toast/stella-toast": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      rules: {
         "no-restricted-imports": [
           "error",
           {
@@ -3443,26 +3538,10 @@ const config = defineConfig({
             ],
           },
         ],
-        "no-raw-api-url/no-direct-api-env": "error",
-        "no-raw-api-url/no-raw-api-url": "error",
-        // Catch raw JSX copy across product UI. Use narrow disables only for
-        // non-user-facing literals such as technical fixtures or brand marks.
-        "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
-          "error",
-          { allowedText: ["Anthropic", "Google AI", "OpenAI"] },
-        ],
-        "require-router-select/require-router-select": "error",
-        "no-optional-mutation-command/no-optional-mutation-command": "error",
-        "no-discarded-toast-error/no-discarded-toast-error": "error",
-        "no-direct-error-toast/no-direct-error-toast": "error",
-        "no-raw-router-invalidation/no-raw-router-invalidation": "error",
-        "require-matter-affordance/require-matter-affordance": "error",
-        "security-guards/no-unsanitized-href": "error",
-        "stella-toast/stella-toast": "error",
       },
     },
     {
-      files: ["apps/api/src/mcp/apps/**/*.tsx"],
+      files: ["packages/mcp-apps/src/**/*.tsx"],
       excludeFiles: ["**/*.test.tsx"],
       rules: {
         "no-untranslated-jsx-literal/no-untranslated-jsx-literal": [
@@ -3510,6 +3589,14 @@ const config = defineConfig({
       ],
       rules: {
         "require-matter-affordance/require-matter-affordance": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/require-matter-option-label.fixture.tsx",
+      ],
+      rules: {
+        "require-matter-option-label/require-matter-option-label": "error",
       },
     },
     {
@@ -4272,6 +4359,13 @@ const config = defineConfig({
       },
     },
     {
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "require-worker-database-login-posture/require-worker-database-login-posture":
+          "error",
+      },
+    },
+    {
       files: ["apps/api/src/handlers/**/*.ts"],
       excludeFiles: [
         "apps/api/src/handlers/**/*.test.ts",
@@ -4558,7 +4652,7 @@ const config = defineConfig({
         "**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
         "apps/api/src/**/test-utils.ts",
-        "apps/api/src/mcp/apps/**",
+        "packages/mcp-apps/src/**",
       ],
       rules: {
         "require-safe-outbound-target/require-safe-outbound-target": "error",

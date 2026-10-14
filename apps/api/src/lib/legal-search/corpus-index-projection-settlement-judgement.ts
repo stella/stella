@@ -41,18 +41,20 @@ export type CorpusProjectionCleanupPending =
   | ({ reason: "staged_split" } & LaggingPending)
   /**
    * The lagging splits are published, and at least one has not matured: the
-   * engine applies deletes to mature splits only. Nothing settles before
-   * `maturesAt`, the latest maturity among them.
+   * engine applies deletes to mature splits only. `maturesAt` is the latest
+   * age-based maturity target in this listing. A merge can replace a split
+   * with a new immature output and move the target; it is not a settlement
+   * deadline.
    */
   | ({ reason: "immature_split"; maturesAt: Temporal.Instant } & LaggingPending)
   /** The lagging splits are mature: the engine's delete pipeline is behind. */
   | ({ reason: "delete_lagging" } & LaggingPending)
   /**
    * What a survivor looks like, read before the task is older than the
-   * index's maturation period. The listing and the count are two reads, and a
-   * split published between them is in the count alone; by `confirmableAt`
-   * every split that existed when the task was created has matured and been
-   * listed, so the verdict cannot rest on a split the listing never showed.
+   * index's maturation period. `confirmableAt` is an age floor for survivor
+   * confirmation, not proof that every split has matured: merges restart the
+   * maturity clock and inherit the minimum input delete opstamp. Confirmation
+   * also requires no lagging split in either the proving or excluded set.
    */
   | {
       reason: "survivor_unconfirmed";

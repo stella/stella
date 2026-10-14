@@ -48,12 +48,13 @@ import type {
   TableBlock,
   TableCell,
 } from "@stll/legal-ast/document-ast";
-import { collapseSpacedLetters } from "@stll/text-normalize";
-
+// parser-output-unchanged: the inline-line helpers moved unchanged to their package owner.
 import {
   normalizeInlineLine,
   stripInlineLinePrefix,
-} from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
+} from "@stll/legal-ast/inline-line";
+import { collapseSpacedLetters } from "@stll/text-normalize";
+
 import { sectionsFromAst } from "@/api/handlers/case-law/ingestion/sections-from-ast";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
 import { arrayOrEmpty } from "@/api/lib/array";

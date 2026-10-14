@@ -535,6 +535,16 @@
       "createInvoice": "Izveidot rēķinu",
       "dueDate": "Apmaksas termiņš",
       "editInvoice": "Rediģēt rēķinu",
+      "export": {
+        "accounting": "Imports grāmatvedībā",
+        "eBilling": "E-rēķini",
+        "eso9": "ESO9 importa tabula (XLSX)",
+        "exporting": "Gatavo eksportu…",
+        "isdoc": "ISDOC e-rēķins (ABRA Gen u. c.)",
+        "spreadsheets": "Izklājlapas",
+        "xlsx": "Rēķini (XLSX)",
+        "xlsxLines": "Rēķinu rindas (XLSX)"
+      },
       "finalize": "Pabeigt",
       "invoiceDate": "Rēķina datums",
       "invoiceDetail": "Rēķina detaļas",
@@ -776,6 +786,9 @@
       "none": "Citējumi vēl nav reģistrēti.",
       "openAtCitation": "Atvērt citāta vietā",
       "openDecision": "Atvērt nolēmumu",
+      "paragraphLabel": "{paragraph}. punkts",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph}. punkts",
       "partialSummary": "Citējumu kopsummas un laika skala ir nepilnīgas.",
       "passageNotFound": "Citējošais fragments tekstā netika atrasts",
       "positiveCount": "{count, plural, zero {# pozitīvu} one {# pozitīvs} other {# pozitīvi}}",
@@ -1287,6 +1300,11 @@
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
+    "history": {
+      "matterUnavailable": "Šī lieta nav pieejama",
+      "older": "Vecākas",
+      "previous7Days": "Iepriekšējās 7 dienas"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, zero {un vēl #} one {un vēl #} other {un vēl #}}"
@@ -1438,17 +1456,23 @@
     },
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
+    "sendErrorConnectionFailed": "Neizdevās izveidot savienojumu ar tērzēšanu. Pārbaudiet savienojumu un mēģiniet vēlreiz.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
     "sendErrorLoopDetected": "AI atbilde atkārtojās pārāk daudz reižu. Mēģiniet vēlreiz ar šaurāku pieprasījumu.",
     "sendErrorModelUnavailable": "Konfigurētais AI modelis vairs nav pieejams. Sazinieties ar darba telpas administratoru, lai atjauninātu modeli organizācijas iestatījumos.",
+    "sendErrorNotStarted": "Saruna joprojām ir aizņemta. Nedaudz uzgaidiet un mēģiniet vēlreiz.",
+    "sendErrorPreparationFailed": "Neizdevās sagatavot ziņojumu. Atveriet tērzēšanu vēlreiz un mēģiniet vēlreiz.",
     "sendErrorProviderBilling": "AI pakalpojumu sniedzējs ziņoja par norēķinu problēmu. Sazinieties ar darba telpas administratoru.",
     "sendErrorProviderCredentialsRejected": "AI pakalpojumu sniedzējs noraidīja konfigurētos akreditācijas datus. Sazinieties ar darba telpas administratoru, lai pārbaudītu API atslēgu organizācijas iestatījumos.",
     "sendErrorProviderUnavailable": "AI pakalpojumu sniedzējs uz laiku nav pieejams. Mēģiniet vēlreiz pēc brīža.",
     "sendErrorQuotaExhausted": "AI pakalpojumu sniedzēja kvota ir izsmelta. Mēģiniet vēlreiz pēc minūtes vai sazinieties ar darba telpas administratoru.",
     "sendErrorStreamIncomplete": "AI atbilde tika pārtraukta, pirms tā bija pabeigta. Mēģiniet vēlreiz.",
+    "sendErrorTimedOut": "Tērzēšanas pakalpojums neatbildēja laikus. Mēģiniet vēlreiz.",
     "sendPrompt": "Sūtīt ziņojumu",
     "sendQueuedMessageNow": "Sūtīt tūlīt",
     "sendWithoutAnonymization": "Sūtīt bez anonimizācijas",
+    "signInToChat": "Piesakieties, lai tērzētu par šo dokumentu",
+    "signInToChatAbout": "Piesakieties, lai tērzētu par",
     "skills": {
       "scope": {
         "private": "Jūsu prasmes",
@@ -1779,6 +1803,8 @@
     "citations": "Citējumi",
     "clauses": "Klauzulas",
     "clearDate": "Notīrīt datumu",
+    "clearFilters": "Notīrīt filtrus",
+    "clearSearch": "Notīrīt meklēšanu",
     "close": "Aizvērt",
     "closeAll": "Aizvērt visu",
     "closeOthers": "Aizvērt citus",
@@ -1809,6 +1835,7 @@
       "nextDecade": "Nākamā desmitgade",
       "nextMonth": "Nākamais mēnesis",
       "nextYear": "Nākamais gads",
+      "outOfRange": "Izvēlieties datumu atļautajā diapazonā.",
       "previousDecade": "Iepriekšējā desmitgade",
       "previousMonth": "Iepriekšējais mēnesis",
       "previousYear": "Iepriekšējais gads",
@@ -2110,28 +2137,27 @@
     "showAllPermissions": "{count, plural, zero {Rādīt visas # atļaujas} one {Rādīt # atļauju} other {Rādīt visas # atļaujas}}",
     "signedInAs": "Pierakstījies kā <email>{accountEmail}</email>",
     "summaryAdminRead": "audita žurnāls",
-    "summaryAdminWrite": "organizācijas dalībnieki un iestatījumi, ieskaitot to dzēšanu",
-    "summaryBillingWrite": "laika ieraksti, ieskaitot to dzēšanu",
-    "summaryChat": "tērzēšanas, ieskaitot to dzēšanu",
-    "summaryContactsWrite": "kontaktpersonas, ieskaitot to dzēšanu",
-    "summaryDocumentsWrite": "dokumenti, ieskaitot to dzēšanu",
+    "summaryAdminWrite": "organizācijas dalībnieki un iestatījumi",
+    "summaryBillingWrite": "laika ieraksti",
+    "summaryChat": "sarunas",
+    "summaryContactsWrite": "kontaktpersonas",
+    "summaryDocumentsWrite": "dokumenti",
     "summaryExternalMcps": "pievienotie ārējie rīki",
-    "summaryFeedback": "atsauksmes",
-    "summaryKnowledgeWrite": "klauzulas un pārbaudes ceļveži, ieskaitot klauzulu dzēšanu",
+    "summaryKnowledgeWrite": "klauzulas un pārbaudes ceļveži",
     "summaryLawRead": "publiski pieejamos tiesību aktus un judikatūru",
-    "summaryLineChange": "<group>Var mainīt:</group> {items} ({count})",
+    "summaryLineChange": "<group>Izveidot un rediģēt:</group> {items}",
     "summaryLineOther": "<group>Arī:</group> {items}",
-    "summaryLineRead": "<group>Var lasīt:</group> {items} ({count})",
-    "summaryMattersWrite": "lietas un uzdevumi, ieskaitot to dzēšanu",
-    "summaryOfflineAccess": "pastāvīga pieteikšanās",
-    "summaryOnboarding": "prakses jurisdikcijas",
+    "summaryLineRead": "<group>Lasīt:</group> {items}",
+    "summaryLineUse": "<group>Lietot:</group> {items}",
+    "summaryMattersWrite": "lietas un uzdevumi",
     "summaryProfile": "profils",
     "summaryRead": "dokumenti, lietas un kontakti",
     "summaryReadAnonymized": "anonimizēti dokumenti un lietas",
     "summarySearch": "meklēšana",
     "summarySearchAnonymized": "anonimizēta meklēšana",
-    "summarySkills": "prasmes, ieskaitot to dzēšanu",
-    "summaryTemplates": "dokumentu veidnes, ieskaitot to dzēšanu",
+    "summarySkills": "prasmes",
+    "summaryStaySignedIn": "Palikt pierakstītam",
+    "summaryTemplates": "dokumentu veidnes",
     "summaryTemplatesAnonymized": "anonimizētas dokumentu veidnes",
     "title": "Autorizēt piekļuvi",
     "unverifiedApp": "Nepārbaudīta lietotne",
@@ -3159,14 +3185,14 @@
         "steps": {
           "basics": {
             "body": "Pievienojiet nosaukumu un aprakstu. Ja vajadzīgs, attieciniet to tikai uz vienu dokumenta veidu.",
-            "title": "Piešķiriet plānam nosaukumu"
+            "title": "Piešķiriet pārbaudes ceļvedim nosaukumu"
           },
           "create": {
-            "body": "Sāciet ar tukšu plānu.",
-            "title": "Izveidojiet plānu"
+            "body": "Sāciet ar tukšu pārbaudes ceļvedi.",
+            "title": "Izveidojiet pārbaudes ceļvedi"
           },
           "overview": {
-            "body": "Plānā tiek saglabāti jautājumi un noteikumi citiem dokumentiem.",
+            "body": "Pārbaudes ceļvedī tiek saglabāti jautājumi un noteikumi citiem dokumentiem.",
             "title": "Saglabājiet pārskatīšanas procesu"
           },
           "positions": {
@@ -3174,7 +3200,7 @@
             "title": "Pievienojiet pārskatīšanas noteikumus"
           }
         },
-        "title": "Izveidojiet plānu"
+        "title": "Izveidojiet pārbaudes ceļvedi"
       },
       "tabularReview": {
         "description": "Iegūstiet atbildes no daudziem failiem vienlaikus",
@@ -3607,6 +3633,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Izveidojiet līgumu pārbaudes ceļvedi pozīciju pa pozīcijai, balstoties uz iepriekš parakstītajiem līgumiem, īsu interviju un tirgū ierastajiem standartiem.",
+          "name": "Izveidot pārbaudes ceļvedi"
+        }
+      },
       "builtInSection": "Iebūvētās prasmes",
       "deleteFile": "Dzēst failu",
       "deleteFileConfirm": "Dzēst failu? Šo darbību nevar atsaukt.",
@@ -4134,7 +4166,6 @@
     "appsSubtitle": "stella darbojas arī ārpus pārlūkprogrammas: jūsu datorā un jūsu AI asistentā. Pie šīs iestatīšanas varat atgriezties jebkurā laikā.",
     "appsTitle": "Iegūstiet stella visur",
     "catalogueAlwaysOn": "Vienmēr ieslēgts",
-    "catalogueClearSearch": "Notīrīt meklēšanu",
     "catalogueCommunityHeading": "Citi",
     "catalogueContinueWithCount": "{count, plural, zero {Turpināt ar # rīkiem} one {Turpināt ar # rīku} other {Turpināt ar # rīkiem}}",
     "catalogueDetailAbout": "Par rīku",
@@ -4436,7 +4467,7 @@
         "governingLaw": "Piemērojamās tiesības",
         "liabilityCap": "Atbildības ierobežojums",
         "missing": "Nav norādīts",
-        "outsidePlaybook": "Neatbilst vadlīnijām",
+        "outsidePlaybook": "Neatbilst pārbaudes ceļvedim",
         "termination": "Līguma izbeigšana"
       },
       "searchPlaceholder": "Kas jums jāpaveic?",
@@ -6394,7 +6425,6 @@
         "year": "Gads"
       },
       "cannotDeleteRequired": "Ir nepieciešams vismaz viens šāda veida skats",
-      "clearFilters": "Notīrīt filtrus",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Dzēst skatu",
       "exportCsv": "Eksportēt CSV",

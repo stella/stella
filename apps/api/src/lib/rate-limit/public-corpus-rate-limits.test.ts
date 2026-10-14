@@ -15,6 +15,7 @@ import {
   PUBLIC_CORPUS_ROUTE_POLICY,
 } from "@/api/public-corpus-policy";
 
+import type { RequestIpServer } from "./contracts";
 import {
   createPublicCorpusAddressRateLimitOptions,
   createPublicCorpusGlobalRateLimitOptions,
@@ -22,7 +23,6 @@ import {
 import {
   InMemoryRateLimitContext,
   rateLimit,
-  type RequestIpServer,
   scopedGenerator,
 } from "./rate-limit";
 import {
