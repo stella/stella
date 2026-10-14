@@ -211,12 +211,19 @@ export const provisionCitedWidelyWarning = ({
 
 export const partialMatchesAppendedWarning = ({
   partial,
+  countsStrictSet,
 }: {
-  /** How many hits on the page hold only some of the query's words. */
+  /** How many returned hits hold only some of the phrasing's words. */
   partial: number;
+  /**
+   * Whether the response's total and facets are this phrasing's strict set:
+   * true for a single phrasing, false once several are merged (the total is
+   * uncounted and the facets describe the first phrasing only).
+   */
+  countsStrictSet: boolean;
 }): AgentCaseLawSearchWarning => ({
   code: "partial_matches_appended",
-  message: `Few decisions held every word, so ${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms" ${partial === 1 ? "was" : "were"} appended after the ones that did; the total and facets count only the decisions holding every word.`,
+  message: `Few decisions held every word, so ${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms" ${partial === 1 ? "was" : "were"} appended after the ones that did${countsStrictSet ? "; the total and facets count only the decisions holding every word" : ""}.`,
   hint: 'Read the "all_terms" hits first; judge each "some_terms" hit by its snippet, or pass strict: true to search only for decisions holding every word.',
 });
 
@@ -275,7 +282,8 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       provision: "§ 2910 OZ",
       citingDecisions: 4037,
     }),
-  partial_matches_appended: () => partialMatchesAppendedWarning({ partial: 3 }),
+  partial_matches_appended: () =>
+    partialMatchesAppendedWarning({ partial: 3, countsStrictSet: true }),
   many_required_terms: () =>
     manyRequiredTermsWarning({
       terms: [

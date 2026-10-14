@@ -201,6 +201,7 @@ import {
   emptyCorpusIndexScan,
   NATIVE_SCAN_TRANSPORT,
   readCorpusIndexSearchPage,
+  sumCorpusIndexScans,
 } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   caseLawCorpusQueryFields,
@@ -2868,7 +2869,7 @@ export const searchCorpusIndexDecisions = async ({
       match: "any",
     });
     if (relaxedQuery.resolved.type === "empty") {
-      return [];
+      return { hits: [], scan: emptyCorpusIndexScan() };
     }
     const needed = limit - page.hits.length;
     const relaxedPage = await readTextPage(
@@ -2897,7 +2898,7 @@ export const searchCorpusIndexDecisions = async ({
         languageGroupKeys: languageGroupKeysOf(ranked, relaxedById),
       },
     );
-    return decisionHitsPage({
+    const relaxedHitsPage = decisionHitsPage({
       alternatesByGroupKey: relaxedAlternates,
       anchorIdById: relaxedPage.anchorIdById,
       byId: relaxedById,
@@ -2911,9 +2912,12 @@ export const searchCorpusIndexDecisions = async ({
       headnotePresentation: body.headnotePresentation,
       total: SEARCH_TOTAL_NOT_COUNTED,
       match: "some_terms",
-    }).hits;
+    });
+    // The relaxed scan is reported with the strict one, so a topped-up
+    // request's rounds and index time count both reads.
+    return { hits: relaxedHitsPage.hits, scan: relaxedPage.scan };
   };
-  const relaxedHits = shouldRelaxCaseLawSearch({
+  const relaxed = shouldRelaxCaseLawSearch({
     body,
     intentType: intent.type,
     isFirstPage,
@@ -2924,7 +2928,8 @@ export const searchCorpusIndexDecisions = async ({
     strictEnd: searchPageEnd(searchPage),
   })
     ? await readRelaxedHits()
-    : [];
+    : { hits: [], scan: emptyCorpusIndexScan() };
+  const relaxedHits = relaxed.hits;
   const servedIds = new Set(page.hits.map((hit) => String(hit.decisionId)));
   const dispositions = hitDispositions.snapshot();
   reportCaseLawIncompleteAnswer({
@@ -2955,7 +2960,8 @@ export const searchCorpusIndexDecisions = async ({
     count: Number(searchPage.paginationOutcome.type === "truncated"),
   });
   const hits = [...page.hits, ...relaxedHits];
-  report(hits.length, scan);
+  // An unrelaxed request adds the empty scan, which changes nothing.
+  report(hits.length, sumCorpusIndexScans(scan, relaxed.scan));
   if (interpretation.droppedFunctionWords.length > 0) {
     reportCaseLawFunctionWordsExcluded({
       country: body.country,

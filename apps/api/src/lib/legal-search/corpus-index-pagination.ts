@@ -372,6 +372,23 @@ export const emptyCorpusIndexScan = (): CorpusIndexScanReport => ({
 });
 
 /**
+ * Two scans one request ran in sequence, reported as one: the counts and
+ * index time add up, and either scan stopping early or at the round cap is
+ * reported, so a request that scanned twice is never reported as one scan.
+ */
+export const sumCorpusIndexScans = (
+  first: CorpusIndexScanReport,
+  second: CorpusIndexScanReport,
+): CorpusIndexScanReport => ({
+  rounds: first.rounds + second.rounds,
+  passagesScanned: first.passagesScanned + second.passagesScanned,
+  indexMs: first.indexMs + second.indexMs,
+  earlyStopped: first.earlyStopped || second.earlyStopped,
+  roundCapHit: first.roundCapHit || second.roundCapHit,
+  highlightRounds: first.highlightRounds + second.highlightRounds,
+});
+
+/**
  * Passage-layout indexes return several hits per document, so a fixed
  * chunk-space scan budget would reach proportionally fewer documents than the
  * same budget did when one document was one hit — and a cursor can only point

@@ -25,7 +25,13 @@ describe("search_case_law guidance", () => {
   test("v1 says how a phrasing is matched and how the limit is shared", () => {
     const { description, queries, limit } = searchCaseLawTexts("v1");
 
-    expect(queries).toContain("must occur in the same passage");
+    expect(queries).toContain(
+      "A full match needs every word of a phrasing except function words in one passage",
+    );
+    // Partial matches can top up a short page, so v1 never says every hit
+    // holds every word.
+    expect(description).toContain("An all_terms hit is a passage holding");
+    expect(description).toContain("some_terms hits only top up a short page");
     expect(queries).toContain("two to four words");
     expect(queries).toContain("a phrasing of its own");
     expect(queries).toContain("`§ N` plus the act's name or abbreviation");

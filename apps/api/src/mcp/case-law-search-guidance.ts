@@ -81,13 +81,14 @@ const SEARCH_CASE_LAW_TEXTS = {
   v1: {
     description:
       `${DESCRIPTION_HEAD} Put the most central phrasing first; three are ` +
-      "usually enough. A hit is a passage holding every word of a phrasing " +
-      "except function words, so keep each phrasing to the few words that " +
+      "usually enough. An all_terms hit is a passage holding every word of " +
+      "a phrasing except function words; some_terms hits only top up a short " +
+      "page. Keep each phrasing to the few words that " +
       `define the issue.${DESCRIPTION_TAIL}`,
     queries:
       `Several phrasings of ONE question, at most ${String(LIMITS.caseLawSearchQueriesMax)}. ` +
-      "Every word of a phrasing except function words must occur in the " +
-      "same passage, so give each phrasing the two to four words that " +
+      "A full match needs every word of a phrasing except function words in " +
+      "one passage, so give each phrasing the two to four words that " +
       "define the issue, and put an alternative wording in a phrasing of " +
       "its own rather than lengthening one. Write a provision as `§ N` " +
       `plus the act's name or abbreviation. ${QUERIES_TAIL}`,

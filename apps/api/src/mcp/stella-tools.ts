@@ -2380,21 +2380,36 @@ const manyRequiredTermsWarnings = ({
       ];
 };
 
-/** `partial_matches_appended` for a phrasing whose page holds partial matches. */
-const partialMatchWarnings = (
-  hits: readonly CaseLawSearchHit[],
-): AgentCaseLawSearchWarning[] => {
-  const partial = hits.filter((hit) => hit.match === "some_terms").length;
-  return partial === 0 ? [] : [partialMatchesAppendedWarning({ partial })];
+type PartialMatchWarningOptions = {
+  merged: readonly MergedCaseLawHit[];
+  queryIndex: number;
+  countsStrictSet: boolean;
+};
+
+/**
+ * `partial_matches_appended` for a phrasing, counted on the merged response
+ * the caller reads: a hit another phrasing matched in full is returned as
+ * `all_terms`, so it is not counted here.
+ */
+const partialMatchWarnings = ({
+  merged,
+  queryIndex,
+  countsStrictSet,
+}: PartialMatchWarningOptions): AgentCaseLawSearchWarning[] => {
+  const partial = merged.filter(
+    (result) =>
+      result.match === "some_terms" &&
+      result.matchedQueries.includes(queryIndex),
+  ).length;
+  return partial === 0
+    ? []
+    : [partialMatchesAppendedWarning({ partial, countsStrictSet })];
 };
 
 /** What a phrasing's page says beyond its filters, read from the page alone. */
 const phrasingAnswerWarnings = (
   options: ManyRequiredTermsOptions,
-): AgentCaseLawSearchWarning[] => [
-  ...manyRequiredTermsWarnings(options),
-  ...partialMatchWarnings(options.page.hits),
-];
+): AgentCaseLawSearchWarning[] => manyRequiredTermsWarnings(options);
 
 const caseLawSearchResult = ({
   hit,
@@ -2618,6 +2633,39 @@ const listSearchCaseLawProvision = async ({
   return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };
 
+type CaseLawSearchCallOutcome =
+  | { exhausted: true }
+  | {
+      exhausted: false;
+      result: Parameters<typeof readCaseLawSearchAnswer>[0];
+    };
+
+/**
+ * Each phrasing's page, or the first failure. A query that failed sinks the
+ * call: a merged page silently missing one phrasing reads as "that phrasing
+ * found nothing", which is a different answer.
+ */
+const readCaseLawQueryPages = (
+  outcomes: readonly CaseLawSearchCallOutcome[],
+  cursor: string | undefined,
+):
+  | Extract<CaseLawSearchAnswer, { type: "failed" }>
+  | { type: "pages"; pages: CaseLawQueryOutcome[] } => {
+  const pages: CaseLawQueryOutcome[] = [];
+  for (const outcome of outcomes) {
+    if (outcome.exhausted) {
+      pages.push({ exhausted: true });
+      continue;
+    }
+    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
+    if (answer.type === "failed") {
+      return answer;
+    }
+    pages.push({ exhausted: false, page: answer.page });
+  }
+  return { type: "pages", pages };
+};
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -2757,21 +2805,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     },
   });
 
-  // A query that failed sinks the call: a merged page silently missing one
-  // phrasing reads as "that phrasing found nothing", which is a different
-  // answer.
-  const pages: CaseLawQueryOutcome[] = [];
-  for (const outcome of outcomes) {
-    if (outcome.exhausted) {
-      pages.push({ exhausted: true });
-      continue;
-    }
-    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
-    if (answer.type === "failed") {
-      return answer.result;
-    }
-    pages.push({ exhausted: false, page: answer.page });
+  const read = readCaseLawQueryPages(outcomes, cursor);
+  if (read.type === "failed") {
+    return read.result;
   }
+  const { pages } = read;
 
   const merged = mergeCaseLawSearchHits(
     pages.map((outcome) => (outcome.exhausted ? [] : outcome.page.hits)),
@@ -2824,6 +2862,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
             subCursor,
             page: outcome.page,
             slots: perQueryLimit,
+          }),
+          ...partialMatchWarnings({
+            merged,
+            queryIndex: index,
+            countsStrictSet: single !== undefined,
           }),
         ],
       };

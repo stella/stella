@@ -3025,6 +3025,70 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(payload.searches.at(0)?.warnings.map(({ code }) => code)).toEqual([
       "partial_matches_appended",
     ]);
+
+    // Several phrasings: the warning counts the merged response. A partial
+    // hit another phrasing matched in full is returned as all_terms and not
+    // counted, and no phrasing claims the uncounted total or the first
+    // phrasing's facets.
+    const page = (
+      hits: readonly {
+        decisionId: string;
+        match: "all_terms" | "some_terms";
+      }[],
+      queryUsed: string,
+    ) => ({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: null,
+      hits: hits.map((hit, index) => ({
+        ...baseHit,
+        ...hit,
+        caseNumber: `29 Cdo ${String(200 + index)}/2024`,
+        slug: `slug-${hit.decisionId}`,
+      })),
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed,
+      warnings: [],
+    });
+    const OTHER_PARTIAL_ID = "018f0000-0000-7000-8000-0000000000c3";
+    searchDecisionsHandlerMock
+      .mockResolvedValueOnce(
+        page(
+          [
+            { decisionId: DECISION_ID, match: "all_terms" },
+            { decisionId: PARTIAL_ID, match: "some_terms" },
+            { decisionId: OTHER_PARTIAL_ID, match: "some_terms" },
+          ],
+          "shareholder dispute",
+        ),
+      )
+      .mockResolvedValueOnce(
+        page([{ decisionId: PARTIAL_ID, match: "all_terms" }], "spor"),
+      );
+    const merged = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          country: "CZE",
+          queries: ["shareholder dispute", "spor"],
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      }),
+    ) as {
+      results: { decisionId: string; match: string }[];
+      searches: { warnings: { code: string; message: string }[] }[];
+    };
+    expect(
+      merged.results.find(({ decisionId }) => decisionId === PARTIAL_ID)?.match,
+    ).toBe("all_terms");
+    const [firstWarnings, secondWarnings] = merged.searches.map(
+      ({ warnings }) =>
+        warnings.filter(({ code }) => code === "partial_matches_appended"),
+    );
+    expect(firstWarnings).toHaveLength(1);
+    expect(firstWarnings?.at(0)?.message).toContain("1 hit marked");
+    expect(firstWarnings?.at(0)?.message).not.toContain("total and facets");
+    expect(secondWarnings).toEqual([]);
   });
 
   test("pending public countries return typed unavailable through real MCP output contracts", async () => {
