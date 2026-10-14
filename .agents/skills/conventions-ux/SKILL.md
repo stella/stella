@@ -197,6 +197,29 @@ through Folio gains one it does not have.
   visually until they _look_ centred, even if that means offset
   from the geometric centre.
 
+## Control States
+
+- **Every control answers every state:** hover, pressed, focus-visible,
+  disabled and, where it loads, pending. A press with no visible
+  response reads as a missed click.
+- **Show where people are.** The current item in navigation and
+  breadcrumbs is styled as current and carries `aria-current`. A tab
+  shows its selected state through `aria-selected`, which
+  `@stll/ui/tabs` supplies; never add `aria-current` to it.
+- **No native `alert`, `confirm` or `prompt`.** Confirm a destructive
+  action with `@stll/ui/destructive-confirm-dialog`, report an outcome
+  with `@stll/ui/toast`, and put a field error next to the field.
+- **A dialog only when the work has to stop.** A small edit happens
+  inline; a side task that needs the page behind it opens in a
+  `@stll/ui/sheet`.
+- **Hidden means out of reach.** Content hidden from everyone
+  (a collapsed panel, an inactive rail) leaves the tab order (`inert`,
+  `hidden`, or unmounted); `aria-hidden` alone still lets focus land
+  inside. The control that reveals it stays reachable, keeps an
+  accessible name, and reports `aria-expanded`. A control that is
+  visually hidden until focus reveals it (a skip link, the data
+  table's keyboard row action) stays in the tab order by design.
+
 ## Lists, Settings Pages & Search
 
 - **Inventories of named things are grouped lists, not tables.**
@@ -352,10 +375,56 @@ shipping — flipping `documentElement.dir` is not enough on its own.
   prompts, labels, empty-state copy) inside an otherwise-Arabic surface;
   route them through i18n. A Latin island reads as "unfinished," not "global."
 
+## Look at the Render
+
+Lint and tests prove nothing banned was written; they say nothing
+about whether the screen is good. Before calling UI done, capture it
+with `bun run agent:drive` (see the `dev` skill): `snap <route>` at
+the default desktop size and again with `--viewport 390x844`, then a
+`run` flow that switches to `ar`. Judge the screenshots,
+not the code: you wrote the code, so you read your intentions into it.
+A problem visible in a screenshot is real whatever the code says.
+
+Make each pass on its own:
+
+1. **One second.** Glance and look away. You should have seen one
+   thing: the content the screen exists for. "A page" means nothing
+   leads.
+2. **Squint.** Text blurs into grey bars. The screen should reduce to
+   a few masses of clearly different weight, not many equal ones.
+3. **Edges.** Count the distinct left (inline-start) edges of text
+   blocks. Two or three, reused, is composed; more means things were
+   placed one at a time.
+4. **Space.** Related things sit close, unrelated things far. Any
+   empty region is either deliberate or a hole beside a short column
+   or a removed element.
+5. **Accent.** Name where the accent appears. On the primary action
+   and perhaps one other thing it means "here"; in ten places it means
+   nothing.
+6. **States.** Empty, loading, error, long content and many items:
+   each one shot, each one designed (see Empty States, Loading States).
+7. **Collisions.** Nothing overlaps text or a control, nothing is
+   clipped, nothing scrolls sideways, at either width or direction.
+
+Write the findings down the way a designer would tell a colleague:
+"the row's secondary line starts 8px left of its title", not "could
+be more polished". Fix in this order, because later items cannot
+rescue earlier ones: hierarchy (one dominant thing per region),
+composition (edges, spacing, holes), typography, colour, detail
+(states, focus, alignment), motion. Re-shoot and look again; stop
+after three rounds and say plainly what still falls short.
+
 ## Anti-Patterns
 
 Explicit list of patterns that AI agents tend to generate and
-that do not belong in a professional legal workspace:
+that do not belong in a professional legal workspace. Each began as a
+reasonable idea and became a tell by being produced by default,
+without a reason.
+
+Removing a tell is half the job. A screen stripped of ornament with
+nothing in its place reads as unfinished; fill the space with the
+content itself (larger, complete, specific), not with another
+ornament.
 
 - **No emojis in the product UI.** Use Lucide icons or semantic
   status colours instead.
@@ -377,6 +446,12 @@ that do not belong in a professional legal workspace:
 - **No AI copywriting clichés:** "Elevate", "Seamless",
   "Unleash", "Revolutionize", "Supercharge". Write plain,
   specific microcopy.
+- **No generic copy shapes.** No "not just X, it's Y"; no "Get
+  started" or "Learn more" labels (name what the button does); no
+  exclamation marks in success messages; no "Oops!" errors (say what
+  failed and what to do next); English headings and labels use
+  sentence case, not Title Case, and each translation follows its
+  own locale's capitalization.
 - **No decorative scroll indicators** (bouncing chevrons,
   "Scroll to explore" text). If content scrolls, the scrollbar
   is sufficient affordance.

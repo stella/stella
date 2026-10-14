@@ -23,7 +23,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { transformSync, type OxcError } from "oxc-transform-react";
 import ts from "typescript";
 
-import { REACT_COMPILER_OPTIONS } from "../apps/web/react-compiler-options.ts";
+import { REACT_COMPILER_OPTIONS } from "../packages/scripts/src/react-compiler-options";
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const BASELINE_PATH = BASELINE_PATHS.reactCompilerBailouts;

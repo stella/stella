@@ -40,8 +40,8 @@ import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { waitForBlockedPid } from "@/api/tests/helpers/flow-review-gate";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

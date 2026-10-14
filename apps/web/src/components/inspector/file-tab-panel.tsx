@@ -190,12 +190,14 @@ const getFileTabChromeState = ({
   isEmailDisplay,
   isMarkdownDisplay,
   isOfficeDisplay,
+  isPlainTextDisplay,
   tab,
 }: {
   isEditingNativeDocx: boolean;
   isEmailDisplay: boolean;
   isMarkdownDisplay: boolean;
   isOfficeDisplay: boolean;
+  isPlainTextDisplay: boolean;
   tab: FileTabPanelProps["tab"];
 }) => {
   const isPreviewFacet = (tab.facet ?? "preview") === "preview";
@@ -207,7 +209,8 @@ const getFileTabChromeState = ({
       !isEditingNativeDocx &&
       !isEmailDisplay &&
       !isMarkdownDisplay &&
-      !isOfficeDisplay,
+      !isOfficeDisplay &&
+      !isPlainTextDisplay,
   };
 };
 
@@ -261,6 +264,7 @@ export const FileTabPanel = ({
     isNativeDocxDisplay,
     isOfficeDisplay,
     isPdfDisplay,
+    isPlainTextDisplay,
     renderId,
     requiresPdfMeasurement,
     scaleOffset,
@@ -364,6 +368,7 @@ export const FileTabPanel = ({
       isEmailDisplay,
       isMarkdownDisplay,
       isOfficeDisplay,
+      isPlainTextDisplay,
       tab,
     });
   const editExit = isMarkdownDisplay ? (

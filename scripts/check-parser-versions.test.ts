@@ -324,6 +324,26 @@ test("verbatim parser source moves do not require a version bump", () => {
   expect(changed(base, head)).toEqual([]);
 });
 
+test("moving non-code assets does not enter parser-source move detection", () => {
+  const base = fixture({ adapters: ["A"] });
+  const head = new Map(base);
+  const assets = new Map([
+    [`${PARSERS}assets/manifest.json`, '{"schema":"v1"}\n'],
+    [
+      `${PARSERS}assets/frame.html`,
+      '<!doctype html><html><head><meta charset="utf-8"></head></html>\n',
+    ],
+  ]);
+  for (const [original, source] of assets) {
+    const destination = original.replace("/assets/", "/assets-v2/");
+    base.set(original, source);
+    head.delete(original);
+    head.set(destination, source);
+  }
+
+  expect(changed(base, head)).toEqual([]);
+});
+
 test("verbatim parser source moves require equivalent resolved dependencies", () => {
   const base = fixture({ adapters: ["A"] });
   const originalDirectory = `${PARSERS}original`;
