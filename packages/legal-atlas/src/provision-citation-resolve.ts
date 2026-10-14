@@ -476,10 +476,14 @@ export const resolveProvisionCitation = ({
     section.index + section[0].length,
     resolver,
   );
+  const after = normalized.slice(end);
   if (
     // `§§` is the plural designator: it always introduces more than one.
     term.startsWith("§§") ||
-    resolver.continuation.test(normalized.slice(end))
+    resolver.continuation.test(after) ||
+    // A second provision anywhere after the first (`§ 316 ZP a § 317 ZP`),
+    // past an act name the continuation check cannot see across.
+    resolver.section.test(after)
   ) {
     return { status: "multiple_provisions" };
   }
