@@ -32,6 +32,9 @@ import type {
 import { createMatcherTestClock } from "./test-fixtures/matcher-test-clock";
 import { recordingMatcherWorker } from "./test-fixtures/recording-matcher-worker";
 
+// Work usage is asserted where it is produced; replies only carry it.
+const SCREENED_WORK = { spent: expect.any(Number), limit: expect.any(Number) };
+
 const outcomeValue = <T>(outcome: MatcherWorkOutcome<T>): T | null =>
   outcome.status === "completed" ? outcome.value : null;
 
@@ -198,9 +201,6 @@ test("compiled runtime loads the deployed matcher worker", async () => {
       entrypoint,
       `import { createSanctionsMatcherPool } from ${JSON.stringify(path.join(import.meta.dir, "matcher-pool.ts"))};
 import { createMatcherTestClock } from ${JSON.stringify(path.join(import.meta.dir, "test-fixtures/matcher-test-clock.ts"))};
-
-// Work usage is asserted where it is produced; replies only carry it.
-const SCREENED_WORK = { spent: expect.any(Number), limit: expect.any(Number) };
 const pool = createSanctionsMatcherPool({ clock: createMatcherTestClock() });
 const response = await pool.run(async (session) => await session.match(${JSON.stringify(request("Acme Trading"))}));
 await pool.close();
