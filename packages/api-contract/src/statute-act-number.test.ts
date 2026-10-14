@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { statuteActLabel } from "./statute-act-number";
+import { statuteActLabel, statuteEliParts } from "./statute-act-number";
 
 const numberOf = (eli: string) => statuteActLabel({ eli, title: "x" }).number;
 
@@ -70,5 +70,20 @@ describe("an act's name", () => {
         title: "89/2012 Sb. m. s.",
       }),
     ).toEqual({ number: "89/2012 Sb. m. s.", name: null });
+  });
+});
+
+describe("an act's ELI parts", () => {
+  test("name its collection, year and number without leading zeros", () => {
+    expect(
+      statuteEliParts("https://www.e-sbirka.cz/eli/cz/sb/2012/089/2024-01-01"),
+    ).toEqual({ collection: "sb", year: "2012", number: "89" });
+  });
+
+  test("are empty for a missing ELI or one without an act number", () => {
+    const empty = { collection: null, year: null, number: null };
+    expect(statuteEliParts(null)).toEqual(empty);
+    expect(statuteEliParts(undefined)).toEqual(empty);
+    expect(statuteEliParts("CZ/2012/89")).toEqual(empty);
   });
 });

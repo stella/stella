@@ -11,6 +11,7 @@ import { SettingsPageHeader } from "@/routes/_protected.settings/-components/set
 export const Route = createFileRoute(
   "/_protected/settings/organization/number-series",
 )({
+  staticData: { organizationSettingsAdmission: "time-billing" },
   beforeLoad: async ({ context }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
     if (

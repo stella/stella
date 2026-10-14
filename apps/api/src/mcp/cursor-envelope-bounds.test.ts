@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 
 import { CONTACT_DISPLAY_NAME_MAX_LENGTH } from "@/api/handlers/contacts/list-query";
 import { encodeVersionCursor } from "@/api/handlers/entities/version-cursor";
@@ -23,10 +24,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { encodeCursor } from "@/api/lib/search/cursor";
-import {
-  encodeGlobalSearchCursor,
-  GLOBAL_SEARCH_RESULT_LIMIT,
-} from "@/api/lib/search/pagination";
+import { encodeGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { isRecord } from "@/api/lib/type-guards";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
@@ -35,6 +33,10 @@ import {
   readerVersion,
 } from "@/api/mcp/decision-reader.logic";
 import capabilityCatalog from "@/api/mcp/generated/capability-catalog";
+import {
+  isProvisionTextCursor,
+  windowProvisionText,
+} from "@/api/mcp/provision-text-window";
 import {
   ALL_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolOutputContract,
@@ -114,7 +116,25 @@ const readerCursor = encodeReaderCursor({
 // These use the same encoders as the handlers: tuple shapes come from the
 // owning cursorForItem call, while nested envelopes pass through their codec.
 // A registry addition has no fixture by default and fails the census below.
+const provisionCursorWindow = windowProvisionText({
+  limit: 1,
+  subject: JSON.stringify([
+    "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+    "par_1729",
+    UUID,
+  ]),
+  text: "ab",
+});
+const provisionTextCursor =
+  provisionCursorWindow.type === "window"
+    ? (provisionCursorWindow.nextTextCursor ??
+      panic("Missing provision cursor"))
+    : panic("Invalid provision fixture");
+
 const cursorFixtures: Readonly<Record<string, string>> = {
+  "advanced.read_statute_provisions.items[].nextTextCursor":
+    provisionTextCursor,
+  "advanced.read_provision_history.items[].nextTextCursor": provisionTextCursor,
   "advanced.search.nextCursor": encodeCompatSearchCursor({
     corpus,
     matter: encodeCursor(SCORE, UUID),
@@ -208,13 +228,34 @@ const acceptsCursor = ({
   property,
   cursor,
 }: CursorAcceptanceOptions): boolean => {
-  const result = v.safeParse(schema, { [property]: cursor });
+  const nested = property.startsWith("items[].");
+  const input = nested
+    ? {
+        items: [
+          {
+            eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+            anchor: "par_1729",
+            text_cursor: cursor,
+          },
+        ],
+      }
+    : { [property]: cursor };
+  const result = v.safeParse(schema, input);
+  const output =
+    isRecord(result.output) && nested && Array.isArray(result.output["items"])
+      ? result.output["items"].at(0)
+      : result.output;
   return (
-    !result.issues?.some(
-      (issue) => v.getDotPath(issue)?.split(".").at(0) === property,
-    ) &&
-    isRecord(result.output) &&
-    result.output[property] === cursor
+    !result.issues?.some((issue) => {
+      const issuePath = v.getDotPath(issue);
+      return nested
+        ? issuePath === "items" ||
+            issuePath === "items.0" ||
+            issuePath === "items.0.text_cursor"
+        : issuePath?.split(".").at(0) === property;
+    }) &&
+    isRecord(output) &&
+    output[nested ? "text_cursor" : property] === cursor
   );
 };
 
@@ -241,8 +282,15 @@ describe("every registered pagination envelope fits its own next-call input", ()
           failures.push(`${site}: missing real producer fixture`);
           continue;
         }
-        const property =
-          path === "versionsNextCursor" ? "versions_cursor" : "cursor";
+        let property = "cursor";
+        if (path.endsWith("nextTextCursor")) {
+          property =
+            definition.name === "read_statute_provisions"
+              ? "items[].text_cursor"
+              : "text_cursor";
+        } else if (path === "versionsNextCursor") {
+          property = "versions_cursor";
+        }
         if (
           !("inputSchemaSource" in definition) ||
           !acceptsCursor({
@@ -266,6 +314,28 @@ describe("every registered pagination envelope fits its own next-call input", ()
   test("the longest optional corpus segments survive the real encoder", () => {
     expect(decodeCorpusSearchCursor(decisionCursor)).toEqual(corpusPosition);
     expect(decodeCorpusSearchCursor(statuteCursor)).toEqual(statutePosition);
+  });
+
+  test("an undersized nested text cursor fails the same acceptance guard", () => {
+    for (const maxLength of [1, provisionTextCursor.length]) {
+      expect(
+        acceptsCursor({
+          schema: v.object({
+            items: v.array(
+              v.object({
+                text_cursor: cursorInput({
+                  description: "Provision fixture cursor",
+                  issuedBy: isProvisionTextCursor,
+                  maxLength,
+                }),
+              }),
+            ),
+          }),
+          property: "items[].text_cursor",
+          cursor: provisionTextCursor,
+        }),
+      ).toBe(maxLength === provisionTextCursor.length);
+    }
   });
 
   test("an undersized fixture input fails the same acceptance guard", () => {

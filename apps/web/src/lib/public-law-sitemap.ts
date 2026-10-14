@@ -5,6 +5,10 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@stll/api-contract/case-law-decision-route";
 import type { CaseLawDecisionLanguageAlternate } from "@stll/api-contract/case-law-decision-route";
+import {
+  PUBLIC_ROBOTS_DENIED_USER_AGENTS,
+  ROBOTS_DISALLOWED_PATHS,
+} from "@stll/api-contract/public-crawl-rules";
 
 import { env } from "@/env";
 import { publicCaseLawCountryFromParam } from "@/features/case-law/case-law-jurisdiction";
@@ -36,7 +40,10 @@ import {
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
 import { isPublicStatuteCountry } from "@/lib/statutes/statute-route";
-import { createPublicCrawlRules } from "@/public-crawl-policy";
+import {
+  createPublicCrawlRules,
+  isPublicLawPathIndexable,
+} from "@/public-crawl-policy";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
@@ -314,13 +321,15 @@ export const createPublicLawStaticSitemapXml = ({
 `;
   }
 
-  // The home is the entry point, and the coverage page is what the corpus
-  // says about itself. The results screen is not listed: an unfiltered request
-  // redirects to the home, and every decision has its own entry in the
-  // per-country sitemaps.
-  const entries = (["/law", "/law/coverage"] as const).map((path) =>
-    createPublicLawCanonicalUrl(path),
-  );
+  // The home is the entry point. The coverage page is not listed: it renders
+  // its figures client-side, so a crawler sees only the pending shape, and
+  // robots.txt does not allow it. The results screen is not listed either: an
+  // unfiltered request redirects to the home, and every decision has its own
+  // entry in the per-country sitemaps. A candidate is listed only when the
+  // crawl policy that builds robots.txt allows it.
+  const entries = (["/law"] as const)
+    .filter((path) => isPublicLawPathIndexable(path, true))
+    .map((path) => createPublicLawCanonicalUrl(path));
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -381,6 +390,12 @@ type RobotsTxtOptions = {
   seoIndexable?: boolean;
 };
 
+const createDeniedCrawlerRules = () =>
+  PUBLIC_ROBOTS_DENIED_USER_AGENTS.flatMap((userAgent) => [
+    `User-agent: ${userAgent}`,
+    "Disallow: /",
+  ]);
+
 export const createRobotsTxt = ({
   publicKnowledgeCrawlAllowed = isPublicKnowledgeCrawlAllowed(),
   publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
@@ -391,9 +406,11 @@ export const createRobotsTxt = ({
   // Sitemap line, so crawlers stay out even when sitemaps are served for
   // verification.
   if (!seoIndexable) {
-    return `User-agent: *
-Disallow: /
-`;
+    return `${[
+      "User-agent: *",
+      "Disallow: /",
+      ...createDeniedCrawlerRules(),
+    ].join("\n")}\n`;
   }
 
   const sitemapUrl = new URL(
@@ -412,6 +429,13 @@ Disallow: /
       : [`Allow: ${path}/`, `Allow: ${path}$`],
   );
 
-  return `${["User-agent: *", ...allowLines, "Disallow: /", `Sitemap: ${sitemapUrl}`].join("\n")}
+  return `${[
+    "User-agent: *",
+    ...ROBOTS_DISALLOWED_PATHS.map((path) => `Disallow: ${path}`),
+    ...allowLines,
+    "Disallow: /",
+    `Sitemap: ${sitemapUrl}`,
+    ...createDeniedCrawlerRules(),
+  ].join("\n")}
 `;
 };

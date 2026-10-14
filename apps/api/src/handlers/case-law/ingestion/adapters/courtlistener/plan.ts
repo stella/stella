@@ -1,3 +1,4 @@
+// parser-output-unchanged: [us-courtlistener] named declaration types leave emitted runtime unchanged.
 /**
  * What a CourtListener cluster becomes, before its text is read: identity,
  * court, references, dates, judges, metadata and the stored raw. Pure: no
@@ -31,7 +32,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   type DecisionJudgeInput,
 } from "@/api/lib/legal-search/ingestion-types";
-import { sanitizeUrl } from "@/api/lib/sanitize-url";
+import { type SafeHref, sanitizeUrl } from "@/api/lib/sanitize-url";
 
 import { courtListenerRawHash, encodeCourtListenerRaw } from "./raw";
 import {
@@ -467,12 +468,44 @@ const textFieldSource = (field: string, value: string): TextFieldSource =>
     ? { type: "present", field }
     : { type: "absent", reason: "not_published" };
 
+export type CourtListenerDecisionPlan = {
+  sourceDocumentId: string;
+  country: string;
+  language: string;
+  courtId: string;
+  court: string;
+  caseNumber: ReferencePlan["caseNumber"];
+  caseNumberType: ReferencePlan["caseNumberType"];
+  identifiers: ReferencePlan["identifiers"];
+  decisionDate: string | undefined;
+  sourceUrl: string;
+  documentUrl: SafeHref | undefined;
+  judges: ReturnType<typeof planJudges>["judges"];
+  textFieldSources: {
+    headnote: TextFieldSource;
+    abstract: TextFieldSource;
+    summary: TextFieldSource;
+    legalSentence: { type: "absent"; reason: "not_published" };
+  };
+  opinions: {
+    opinionId: string;
+    scopeId: string;
+    type: AdmittedOpinion["type"];
+  }[];
+  scdbPresent: boolean;
+  metadata: ReturnType<typeof planMetadata>;
+  rawHash: string;
+  sourceRaw: string;
+  sourceRawContentType: string;
+  diagnostics: PlanDiagnostic[];
+};
+
 const decisionPlan = (
   admitted: AdmittedCourtListenerRecord,
   court: { readonly id: string; readonly canonicalName: string },
   references: ReferencePlan,
   diagnostics: PlanDiagnostic[],
-) => {
+): CourtListenerDecisionPlan => {
   const { cluster } = admitted.record;
   const ordered = admitted.opinions.toSorted(compareOpinionOrder);
 
@@ -557,8 +590,6 @@ const planDecision = (
     decisionPlan(admitted, resolution.court, references.value, diagnostics),
   );
 };
-
-export type CourtListenerDecisionPlan = ReturnType<typeof decisionPlan>;
 
 /**
  * Admit a record and plan its decision, or reject the whole cluster. Text

@@ -4,7 +4,7 @@ import { env } from "@/api/env";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
 import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
 import { OTP_DELIVERY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
 const DISPOSABLE_EMAIL_DOMAINS = disposableEmailBlocklistSet();

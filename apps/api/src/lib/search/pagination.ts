@@ -1,6 +1,7 @@
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
@@ -10,8 +11,6 @@ export type GlobalSearchCursor = {
   id: string;
   seen: number;
 };
-
-export const GLOBAL_SEARCH_RESULT_LIMIT = 1000;
 
 const LEGACY_GLOBAL_SEARCH_CURSOR_ID = "global";
 const DUAL_CURSOR_SEPARATOR = "==";

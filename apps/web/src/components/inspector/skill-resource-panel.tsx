@@ -21,9 +21,11 @@ import { PDF_MIME, isMarkdownFile } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { toSafeId } from "@/lib/safe-id";
 
-import { BUILT_IN_SKILL_ORIGIN, skillLabel } from "./inspector-store-types";
+import { skillResourceTabSkill } from "./inspector-active-skill";
+import { BUILT_IN_SKILL_ORIGIN } from "./inspector-store-types";
 import type { InstalledSkillResourceTab } from "./inspector-store-types";
 import { InspectorTabHeader } from "./inspector-tab-header";
 import type { SkillResourceTab } from "./inspector-tabs-store";
@@ -72,16 +74,19 @@ type SkillResourceTabMatterProps = {
 };
 
 /** The skill's title; the tooltip keeps its slug and the resource path. */
-const SkillResourceTabMatter = ({ tab }: SkillResourceTabMatterProps) => (
-  <Tooltip
-    content={`${tab.skillName} · ${tab.resourcePath}`}
-    render={
-      <span className="text-muted-foreground text-3xs truncate">
-        {skillLabel(tab)}
-      </span>
-    }
-  />
-);
+const SkillResourceTabMatter = ({ tab }: SkillResourceTabMatterProps) => {
+  const skillLabel = useSkillLabel();
+  return (
+    <Tooltip
+      content={`${tab.skillName} · ${tab.resourcePath}`}
+      render={
+        <span className="text-muted-foreground text-3xs truncate">
+          {skillLabel(skillResourceTabSkill(tab))}
+        </span>
+      }
+    />
+  );
+};
 
 /** A built-in skill ships with Stella and has no row, so it is read-only. */
 const BuiltInSkillResourcePanel = ({

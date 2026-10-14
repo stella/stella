@@ -44,6 +44,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { auditedPresignDownload } from "@/api/lib/audited-download";
+import { formatCourtParagraphMark } from "@/api/lib/case-law/court-paragraph-mark";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { markdownToStellaDocument } from "@/api/lib/docx-authoring/from-markdown";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -217,6 +218,11 @@ const createMessageExport = createSafeRootHandler(
             citationStyle,
             {
               folioSourceTitle: onlySourceDocumentTitle(trustedSourceDocuments),
+              formatParagraphMark: (courtParagraphNumber) =>
+                formatCourtParagraphMark(
+                  citationLabels.locale,
+                  courtParagraphNumber,
+                ),
               internalCitationFallback: citationLabels.citation,
               internalReferenceMode: internalReferenceModeFor(
                 persistedSearchSources,

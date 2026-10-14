@@ -16,16 +16,35 @@ const ELI_ACT_TAIL_RE =
 /** The same prefix the API strips for name matching (`legislationTitleName`). */
 const TITLE_NUMBER_PREFIX_RE = /^\d+\/\d{4} [^,]*, /u;
 
+/** An act's collection, year and number as its ELI names them. */
+export type StatuteEliParts = {
+  collection: string | null;
+  year: string | null;
+  /** The act's number without leading zeros (`89`). */
+  number: string | null;
+};
+
+/** The same ELI reader feeds number labels and document identity badges. */
+export const statuteEliParts = (
+  eli: string | null | undefined,
+): StatuteEliParts => {
+  const match =
+    eli === null || eli === undefined ? null : ELI_ACT_TAIL_RE.exec(eli);
+  const ordinal = match?.[3];
+  return {
+    collection: match?.[1] ?? null,
+    year: match?.[2] ?? null,
+    number: ordinal === undefined ? null : String(Number(ordinal)),
+  };
+};
+
 /** `89/2012 Sb.`, or null for an ELI that carries no act number. */
 const statuteActNumber = (eli: string): string | null => {
-  const match = ELI_ACT_TAIL_RE.exec(eli);
-  const collection = match?.[1];
-  const year = match?.[2];
-  const ordinal = match?.[3];
-  if (collection === undefined || year === undefined || ordinal === undefined) {
+  const { collection, year, number: ordinal } = statuteEliParts(eli);
+  if (collection === null || year === null || ordinal === null) {
     return null;
   }
-  const number = `${String(Number(ordinal))}/${year}`;
+  const number = `${ordinal}/${year}`;
   const abbreviation = statuteGazetteAbbreviation(collection, Number(year));
   return abbreviation === null ? number : `${number} ${abbreviation}`;
 };

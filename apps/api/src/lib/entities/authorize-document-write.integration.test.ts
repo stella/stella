@@ -7,7 +7,7 @@ import { roles } from "@stll/permissions";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { entities, entityVersions } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

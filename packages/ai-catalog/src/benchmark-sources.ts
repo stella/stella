@@ -58,6 +58,7 @@ export const MODEL_BENCHMARK_SOURCES = {
   "anthropic/claude-haiku-5.5": [],
   "us.anthropic.claude-haiku-5-5": [],
   "claude-haiku-5-5": [],
+  "gemini-4-argon": [],
   "gemini-3.8-flash": [
     { sourceModelId: "gemini-3.8-flash-high", reasoningEffort: "high" },
   ],
@@ -98,6 +99,7 @@ export const MODEL_BENCHMARK_SOURCES = {
   "openai/gpt-5.6-luna": [
     { sourceModelId: "gpt-5.6-luna-xhigh", reasoningEffort: "xhigh" },
   ],
+  "google/gemini-4-argon": [],
   "google/gemini-3.8-flash": [
     { sourceModelId: "gemini-3.8-flash-high", reasoningEffort: "high" },
   ],
@@ -261,8 +263,10 @@ export const MODEL_UNRATED_REASON = {
   "anthropic/claude-haiku-5.5": "too_new",
   "us.anthropic.claude-haiku-5-5": "too_new",
   "claude-haiku-5-5": "too_new",
+  "gemini-4-argon": "too_new",
   "gemini-3.1-flash-lite": "preview_only",
   "openai/gpt-6.1-sol": "too_new",
+  "google/gemini-4-argon": "too_new",
   "google/gemini-3.5-flash-lite": "named_default_effort",
   "google/gemini-3.1-pro-preview": "named_default_effort",
   "google/gemini-3.1-flash-lite": "preview_only",

@@ -5,12 +5,15 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import type {
   AnyPgColumn,
   PgTable,
+  PgAsyncDatabase,
+  PgQueryResultHKT,
   PgInsertValue,
   PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
+import type { Transaction } from "@/api/db/root";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -1005,14 +1008,11 @@ export type TransitionResult<TId, TStatus> =
   | { type: "transitioned"; row: { id: TId; status: TStatus } }
   | { type: "stale" };
 
-export type TransitionTransaction = {
-  execute: (
-    query: SQL,
-  ) => PromiseLike<
-    Record<string, unknown>[] | { rows: Record<string, unknown>[] }
-  >;
-  rollback: () => never;
-};
+export type TransitionTransaction = Pick<
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "execute"
+> &
+  Pick<Transaction, "rollback">;
 
 type TransitionArgs<
   TTx extends TransitionTransaction,

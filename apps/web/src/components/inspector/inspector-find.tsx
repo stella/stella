@@ -61,6 +61,8 @@ type FindBarState =
       focusRequest: number;
       /** Whether the next match collection takes the reader to the active match. */
       scrollIntent: FindScrollIntent;
+      /** A citation can request the same search passage again after the reader moved away. */
+      landingRequest: number;
     };
 
 const FIND_CLOSED: FindBarState = { open: false };
@@ -71,6 +73,7 @@ const FIND_OPENED: FindBarState = {
   activeIndex: 0,
   focusRequest: 0,
   scrollIntent: FIND_SCROLL_INTENT.reveal,
+  landingRequest: 0,
 };
 
 /** What a match collection reads from the bar. */
@@ -79,6 +82,8 @@ type FindInputs = {
   scrollIntent: FindScrollIntent;
   enabled: boolean;
   findQuery: string;
+  /** Keys reapplication even when a citation's query and active index stay the same. */
+  landingRequest: number;
 };
 
 /** The state after a find command: opened, or open with focus asked for again. */
@@ -144,6 +149,24 @@ export const useInspectorFind = ({
     );
   }, []);
 
+  const openFindAtQuery = useCallback(
+    (query: string) => {
+      if (!enabled) {
+        return;
+      }
+      setFindState((prev) => ({
+        open: true,
+        query: query.trim(),
+        matchCount: 0,
+        activeIndex: 0,
+        focusRequest: prev.open ? prev.focusRequest : 0,
+        landingRequest: prev.open ? prev.landingRequest + 1 : 1,
+        scrollIntent: FIND_SCROLL_INTENT.reveal,
+      }));
+    },
+    [enabled],
+  );
+
   const nextMatch = useCallback(() => {
     setFindState((prev) => {
       if (!prev.open || prev.matchCount === 0) {
@@ -178,6 +201,7 @@ export const useInspectorFind = ({
   const scrollIntent = findState.open
     ? findState.scrollIntent
     : FIND_SCROLL_INTENT.stay;
+  const landingRequest = findState.open ? findState.landingRequest : 0;
 
   // The DOCX pane and a table view's toolbar are candidates for the same
   // press: an inspector reader reaches the whole app while it is showing
@@ -297,15 +321,28 @@ export const useInspectorFind = ({
   );
 
   useLayoutEffect(
-    () => applyFind({ activeIndex, enabled, findQuery, scrollIntent }),
-    [activeIndex, applyFind, enabled, findQuery, scrollIntent],
+    () =>
+      applyFind({
+        activeIndex,
+        enabled,
+        findQuery,
+        landingRequest,
+        scrollIntent,
+      }),
+    [activeIndex, applyFind, enabled, findQuery, landingRequest, scrollIntent],
   );
 
   // The reader fills in after the bar can be open: citations, provision
   // history and "load more" insert text later. Each insertion is a new
   // document to match against, so the collection runs again on it.
   const reapplyFind = useLatestCallback(() => {
-    applyFind({ activeIndex, enabled, findQuery, scrollIntent });
+    applyFind({
+      activeIndex,
+      enabled,
+      findQuery,
+      landingRequest,
+      scrollIntent,
+    });
   });
   useExternalSyncEffect(() => {
     const root = contentRef.current;
@@ -336,6 +373,7 @@ export const useInspectorFind = ({
     matchCount,
     nextMatch,
     openFind,
+    openFindAtQuery,
     previousMatch,
     setFindQuery,
   };

@@ -2,6 +2,12 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
+import {
+  missingPreparedApiTypecheckConfigs,
+  validateApiTypecheckProjects,
+} from "./api-typecheck-projects";
 import { validateWorkspaceAppBoundaries } from "./workspace-app-boundaries";
 import type { AppBoundaryOptions } from "./workspace-app-boundaries";
 
@@ -52,7 +58,7 @@ const BABEL_TOOLCHAINS = [
 const TYPESCRIPT_TOOLCHAIN = {
   native: "npm:typescript@7.0.2",
   oxlint: "1.87.0",
-  oxlintConfig: "0.12.0",
+  oxlintConfig: "1.0.2",
   tsgolint: "7.0.2003",
   typescript6Compatibility: "6.0.3",
 } as const;
@@ -408,6 +414,10 @@ const validateTypeScriptToolchain = (rootDir: string): WorkspaceIssue[] => {
       if (
         typecheck !== null &&
         relativePackagePath !== TYPESCRIPT6_COMPATIBILITY.astro.packagePath &&
+        !(
+          relativePackagePath === "apps/api/package.json" &&
+          typecheck === "bun ../../packages/scripts/src/api-typecheck.ts"
+        ) &&
         !typecheck
           .split("&&")
           .some((command) =>
@@ -653,7 +663,7 @@ const validateBunTypeOwnership = (
     )
     .map((filePath) => ({
       message: `${BUN_TYPES_DEPENDENCY} is named by this TypeScript project but is not declared in the workspace package.json`,
-      path: `${relativeWorkspacePath}/${path.relative(workspacePath, filePath)}`,
+      path: `${relativeWorkspacePath}/${repoRelativePath(workspacePath, filePath)}`,
     }));
 };
 
@@ -687,7 +697,7 @@ const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
       const installVersion = match[0].slice(match[0].lastIndexOf("@") + 1);
       issues.push({
         message: `turbo install version must derive from root package.json; found mirrored pin ${installVersion}`,
-        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+        path: `${repoRelativePath(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
       });
     }
   }
@@ -725,15 +735,23 @@ const validateBunCwdRunForm = (rootDir: string): WorkspaceIssue[] =>
       return [...content.matchAll(BUN_SPACED_CWD_RUN_PATTERN)].map((match) => ({
         message:
           "`bun --cwd <dir> run <script>` exits 0 without running the script; use `bun run --cwd <dir> <script>`",
-        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+        path: `${repoRelativePath(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
       }));
     });
 
 export const validateWorkspaceRoot = (
   rootDir: string,
   appBoundaryOptions: AppBoundaryOptions = {},
+  {
+    requirePreparedApiTypecheck = false,
+  }: {
+    requirePreparedApiTypecheck?: boolean;
+  } = {},
 ): WorkspaceIssue[] => {
   const issues: WorkspaceIssue[] = [
+    ...validateApiTypecheckProjects(rootDir, {
+      requirePrepared: requirePreparedApiTypecheck,
+    }),
     ...validateWorkspaceAppBoundaries(rootDir, appBoundaryOptions),
     ...validateTurboInstallPins(rootDir),
     ...validateBunCwdRunForm(rootDir),
@@ -818,7 +836,22 @@ export const validateWorkspaceRoot = (
 };
 
 if (import.meta.main) {
-  const issues = validateWorkspaceRoot(process.cwd());
+  // CI runs this as a verification step (STELLA_VERIFY=check) after it has
+  // generated the API typecheck configs; the install-time postinstall has not.
+  const requirePreparedApiTypecheck = process.env["STELLA_VERIFY"] === "check";
+  const unprepared = missingPreparedApiTypecheckConfigs(process.cwd());
+  if (unprepared.length > 0 && !requirePreparedApiTypecheck) {
+    console.log(
+      `Skipping API typecheck ownership: prepared configs are not generated yet (${unprepared.join(", ")}).`,
+    );
+  }
+  const issues = validateWorkspaceRoot(
+    process.cwd(),
+    {},
+    {
+      requirePreparedApiTypecheck,
+    },
+  );
 
   if (issues.length === 0) {
     console.log("Workspace layout OK.");

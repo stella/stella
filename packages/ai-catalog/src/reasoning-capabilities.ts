@@ -33,6 +33,20 @@ export type ModelReasoningCapabilities = {
 // Native Anthropic currently emits signed thinking only; redacted blocks are
 // not exposed by the installed adapter, so they are not admitted for replay.
 export const MODEL_REASONING_CAPABILITIES = {
+  "gemini-4-argon": {
+    support: "supported",
+    emittedFormats: ["google-thought-signature"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [
+      {
+        provider: "google",
+        model: "gemini-4-argon",
+        format: "google-thought-signature",
+      },
+    ],
+  },
   "gemini-3.8-flash": {
     support: "supported",
     emittedFormats: ["google-thought-signature"],
@@ -180,6 +194,14 @@ export const MODEL_REASONING_CAPABILITIES = {
     replayCompatibility: [],
   },
   "openai/gpt-5.6-luna": {
+    support: "supported",
+    emittedFormats: ["none"],
+    openAIIncludeEncryptedContent: false,
+    openAIStore: null,
+    anthropicThinking: "none",
+    replayCompatibility: [],
+  },
+  "google/gemini-4-argon": {
     support: "supported",
     emittedFormats: ["none"],
     openAIIncludeEncryptedContent: false,
