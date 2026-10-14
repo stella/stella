@@ -245,6 +245,50 @@ context("test registration census", () => {
     },
   );
 
+  check.each([
+    { body: "if (process.env.X) {} else return;", disabled: true },
+    { body: "if (enabled) {} else if (true) return;", disabled: true },
+    { body: "if (true) {} else if (enabled) {} else return;", disabled: true },
+    { body: "!enabled && ctx.skip();", disabled: true },
+    { body: "enabled || test['skip']();", disabled: true },
+    { body: "enabled ? work() : ctx.skip();", disabled: true },
+    {
+      body: "switch (process.env.X) { case 'yes': break; default: return; }",
+      disabled: true,
+    },
+    {
+      body: "for (const value of values) { if (!enabled) continue; work(value); }",
+      disabled: true,
+    },
+    {
+      body: "for (const value of values) { if (!enabled) break; work(value); }",
+      disabled: true,
+    },
+    { body: "while (enabled) { ctx.skip(); }", disabled: true },
+    { body: "if (enabled) throw new Error('failed');", disabled: false },
+    {
+      body: "if (enabled) { const helper = () => { return; }; work(helper); }",
+      disabled: false,
+    },
+    {
+      body: "switch (process.env.X) { case 'yes': work(); break; default: work(); }",
+      disabled: false,
+    },
+    { body: "enabled && work();", disabled: false },
+  ])("environment-controlled callback exit: $body", ({ body, disabled }) => {
+    const source = `const enabled = process.env.X === 'yes';
+      test('controlled', (ctx) => { ${body} expect(actual).toBe(expected); });`;
+    const findings = parseTestRegistrations("fixture.test.ts", source);
+    if (disabled) {
+      expect(findings).toContainEqual({
+        identity: "fixture.test.ts::controlled",
+        type: "disabled",
+      });
+    } else {
+      expect(findings).toEqual([]);
+    }
+  });
+
   check("finds focused registrations through namespace imports", () => {
     const source = `
       import * as bt from "bun:test";

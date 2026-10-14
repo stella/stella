@@ -519,6 +519,84 @@ const registrationTitle = (
     : undefined;
 };
 
+const containsCallbackExit = (candidate: ts.Node): boolean => {
+  if (ts.isFunctionLike(candidate)) {
+    return false;
+  }
+  if (ts.isReturnStatement(candidate) || ts.isContinueStatement(candidate)) {
+    return true;
+  }
+  if (ts.isBreakStatement(candidate)) {
+    let parent = candidate.parent;
+    while (!ts.isSourceFile(parent) && !ts.isFunctionLike(parent)) {
+      if (ts.isSwitchStatement(parent)) {
+        return false;
+      }
+      if (ts.isIterationStatement(parent, false)) {
+        return true;
+      }
+      parent = parent.parent;
+    }
+    return false;
+  }
+  if (ts.isCallExpression(candidate)) {
+    const callee = unwrapTransparentExpression(candidate.expression);
+    if (
+      literalMemberName(callee) === "skip" ||
+      (ts.isIdentifier(callee) && callee.text === "skip")
+    ) {
+      return true;
+    }
+  }
+  return (
+    ts.forEachChild(candidate, (child) =>
+      containsCallbackExit(child) ? true : undefined,
+    ) === true
+  );
+};
+
+const environmentControlledBodies = (
+  node: ts.Node,
+  containsEnvironment: (candidate: ts.Node) => boolean,
+): readonly ts.Node[] => {
+  if (ts.isIfStatement(node) && containsEnvironment(node.expression)) {
+    return node.elseStatement === undefined
+      ? [node.thenStatement]
+      : [node.thenStatement, node.elseStatement];
+  }
+  if (ts.isConditionalExpression(node) && containsEnvironment(node.condition)) {
+    return [node.whenTrue, node.whenFalse];
+  }
+  if (
+    ts.isBinaryExpression(node) &&
+    [
+      ts.SyntaxKind.AmpersandAmpersandToken,
+      ts.SyntaxKind.BarBarToken,
+      ts.SyntaxKind.QuestionQuestionToken,
+    ].includes(node.operatorToken.kind) &&
+    containsEnvironment(node.left)
+  ) {
+    return [node.right];
+  }
+  if (ts.isSwitchStatement(node) && containsEnvironment(node.expression)) {
+    return [node.caseBlock];
+  }
+  if (
+    (ts.isWhileStatement(node) || ts.isDoStatement(node)) &&
+    containsEnvironment(node.expression)
+  ) {
+    return [node.statement];
+  }
+  if (
+    ts.isForStatement(node) &&
+    node.condition !== undefined &&
+    containsEnvironment(node.condition)
+  ) {
+    return [node.statement];
+  }
+  return [];
+};
+
 const containsEnvironmentReturn = (node: ts.Node): boolean => {
   const bindings = new Map<string, ts.Expression[]>();
   const source = node.getSourceFile();
@@ -592,23 +670,11 @@ const containsEnvironmentReturn = (node: ts.Node): boolean => {
     );
   };
   let found = false;
-  const containsReturn = (candidate: ts.Node): boolean => {
-    let result = false;
-    const findReturn = (child: ts.Node): void => {
-      if (ts.isReturnStatement(child) || ts.isContinueStatement(child)) {
-        result = true;
-      } else {
-        ts.forEachChild(child, findReturn);
-      }
-    };
-    findReturn(candidate);
-    return result;
-  };
   const visit = (child: ts.Node): void => {
     if (
-      ts.isIfStatement(child) &&
-      containsEnvironment(child.expression) &&
-      containsReturn(child.thenStatement)
+      environmentControlledBodies(child, containsEnvironment).some(
+        containsCallbackExit,
+      )
     ) {
       found = true;
     }
