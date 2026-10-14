@@ -202,6 +202,8 @@ jobs:
     steps:
       # When the merge queue has work waiting, a pull request run defers
       # itself so the queue lands first; the merge-queue steward re-runs it.
+      # A head defers at most once: a re-run (the steward's resume or a manual
+      # one) never yields and clears a deferral that is still pending.
       - name: Yield to the merge queue
         if: >-
           github.event_name == 'pull_request'
@@ -211,6 +213,23 @@ jobs:
           retries: 0
           script: |
             const repo = context.repo;
+            const sha = context.payload.pull_request.head.sha;
+            if (Number(process.env.GITHUB_RUN_ATTEMPT ?? "1") > 1) {
+              const { data } = await github.rest.repos.listCommitStatusesForRef({
+                ...repo, ref: sha, per_page: 100,
+              });
+              const latest = data.find((status) => status.context === "ci/merge-queue-yield");
+              if (latest?.state === "pending") {
+                await github.rest.repos.createCommitStatus({
+                  ...repo,
+                  sha,
+                  state: "success",
+                  context: "ci/merge-queue-yield",
+                  description: "Resumed",
+                });
+              }
+              return;
+            }
             const waiting = async () => {
               for (const status of ["queued", "waiting", "pending", "requested"]) {
                 const { data } = await github.rest.actions.listWorkflowRunsForRepo({
@@ -232,7 +251,7 @@ jobs:
             if (!(await waiting())) return;
             await github.rest.repos.createCommitStatus({
               ...repo,
-              sha: context.payload.pull_request.head.sha,
+              sha,
               state: "pending",
               context: "ci/merge-queue-yield",
               description: "Deferred while the merge queue runs; resumes automatically",
