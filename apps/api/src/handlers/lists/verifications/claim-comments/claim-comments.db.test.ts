@@ -20,7 +20,10 @@ import {
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -250,6 +253,42 @@ const storedComments = async (db: GatedTestDb, tenant: Tenant) =>
     .where(eq(legalReaderAnnotations.organizationId, tenant.organizationId))
     .limit(20);
 
+/** Resolves once some session of the database waits on a lock. */
+const lockWaitStarted = async (db: GatedTestDb, failure: string) => {
+  for (let attempt = 0; ; attempt += 1) {
+    const waiting = await db.execute<{ waiting: number }>(
+      sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
+        WHERE datname = current_database() AND wait_event_type = 'Lock'`,
+    );
+    if ((waiting.at(0)?.waiting ?? 0) > 0) {
+      return;
+    }
+    if (attempt > 200) {
+      throw new TypeError(failure);
+    }
+    await Bun.sleep(10);
+  }
+};
+
+/** A shared claim comment row, as the create handler writes one. */
+const commentRow = (tenant: Tenant) => ({
+  id: createSafeId<"legalReaderAnnotation">(),
+  organizationId: tenant.organizationId,
+  userId: tenant.author,
+  targetType: "verification-claim" as const,
+  targetId: tenant.claimId,
+  workspaceId: tenant.workspaceId,
+  verificationRunId: tenant.runId,
+  verificationClaimId: tenant.claimId,
+  kind: "comment" as const,
+  visibility: "shared" as const,
+  blockAnchorId: "p1",
+  startOffset: 0,
+  endOffset: 27,
+  quote: CLAIM_TEXT,
+  body: COMMENT,
+});
+
 const withTenants = async (
   exercise: (scope: { db: GatedTestDb; tenant: Tenant }) => Promise<void>,
 ) => {
@@ -465,7 +504,7 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
       ).toEqual([]);
     }));
 
-  test("a comment written while its claim is being deleted does not outlive the claim", async () =>
+  test("a comment written while its claim is being deleted (deletion first) does not outlive the claim", async () =>
     await withTenants(async ({ db, tenant }) => {
       let markDeleted = () => {};
       const deletedInTransaction = new Promise<void>((resolve) => {
@@ -487,25 +526,131 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
       await deletedInTransaction;
       const creation = create(db, tenant);
       // The comment's write waits on the claim the deletion holds.
-      for (let attempt = 0; ; attempt += 1) {
-        const waiting = await db.execute<{ waiting: number }>(
-          sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
-            WHERE datname = current_database() AND wait_event_type = 'Lock'`,
-        );
-        if ((waiting.at(0)?.waiting ?? 0) > 0) {
-          break;
-        }
-        if (attempt > 200) {
-          throw new TypeError("The comment write never waited on the claim");
-        }
-        await Bun.sleep(10);
-      }
+      await lockWaitStarted(db, "The comment write never waited on the claim");
       release();
       await deletion;
       // The held claim is gone once the write resumes, so the row policy
       // refuses the comment instead of storing one the trigger never saw.
       expect(await creation).toMatchObject({ code: expect.any(Number) });
       expect(await storedComments(db, tenant)).toHaveLength(0);
+    }));
+
+  test("a claim deleted while a comment on it is being written (write first) takes the comment with it", async () =>
+    await withTenants(async ({ db, tenant }) => {
+      let markWritten = () => {};
+      const writtenInTransaction = new Promise<void>((resolve) => {
+        markWritten = resolve;
+      });
+      let release = () => {};
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      // The comment's transaction is held open after its insert, still
+      // holding the claim its insert check locked.
+      const writing = scopedFor(
+        db,
+        tenant,
+      )(async (tx) => {
+        await tx.insert(legalReaderAnnotations).values(commentRow(tenant));
+        markWritten();
+        await released;
+      });
+      await writtenInTransaction;
+      const deletion = db
+        .delete(legalListVerificationRuns)
+        .where(eq(legalListVerificationRuns.id, tenant.runId))
+        .execute();
+      // The claim's deletion waits on the comment's transaction.
+      await lockWaitStarted(
+        db,
+        "The claim deletion never waited on the comment",
+      );
+      release();
+      await writing;
+      await deletion;
+      // The cleanup that follows the claim's deletion sees the committed
+      // comment and removes it.
+      expect(await storedComments(db, tenant)).toHaveLength(0);
+    }));
+
+  test("a claim's comments need the verification feature in the database too", async () =>
+    await withTenants(async ({ db, tenant }) => {
+      const id = createdId(await create(db, tenant, { visibility: "shared" }));
+      testState.setConfig(
+        "API_FEATURE_ACCESS_GRANTS",
+        organizationFeatureGrants(tenant.organizationId, [
+          LEGAL_LISTS_FEATURE_ID,
+        ]),
+      );
+      const { claims, comments } = await scopedFor(
+        db,
+        tenant,
+      )(async (tx) => ({
+        claims: await tx
+          .select({ id: legalListClaims.id })
+          .from(legalListClaims)
+          .where(eq(legalListClaims.id, tenant.claimId)),
+        comments: await tx
+          .select({ id: legalReaderAnnotations.id })
+          .from(legalReaderAnnotations)
+          .where(eq(legalReaderAnnotations.id, id)),
+      }));
+      // The lists feature alone shows the claim, never the comment on it.
+      expect(claims).toHaveLength(1);
+      expect(comments).toEqual([]);
+    }));
+
+  test("the table owner reaches claim comments only through the claim cleanup", async () =>
+    await withTenants(async ({ db, tenant }) => {
+      createdId(await create(db, tenant));
+      const ownerRole = `claim_cleanup_owner_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+      const rolledBack = new Error("Rolled back on purpose");
+      let observed: { reachable: number; remaining: number } | undefined;
+      // Every change here, the owner role included, is rolled back.
+      await db
+        .transaction(async (tx) => {
+          await tx.execute(
+            sql.raw(`CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS`),
+          );
+          await tx.execute(
+            sql.raw(
+              `ALTER TABLE public.legal_reader_annotations OWNER TO ${ownerRole}`,
+            ),
+          );
+          await tx.execute(
+            sql.raw(
+              `ALTER FUNCTION public.legal_reader_annotations_drop_claim_comments() OWNER TO ${ownerRole}`,
+            ),
+          );
+          await tx.execute(sql.raw(`SET LOCAL ROLE ${ownerRole}`));
+          const reachable = await tx.execute<{ reachable: number }>(
+            sql`SELECT count(*)::int AS reachable FROM public.legal_reader_annotations
+              WHERE organization_id = ${tenant.organizationId}`,
+          );
+          await tx.execute(sql`RESET ROLE`);
+          // The cleanup trigger now runs as the restricted owner.
+          await tx
+            .delete(legalListVerificationRuns)
+            .where(eq(legalListVerificationRuns.id, tenant.runId));
+          const remaining = await tx
+            .select({ id: legalReaderAnnotations.id })
+            .from(legalReaderAnnotations)
+            .where(
+              eq(legalReaderAnnotations.organizationId, tenant.organizationId),
+            );
+          observed = {
+            reachable: reachable.at(0)?.reachable ?? -1,
+            remaining: remaining.length,
+          };
+          throw rolledBack;
+        })
+        .catch((error: unknown) => {
+          if (error !== rolledBack) {
+            throw error;
+          }
+        });
+      expect(observed).toEqual({ reachable: 0, remaining: 0 });
+      expect(await storedComments(db, tenant)).toHaveLength(1);
     }));
 
   test("without the verification feature nothing is read or written", async () =>

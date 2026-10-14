@@ -22,7 +22,7 @@ type CommentedClaim = {
 
 /**
  * The claim, if the caller can see it in this matter: the claim's row
- * policies (matter access, the verification's feature fence) decide, so a
+ * policies (matter access, the lists feature) decide, so a
  * claim of another matter or organization reads as absent.
  */
 export const readCommentedClaim = async ({

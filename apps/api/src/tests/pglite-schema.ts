@@ -250,7 +250,7 @@ export const installPgliteSchemaPrerequisites = async (
     await db.execute(
       sql.raw(
         latestMigrationStatementContaining(
-          `CREATE FUNCTION public.${name}(uuid, uuid, uuid)`,
+          `FUNCTION public.${name}(uuid, uuid, uuid)\nRETURNS boolean`,
         ),
       ),
     );
@@ -493,25 +493,30 @@ export const installPgliteChatRunLogRls = async (
 /** Apply the committed setting omitted by schema push. */
 const READER_ANNOTATION_CLAIM_COMMENT_STATEMENT_PREFIXES = [
   'ALTER TABLE "legal_reader_annotations" FORCE ROW LEVEL SECURITY',
-  'CREATE FUNCTION "legal_reader_annotations_drop_claim_comments"',
+  'CREATE OR REPLACE FUNCTION "legal_reader_annotations_drop_claim_comments"',
   'REVOKE ALL ON FUNCTION "legal_reader_annotations_drop_claim_comments"',
   'CREATE TRIGGER "legal_list_claims_drop_reader_comments"',
 ] as const;
 
+const READER_ANNOTATION_CLAIM_COMMENT_MIGRATIONS = [
+  "20261012120100_reader_annotation_verification_claims",
+  "20261012120200_reader_annotation_claim_comment_fences",
+] as const;
+
 // The push creates the claim-comment columns and policies; the forced RLS and
-// the claim cleanup trigger exist only in the migration.
+// the claim cleanup trigger exist only in the migrations. Each statement is
+// taken from the newest migration that carries it.
 export const installPgliteReaderAnnotationClaimComments = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    nodePath.join(
-      DRIZZLE_DIR,
-      "20261012120100_reader_annotation_verification_claims",
-      "migration.sql",
-    ),
+  const statements = READER_ANNOTATION_CLAIM_COMMENT_MIGRATIONS.flatMap(
+    (migration) =>
+      readMigrationStatements(
+        nodePath.join(DRIZZLE_DIR, migration, "migration.sql"),
+      ),
   );
   for (const prefix of READER_ANNOTATION_CLAIM_COMMENT_STATEMENT_PREFIXES) {
-    const statement = statements.find((candidate) =>
+    const statement = statements.findLast((candidate) =>
       executableSql(candidate).startsWith(prefix),
     );
     if (statement === undefined) {

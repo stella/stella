@@ -46,11 +46,17 @@ const tableOwnerCheck = sql.raw(
   `current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${LEGAL_READER_ANNOTATIONS}'::regclass)`,
 );
 
+/** The claims the running cleanup trigger deletes, as it names them. */
+const claimCleanupScope = sql.raw(
+  "verification_claim_id = ANY(coalesce(nullif((SELECT pg_catalog.current_setting('app.reader_claim_cleanup_ids', true)), '')::uuid[], '{}'::uuid[]))",
+);
+
 /**
- * A claim's comment exists for the caller only while the claim does. The
- * database function (migration `20261012120100`) is SECURITY INVOKER, so the
- * claim's own policies (matter access, the verification's feature fence)
- * decide whether it finds the claim. The check lives in the database rather
+ * A claim's comment exists for the caller only while the claim does and the
+ * caller's transaction carries the document verification feature. The
+ * database function (migration `20261012120200`) checks that feature itself
+ * and is SECURITY INVOKER, so the claim's own policies (matter access, the
+ * lists feature) decide whether it finds the claim. The check lives in the database rather
  * than in this module: the public-law reader routes reach this table but
  * never a claim's comment, and are not part of the verification feature.
  */
@@ -219,14 +225,16 @@ export const legalReaderAnnotations = p.pgTable(
     }),
     ...reviewResetOwnerPolicies(LEGAL_READER_ANNOTATIONS),
     // The claim-cleanup trigger runs as the owner and removes every author's
-    // comments on the claims a statement deleted.
+    // comments on the claims a statement deleted; it names those claims in a
+    // transaction-local setting for the length of its delete, and the owner
+    // reaches only the comments on them.
     p.pgPolicy("claim_cleanup_owner_select", {
       for: "select",
-      using: sql`${tableOwnerCheck} AND verification_claim_id IS NOT NULL`,
+      using: sql`${tableOwnerCheck} AND ${claimCleanupScope}`,
     }),
     p.pgPolicy("claim_cleanup_owner_delete", {
       for: "delete",
-      using: sql`${tableOwnerCheck} AND verification_claim_id IS NOT NULL`,
+      using: sql`${tableOwnerCheck} AND ${claimCleanupScope}`,
     }),
   ],
 );
