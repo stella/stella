@@ -169,6 +169,7 @@ import {
   defaultReadGatedDecisionCitationDigest,
   defaultReadGatedDecisionCitations,
   defaultReadGatedDecisionWithDocument,
+  defaultListCaseLawProvisionDecisions,
   defaultSearchDecisionsHandler,
   isReadCaseLawDecisionSuccess,
   isSearchCaseLawSuccess,
@@ -714,17 +715,19 @@ const SEARCH_CASE_LAW_TEXTS = searchCaseLawTexts(
 
 const searchCaseLawArgsSchema = nullAsAbsent(
   v.strictObject({
-    queries: v.pipe(
-      v.array(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(LIMITS.searchQueryMaxLength),
+    queries: v.optional(
+      v.pipe(
+        v.array(
+          v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(LIMITS.searchQueryMaxLength),
+          ),
         ),
+        v.minLength(1),
+        v.maxLength(LIMITS.caseLawSearchQueriesMax),
+        v.description(SEARCH_CASE_LAW_TEXTS.queries),
       ),
-      v.minLength(1),
-      v.maxLength(LIMITS.caseLawSearchQueriesMax),
-      v.description(SEARCH_CASE_LAW_TEXTS.queries),
     ),
     limit: v.optional(
       v.pipe(
@@ -2404,6 +2407,108 @@ const caseLawSearchResult = ({
   };
 };
 
+/**
+ * The merged page's continuation: null when every query is exhausted, which
+ * makes the merged page the last one; otherwise each query's own cursor.
+ */
+const mergedCaseLawSearchCursor = (
+  pages: readonly CaseLawQueryOutcome[],
+): string | null => {
+  const subCursors = pages.map((outcome) =>
+    outcome.exhausted ? null : outcome.page.nextCursor,
+  );
+  return subCursors.every((subCursor) => subCursor === null)
+    ? null
+    : encodePaginationCursor(subCursors);
+};
+
+type ListSearchCaseLawProvisionOptions = {
+  args: v.InferOutput<typeof searchCaseLawArgsSchema>;
+  context: McpRequestContext;
+  country: NonNullable<ReturnType<typeof publicCaseLawCountry>>;
+  /** Absent when the call named neither queries nor a provision. */
+  provision: CaseLawProvisionFilter | undefined;
+};
+
+/**
+ * A provision with no queries: the complete list of decisions citing it, one
+ * page at a time, in the same result shape a search returns. The cursor is
+ * the list's own, passed through unchanged.
+ */
+const listSearchCaseLawProvision = async ({
+  args,
+  context,
+  country,
+  provision,
+}: ListSearchCaseLawProvisionOptions) => {
+  if (provision === undefined) {
+    const message = "Pass queries, a provision, or both";
+    return structuredErrorResult({
+      code: "validation_error",
+      message,
+      hint: 'Add queries with the question, or provision with the cited statute provision, for example "§ 316 odst. 2 ZP".',
+      issues: [{ path: "queries", message }],
+    });
+  }
+  const {
+    court: courtFilter,
+    courts: courtListFilter,
+    warnings: filterWarnings,
+  } = await resolveCourtFilter({
+    context,
+    country,
+    court: args.court,
+    courts: args.courts,
+  });
+  const list =
+    context.testDependencies?.listCaseLawProvisionDecisions ??
+    defaultListCaseLawProvisionDecisions;
+  const provisionText =
+    args.provision ?? panic("A provision list has no provision");
+  const answer = readCaseLawSearchAnswer(
+    await list({
+      body: {
+        // The list ranks no text; the provision as written is what it reads.
+        query: provisionText,
+        sentenceAlignedExcerpt: true,
+        headnotePresentation: "expanded",
+        limit: normalizePage(args.limit ?? DEFAULT_SEARCH_LIMIT),
+        ...(args.cursor === undefined ? {} : { cursor: args.cursor }),
+        ...(courtFilter === undefined ? {} : { court: courtFilter }),
+        ...(courtListFilter === undefined ? {} : { courts: courtListFilter }),
+        ...caseLawSearchRequestFilters(args),
+        provision,
+        country,
+      },
+      caseLawDb: caseLawPublicReadDb,
+    }),
+    args.cursor,
+  );
+  if (answer.type === "failed") {
+    return answer.result;
+  }
+  const { page } = answer;
+  const merged = mergeCaseLawSearchHits([page.hits]);
+  const payload = boundCaseLawSearchHeadnotes({
+    headnotes: "included",
+    facets: page.facets,
+    searches: [
+      {
+        query: provisionText,
+        queryUsed: page.queryUsed,
+        paginationOutcome: page.paginationOutcome,
+        warnings: [...filterWarnings, ...page.warnings],
+      },
+    ],
+    nextCursor: page.nextCursor,
+    paginationOutcome: page.paginationOutcome,
+    results: merged.map(caseLawSearchResult),
+    total: page.total,
+    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
+  });
+  return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
+};
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -2425,10 +2530,6 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     queries,
   } = parsed.output;
   const limit = normalizePage(parsed.output.limit ?? DEFAULT_SEARCH_LIMIT);
-  const pageError = validateSearchQueryPage(limit, queries.length);
-  if (pageError !== undefined) {
-    return pageError;
-  }
   const unavailable = publicCountryUnavailable(country);
   if (unavailable !== null) {
     return toolDataResult(unavailable);
@@ -2447,6 +2548,18 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   if (provisionFilter?.type === "refused") {
     return provisionFilter.result;
   }
+  if (queries === undefined) {
+    return await listSearchCaseLawProvision({
+      args: parsed.output,
+      context,
+      country: publicCountry,
+      provision: provisionFilter?.provision,
+    });
+  }
+  const pageError = validateSearchQueryPage(limit, queries.length);
+  if (pageError !== undefined) {
+    return pageError;
+  }
   const resolved = resolveCaseLawSearchCursors({
     cursor,
     queryCount: queries.length,
@@ -2460,7 +2573,6 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   if (resolved.type === "count_mismatch") {
     return mismatchedSearchCursorResult(resolved.encoded, queries.length);
   }
-
   // A court filter is read onto a stored court before any query runs, so
   // every phrasing and every continuation of this call narrows the same way.
   const {
@@ -2562,14 +2674,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const first = pages.at(0) ?? panic("Case-law search ran no query");
   const single =
     queries.length === 1 && !first.exhausted ? first.page : undefined;
-  const subCursors = pages.map((outcome) =>
-    outcome.exhausted ? null : outcome.page.nextCursor,
-  );
-  // Every query exhausted means the merged page is the last one; otherwise the
-  // envelope carries each query's own continuation.
-  const mergedCursor = subCursors.every((subCursor) => subCursor === null)
-    ? null
-    : encodePaginationCursor(subCursors);
+  const mergedCursor = mergedCaseLawSearchCursor(pages);
 
   // One entry per query, in input order. Required words and warnings belong
   // to each phrasing independently of the first phrasing's facets.

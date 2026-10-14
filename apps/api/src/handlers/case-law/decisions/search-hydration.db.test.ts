@@ -24,6 +24,7 @@ import {
   caseLawSearchPlan,
   decisionHitsPage,
   candidateDecisionRowsQuery,
+  listCaseLawProvisionDecisions,
   candidateDecisionRowsStatement,
   pageDecisionRowsQuery,
   pageDecisionRowsStatement,
@@ -824,6 +825,54 @@ test.each([
     expect([...rows.keys()]).toEqual([...expectedIds]);
   },
 );
+
+test("a provision-only list is the complete citing set with an exact total and its citing sentence", async () => {
+  const listed = await listCaseLawProvisionDecisions({
+    body: {
+      ...SEARCH_BODY,
+      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+    },
+    caseLawDb,
+    dependencies: { servingGeneration: GENERATION },
+  });
+  if (!("hits" in listed)) {
+    throw new Error("expected a page");
+  }
+  // § 316 of the labour code: the Czech decision cites odst. 2; the Slovak
+  // one cites § 31 of it and § 316 of another act, so it is not listed.
+  expect(listed.hits.map(({ decisionId }) => String(decisionId))).toEqual([
+    String(czechId),
+  ]);
+  expect(listed.total).toEqual({ type: "exact", value: 1 });
+  expect(listed.nextCursor).toBeNull();
+  expect(listed.hits.at(0)?.headline).toBe("sentence par_316-odst_2");
+
+  const none = await listCaseLawProvisionDecisions({
+    body: {
+      ...SEARCH_BODY,
+      provision: { work: "262/2006 Sb.", unit: "section", section: 317 },
+    },
+    caseLawDb,
+    dependencies: { servingGeneration: GENERATION },
+  });
+  expect("hits" in none ? none.total : null).toEqual({
+    type: "exact",
+    value: 0,
+  });
+});
+
+test("a provision-only list refuses a cursor issued for another request", async () => {
+  const refused = await listCaseLawProvisionDecisions({
+    body: {
+      ...SEARCH_BODY,
+      cursor: "not-a-list-cursor",
+      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+    },
+    caseLawDb,
+    dependencies: { servingGeneration: GENERATION },
+  });
+  expect("hits" in refused).toBe(false);
+});
 
 test("the provision filter probes links by decision id, not by scanning them", async () => {
   await caseLawDb(async (tx) => {

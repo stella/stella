@@ -22,7 +22,10 @@ import type {
   readsSharedPublicLawCorpus,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
-import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
+import type {
+  listCaseLawProvisionDecisions,
+  searchDecisionsHandler,
+} from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
 import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
 import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
@@ -165,6 +168,7 @@ export type McpRequestContext = {
     createTimeEntryHandler?: typeof createTimeEntryHandler;
     readCaseLawCoverageHandler?: typeof readCaseLawCoverageHandler;
     searchDecisionsHandler?: typeof searchDecisionsHandler;
+    listCaseLawProvisionDecisions?: typeof listCaseLawProvisionDecisions;
     corpusIndexQueryVariant?: CorpusIndexQueryVariant;
     caseLawSearchGuidance?: CaseLawSearchGuidanceMode;
     /** Every court spelling one corpus country holds, for reading a court filter. */

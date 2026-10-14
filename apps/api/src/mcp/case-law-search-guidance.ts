@@ -55,7 +55,7 @@ const DESCRIPTION_TAIL =
   "gives citing polarity.";
 
 const QUERIES_TAIL =
-  "Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call.";
+  "Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total.";
 
 const LIMIT_OFF =
   "Merged-page size, split evenly across the queries (at least one hit each)";

@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, sql } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { type Static, t } from "elysia";
 
@@ -135,4 +135,50 @@ export const readCaseLawProvisionScope = async (
     citingDecisions:
       count?.citingDecisions ?? panic("A count query returned no row"),
   };
+};
+
+/**
+ * The ids of every decision citing the provision, as a subquery a page read
+ * filters by. It drives from the links' work index, so a provision-only list
+ * reads the provision's own links rather than probing every decision.
+ */
+export const citingDecisionIdsSubquery = (
+  tx: CaseLawPublicReadTransaction,
+  scope: ProvisionScopeOptions,
+) =>
+  tx
+    .select({ decisionId: caseLawProvisionCitations.decisionId })
+    .from(caseLawProvisionCitations)
+    .where(and(...provisionLinkConditions(scope)));
+
+/**
+ * The first sentence of each decision that cites the provision, in text
+ * order: what a provision-only list shows as the reason each decision is on
+ * it.
+ */
+export const readProvisionCitingSentences = async (
+  tx: CaseLawPublicReadTransaction,
+  scope: ProvisionScopeOptions,
+  decisionIds: readonly SafeId<"caseLawDecision">[],
+): Promise<Map<string, string>> => {
+  if (decisionIds.length === 0) {
+    return new Map();
+  }
+  const link = caseLawProvisionCitations;
+  const rows = await tx
+    .selectDistinctOn([link.decisionId], {
+      decisionId: link.decisionId,
+      sentence: link.sentenceText,
+    })
+    .from(link)
+    .where(
+      and(
+        inArray(link.decisionId, decisionIds),
+        ...provisionLinkConditions(scope),
+      ),
+    )
+    .orderBy(link.decisionId, link.spanStart)
+    // One row per decision, by DISTINCT ON.
+    .limit(decisionIds.length);
+  return new Map(rows.map((row) => [String(row.decisionId), row.sentence]));
 };

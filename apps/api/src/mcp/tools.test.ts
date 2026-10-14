@@ -406,6 +406,7 @@ const searchProviderSearchMock = mock(
   },
 );
 const searchDecisionsHandlerMock = mock();
+const listCaseLawProvisionDecisionsMock = mock();
 const searchLegislationHandlerMock = mock();
 const resolveStatuteExpressionMock = mock();
 const resolveStatuteWorkVersionMock = mock();
@@ -1142,6 +1143,7 @@ const createContext = ({
     readWorkspaceHandler: readWorkspaceHandlerMock,
     readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
     searchDecisionsHandler: searchDecisionsHandlerMock,
+    listCaseLawProvisionDecisions: listCaseLawProvisionDecisionsMock,
     readCaseLawCourtNames: async () => STORED_CZ_COURTS,
     searchLegislationHandler: searchLegislationHandlerMock,
     resolveStatuteExpression: resolveStatuteExpressionMock,
@@ -1225,6 +1227,7 @@ describe("OpenAI-compatible MCP tools", () => {
     readContentAcrossMattersExecute.mockReset();
     readContactExecute.mockReset();
     searchDecisionsHandlerMock.mockReset();
+    listCaseLawProvisionDecisionsMock.mockReset();
     searchLegislationHandlerMock.mockReset();
     resolveStatuteExpressionMock.mockReset();
     resolveStatuteWorkVersionMock.mockReset();
@@ -1319,7 +1322,7 @@ describe("OpenAI-compatible MCP tools", () => {
         queries: {
           type: "array",
           description:
-            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call.",
+            "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total.",
           items: { type: "string", minLength: 1, maxLength: 500 },
           minItems: 1,
           maxItems: 5,
@@ -1455,7 +1458,7 @@ describe("OpenAI-compatible MCP tools", () => {
             "Require every word of each query, function words included. Off by default: a query phrased as a question carries words no judgment is written with, and `searches[].queryUsed` reports what was required. Pass true when every word matters.",
         },
       },
-      required: ["queries", "country"],
+      required: ["country"],
       additionalProperties: false,
     });
   });
@@ -5160,6 +5163,69 @@ describe("OpenAI-compatible MCP tools", () => {
         expect(JSON.stringify(payload)).toContain('"hint"');
       },
     );
+
+    test("a provision without queries lists its citing decisions, with an exact total", async () => {
+      listCaseLawProvisionDecisionsMock.mockResolvedValue({
+        paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+        facets: null,
+        hits: [],
+        nextCursor: "next-page",
+        total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 21),
+        queryUsed: "",
+        warnings: [],
+      });
+      const result = await handleMcpToolCall({
+        args: {
+          country: "CZE",
+          provision: "§ 316 odst. 2 ZP",
+          courts: ["NS"],
+          sort: "newest",
+          cursor: "list-cursor",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+      expect(result.isError).toBeUndefined();
+      expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+      expect(listCaseLawProvisionDecisionsMock).toHaveBeenCalledTimes(1);
+      const [{ body }] = listCaseLawProvisionDecisionsMock.mock.calls[0] ?? [];
+      expect(body).toMatchObject({
+        country: "CZE",
+        courts: ["Nejvyšší soud"],
+        sort: "newest",
+        // The list's own cursor is passed through, not split per phrasing.
+        cursor: "list-cursor",
+        provision: {
+          work: "262/2006 Sb.",
+          unit: "section",
+          section: 316,
+          subsection: "2",
+        },
+      });
+      expect(parseToolPayload(result)).toMatchObject({
+        total: { type: "exact", value: 21 },
+        nextCursor: "next-page",
+        searches: [{ query: "§ 316 odst. 2 ZP" }],
+      });
+    });
+
+    test("neither queries nor a provision is refused with the fix", async () => {
+      const result = await handleMcpToolCall({
+        args: { country: "CZE" },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+      expect(result.isError).toBe(true);
+      expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+      expect(listCaseLawProvisionDecisionsMock).not.toHaveBeenCalled();
+      expect(parseToolPayload(result)).toMatchObject({
+        error: {
+          code: "validation_error",
+          message: "Pass queries, a provision, or both",
+          hint: expect.stringContaining("provision"),
+        },
+      });
+    });
 
     test("placeholder filters, a zero id and open bounds narrow nothing", async () => {
       const result = await handleMcpToolCall({

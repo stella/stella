@@ -200,7 +200,6 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -214,7 +213,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -6691,7 +6690,6 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -6705,7 +6703,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -13964,7 +13962,6 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -13978,7 +13975,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
@@ -15949,7 +15946,6 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
     "inputSchema": {
       "type": "object",
       "required": [
-        "queries",
         "country"
       ],
       "additionalProperties": false,
@@ -15963,7 +15959,7 @@ exports[`MCP registry quality (law surface) tool surface snapshot (name, scope, 
           },
           "minItems": 1,
           "maxItems": 5,
-          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call."
+          "description": "Several phrasings of ONE question, at most 5. Their pages are merged and deduplicated within the page, so a reformulation costs no extra round trip; one phrasing is a valid call. Omit queries and pass provision to list every decision citing it, by authority or date, with an exact total."
         },
         "limit": {
           "type": "integer",
