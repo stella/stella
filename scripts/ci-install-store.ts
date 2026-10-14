@@ -12,7 +12,7 @@ import path from "node:path";
 import { createSha256 } from "../packages/sha256/src/bun";
 
 const MARKER = ".stella-install-complete";
-const STORE_CACHE_VERSION = "v3";
+const STORE_CACHE_VERSION = "v4";
 
 export type GlobalStoreMode = "enabled" | "disabled";
 
@@ -34,6 +34,25 @@ const assertIdentity = (name: string, value: string) => {
   if (value.trim() === "") {
     throw new InstallStoreInvariantError(`Missing install-store ${name}`);
   }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const normalizedLock = (source: string) => {
+  const lock: unknown = Bun.JSONC.parse(source);
+  if (!isRecord(lock) || !isRecord(lock["workspaces"])) {
+    throw new InstallStoreInvariantError("Invalid bun.lock workspaces");
+  }
+  for (const workspace of Object.values(lock["workspaces"])) {
+    if (!isRecord(workspace)) {
+      throw new InstallStoreInvariantError("Invalid bun.lock workspace");
+    }
+    // Workspace self versions do not change dependency resolution or extraction.
+    // Retain every other lock field, including dependency versions and integrity.
+    delete workspace["version"];
+  }
+  return JSON.stringify(lock);
 };
 
 export const parseGlobalStoreMode = (
@@ -97,7 +116,9 @@ export const completeInstallStoreKey = ({
     .update(
       JSON.stringify({
         format: STORE_CACHE_VERSION,
-        lock: createSha256().update(readFileSync(lockfile)).digest("hex"),
+        lock: createSha256()
+          .update(normalizedLock(readFileSync(lockfile, "utf-8")))
+          .digest("hex"),
         configuration: createSha256()
           .update(readFileSync(configuration))
           .digest("hex"),
