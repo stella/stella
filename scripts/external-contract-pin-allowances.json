@@ -38,6 +38,21 @@
       "checkedAt": "2026-10-13T23:28:29.000Z",
       "expiresAt": "2026-10-20T23:28:29.000Z",
       "reason": "Existing SDK and patch pin drift requires offline replay characterisation."
+    },
+    {
+      "id": "s3-compatible-2026-10-14",
+      "system": "s3-compatible",
+      "pins": {
+        "apps/api/package.json#dependencies.@aws-sdk/client-s3": "^3.1147.0",
+        "apps/api/package.json#dependencies.@aws-sdk/client-sts": "^3.1147.0",
+        "apps/api/package.json#dependencies.@aws-sdk/s3-request-presigner": "^3.1147.0",
+        "bun.lock#@aws-sdk/client-s3": "@aws-sdk/client-s3@3.1147.0",
+        "bun.lock#@aws-sdk/client-sts": "@aws-sdk/client-sts@3.1147.0",
+        "bun.lock#@aws-sdk/s3-request-presigner": "@aws-sdk/s3-request-presigner@3.1147.0"
+      },
+      "checkedAt": "2026-10-14T04:02:36.914Z",
+      "expiresAt": "2026-10-21T04:02:36.914Z",
+      "reason": "Existing dependency pin drift from the merge base requires offline replay characterisation."
     }
   ]
 }

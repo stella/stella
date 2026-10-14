@@ -817,7 +817,7 @@ export const hasChangedExecutableUsage = ({
         continue;
       }
       const clause = statement.importClause;
-      if (clause?.isTypeOnly) {
+      if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
         continue;
       }
       if (clause?.name) {
