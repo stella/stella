@@ -407,6 +407,12 @@ export const LIMITS = {
   searchQueryMaxLength: SEARCH_QUERY_MAX_LENGTH,
   /** Characters of a provision citation a case-law search is narrowed by. */
   caseLawProvisionFilterMaxLength: 256,
+  /**
+   * Decisions citing one provision the engine is handed as an id-set filter.
+   * Conservative until the engine's term-set cost is measured at scale; a
+   * provision cited more widely is checked candidate by candidate instead.
+   */
+  caseLawProvisionIdSetMax: 5000,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */

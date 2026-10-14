@@ -126,7 +126,10 @@ import {
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
-import { provisionCitedSql } from "@/api/lib/case-law/provision-filter";
+import {
+  provisionCitedSql,
+  readCaseLawProvisionScope,
+} from "@/api/lib/case-law/provision-filter";
 import {
   loadPublicCourtWeights,
   loadPublicFtsSearchConfigs,
@@ -314,6 +317,13 @@ type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema> & {
   sentenceAlignedExcerpt?: boolean;
   /** Internal MCP reading policy; HTTP rows retain the compact preview. */
   headnotePresentation?: "expanded";
+  /**
+   * Every decision citing `provision`, read from the provision links before
+   * the engine runs: the engine filters by the set natively. Absent when the
+   * provision is cited too widely for a set, and then each ranked candidate
+   * is checked against the links instead.
+   */
+  provisionDecisionIds?: readonly SafeId<"caseLawDecision">[];
 };
 
 type PostgresSearchBody = Omit<
@@ -361,8 +371,22 @@ export const searchDecisionsHandler = async ({
   }
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
+    const { provision } = scopedBody;
+    const provisionScope =
+      provision === undefined
+        ? null
+        : await caseLawDb(
+            async (tx) =>
+              await readCaseLawProvisionScope(tx, {
+                jurisdiction: country,
+                provision,
+              }),
+          );
     return await searchCorpusIndexDecisions({
-      body: scopedBody,
+      body:
+        provisionScope?.type === "decisions"
+          ? { ...scopedBody, provisionDecisionIds: provisionScope.decisionIds }
+          : scopedBody,
       caseLawDb,
       observer,
     });
@@ -1092,6 +1116,7 @@ const buildCorpusIndexQuery = ({
       courtPartitions: courtPartitionsForCourtFilter(contract, body.court),
       dateFrom: body.dateFrom,
       dateTo: body.dateTo,
+      decisionIds: body.provisionDecisionIds,
       documentType: body.decisionType,
       jurisdiction: jurisdictionClause,
       language: body.language,
@@ -2081,7 +2106,9 @@ const readCaseLawSearchFacets = async ({
     queryFor === null ||
     body.category !== undefined ||
     body.hasLegalSentence !== undefined ||
-    body.provision !== undefined
+    // An id-set provision filter is the engine's own; only the candidate
+    // check a broad provision falls back to is invisible to aggregations.
+    (body.provision !== undefined && body.provisionDecisionIds === undefined)
   ) {
     return null;
   }

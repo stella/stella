@@ -13,11 +13,18 @@ import {
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import { caseLawSearchPlan } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId } from "@/api/lib/branded-types";
-import type { CaseLawProvisionFilter } from "@/api/lib/case-law/provision-filter";
+import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
+import {
+  type CaseLawProvisionFilter,
+  readCaseLawProvisionScope,
+} from "@/api/lib/case-law/provision-filter";
 import { DEFAULT_SEARCH_SORT } from "@/api/lib/legal-search/corpus-search-order";
 import { createFtsConfigCache } from "@/api/lib/legal-search/fts-config";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
-import { createTestPglite } from "@/api/tests/pglite-test-db";
+import {
+  createTestPglite,
+  withPublicLawReaderRole,
+} from "@/api/tests/pglite-test-db";
 
 const WORD = "zqxprovisionfilter";
 
@@ -167,5 +174,89 @@ test("the Postgres search narrows to decisions citing the provision, level by le
       courts.rows.reduce((sum, row) => sum + Number(row["count"]), 0),
     ).toBe(expected.length);
   }
+  await client.close();
+}, 60_000);
+
+test("the provision scope is the whole citing set while it fits, else its exact size", async () => {
+  const client = await createTestPglite();
+  const db = drizzle({ client });
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values(caseLawSourceRow({ id: sourceId }));
+  const decisions = ["1", "2", "3"].map((index) => ({
+    id: createSafeId<"caseLawDecision">(),
+    sourceId,
+    country: "CZE",
+    language: "cs",
+    court: "Nejvyšší soud",
+    caseNumber: `21 Cdo ${index}/2020`,
+    decisionDate: "2020-01-01",
+  }));
+  await db.insert(caseLawDecisions).values(decisions);
+  // Two links in one decision count it once; the third decision cites
+  // another subsection.
+  const link = (
+    decisionId: (typeof decisions)[number]["id"],
+    subsection: string,
+    spanStart: number,
+  ): typeof caseLawProvisionCitations.$inferInsert => ({
+    anchor: `par_316-odst_${subsection}`,
+    confidence: 0.9,
+    decisionDate: "2020-01-01",
+    decisionId,
+    jurisdiction: "CZE",
+    section: 316,
+    subsection,
+    sentenceText: "sentence",
+    spanEnd: spanStart + 10,
+    spanStart,
+    unit: "section",
+    workCollection: "Sb.",
+    workIdentifier: "262/2006 Sb.",
+    workNumber: 262,
+    workYear: 2006,
+  });
+  const [first, second, third] = decisions;
+  if (first === undefined || second === undefined || third === undefined) {
+    throw new Error("expected three decisions");
+  }
+  await db
+    .insert(caseLawProvisionCitations)
+    .values([
+      link(first.id, "2", 10),
+      link(first.id, "2", 40),
+      link(second.id, "2", 10),
+      link(third.id, "1", 10),
+    ]);
+  const read = async (provision: CaseLawProvisionFilter, idSetMax?: number) =>
+    await withPublicLawReaderRole(db, async (roleTx) => {
+      // SAFETY: the role transaction supplies the select surface the read uses.
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test handle stands in for a transaction
+      const tx = roleTx as unknown as CaseLawPublicReadTransaction;
+      return await readCaseLawProvisionScope(tx, {
+        jurisdiction: "CZE",
+        provision,
+        ...(idSetMax === undefined ? {} : { idSetMax }),
+      });
+    });
+  const subsection: CaseLawProvisionFilter = {
+    work: "262/2006 Sb.",
+    unit: "section",
+    section: 316,
+    subsection: "2",
+  };
+  const scope = await read(subsection);
+  expect(scope.type).toBe("decisions");
+  expect(
+    scope.type === "decisions" ? scope.decisionIds.map(String).toSorted() : [],
+  ).toEqual([first.id, second.id].map(String).toSorted());
+  // Past the bound the set is not handed over, but its size is exact.
+  expect(
+    await read({ work: "262/2006 Sb.", unit: "section", section: 316 }, 2),
+  ).toEqual({ type: "broad", citingDecisions: 3 });
+  // Exactly at the bound the set still fits.
+  expect((await read(subsection, 2)).type).toBe("decisions");
+  expect(
+    await read({ work: "262/2006 Sb.", unit: "section", section: 317 }),
+  ).toEqual({ type: "decisions", decisionIds: [] });
   await client.close();
 }, 60_000);
