@@ -116,7 +116,10 @@ export const shardFilters = ({
     .map((name) => `--filter=!${name}`);
 };
 
-export const apiShardValue = (shard: TestShardId, count = 4): string => {
+export const apiShardValue = (
+  shard: TestShardId,
+  count: number = API_TEST_SHARD_IDS.length,
+): string => {
   const apiShards = API_TEST_SHARD_IDS;
   if (!isApiTestShardId(shard)) {
     return "";
@@ -164,7 +167,7 @@ export const assertApiShardExecuted = ({
   shard,
   taskIds,
   output,
-  count = 4,
+  count = API_TEST_SHARD_IDS.length,
 }: AssertApiShardExecutedOptions): void => {
   const value = apiShardValue(shard, count);
   if (value === "" || !taskIds.includes("@stll/api#test")) {
