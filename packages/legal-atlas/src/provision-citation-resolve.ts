@@ -38,6 +38,12 @@ export type ResolvedProvisionCitation = {
 export type ProvisionCitationResolution =
   | ResolvedProvisionCitation
   | { status: "no_provision" }
+  /**
+   * The text names several provisions or a range (`§ 316 odst. 2 a 3`,
+   * `§ 316–318`, `§§ 2 až 4`, `§ 2 a násl.`): one filter cannot stand for
+   * them, so the caller is told rather than given the first.
+   */
+  | { status: "multiple_provisions" }
   | { status: "no_act" }
   | {
       status: "ambiguous_act";
@@ -85,6 +91,8 @@ const alternation = (texts: readonly string[]) =>
 
 type CompiledResolver = {
   section: RegExp;
+  /** What, right after a provision, continues it into a list or a range. */
+  continuation: RegExp;
   sectionUnits: ReadonlyMap<string, SectionUnit>;
   subdivisions: readonly {
     pattern: RegExp;
@@ -105,6 +113,17 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
   return {
     section: new RegExp(
       String.raw`(?:(?:ust\.?|ustanoven[íi])\s*)?(?<term>${alternation(sectionTerms)})\s*${SECTION_VALUE}`,
+      "iu",
+    ),
+    continuation: new RegExp(
+      String.raw`^\s*(?:(?:${alternation(profile.andFollowingMarkers)})|(?:[,;]|[-–—]|(?:${[
+        ...profile.enumerationConnectors,
+        ...profile.rangeConnectors,
+      ]
+        .map((word) => RegExp.escape(word))
+        .join(
+          "|",
+        )})(?=\s))\s*(?:${alternation(profile.sectionTerms.map(({ text }) => text))}|${alternation(profile.subdivisionTerms.map(({ text }) => text))}|\d|[a-z]\)))`,
       "iu",
     ),
     sectionUnits: new Map(
@@ -457,6 +476,13 @@ export const resolveProvisionCitation = ({
     section.index + section[0].length,
     resolver,
   );
+  if (
+    // `§§` is the plural designator: it always introduces more than one.
+    term.startsWith("§§") ||
+    resolver.continuation.test(normalized.slice(end))
+  ) {
+    return { status: "multiple_provisions" };
+  }
   const rest = `${normalized.slice(0, section.index)} ${normalized.slice(end)}`;
   const act = resolveAct(rest, resolver, profile, citedOn);
   if (act.kind === "refused") {

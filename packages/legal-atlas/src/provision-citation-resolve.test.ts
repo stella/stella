@@ -116,6 +116,33 @@ describe("resolveProvisionCitation", () => {
     );
   });
 
+  test.each([
+    "§ 316 odst. 2 a 3 ZP",
+    "§ 316 odst. 2, 3 ZP",
+    "§ 316–318 ZP",
+    "§ 316 - 318 ZP",
+    "§ 316 až 318 ZP",
+    "§§ 316 a 317 ZP",
+    "§ 316 a § 317 ZP",
+    "§ 52 písm. g) a h) ZP",
+    "§ 2910 a násl. OZ",
+  ])(
+    "%s names several provisions and is refused, never narrowed to the first",
+    (text) => {
+      expect(resolve(text).status).toBe("multiple_provisions");
+    },
+  );
+
+  test("an act named after a list-like word is still one provision", () => {
+    // `a` joins the act's own words here, not a second provision.
+    expect(
+      resolved("§ 2910 zákona č. 89/2012 Sb., občanský zákoník"),
+    ).toMatchObject({
+      section: 2910,
+      workIdentifier: "89/2012 Sb.",
+    });
+  });
+
   test("a section naming no act is refused as no act", () => {
     expect(resolve("§ 316 odst. 2").status).toBe("no_act");
     expect(resolve("§ 316 neznámého zákona").status).toBe("no_act");

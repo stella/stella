@@ -2209,6 +2209,11 @@ const resolveSearchProvision = (
         "The provision names no section",
         'Write it with its section, for example "§ 316 odst. 2 ZP" or "čl. 10 Listiny".',
       );
+    case "multiple_provisions":
+      return provisionRefusal(
+        "The provision names several provisions or a range",
+        'Pass one provision per search, for example "§ 316 odst. 2 ZP"; search the others separately, or name them in queries.',
+      );
     case "no_act":
       return provisionRefusal(
         "The provision names no act this corpus recognises",

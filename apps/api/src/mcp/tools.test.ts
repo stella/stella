@@ -5152,6 +5152,8 @@ describe("OpenAI-compatible MCP tools", () => {
       ["kamerový systém", "names no section"],
       ["§ 316 odst. 2", "names no act"],
       ["§ 10 Listiny", "is not divided into the units"],
+      ["§ 316 odst. 2 a 3 ZP", "several provisions or a range"],
+      ["§ 316–318 ZP", "several provisions or a range"],
     ])(
       "refuses the provision %s before any search, naming the fix",
       async (provision, message) => {
