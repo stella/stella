@@ -198,7 +198,6 @@ const runFor = async (
   );
   const memory = memorySink();
   let manifest: Uint8Array | null = null;
-  let removed = 0;
   const now = new Date("2026-10-14T10:00:00.000Z");
   const outcome = await runDataExport(
     { exportId, organizationId: ids.orgA, userId },
@@ -224,16 +223,13 @@ const runFor = async (
       writeManifest: async (bytes) => {
         manifest = bytes;
       },
-      removeObjects: async () => {
-        removed += 1;
-      },
       pace,
       signal,
       partTargetBytes: 2 * 1024 ** 3,
       now: () => now,
     },
   );
-  return { outcome, memory, manifest, removed, now };
+  return { outcome, memory, manifest, now };
 };
 
 describe("data export permissions", () => {
@@ -314,12 +310,11 @@ describe("data export run", () => {
       organizationId: ids.orgA,
       requestedBy: ids.userAdmin,
     });
-    const { outcome, memory, manifest, removed, now } = await runFor(
+    const { outcome, memory, manifest, now } = await runFor(
       ids.userAdmin,
       exportId,
     );
     expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.READY);
-    expect(removed).toBe(0);
     expect(manifest).not.toBeNull();
 
     const [partChunks] = [...memory.parts.values()];
@@ -378,31 +373,32 @@ describe("data export run", () => {
 });
 
 describe("data export maintenance", () => {
-  test("deletes expired files before marking the export expired, and keeps it ready when deletion fails", async () => {
+  test("marks exports expired without deleting objects, and refuses their downloads", async () => {
+    // Export objects are deleted by the bucket lifecycle, never by the app:
+    // the maintenance task only stops offering them.
     const now = new Date("2026-10-14T12:00:00.000Z");
+    const part = {
+      index: 1,
+      fileName: "part.zip",
+      sizeBytes: 1,
+      sha256: "0".repeat(64),
+      matterIds: [],
+      fileCount: 0,
+      totals: { matters: 0, documents: 0, versions: 0, files: 0, fileBytes: 0 },
+      problems: [],
+    };
     const expired = await insertExport({
       organizationId: ids.orgA,
       status: "ready",
       expiresAt: new Date(now.getTime() - 1000),
-    });
-    const stuck = await insertExport({
-      organizationId: ids.orgB,
-      status: "ready",
-      expiresAt: new Date(now.getTime() - 1000),
+      parts: [part],
     });
     const live = await insertExport({
       organizationId: ids.orgB,
       status: "ready",
       expiresAt: new Date(now.getTime() + 1000),
     });
-    const deletedPrefixes: string[] = [];
     const task = createMaintainDataExportsTask({
-      deleteObjects: async (prefix) => {
-        if (prefix.includes(stuck)) {
-          throw new Error("storage unavailable");
-        }
-        deletedPrefixes.push(prefix);
-      },
       enqueue: async () => "requeued",
     });
     const result = await task(
@@ -413,22 +409,32 @@ describe("data export maintenance", () => {
         signal: new AbortController().signal,
       }),
     );
-    // The failed deletion is reported, not swallowed.
-    expect(result !== undefined && Result.isError(result)).toBe(true);
-    expect(deletedPrefixes).toEqual([
-      `exports/${ids.orgA}/data-exports/${expired}/`,
-    ]);
+    expect(result !== undefined && Result.isOk(result)).toBe(true);
     const rows = await testDb
       .select({
         id: organizationDataExports.id,
         status: organizationDataExports.status,
       })
       .from(organizationDataExports)
-      .where(inArray(organizationDataExports.id, [expired, stuck, live]));
+      .where(inArray(organizationDataExports.id, [expired, live]));
     const statusById = new Map(rows.map((row) => [row.id, row.status]));
     expect(statusById.get(expired)).toBe("expired");
-    expect(statusById.get(stuck)).toBe("ready");
     expect(statusById.get(live)).toBe("ready");
+
+    const context = createTestHandlerContext({
+      audit: async () => {},
+      safeDb: createSafeDb(database, [], ids.orgA, ids.userAdmin),
+      scopedDb: NO_DB,
+      memberRole: sessionMemberRole("owner"),
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userAdmin },
+    });
+    const download = await invoke(downloadDataExport, {
+      ...context,
+      params: { exportId: expired },
+      body: { file: { type: "part", index: 1 } },
+    });
+    expect(download).toMatchObject({ code: 409 });
   });
 
   test("resumes runs whose worker stopped and fails those out of attempts", async () => {
@@ -450,7 +456,6 @@ describe("data export maintenance", () => {
     });
     const enqueued: string[] = [];
     const task = createMaintainDataExportsTask({
-      deleteObjects: async () => {},
       enqueue: async ({ exportId, attempts }) => {
         enqueued.push(`${exportId}:${attempts}`);
         return "requeued";

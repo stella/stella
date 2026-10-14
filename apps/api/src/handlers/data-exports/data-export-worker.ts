@@ -12,6 +12,9 @@
  * - resumable: the part plan is stored on the first attempt and each
  *   finished part is checkpointed, so a deploy, restart or failure resumes
  *   at the part it was in instead of starting over.
+ *
+ * It never deletes what it wrote: objects under `exports/` are removed by
+ * the bucket lifecycle (see `data-export-queue.ts`).
  */
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -53,7 +56,6 @@ import {
   DATA_EXPORT_RETENTION_MS,
   dataExportPartKey,
   dataExportPrefix,
-  deleteDataExportObjects,
   getDataExportQueue,
 } from "@/api/lib/data-export-queue";
 import type { DataExportJobData } from "@/api/lib/data-export-queue";
@@ -93,8 +95,6 @@ export type DataExportRunDependencies = {
   sink: ExportSink;
   /** Store the export manifest next to the parts. */
   writeManifest: (bytes: Uint8Array) => Promise<void>;
-  /** Remove every object this export wrote. */
-  removeObjects: () => Promise<void>;
   pace: () => Promise<void>;
   /** Aborted on shutdown; the run stops and is resumed later. */
   signal: AbortSignal;
@@ -222,9 +222,6 @@ export const runDataExport = async (
   // would silently export only their own matters. Refuse instead.
   if (!claimed.authorized) {
     await markFailed(deps.db, ids, DATA_EXPORT_FAILURE_MESSAGE.notAuthorized);
-    await deps.removeObjects().catch((error: unknown) => {
-      captureError(error, { exportId, operation: "data_export.cleanup" });
-    });
     return DATA_EXPORT_RUN_OUTCOME.FAILED;
   }
   const run: ClaimedRun & { startedAt: Date | null } = claimed.row;
@@ -355,12 +352,8 @@ export const runDataExport = async (
       await markResumable(deps.db, ids);
       return DATA_EXPORT_RUN_OUTCOME.RESUMABLE;
     }
-    await deps.removeObjects().catch((cleanupError: unknown) => {
-      captureError(cleanupError, {
-        exportId,
-        operation: "data_export.cleanup",
-      });
-    });
+    // Parts already written stay until the bucket lifecycle expires them;
+    // a failed export never offers a download link for them.
     await markFailed(deps.db, ids, DATA_EXPORT_FAILURE_MESSAGE.failed);
     return DATA_EXPORT_RUN_OUTCOME.FAILED;
   } finally {
@@ -388,7 +381,9 @@ export const createS3RunDependencies = ({
     source: createExportSource({ db, organizationId, signal, pace }),
     sink: {
       openPart: (fileName) => {
-        // A part rebuilt after a restart replaces its unfinished upload.
+        // Part keys are deterministic: a part rebuilt by a resumed attempt
+        // overwrites the earlier object, and an unfinished multipart upload
+        // is aborted by the bucket lifecycle.
         const upload = openS3StreamingUpload({
           key: dataExportPartKey({ organizationId, exportId, fileName }),
           contentType: ZIP_CONTENT_TYPE,
@@ -411,9 +406,6 @@ export const createS3RunDependencies = ({
         },
         { type: "lifecycle-prefix", prefix },
       );
-    },
-    removeObjects: async () => {
-      await deleteDataExportObjects(prefix);
     },
     pace,
     signal,

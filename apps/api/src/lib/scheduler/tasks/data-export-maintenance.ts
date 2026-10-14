@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { AnyColumn } from "drizzle-orm";
 
 import {
@@ -8,8 +8,6 @@ import {
 } from "@/api/db/schema";
 import {
   DATA_EXPORT_HEARTBEAT_STALE_MS,
-  dataExportPrefix,
-  deleteDataExportObjects,
   enqueueDataExport,
 } from "@/api/lib/data-export-queue";
 import {
@@ -32,7 +30,6 @@ const ABANDONED_ERROR =
   "The export could not be started because its requester's account no longer exists.";
 
 export type DataExportMaintenanceDependencies = {
-  deleteObjects: (prefix: string) => Promise<void>;
   enqueue: typeof enqueueDataExport;
 };
 
@@ -58,12 +55,14 @@ const atOrBefore = (column: AnyColumn, cutoff: Date) =>
 const before = (column: AnyColumn, cutoff: Date) =>
   sql<boolean>`${column} < ${cutoff.toISOString()}::timestamptz`;
 
-const expireReady = async ({ db, deps, summary, now }: StepArgs) => {
-  const due = await db
-    .select({
-      id: organizationDataExports.id,
-      organizationId: organizationDataExports.organizationId,
-    })
+// The bucket lifecycle deletes export objects (the API role may not); this
+// only stops offering them. `expires_at` counts from the run's start, which
+// no object of the export predates, so a row turns `expired` no later than
+// the lifecycle could remove its files and no link is ever signed for a
+// removed object.
+const expireReady = async ({ db, summary, now }: StepArgs) => {
+  const due = db
+    .select({ id: organizationDataExports.id })
     .from(organizationDataExports)
     .where(
       and(
@@ -73,38 +72,21 @@ const expireReady = async ({ db, deps, summary, now }: StepArgs) => {
     )
     .orderBy(asc(organizationDataExports.expiresAt))
     .limit(BATCH_SIZE);
-  for (const row of due) {
-    // db-await-in-loop: one storage delete then one conditional update per expired export; bounded by BATCH_SIZE
-    const deleted = await Result.tryPromise(
-      async () =>
-        await deps.deleteObjects(
-          dataExportPrefix({
-            organizationId: row.organizationId,
-            exportId: row.id,
-          }),
-        ),
-    );
-    // Files first, row second: a row marked expired never still has files,
-    // and a failed delete keeps the row `ready` for the next tick.
-    if (Result.isError(deleted)) {
-      summary.errors.push(deleted.error);
-      continue;
-    }
-    // audit: skip - retention lifecycle of an export whose request and downloads are audited
-    await db
-      .update(organizationDataExports)
-      .set({ status: "expired" })
-      .where(
-        and(
-          eq(organizationDataExports.id, row.id),
-          eq(organizationDataExports.status, "ready"),
-        ),
-      );
-    summary.expired += 1;
-  }
+  // audit: skip - retention lifecycle of an export whose request and downloads are audited
+  const expired = await db
+    .update(organizationDataExports)
+    .set({ status: "expired" })
+    .where(
+      and(
+        inArray(organizationDataExports.id, due),
+        eq(organizationDataExports.status, "ready"),
+      ),
+    )
+    .returning({ id: organizationDataExports.id });
+  summary.expired += expired.length;
 };
 
-const resumeStaleRuns = async ({ db, deps, summary, now }: StepArgs) => {
+const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
   const staleBefore = new Date(now.getTime() - DATA_EXPORT_HEARTBEAT_STALE_MS);
   // A worker that vanished (crash, killed deploy) leaves its checkpoints:
   // hand the run back so the next attempt resumes, unless it is out of
@@ -133,26 +115,9 @@ const resumeStaleRuns = async ({ db, deps, summary, now }: StepArgs) => {
         gte(organizationDataExports.attempts, DATA_EXPORT_MAX_ATTEMPTS),
       ),
     )
-    .returning({
-      id: organizationDataExports.id,
-      organizationId: organizationDataExports.organizationId,
-    });
+    .returning({ id: organizationDataExports.id });
+  // Parts already written age out through the bucket lifecycle.
   summary.failedStale += failed.length;
-  for (const row of failed) {
-    // db-await-in-loop: storage cleanup per failed run; rows are rare and the update above already committed
-    const deleted = await Result.tryPromise(
-      async () =>
-        await deps.deleteObjects(
-          dataExportPrefix({
-            organizationId: row.organizationId,
-            exportId: row.id,
-          }),
-        ),
-    );
-    if (Result.isError(deleted)) {
-      summary.errors.push(deleted.error);
-    }
-  }
 };
 
 const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
@@ -210,8 +175,8 @@ const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
 };
 
 /**
- * Keep exports moving and honest about their files: delete the files of
- * expired exports, resume runs whose worker stopped (failing those out of
+ * Keep exports moving: mark exports past their expiry as expired (the bucket
+ * lifecycle deletes their files), resume runs whose worker stopped (failing those out of
  * attempts), and enqueue queued exports, which is how a stopped run gets its
  * next attempt.
  */
@@ -252,6 +217,5 @@ export const createMaintainDataExportsTask =
   };
 
 export const maintainDataExports = createMaintainDataExportsTask({
-  deleteObjects: deleteDataExportObjects,
   enqueue: enqueueDataExport,
 });

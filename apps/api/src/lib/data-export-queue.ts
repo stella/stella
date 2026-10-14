@@ -3,18 +3,22 @@
  * name, the job payload, the handoff, and where an export's files live.
  *
  * Separate from the worker so the request handler and the scheduler can
- * enqueue and clean up without importing the archive builder.
+ * enqueue without importing the archive builder.
+ *
+ * The application never deletes export objects: the API role may not delete
+ * under `exports/`, and the bucket lifecycle is the deletion mechanism. It
+ * expires every object there a week after creation and aborts unfinished
+ * multipart uploads after a day, so a part abandoned by a failed attempt,
+ * or rewritten by a resumed one, ages out on its own.
  */
 
 import { DAY_IN_MS } from "@stll/time";
 
-import { envBase } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import type { QueueRequeueOutcome } from "@/api/lib/bullmq-requeue";
-import { deleteS3ObjectWithSignal, listS3ObjectKeys } from "@/api/lib/s3";
 
 export const DATA_EXPORT_QUEUE_NAME = "organization-data-exports";
 const DATA_EXPORT_JOB_NAME = "export-organization-data";
@@ -107,27 +111,3 @@ export const dataExportPartKey = ({
 }): string => `${dataExportPrefix({ organizationId, exportId })}${fileName}`;
 
 export const DATA_EXPORT_MANIFEST_FILE_NAME = "export-manifest.json";
-
-// Parts plus one manifest; far below this for any organisation.
-const MAX_OBJECTS_PER_EXPORT = 1000;
-const DELETE_TIMEOUT_MS = 60_000;
-
-/**
- * Delete every object under one export's prefix. Export files are copies,
- * outside the organisation's stored-file accounting, so they are deleted
- * directly rather than through the organisation file-usage path.
- */
-export const deleteDataExportObjects = async (
-  prefix: string,
-): Promise<void> => {
-  const signal = AbortSignal.timeout(DELETE_TIMEOUT_MS);
-  const keys = await listS3ObjectKeys({
-    bucket: envBase.S3_BUCKET,
-    prefix,
-    maxKeys: MAX_OBJECTS_PER_EXPORT,
-    signal,
-  });
-  await Promise.all(
-    keys.map(async (key) => await deleteS3ObjectWithSignal(key, signal)),
-  );
-};
