@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Seed templates & clauses (Knowledge section).
@@ -108,7 +109,8 @@ const createTemplateDocx = async (
 ): Promise<Buffer> => {
   const zip = new JSZip();
 
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -118,31 +120,27 @@ const createTemplateDocx = async (
       "</Types>",
   );
 
-  zip
-    .folder("_rels")
-    ?.file(
-      ".rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
-        "</Relationships>",
-    );
+  writeZipEntry(
+    zip.folder("_rels"),
+    ".rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      "</Relationships>",
+  );
 
-  zip
-    .folder("word")
-    ?.file(
-      "document.xml",
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escXml(title)}</w:t></w:r></w:p>${bodyXml}</w:body></w:document>`,
-    );
+  writeZipEntry(
+    zip.folder("word"),
+    "document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escXml(title)}</w:t></w:r></w:p>${bodyXml}</w:body></w:document>`,
+  );
 
-  zip
-    .folder("word")
-    ?.folder("_rels")
-    ?.file(
-      "document.xml.rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
-    );
+  writeZipEntry(
+    zip.folder("word")?.folder("_rels"),
+    "document.xml.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
+  );
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return Buffer.from(buf);

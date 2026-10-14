@@ -23,6 +23,7 @@
 
 import { panic } from "better-result";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import {
   filtersFromFieldConfig,
   renderValueMarker,
@@ -534,7 +535,8 @@ const createDocx = async (): Promise<Buffer> => {
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
 
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -547,38 +549,37 @@ const createDocx = async (): Promise<Buffer> => {
       "</Types>",
   );
 
-  zip
-    .folder("_rels")
-    ?.file(
-      ".rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        `<Relationship Id="rId1" Type="${REL.officeDocument}" Target="word/document.xml"/>` +
-        "</Relationships>",
-    );
+  writeZipEntry(
+    zip.folder("_rels"),
+    ".rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      `<Relationship Id="rId1" Type="${REL.officeDocument}" Target="word/document.xml"/>` +
+      "</Relationships>",
+  );
 
   const word = zip.folder("word");
-  word?.file(
+  writeZipEntry(
+    word,
     "document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
       ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       `<w:body>${bodyXml}${SECT_PR}</w:body></w:document>`,
   );
-  word?.file("styles.xml", STYLES_XML);
-  word?.file("header1.xml", HEADER_XML);
-  word?.file("footer1.xml", FOOTER_XML);
-  word
-    ?.folder("_rels")
-    ?.file(
-      "document.xml.rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        `<Relationship Id="rId1" Type="${REL.styles}" Target="styles.xml"/>` +
-        `<Relationship Id="rId2" Type="${REL.header}" Target="header1.xml"/>` +
-        `<Relationship Id="rId3" Type="${REL.footer}" Target="footer1.xml"/>` +
-        "</Relationships>",
-    );
+  writeZipEntry(word, "styles.xml", STYLES_XML);
+  writeZipEntry(word, "header1.xml", HEADER_XML);
+  writeZipEntry(word, "footer1.xml", FOOTER_XML);
+  writeZipEntry(
+    word?.folder("_rels"),
+    "document.xml.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      `<Relationship Id="rId1" Type="${REL.styles}" Target="styles.xml"/>` +
+      `<Relationship Id="rId2" Type="${REL.header}" Target="header1.xml"/>` +
+      `<Relationship Id="rId3" Type="${REL.footer}" Target="footer1.xml"/>` +
+      "</Relationships>",
+  );
 
   const buffer = await zip.generateAsync({ type: "nodebuffer" });
   return Buffer.from(buffer);

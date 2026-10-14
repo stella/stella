@@ -9,6 +9,8 @@ import JSZip from "jszip";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
@@ -30,9 +32,9 @@ const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 </w:document>`;
 
 const zip = new JSZip();
-zip.file("[Content_Types].xml", contentTypesXml);
-zip.folder("_rels")?.file(".rels", rootRelsXml);
-zip.folder("word")?.file("document.xml", documentXml);
+writeZipEntry(zip, "[Content_Types].xml", contentTypesXml);
+writeZipEntry(zip.folder("_rels"), ".rels", rootRelsXml);
+writeZipEntry(zip.folder("word"), "document.xml", documentXml);
 
 const out = await zip.generateAsync({
   type: "uint8array",
@@ -44,7 +46,8 @@ console.log(`wrote ${target} (${String(out.byteLength)} bytes)`);
 
 // Two outline entries make the outline available; explicit A4 dimensions
 // exercise page fitting independently of editor defaults.
-zip.file(
+writeZipEntry(
+  zip,
   "word/document.xml",
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">

@@ -16,6 +16,7 @@
 
 import * as slimdom from "slimdom";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import {
   isFieldPath,
   qualifyLoopPath,
@@ -237,7 +238,7 @@ export const writeFieldFilters = async (
       written,
     });
     if (rewritten.changed) {
-      zip.file(path, rewritten.xml);
+      writeZipEntry(zip, path, rewritten.xml);
       changed = true;
     }
   }

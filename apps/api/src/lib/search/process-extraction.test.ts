@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import JSZip from "jszip";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -848,11 +849,13 @@ describe("the extraction's database", () => {
 
   test("stamps a DOCX-declared language on the same connection", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/document.xml",
       `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body><w:p><w:r><w:t>Text</w:t></w:r></w:p></w:body></w:document>`,
     );
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/styles.xml",
       `<w:styles xmlns:w="${WORD_NAMESPACE}"><w:docDefaults><w:rPrDefault><w:rPr><w:lang w:val="cs-CZ"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
     );
