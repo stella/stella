@@ -210,9 +210,12 @@ test("the reader's own date bounds the agenda before the limit applies", async (
     workspaceId: ids.wsA1,
     agendaFrom: yesterday,
   });
-  expect(behind.map(({ entityId: id }) => id)).toContain(
-    yesterdayIds[0] ?? todayTaskId,
-  );
+  // Ties on the due date order by id, so which of them fill the limit is not
+  // fixed; every slot going to one of them is.
+  expect(behind).toHaveLength(LIMITS.overviewUpcomingAgenda);
+  for (const { entityId: id } of behind) {
+    expect(yesterdayIds).toContain(id);
+  }
 
   // Yesterday's deadlines never use up the limit for a reader on today.
   const current = await readOverviewAgenda({
