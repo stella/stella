@@ -14,7 +14,7 @@ import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { projectInconsistentVersion } from "@/api/handlers/legislation/catalog-response";
 import { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import type { SafeId } from "@/api/lib/branded-types";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceOn,
@@ -89,7 +89,7 @@ const workConditionsFor = ({
 }): SQL[] => {
   const conditions: SQL[] = [
     eq(legislationDocuments.eli, eli),
-    publishedLegislationDocument,
+    publishedLegislationDocumentFor("pages"),
   ];
   if (language !== undefined) {
     conditions.push(eq(legislationDocuments.language, language));

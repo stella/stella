@@ -176,6 +176,7 @@ export const readProvisionHistoryHandler = async ({
     operation: async (version) =>
       extractProvisionText(
         await readVersionBlocks({
+          surface: "pages",
           row: version,
           legislationDb,
           step: HISTORY_READ_STEP,

@@ -31,8 +31,8 @@ import {
   type DecisionReadResolution,
 } from "@stll/api-contract/case-law-decision-resolution";
 import {
-  isPublicCaseLawCountry,
-  publicCaseLawCountry,
+  isPublicCaseLawPageCountry,
+  publicCaseLawPageCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
@@ -104,7 +104,7 @@ const locatorCondition = (locator: DecisionSubjectLocator) => {
     case "id":
       return eq(caseLawDecisions.id, locator.id);
     case "slug": {
-      const country = publicCaseLawCountry(locator.country);
+      const country = publicCaseLawPageCountry(locator.country);
       const language = normalizePublicDecisionLanguage(locator.language);
       if (
         country === null ||
@@ -158,7 +158,7 @@ type LocatedRow = NonNullable<Awaited<ReturnType<typeof selectLocatedRow>>>;
 const isPublic = (row: LocatedRow): boolean => {
   if (
     !row.published ||
-    !isPublicCaseLawCountry(row.country) ||
+    !isPublicCaseLawPageCountry(row.country) ||
     !isRedistributable(row.descriptor)
   ) {
     return false;

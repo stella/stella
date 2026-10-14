@@ -708,9 +708,9 @@ describe("public case-law route boundary", () => {
         readSource(CITATION_GRAPH_FILE),
         readSource(LAUNCH_READINESS_FILE),
       ]);
-    expect(subject).toContain("!isPublicCaseLawCountry(row.country)");
+    expect(subject).toContain("!isPublicCaseLawPageCountry(row.country)");
     for (const source of [sitemap, alternates, citations]) {
-      expect(source).toContain("PUBLIC_CASE_LAW_COUNTRIES");
+      expect(source).toContain("PUBLIC_CASE_LAW_PAGE_COUNTRIES");
     }
     expect(readiness).toContain("evalSetExists: v.literal(true)");
     expect(readiness).toContain("lastCensusGreen: v.literal(true)");
@@ -923,7 +923,7 @@ describe("public case-law route boundary", () => {
     for (const component of [
       "redistributableCaseLawSourceFor(",
       "publishedCaseLawDecisionFor(",
-      "[...PUBLIC_CASE_LAW_COUNTRIES]",
+      "[...PUBLIC_CASE_LAW_PAGE_COUNTRIES]",
     ]) {
       expect({ component, count: count(component) }).toEqual({
         component,

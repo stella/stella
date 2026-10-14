@@ -69,6 +69,7 @@ export const resolveStatutesHandler = async (
   for (const [index, work] of body.works.entries()) {
     const countryRead = readPublicLawCountry(work.country, {
       admitted: PUBLIC_LEGISLATION_COUNTRIES,
+      surface: "search",
     });
     if (countryRead.kind === "read") {
       requests.push({
@@ -105,6 +106,7 @@ export const resolveStatutesHandler = async (
     items: body.works.map((work, index) => {
       const countryRead = readPublicLawCountry(work.country, {
         admitted: PUBLIC_LEGISLATION_COUNTRIES,
+        surface: "search",
       });
       if (countryRead.kind === "unavailable") {
         return {

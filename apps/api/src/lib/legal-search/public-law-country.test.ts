@@ -20,6 +20,7 @@ import {
 } from "@/api/lib/api-handlers";
 import {
   publicCountryUnavailableAnswer,
+  readPublicLawCountry,
   withPublicCountryUnavailable,
 } from "@/api/lib/legal-search/public-law-country";
 import { resetFailureObservationsForTesting } from "@/api/lib/observability/failure-shadow";
@@ -125,7 +126,9 @@ describe("typed public country unavailability through the request lifecycle", ()
       );
 
       expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
-      expect(await response.json()).toEqual(publicCountryUnavailable(country));
+      expect(await response.json()).toEqual(
+        publicCountryUnavailable(country, "search"),
+      );
       expectAnsweredClientOutcome();
     },
   );
@@ -213,5 +216,32 @@ describe("declared public country unavailability", () => {
         .map(({ name }) => name)
         .filter((name) => !declaring.has(name)),
     ).toEqual([]);
+  });
+});
+
+describe("a pages_public country on the shared read", () => {
+  const capabilities = {
+    ...PUBLIC_COUNTRY_CAPABILITIES,
+    SVK: "pages_public",
+  } as const;
+  const admitted = ["CZE", "SVK"];
+
+  test("a page read succeeds", () => {
+    expect(
+      readPublicLawCountry("SVK", { admitted, capabilities, surface: "pages" }),
+    ).toEqual({ kind: "read", country: "SVK" });
+  });
+
+  test("a search read stops with the unavailable answer before any query", () => {
+    expect(
+      readPublicLawCountry("SVK", {
+        admitted,
+        capabilities,
+        surface: "search",
+      }),
+    ).toMatchObject({
+      kind: "unavailable",
+      answer: { response: { country: "SVK", reason: "pages_public" } },
+    });
   });
 });

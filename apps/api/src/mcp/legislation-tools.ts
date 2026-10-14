@@ -567,7 +567,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     parsed.output.limit ?? DEFAULT_SEARCH_LIMIT,
   );
 
-  const unavailable = publicCountryUnavailable(country);
+  const unavailable = publicCountryUnavailable(country, "search");
   if (unavailable !== null) {
     return toolDataResult(unavailable);
   }
@@ -1125,6 +1125,7 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
         [
           String(version.id),
           await readBlocks({
+            surface: "search",
             row: version,
             legislationDb: legislationPublicReadDb,
             step: PROVISION_READ_STEP,

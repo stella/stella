@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
-  publishedLegislationDocument,
+  publishedLegislationDocumentFor,
   publishedLegislationCountryFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
@@ -53,7 +53,7 @@ export const selectWorkKey = async (
     .where(
       and(
         eq(legislationDocuments.id, documentId),
-        publishedLegislationDocument,
+        publishedLegislationDocumentFor("pages"),
       ),
     )
     .limit(1);
@@ -63,7 +63,7 @@ export const selectWorkKey = async (
 
 /** Restricts a `legislation_documents` scan to one Work. */
 export const workKeyConditions = (work: LegislationWorkKey): SQL[] => [
-  publishedLegislationCountryFor(legislationDocuments.country),
+  publishedLegislationCountryFor(legislationDocuments.country, "pages"),
   eq(legislationDocuments.sourceId, work.sourceId),
   eq(legislationDocuments.eli, work.eli),
   eq(legislationDocuments.language, work.language),
