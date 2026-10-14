@@ -59,6 +59,7 @@ import {
 import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-template-upload-dialog";
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
+import { caseLawCountryName } from "@/features/case-law/components/case-law-search";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
 import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
@@ -320,7 +321,7 @@ export const ProtectedAppFrame = ({
 };
 
 function GlobalChatMentionRegistration() {
-  useGlobalChatMentionRegistration();
+  useGlobalChatMentionRegistration({ caseLawCountryName });
 
   return null;
 }

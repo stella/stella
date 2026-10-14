@@ -2040,7 +2040,12 @@ type AssembleTurnSystemPromptOptions = {
 /** The connectors a turn loaded; none when it loaded no external tools. */
 const loadedConnectorsOf = (
   externalMcpTools: LoadedExternalMcpTools | undefined,
-): readonly LoadedExternalMcpConnector[] => externalMcpTools?.connectors ?? [];
+): readonly LoadedExternalMcpConnector[] => {
+  if (externalMcpTools === undefined) {
+    return [];
+  }
+  return externalMcpTools.connectors;
+};
 
 const assembleTurnSystemPrompt = ({
   chatContext,

@@ -1319,9 +1319,7 @@
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
-        "connectors": "Kapcsolatok",
         "entities": "Ebben az ügyben",
-        "registries": "Nyilvántartások",
         "sources": "Források"
       },
       "corpus": {

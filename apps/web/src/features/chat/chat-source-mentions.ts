@@ -25,10 +25,15 @@ type SourceMentionInputs = {
   legislationCountries: readonly PublicCountry[];
   /** "Case law · Czechia": the chip text a corpus scope reads as. */
   corpusLabel: (scope: ChatCorpusScope) => string;
-  /** The organization's native tools (`mcpConnectorsOptions().nativeTools`). */
-  nativeTools: readonly NativeToolRow[];
-  /** The connectors the organization lists, for their names. */
-  connectors: readonly ConnectorRow[];
+  /**
+   * The organization's connector catalog (`mcpConnectorsOptions()`): its
+   * native tools and the connectors it lists, for their names. Null when the
+   * catalog could not be read, which offers no registry or connector chips.
+   */
+  catalog: {
+    nativeTools: readonly NativeToolRow[];
+    connectors: readonly ConnectorRow[];
+  } | null;
   /** The user's connections (`mcpConnectionsOptions().connections`). */
   connections: readonly ConnectionRow[];
 };
@@ -41,6 +46,29 @@ type SourceMentionInputs = {
 const isActiveConnection = (connection: ConnectionRow): boolean =>
   connection.enabled && connection.status === "connected";
 
+/** Each public corpus by country, as the chip that scopes a turn to it. */
+const corpusMentions = (
+  caseLawCountries: readonly PublicCountry[],
+  legislationCountries: readonly PublicCountry[],
+  corpusLabel: (scope: ChatCorpusScope) => string,
+): ChatMentionOption[] =>
+  [
+    ...caseLawCountries.map((country): ChatCorpusScope => ({
+      corpus: "case_law",
+      country,
+    })),
+    ...legislationCountries.map((country): ChatCorpusScope => ({
+      corpus: "legislation",
+      country,
+    })),
+  ].map((scope): ChatMentionOption => ({
+    category: "corpus",
+    kind: "corpus",
+    label: corpusLabel(scope),
+    mimeType: null,
+    scope,
+  }));
+
 /**
  * The static Sources the picker offers as chips: each public corpus by
  * country, the organization's enabled business registries, and the user's
@@ -50,31 +78,18 @@ export const buildSourceMentionOptions = ({
   caseLawCountries,
   legislationCountries,
   corpusLabel,
-  nativeTools,
-  connectors,
+  catalog,
   connections,
 }: SourceMentionInputs): ChatMentionOption[] => {
-  const corpora: ChatCorpusScope[] = [
-    ...caseLawCountries.map((country): ChatCorpusScope => ({
-      corpus: "case_law",
-      country,
-    })),
-    ...legislationCountries.map((country): ChatCorpusScope => ({
-      corpus: "legislation",
-      country,
-    })),
-  ];
+  if (catalog === null) {
+    return corpusMentions(caseLawCountries, legislationCountries, corpusLabel);
+  }
+  const { nativeTools, connectors } = catalog;
   const connectorNames = new Map(
     connectors.map((connector) => [connector.id, connector.displayName]),
   );
   return [
-    ...corpora.map((scope): ChatMentionOption => ({
-      category: "corpus",
-      kind: "corpus",
-      label: corpusLabel(scope),
-      mimeType: null,
-      scope,
-    })),
+    ...corpusMentions(caseLawCountries, legislationCountries, corpusLabel),
     ...nativeTools.flatMap((tool): ChatMentionOption[] =>
       tool.enabled && isBusinessRegistrySlug(tool.slug)
         ? [

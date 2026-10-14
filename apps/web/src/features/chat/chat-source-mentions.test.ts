@@ -8,17 +8,19 @@ describe("buildSourceMentionOptions", () => {
       caseLawCountries: ["CZE"],
       legislationCountries: ["CZE"],
       corpusLabel: ({ corpus, country }) => `${corpus} · ${country}`,
-      nativeTools: [
-        { slug: "ares", displayName: "ARES", enabled: true },
-        { slug: "brreg", displayName: "Brønnøysund", enabled: false },
-        // A native tool that is not a business registry is not a source chip.
-        { slug: "boe", displayName: "BOE", enabled: true },
-      ],
-      connectors: [
-        { id: "c1", displayName: "Legal Search" },
-        { id: "c2", displayName: "Notes" },
-        { id: "c3", displayName: "Archive" },
-      ],
+      catalog: {
+        nativeTools: [
+          { slug: "ares", displayName: "ARES", enabled: true },
+          { slug: "brreg", displayName: "Brønnøysund", enabled: false },
+          // A native tool that is not a business registry is not a source chip.
+          { slug: "boe", displayName: "BOE", enabled: true },
+        ],
+        connectors: [
+          { id: "c1", displayName: "Legal Search" },
+          { id: "c2", displayName: "Notes" },
+          { id: "c3", displayName: "Archive" },
+        ],
+      },
       connections: [
         {
           connectorId: "c1",
@@ -87,10 +89,28 @@ describe("buildSourceMentionOptions", () => {
         caseLawCountries: [],
         legislationCountries: [],
         corpusLabel: () => "unused",
-        nativeTools: [],
-        connectors: [],
+        catalog: { nativeTools: [], connectors: [] },
         connections: [],
       }),
     ).toEqual([]);
+  });
+
+  test("offers only the corpora when the connector catalog could not be read", () => {
+    expect(
+      buildSourceMentionOptions({
+        caseLawCountries: ["CZE"],
+        legislationCountries: [],
+        corpusLabel: ({ corpus, country }) => `${corpus} · ${country}`,
+        catalog: null,
+        connections: [
+          {
+            connectorId: "c1",
+            connectorSlug: "legal-search",
+            enabled: true,
+            status: "connected",
+          },
+        ],
+      }).map((option) => option.label),
+    ).toEqual(["case_law · CZE"]);
   });
 });

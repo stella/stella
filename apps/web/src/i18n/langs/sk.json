@@ -1319,9 +1319,7 @@
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
-        "connectors": "Pripojenia",
         "entities": "V tomto spise",
-        "registries": "Registre",
         "sources": "Zdroje"
       },
       "corpus": {

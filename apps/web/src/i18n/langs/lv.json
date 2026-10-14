@@ -1319,9 +1319,7 @@
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {
       "category": {
-        "connectors": "Savienojumi",
         "entities": "Šajā lietā",
-        "registries": "Reģistri",
         "sources": "Avoti"
       },
       "corpus": {

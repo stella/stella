@@ -21,8 +21,8 @@ const CATEGORY_LABEL_KEYS = {
   workspace: "common.matters",
   decision: "common.caseLaw",
   corpus: "chat.mention.category.sources",
-  registry: "chat.mention.category.registries",
-  connector: "chat.mention.category.connectors",
+  registry: "search.scopeRegistries",
+  connector: "settings.connections.title",
 } as const satisfies Record<ChatReferenceCategory, TranslationKey>;
 
 /**
