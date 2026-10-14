@@ -53,6 +53,10 @@ import {
 } from "@/api/lib/legal-search/corpus-index-provider";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
+import {
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { installCorpusDispositionScan } from "@/api/tests/helpers/corpus-disposition-scan";
@@ -861,6 +865,21 @@ test("a provision-only list is the complete citing set with an exact total and i
   });
 });
 
+test("a provision-only list under the Postgres provider says it needs corpus-index search", async () => {
+  const refused = await listCaseLawProvisionDecisions({
+    body: {
+      ...SEARCH_BODY,
+      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+    },
+    caseLawDb,
+    dependencies: { provider: "pg-fts" },
+  });
+  expect(refused).toMatchObject({
+    code: 400,
+    response: { message: expect.stringContaining("corpus-index") },
+  });
+});
+
 test("a provision-only list reads its page and excerpts in one snapshot", async () => {
   const before = reads;
   await listCaseLawProvisionDecisions({
@@ -952,6 +971,32 @@ test("a provision-only list cursor resumes only the request it was issued for", 
       expect("hits" in (await list({ ...request, cursor, ...change }))).toBe(
         false,
       );
+    }
+
+    // A cursor of this very request whose key no longer fits the order's
+    // column is refused as a cursor, never sent to the comparison.
+    const parts = decodePaginationCursor(cursor) ?? [];
+    for (const key of ["not-an-authority", Number.POSITIVE_INFINITY, null]) {
+      const tampered = encodePaginationCursor([parts[0], key, parts[2]]);
+      expect("hits" in (await list({ ...request, cursor: tampered }))).toBe(
+        false,
+      );
+    }
+    const newest = await list({ ...request, sort: "newest" });
+    if (!("hits" in newest) || newest.nextCursor === null) {
+      throw new Error("expected a newest first page with a continuation");
+    }
+    const newestParts = decodePaginationCursor(newest.nextCursor) ?? [];
+    for (const key of [7, "2024-13-45", "yesterday"]) {
+      const tampered = encodePaginationCursor([
+        newestParts[0],
+        key,
+        newestParts[2],
+      ]);
+      expect(
+        "hits" in
+          (await list({ ...request, sort: "newest", cursor: tampered })),
+      ).toBe(false);
     }
   } finally {
     if (extra !== undefined) {

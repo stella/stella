@@ -273,6 +273,7 @@ import { logger } from "@/api/lib/observability/logger";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
+  isDateOnlyPaginationCursorPart,
 } from "@/api/lib/pagination";
 import {
   definePublicLawSharedQuery,
@@ -2854,12 +2855,31 @@ type ListCaseLawProvisionDecisionsOptions = {
   dependencies?: {
     /** The serving generation, read from the enrollment store when absent. */
     servingGeneration?: string;
+    /** The search provider, `LEGAL_SEARCH_PROVIDER` when absent. */
+    provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
   };
 };
 
 type ProvisionListCursor = {
   key: number | string;
   id: SafeId<"caseLawDecision">;
+};
+
+/**
+ * Whether a cursor key is a value the order's column can hold: an authority
+ * is a finite number, a date a calendar date. Anything else is refused
+ * before it reaches the comparison.
+ */
+const isProvisionListKey = (sort: SearchSort, key: unknown): boolean => {
+  switch (sort) {
+    case "relevance":
+      return typeof key === "number" && Number.isFinite(key);
+    case "newest":
+      return isDateOnlyPaginationCursorPart(key);
+    default:
+      sort satisfies never;
+      return panic(`Unhandled search sort: ${String(sort)}`);
+  }
 };
 
 /**
@@ -2870,6 +2890,7 @@ type ProvisionListCursor = {
 const readProvisionListCursor = (
   cursor: string,
   context: string,
+  sort: SearchSort,
 ): ProvisionListCursor | null => {
   const parts = decodePaginationCursor(cursor);
   if (parts === null || parts.length !== 3) {
@@ -2879,6 +2900,7 @@ const readProvisionListCursor = (
   if (
     cursorContext !== context ||
     !(typeof key === "number" || typeof key === "string") ||
+    !isProvisionListKey(sort, key) ||
     typeof id !== "string" ||
     !isUuid(id)
   ) {
@@ -2924,9 +2946,20 @@ export const listCaseLawProvisionDecisions = async ({
   const cursor =
     body.cursor === undefined
       ? null
-      : readProvisionListCursor(body.cursor, context);
+      : readProvisionListCursor(body.cursor, context, sort);
   if (body.cursor !== undefined && cursor === null) {
     return status(400, { message: "Invalid cursor" });
+  }
+  // Every page is re-checked against the serving generation's projection,
+  // which only the corpus-index provider keeps, as the category and
+  // legal-sentence filters are.
+  if (
+    (dependencies.provider ?? envBase.LEGAL_SEARCH_PROVIDER) !== "corpus-index"
+  ) {
+    return status(400, {
+      message:
+        "A provision-only list requires corpus-index search. Pass queries with the provision, or use a corpus-index deployment.",
+    });
   }
   let generation = dependencies.servingGeneration;
   if (generation === undefined) {
