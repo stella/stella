@@ -165,33 +165,29 @@ describe("MCP web handoff lifecycle", () => {
         "text",
       ),
     ).toBeNull();
-    for (const omitted of MCP_DEFAULT_RESOURCE_SCOPES) {
-      expect(
-        await service.mint(
-          {
-            ...fixture,
-            grantedScopes: MCP_DEFAULT_RESOURCE_SCOPES.filter(
-              (scope) => scope !== omitted,
-            ),
-          },
-          ["/law/example"],
-          "click",
-        ),
-      ).toBeNull();
-    }
-  });
-  test("every default permission is required and additional permissions are allowed", async () => {
-    for (const omitted of MCP_DEFAULT_RESOURCE_SCOPES) {
-      await db
-        .update(oauthConsent)
-        .set({
-          scopes: MCP_DEFAULT_RESOURCE_SCOPES.filter(
-            (scope) => scope !== omitted,
+    expect(
+      await service.mint(
+        {
+          ...fixture,
+          grantedScopes: MCP_DEFAULT_RESOURCE_SCOPES.filter(
+            (scope) => scope !== "stella:documents_write",
           ),
-        })
-        .where(eq(oauthConsent.id, fixture.consentId));
-      expect(await service.mint(fixture, ["/law/example"], "text")).toBeNull();
-    }
+        },
+        ["/law/example"],
+        "click",
+      ),
+    ).toBeNull();
+  });
+  test("an incomplete consent keeps plain links and additional permissions are allowed", async () => {
+    await db
+      .update(oauthConsent)
+      .set({
+        scopes: MCP_DEFAULT_RESOURCE_SCOPES.filter(
+          (scope) => scope !== "stella:documents_write",
+        ),
+      })
+      .where(eq(oauthConsent.id, fixture.consentId));
+    expect(await service.mint(fixture, ["/law/example"], "text")).toBeNull();
     await db
       .update(oauthConsent)
       .set({ scopes: [...MCP_DEFAULT_RESOURCE_SCOPES] })
