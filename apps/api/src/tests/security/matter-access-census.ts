@@ -20,7 +20,11 @@ import ts from "typescript";
  *   workspace-id set (`inArray(<table>.workspaceId, …)`, `workspace_id = ANY(…)`,
  *   `workspace_id IN (…)`, or an `accessibleWorkspaceIds` /
  *   `activeWorkspaceIds` binding). It must obtain the set from the owner
- *   module.
+ *   module: it calls a value-imported owner export, and every concrete filter
+ *   (`inArray` set or SQL `ANY`/`IN` value) is derived from such a call
+ *   through local bindings. Derivation is tracked by name across the file, so
+ *   shadowed names and values passed in from callers are not proven (they
+ *   count as not derived).
  *
  * A member that does not meet its signal's rule fails the census unless the
  * allowlist names `<file>::<signal>` with a reason.
@@ -64,9 +68,33 @@ const SQL_MEMBERSHIP = /\bworkspace_members\b/u;
 const SQL_MEMBER_ROLE = /\b[a-z_]+\.role\b/u;
 const SQL_CLIENT_ID = /\bclient_id\b/u;
 const SQL_WORKSPACE_SET = /\bworkspace_id\s*(?:=\s*any|in)\s*\(/iu;
+const SQL_WORKSPACE_SET_BEFORE_VALUE =
+  /\bworkspace_id\s*(?:=\s*any|in)\s*\(\s*$/iu;
+const ASSIGNMENT_OPERATORS = new Set<ts.SyntaxKind>([
+  ts.SyntaxKind.EqualsToken,
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+]);
+
+/** Every identifier a declaration binds, through destructuring. */
+const boundNames = (name: ts.BindingName): string[] => {
+  if (ts.isIdentifier(name)) {
+    return [name.text];
+  }
+  return name.elements.flatMap((element) =>
+    ts.isOmittedExpression(element) ? [] : boundNames(element.name),
+  );
+};
 
 type Facts = {
-  importsOwner: boolean;
+  /** The owner module is value-imported and one of its exports is called. */
+  callsOwner: boolean;
+  /**
+   * Every concrete workspace-set filter (`inArray(x.workspaceId, set)`, or a
+   * SQL `workspace_id = ANY(${set})` / `IN (${set})`) takes a value derived
+   * from an owner call. True when the module has no concrete filter.
+   */
+  filtersDeriveFromOwner: boolean;
   importsRootDbValue: boolean;
   namesView: boolean;
   namesMembership: boolean;
@@ -97,7 +125,8 @@ const readFacts = (file: string, source: string): Facts => {
     true,
   );
   const facts: Facts = {
-    importsOwner: false,
+    callsOwner: false,
+    filtersDeriveFromOwner: true,
     importsRootDbValue: false,
     namesView: false,
     namesMembership: false,
@@ -106,16 +135,36 @@ const readFacts = (file: string, source: string): Facts => {
     namesClientId: false,
     filtersWorkspaceSet: false,
   };
+  const ownerBindings = new Set<string>();
+  const ownerNamespaces = new Set<string>();
+  /** Values handed to concrete workspace-set filters. */
+  const filterArguments: ts.Expression[] = [];
+  /** `name <- initializer` edges for the derivation fixpoint below. */
+  const derivations: { names: string[]; from: ts.Node }[] = [];
   const visit = (node: ts.Node): void => {
     if (
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
       const specifier = node.moduleSpecifier.text;
-      if (specifier === AUTHORIZED_WORKSPACE_OWNER_MODULE) {
-        facts.importsOwner = true;
-      }
       const bindings = node.importClause?.namedBindings;
+      // Only value bindings can carry the owner's result; a type-only import
+      // (whole clause or one specifier) proves nothing.
+      if (
+        specifier === AUTHORIZED_WORKSPACE_OWNER_MODULE &&
+        node.importClause?.isTypeOnly !== true &&
+        bindings !== undefined
+      ) {
+        if (ts.isNamespaceImport(bindings)) {
+          ownerNamespaces.add(bindings.name.text);
+        } else {
+          for (const element of bindings.elements) {
+            if (!element.isTypeOnly) {
+              ownerBindings.add(element.name.text);
+            }
+          }
+        }
+      }
       if (
         specifier === "@/api/db/root" &&
         node.importClause?.isTypeOnly !== true &&
@@ -164,13 +213,39 @@ const readFacts = (file: string, source: string): Facts => {
       node.expression.text === "inArray"
     ) {
       const [column] = node.arguments;
+      const [, set] = node.arguments;
       if (
         column !== undefined &&
         ts.isPropertyAccessExpression(column) &&
         column.name.text === "workspaceId"
       ) {
         facts.filtersWorkspaceSet = true;
+        if (set !== undefined) {
+          filterArguments.push(set);
+        }
       }
+    }
+    if (ts.isTemplateExpression(node)) {
+      let preceding = node.head.text;
+      for (const span of node.templateSpans) {
+        if (SQL_WORKSPACE_SET_BEFORE_VALUE.test(preceding)) {
+          filterArguments.push(span.expression);
+        }
+        preceding = span.literal.text;
+      }
+    }
+    if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+      derivations.push({
+        names: boundNames(node.name),
+        from: node.initializer,
+      });
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      ts.isIdentifier(node.left) &&
+      ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)
+    ) {
+      derivations.push({ names: [node.left.text], from: node.right });
     }
     const text = literalText(node);
     if (text !== undefined) {
@@ -193,6 +268,40 @@ const readFacts = (file: string, source: string): Facts => {
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
+
+  // A value derives from the owner when it contains an owner call or names a
+  // binding that does. File-level names: shadowing is a documented blind spot.
+  const derived = new Set<string>();
+  const isOwnerCall = (node: ts.Node) =>
+    ts.isCallExpression(node) &&
+    ((ts.isIdentifier(node.expression) &&
+      ownerBindings.has(node.expression.text)) ||
+      (ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        ownerNamespaces.has(node.expression.expression.text)));
+  const derivesFromOwner = (node: ts.Node): boolean =>
+    isOwnerCall(node) ||
+    (ts.isIdentifier(node) && derived.has(node.text)) ||
+    (ts.forEachChild(node, (child) => derivesFromOwner(child) || undefined) ??
+      false);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const { names, from } of derivations) {
+      if (names.some((name) => !derived.has(name)) && derivesFromOwner(from)) {
+        for (const name of names) {
+          changed ||= !derived.has(name);
+          derived.add(name);
+        }
+      }
+    }
+  }
+  const findOwnerCall = (node: ts.Node): boolean =>
+    isOwnerCall(node) ||
+    (ts.forEachChild(node, (child) => findOwnerCall(child) || undefined) ??
+      false);
+  facts.callsOwner = findOwnerCall(sourceFile);
+  facts.filtersDeriveFromOwner = filterArguments.every(derivesFromOwner);
   return facts;
 };
 
@@ -227,7 +336,9 @@ export const classifyMatterAccessModule = (
     findings.push({
       file,
       signal: "owner-connection-workspace-set",
-      screened: facts.importsOwner,
+      // An import alone proves nothing: the owner must be called, and every
+      // concrete filter must take a value derived from that call.
+      screened: facts.callsOwner && facts.filtersDeriveFromOwner,
     });
   }
   return findings;

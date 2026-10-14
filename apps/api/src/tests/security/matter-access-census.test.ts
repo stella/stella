@@ -135,14 +135,67 @@ describe("matter access census self-test", () => {
     ]);
   });
 
-  test("the same reader is screened once it takes its set from the owner module", () => {
-    const screened = `import { authorizedWorkspaceIds } from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}";\n${unscreenedReader}`;
-    const findings = classifyMatterAccessModule(
-      "apps/api/src/lib/example-reader.ts",
-      screened,
-    );
-    expect(findings.map((finding) => finding.screened)).toEqual([true]);
-    expect(evaluateMatterAccessCensus(findings, {}).violations).toEqual([]);
+  const classifyReader = (source: string) =>
+    classifyMatterAccessModule("apps/api/src/lib/example-reader.ts", source)
+      .filter(({ signal }) => signal === "owner-connection-workspace-set")
+      .map(({ screened }) => screened);
+
+  test("the reader is screened once its filtered set comes from the owner module", () => {
+    const screened = `
+      import { inArray } from "drizzle-orm";
+      import { rootDb } from "@/api/db/root";
+      import { entities } from "@/api/db/schema";
+      import { authorizedWorkspaceIds } from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}";
+      export const readTitles = async (tx: Tx) => {
+        const authorized = await authorizedWorkspaceIds(tx);
+        const ids = authorized.value;
+        return await rootDb
+          .select({ title: entities.name })
+          .from(entities)
+          .where(inArray(entities.workspaceId, ids));
+      };
+    `;
+    expect(classifyReader(screened)).toEqual([true]);
+    expect(
+      evaluateMatterAccessCensus(
+        classifyMatterAccessModule(
+          "apps/api/src/lib/example-reader.ts",
+          screened,
+        ),
+        {},
+      ).violations,
+    ).toEqual([]);
+  });
+
+  test("an unused or type-only owner import leaves the reader unscreened", () => {
+    for (const ownerImport of [
+      `import { authorizedWorkspaceIds } from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}";`,
+      `import type { AuthorizedWorkspace } from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}";`,
+      `import { type authorizedWorkspaceIds } from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}";`,
+    ]) {
+      expect(classifyReader(`${ownerImport}\n${unscreenedReader}`)).toEqual([
+        false,
+      ]);
+    }
+  });
+
+  test("calling the owner does not screen a filter fed from another set", () => {
+    const mixed = `
+      import { inArray, sql } from "drizzle-orm";
+      import { rootDb } from "@/api/db/root";
+      import { entities } from "@/api/db/schema";
+      import { authorizedWorkspaceIds } from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}";
+      export const readTitles = async (tx: Tx, workspaceIds: string[]) => {
+        await authorizedWorkspaceIds(tx);
+        return await rootDb
+          .select({ title: entities.name })
+          .from(entities)
+          .where(inArray(entities.workspaceId, workspaceIds));
+      };
+      export const readRaw = async (tx: Tx, other: string[]) =>
+        await rootDb.execute(sql\`SELECT 1 FROM entities WHERE workspace_id = ANY(\${other})\`);
+    `;
+    expect(classifyReader(mixed)).toEqual([false]);
   });
 
   test("a module reading the authorization view outside the owner fails, a comment does not", () => {
