@@ -2521,6 +2521,34 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Checkout workflow classification tooling
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Reads classification tooling at the workflow revision."
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .ci-job-classification
+          persist-credentials: false
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            .github/workflows
+            .github/actions
+            .github/ci-job-classification.json
+            .github/ci-job-classification-sources.json
+            scripts/check-ci-job-classification.ts
+            scripts/ci-job-classification
+            packages/sha256/src/node.ts
+            packages/sha256/src/types.ts
+
+      - name: Check workflow job classifications
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Checks workflow-owned declarations and metadata at the workflow revision."
+        run: bun .ci-job-classification/scripts/check-ci-job-classification.ts .ci-job-classification
+
       - name: Prepare environment
         env:
           CI_CHECK_KIND: CONTEXTUAL

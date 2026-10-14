@@ -1,0 +1,3030 @@
+{
+  "version": 1,
+  "mode": "public-metadata",
+  "repository": "candidate",
+  "workflows": [
+    {
+      "path": ".github/workflows/agent-sandbox-canary.yml",
+      "node": "n0015"
+    },
+    {
+      "path": ".github/workflows/ai-provider-canary.yml",
+      "node": "n0016"
+    },
+    {
+      "path": ".github/workflows/api-test-memory.yml",
+      "node": "n0017"
+    },
+    {
+      "path": ".github/workflows/audit-branch-protection.yml",
+      "node": "n0018"
+    },
+    {
+      "path": ".github/workflows/audit-image.yml",
+      "node": "n0019"
+    },
+    {
+      "path": ".github/workflows/auth-md-spec-check.yml",
+      "node": "n0020"
+    },
+    {
+      "path": ".github/workflows/autofix.yml",
+      "node": "n0021"
+    },
+    {
+      "path": ".github/workflows/bot-refresh-auto-merge.yml",
+      "node": "n0022"
+    },
+    {
+      "path": ".github/workflows/build-api-image.yml",
+      "node": "n0023"
+    },
+    {
+      "path": ".github/workflows/bundle-size-nightly.yml",
+      "node": "n0024"
+    },
+    {
+      "path": ".github/workflows/cancel-stale-merge-groups.yml",
+      "node": "n0025"
+    },
+    {
+      "path": ".github/workflows/catalogue-upstream.yml",
+      "node": "n0026"
+    },
+    {
+      "path": ".github/workflows/ci.yml",
+      "node": "n0027"
+    },
+    {
+      "path": ".github/workflows/cla-notify.yml",
+      "node": "n0028"
+    },
+    {
+      "path": ".github/workflows/cla.yml",
+      "node": "n0029"
+    },
+    {
+      "path": ".github/workflows/cleanup-queued-pr-runs.yml",
+      "node": "n0030"
+    },
+    {
+      "path": ".github/workflows/codeql.yml",
+      "node": "n0031"
+    },
+    {
+      "path": ".github/workflows/dated-waiver-healing.yml",
+      "node": "n0032"
+    },
+    {
+      "path": ".github/workflows/db-migrations.yml",
+      "node": "n0033"
+    },
+    {
+      "path": ".github/workflows/dependency-audit.yml",
+      "node": "n0034"
+    },
+    {
+      "path": ".github/workflows/dependency-malware-nightly.yml",
+      "node": "n0035"
+    },
+    {
+      "path": ".github/workflows/dependency-review.yml",
+      "node": "n0036"
+    },
+    {
+      "path": ".github/workflows/deploy-landing.yml",
+      "node": "n0037"
+    },
+    {
+      "path": ".github/workflows/deploy-staging.yml",
+      "node": "n0038"
+    },
+    {
+      "path": ".github/workflows/desktop-release-canary.yml",
+      "node": "n0039"
+    },
+    {
+      "path": ".github/workflows/disarm-auto-merge.yml",
+      "node": "n0040"
+    },
+    {
+      "path": ".github/workflows/docs-source-policy.yml",
+      "node": "n0041"
+    },
+    {
+      "path": ".github/workflows/fetch-public-documents.yml",
+      "node": "n0042"
+    },
+    {
+      "path": ".github/workflows/journey-canary.yml",
+      "node": "n0043"
+    },
+    {
+      "path": ".github/workflows/label-sync.yml",
+      "node": "n0044"
+    },
+    {
+      "path": ".github/workflows/landing-canary.yml",
+      "node": "n0045"
+    },
+    {
+      "path": ".github/workflows/main-heavy.yml",
+      "node": "n0046"
+    },
+    {
+      "path": ".github/workflows/main-pr-depth.yml",
+      "node": "n0047"
+    },
+    {
+      "path": ".github/workflows/manual-checks.yml",
+      "node": "n0048"
+    },
+    {
+      "path": ".github/workflows/marketing-screenshots-capture.yml",
+      "node": "n0049"
+    },
+    {
+      "path": ".github/workflows/marketing-screenshots-publish.yml",
+      "node": "n0050"
+    },
+    {
+      "path": ".github/workflows/marketing-screenshots-update.yml",
+      "node": "n0051"
+    },
+    {
+      "path": ".github/workflows/marketing-screenshots.yml",
+      "node": "n0052"
+    },
+    {
+      "path": ".github/workflows/mcp-canary.yml",
+      "node": "n0053"
+    },
+    {
+      "path": ".github/workflows/mirror-ci-service-images.yml",
+      "node": "n0054"
+    },
+    {
+      "path": ".github/workflows/model-catalog-check.yml",
+      "node": "n0055"
+    },
+    {
+      "path": ".github/workflows/network-baseline-deliver.yml",
+      "node": "n0056"
+    },
+    {
+      "path": ".github/workflows/network-baseline-record.yml",
+      "node": "n0057"
+    },
+    {
+      "path": ".github/workflows/network-baseline-request.yml",
+      "node": "n0058"
+    },
+    {
+      "path": ".github/workflows/nightly-property-test.yml",
+      "node": "n0059"
+    },
+    {
+      "path": ".github/workflows/nightly-test.yml",
+      "node": "n0060"
+    },
+    {
+      "path": ".github/workflows/nightly-typecheck.yml",
+      "node": "n0061"
+    },
+    {
+      "path": ".github/workflows/pr-lint.yml",
+      "node": "n0062"
+    },
+    {
+      "path": ".github/workflows/provenance-nightly.yml",
+      "node": "n0063"
+    },
+    {
+      "path": ".github/workflows/provider-request-schemas-check.yml",
+      "node": "n0064"
+    },
+    {
+      "path": ".github/workflows/publish-npm.yml",
+      "node": "n0065"
+    },
+    {
+      "path": ".github/workflows/publish-product-media.yml",
+      "node": "n0066"
+    },
+    {
+      "path": ".github/workflows/quarantine-prune.yml",
+      "node": "n0067"
+    },
+    {
+      "path": ".github/workflows/query-perf.yml",
+      "node": "n0068"
+    },
+    {
+      "path": ".github/workflows/railway-smoke.yml",
+      "node": "n0069"
+    },
+    {
+      "path": ".github/workflows/railway-template-source.yml",
+      "node": "n0070"
+    },
+    {
+      "path": ".github/workflows/release-desktop.yml",
+      "node": "n0071"
+    },
+    {
+      "path": ".github/workflows/release-pr.yml",
+      "node": "n0072"
+    },
+    {
+      "path": ".github/workflows/release-proof.yml",
+      "node": "n0073"
+    },
+    {
+      "path": ".github/workflows/release-tag.yml",
+      "node": "n0074"
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "node": "n0075"
+    },
+    {
+      "path": ".github/workflows/safe-chain-cache.yml",
+      "node": "n0076"
+    },
+    {
+      "path": ".github/workflows/scheduled-run-alerts.yml",
+      "node": "n0077"
+    },
+    {
+      "path": ".github/workflows/scorecard.yml",
+      "node": "n0078"
+    },
+    {
+      "path": ".github/workflows/security-txt-guard.yml",
+      "node": "n0079"
+    },
+    {
+      "path": ".github/workflows/staging-response-policy.yml",
+      "node": "n0080"
+    },
+    {
+      "path": ".github/workflows/sync-branch-protection.yml",
+      "node": "n0081"
+    },
+    {
+      "path": ".github/workflows/type-cost-measurement.yml",
+      "node": "n0082"
+    },
+    {
+      "path": ".github/workflows/typecheck-base.yml",
+      "node": "n0083"
+    },
+    {
+      "path": ".github/workflows/visual-preview.yml",
+      "node": "n0084"
+    }
+  ],
+  "nodes": [
+    {
+      "type": "metadata",
+      "id": "n0001",
+      "repository": "candidate",
+      "path": ".github/actions/build-e2e-web/action.yml",
+      "digest": "6241f4dc74d7b1620cea9f6431140ce244070a735920d177643bda476c296b11",
+      "references": ["./.github/actions/build-e2e-web"],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0002",
+      "repository": "candidate",
+      "path": ".github/actions/build-web-image/action.yml",
+      "digest": "33a61188582b26281a90cfbc9b16cd888ac56b87e6816158bbf6576635f83d46",
+      "references": [
+        "./.github/actions/build-web-image",
+        "./.workflow-source/.github/actions/build-web-image"
+      ],
+      "jobs": [],
+      "edges": {
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a": "n0116",
+        "docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e": "n0109",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
+        "docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a": "n0103"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0003",
+      "repository": "candidate",
+      "path": ".github/actions/cargo-deny/action.yml",
+      "digest": "ca20eec30ca1b5887cc82b10c9c0c568c73322e15218b3076d10b7fdedb67efe",
+      "references": ["./.github/actions/cargo-deny"],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0004",
+      "repository": "candidate",
+      "path": ".github/actions/ci-install/action.yml",
+      "digest": "d3ac580b2a20d70841de986c683500f12994783f2f2d212b6c09d9a21f069a12",
+      "references": ["$/.github/actions/ci-install"],
+      "jobs": [],
+      "edges": {
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0112",
+        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0114",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0005",
+      "repository": "candidate",
+      "path": ".github/actions/desktop-windows-build/action.yml",
+      "digest": "b7053327161e6e2eccb2f3f81cc62878ee72d923b0a31a9f2c4b049afc59895a",
+      "references": [
+        "./.github/actions/desktop-windows-build",
+        "./.release-tooling/desktop-windows-build"
+      ],
+      "jobs": [],
+      "edges": {
+        "baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759": "n0102",
+        "azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82": "n0120"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0006",
+      "repository": "candidate",
+      "path": ".github/actions/marketing-capture/action.yml",
+      "digest": "e15b3385afbe6b91f7907e97eafdd608fe0cc0923df889dad2eb83fe327c88bd",
+      "references": ["./.github/actions/marketing-capture"],
+      "jobs": [],
+      "edges": {
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "./.github/actions/setup-e2e-stack": "n0012",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
+        "./.github/actions/setup-playwright": "n0013"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0007",
+      "repository": "candidate",
+      "path": ".github/actions/osv-scanner/action.yml",
+      "digest": "d3377f0ccbc214b2cd9c0eb9b1e60e19486eb811ef8b7e128ed8eaacb4504f00",
+      "references": ["./.github/actions/osv-scanner"],
+      "jobs": [],
+      "edges": {
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0113"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0008",
+      "repository": "candidate",
+      "path": ".github/actions/prepare-network-baseline/action.yml",
+      "digest": "d425e75433868ac78c6fecd95299187d5172f13102ebf130063ef56fb542c1ed",
+      "references": ["./.github/actions/prepare-network-baseline"],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0009",
+      "repository": "candidate",
+      "path": ".github/actions/promote-dispatch/action.yml",
+      "digest": "04987e479f31fc1838fe8fd403d8fededb0562319ba1e608a258e28a36c01770",
+      "references": ["./.github/actions/promote-dispatch"],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0010",
+      "repository": "candidate",
+      "path": ".github/actions/provenance/action.yml",
+      "digest": "ad7ce91c1fd75d5c025940e331bace2f3af9c72be0a1440f9c5068dcf5bb9a01",
+      "references": [
+        "./.github/actions/provenance",
+        "./.workflow-actions/.github/actions/provenance",
+        "./.workflow-source/.github/actions/provenance"
+      ],
+      "jobs": [],
+      "edges": {
+        "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6": "n0107"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0011",
+      "repository": "candidate",
+      "path": ".github/actions/safe-chain/action.yml",
+      "digest": "2b21b3a268171b8423851b70d5c3592eb2242c2a76cc85817d246a3fc0e2594b",
+      "references": ["./.github/actions/safe-chain"],
+      "jobs": [],
+      "edges": {
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0113"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0012",
+      "repository": "candidate",
+      "path": ".github/actions/setup-e2e-stack/action.yml",
+      "digest": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc",
+      "references": ["./.github/actions/setup-e2e-stack"],
+      "jobs": [],
+      "edges": {
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0013",
+      "repository": "candidate",
+      "path": ".github/actions/setup-playwright/action.yml",
+      "digest": "25c7fa4b135e32a251bc8ab924979a0823d6a06fc7acfdb6ab9dd61539f68613",
+      "references": ["./.github/actions/setup-playwright"],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0014",
+      "repository": "candidate",
+      "path": ".github/actions/setup-production-e2e/action.yml",
+      "digest": "26f719b87d4e8688022fb590ef614dc59679a8ee0db90b9265aebd2945c3188f",
+      "references": ["./.github/actions/setup-production-e2e"],
+      "jobs": [],
+      "edges": {
+        "./.github/actions/setup-e2e-stack": "n0012",
+        "./.github/actions/setup-playwright": "n0013",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0015",
+      "repository": "candidate",
+      "path": ".github/workflows/agent-sandbox-canary.yml",
+      "digest": "5a9445eb54a5fb50a67e0c3a90487ee9a476b2592f7ebf24d0dbc5df8815cfeb",
+      "references": [],
+      "jobs": [
+        {
+          "id": "real-model-mcp-canary",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "5f74b69fe28ba61a7d7a3c765b4e3ff879c52c88fd94341e35ebb33112f25d4c"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0016",
+      "repository": "candidate",
+      "path": ".github/workflows/ai-provider-canary.yml",
+      "digest": "826ce3b019abfbe2373e2e2d96b5c214333acfe37a139d25d50f776a86bce2d3",
+      "references": [],
+      "jobs": [
+        {
+          "id": "provider-canary",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "240665bcdfdafd78d79fa2146eb1f9c15a18deda2a2389ad794a0a6ae0cd41bd"
+        },
+        {
+          "id": "require-provider-coverage",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "ff14f05299653c8ba2fec1ce11bf7b61470c1c11406d53c26f375cac8e5402fa"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0017",
+      "repository": "candidate",
+      "path": ".github/workflows/api-test-memory.yml",
+      "digest": "5999bb7c2326f81e4ade5f9628ac9f17f35cd2ac7ab06bb04afc2688573190e3",
+      "references": [],
+      "jobs": [
+        {
+          "id": "measure",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "41f5efb8fd5b76c4fb4ac5439f0ba95efaf13fc4503d68341e4eee5faeadbafd"
+        },
+        {
+          "id": "refresh",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "9bc7df6b6ce04f7a9e534a8802f01b1833cf0b097c7a3dabfdf49fd9fbaa3c3c"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0018",
+      "repository": "candidate",
+      "path": ".github/workflows/audit-branch-protection.yml",
+      "digest": "0ed8f15edefbb3702428c33abbaba757b2463a4f1be81fc4f1dbd9a8071cb8a3",
+      "references": [],
+      "jobs": [
+        {
+          "id": "audit-branch",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "82fc1efbcf282b5e74ca49b5fec2351f41e62ea42c3c0f1573405371a4725ceb"
+        },
+        {
+          "id": "audit-tag",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "006b6d79f2042d78d2f43aeef865cc29c88c74c19b138d8537a4676a9966964a"
+        },
+        {
+          "id": "audit-fork-approval",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "1a3a04ef2e1a89dc045433bd83cf7776afe145be438b4667e918510d0c2a36d8"
+        }
+      ],
+      "edges": {
+        "stella/.github/.github/workflows/audit-branch-protection.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0088",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0019",
+      "repository": "candidate",
+      "path": ".github/workflows/audit-image.yml",
+      "digest": "79071bf6b87aba7fb337cec002c56ce06063f2c4af239c37664772600f71c33d",
+      "references": [],
+      "jobs": [
+        {
+          "id": "build",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "b5ff20b870c4906d6889ce32798f28a048eac49d2a315621144c445693fd823e"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0020",
+      "repository": "candidate",
+      "path": ".github/workflows/auth-md-spec-check.yml",
+      "digest": "0e1ce1b7d144b2a52e8096ff85c16e8092b15b91c8216f39b4f569e4ff3987f1",
+      "references": [],
+      "jobs": [
+        {
+          "id": "auth-md-spec-check",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "b6b864ec658fc542d3549a0fbf2726e3bf2b1923fc02a6ec049bf92ec14451ea"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0021",
+      "repository": "candidate",
+      "path": ".github/workflows/autofix.yml",
+      "digest": "982dc4ea3b176a44d3a3a4aa03e7c180da80caf5ea395b65b1c714fcd6d509ad",
+      "references": [],
+      "jobs": [
+        {
+          "id": "regenerate-requested-files",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "41c39493e0527c492b9c1e48636fae2c4af9d168e6792af1a6400d745b56e232"
+        },
+        {
+          "id": "dependabot-bun-autofix",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "623bc7e1cede348d3de7989af316d123e9bfd08da286d5df9b765e6938868401"
+        },
+        {
+          "id": "regenerate-scope",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "453ece735dca3bb3a471500536b1cbed6218e72e907710a103a6de58f6d48ebb"
+        },
+        {
+          "id": "regenerate-derived-files",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "9cb7a190fe1c9577f71952d52f81364f892563638b635781e171dfb4792da378"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a": "n0111",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0022",
+      "repository": "candidate",
+      "path": ".github/workflows/bot-refresh-auto-merge.yml",
+      "digest": "8f27439a123e85a54ed64229e98d4a77fb21bb34255b9112eea7261ef1bf1b75",
+      "references": [],
+      "jobs": [
+        {
+          "id": "arm",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "35ad0e483c71d96a9f69be6a45db893b2b552655a6eefd7b66d44dead5e65d9a"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0023",
+      "repository": "candidate",
+      "path": ".github/workflows/build-api-image.yml",
+      "digest": "b8b06df8291e6406bd136dcdfa0edee588541e92ca33b34d07018b1ced94d1de",
+      "references": [],
+      "jobs": [
+        {
+          "id": "resolve",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "fd2a835afed39cf0dae2d59a11140bf491e49a71a9c5a6f75732911dd8378761"
+        },
+        {
+          "id": "build",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "8928ce779537937e2fe32ffb24379a3f326309d5732db99b01f9b744611a36b1"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0132",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
+        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0101",
+        "./.github/actions/provenance": "n0010"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0024",
+      "repository": "candidate",
+      "path": ".github/workflows/bundle-size-nightly.yml",
+      "digest": "9a8e35a2a0fe697ad5a61f2a34c95afb9c9feaac6c56e5c04b4b78ecfb46b358",
+      "references": [],
+      "jobs": [
+        {
+          "id": "report",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "6b49d87e96854ea062c7aaa77fb6d0540725c8e9242cc239001683693e724d3d"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "./.github/actions/build-e2e-web": "n0001"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0025",
+      "repository": "candidate",
+      "path": ".github/workflows/cancel-stale-merge-groups.yml",
+      "digest": "0e642299cc3cfa49b7f79315088e5de8008f2e81e6d97923a4ce9d0425b7c1bd",
+      "references": [],
+      "jobs": [
+        {
+          "id": "cancel",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "86abde4ac3db49e88130bc1bf9bdb951eb9a6c01c369aa2ac9b720df2fad0111"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0026",
+      "repository": "candidate",
+      "path": ".github/workflows/catalogue-upstream.yml",
+      "digest": "9728670166a622ba7cb197ee9e6572d2947384f93468703f8e24aa783ad5d6f6",
+      "references": [],
+      "jobs": [
+        {
+          "id": "catalogue-upstream",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "393285874aae2cdbe85193339836a1cb9589f11375c838a898527e346a7a1771"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0027",
+      "repository": "candidate",
+      "path": ".github/workflows/ci.yml",
+      "digest": "c78422ea2c0fc89ad5cbadd9037514c39c0ffae75373556d5985df60e43bbcb2",
+      "references": ["./.github/workflows/ci.yml"],
+      "jobs": [
+        {
+          "id": "ci-plan",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "fe6868b6d40dcc5b46378ef09a9a3c1362682bf0694212dd7ea186b3624f5507"
+        },
+        {
+          "id": "docker-checks",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "4e5ac798882c2e0f8a87e8ecbdd4be84932ffac3ad6c9ba851fbdac0178276e3"
+        },
+        {
+          "id": "parser-version-guard",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "852f05b52cc7d475a9a810cb8293c5b1051fa65d4196e3ac8bb1837b40edfbc7"
+        },
+        {
+          "id": "ci-generated-sources",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "30c0a47f266795eb55ff8c5c2410a52d7ca9d8e65121df7e624877fce4428ea2"
+        },
+        {
+          "id": "ci-checks-docs",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "54c23e237b9e5cb242d53816504c4e2dc7a9db1fd8918fbf24c0436e57a2306c"
+        },
+        {
+          "id": "ci-checks-generated",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "372c5934e77b78afc639aa110882249bd9ee5e92ccd009a886b2201b2f552cfc"
+        },
+        {
+          "id": "ci-checks-policy",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "bf3ebf2143b91897b6c725a4a58ba23c94f747ab77435886379513660b9a0ef4"
+        },
+        {
+          "id": "ci-checks-rest",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "be6a4e4e9960df931617ae767cf1fc84b423fb60e1610188ee4beb57a6f733d3"
+        },
+        {
+          "id": "ci-tests",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "984b5323ff840f42be7f45fd612efdfe50ee66ed96ace69ac8d67b53c7ee1a41"
+        },
+        {
+          "id": "api-test-durations",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "f727a045ff15b7deffa2b33c6baadb7bfaeb565e58cba29392885a27b470717e"
+        },
+        {
+          "id": "ci-browser",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "0fb602b6019347a8d58dd19c8ab197b6be5f822701b88daf98ef271004220aa7"
+        },
+        {
+          "id": "code-quality-api",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "b87f3d706deabf401518ac4dade98ffaf371b2f77de923a02ed26ae0ca35136c"
+        },
+        {
+          "id": "code-quality-web-rest",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "f9f08167909eea5de0b10441313443fffcceee6193d8371e2f31e4d4ff009334"
+        },
+        {
+          "id": "query-perf",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "39bff17d3d6adcce5dd129853478d1dc22cbbae7fd06918435746ed20b09627e"
+        },
+        {
+          "id": "postgres-service-suites",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "b4b3b86fdfbbdea776126a031a0103906c7615d7498e13a340abbabb5e3e2338"
+        },
+        {
+          "id": "service-suites",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "2d07a26f718330fce31fba7ec3bc7f7473726d6feee177b481af2424b76fa474"
+        },
+        {
+          "id": "migration-upgrade-rehearsal",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "e475b7a31048cdaa0c9eefe22c295218b6873133243ffb5de03b17386402b509"
+        },
+        {
+          "id": "release-typecheck",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "31488d9d55b5ab8a14612db4fbbd4c5d86d8dcb63e92bfa45ce801ac15f1207b"
+        },
+        {
+          "id": "fix-tests-on-base",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "420e836a28e0e37f759ea233a8728cae61dd81b33ad9a9b8fdba55d9bb2d53db"
+        },
+        {
+          "id": "web-build",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "3a3c081e6c3f095026ae7aa50bb6c9552bbfaceda00d326453f0a675b92a15e8"
+        },
+        {
+          "id": "web-image-smoke",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "d2fc5026848f73b46f62a5c7759c942d1621657c40eb881e83fbcaf2f0557f0c"
+        },
+        {
+          "id": "mobile-build",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "452d52144b5c2aed018e57ae946f9b071673cc3e7afabd156e81e74a5442a364"
+        },
+        {
+          "id": "landing-build",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "be8f1a78b721b52ffe443a5fca6d7b8ae1c19263787fe886810cac31ea7bbfdd"
+        },
+        {
+          "id": "heavy-web-build",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "18612d1f879bf2f97129722ebb5319024415930d2132388d14d0ffc00bfdc485"
+        },
+        {
+          "id": "route-smoke",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "951882e8fe277e2490f072e2a9d812b2e23a2f8a5497c0052f7c9cf020bb6c11"
+        },
+        {
+          "id": "e2e-production-shard",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "42c7bf24a35c318ed9cca5ad417f70da690206522efb98abcde71427d4b10bf3"
+        },
+        {
+          "id": "stack-redaction-browsers",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "a4d5c7a940a04159003ff00aca406cc28596c9801002696e29c9729d30b52e88"
+        },
+        {
+          "id": "e2e-vite-canary",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "43ad545c9be35dc0a26c32bce4a9335614ef075bff79a020c03361404794da14"
+        },
+        {
+          "id": "e2e-landing",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "90797b1889e509366b30059acc865605243d11c9021c89ae9767d8987c1dea36"
+        },
+        {
+          "id": "marketing-screenshots",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "9149a4a119cfe68815b356866aa39b307c1987e5e70a3bd011465fb697700870"
+        },
+        {
+          "id": "marketing-screenshots-cancel",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "25953874feb59b5ad9662ec962c6abcc23f0b0ca1a8f7bc47fc47eb138dfbe4c"
+        },
+        {
+          "id": "e2e-report",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "4859eb4d59b9ad31f29ea78e41bedb53d744a14fa88d16a03d2bce5345033408"
+        },
+        {
+          "id": "api-image-smoke",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "ec36e37f3a15b2b78179e9101bd14b962ab2a4a36c17ac29691bc73b2acb9508"
+        },
+        {
+          "id": "legal-atlas-image",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "d7562da20a71f5edba46ae86b8d9520fdede013c00aa2925f8cb6cecc16afc83"
+        },
+        {
+          "id": "desktop-windows-dry-run",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "fb0fbe6be6ce98a4815fbb1f0e5b72e36a243e8c63b5c30a7b70620504c8edb9"
+        },
+        {
+          "id": "windows-scripts",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "0a9e27f8f74cfe2802a9fed49c6328411ec9ed2924d97f9c4a40e0ee31eb10a5"
+        },
+        {
+          "id": "scan-engine-wasm-drift",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "670a0f57b5037c20ac6a48b6fa849b6c9eff42ec88bd1fd0af6ff233915292fb"
+        },
+        {
+          "id": "desktop-rust-tests",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "cc08fe9546b76c39eb304e1ac953f957ec128d827487ba19209e452d51f44d48"
+        },
+        {
+          "id": "desktop-rust-lint",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "e8726f5fe90581e8966d343d6807c7624c51a87fbdb3b3e34277471204c198c7"
+        },
+        {
+          "id": "dependency-malware",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "83eb8e8998e9e0636b9fac7e5c50b332c095c51422f683fb98fdd15a9096bd49"
+        },
+        {
+          "id": "dated-waiver-expiry",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "d0a821b949554abe592019260251658856007c463e2def4415d756d74179767f"
+        },
+        {
+          "id": "ci-result",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "af3b115b1e8d322039b3c2de424c06fb19740e1fdc023dd9758883a7486bbd8e"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
+        "$/.github/actions/ci-install": "n0004",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0112",
+        "rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7": "n0099",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
+        "stella/.github/.github/actions/changeset-policy@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0085",
+        "./.github/actions/prepare-network-baseline": "n0008",
+        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0114",
+        "./.github/actions/setup-playwright": "n0013",
+        "./.github/workflows/query-perf.yml": "n0068",
+        "./.github/actions/build-e2e-web": "n0001",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "./.github/actions/setup-production-e2e": "n0014",
+        "./.github/actions/setup-e2e-stack": "n0012",
+        "./.github/workflows/marketing-screenshots.yml": "n0052",
+        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0132",
+        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0101",
+        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0128",
+        "./.github/actions/desktop-windows-build": "n0005",
+        "./.github/actions/cargo-deny": "n0003",
+        "./.github/actions/safe-chain": "n0011",
+        "./.github/actions/osv-scanner": "n0007"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0028",
+      "repository": "candidate",
+      "path": ".github/workflows/cla-notify.yml",
+      "digest": "d770a5b61018f57563bb2fbe3e3fd236a7bf6b557091035c216981942beb8831",
+      "references": [],
+      "jobs": [
+        {
+          "id": "notify",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "93a0bb8575cf55558ac0c261af6ca8c85ebee2a07bce4b175bfdc5ee7114af2c"
+        }
+      ],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0029",
+      "repository": "candidate",
+      "path": ".github/workflows/cla.yml",
+      "digest": "a1d17f2f77db2503a671a37546053e59b21856c67cb0c76f0a23ad7bd4401750",
+      "references": [],
+      "jobs": [
+        {
+          "id": "verify-signatures",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "3d9c8a149f46cc475836af01d87846fcca33efc59471abe360718ddbeb17f589"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0030",
+      "repository": "candidate",
+      "path": ".github/workflows/cleanup-queued-pr-runs.yml",
+      "digest": "d5674f7a11369898490a443c346c312ebbcfcd2959b464db654ca8617a6fdc1f",
+      "references": [],
+      "jobs": [
+        {
+          "id": "cleanup",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "e62d96a97fe79c18e9142da9b584a4c8268f4ae268ac1ffec5100f5185c7207a"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0031",
+      "repository": "candidate",
+      "path": ".github/workflows/codeql.yml",
+      "digest": "523167524fa4c46d6d2d29724cf774b0362ae7828c3b8a81b5e8524961b8c9f7",
+      "references": [],
+      "jobs": [
+        {
+          "id": "scope",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "2ae1b1ebf28f7e2d1b2c95712653cf3d9027ddaead0e0eaa5118ffbd40df636e"
+        },
+        {
+          "id": "analyze",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "9715c4086226ea5b96de1f51fcc02e50b4d3fcec40d264af145153d3fdd9715a"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0133",
+        "github/codeql-action/autobuild@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0117",
+        "github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0105"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0032",
+      "repository": "candidate",
+      "path": ".github/workflows/dated-waiver-healing.yml",
+      "digest": "af2b6ae07e5cf9c062b3565a1bf36ba675aa8e73fc2e6f0bd538751a783d42e3",
+      "references": [],
+      "jobs": [
+        {
+          "id": "heal",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "629bc52a6fb8df1b64bc66114bb139c7745847367c10ae33521fdabefe5cc352"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0033",
+      "repository": "candidate",
+      "path": ".github/workflows/db-migrations.yml",
+      "digest": "874ffa6138d9aa47feb985a13474e988d2a561294e7c2a1a93931d06a42cd10e",
+      "references": [],
+      "jobs": [
+        {
+          "id": "scope",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "68d5d19f944f1a9fd5f769f7a09569ff9807c3085939b2cbb0adef05f282db1d"
+        },
+        {
+          "id": "check",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "805886f5676c164c3e1cd582456f38ecc9998c8561a7b72e81bdf8f98cd0b28e"
+        },
+        {
+          "id": "apply-fresh",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "1ab80eb805433fbfef6896be496c6d8f659aeebea786d9f626f6fd5947a0946a"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0034",
+      "repository": "candidate",
+      "path": ".github/workflows/dependency-audit.yml",
+      "digest": "6e448966a8321c7ecfb821dfa45645cd2c4e584f3bbbc8f0b333d88ba44b1eb7",
+      "references": [],
+      "jobs": [
+        {
+          "id": "audit",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "342ebab7b9e7b4407697a1bd9399126e785b99b0bf7974af35133b9d7c444c69"
+        },
+        {
+          "id": "remediate",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "f2a179ca72f6bcb6a2c9294b23e90d49fb1734f36f871ec5bc277e863ddf79e4"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0035",
+      "repository": "candidate",
+      "path": ".github/workflows/dependency-malware-nightly.yml",
+      "digest": "650f2e20ef0e8393e06640c8ab03498dbe8dba18a71091bd9e33e263a8175b7d",
+      "references": [],
+      "jobs": [
+        {
+          "id": "dependency-malware-scan",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "52cac80b66be48c2873baeb1a2ccf0c24a820d38fb553f8329787298a0f0da0f"
+        },
+        {
+          "id": "report-failure",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "3ea6f8a75506875cfa31fe3e5dd33ab50aaa5ca471c2da1d1c1c65a08aa7af51"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "./.github/actions/safe-chain": "n0011",
+        "./.github/actions/osv-scanner": "n0007"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0036",
+      "repository": "candidate",
+      "path": ".github/workflows/dependency-review.yml",
+      "digest": "dce510dfec6fbabd822880ed94c8cdf3e66357b0173e1e2c146680bedd32aa4f",
+      "references": [],
+      "jobs": [
+        {
+          "id": "dependency-review",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "7ebebcde88447c0c7f732368baaa7974a76715f4082074f35d33455fcb124273"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294": "n0110"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0037",
+      "repository": "candidate",
+      "path": ".github/workflows/deploy-landing.yml",
+      "digest": "ab4e00c6cb7770a5701cf31e07d057fa2e2ab11779392d5be499f3cb07d4017c",
+      "references": [],
+      "jobs": [
+        {
+          "id": "scope",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "492af8b357eb31ca7954862d2eaa5c6c00b59fcc90c90c2af8d690bd66b6a948"
+        },
+        {
+          "id": "build",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "247fdca280b83b4bfef034f5f5d9974d9ea53ed23d72fb7ec46fa9160de7729e"
+        },
+        {
+          "id": "deploy",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "591656c77980fc11144f852f0c55b9cb10c41345eea93b549521357061d4e2c9"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0038",
+      "repository": "candidate",
+      "path": ".github/workflows/deploy-staging.yml",
+      "digest": "a3a150e7c37fae209661ac193414ec0892f54434c4a3a9c4228a84274fa45334",
+      "references": [],
+      "jobs": [
+        {
+          "id": "resolve",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "ed66c24c3c17b8196cd303bd04d25613b67b64f1d6a4201568dd2932d8e3d885"
+        },
+        {
+          "id": "staging-health",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "88a0801474e5562a95f03f353514662a98f32b71834b9fab6bd9ddc0ad1479b6"
+        },
+        {
+          "id": "build-api",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "3625e1096c434a1671bd2e35743e6321b08846f12469b9c8aa4771fdfef2b880"
+        },
+        {
+          "id": "build-web",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "c6a47698171029c43f47eb9b702f2326011866af6fb2a01c77bb4613c55ea107"
+        },
+        {
+          "id": "promote-staging",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "2ba08070c5757916f4995e59f9bf3d13ee2867dbde56f87ec295caa8a543325c"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0132",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
+        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0101",
+        "./.workflow-actions/.github/actions/provenance": "n0010",
+        "./.github/actions/build-web-image": "n0002",
+        "./.github/actions/promote-dispatch": "n0009",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "./.github/actions/setup-playwright": "n0013",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0039",
+      "repository": "candidate",
+      "path": ".github/workflows/desktop-release-canary.yml",
+      "digest": "1e3f7dc5139e8307d45bc7acc07277b9f089a9ff702a732b578b2f2c4f2e6fd7",
+      "references": [],
+      "jobs": [
+        {
+          "id": "check-latest",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "2561034b4ae060965a588f8cd51329cc3543cd2f2222ada4e09a4dacdc97e12a"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0040",
+      "repository": "candidate",
+      "path": ".github/workflows/disarm-auto-merge.yml",
+      "digest": "5f188770b4839aacdb90d5318163faf20bb575184c951ec10256d35cd3c598d9",
+      "references": [],
+      "jobs": [
+        {
+          "id": "disarm",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "18db72ba3e010154dc8fd0915743699d3cf586566b522f981935cb4591e71307"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0041",
+      "repository": "candidate",
+      "path": ".github/workflows/docs-source-policy.yml",
+      "digest": "21d266eb9f94fab1d9b9f1cd352508eab7f52ba1ae09df7e1659c82d55fdc184",
+      "references": [],
+      "jobs": [
+        {
+          "id": "docs-source-policy",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "f3e5dfc1ad04507a5f8f2c3b793e12078074d36354957e583666fd18c901750f"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0042",
+      "repository": "candidate",
+      "path": ".github/workflows/fetch-public-documents.yml",
+      "digest": "be2396ad04d9479f8ae5258bcc21ea2e1f86f612bce22393891ab7887a9e194d",
+      "references": [],
+      "jobs": [
+        {
+          "id": "fetch",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "748a2952b0c3e1875ff359881e507ed2bdfe5302769737dfdaf2fd05793ec080"
+        }
+      ],
+      "edges": {
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0043",
+      "repository": "candidate",
+      "path": ".github/workflows/journey-canary.yml",
+      "digest": "295e9b1244813c39b8f491091bfc9c913d7aae2e5b90054891c78611e8eaa160",
+      "references": [],
+      "jobs": [
+        {
+          "id": "journeys",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "06e178025ad7f225a754a10bdef6edcddb933c85ae47a959572e7bbc99b0d868"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0044",
+      "repository": "candidate",
+      "path": ".github/workflows/label-sync.yml",
+      "digest": "3cd9b4cf1d1e128ca493b7e6f3eabbc163d5615c034e659d27c0a51721e22739",
+      "references": [],
+      "jobs": [
+        {
+          "id": "label-sync",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "cd48d1665bfb8c0b3733eae4c27b1bded6c8ac1612fcf52650c42d3c1dedb8a1"
+        }
+      ],
+      "edges": {
+        "stella/.github/.github/workflows/label-sync.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0090"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0045",
+      "repository": "candidate",
+      "path": ".github/workflows/landing-canary.yml",
+      "digest": "4793b8321bfa9debefcacd69e8b00214af0c99f9fbd9a9c6983572a10e44421f",
+      "references": [],
+      "jobs": [
+        {
+          "id": "served",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "e0fabe21b7b9fd655380b2ba40dac3d8156724ff080fa90aa99f47e6319c2a05"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0046",
+      "repository": "candidate",
+      "path": ".github/workflows/main-heavy.yml",
+      "digest": "087f33decef048b2feec5944a43ef6c68ad9decb3320d3552c7fccef42dd8eff",
+      "references": [],
+      "jobs": [
+        {
+          "id": "validate",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "85db46659b2ec8a7ae44787edd906b215f8b75976742381bba8199a4d7413617"
+        },
+        {
+          "id": "suites",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "47b78efc8a24946781c81914c16564fe44016b40b33d1d5eea10c5e91c0fdef7"
+        },
+        {
+          "id": "status",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "77fb339b27f3e628ca834c25b346a2c9a52d6e693a2bd169e5f26cccf9b875cd"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
+        "./.github/workflows/ci.yml": "n0027"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0047",
+      "repository": "candidate",
+      "path": ".github/workflows/main-pr-depth.yml",
+      "digest": "d8bde2ffbaa7373a9845e55a23f7149fb4e569bc359aa42099278825617328ac",
+      "references": [],
+      "jobs": [
+        {
+          "id": "validate",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "411a0e3ba856d8b09e9771634f4dd044263cfad73da45a453dfaea0707891b3a"
+        },
+        {
+          "id": "suites",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "7fb076275dd751e4c355e3a24af08964fbb51acbd0bb4e94af61f2c3e63b2e34"
+        },
+        {
+          "id": "status",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "5f248e282e6b0336a4aa09444a31de07cdb043ebab95d4541454036702463e08"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
+        "./.github/workflows/ci.yml": "n0027"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0048",
+      "repository": "candidate",
+      "path": ".github/workflows/manual-checks.yml",
+      "digest": "d36d1dac7dfff73094c138bdb89fb4b89b5ff2ebb7b31b80e79f168d3a8c59bd",
+      "references": [],
+      "jobs": [
+        {
+          "id": "check",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "e7d3ee97da2e4bc1093af1333311070f013e379e197c5745390c1d0e23d49057"
+        },
+        {
+          "id": "install-cache-windows",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "5f9b4d2a0de7c0d1cfc17f64e3a6375160db0f88376e93f3e760bcfb9944a762"
+        },
+        {
+          "id": "install-cache-linux",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "28ba38ce102f32eafea4831b961897db9fd4de10855a6cae0ef19ef5392d97af"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7": "n0099",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "$/.github/actions/ci-install": "n0004"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0049",
+      "repository": "candidate",
+      "path": ".github/workflows/marketing-screenshots-capture.yml",
+      "digest": "0771fbd3f13109f9cbf483f5a81cdaeb001b1eea7ab4a8ba37e7dd20a2ec5909",
+      "references": [],
+      "jobs": [
+        {
+          "id": "capture",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "00bfcefd3036bf175ade13227a5ca99babdc0ab1a2314213a331606e095c75c6"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "./.github/actions/marketing-capture": "n0006",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0050",
+      "repository": "candidate",
+      "path": ".github/workflows/marketing-screenshots-publish.yml",
+      "digest": "4620f0bf72d007722a6886f2ebe840f762de110ca3887696ce9448f3a38e3803",
+      "references": [],
+      "jobs": [
+        {
+          "id": "publish",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "ae2f4ef031e6dcb2ab41ef62676c70f87b48decd5d5cbd68a4781b4cc178dcf8"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0051",
+      "repository": "candidate",
+      "path": ".github/workflows/marketing-screenshots-update.yml",
+      "digest": "9b7ec07f6cd37d0afbff40c30f64f478ed6067751a06565ffca26d8289656d60",
+      "references": [],
+      "jobs": [
+        {
+          "id": "update",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "053377703549be9e20c04cc6341338bbf86c39a4f546f894af728d129e739c74"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0052",
+      "repository": "candidate",
+      "path": ".github/workflows/marketing-screenshots.yml",
+      "digest": "99e01737fd3bc5b99645ecfb5bcd2b5983900fb780f3c5f197447f78f3708236",
+      "references": ["./.github/workflows/marketing-screenshots.yml"],
+      "jobs": [
+        {
+          "id": "check",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "c94eb911e93ebc5054e579f646ef9b6e933bb2447235cbc562510720854c9df8"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "./.github/actions/marketing-capture": "n0006",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0053",
+      "repository": "candidate",
+      "path": ".github/workflows/mcp-canary.yml",
+      "digest": "d9334f9d44d730a7d202a0b0da377c630d8e54e945ee2dca32e24185448a3aa5",
+      "references": [],
+      "jobs": [
+        {
+          "id": "mcp-canary",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "ade3959e9f9136b341dd557917fe473320743e6f48ec6f0b77975bf347d03230"
+        },
+        {
+          "id": "desktop-transport-canary",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "ec8f9701b1b69367ee3c2a2e13477c3b1278baf4f33463a3959a96be9bcf3a08"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0128"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0054",
+      "repository": "candidate",
+      "path": ".github/workflows/mirror-ci-service-images.yml",
+      "digest": "2ad43f1d6df46052d8b49a24bd8c2402b8399ac31025d3e7f9f1ffb46c3e685a",
+      "references": [],
+      "jobs": [
+        {
+          "id": "mirror",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "f60eb78c0160f0480ec1eb26089a971b650d984c3af37c56d08b266e4b744838"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0055",
+      "repository": "candidate",
+      "path": ".github/workflows/model-catalog-check.yml",
+      "digest": "33b6d98b7dd18ee59664f2fd8b536df376cbef627a9a37171a06ea53e85bb3be",
+      "references": [],
+      "jobs": [
+        {
+          "id": "model-catalog-check",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "0b017e2799205b044280cc4f95b05aa3645ad466bbc76ff240fe1c4e7c0a52de"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0056",
+      "repository": "candidate",
+      "path": ".github/workflows/network-baseline-deliver.yml",
+      "digest": "f1fe201835bcc843ea608dbb29d2b5e2c8bcf55420ebe4ade769dc9670f59094",
+      "references": ["./.github/workflows/network-baseline-deliver.yml"],
+      "jobs": [
+        {
+          "id": "deliver",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "7da03597254081a99cd7876251f819ef880a91dc42f19c3e2fa1d66e655de40c"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0057",
+      "repository": "candidate",
+      "path": ".github/workflows/network-baseline-record.yml",
+      "digest": "087b07000937dd06db73832608d4b38be58d1e5aa7baf2abae354a4099615979",
+      "references": [],
+      "jobs": [
+        {
+          "id": "build",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "64dc24d7b8c94dbc66e2650f5602d923346c313820c5918361468a2f2f2aa9d2"
+        },
+        {
+          "id": "record",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "432fadbba874ff0c34beff3663ec8e01fc8878371965815ee819c8f6c43fc86a"
+        },
+        {
+          "id": "deliver",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "6fe80d09818057bea19ba18600c5feb3ddb7624d26c53c35d11743107782618e"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "./.github/actions/build-e2e-web": "n0001",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "./.github/actions/setup-production-e2e": "n0014",
+        "./.github/actions/prepare-network-baseline": "n0008",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
+        "./.github/workflows/network-baseline-deliver.yml": "n0056"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0058",
+      "repository": "candidate",
+      "path": ".github/workflows/network-baseline-request.yml",
+      "digest": "e5b9170561d5011316ac539902fdf23632e4b895cc6dcac6faceb62f2447bfc0",
+      "references": [],
+      "jobs": [
+        {
+          "id": "request",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "5f86493b059ab0c6f9c6a29394191ce43c7c1def41cc082e52441d7b02871283"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0059",
+      "repository": "candidate",
+      "path": ".github/workflows/nightly-property-test.yml",
+      "digest": "552d555b6b2db7838fa6e215aa0117d475f308c718b4f36cf544832d20cd502f",
+      "references": [],
+      "jobs": [
+        {
+          "id": "provider-request-three-wise",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "65a96b2cb41f17b1d5e96ae59e9a4c2cb31135d37b0326f4cf725a4948003b88"
+        },
+        {
+          "id": "provider-request-combinations",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "c3d83ae85fc11e3fd12dc6baea845ee4e387d2bc0c2cf735d47d41e8e05e8b07"
+        },
+        {
+          "id": "turn-outcome-combinations",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "129edbb7f6719892dc14eb8d2c5dfe52af4d8bfa0a2250f4a6661edda3971e2f"
+        },
+        {
+          "id": "chat-mutation-matrix",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "7860150824d35c811cd0546bd715b81880a043d8ed40705e6d1aeb1aaee84b54"
+        },
+        {
+          "id": "tanstack-drift",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "68f0f7604716ea03e35740c7999d071b59f7bdb46bf409c8770b1d89b49c73c1"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0060",
+      "repository": "candidate",
+      "path": ".github/workflows/nightly-test.yml",
+      "digest": "7d62a878690fc38f2f0d5d1050d68c085cf9a13507708b88548859027d31b852",
+      "references": [],
+      "jobs": [
+        {
+          "id": "workspace-replay",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "47555508ca20531aece1988cee479eb56935be1183eb4fcb7bbd74e63e77da1c"
+        },
+        {
+          "id": "full-test-plan",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "ba9d9c7ba1b6518110f98ef0db59609d0cdc15c08587588c0f50cc1904852464"
+        },
+        {
+          "id": "full-test",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "12d68d811d48e732067497bdc04b17c38ffde1fbeb5e14aaddb310088477a169"
+        },
+        {
+          "id": "web-build-profile",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "3627fda8745d3f8f8eb60b8b55b78323837c78cf463691d6bdf72000bcf54754"
+        },
+        {
+          "id": "marketing-screenshots",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "a72b76daed72dc02f97cd23a7a2e3facba891da54c8753ee0b34aebf58623246"
+        },
+        {
+          "id": "postgres-suites",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "88b4a2a97a899d51dccce993dc52fb143d804ae9937e45d610f8dda501a7a32a"
+        },
+        {
+          "id": "valkey-suites",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "76e1abb7a55965161787d9c29377190a40387c64da4cf25517cf0735c13728d1"
+        },
+        {
+          "id": "smoke-suite",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "b53e6aab68c778687019ceb806e9542165cc079175fbb7c9d80f273fc94d581a"
+        },
+        {
+          "id": "migration-exact-base-upgrade",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "3619ab5a02afeadee9b70f64b276b69cce76aa13a5029eb5ca2dbe68f474a3fb"
+        },
+        {
+          "id": "report-failure",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "4ac4d7710121145d8d469b8f477960f6a87625fe49420d3d0522d9d6e31865d2"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "./.github/actions/setup-e2e-stack": "n0012",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
+        "./.github/actions/setup-playwright": "n0013",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "./.github/workflows/marketing-screenshots.yml": "n0052"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0061",
+      "repository": "candidate",
+      "path": ".github/workflows/nightly-typecheck.yml",
+      "digest": "c49f666e74e2e95a169c62d89add50572b39243c8d49e96c541424dda9d55cdf",
+      "references": [],
+      "jobs": [
+        {
+          "id": "full-typecheck",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "7559936137525aafd62e4f261b16876df1e957df9c8da2ed85a7898ee40eb9db"
+        },
+        {
+          "id": "cumulative-type-cost",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "7be506ee78af01773af54241754589b09a5198126469daaa4bab79a2d2b69bb7"
+        },
+        {
+          "id": "fresh-web-sources",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "54419550a5ee2123da91d279852ed0ab19e2c8e04da26fc7c183c9f623a46287"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0062",
+      "repository": "candidate",
+      "path": ".github/workflows/pr-lint.yml",
+      "digest": "e37b546b2141e4a2e3f4e049ae126beaa9858950aedc1290147191ec066a9fb2",
+      "references": [],
+      "jobs": [
+        {
+          "id": "pr-lint",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "9d6d191982560d52a1e732af89f9d4cc6d3ec4e1cabd366e1eeccb255dc44171"
+        }
+      ],
+      "edges": {
+        "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0092"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0063",
+      "repository": "candidate",
+      "path": ".github/workflows/provenance-nightly.yml",
+      "digest": "f9d16a2b647917b7cd1be17cf7513841c364583723084f16246b529fc8defaaf",
+      "references": [],
+      "jobs": [
+        {
+          "id": "provenance-update",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "5dcffef21e5d61c516517b47c031f4be5d8363f7a0987fa20fdccc393ba10846"
+        }
+      ],
+      "edges": {
+        "stella/.github/.github/workflows/provenance-update.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0093"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0064",
+      "repository": "candidate",
+      "path": ".github/workflows/provider-request-schemas-check.yml",
+      "digest": "4d49ea1a42b5131fba25e7a7d1de32674420f90b55d71f02a08c1fde9060239d",
+      "references": [],
+      "jobs": [
+        {
+          "id": "provider-request-schemas-check",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "e1f0a0e1ed5479a7867e9eb6dc86e0120c2ece8ff090416b290e9412e9862096"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0065",
+      "repository": "candidate",
+      "path": ".github/workflows/publish-npm.yml",
+      "digest": "d7c6470f4cee5ac5d41939a17f40415ab56e6e844ec955eebc0f52859c6b0d12",
+      "references": [],
+      "jobs": [
+        {
+          "id": "release-trigger",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "2099ea44c39ac1aecccc35aa6b8bd7bf4a2cdc5827932a5c92cb8fc84eddc9ec"
+        },
+        {
+          "id": "pack",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "37f3f9f4c901d4810d3e8ffb97d45ac8858d02f01660d8b94c69a8ef5992100b"
+        },
+        {
+          "id": "release",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "bc6ffc8372235dfce274d1d197b46a0cd90c3bd2f61d2d48af6feadbfbe65edd"
+        },
+        {
+          "id": "verify-npm",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "c199fc5c98d087a92df255f0514b9305e022eb6c7090e32372c4845005210360"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0115",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0091"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0066",
+      "repository": "candidate",
+      "path": ".github/workflows/publish-product-media.yml",
+      "digest": "893651361e2b23bfb2763a37c4e0e5d5d0832d8c866dfaa029fc8325d625d5d7",
+      "references": [],
+      "jobs": [
+        {
+          "id": "publish",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "35cf1a35a076ae57e72f30ddf5448bd0d31c560c2a76df74da0844a49e4b22e6"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0067",
+      "repository": "candidate",
+      "path": ".github/workflows/quarantine-prune.yml",
+      "digest": "da6eacbe2e1bfbec4d6fce788d2ac44268e7b42da4392de25b60aa1c9de8b356",
+      "references": [],
+      "jobs": [
+        {
+          "id": "prune",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "515e0022f865132545d1505334aea9bf9049e56fd5f3a2512138491ea3ac5141"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0068",
+      "repository": "candidate",
+      "path": ".github/workflows/query-perf.yml",
+      "digest": "86f4b0aa409538c8d3c2088abe68292f5b3b484d1e5e6b5ee2c8b8556989e7f3",
+      "references": ["./.github/workflows/query-perf.yml"],
+      "jobs": [
+        {
+          "id": "query-perf",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "63df453c9794246e44c706e5e766c847b3e93e720227a7b6e5b87242b1651a90"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0069",
+      "repository": "candidate",
+      "path": ".github/workflows/railway-smoke.yml",
+      "digest": "3aad92d8d99ab6956a0c9d89e3d13ff8a498ac11c7341882f0ec13e31075aca6",
+      "references": [],
+      "jobs": [
+        {
+          "id": "smoke",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "aa12e73dd26ec3c112636c0a8e77048816a25236dfa309b263faee4f4ad3ad42"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0070",
+      "repository": "candidate",
+      "path": ".github/workflows/railway-template-source.yml",
+      "digest": "3e9edd242db4d27c5311f5aad89c49c3968090a0858bfa86e2f221a760b27373",
+      "references": [],
+      "jobs": [
+        {
+          "id": "drift",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "b75e5e02f07685a794dd88aca0dceb57342a22fb96e517727c67d82d2e05b9c8"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0071",
+      "repository": "candidate",
+      "path": ".github/workflows/release-desktop.yml",
+      "digest": "ea8fc2623d4a7e8b471e1a238c8b78ad7e61f85f6d5ccd3fb273d280a2b5241b",
+      "references": [],
+      "jobs": [
+        {
+          "id": "resolve",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "746a7d9ebf57a5b72aada2c286ac271c12c8e90933c3beda274e2c7e6f27e521"
+        },
+        {
+          "id": "build",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "a96ea53fcff9fc2b46a70b21be30d9a325ee0c3e7f7d84cc2d5ff438e9a009fb"
+        },
+        {
+          "id": "verify-production",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "a393f3be94dad5459e2ab3337f103e9206474ff709d607f4448486195969642c"
+        },
+        {
+          "id": "manifest",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "1f0a5e59871a5cd4c15c524be54bd705043811350a4942ff84fe963591fbd376"
+        },
+        {
+          "id": "promote-latest",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "a36d7e4d9b6bd945eefd4e135d43b7d497c316003cad1a90df05089e89bfe1ab"
+        },
+        {
+          "id": "carry-forward",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "8409dc6ec30e6afdf234faa07edcb688f073ac40d13e7a1bb00dd570da712ca6"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0128",
+        "./.release-tooling/desktop-windows-build": "n0005",
+        "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466": "n0121",
+        "aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd": "n0123"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0072",
+      "repository": "candidate",
+      "path": ".github/workflows/release-pr.yml",
+      "digest": "1f9c14f2ddb40d3b0d7c0ef8caf7b7cd54c9d292615eb5677412ddaee75f1c1a",
+      "references": [],
+      "jobs": [
+        {
+          "id": "gate",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "07c08e4b7b6595ebd1e6c141e8fcef158f8da338c6fdbd7a8ae8e0349eac0b41"
+        },
+        {
+          "id": "version",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "d112043d0d45478b50158d89d1cf33f439266de4811aa984e6644046016aca3d"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/.github/workflows/changeset-release-pr.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0089"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0073",
+      "repository": "candidate",
+      "path": ".github/workflows/release-proof.yml",
+      "digest": "68371025462dcd384b1e597f9109d90f6a93aeee5a35299d32c8bc4ebd3bfca8",
+      "references": [],
+      "jobs": [
+        {
+          "id": "dispatch",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "3304fe5267dabb1898398d3c0e2136739d61afaa39593a5a0f9be3b9cd6e514a"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0074",
+      "repository": "candidate",
+      "path": ".github/workflows/release-tag.yml",
+      "digest": "b7bbe14281414b97be22c12e1dd0c018f04b79dd051043e568ec9d4bee79dc7c",
+      "references": [],
+      "jobs": [
+        {
+          "id": "tag",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "1c11bea052408353cc689bb25faee7b5e8e644c8c7854a2db6620eddb89a807a"
+        },
+        {
+          "id": "marketing-freshness",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "8e6b3d954fa08cf5987aed75b8d0f3c7dfb4169fefbcb2222aaa81e0abb7f20e"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0075",
+      "repository": "candidate",
+      "path": ".github/workflows/release.yml",
+      "digest": "4b8a309fbdace50e3e599c6c40426a8371e499fbc6752b9fe15935a21dcdcb8b",
+      "references": [],
+      "jobs": [
+        {
+          "id": "resolve",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "eeda2c0ab783e0b42caeefe450653629c6e17e564067c277b08d47411f118ebc"
+        },
+        {
+          "id": "smoke",
+          "kind": "support",
+          "qualifier": "Prerequisites follow the workflow's execution conditions.",
+          "digest": "69042c6fded9d97ecc5f6d9f6d8b91bde614d5fdfe27970c057aa92c86ed3ff1"
+        },
+        {
+          "id": "build",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "98a1e918d64563fd8878ecdfa81e7abb6fe9f34ab41d89901c427f191643d2ea"
+        },
+        {
+          "id": "prepare-web-image",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "e3297646dcac41fc14c411e5ce251c1f90f58d1a8c1503521703e31fae53aadb"
+        },
+        {
+          "id": "manifest",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "78bc242c3c1c9c1d65a77eb2e445edc2116f78b51b06e3be796a8707d7f54c9f"
+        },
+        {
+          "id": "promote",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "21dd8c93721623f6132f3af1d9d63389e4595f9377fe4c0f210df5bbe2cbc586"
+        },
+        {
+          "id": "promote-staging",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "d93542e03f3d0885c688e6adc31e914ff5be25cc169de6aaf52adadd75cb15e4"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0132",
+        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0101",
+        "./.github/actions/provenance": "n0010",
+        "./.workflow-source/.github/actions/build-web-image": "n0002",
+        "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6": "n0107",
+        "./.workflow-source/.github/actions/provenance": "n0010",
+        "orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff": "n0126",
+        "./.github/actions/promote-dispatch": "n0009"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0076",
+      "repository": "candidate",
+      "path": ".github/workflows/safe-chain-cache.yml",
+      "digest": "f85d4a6065211c25a597dbcbeaf10c8fce8e957b1e1e368115e8d34028bcfecd",
+      "references": [],
+      "jobs": [
+        {
+          "id": "warm",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "c86630e515a06a17e3d09899b8e2e3a9fe4a9d01a59d87e2c5599c6a749d3bdb"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "./.github/actions/safe-chain": "n0011"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0077",
+      "repository": "candidate",
+      "path": ".github/workflows/scheduled-run-alerts.yml",
+      "digest": "26afd87e86c6ab078643b4a9f9710cd4d02e2428ca21fb6707c60533f1ef7657",
+      "references": [],
+      "jobs": [
+        {
+          "id": "notify",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "de96d4a22d13df545873dcb2a90be118c7ffb2ed1637e513fc295858ec09678c"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0078",
+      "repository": "candidate",
+      "path": ".github/workflows/scorecard.yml",
+      "digest": "8d87d40e6eae148bda61b14c089feedabacafc771b1463f34be03042e3a221d2",
+      "references": [],
+      "jobs": [
+        {
+          "id": "scorecard",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "5160dfedc0bf35c2c860b5a40a1411f9bf2b58863cc1d0b9b87a93fb111075ab"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc": "n0108",
+        "github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0131"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0079",
+      "repository": "candidate",
+      "path": ".github/workflows/security-txt-guard.yml",
+      "digest": "37b4ed6420ed5245548165e2fe6211060a49d3cfce9ffbc526c110a04ce9f7a4",
+      "references": [],
+      "jobs": [
+        {
+          "id": "check",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "20655504fa41f0e41f560b840ac68f3aa0312e8754675da71b52929a2a6b41f5"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0080",
+      "repository": "candidate",
+      "path": ".github/workflows/staging-response-policy.yml",
+      "digest": "958cbd4f08e28e69df9423e6d8790bcbbf4fbd25a7c345b10d77a1b5bb52b11b",
+      "references": [],
+      "jobs": [
+        {
+          "id": "check",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "ac35ce34fd6f6857c74f8902bf36639b6dcf806ac230b2d507af1d007c6fdc03"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0081",
+      "repository": "candidate",
+      "path": ".github/workflows/sync-branch-protection.yml",
+      "digest": "67f5473963e4735ec74811c7e75129e5e73b9c7b5fc57c78989e6d3e8092264b",
+      "references": [],
+      "jobs": [
+        {
+          "id": "sync",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "f3046de8ea333c57b42d72649fa6313f9dcf37956b75fcc497dfa05cce075d15"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0082",
+      "repository": "candidate",
+      "path": ".github/workflows/type-cost-measurement.yml",
+      "digest": "06a186855bd18f4f263ebd211701f3558feca82274468353efef6ae20245f2f3",
+      "references": [],
+      "jobs": [
+        {
+          "id": "prepare",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "c3c55b5aa50f769c2a37d2381fae63a2d8350655c8db577abd27738511b91c20"
+        },
+        {
+          "id": "measure",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "0a3cc7fcb827e35845762b6c32544cbf089b657fcb2014c26ea19d7d793f1db2"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0083",
+      "repository": "candidate",
+      "path": ".github/workflows/typecheck-base.yml",
+      "digest": "52942fcb384e3b190152cec70c169dfee67c361e71dfbbcce92d3c5882673e1b",
+      "references": [],
+      "jobs": [
+        {
+          "id": "record",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "21d1edb0080443556bb5927cc9384f013db9125101d6bd24d93246b0819239b3"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0084",
+      "repository": "candidate",
+      "path": ".github/workflows/visual-preview.yml",
+      "digest": "5c6bf5f772a638dde31de8ca60bafc054e5526ca1aab266d2e3387982372f489",
+      "references": [],
+      "jobs": [
+        {
+          "id": "preview",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "c8889bccf2b406ae2aaa239cdc8585153f30719ab3c20d1dd4a2e9bc31a143ae"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0085",
+      "repository": "supplier1",
+      "path": ".github/actions/changeset-policy/action.yml",
+      "digest": "738a6bb23409ce8a3bf83588b999deef32da392f2d0d1a761fc17f74a03295bf",
+      "references": [
+        "stella/.github/.github/actions/changeset-policy@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      ],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0086",
+      "repository": "supplier1",
+      "path": ".github/actions/npm-independent-release/action.yml",
+      "digest": "97b85acfff4913eb6dbc1dd5bcecadd1ecb3f177fa572fcd8130b08360f1dff0",
+      "references": [
+        "./.release-tooling/.github/actions/npm-independent-release"
+      ],
+      "jobs": [],
+      "edges": {
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0115",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
+        "stella/.github/.github/actions/npm-publish-hardened@42bd6a23099a2dc219dd1af9c55f8f0506fcfffd": "n0095"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0087",
+      "repository": "supplier1",
+      "path": ".github/actions/signed-commit/action.yml",
+      "digest": "81208f3202da284b34016692bd7e6d1303b6272f4115d091bb972cf454235d22",
+      "references": [
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+        "./.signed-commit/.github/actions/signed-commit",
+        "./.quarantine-policy/.github/actions/signed-commit"
+      ],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0088",
+      "repository": "supplier1",
+      "path": ".github/workflows/audit-branch-protection.yml",
+      "digest": "f7ef39fecd5bd888e9a376772e223fafa568c96ea03767be2e55552f8224ec5c",
+      "references": [
+        "stella/.github/.github/workflows/audit-branch-protection.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      ],
+      "jobs": [
+        {
+          "id": "audit",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "14f3dc469b63f69cdb2373d93677ae55ae0993cd0310748a603c42180986dbdb"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0089",
+      "repository": "supplier1",
+      "path": ".github/workflows/changeset-release-pr.yml",
+      "digest": "8f200a342f598241f346aae13420ee0737ad92cbcac483d147f1079261f59380",
+      "references": [
+        "stella/.github/.github/workflows/changeset-release-pr.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      ],
+      "jobs": [
+        {
+          "id": "version",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "3bd26c6a029ecb1ed0c7f56038664cb16f1e95769591b7cbb8aaea007baa4c9a"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0115",
+        "stella/.github/.github/actions/changeset-release-lifecycle@636b7841096c8f0cc5a1572077b78768ef8fea42": "n0096",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0128",
+        "stella/.github/.github/actions/sync-cargo-workspace-lock@636b7841096c8f0cc5a1572077b78768ef8fea42": "n0097",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0090",
+      "repository": "supplier1",
+      "path": ".github/workflows/label-sync.yml",
+      "digest": "ea2f691e7e6e8e5237579704fa4cc760f6f70628048d306b7e5d365cb7ab84db",
+      "references": [
+        "stella/.github/.github/workflows/label-sync.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      ],
+      "jobs": [
+        {
+          "id": "sync",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "ce204a966b9665a041c091bfbce93f61ecfa56f3caca847df09832ab6b169f34"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0091",
+      "repository": "supplier1",
+      "path": ".github/workflows/npm-independent-release.yml",
+      "digest": "f9031a3b4c193b6a82388aadb5be1a8f73790d9f8326b9961fac64985e4be3b5",
+      "references": [
+        "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      ],
+      "jobs": [
+        {
+          "id": "release",
+          "kind": "priority",
+          "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
+          "digest": "38cecc4e39e5afda2a3373943151fb9d00512eaf33152ba0d06b719725f4cc3e"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
+        "./.release-tooling/.github/actions/npm-independent-release": "n0086"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0092",
+      "repository": "supplier1",
+      "path": ".github/workflows/pr-lint.yml",
+      "digest": "01dc7c187a0dc0c058479646ce496fe307e31270820225bb3ca7451a8ec133ba",
+      "references": [
+        "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8",
+        "./.github/workflows/pr-lint.yml"
+      ],
+      "jobs": [
+        {
+          "id": "pr-lint",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "a598e752a506f8f0f4212f517757d91ae103bd1aeccc972ae52947629a947761"
+        }
+      ],
+      "edges": {
+        "ytanikin/PRConventionalCommits@b628c5a234cc32513014b7bfdd1e47b532124d98": "n0130",
+        "michalvankodev/copy-issue-labels@c4df96ee53d2cdf639ba169a26c43b04d5085cb3": "n0104",
+        "pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff": "n0098",
+        "kentaro-m/auto-assign-action@0a2c53d3721e4c5cfcce6afd4014aecc337979f6": "n0106"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0093",
+      "repository": "supplier1",
+      "path": ".github/workflows/provenance-update.yml",
+      "digest": "c8c4d96f05bd6ea4acebaf332a4a989b5e32e9c5c0f4f13e4f02a8af9d668322",
+      "references": [
+        "stella/.github/.github/workflows/provenance-update.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      ],
+      "jobs": [
+        {
+          "id": "update",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "f6d6e1867d913e5ad0401f530eee1704936328388cc2632b943f06c7a3d8ce08"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0115",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26": "n0118",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
+        "./.signed-commit/.github/actions/signed-commit": "n0087"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0094",
+      "repository": "supplier1",
+      "path": "actions/setup-bun-cached/action.yml",
+      "digest": "865d7c5596178bf885c0d4b0f07c784fd93102e1807b19806a44a85380a33c7c",
+      "references": [
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      ],
+      "jobs": [],
+      "edges": {
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0113",
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0112"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0095",
+      "repository": "supplier2",
+      "path": ".github/actions/npm-publish-hardened/action.yml",
+      "digest": "c39892557e3f48af6663980fa708930f19805ca0054580b26df552fac60443b1",
+      "references": [
+        "stella/.github/.github/actions/npm-publish-hardened@42bd6a23099a2dc219dd1af9c55f8f0506fcfffd"
+      ],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0096",
+      "repository": "supplier3",
+      "path": ".github/actions/changeset-release-lifecycle/action.yml",
+      "digest": "6b1eb4f9f47de784b978dcb4810153eba4bb7188980683628dd7bc81cf24cf5d",
+      "references": [
+        "stella/.github/.github/actions/changeset-release-lifecycle@636b7841096c8f0cc5a1572077b78768ef8fea42"
+      ],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "metadata",
+      "id": "n0097",
+      "repository": "supplier3",
+      "path": ".github/actions/sync-cargo-workspace-lock/action.yml",
+      "digest": "7b73a9100b970f85976a0dfcc039b870990615270b890985aa73cfe8b55d8955",
+      "references": [
+        "stella/.github/.github/actions/sync-cargo-workspace-lock@636b7841096c8f0cc5a1572077b78768ef8fea42"
+      ],
+      "jobs": [],
+      "edges": {}
+    },
+    {
+      "type": "supplier",
+      "id": "n0098",
+      "reference": "pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0099",
+      "reference": "rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0100",
+      "reference": "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0101",
+      "reference": "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0102",
+      "reference": "baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0103",
+      "reference": "docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0104",
+      "reference": "michalvankodev/copy-issue-labels@c4df96ee53d2cdf639ba169a26c43b04d5085cb3",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0105",
+      "reference": "github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0106",
+      "reference": "kentaro-m/auto-assign-action@0a2c53d3721e4c5cfcce6afd4014aecc337979f6",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0107",
+      "reference": "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0108",
+      "reference": "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0109",
+      "reference": "docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0110",
+      "reference": "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0111",
+      "reference": "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0112",
+      "reference": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0113",
+      "reference": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0114",
+      "reference": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0115",
+      "reference": "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0116",
+      "reference": "docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0117",
+      "reference": "github/codeql-action/autobuild@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0118",
+      "reference": "anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0119",
+      "reference": "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0120",
+      "reference": "azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0121",
+      "reference": "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0122",
+      "reference": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0123",
+      "reference": "aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0124",
+      "reference": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0125",
+      "reference": "docker/login-action@dbcb813823bdd20940b903addbd779551569679f",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0126",
+      "reference": "orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0127",
+      "reference": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0128",
+      "reference": "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0129",
+      "reference": "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0130",
+      "reference": "ytanikin/PRConventionalCommits@b628c5a234cc32513014b7bfdd1e47b532124d98",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0131",
+      "reference": "github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0132",
+      "reference": "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069",
+      "binding": "immutable"
+    },
+    {
+      "type": "supplier",
+      "id": "n0133",
+      "reference": "github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
+      "binding": "immutable"
+    }
+  ]
+}
