@@ -260,8 +260,8 @@ test("an in-scope API leg rejects help, empty or another shard's output", () => 
   for (const output of [
     "",
     "Usage: bun run [flags] <script>",
-    "API test shard 1/4: 0/10 files",
-    "API test shard 2/4: 5/10 files",
+    "API test shard 1/2: 0/10 files",
+    "API test shard 2/2: 5/10 files",
   ]) {
     expect(() =>
       assertApiShardExecuted({ shard: "api-1", taskIds, output }),
@@ -270,7 +270,7 @@ test("an in-scope API leg rejects help, empty or another shard's output", () => 
   assertApiShardExecuted({
     shard: "api-1",
     taskIds,
-    output: "@stll/api:test: API test shard 1/4: 5/10 files",
+    output: "@stll/api:test: API test shard 1/2: 5/10 files",
   });
   assertApiShardExecuted({ shard: "api-1", taskIds: [], output: "" });
   assertApiShardExecuted({ shard: "rest", taskIds, output: "" });

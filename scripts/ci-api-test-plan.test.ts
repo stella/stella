@@ -106,5 +106,5 @@ test("merge groups select the batch union without narrowing API test files", () 
   ).toEqual(allApiTests());
   expect(
     planCiApiTests({ ...options, scopeUnknown: true }).matrix.shard,
-  ).toHaveLength(5);
+  ).toHaveLength(FULL_TEST_JOB_SHARDS.length);
 });

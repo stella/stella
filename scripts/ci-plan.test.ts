@@ -6255,10 +6255,10 @@ test("API planning only loads dependencies after installation and emits install-
   try {
     for (const [event, packages, unknown, selected, shards, expected] of [
       ["pull_request", "false", "false", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "4"],
-      ["pull_request", "false", "true", "", "", "4"],
-      ["merge_group", "true", "false", "", "", "4"],
-      ["workflow_dispatch", "true", "false", "", "", "4"],
+      ["pull_request", "true", "false", "", "", "2"],
+      ["pull_request", "false", "true", "", "", "2"],
+      ["merge_group", "true", "false", "", "", "2"],
+      ["workflow_dispatch", "true", "false", "", "", "2"],
       [
         "pull_request",
         "true",
