@@ -2825,7 +2825,7 @@ jobs:
           bun test scripts/knip-exports-ratchet.test.ts
           bun run check:knip-exports
 
-      - name: Dependabot group guard
+      - name: Dependabot group guard (installed packages)
         env:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
