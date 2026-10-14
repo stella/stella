@@ -341,23 +341,33 @@ const readNamedAct = (
   resolver: CompiledResolver,
   citedOn: string,
 ): ActRead => {
-  const matches = matchNamedActs(rest, resolver).map(({ entry }) => entry);
+  const matches = matchNamedActs(rest, resolver);
   if (matches.length === 0) {
     return { kind: "none" };
   }
-  // A spelling two acts bore in turn names the one its window covers; an
-  // unbounded entry applies only where no bounded one of it does.
-  const bounded = matches.filter(
-    (entry) => entry.citedFrom !== undefined || entry.citedUntil !== undefined,
-  );
-  const windowed = bounded.filter((entry) => inWindow(entry, citedOn));
-  const chosen =
-    windowed.length > 0
+  // Window precedence is per spelling: a spelling two acts bore in turn names
+  // the one its window covers, and an unbounded entry of that spelling
+  // applies only where no bounded one does. Another spelling elsewhere in the
+  // citation is read on its own, so a dated title never hides an unrelated
+  // undated name beside it.
+  const spans = new Map<string, ActTitleSpec[]>();
+  for (const { start, end, entry } of matches) {
+    const key = `${String(start)}:${String(end)}`;
+    spans.set(key, [...(spans.get(key) ?? []), entry]);
+  }
+  const chosen = [...spans.values()].flatMap((entries) => {
+    const windowed = entries.filter(
+      (entry) =>
+        (entry.citedFrom !== undefined || entry.citedUntil !== undefined) &&
+        inWindow(entry, citedOn),
+    );
+    return windowed.length > 0
       ? windowed
-      : matches.filter(
+      : entries.filter(
           (entry) =>
             entry.citedFrom === undefined && entry.citedUntil === undefined,
         );
+  });
   const works: WorkIdentifier[] = [];
   const units: (SectionUnit | undefined)[] = [];
   for (const entry of chosen) {

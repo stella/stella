@@ -172,6 +172,16 @@ describe("resolveProvisionCitation", () => {
     ).toMatchObject({ workIdentifier: "262/2006 Sb." });
   });
 
+  test("a dated title does not hide an undated name of another act beside it", () => {
+    const read = resolve("čl. 10 občanského zákoníku a Listiny");
+    expect(read.status).toBe("ambiguous_act");
+    if (read.status === "ambiguous_act") {
+      expect(
+        read.candidates.map(({ workIdentifier }) => workIdentifier),
+      ).toEqual(expect.arrayContaining(["89/2012 Sb.", "2/1993 Sb."]));
+    }
+  });
+
   test("two acts named by number are ambiguous, never the first", () => {
     const read = resolve("§ 10 zákona č. 89/2012 Sb. nebo č. 262/2006 Sb.");
     expect(read.status).toBe("ambiguous_act");
