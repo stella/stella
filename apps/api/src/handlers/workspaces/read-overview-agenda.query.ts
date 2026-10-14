@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import { and, isNull, or } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { entities } from "@/api/db/schema";
 import {
   dueFromReaderDate,
   openAgendaTask,
@@ -33,10 +32,10 @@ export const readOverviewAgenda = async ({
       await tx.query.entities.findMany({
         where: {
           workspaceId: { eq: workspaceId },
-          RAW: () =>
+          RAW: (table) =>
             and(
-              openAgendaTask(),
-              or(isNull(entities.dueDate), dueFromReaderDate(agendaFrom)),
+              openAgendaTask(table),
+              or(isNull(table.dueDate), dueFromReaderDate(table, agendaFrom)),
             ) ?? panic("Agenda condition is never empty"),
         },
         columns: { id: true, name: true, status: true, dueDate: true },

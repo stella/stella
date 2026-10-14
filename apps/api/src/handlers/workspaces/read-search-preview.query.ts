@@ -109,9 +109,9 @@ export const readSearchPreviewHandler = async ({
           .where(
             and(
               eq(entities.workspaceId, workspaceId),
-              openAgendaTask(),
+              openAgendaTask(entities),
               isNotNull(entities.dueDate),
-              dueFromToday(),
+              dueFromToday(entities),
             ),
           )
           .orderBy(asc(entities.dueDate), asc(entities.id))
