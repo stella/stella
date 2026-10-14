@@ -130,6 +130,9 @@ describe("resolveProvisionCitation", () => {
     "§ 52 písm. g a h ZP",
     "§ 52 písm. g–h ZP",
     "§ 52 písm. g, h ZP",
+    "§ 316 resp. 317 ZP",
+    "§ 316 odst. 2 popř. odst. 3 ZP",
+    "§ 52 písm. g respektive h ZP",
     "§ 316 odst. 2 ZP ve spojení s čl. 7 Listiny",
   ])(
     "%s names several provisions and is refused, never narrowed to the first",

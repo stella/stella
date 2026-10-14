@@ -83,6 +83,30 @@ const termSource = (text: string) => {
   return text.endsWith(".") ? `${escaped.slice(0, -2)}\\.?` : escaped;
 };
 
+/**
+ * Words that join provisions in a caller's own phrasing beyond the profile's
+ * enumeration connectors, which describe court citations: an alternative
+ * (`resp.`, `popř.`) still names two provisions one filter cannot stand for.
+ */
+const CALLER_ALTERNATIVE_CONNECTORS = [
+  "resp.",
+  "respektive",
+  "popř.",
+  "popřípadě",
+  "event.",
+  "eventuálně",
+] as const;
+
+const connectorSource = (profile: JurisdictionProfile) =>
+  [
+    ...profile.enumerationConnectors,
+    ...profile.rangeConnectors,
+    ...CALLER_ALTERNATIVE_CONNECTORS,
+  ]
+    .toSorted((left, right) => right.length - left.length)
+    .map((word) => RegExp.escape(word))
+    .join("|");
+
 const alternation = (texts: readonly string[]) =>
   texts
     .toSorted((left, right) => right.length - left.length)
@@ -122,23 +146,11 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
       "iu",
     ),
     continuation: new RegExp(
-      String.raw`^\s*(?:(?:${alternation(profile.andFollowingMarkers)})|(?:[,;]|[-–—]|(?:${[
-        ...profile.enumerationConnectors,
-        ...profile.rangeConnectors,
-      ]
-        .map((word) => RegExp.escape(word))
-        .join(
-          "|",
-        )})(?=\s))\s*(?:${alternation(profile.sectionTerms.map(({ text }) => text))}|${alternation(profile.subdivisionTerms.map(({ text }) => text))}|\d|[a-z]\)))`,
+      String.raw`^\s*(?:(?:${alternation(profile.andFollowingMarkers)})|(?:[,;]|[-–—]|(?:${connectorSource(profile)})(?=\s))\s*(?:${alternation(profile.sectionTerms.map(({ text }) => text))}|${alternation(profile.subdivisionTerms.map(({ text }) => text))}|\d|[a-z]\)))`,
       "iu",
     ),
     letterContinuation: new RegExp(
-      String.raw`^\s*(?:[,;]|[-–—]|(?:${[
-        ...profile.enumerationConnectors,
-        ...profile.rangeConnectors,
-      ]
-        .map((word) => RegExp.escape(word))
-        .join("|")})(?=\s))\s*[a-z](?![\p{L}\p{N}])`,
+      String.raw`^\s*(?:[,;]|[-–—]|(?:${connectorSource(profile)})(?=\s))\s*[a-z](?![\p{L}\p{N}])`,
       "iu",
     ),
     sectionUnits: new Map(
