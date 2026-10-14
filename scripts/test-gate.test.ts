@@ -19,6 +19,7 @@ import {
   scenarioBlockerFailure,
   validateTrustedOutputProducers,
   validateGatingEventFacts,
+  repositoryTestExecutionTopology,
 } from "./test-gate";
 import type { ScenarioBlocker, TestScenario } from "./test-gate";
 import { TRUSTED_OUTPUT_PRODUCERS } from "./test-gate-output-producers";
@@ -3677,6 +3678,24 @@ context("extension browser spec collection", () => {
       }),
     ).toBeUndefined();
   });
+});
+
+context("repository execution topology validation", () => {
+  check(
+    "returns real workflow findings without relying on the CLI accumulator",
+    () => {
+      const topology = repositoryTestExecutionTopology();
+      expect(topology.findings).toEqual([]);
+      expect(topology.gatingJobs.size).toBeGreaterThan(0);
+      expect(
+        firstCollectionFailure({
+          file: "scripts/test-gate.test.ts",
+          scenarios: new Map(),
+        }),
+      ).toBeUndefined();
+      expect(repositoryTestExecutionTopology()).toBe(topology);
+    },
+  );
 });
 
 context("real marketing Playwright factory composition", () => {

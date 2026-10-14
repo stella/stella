@@ -4352,49 +4352,55 @@ type RepositoryTestExecutionTopology = {
   readonly shardedPackages: ReadonlySet<string>;
 };
 
+type ValidatedRepositoryTestExecutionTopology =
+  RepositoryTestExecutionTopology & {
+    readonly findings: readonly string[];
+  };
+
 let cachedRepositoryTestExecutionTopology:
-  | RepositoryTestExecutionTopology
+  | ValidatedRepositoryTestExecutionTopology
   | undefined;
 
-const repositoryTestExecutionTopology = (): RepositoryTestExecutionTopology => {
-  if (cachedRepositoryTestExecutionTopology !== undefined) {
-    return cachedRepositoryTestExecutionTopology;
-  }
-  const workflow = readFileSync(
-    path.join(ROOT, ".github/workflows/ci.yml"),
-    "utf-8",
-  );
-  const packageNames = workspacePackages()
-    .filter(({ hasTestScript }) => hasTestScript)
-    .map(({ name }) => name);
-  errors.push(...validateGatingEventFacts(Bun.YAML.parse(workflow)));
-  const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
-  const gatingJobs = analysis.jobs;
-  const plannedJob = workflowRecord(
-    workflowRecord(workflowRecord(Bun.YAML.parse(workflow))?.["jobs"])?.[
-      "ci-plan"
-    ],
-  );
-  const planJob = Array.isArray(plannedJob?.["steps"])
-    ? flattenWorkflowSteps(plannedJob["steps"])
-        .flatMap((step) =>
-          typeof step["run"] === "string" ? [step["run"]] : [],
-        )
-        .join("\n")
-    : "";
-  cachedRepositoryTestExecutionTopology = {
-    workflow,
-    gatingJobs,
-    shardedPackages: new Set(
-      Object.entries(TEST_JOB_SHARDS).flatMap(([jobShard, shards]) =>
-        planJob.includes(`"${jobShard}"`)
-          ? shards.flatMap((shard) => shardPackages({ packageNames, shard }))
-          : [],
+export const repositoryTestExecutionTopology =
+  (): ValidatedRepositoryTestExecutionTopology => {
+    if (cachedRepositoryTestExecutionTopology !== undefined) {
+      return cachedRepositoryTestExecutionTopology;
+    }
+    const workflow = readFileSync(
+      path.join(ROOT, ".github/workflows/ci.yml"),
+      "utf-8",
+    );
+    const packageNames = workspacePackages()
+      .filter(({ hasTestScript }) => hasTestScript)
+      .map(({ name }) => name);
+    const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
+    const gatingJobs = analysis.jobs;
+    const plannedJob = workflowRecord(
+      workflowRecord(workflowRecord(Bun.YAML.parse(workflow))?.["jobs"])?.[
+        "ci-plan"
+      ],
+    );
+    const planJob = Array.isArray(plannedJob?.["steps"])
+      ? flattenWorkflowSteps(plannedJob["steps"])
+          .flatMap((step) =>
+            typeof step["run"] === "string" ? [step["run"]] : [],
+          )
+          .join("\n")
+      : "";
+    cachedRepositoryTestExecutionTopology = {
+      findings: validateGatingEventFacts(Bun.YAML.parse(workflow)),
+      workflow,
+      gatingJobs,
+      shardedPackages: new Set(
+        Object.entries(TEST_JOB_SHARDS).flatMap(([jobShard, shards]) =>
+          planJob.includes(`"${jobShard}"`)
+            ? shards.flatMap((shard) => shardPackages({ packageNames, shard }))
+            : [],
+        ),
       ),
-    ),
+    };
+    return cachedRepositoryTestExecutionTopology;
   };
-  return cachedRepositoryTestExecutionTopology;
-};
 
 type PlaywrightCollection =
   | { readonly type: "collected" }
@@ -5860,7 +5866,7 @@ const run = (): void => {
   const files = trackedFiles().filter(isTypeScriptTest);
   const disabledLedger = readDisabledLedger();
   const nonGating = readNonGatingLedger();
-  const errors: string[] = [];
+  const errors: string[] = [...repositoryTestExecutionTopology().findings];
   validateExecutionTopology(errors);
   validateCanonicalOrder(disabledLedger.identities, DISABLED_LEDGER, errors);
   validateCanonicalOrder(
