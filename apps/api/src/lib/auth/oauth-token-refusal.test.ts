@@ -241,7 +241,7 @@ describe("OAuth token refusal observations", () => {
   });
 });
 
-const providerFile = (name: string) =>
+const providerFile = async (name: string) =>
   Bun.file(
     new URL(name, import.meta.resolve("@better-auth/oauth-provider")),
   ).text();
