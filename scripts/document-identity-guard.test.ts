@@ -309,7 +309,7 @@ describe("document identity ownership guard", () => {
       "apps/web/src/components/search-dialog-results.tsx#SearchHitIcon",
       "apps/web/src/components/search-dialog-results.tsx#RecentFileIcon",
       "apps/web/src/features/case-law/components/decision-cells.tsx#CaseNumberCell",
-      "apps/api/src/mcp/apps/case-law-results/app.tsx#ResultTableRow",
+      "packages/mcp-apps/src/case-law-results/view.tsx#ResultTableRow",
     ]) {
       expect(result.surfaces).toContain(surface);
     }

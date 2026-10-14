@@ -12,7 +12,7 @@ import path from "node:path";
 import { createSha256 } from "../packages/sha256/src/bun";
 
 const MARKER = ".stella-install-complete";
-const STORE_CACHE_VERSION = "v3";
+const STORE_CACHE_VERSION = "v4";
 
 export type GlobalStoreMode = "enabled" | "disabled";
 
@@ -34,6 +34,25 @@ const assertIdentity = (name: string, value: string) => {
   if (value.trim() === "") {
     throw new InstallStoreInvariantError(`Missing install-store ${name}`);
   }
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const normalizedLock = (source: string) => {
+  const lock: unknown = Bun.JSONC.parse(source);
+  if (!isRecord(lock) || !isRecord(lock["workspaces"])) {
+    throw new InstallStoreInvariantError("Invalid bun.lock workspaces");
+  }
+  for (const workspace of Object.values(lock["workspaces"])) {
+    if (!isRecord(workspace)) {
+      throw new InstallStoreInvariantError("Invalid bun.lock workspace");
+    }
+    // Workspace self versions do not change dependency resolution or extraction.
+    // Retain every other lock field, including dependency versions and integrity.
+    delete workspace["version"];
+  }
+  return JSON.stringify(lock);
 };
 
 export const parseGlobalStoreMode = (
@@ -97,7 +116,9 @@ export const completeInstallStoreKey = ({
     .update(
       JSON.stringify({
         format: STORE_CACHE_VERSION,
-        lock: createSha256().update(readFileSync(lockfile)).digest("hex"),
+        lock: createSha256()
+          .update(normalizedLock(readFileSync(lockfile, "utf-8")))
+          .digest("hex"),
         configuration: createSha256()
           .update(readFileSync(configuration))
           .digest("hex"),
@@ -110,6 +131,37 @@ export const completeInstallStoreKey = ({
     )
     .digest("hex");
   return `bun-complete-store-${STORE_CACHE_VERSION}-${platform}-${arch}-${revision}-${globalStoreMode}-${digest}`;
+};
+
+type ExtractionScratchOptions = {
+  directory: string;
+  entry: string;
+  filename: string;
+};
+
+const isExtractionScratch = ({
+  directory,
+  entry,
+  filename,
+}: ExtractionScratchOptions) => {
+  if (
+    (directory !== "" && directory !== "links") ||
+    !/\.tmp(?:-|$)/u.test(entry)
+  ) {
+    return false;
+  }
+  const manifest = path.join(filename, "package.json");
+  if (
+    directory !== "" ||
+    !lstatSync(filename).isDirectory() ||
+    !existsSync(manifest)
+  ) {
+    return true;
+  }
+  // A root package name may end in .tmp; extraction scratch does not
+  // carry a manifest identifying that directory as the package itself.
+  const metadata: unknown = Bun.JSONC.parse(readFileSync(manifest, "utf-8"));
+  return !isRecord(metadata) || metadata["name"] !== entry;
 };
 
 const storeFingerprint = (store: string, globalStoreMode: GlobalStoreMode) => {
@@ -142,12 +194,9 @@ const storeFingerprint = (store: string, globalStoreMode: GlobalStoreMode) => {
       ) {
         continue;
       }
-      if (
-        (directory === "" || directory === "links") &&
-        /\.tmp(?:-|$)/u.test(entry)
-      ) {
+      if (isExtractionScratch({ directory, entry, filename })) {
         throw new InstallStoreInvariantError(
-          `Incomplete Bun install store: ${path.join(directory, entry)}`,
+          `Incomplete Bun install store: ${relative}`,
         );
       }
       let kind = "file";
@@ -228,6 +277,60 @@ export const verifyInstallStore = (options: InstallStoreOptions) => {
   }
 };
 
+// Hosted Linux runners keep RUNNER_TEMP here; job containers mount the same
+// directory at /__w. Cache versions hash the absolute store path and Bun
+// global-store links are absolute, so both environments use this one path.
+const HOSTED_LINUX_WORK = "/home/runner/work";
+const CONTAINER_WORK = "/__w";
+
+// Astro resolves a module id as project-relative unless it shares a
+// non-root ancestor with the project, so a store under /tmp breaks Astro
+// builds that load .astro files from the store.
+const sharesNonRootAncestor = (left: string, right: string) => {
+  const first = path.resolve(left).split(path.sep).find(Boolean);
+  return (
+    first !== undefined &&
+    first === path.resolve(right).split(path.sep).find(Boolean)
+  );
+};
+
+export const installStorePath = ({
+  key,
+  platform,
+  runnerTemp,
+  workspace,
+}: {
+  key: string;
+  platform: string;
+  runnerTemp: string;
+  workspace: string;
+}) => {
+  const container =
+    platform === "linux" &&
+    runnerTemp === path.join(CONTAINER_WORK, "_temp") &&
+    workspace.startsWith(`${CONTAINER_WORK}/`);
+  const canonicalTemp =
+    platform === "linux" &&
+    (container || runnerTemp === path.join(HOSTED_LINUX_WORK, "_temp"))
+      ? path.join(HOSTED_LINUX_WORK, "_temp")
+      : runnerTemp;
+  const store = path.join(canonicalTemp, "bun-scoped-install", key);
+  const resolved = container
+    ? `${CONTAINER_WORK}${store.slice(HOSTED_LINUX_WORK.length)}`
+    : store;
+  if (!sharesNonRootAncestor(resolved, workspace)) {
+    throw new InstallStoreInvariantError(
+      `Install store ${resolved} shares no non-root ancestor with workspace ${workspace}`,
+    );
+  }
+  return {
+    store,
+    alias: container
+      ? { link: HOSTED_LINUX_WORK, target: CONTAINER_WORK }
+      : undefined,
+  };
+};
+
 export const parseInstallFlags = (serialized: string | undefined) => {
   if (serialized === undefined) {
     throw new InstallStoreInvariantError(
@@ -269,7 +372,17 @@ if (import.meta.main) {
     console.log(`key=${key}`);
     const temporary = process.env["RUNNER_TEMP"];
     if (temporary !== undefined) {
-      console.log(`store=${path.join(temporary, "bun-scoped-install", key)}`);
+      const { store: storePath, alias } = installStorePath({
+        key,
+        platform: process.platform,
+        runnerTemp: temporary,
+        workspace: process.env["GITHUB_WORKSPACE"] ?? process.cwd(),
+      });
+      console.log(`store=${storePath}`);
+      if (alias !== undefined) {
+        console.log(`alias-link=${alias.link}`);
+        console.log(`alias-target=${alias.target}`);
+      }
     }
   } else if (
     (operation === "seal" || operation === "verify") &&

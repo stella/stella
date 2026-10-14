@@ -2,10 +2,14 @@ import { expect, test } from "bun:test";
 import path from "node:path";
 import ts from "typescript";
 
-import { inspectAppSources } from "./app-source-guard";
-import { MCP_APPS } from "./apps/manifest";
+import { MCP_APPS } from "@stll/mcp-apps/manifest";
 
-const appRoot = path.join(import.meta.dirname, "apps");
+import { inspectAppSources } from "./app-source-guard";
+
+const appRoot = path.resolve(
+  import.meta.dirname,
+  "../../../../packages/mcp-apps/src",
+);
 
 test("every registered app uses the shared bounded viewport", async () => {
   const files = [...new Bun.Glob("**/*.{ts,tsx}").scanSync(appRoot)].filter(
@@ -102,8 +106,8 @@ test("app size reporting cannot bypass the shared viewport", () => {
 test("SDK owners explicitly disable automatic document height reporting", () => {
   for (const file of [
     "shared/bridge.ts",
-    "document-upload/app.ts",
-    "file-comparison/app.ts",
+    "document-upload/runtime.ts",
+    "file-comparison/runtime.ts",
   ]) {
     for (const source of [
       "new App(info);",

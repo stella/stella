@@ -108,7 +108,12 @@ keyring-core = "1"
 opener = "0.9"
 notify = "8"
 ring = "0.17"
-reqwest = { version = "0.13", features = ["json", "multipart", "stream"] }
+reqwest = { version = "0.13", features = [
+  "json",
+  "multipart",
+  "query",
+  "stream",
+] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sys-locale = "0.3"

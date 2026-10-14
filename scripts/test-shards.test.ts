@@ -103,7 +103,7 @@ test("the ci-tests matrix runs exactly the declared jobs", () => {
   const declared = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
-    apiInScope: true,
+    testJobs: FULL_TEST_JOB_SHARDS,
     select: allApiTests,
   }).matrix.shard;
   expect(Object.keys(TEST_JOB_SHARDS)).toEqual(declared);

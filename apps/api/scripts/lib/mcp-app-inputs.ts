@@ -5,8 +5,8 @@ import { panic } from "better-result";
 import path from "node:path";
 
 import { AGENT_INPUT_NORMALIZATION_KEY } from "@stll/agent-input";
+import { MCP_APPS } from "@stll/mcp-apps/manifest";
 
-import { MCP_APPS } from "../../src/mcp/apps/manifest";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "../../src/mcp/static-tool-definitions";
 
 type SchemaPurpose = "normalization" | "validation";
@@ -64,7 +64,8 @@ export const appInputSchema = (schema: unknown, purpose: SchemaPurpose) => {
   return Object.fromEntries(Object.entries(value));
 };
 
-export const generateMcpAppInputs = async (generatedRoot: string) => {
+/** Browser-side input schemas and CSP-safe validators for presentation app tools. */
+export const mcpAppInputArtifacts = (generatedRoot: string) => {
   const tools = [
     ...new Set(
       MCP_APPS.filter((app) => app.type === "presentation").flatMap(
@@ -90,17 +91,19 @@ export const generateMcpAppInputs = async (generatedRoot: string) => {
   for (const [name, schema] of Object.entries(schemas)) {
     ajv.addSchema(appInputSchema(schema, "validation"), name);
   }
-  await Bun.write(
-    path.join(generatedRoot, "input-schemas.json"),
-    `${JSON.stringify(schemas, null, 2)}\n`,
-  );
-  await Bun.write(
-    path.join(generatedRoot, "input-validators.js"),
-    // Validators are internal; the app consumes the single default registry.
-    `${standaloneCode(ajv, Object.fromEntries(tools.map((name) => [name, name]))).replaceAll("export const ", "const ")}\nexport default { ${tools.join(", ")} };\n`,
-  );
-  await Bun.write(
-    path.join(generatedRoot, "input-validators.d.ts"),
-    `// Generated from declared MCP tool input schemas.\ntype InputValidator = ((input: unknown) => boolean) & { errors?: readonly { instancePath: string; keyword: string; params: Record<string, unknown> }[] | null };\ndeclare const validators: Record<${tools.map((name) => JSON.stringify(name)).join(" | ")}, InputValidator>;\nexport default validators;\n`,
-  );
+  return [
+    {
+      path: path.join(generatedRoot, "input-schemas.json"),
+      contents: `${JSON.stringify(schemas, null, 2)}\n`,
+    },
+    {
+      path: path.join(generatedRoot, "input-validators.js"),
+      // Validators are internal; the app consumes the single default registry.
+      contents: `${standaloneCode(ajv, Object.fromEntries(tools.map((name) => [name, name]))).replaceAll("export const ", "const ")}\nexport default { ${tools.join(", ")} };\n`,
+    },
+    {
+      path: path.join(generatedRoot, "input-validators.d.ts"),
+      contents: `// Generated from declared MCP tool input schemas.\ntype InputValidator = ((input: unknown) => boolean) & { errors?: readonly { instancePath: string; keyword: string; params: Record<string, unknown> }[] | null };\ndeclare const validators: Record<${tools.map((name) => JSON.stringify(name)).join(" | ")}, InputValidator>;\nexport default validators;\n`,
+    },
+  ];
 };

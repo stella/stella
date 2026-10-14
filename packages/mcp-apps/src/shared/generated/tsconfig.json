@@ -1,0 +1,15 @@
+{
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "tsBuildInfoFile": "${configDir}/../../../.cache/tsbuildinfo.generated.json"
+  },
+  "files": [
+    "contracts.js",
+    "contracts.d.ts",
+    "input-validators.js",
+    "input-validators.d.ts"
+  ],
+  "include": ["*.d.ts"]
+}

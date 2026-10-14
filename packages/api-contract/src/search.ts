@@ -23,6 +23,12 @@ export const DEFAULT_SEARCH_SORT = SEARCH_SORTS[0];
 export const PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX = 20;
 
 /**
+ * How far global search pages, and the ceiling of each facet count. Shared
+ * because the web shows a count at this ceiling as "at least", not exact.
+ */
+export const GLOBAL_SEARCH_RESULT_LIMIT = 1000;
+
+/**
  * How much of the matched passage a result carries.
  *
  * A name rather than a character count, for the same reason the orders above

@@ -1,0 +1,17 @@
+[
+  {
+    "appIdentifier": "com.microsoft.Word",
+    "appName": "Microsoft Word",
+    "minutes": 24
+  },
+  {
+    "appIdentifier": "com.microsoft.Outlook",
+    "appName": "Microsoft Outlook",
+    "minutes": 12
+  },
+  {
+    "appIdentifier": "com.google.Chrome",
+    "appName": "Google Chrome",
+    "minutes": 18
+  }
+]

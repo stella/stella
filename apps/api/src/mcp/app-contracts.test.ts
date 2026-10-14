@@ -10,6 +10,23 @@ import {
   APP_UNAVAILABLE_FIXTURE,
 } from "@stll/api-contract/mcp-app.fixtures";
 import { UI_LOCALES } from "@stll/locales";
+import {
+  filterDefaults,
+  resolveView,
+  searchFilterInput,
+  searchView,
+  sortResultRows,
+} from "@stll/mcp-apps/case-law-results/model";
+import { createCaseLawParser } from "@stll/mcp-apps/case-law-results/parse";
+import { CASE_LAW_RESULTS_APP, MCP_APPS } from "@stll/mcp-apps/manifest";
+import type {
+  ResolveResults,
+  SearchResults,
+} from "@stll/mcp-apps/shared/contracts";
+import {
+  projectAppToolArguments,
+  validateAppToolArguments,
+} from "@stll/mcp-apps/shared/tool-input";
 
 import {
   AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS,
@@ -24,20 +41,6 @@ import { MCP_APP_OUTPUT_SCHEMAS } from "./app-contracts";
 import { inspectAppManifest, inspectAppSchemas } from "./app-guards";
 import { isMcpAppAvailable } from "./app-policy";
 import { inspectAppHtmlSources, inspectAppSources } from "./app-source-guard";
-import {
-  filterDefaults,
-  resolveView,
-  searchFilterInput,
-  searchView,
-  sortResultRows,
-} from "./apps/case-law-results/model";
-import { createCaseLawParser } from "./apps/case-law-results/parse";
-import { CASE_LAW_RESULTS_APP, MCP_APPS } from "./apps/manifest";
-import type { ResolveResults, SearchResults } from "./apps/shared/contracts";
-import {
-  validateAppToolArguments,
-  projectAppToolArguments,
-} from "./apps/shared/tool-input";
 import type { McpMode } from "./constants";
 import { normalizeObjectInputAtBoundary } from "./input-normalization";
 import {
@@ -124,7 +127,10 @@ const STATUTE_PROVISIONS_FIXTURE = v.parse(READ_STATUTE_PROVISIONS_PROJECTION, {
   ],
 }) satisfies StatuteProvisionsFixture;
 
-const appRoot = path.resolve(import.meta.dirname, "apps");
+const appRoot = path.resolve(
+  import.meta.dirname,
+  "../../../../packages/mcp-apps/src",
+);
 const directories = [...new Bun.Glob("*/app.html").scanSync(appRoot)].map(
   (file) => path.dirname(file),
 );
@@ -248,9 +254,11 @@ describe("MCP app registry and contracts", () => {
   });
   test("browser apps reject server imports, including type-only edges", () => {
     for (const module of [
-      "../static-tool-definitions",
+      "../../../apps/api/src/mcp/static-tool-definitions",
       "@/api/mcp/context",
-      "../../db/long-running-connection",
+      "@stll/api",
+      "@stll/api/mcp/context",
+      "../../../apps/api/src/db/long-running-connection",
       "@/api/handlers/case-law/decisions/get",
     ]) {
       for (const source of [
@@ -266,11 +274,24 @@ describe("MCP app registry and contracts", () => {
       }
     }
   });
+  test("browser ownership scans omit test and declaration surfaces", () => {
+    const source =
+      'import { App } from "@modelcontextprotocol/ext-apps"; new App().callServerTool({name:"write"});';
+    for (const file of [
+      "document-upload/runtime.test.tsx",
+      "file-comparison/runtime.spec.ts",
+      "tests/setup.ts",
+      "setup-env.ts",
+      "shared/generated/contracts.d.ts",
+    ]) {
+      expect(inspectAppSources({ [file]: source })).toEqual([]);
+    }
+  });
   test("SDK owners also reject server imports", () => {
     for (const file of [
       "shared/bridge.ts",
-      "document-upload/app.ts",
-      "file-comparison/app.ts",
+      "document-upload/runtime.ts",
+      "file-comparison/runtime.ts",
     ]) {
       expect(
         inspectAppSources({

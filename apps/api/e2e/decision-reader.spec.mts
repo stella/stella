@@ -9,14 +9,14 @@ import type * as v from "valibot";
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
 
 import type {
   blocksDecisionOutput,
   openDecisionOutput,
   provisionPreviewOutput,
 } from "../src/lib/chat/decision-reader-projections";
-import type { SearchResults } from "../src/mcp/apps/shared/contracts";
-import APP_INPUT_SCHEMAS from "../src/mcp/apps/shared/generated/input-schemas.json" with { type: "json" };
+import APP_INPUT_SCHEMAS from "../../../packages/mcp-apps/src/shared/generated/input-schemas.json" with { type: "json" };
 
 type ReaderPage = v.InferInput<typeof blocksDecisionOutput>;
 type ReaderPreview = v.InferInput<typeof provisionPreviewOutput>;
@@ -292,7 +292,7 @@ const mountReader = async ({
   const bundle = await readFile(
     process.env["MCP_APP_BUNDLE_DIRECTORY"] === undefined
       ? new URL(
-          `../src/mcp/apps/${directory}/generated/app.html.txt`,
+          `../../../packages/mcp-apps/src/${directory}/generated/app.html.txt`,
           import.meta.url,
         )
       : path.join(
@@ -1706,7 +1706,7 @@ for (const host of ["Claude", "ChatGPT"] as const) {
 const manifestSource = ts.createSourceFile(
   "manifest.ts",
   await readFile(
-    new URL("../src/mcp/apps/manifest.ts", import.meta.url),
+    new URL("../../../packages/mcp-apps/src/manifest.ts", import.meta.url),
     "utf-8",
   ),
   ts.ScriptTarget.Latest,
@@ -1782,5 +1782,34 @@ for (const locale of ["en-GB", "cs", "sk", "ar"] as const) {
       "dir",
       locale === "ar" ? "rtl" : "ltr",
     );
+  });
+}
+
+for (const locale of ["cs-CZ", "en-GB", "sk-SK"]) {
+  test(`decision reader exposes named controls and localized document metadata in ${locale}`, async ({
+    page,
+  }) => {
+    const app = await mountReader({ page, host: "ChatGPT", locale });
+    await expect(app.locator("article").first()).toBeVisible();
+    await expect(app.locator("html")).toHaveAttribute("lang", locale);
+    // <title> is not rendered, so read the frame document's title directly.
+    await expect
+      .poll(
+        async () => await app.locator("html").evaluate(() => document.title),
+      )
+      .toMatch(/\S/u);
+    const controls = app
+      .locator(
+        'button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible',
+      )
+      .and(
+        app.locator(
+          ':not([aria-hidden="true"], [aria-hidden="true"] *, [inert], [inert] *)',
+        ),
+      );
+    expect(await controls.count()).toBeGreaterThan(0);
+    for (const control of await controls.all()) {
+      await expect(control).toHaveAccessibleName(/\S/u);
+    }
   });
 }
