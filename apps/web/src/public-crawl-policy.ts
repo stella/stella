@@ -30,7 +30,7 @@ export const PUBLIC_CRAWL_ROUTES = [
   // search URLs stay behind Disallow: / as everything else does.
   {
     path: "/law/cases",
-    route: "/law/cases",
+    route: "/law/cases/",
     scope: "exact",
     permission: "law",
     format: "html",
