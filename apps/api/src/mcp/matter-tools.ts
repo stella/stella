@@ -69,6 +69,11 @@ import {
 import { ENTITY_PRIORITIES, TASK_STATUSES } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LEGAL_LISTS_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  EXTERNAL_ID_MAX_LENGTH,
+  EXTERNAL_SOURCE_MAX_LENGTH,
+  EXTERNAL_SOURCE_PATTERN,
+} from "@/api/lib/imports/external-ref-limits";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import {
@@ -776,7 +781,41 @@ const saveContactArgsSchema = nullAsAbsent(
           v.description("Nationality countries; pass [] to clear"),
         ),
       ),
+      external: v.optional(
+        v.pipe(
+          v.strictObject({
+            source: v.pipe(
+              v.string(),
+              v.maxLength(EXTERNAL_SOURCE_MAX_LENGTH),
+              v.regex(EXTERNAL_SOURCE_PATTERN),
+              v.description(
+                "Lowercase key of the system the contact came from",
+              ),
+            ),
+            id: v.pipe(
+              v.string(),
+              v.nonEmpty(),
+              v.maxLength(EXTERNAL_ID_MAX_LENGTH),
+              v.description("The contact's id in that system"),
+            ),
+          }),
+          v.description(
+            "When creating, the contact's identity in the system it came " +
+              "from, as read_contact returns it; a second contact with the " +
+              "same source and id is refused",
+          ),
+        ),
+      ),
     }),
+    v.forward(
+      v.partialCheck(
+        [["contact_id"], ["external"]],
+        ({ contact_id, external }) =>
+          contact_id === undefined || external === undefined,
+        "external can only be set when creating a contact",
+      ),
+      ["external"],
+    ),
     // Creating (no contact_id) requires type and a name to display.
     v.forward(
       v.partialCheck(
@@ -888,6 +927,7 @@ const handleSaveContactTool: TypedMcpToolHandler<
           ...(input.nationality_codes === undefined
             ? {}
             : { nationalityCodes: input.nationality_codes }),
+          ...(input.external === undefined ? {} : { external: input.external }),
         },
       }),
     );
@@ -2469,7 +2509,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "Create or update a contact (a person or organization in the address " +
       "book, shared across the whole organization). Omit contact_id to create " +
       "(type required, plus display_name or the name parts it is derived " +
-      "from); pass contact_id to update. String fields other than " +
+      "from, and optionally external: the contact's source system and id " +
+      "there); pass contact_id to update. String fields other than " +
       "display_name accept null to clear them.",
     inputSchema: saveContactArgsSchema,
     inputNormalization: {

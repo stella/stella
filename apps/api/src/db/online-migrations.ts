@@ -399,6 +399,60 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     name: "sanctions_contact_marks_organization_retry_idx",
     tableName: "sanctions_contact_marks",
   },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "contacts_org_external_uidx" ON public."contacts" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.contacts USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "contacts_org_external_uidx",
+    tableName: "contacts",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "workspaces_org_external_uidx" ON public."workspaces" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.workspaces USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "workspaces_org_external_uidx",
+    tableName: "workspaces",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "time_entries_org_external_uidx" ON public."time_entries" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.time_entries USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "time_entries_org_external_uidx",
+    tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "expenses_org_external_uidx" ON public."expenses" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.expenses USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "expenses_org_external_uidx",
+    tableName: "expenses",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_org_external_uidx" ON public."invoices" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "invoices_org_external_uidx",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "correspondence_org_external_uidx" ON public."correspondence" USING btree ("organization_id", "external_source", "external_id") WHERE "external_id" IS NOT NULL',
+    definitionBody:
+      "ON public.correspondence USING btree (organization_id, external_source, external_id) WHERE (external_id IS NOT NULL)",
+    isUnique: true,
+    name: "correspondence_org_external_uidx",
+    tableName: "correspondence",
+  },
   ...REWRITTEN_MIGRATION_INDEXES,
 ];
 

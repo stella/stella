@@ -2267,6 +2267,7 @@ type Messages = {
       "resultsSummary": "Import complete: {created, plural, one {# created} other {# created}}; {skipped, plural, one {# skipped} other {# skipped}}";
       "rowLabel": "Client {index}";
       "skippedDuplicateContactId": "Skipped: duplicate contact ID";
+      "skippedDuplicateExternalRef": "Skipped: the same source and external ID appears twice";
       "skippedDuplicateTaxId": "Skipped: duplicate tax ID";
       "skippedInvalidRow": "Skipped: the row failed the import rules";
       "skippedInvalidTaxId": "Skipped: invalid tax ID";

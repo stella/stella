@@ -710,6 +710,8 @@ const CONTRACT_CORPUS = {
                 dateOfBirthMonth: null,
                 dateOfBirthDay: null,
                 nationalityCodes: [],
+                externalSource: null,
+                externalId: null,
               }) satisfies Pick<
                 typeof contacts.$inferSelect,
                 keyof typeof READ_CONTACT_COLUMNS
