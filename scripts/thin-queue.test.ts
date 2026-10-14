@@ -1274,6 +1274,28 @@ test("main release and scheduled runs execute the planned version compiler in ei
   }
 }, 30_000);
 
+test("a release merge group compiles the next version before it lands, at either queue depth", () => {
+  expect(admitted).toContain("release-typecheck");
+  for (const queueDepth of ["thin", "full"]) {
+    for (const required of ["true", "false"]) {
+      const value = context({
+        event: { event: "merge_group", message: "chore: release v1.2.3" },
+        variable: queueDepth,
+        queueDepth,
+      });
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic("Missing ci-plan context");
+      }
+      planner.outputs["release_typecheck_required"] = required;
+      expect(
+        selected(ci.jobs["release-typecheck"]?.if, value),
+        `${queueDepth}/${required}`,
+      ).toBe(required === "true");
+    }
+  }
+});
+
 test("queue admission covers every gated job except documented event and producer exceptions", () => {
   const exceptions = new Set(Object.keys(MERGE_GROUP_EXCEPTIONS));
   expect([...admitted].toSorted()).toEqual(
