@@ -23,6 +23,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { forceReflow } from "@/lib/utils";
 
+import { getCategoryVar } from "./category-color";
 import type { AnchoredNote, NotePlacement } from "./margin-notes.logic";
 import {
   gutterIsAvailable,
@@ -30,7 +31,6 @@ import {
   placeGutterNotes,
   UNMEASURED_NOTE_HEIGHT_PX,
 } from "./margin-notes.logic";
-import { getCategoryVar } from "./types";
 
 const capitalize = (s: string): string =>
   s.charAt(0).toUpperCase() + s.slice(1);

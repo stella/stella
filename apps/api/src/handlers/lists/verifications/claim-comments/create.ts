@@ -8,12 +8,6 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { createReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/create";
-import {
-  annotationCommentTextSchema,
-  annotationVisibilitySchema,
-  requireAnnotationVisibility,
-} from "@/api/handlers/legal-reader/annotations/schema";
 import {
   claimCommentSpan,
   readCommentedClaim,
@@ -23,6 +17,12 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
+import {
+  annotationCommentTextSchema,
+  annotationVisibilitySchema,
+  requireAnnotationVisibility,
+} from "@/api/lib/legal-search/reader-annotations/schema";
 
 const bodySchema = t.Object(
   {

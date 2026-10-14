@@ -5,8 +5,8 @@ import type { SQL } from "drizzle-orm";
 import { READER_DOCUMENT_TARGET_TYPES } from "@stll/api-contract/legal-reader-annotations";
 
 import { legalReaderAnnotations } from "@/api/db/schema";
-import type { AnnotationReach } from "@/api/handlers/legal-reader/annotations/target";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { AnnotationReach } from "@/api/lib/legal-search/reader-annotations/target";
 
 /** The marks one route may reach by id: documents, or one matter's claims. */
 const reachSql = (reach: AnnotationReach): SQL | undefined => {

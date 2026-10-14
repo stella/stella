@@ -25,7 +25,10 @@ import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
+import { getCategoryVar } from "@/components/legal-reader/category-color";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type { AnalysisMarginItem } from "@/components/legal-reader/margin-notes";
 import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
 import Tooltip from "@/components/tooltip";
@@ -40,12 +43,9 @@ import {
   EXAMPLE_NOTES,
   exampleNoteAnchors,
 } from "@/features/case-law/components/case-viewer/analysis/example-notes.logic";
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type { AnalysisMarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
 import {
   buildSectionMap,
   flattenAnalysisHeadings,
-  getCategoryVar,
   getHeadingDisplayAnchorId,
 } from "@/features/case-law/components/case-viewer/analysis/types";
 import { useLazyDecisionAnalysis } from "@/features/case-law/components/case-viewer/analysis/use-lazy-decision-analysis";

@@ -6,7 +6,6 @@
 
 import { t } from "elysia";
 
-import { listReaderAnnotationsHandler } from "@/api/handlers/legal-reader/annotations/list";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import {
@@ -16,6 +15,7 @@ import {
   workspaceParams,
 } from "@/api/lib/custom-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { listReaderAnnotationsHandler } from "@/api/lib/legal-search/reader-annotations/list";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {

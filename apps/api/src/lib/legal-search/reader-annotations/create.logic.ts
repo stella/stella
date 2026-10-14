@@ -1,4 +1,4 @@
-import type { CreateAnnotationRequest } from "@/api/handlers/legal-reader/annotations/schema";
+import type { CreateAnnotationRequest } from "@/api/lib/legal-search/reader-annotations/schema";
 
 type StoredAnnotation = {
   blockAnchorId: string;

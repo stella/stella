@@ -1068,6 +1068,10 @@
     "reason": "Existing spansSchema UI validation or presentation bound; contract migration pending."
   },
   {
+    "id": "apps/web/src/components/legal-reader/category-color.ts::OPTION_VARS::domain:[\"--option-blue\",\"--option-amber\",\"--option-violet\",\"--option-emerald\",\"--option-cyan\",\"--option-orange\",\"--option-indigo\",\"--option-teal\"]::1",
+    "reason": "Existing OPTION_VARS domain; contract ownership pending migration."
+  },
+  {
     "id": "apps/web/src/components/pdf/versions-sidebar.tsx::MENU_OWNED_KEYS::domain:[\"Escape\",\"ArrowDown\",\"ArrowUp\"]::1",
     "reason": "Existing MENU_OWNED_KEYS domain; contract ownership pending migration."
   },
@@ -1226,10 +1230,6 @@
   {
     "id": "apps/web/src/features/case-law/components/case-decision-inspector-view.tsx::HEADER_DECISION_FACTS::domain:[\"decisionType\",\"subject\",\"legalAreas\",\"keywords\",\"judges\"]::1",
     "reason": "Existing HEADER_DECISION_FACTS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts::OPTION_VARS::domain:[\"--option-blue\",\"--option-amber\",\"--option-violet\",\"--option-emerald\",\"--option-cyan\",\"--option-orange\",\"--option-indigo\",\"--option-teal\"]::1",
-    "reason": "Existing OPTION_VARS domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/features/case-law/components/case-viewer/decision-facts.logic.ts::DECISION_FACT_KINDS::domain:[\"decisionType\",\"legalAreas\",\"subject\",\"keywords\",\"judges\",\"source\"]::1",

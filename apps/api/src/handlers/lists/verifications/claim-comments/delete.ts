@@ -3,11 +3,11 @@
  * Reaches only claim comments of this matter; anyone else's is not found.
  */
 
-import { deleteReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/delete";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import { deleteReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/delete";
 
 const config = {
   contract: "patch",

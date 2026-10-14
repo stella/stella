@@ -3,8 +3,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import type { MarginItem } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type { MarginItem } from "@/components/legal-reader/margin-notes";
 import messages from "@/i18n/langs/en.json";
 
 const renderInline = (items: MarginItem[]): string =>

@@ -1,26 +1,17 @@
-import { useRef } from "react";
-
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
+import { useQuery } from "@tanstack/react-query";
 
 import type {
   AnnotationVisibility,
   UpdateAnnotationInput,
 } from "@/components/legal-reader/annotations/annotation-types";
 import type { ReaderAnnotation } from "@/components/legal-reader/annotations/reader-annotations-query";
-import {
-  applyChange,
-  pendingRows,
-  rowsOfSame,
-} from "@/components/legal-reader/annotations/use-reader-annotations";
+import { useOptimisticAnnotationMutations } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
 import { claimCommentsOptions } from "@/features/avt/claim-comments-query";
 import type { VerificationClaim } from "@/features/avt/types";
-import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
-import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
@@ -63,10 +54,7 @@ export const useClaimComments = ({
   runId,
   workspaceId,
 }: ClaimCommentsScope): ClaimComments => {
-  const t = useTranslations();
-  const queryClient = useQueryClient();
   const user = useMaybeAuthenticatedUser();
-  const pendingSequence = useRef(0);
   const options = claimCommentsOptions({
     claimId: claim.id,
     runId,
@@ -87,34 +75,8 @@ export const useClaimComments = ({
   const oneComment = (id: string) =>
     commentRoutes()({ annotationId: toSafeId<"legalReaderAnnotation">(id) });
 
-  const patchCache = async (
-    patch: (rows: readonly ReaderAnnotation[]) => ReaderAnnotation[],
-  ): Promise<{ previous: ReaderAnnotation[] | undefined }> => {
-    await queryClient.cancelQueries({ queryKey });
-    const previous = queryClient.getQueryData(queryKey);
-    queryClient.setQueryData(queryKey, (rows) => patch(optionalArray(rows)));
-    return { previous };
-  };
-
-  const settle = {
-    onError: (
-      error: unknown,
-      _input: unknown,
-      context: { previous: ReaderAnnotation[] | undefined } | undefined,
-    ) => {
-      if (context !== undefined) {
-        queryClient.setQueryData(queryKey, context.previous);
-      }
-      getAnalytics().captureError(error);
-      notifyUserError(error, t("errors.actionFailed"));
-    },
-    onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey });
-    },
-  };
-
-  const create = useMutation({
-    mutationFn: async ({
+  const { create, remove, update } = useOptimisticAnnotationMutations({
+    create: async ({
       body,
       visibility,
     }: {
@@ -129,59 +91,23 @@ export const useClaimComments = ({
           visibility,
         }),
       ),
-    onMutate: async ({ body, visibility }) => {
-      // Tells pending comments apart; only ever advanced on a submit.
-      pendingSequence.current += 1;
-      const stamp = pendingSequence.current;
-      return await patchCache((rows) => [
-        ...rows,
-        ...pendingRows({
-          author: {
-            id: user?.id ?? "",
-            image: user?.image ?? null,
-            name: user?.name ?? null,
-          },
-          input: {
-            body,
-            kind: "comment",
-            spans: [
-              {
-                blockAnchorId: claimAnchorId(claim.anchor),
-                endOffset: claim.anchor.end,
-                quote: claim.text,
-                startOffset: claim.anchor.start,
-              },
-            ],
-            visibility,
-          },
-          stamp,
-        }),
-      ]);
-    },
-    ...settle,
-  });
-
-  const update = useMutation({
-    mutationFn: async ({ id, ...change }: ClaimCommentChange) =>
+    pendingInput: ({ body, visibility }) => ({
+      body,
+      kind: "comment",
+      spans: [
+        {
+          blockAnchorId: claimAnchorId(claim.anchor),
+          endOffset: claim.anchor.end,
+          quote: claim.text,
+          startOffset: claim.anchor.start,
+        },
+      ],
+      visibility,
+    }),
+    queryKey,
+    remove: async (id: string) => unwrapEden(await oneComment(id).delete()),
+    update: async ({ id, ...change }: ClaimCommentChange) =>
       unwrapEden(await oneComment(id).patch(change)),
-    onMutate: async (input) =>
-      await patchCache((rows) => {
-        const touched = rowsOfSame(rows, input.id);
-        return rows.map((row) =>
-          touched(row) ? applyChange(row, input) : row,
-        );
-      }),
-    ...settle,
-  });
-
-  const remove = useMutation({
-    mutationFn: async (id: string) => unwrapEden(await oneComment(id).delete()),
-    onMutate: async (id) =>
-      await patchCache((rows) => {
-        const touched = rowsOfSame(rows, id);
-        return rows.filter((row) => !touched(row));
-      }),
-    ...settle,
   });
 
   return {
@@ -189,9 +115,8 @@ export const useClaimComments = ({
     comments: optionalArray(comments).filter(
       (row) => row.kind === "comment" && row.body !== null,
     ),
-    create: async (body, visibility) =>
-      create.mutateAsync({ body, visibility }),
-    remove: remove.mutateAsync,
-    update: update.mutateAsync,
+    create: async (body, visibility) => create({ body, visibility }),
+    remove,
+    update,
   };
 };

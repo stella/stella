@@ -6176,28 +6176,12 @@
         "job": "measure-3"
       }
     },
-    "src/handlers/legal-reader/annotations/create.logic.test.ts": {
-      "peakMb": 193,
-      "baselineMb": 193,
-      "source": {
-        "runId": "37987009011",
-        "job": "measure-4"
-      }
-    },
     "src/handlers/legal-reader/annotations/locate.logic.test.ts": {
       "peakMb": 191,
       "baselineMb": 191,
       "source": {
         "runId": "37987009011",
         "job": "measure-1"
-      }
-    },
-    "src/handlers/legal-reader/annotations/page.logic.test.ts": {
-      "peakMb": 184,
-      "baselineMb": 184,
-      "source": {
-        "runId": "37987009011",
-        "job": "measure-2"
       }
     },
     "src/handlers/legislation/applicability.db.test.ts": {
@@ -13382,6 +13366,22 @@
       "source": {
         "runId": "37987009011",
         "job": "measure-4"
+      }
+    },
+    "src/lib/legal-search/reader-annotations/create.logic.test.ts": {
+      "peakMb": 193,
+      "baselineMb": 193,
+      "source": {
+        "runId": "37987009011",
+        "job": "measure-4"
+      }
+    },
+    "src/lib/legal-search/reader-annotations/page.logic.test.ts": {
+      "peakMb": 184,
+      "baselineMb": 184,
+      "source": {
+        "runId": "37987009011",
+        "job": "measure-2"
       }
     },
     "src/lib/legal-search/reconciliation-payload.property.test.ts": {

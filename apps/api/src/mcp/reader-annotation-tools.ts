@@ -25,23 +25,23 @@ import type { ReaderDocumentTargetType } from "@stll/api-contract/legal-reader-a
 import type { Block } from "@stll/legal-ast/document-ast";
 import { createSha256 } from "@stll/sha256/bun";
 
-import { createReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/create";
-import { deleteReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/delete";
 import { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
-import { listReaderAnnotationsHandler } from "@/api/handlers/legal-reader/annotations/list";
 import { locatePassages } from "@/api/handlers/legal-reader/annotations/locate.logic";
-import type {
-  CreateAnnotationBody,
-  UpdateAnnotationBody,
-} from "@/api/handlers/legal-reader/annotations/schema";
-import { DOCUMENT_ANNOTATION_REACH } from "@/api/handlers/legal-reader/annotations/target";
-import { updateReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/update";
 import {
   CREATE_READER_ANNOTATION_PROJECTION,
   DELETED_TRUE_PROJECTION,
   LIST_READER_ANNOTATIONS_PROJECTION,
   UPDATE_READER_ANNOTATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { createReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/create";
+import { deleteReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/delete";
+import { listReaderAnnotationsHandler } from "@/api/lib/legal-search/reader-annotations/list";
+import type {
+  CreateAnnotationBody,
+  UpdateAnnotationBody,
+} from "@/api/lib/legal-search/reader-annotations/schema";
+import { DOCUMENT_ANNOTATION_REACH } from "@/api/lib/legal-search/reader-annotations/target";
+import { updateReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/update";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";

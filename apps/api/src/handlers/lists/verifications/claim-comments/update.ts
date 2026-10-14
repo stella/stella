@@ -6,15 +6,15 @@
 
 import { t } from "elysia";
 
-import {
-  annotationCommentTextSchema,
-  annotationVisibilitySchema,
-} from "@/api/handlers/legal-reader/annotations/schema";
-import { updateReaderAnnotationHandler } from "@/api/handlers/legal-reader/annotations/update";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  annotationCommentTextSchema,
+  annotationVisibilitySchema,
+} from "@/api/lib/legal-search/reader-annotations/schema";
+import { updateReaderAnnotationHandler } from "@/api/lib/legal-search/reader-annotations/update";
 
 /** One named change per request, so an update cannot be empty or ambiguous. */
 const bodySchema = t.Union([

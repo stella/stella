@@ -11,13 +11,13 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { AddCommentIcon } from "@stll/ui/icons";
 
-import type { VerificationClaim } from "@/features/avt/types";
-import { useClaimComments } from "@/features/avt/use-claim-comments";
 import type {
   CommentMarginItem,
   ComposerMarginItem,
-} from "@/features/case-law/components/case-viewer/analysis/margin-notes";
-import { MarginNotes } from "@/features/case-law/components/case-viewer/analysis/margin-notes";
+} from "@/components/legal-reader/margin-notes";
+import { MarginNotes } from "@/components/legal-reader/margin-notes";
+import type { VerificationClaim } from "@/features/avt/types";
+import { useClaimComments } from "@/features/avt/use-claim-comments";
 import { detached } from "@/lib/detached";
 
 type ClaimCommentsProps = {
