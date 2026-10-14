@@ -193,11 +193,14 @@ export const useLoadSampleCase = ({
           }),
         });
       }
-      // Last, so the view leaves its empty state only once the load is over.
+      return load;
+    },
+    // After the load either way, so the view leaves its empty state only
+    // once it is over, and a failed load still shows what it saved.
+    onSettled: async () => {
       await queryClient.invalidateQueries({
         queryKey: legalListKeys.all(workspaceId),
       });
-      return load;
     },
     onSuccess: (load) => {
       if (!isSampleCaseComplete(load)) {
