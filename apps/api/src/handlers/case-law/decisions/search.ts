@@ -668,6 +668,7 @@ export const caseLawSearchPlan = ({
     WHERE ${ftsSearch.predicate}
       ${datedFilter}
       ${countryFilter}
+      ${provisionFilter}
       ${dateFromFilter}
       ${dateToFilter}
       ${typeFilter}
@@ -688,6 +689,7 @@ export const caseLawSearchPlan = ({
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
+      ${provisionFilter}
       ${typeFilter}
       ${sourceFilter}
       ${languageFilter}
@@ -710,6 +712,7 @@ export const caseLawSearchPlan = ({
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
+      ${provisionFilter}
       ${dateFromFilter}
       ${dateToFilter}
       ${sourceFilter}
@@ -729,6 +732,7 @@ export const caseLawSearchPlan = ({
         ${courtFilter}
         ${courtListFilter}
         ${countryFilter}
+        ${provisionFilter}
         ${dateFromFilter}
         ${dateToFilter}
         ${typeFilter}
@@ -768,6 +772,7 @@ export const caseLawSearchPlan = ({
       ${courtFilter}
       ${courtListFilter}
       ${countryFilter}
+      ${provisionFilter}
       ${dateFromFilter}
       ${dateToFilter}
       ${typeFilter}

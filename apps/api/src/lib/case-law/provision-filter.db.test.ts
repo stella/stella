@@ -160,6 +160,12 @@ test("the Postgres search narrows to decisions citing the provision, level by le
     expect(
       result.rows.map((row) => String(row["decision_id"])).toSorted(),
     ).toEqual(expected.map(String).toSorted());
+    // Facets count the same narrowed set the page lists, never the whole
+    // topic: every decision here sits at one court.
+    const courts = await db.execute(plan.facets.court);
+    expect(
+      courts.rows.reduce((sum, row) => sum + Number(row["count"]), 0),
+    ).toBe(expected.length);
   }
   await client.close();
 }, 60_000);

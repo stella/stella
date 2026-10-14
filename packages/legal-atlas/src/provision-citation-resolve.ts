@@ -384,8 +384,8 @@ type ActResolution =
 
 /**
  * The act the rest of the citation names: a gazette number outright, else
- * an alias or title read for the citing date. A number names the act itself,
- * so its unit is not second-guessed (`unit` undefined).
+ * an alias or title read for the citing date. `unit` is undefined only for a
+ * number the profile does not list, whose unit nothing can check.
  */
 const resolveAct = (
   rest: string,
@@ -395,7 +395,17 @@ const resolveAct = (
 ): ActResolution => {
   const gazette = readGazetteAct(rest, resolver, profile);
   if (gazette !== null) {
-    return { kind: "work", work: gazette, unit: undefined };
+    // A number the profile knows carries that act's unit (`§ 10 zákona
+    // č. 2/1993 Sb.` names the Charter, which has articles); an act the
+    // profile does not list is taken as numbered.
+    const known = resolver.acts.find(({ entry }) =>
+      sameWork(entry.identifier, gazette),
+    );
+    return {
+      kind: "work",
+      work: gazette,
+      unit: known === undefined ? undefined : (known.entry.unit ?? "section"),
+    };
   }
   const named = readNamedAct(rest, resolver, citedOn);
   const [work, ...others] = named.kind === "none" ? [] : named.works;

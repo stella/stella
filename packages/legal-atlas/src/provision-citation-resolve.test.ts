@@ -123,6 +123,12 @@ describe("resolveProvisionCitation", () => {
 
   test("a section in the wrong unit for its act is refused", () => {
     expect(resolve("§ 10 Listiny").status).toBe("unit_mismatch");
+    // A gazette number the profile knows is checked against that act's unit.
+    expect(resolve("§ 10 zákona č. 2/1993 Sb.").status).toBe("unit_mismatch");
+    expect(resolved("čl. 10 č. 2/1993 Sb.")).toMatchObject({
+      unit: "article",
+      workIdentifier: "2/1993 Sb.",
+    });
   });
 
   test("an alias is matched case-sensitively and as a whole word", () => {
