@@ -1028,10 +1028,9 @@ test("CI logs are plain text and failures are digested by the result gate", () =
   );
   expect(testSteps.length).toBeGreaterThan(0);
   for (const step of testSteps) {
-    expect(step.run, step.name).toMatch(
-      /timeout 60 bun scripts\/ci-failure-digest\.ts tail "\$output"\s+exit 1/u,
+    expect(step.run, step.name).toContain(
+      'timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true',
     );
-    expect(step.run, step.name).not.toContain('tail "$output" || true');
   }
 });
 
@@ -1050,24 +1049,23 @@ const wrapperBlock = (run: string): string => {
   return lines.slice(start, end + 1).join("\n");
 };
 
-test("the failure wrapper normalizes producer failures after reporting", () => {
+test("a failing test run keeps its exit status through tee and the tail", () => {
   const step = (ciWorkflow().jobs["ci-tests"]?.steps ?? []).find(
     ({ run }) => run?.includes('| tee "$output" || {') === true,
   );
   const block = wrapperBlock(step?.run ?? "");
   const directory = mkdtempSync(path.join(tmpdir(), "ci-tests-wrapper-"));
   try {
-    for (const [producerStatus, digestStatus, expected] of [
-      [3, 0, 1],
-      [0, 0, 0],
-      [3, 42, 42],
+    for (const [producerStatus, expected] of [
+      [3, 3],
+      [0, 0],
     ] as const) {
       // `bun` stands in for both the test run and the tail command.
       const script = [
         "set -eo pipefail",
         `output="${directory}/out.log"`,
         "bun() {",
-        `  if [[ "$1" == scripts/ci-failure-digest.ts ]]; then echo TAIL-RAN; return ${digestStatus}; fi`,
+        `  if [[ "$1" == scripts/ci-failure-digest.ts ]]; then echo TAIL-RAN; return 0; fi`,
         `  echo "(fail) a > b"; return ${producerStatus}`,
         "}",
         'timeout() { shift; "$@"; }',
@@ -1083,7 +1081,7 @@ test("the failure wrapper normalizes producer failures after reporting", () => {
       );
       const stdout = result.stdout.toString();
       expect(result.exitCode).toBe(expected);
-      expect(stdout.includes("TAIL-RAN")).toBe(producerStatus !== 0);
+      expect(stdout.includes("TAIL-RAN")).toBe(expected !== 0);
       expect(stdout.includes("AFTER")).toBe(expected === 0);
     }
   } finally {
