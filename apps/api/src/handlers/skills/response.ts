@@ -30,7 +30,7 @@ type AgentSkillResponseRow = Pick<
 
 type AgentSkillResourceResponseRow = Pick<
   typeof agentSkillResources.$inferSelect,
-  "id" | "path" | "kind" | "sizeBytes" | "content"
+  "id" | "path" | "sizeBytes" | "content"
 >;
 
 export const toAgentSkillResponse = (
@@ -53,10 +53,9 @@ export const toAgentSkillResponse = (
   body: skill.body,
   command: skill.command,
   createdAt: skill.createdAt,
-  resources: resources.map(({ id, path, kind, sizeBytes, content }) => ({
+  resources: resources.map(({ id, path, sizeBytes, content }) => ({
     id,
     path,
-    kind,
     sizeBytes,
     content,
   })),

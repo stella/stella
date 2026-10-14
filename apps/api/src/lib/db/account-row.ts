@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { and, asc, eq, gt } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -156,9 +155,6 @@ export const lockActiveAccountRow = async (
     select: (lockedTx) =>
       lockedTx.select({ id: user.id, deletedAt: user.deletedAt }).from(user),
   });
-  if (result.status === "busy") {
-    panic("Blocking account lock was busy");
-  }
   const row = result.rows.at(0);
   if (row === undefined || row.deletedAt !== null) {
     abortTransaction(
