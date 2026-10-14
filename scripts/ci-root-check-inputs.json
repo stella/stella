@@ -1,5 +1,7 @@
 {
   "ci-checks-rest": {
+    "Resolve static check receipts": ["**"],
+    "Record static check receipts": ["**"],
     "Check AI prompt sync": ["**"],
     "Check AI verification guards": ["**"],
     "Check local base selection": [],
@@ -25,8 +27,7 @@
       "scripts/**",
       "apps/api/scripts/test-path-filters.ts",
       "packages/scripts/src/child-exit-status.ts",
-      "@stll/api",
-      "@stll/oxlint-config"
+      "@stll/api"
     ],
     "Route network manifest coverage": ["**"],
     "Restore route network baseline": ["**"],
@@ -179,6 +180,8 @@
     "Bridge-version guard": ["**"]
   },
   "ci-checks-policy": {
+    "Resolve static check receipts": ["**"],
+    "Record static check receipts": ["**"],
     "Prepare environment": ["**"],
     "Restore generated sources": ["**"],
     "Compute affected flag": ["**"],

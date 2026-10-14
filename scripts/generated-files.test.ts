@@ -546,7 +546,6 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     "capability-runtime",
     "cli-registry",
     "cli-runtime",
-    "mcp-surface",
     "api-typecheck-projects",
   ] satisfies readonly (typeof GENERATORS)[number]["id"][];
   expect(

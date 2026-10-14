@@ -15,6 +15,7 @@ import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
 import { rootCheckGate } from "./ci-root-check-gate";
+import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -857,7 +858,9 @@ describe("detect-e2e-changes", () => {
     );
 
     const driftGuard = ciChecksRestStep("Model catalog snapshot drift check");
-    const driftGuardCondition = requiredExpression(driftGuard["if"]);
+    const driftGuardCondition = requiredExpression(
+      withoutStaticReuseCondition(driftGuard)["if"],
+    );
     const driftGuardRun = requiredExpression(driftGuard["run"]);
     expect(driftGuardCondition).toContain(
       "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",
@@ -896,7 +899,9 @@ describe("detect-e2e-changes", () => {
     );
     expect(gatedSteps.length).toBeGreaterThan(0);
     for (const { job, step } of gatedSteps) {
-      const condition = requiredExpression(step["if"]);
+      const condition = requiredExpression(
+        withoutStaticReuseCondition(step)["if"],
+      );
       const gate = rootCheckGate({
         job,
         name: requiredExpression(step["name"]),
