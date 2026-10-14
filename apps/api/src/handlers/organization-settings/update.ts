@@ -38,6 +38,7 @@ import {
   organizationTimeZoneColumns,
   TIME_ZONE_ID_MAX_LENGTH,
 } from "@/api/lib/organization-time-zone";
+import { pickDefined } from "@/api/lib/pick-defined";
 
 import { resolveMemoryExtractionEnabledAt } from "./memory-extraction-consent";
 
@@ -213,6 +214,20 @@ const timeZoneAuditChanges = (
     ? { timeZone: { old: existing?.timeZone ?? null, new: body.timeZone } }
     : {};
 
+/** `{ old, new }` when the request sets a value that differs from the stored one. */
+const settingChange = <V>(requested: V | undefined, current: V) =>
+  requested !== undefined && requested !== current
+    ? { old: current, new: requested }
+    : undefined;
+
+const SETTING_CHANGE_KEYS = [
+  "matterNumberingEnabled",
+  "managedAIResidency",
+  "promptCachingEnabled",
+  "documentProcessingMode",
+  "memoryExtractionEnabled",
+] as const;
+
 const organizationSettingsAuditChanges = (
   body: NormalizedUpdateBody,
   existing: ExistingGeneralSettings | undefined,
@@ -230,55 +245,31 @@ const organizationSettingsAuditChanges = (
         },
       }
     : {}),
-  ...(body.matterNumberingEnabled !== undefined &&
-  body.matterNumberingEnabled !== (existing?.matterNumberingEnabled ?? false)
-    ? {
-        matterNumberingEnabled: {
-          old: existing?.matterNumberingEnabled ?? false,
-          new: body.matterNumberingEnabled,
-        },
-      }
-    : {}),
-  ...(body.managedAIResidency !== undefined &&
-  body.managedAIResidency !==
-    (existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY)
-    ? {
-        managedAIResidency: {
-          old: existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
-          new: body.managedAIResidency,
-        },
-      }
-    : {}),
-  ...(body.promptCachingEnabled !== undefined &&
-  body.promptCachingEnabled !== (existing?.promptCachingEnabled ?? true)
-    ? {
-        promptCachingEnabled: {
-          old: existing?.promptCachingEnabled ?? true,
-          new: body.promptCachingEnabled,
-        },
-      }
-    : {}),
-  ...(body.documentProcessingMode !== undefined &&
-  body.documentProcessingMode !==
-    (existing?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE)
-    ? {
-        documentProcessingMode: {
-          old:
-            existing?.documentProcessingMode ??
-            DEFAULT_DOCUMENT_PROCESSING_MODE,
-          new: body.documentProcessingMode,
-        },
-      }
-    : {}),
-  ...(body.memoryExtractionEnabled !== undefined &&
-  body.memoryExtractionEnabled !== (existing?.memoryExtractionEnabled ?? false)
-    ? {
-        memoryExtractionEnabled: {
-          old: existing?.memoryExtractionEnabled ?? false,
-          new: body.memoryExtractionEnabled,
-        },
-      }
-    : {}),
+  ...pickDefined(
+    {
+      matterNumberingEnabled: settingChange(
+        body.matterNumberingEnabled,
+        existing?.matterNumberingEnabled ?? false,
+      ),
+      managedAIResidency: settingChange(
+        body.managedAIResidency,
+        existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
+      ),
+      promptCachingEnabled: settingChange(
+        body.promptCachingEnabled,
+        existing?.promptCachingEnabled ?? true,
+      ),
+      documentProcessingMode: settingChange(
+        body.documentProcessingMode,
+        existing?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
+      ),
+      memoryExtractionEnabled: settingChange(
+        body.memoryExtractionEnabled,
+        existing?.memoryExtractionEnabled ?? false,
+      ),
+    },
+    SETTING_CHANGE_KEYS,
+  ),
   ...timePolicyAuditChanges(body, existing),
   ...timeZoneAuditChanges(body, existing),
 });
@@ -419,6 +410,7 @@ export const updateOrganizationSettingsHandler = async function* ({
   }
 
   const timePolicyUpdate = timePolicyValues(body);
+  const matterNumberingUpdate = pickDefined(body, ["matterNumberingEnabled"]);
 
   const updateOutcome = yield* Result.await(
     safeDb(async (tx) => {
@@ -431,18 +423,15 @@ export const updateOrganizationSettingsHandler = async function* ({
         body.documentProcessingMode !== undefined;
       const wantsMemoryExtractionUpdate =
         body.memoryExtractionEnabled !== undefined;
-      const wantsTimePolicyUpdate = Object.keys(timePolicyUpdate).length > 0;
       const wantsTimeZoneUpdate = body.timeZone !== undefined;
-      const wantsMatterNumberingEnabledUpdate =
-        body.matterNumberingEnabled !== undefined;
       const needsSerializedSettingsRead =
         wantsManagedAIResidencyUpdate ||
         wantsPromptCachingUpdate ||
         wantsDocumentProcessingUpdate ||
         wantsMemoryExtractionUpdate ||
-        wantsTimePolicyUpdate ||
         wantsTimeZoneUpdate ||
-        wantsMatterNumberingEnabledUpdate;
+        Object.keys({ ...timePolicyUpdate, ...matterNumberingUpdate }).length >
+          0;
 
       // Coordinate extraction consent changes with the background worker's
       // persistence transaction as well as concurrent settings requests.
@@ -565,9 +554,7 @@ export const updateOrganizationSettingsHandler = async function* ({
             : {}),
           ...timePolicyUpdate,
           ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
-          ...(wantsMatterNumberingEnabledUpdate
-            ? { matterNumberingEnabled: body.matterNumberingEnabled }
-            : {}),
+          matterNumberingEnabled: body.matterNumberingEnabled,
         })
         .onConflictDoUpdate({
           target: organizationSettings.organizationId,
@@ -600,9 +587,7 @@ export const updateOrganizationSettingsHandler = async function* ({
             timeLockedThroughMonth: timePolicyUpdate.timeLockedThroughMonth,
             timeNarrativeRequired: timePolicyUpdate.timeNarrativeRequired,
             ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
-            ...(wantsMatterNumberingEnabledUpdate
-              ? { matterNumberingEnabled: body.matterNumberingEnabled }
-              : {}),
+            matterNumberingEnabled: body.matterNumberingEnabled,
             updatedAt: new Date(),
           },
         });
@@ -656,9 +641,7 @@ export const updateOrganizationSettingsHandler = async function* ({
       : {}),
     ...timePolicyUpdate,
     ...(body.timeZone !== undefined ? { timeZone: body.timeZone } : {}),
-    ...(body.matterNumberingEnabled !== undefined
-      ? { matterNumberingEnabled: body.matterNumberingEnabled }
-      : {}),
+    ...matterNumberingUpdate,
   });
 };
 

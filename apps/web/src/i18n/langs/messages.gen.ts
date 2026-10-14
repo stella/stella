@@ -5672,6 +5672,7 @@ type Messages = {
     };
     "create": {
       "matterName": "Matter name";
+      "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team.";
     };
     "createNewWorkspace": "Create new matter";
     "defaultName": "Untitled";
@@ -6140,7 +6141,11 @@ type Messages = {
         "third_party": "Third party";
         "witness": "Witness";
       };
-      "personalLabel": "No client";
+      "personalDescription": "Personal matters are private to you. Promote to a client to share with the team.";
+      "personalLabel": "Personal";
+      "promoteCta": "Promote to client";
+      "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.";
+      "promotedSuccess": "Matter promoted";
       "removeClient": "Remove client";
       "removeParty": "Remove party";
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?";

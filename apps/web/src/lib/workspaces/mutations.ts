@@ -24,8 +24,9 @@ import { useTableStore } from "@/lib/workspaces/table-store";
 const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 type CreateWorkspaceVars = {
-  // Omit `clientId` to create a matter with no client. `memberUserIds`
-  // adds other members either way; the creator is always a member.
+  // Omit `clientId` to create a personal matter (initially visible
+  // only to the creator). With `clientId`, `memberUserIds` may add
+  // other members; for personal matters that field is ignored.
   clientId?: string;
   memberUserIds?: string[];
   name: string;
@@ -72,10 +73,6 @@ type WorkspaceUpdateValueByType = {
   color: string | null;
   leadUserId: string | null;
   name: string;
-  promote: {
-    clientId: string;
-    memberUserIds?: string[];
-  };
   reference: string;
 };
 
@@ -95,7 +92,6 @@ const WORKSPACE_UPDATE_REFRESH_SCOPE = {
   color: "query-cache",
   leadUserId: "query-cache",
   name: "route-metadata",
-  promote: "query-cache",
   reference: "query-cache",
 } as const satisfies Record<
   WorkspaceUpdate["type"],
@@ -120,16 +116,6 @@ export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
       return { leadUserId: update.value };
     case "name":
       return { name: update.value };
-    case "promote":
-      return {
-        promote: {
-          clientId: toSafeId<"contact">(update.value.clientId),
-          ...(update.value.memberUserIds &&
-            update.value.memberUserIds.length > 0 && {
-              memberUserIds: update.value.memberUserIds,
-            }),
-        },
-      };
     case "reference":
       return { reference: update.value };
     default: {

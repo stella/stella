@@ -5668,7 +5668,8 @@
       "title": "Másolás ügyiratba"
     },
     "create": {
-      "matterName": "Ügy neve"
+      "matterName": "Ügy neve",
+      "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."
     },
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",
@@ -6137,7 +6138,11 @@
         "third_party": "Harmadik fél",
         "witness": "Tanú"
       },
-      "personalLabel": "Nincs ügyfél",
+      "personalDescription": "A személyes ügyek csak az Ön számára láthatók. Léptesse elő ügyfélüggyé a csapattal való megosztáshoz.",
+      "personalLabel": "Személyes",
+      "promoteCta": "Előléptetés ügyfélüggyé",
+      "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges — az előléptetett ügy nem vonható vissza személyesre.",
+      "promotedSuccess": "Ügy előléptetve",
       "removeClient": "Ügyfél eltávolítása",
       "removeParty": "Fél eltávolítása",
       "removePartyConfirm": "Biztosan eltávolítja ezt a felet az ügyből?",

@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { and, count, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -29,7 +29,9 @@ import {
   withDescription,
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { nextAvailableMatterName } from "@/api/lib/matter-name";
 import {
   allocateMatterReference,
   DEFAULT_MATTER_NUMBER_PADDING,
@@ -41,9 +43,9 @@ import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repai
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 
-// `clientId` is optional. Omitting it creates a matter with no client;
-// access is still workspace membership. `memberUserIds` may add
-// organization members either way.
+// A request without `clientId` creates a personal matter (initially
+// visible only to the creator). With `clientId`, it's a normal
+// client matter and `memberUserIds` may add additional members.
 const createWorkspaceBodySchema = t.Object({
   id: tSafeId("workspace"),
   clientId: t.Optional(
@@ -64,9 +66,8 @@ const config = {
   contract: "patch",
   featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
-    "Create a new matter. Name is required and stored as entered. Pass " +
-    "clientId to attach a client contact, and memberUserIds to add other " +
-    "members. Returns the matter ID.",
+    "Create a new matter (name required; pass clientId to attach a client " +
+    "contact). Returns the matter ID.",
   permissions: { workspace: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: organizationWorkspaceRealtimeUpdates,
@@ -94,58 +95,69 @@ export const createWorkspaceHandler = async function* ({
   recordAuditEvent,
   body,
 }: CreateWorkspaceHandlerProps) {
-  if ((body.memberUserIds?.length ?? 0) > 0) {
+  if (body.clientId !== undefined && (body.memberUserIds?.length ?? 0) > 0) {
     yield* checkDemoAccountOperation(userEmail);
   }
   const txResult = yield* Result.await(
     resultTx(safeDb, async (tx) => {
-      // The creator is always a member. Additional members are optional
-      // and do not depend on whether a client is attached.
+      // New personal matters (no clientId) start with exactly one
+      // member: the creator. Additional members can be attached
+      // through the workspace members endpoint after creation.
       const requestedMemberUserIds =
-        body.memberUserIds !== undefined
+        body.clientId !== undefined && body.memberUserIds !== undefined
           ? Array.from(new Set(body.memberUserIds))
           : [];
 
       const grantedUserIds = [...new Set([userId, ...requestedMemberUserIds])];
       const orgFilter = eq(workspaces.organizationId, organizationId);
 
-      const [countResult, settings, client, orgMembers] = await Promise.all([
-        tx.select({ total: count() }).from(workspaces).where(orgFilter),
-        tx.query.organizationSettings.findFirst({
-          where: { organizationId: { eq: organizationId } },
-          columns: {
-            matterNumberPattern: true,
-            matterNumberPadding: true,
-          },
-        }),
-        body.clientId !== undefined
-          ? tx
-              .select({ id: contacts.id })
-              .from(contacts)
-              .where(
-                and(
-                  eq(contacts.id, body.clientId),
-                  eq(contacts.organizationId, organizationId),
-                ),
-              )
-              .for("update")
-              .limit(1)
-              .then((rows) => rows.at(0) ?? null)
-          : Promise.resolve(null),
-        tx
-          .select({ userId: member.userId })
-          .from(member)
-          .where(
-            and(
-              eq(member.organizationId, organizationId),
-              inArray(member.userId, grantedUserIds),
+      const [countResult, duplicatedNames, settings, client, orgMembers] =
+        await Promise.all([
+          tx.select({ total: count() }).from(workspaces).where(orgFilter),
+          tx
+            .select({ name: workspaces.name })
+            .from(workspaces)
+            .where(
+              and(
+                orgFilter,
+                ilike(workspaces.name, `${escapeLike(body.name)}%`),
+              ),
             ),
-          )
-          // Same order as organization removal's membership locks.
-          .orderBy(member.userId)
-          .limit(grantedUserIds.length)
-          .for("update"),
-      ]);
+          tx.query.organizationSettings.findFirst({
+            where: { organizationId: { eq: organizationId } },
+            columns: {
+              matterNumberPattern: true,
+              matterNumberPadding: true,
+            },
+          }),
+          body.clientId !== undefined
+            ? tx
+                .select({ id: contacts.id })
+                .from(contacts)
+                .where(
+                  and(
+                    eq(contacts.id, body.clientId),
+                    eq(contacts.organizationId, organizationId),
+                  ),
+                )
+                .for("update")
+                .limit(1)
+                .then((rows) => rows.at(0) ?? null)
+            : Promise.resolve(null),
+          tx
+            .select({ userId: member.userId })
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, organizationId),
+                inArray(member.userId, grantedUserIds),
+              ),
+            )
+            // Same order as organization removal's membership locks.
+            .orderBy(member.userId)
+            .limit(grantedUserIds.length)
+            .for("update"),
+        ]);
 
       const activeCount = countResult.at(0)?.total ?? 0;
 
@@ -169,8 +181,8 @@ export const createWorkspaceHandler = async function* ({
 
       // Membership verified above — brand each requested user ID.
       // Combined with the session user.id, this gives a typed list
-      // of org-validated members for the insert below. The creator
-      // is always included.
+      // of org-validated members for the insert below. New personal
+      // matters start with exactly one member: the creator.
       const workspaceMemberUserIds = Array.from(
         new Set([
           userId,
@@ -186,6 +198,11 @@ export const createWorkspaceHandler = async function* ({
           }),
         );
       }
+
+      const newName = nextAvailableMatterName(
+        body.name,
+        duplicatedNames.map(({ name }) => name),
+      );
 
       const pattern =
         settings?.matterNumberPattern ?? DEFAULT_MATTER_NUMBER_PATTERN;
@@ -209,7 +226,7 @@ export const createWorkspaceHandler = async function* ({
         id: body.id,
         organizationId,
         clientId: body.clientId ?? null,
-        name: body.name,
+        name: newName,
         reference,
       });
 
@@ -302,7 +319,7 @@ export const createWorkspaceHandler = async function* ({
           created: {
             old: null,
             new: {
-              name: body.name,
+              name: newName,
               reference,
               clientId: body.clientId ?? null,
               memberCount: workspaceMemberUserIds.length,

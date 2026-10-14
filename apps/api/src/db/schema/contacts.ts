@@ -311,9 +311,10 @@ export const workspaces = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
-    // Null means the matter has no client. Access is workspace
-    // membership either way; attaching a client later is an ordinary
-    // clientId update.
+    // Nullable: a null client_id encodes a personal matter (visible
+    // only to the creator via workspace_members). A non-null client_id
+    // is a normal client matter. Setting clientId on update turns a
+    // personal matter into a client matter; members are added apart.
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "restrict",
     }),

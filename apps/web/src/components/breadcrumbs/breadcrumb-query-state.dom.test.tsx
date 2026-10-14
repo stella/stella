@@ -1,9 +1,12 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { sleep } from "@stll/concurrency/sleep";
+import { parseTimeZoneId } from "@stll/time";
 
 import type { ChatThreadFetched } from "@/features/chat/queries";
+import type { OrganizationSettings } from "@/queries/organization-settings";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 const originalFetch = globalThis.fetch;
@@ -19,6 +22,8 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { contactOptions } = await import("@/lib/contacts/queries");
 const { workspaceOptions } = await import("@/lib/workspaces/queries");
+const { organizationSettingsOptions } =
+  await import("@/queries/organization-settings");
 const { skillDetailOptions } = await import("@/lib/knowledge/queries");
 const { fileMetadataOptions } = await import("@/lib/files/file-metadata-query");
 const {
@@ -101,6 +106,39 @@ const seedPersistedThread = (client: InstanceType<typeof QueryClient>) => {
   client.setQueryData(threadKey, persistedThread);
 };
 
+// The matter title reads whether numbering is on; this suite fails only the
+// breadcrumb's own read.
+const organizationSettings = {
+  declaredFeatureIds: [],
+  deploymentFeatures: {},
+  capabilities: {},
+  documentProcessingMode: "off",
+  matterNumberPattern: "{year}/{number}",
+  matterNumberPadding: 3,
+  matterNumberingEnabled: true,
+  practiceJurisdictions: [],
+  promptCachingEnabled: true,
+  managedAIResidency: "eu",
+  memoryExtractionEnabled: false,
+  timeMinimumUnitMinutes: 1,
+  timeEditWindowDays: 30,
+  timeLockedThroughMonth: null,
+  timeNarrativeRequired: false,
+  timeZone:
+    parseTimeZoneId("UTC") ??
+    panic("UTC fixture must be a supported time zone"),
+  timeZoneSource: "organization",
+} satisfies OrganizationSettings;
+const seedOrganizationSettings = (client: InstanceType<typeof QueryClient>) => {
+  client.setQueryData(
+    organizationSettingsOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }).queryKey,
+    organizationSettings,
+  );
+};
+
 const cases = [
   {
     name: "contact",
@@ -115,6 +153,7 @@ const cases = [
     url: "/workspaces/matter",
     key: workspaceOptions("matter").queryKey,
     component: () => <WorkspaceBreadcrumb workspaceId="matter" />,
+    seed: seedOrganizationSettings,
   },
   {
     name: "skill",

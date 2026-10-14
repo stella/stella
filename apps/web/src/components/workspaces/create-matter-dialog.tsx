@@ -324,6 +324,11 @@ const CreateMatterDialogBody = ({
                 : t("workspaces.parties.noClientOptional")
             }
           />
+          {selectedClient === null ? (
+            <p className="text-muted-foreground text-xs">
+              {t("workspaces.create.personalDescription")}
+            </p>
+          ) : null}
         </Field>
 
         {possibleDuplicates.length > 0 && (

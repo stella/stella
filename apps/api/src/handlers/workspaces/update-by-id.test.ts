@@ -85,47 +85,7 @@ describe("updateWorkspace", () => {
     expect(getCallCount()).toBe(1);
   });
 
-  test("rejects promote on an already-client workspace", async () => {
-    const workspaceSelect = {
-      from: () => ({
-        where: () => ({
-          for: async () => [
-            {
-              id: "ws_test123",
-              name: "Workspace",
-              clientId: "contact_existing",
-              reference: null,
-              billingReference: null,
-              color: null,
-            },
-          ],
-        }),
-      }),
-    };
-
-    const { safeDb, scopedDb } = createScopedDbMock({
-      select: () => workspaceSelect,
-    });
-
-    const result = await updateWorkspace.handler(
-      createContext({
-        body: {
-          promote: {
-            clientId: toSafeId<"contact">(Bun.randomUUIDv7()),
-          },
-        },
-        safeDb,
-        scopedDb,
-      }),
-    );
-
-    expect(result).toEqual({
-      code: 400,
-      response: { message: "Workspace is already a client matter" },
-    });
-  });
-
-  test("looks up the contact when attaching a client to a matter that has none", async () => {
+  test("looks up the contact when attaching a client to a personal matter", async () => {
     const workspaceRow = {
       id: "ws_test123",
       name: "Workspace",

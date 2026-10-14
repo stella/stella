@@ -5668,7 +5668,8 @@
       "title": "Copiar para caso"
     },
     "create": {
-      "matterName": "Nome do caso"
+      "matterName": "Nome do caso",
+      "personalDescription": "Casos pessoais são privados para você e não precisam de cliente. Você pode promovê-los depois para compartilhar com a equipe."
     },
     "createNewWorkspace": "Criar novo caso",
     "defaultName": "Sem título",
@@ -6137,7 +6138,11 @@
         "third_party": "Terceiro",
         "witness": "Testemunha"
       },
-      "personalLabel": "Sem cliente",
+      "personalDescription": "Casos pessoais são privados para você. Promova para um cliente para compartilhar com a equipe.",
+      "personalLabel": "Pessoal",
+      "promoteCta": "Promover para cliente",
+      "promoteDescription": "Associe um cliente para compartilhar este caso com a equipe. Esta ação é unidirecional; casos promovidos não podem voltar a ser pessoais.",
+      "promotedSuccess": "Caso promovido",
       "removeClient": "Remover cliente",
       "removeParty": "Remover parte",
       "removePartyConfirm": "Tem certeza de que deseja remover esta parte do caso?",

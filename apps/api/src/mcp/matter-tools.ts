@@ -468,7 +468,6 @@ const handleSaveMatterTool: TypedMcpToolHandler<
   ) {
     const updated = await Result.gen(() =>
       updateWorkspaceHandler({
-        userEmail: context.userEmail,
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,

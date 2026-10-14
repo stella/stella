@@ -225,7 +225,23 @@ export const WorkspaceBreadcrumb = ({
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
     </>
-  ) : null;
+  ) : (
+    <>
+      <BreadcrumbItem className="min-w-8 shrink">
+        <Link
+          className="hover:text-foreground text-muted-foreground min-w-0 truncate"
+          onClick={() => {
+            updateMattersConfig({ clientFilter: null });
+          }}
+          to="/workspaces"
+          title={t("workspaces.parties.personalLabel")}
+        >
+          {t("workspaces.parties.personalLabel")}
+        </Link>
+      </BreadcrumbItem>
+      <BreadcrumbSeparator className="shrink-0" />
+    </>
+  );
 
   const referenceSegment = (() => {
     if (isEditingRef) {

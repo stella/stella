@@ -5668,7 +5668,8 @@
       "title": "Kopēt uz lietu"
     },
     "create": {
-      "matterName": "Lietas nosaukums"
+      "matterName": "Lietas nosaukums",
+      "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
@@ -6137,7 +6138,11 @@
         "third_party": "Trešā puse",
         "witness": "Liecinieks"
       },
-      "personalLabel": "Bez klienta",
+      "personalDescription": "Personīgās lietas ir tikai jums. Paaugstiniet klientam, lai dalītos ar komandu.",
+      "personalLabel": "Personīga",
+      "promoteCta": "Paaugstināt klientam",
+      "promoteDescription": "Pievienojiet klientu, lai dalītos ar šo lietu komandai. Tas ir neatgriezeniski — paaugstinātās lietas nevar atgriezties personīgās.",
+      "promotedSuccess": "Lieta paaugstināta",
       "removeClient": "Noņemt klientu",
       "removeParty": "Noņemt pusi",
       "removePartyConfirm": "Vai tiešām vēlaties noņemt šo pusi no lietas?",

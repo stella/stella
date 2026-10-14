@@ -5668,7 +5668,8 @@
       "title": "Copier vers un dossier"
     },
     "create": {
-      "matterName": "Nom du dossier"
+      "matterName": "Nom du dossier",
+      "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
     },
     "createNewWorkspace": "Créer un nouveau dossier",
     "defaultName": "Sans titre",
@@ -6137,7 +6138,11 @@
         "third_party": "Tiers",
         "witness": "Témoin"
       },
-      "personalLabel": "Sans client",
+      "personalDescription": "Les dossiers personnels sont privés. Promouvoir vers un client pour partager avec l'équipe.",
+      "personalLabel": "Personnel",
+      "promoteCta": "Promouvoir au client",
+      "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
+      "promotedSuccess": "Dossier promu",
       "removeClient": "Retirer le client",
       "removeParty": "Retirer la partie",
       "removePartyConfirm": "Voulez-vous vraiment retirer cette partie du dossier ?",

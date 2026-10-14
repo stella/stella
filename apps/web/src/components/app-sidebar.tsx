@@ -1432,7 +1432,7 @@ const MatterItem = ({
           )}
           tooltip={[
             ws.name,
-            ws.client?.displayName,
+            ws.client?.displayName ?? t("workspaces.parties.personalLabel"),
             showMatterNumber ? ws.reference : null,
           ]
             .filter(Boolean)
@@ -1475,10 +1475,11 @@ const MatterItem = ({
                 }
               >
                 <BidiText>
-                  {ws.client ? ws.client.displayName : null}
-                  {ws.client && relTime ? " · " : null}
-                  {relTime || null}
+                  {ws.client
+                    ? ws.client.displayName
+                    : t("workspaces.parties.personalLabel")}
                 </BidiText>
+                {relTime ? ` · ${relTime}` : ""}
               </Tooltip>
             </span>
           </Link>

@@ -102,6 +102,7 @@
     "clauses.versionRestored",
     "consent.error",
     "contacts.emailTypes.other",
+    "contacts.emailTypes.personal",
     "contacts.phoneTypes.other",
     "contacts.search",
     "docxReview.applyTracked",
@@ -261,6 +262,7 @@
     "workspaces.overview.activity.actorActions.updated",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
+    "workspaces.parties.personalLabel",
     "workspaces.parties.searchContacts",
     "workspaces.playbooks.run",
     "workspaces.properties.addOption",
@@ -916,6 +918,9 @@
       "de",
       "pl"
     ],
+    "workspaces.parties.personalLabel": [
+      "es"
+    ],
     "workspaces.properties.chipSingle": [
       "pl"
     ],
@@ -1193,6 +1198,7 @@
     "workspaces.overview.uploaded",
     "workspaces.parties.noClient",
     "workspaces.parties.removePartyConfirm",
+    "workspaces.parties.setClient",
     "workspaces.pdf.entitySidebar",
     "workspaces.pdf.pageEditor.pageCount",
     "workspaces.pdf.pageEditor.title",

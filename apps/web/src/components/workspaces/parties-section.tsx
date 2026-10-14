@@ -22,6 +22,7 @@ import {
 } from "@stll/ui/dialog";
 import {
   BuildingIcon,
+  LockIcon,
   PlusIcon,
   TrashIcon,
   UserIcon,
@@ -126,29 +127,43 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   }
 
   const { client } = workspace;
-  const clientActionLabel = client
-    ? t("workspaces.parties.changeClient")
-    : t("workspaces.parties.setClient");
+  const personalSection = !client ? (
+    <div className="flex flex-col p-3">
+      <section className="bg-muted/30 flex flex-col gap-2 rounded-md border p-3">
+        <div className="flex items-center gap-2">
+          <LockIcon className="text-muted-foreground size-4" />
+          <h3 className="text-sm font-medium">
+            {t("workspaces.parties.personalLabel")}
+          </h3>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          {t("workspaces.parties.personalDescription")}
+        </p>
+        <PromoteDialog workspaceId={workspaceId} />
+      </section>
+    </div>
+  ) : null;
 
   return (
     <div className="flex flex-col">
-      <section>
-        <div
-          className={cn(
-            "flex items-center justify-between gap-2 px-3",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-        >
-          <h3 className="text-muted-foreground text-sm font-medium">
-            {t("workspaces.parties.client")}
-          </h3>
-          <ChangeClientDialog
-            label={clientActionLabel}
-            onCreate={handleCreateAndSetClient}
-            onSelect={handleSetClient}
-          />
-        </div>
-        {client ? (
+      {personalSection}
+      {/* Client sub-section */}
+      {client && (
+        <section>
+          <div
+            className={cn(
+              "flex items-center justify-between gap-2 px-3",
+              TOOLBAR_ROW_HEIGHT,
+            )}
+          >
+            <h3 className="text-muted-foreground text-sm font-medium">
+              {t("workspaces.parties.client")}
+            </h3>
+            <ChangeClientDialog
+              onCreate={handleCreateAndSetClient}
+              onSelect={handleSetClient}
+            />
+          </div>
           <div
             className={cn("flex items-center gap-2 px-3", TOOLBAR_ROW_HEIGHT)}
           >
@@ -169,17 +184,8 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
               <BidiText>{client.displayName}</BidiText>
             </Link>
           </div>
-        ) : (
-          <p
-            className={cn(
-              "text-muted-foreground flex items-center px-3 text-sm",
-              TOOLBAR_ROW_HEIGHT,
-            )}
-          >
-            {t("workspaces.parties.noClientOptional")}
-          </p>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Parties sub-section */}
       <section>
@@ -288,13 +294,11 @@ const PartiesReadError = ({ error, onRetry }: PartiesReadErrorProps) => {
 };
 
 type ChangeClientDialogProps = {
-  label: string;
   onCreate: (name: string, type: ContactType) => void;
   onSelect: (contact: { id: string; displayName: string }) => void;
 };
 
 const ChangeClientDialog = ({
-  label,
   onCreate,
   onSelect,
 }: ChangeClientDialogProps) => {
@@ -306,9 +310,9 @@ const ChangeClientDialog = ({
       <DialogTrigger
         render={
           <Button
-            aria-label={label}
+            aria-label={t("workspaces.parties.changeClient")}
             size="icon-xs"
-            title={label}
+            title={t("workspaces.parties.changeClient")}
             variant="ghost"
           />
         }
@@ -317,7 +321,7 @@ const ChangeClientDialog = ({
       </DialogTrigger>
       <DialogPopup>
         <DialogHeader>
-          <DialogTitle>{label}</DialogTitle>
+          <DialogTitle>{t("workspaces.parties.changeClient")}</DialogTitle>
           <DialogDescription />
         </DialogHeader>
         <DialogPanel>
@@ -331,9 +335,166 @@ const ChangeClientDialog = ({
               onSelect(contact);
               setIsOpen(false);
             }}
-            placeholder={t("workspaces.parties.noClientOptional")}
+            placeholder={t("workspaces.parties.changeClient")}
           />
         </DialogPanel>
+      </DialogPopup>
+    </Dialog>
+  );
+};
+
+type PromoteDialogProps = {
+  workspaceId: string;
+};
+
+const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const updateWorkspace = useUpdateWorkspace();
+  const createContact = useCreateContact();
+  const [isOpen, setIsOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<{
+    id: string;
+    displayName: string;
+  } | null>(null);
+
+  const handleClose = () => {
+    setIsOpen(false);
+    setSelectedContact(null);
+  };
+
+  const handleCreateContact = (name: string, type: ContactType) => {
+    const id = toSafeId<"contact">(createUuid());
+    createContact.mutate(
+      { id, type, displayName: name },
+      {
+        onSuccess: () => {
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: contactsKeys.all,
+            }),
+            "parties-section.invalidate",
+          );
+          setSelectedContact({ id, displayName: name });
+        },
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
+        },
+      },
+    );
+  };
+
+  const handleSubmit = () => {
+    if (!selectedContact) {
+      return;
+    }
+
+    updateWorkspace.mutate(
+      {
+        workspaceId,
+        update: {
+          type: "clientId",
+          value: selectedContact.id,
+        },
+      },
+      {
+        onSuccess: () => {
+          stellaToast.add({
+            title: t("workspaces.parties.promotedSuccess"),
+            type: "success",
+          });
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspacesKeys.byId(workspaceId),
+            }),
+            "parties-section.invalidate",
+          );
+          detached(
+            queryClient.invalidateQueries({
+              queryKey: workspacesKeys.all,
+            }),
+            "parties-section.invalidate",
+          );
+          handleClose();
+        },
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
+        },
+      },
+    );
+  };
+
+  return (
+    <Dialog
+      onOpenChange={(open) => {
+        if (!open) {
+          handleClose();
+          return;
+        }
+        setIsOpen(true);
+      }}
+      open={isOpen}
+    >
+      <DialogTrigger render={<Button size="sm" variant="outline" />}>
+        {t("workspaces.parties.promoteCta")}
+      </DialogTrigger>
+      <DialogPopup>
+        <DialogFormState
+          dirty={selectedContact !== null}
+          onDiscard={() => {
+            setSelectedContact(null);
+          }}
+        />
+        <DialogHeader>
+          <DialogTitle>{t("workspaces.parties.promoteCta")}</DialogTitle>
+          <DialogDescription>
+            {t("workspaces.parties.promoteDescription")}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogPanel className="flex flex-col gap-4">
+          <div>
+            <span className="mb-1.5 block text-sm font-medium">
+              {t("workspaces.parties.client")}
+            </span>
+            {selectedContact ? (
+              <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                <BidiText>{selectedContact.displayName}</BidiText>
+                <Button
+                  aria-label={t("common.remove")}
+                  className="ms-auto"
+                  onClick={() => setSelectedContact(null)}
+                  size="icon-xs"
+                  variant="ghost"
+                >
+                  <XIcon className="size-3.5" />
+                </Button>
+              </div>
+            ) : (
+              <ContactPicker
+                autoFocus
+                onCreate={handleCreateContact}
+                onSelect={(contact) =>
+                  setSelectedContact({
+                    id: contact.id,
+                    displayName: contact.displayName,
+                  })
+                }
+              />
+            )}
+          </div>
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="outline" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            disabled={!selectedContact}
+            loading={updateWorkspace.isPending}
+            onClick={handleSubmit}
+          >
+            {t("workspaces.parties.promoteCta")}
+          </Button>
+        </DialogFooter>
       </DialogPopup>
     </Dialog>
   );

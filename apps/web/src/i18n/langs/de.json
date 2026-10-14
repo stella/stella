@@ -5668,7 +5668,8 @@
       "title": "In Akte kopieren"
     },
     "create": {
-      "matterName": "Name der Akte"
+      "matterName": "Name der Akte",
+      "personalDescription": "Persönliche Akten sind privat und benötigen keinen Klienten. Sie können später hochgestuft werden, um sie mit dem Team zu teilen."
     },
     "createNewWorkspace": "Neue Akte erstellen",
     "defaultName": "Ohne Titel",
@@ -6137,7 +6138,11 @@
         "third_party": "Dritte Partei",
         "witness": "Zeuge"
       },
-      "personalLabel": "Kein Klient",
+      "personalDescription": "Persönliche Akten sind nur für Sie sichtbar. Stufen Sie sie auf einen Klienten hoch, um sie mit dem Team zu teilen.",
+      "personalLabel": "Persönlich",
+      "promoteCta": "Zu Klient hochstufen",
+      "promoteDescription": "Fügen Sie einen Klienten hinzu, um diese Akte mit dem Team zu teilen. Diese Aktion ist endgültig — hochgestufte Akten können nicht wieder persönlich werden.",
+      "promotedSuccess": "Akte hochgestuft",
       "removeClient": "Klient entfernen",
       "removeParty": "Partei entfernen",
       "removePartyConfirm": "Möchten Sie diese Partei wirklich aus der Akte entfernen?",
