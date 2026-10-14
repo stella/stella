@@ -87,6 +87,7 @@ import {
   isSessionActivityCancelled,
   SESSION_ACTIVITY_INTERVAL_MS,
 } from "@/routes/-session-activity";
+import { UploadUnloadGuard } from "@/routes/-upload-unload-guard";
 
 const LazyInspectorPanel = lazy(
   async () =>
@@ -470,6 +471,7 @@ function ProtectedContent() {
   return (
     <>
       <ApiVersionMismatchReporter />
+      <UploadUnloadGuard />
       <SelfhostUpdateBanner />
       <PaymentRetryBanner />
       <header className="border-sidebar-border flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b bg-(--matter-sidebar-tint) px-4">
