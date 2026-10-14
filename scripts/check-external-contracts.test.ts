@@ -545,7 +545,7 @@ test("dated drift admits only unchanged pins before its exact deadline", () => {
   ).toEqual({});
 });
 
-test("changed SDK usage invalidates dated debt while comments and deletions do not", () => {
+test("executable changes in SDK importers invalidate dated debt while comments do not", () => {
   const options = {
     sdks: ["vendor"],
     file: "client.ts",
@@ -567,7 +567,7 @@ test("changed SDK usage invalidates dated debt while comments and deletions do n
       ...options,
       current: 'import sdk from "vendor";',
     }),
-  ).toBe(false);
+  ).toBe(true);
 });
 
 test("duplicate added SDK calls count as changed usage", () => {
@@ -582,8 +582,8 @@ test("duplicate added SDK calls count as changed usage", () => {
   ).toBe(true);
 });
 
-test("receipt bookkeeping changes do not count as SDK usage", () => {
-  const usage = 'import sdk from "vendor"; sdk.send("request");';
+test("receipt bookkeeping in a file without a pinned SDK import keeps dated debt", () => {
+  const usage = 'const receipt = { pin: "old" };';
   expect(
     hasChangedExecutableUsage({
       sdks: ["vendor"],
@@ -592,4 +592,44 @@ test("receipt bookkeeping changes do not count as SDK usage", () => {
       current: `${usage} const receipt = { pin: "old" };`,
     }),
   ).toBe(false);
+});
+
+test.each([
+  'const client = sdk.createClient(); client.send("old");',
+  'const client = sdk; client.send("old");',
+  'const { send } = sdk; send("old");',
+])("changes through derived SDK values invalidate dated debt: %s", (use) => {
+  const baseline = `import sdk from "vendor"; ${use}`;
+  expect(
+    hasChangedExecutableUsage({
+      sdks: ["vendor"],
+      file: "client.ts",
+      baseline,
+      current: baseline.replace('"old"', '"new"'),
+    }),
+  ).toBe(true);
+});
+test("comment and type-only edits in SDK importers keep dated debt", () => {
+  const baseline =
+    'import sdk from "vendor"; const client = sdk.createClient(); client.send("old");';
+  const current = `// note\nimport type { Client } from "vendor"; interface Receipt { pin: string } type Pin = string; ${baseline.replace("const client =", "const client: Client =")}`;
+  expect(
+    hasChangedExecutableUsage({
+      sdks: ["vendor"],
+      file: "client.ts",
+      baseline,
+      current,
+    }),
+  ).toBe(false);
+});
+test("unrelated executable edits in SDK importers also invalidate dated debt", () => {
+  const baseline = 'import sdk from "vendor"; sdk.send("old");';
+  expect(
+    hasChangedExecutableUsage({
+      sdks: ["vendor"],
+      file: "client.ts",
+      baseline,
+      current: `${baseline} const receipt = { pin: "old" };`,
+    }),
+  ).toBe(true);
 });

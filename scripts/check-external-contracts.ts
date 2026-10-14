@@ -797,79 +797,61 @@ export const hasChangedExecutableUsage = ({
   if (baseline === undefined) {
     return true;
   }
-  const printer = ts.createPrinter({ removeComments: true });
-  const statements = (text: string) => {
+  const importsPinnedSdk = (text: string) => {
     const source = parseSource({ fileName: file, text });
-    const bindings = new Set(["fetch", "WebSocket"]);
-    for (const statement of source.statements) {
+    const pinned = (specifier: string) =>
+      sdks.some((sdk) => specifier === sdk || specifier.startsWith(`${sdk}/`));
+    const importsSdk = (node: ts.Node): boolean => {
       if (
-        !ts.isImportDeclaration(statement) ||
-        !ts.isStringLiteral(statement.moduleSpecifier)
+        ts.isImportDeclaration(node) &&
+        ts.isStringLiteral(node.moduleSpecifier)
       ) {
-        continue;
-      }
-      const specifier = statement.moduleSpecifier.text;
-      if (
-        !sdks.some(
-          (sdk) => specifier === sdk || specifier.startsWith(`${sdk}/`),
-        )
-      ) {
-        continue;
-      }
-      const clause = statement.importClause;
-      if (clause?.phaseModifier === ts.SyntaxKind.TypeKeyword) {
-        continue;
-      }
-      if (clause?.name) {
-        bindings.add(clause.name.text);
-      }
-      const named = clause?.namedBindings;
-      if (named && ts.isNamespaceImport(named)) {
-        bindings.add(named.name.text);
-      }
-      if (named && ts.isNamedImports(named)) {
-        for (const element of named.elements) {
-          if (!element.isTypeOnly) {
-            bindings.add(element.name.text);
-          }
-        }
-      }
-    }
-    const usesSdk = (node: ts.Node): boolean => {
-      if (ts.isIdentifier(node) && bindings.has(node.text)) {
-        return true;
+        return (
+          node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword &&
+          pinned(node.moduleSpecifier.text)
+        );
       }
       if (
-        ts.isStringLiteral(node) &&
-        sdks.some((sdk) => node.text === sdk || node.text.startsWith(`${sdk}/`))
+        ts.isExportDeclaration(node) &&
+        !node.isTypeOnly &&
+        node.moduleSpecifier &&
+        ts.isStringLiteral(node.moduleSpecifier)
       ) {
-        return true;
+        return pinned(node.moduleSpecifier.text);
       }
-      return ts.forEachChild(node, usesSdk) ?? false;
+      if (
+        ts.isCallExpression(node) &&
+        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+          (ts.isIdentifier(node.expression) &&
+            node.expression.text === "require"))
+      ) {
+        const specifier = node.arguments.at(0);
+        return (
+          specifier !== undefined &&
+          ts.isStringLiteral(specifier) &&
+          pinned(specifier.text)
+        );
+      }
+      return ts.forEachChild(node, importsSdk) ?? false;
     };
-    return source.statements
-      .filter(
-        (statement) =>
-          !ts.isTypeAliasDeclaration(statement) &&
-          !ts.isInterfaceDeclaration(statement) &&
-          usesSdk(statement),
-      )
-      .map((statement) =>
-        printer.printNode(ts.EmitHint.Unspecified, statement, source),
-      );
+    return importsSdk(source);
   };
-  const previous = new Map<string, number>();
-  for (const statement of statements(baseline)) {
-    previous.set(statement, (previous.get(statement) ?? 0) + 1);
-  }
-  return statements(current).some((statement) => {
-    const remaining = previous.get(statement) ?? 0;
-    if (remaining === 0) {
-      return true;
-    }
-    previous.set(statement, remaining - 1);
+  if (!importsPinnedSdk(baseline) && !importsPinnedSdk(current)) {
     return false;
-  });
+  }
+  // Erase TypeScript syntax rather than trying to track SDK-derived values.
+  // Every emitted change can affect arguments, instances, aliases or re-exports.
+  const executable = (text: string) =>
+    ts.transpileModule(text, {
+      fileName: file,
+      compilerOptions: {
+        target: ts.ScriptTarget.ESNext,
+        module: ts.ModuleKind.Preserve,
+        verbatimModuleSyntax: true,
+        removeComments: true,
+      },
+    }).outputText;
+  return executable(baseline) !== executable(current);
 };
 
 type AdmittedPinDriftOptions = {

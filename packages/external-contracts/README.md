@@ -26,9 +26,11 @@ it parses source without executing modules. A changed pin or coverage scope
 requires re-characterisation. Existing pin drift can be recorded in
 `scripts/external-contract-pin-allowances.json` with exact current values and an
 expiry no more than seven days after its checked date. An allowance applies only
-while those pins match the merge base and no SDK-bearing executable statement
-has been added or changed in a registered owner. Added duplicate SDK calls count
-as changed usage; comments and receipt bookkeeping do not. New unregistered SDK
+while those pins match the merge base and no executable code
+has changed in a registered owner that imports or re-exports the pinned SDK.
+This includes calls through derived clients, aliases and destructured bindings.
+Comments and type-only changes keep the allowance; receipt bookkeeping in a file
+without a pinned SDK import does too. New unregistered SDK
 usage still fails the closed census. Removed patch pins use the explicit
 `<removed>` value. The existing `dated-waiver-expiry` job rejects an elapsed
 allowance on every merge candidate, even when package checks are not selected.
