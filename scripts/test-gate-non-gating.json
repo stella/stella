@@ -52,6 +52,26 @@
     "type": "non-gating"
   },
   {
+    "file": "apps/api/e2e/decision-reader.spec.mts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    }
+  },
+  {
+    "file": "apps/api/e2e/file-picker.spec.mts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    }
+  },
+  {
     "file": "apps/desktop/tests/browser/activity-interactions.playwright.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
     "type": "non-gating",
