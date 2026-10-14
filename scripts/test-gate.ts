@@ -648,20 +648,497 @@ type ShellInvocationGatesOptions = {
   readonly command: string;
   readonly matches: (invocation: ShellInvocation) => boolean;
   readonly propagation?: ShellPropagation;
+  readonly knownRunner?: (invocation: ShellInvocation) => boolean;
+  readonly onUnresolved?: (reason: string) => void;
 };
+
+const literalShellWord = (word: string) =>
+  !word.includes("$") && !word.includes("`");
+const SHELL_SAFE_PREFIXES = new Map<
+  string,
+  (args: readonly string[]) => boolean
+>([
+  ["true", (args) => args.length === 0],
+  [":", (args) => args.every(literalShellWord)],
+  ["cd", (args) => args.length === 1 && args.every(literalShellWord)],
+  [
+    "export",
+    (args) =>
+      args.length > 0 &&
+      args.every(
+        (arg) => /^[A-Za-z_][A-Za-z0-9_]*=/u.test(arg) && literalShellWord(arg),
+      ),
+  ],
+  [
+    "set",
+    (args) =>
+      [
+        "-e",
+        "-o pipefail",
+        "-e -o pipefail",
+        "-eo pipefail",
+        "-euo pipefail",
+      ].includes(args.join(" ")),
+  ],
+]);
+
+const directTestRunner = ({ words, index }: ShellInvocation) =>
+  (words[index] === "bun" &&
+    (words[index + 1] === "test" ||
+      [
+        "scripts/run-tests.ts",
+        "scripts/run-unlisted-script-tests.ts",
+        "scripts/run-custom-lint-tests.ts",
+      ].some((script) => words[index + 1]?.endsWith(script)))) ||
+  (words[index] === "playwright" && words[index + 1] === "test");
+
+type ShellExecution = "runs" | "skipped" | "unresolved";
+type ShellStatus = "success" | "failure" | "unresolved";
+type ShellControlFrame =
+  | {
+      type: "if";
+      parent: ShellExecution;
+      remaining: ShellExecution;
+      condition: ShellStatus;
+      conditionStart: number;
+      phase: "condition" | "body";
+    }
+  | { type: "opaque"; parent: ShellExecution; terminator: string };
+
+type ShellExecutablePositionsOptions = {
+  readonly tokens: readonly ShellToken[];
+  readonly initialErrexit: boolean;
+  readonly knownRunner: (invocation: ShellInvocation) => boolean;
+};
+
+const SHELL_CONTROL_TERMINATORS = new Map<string, string>([
+  ["case", "esac"],
+  ["(", ")"],
+  ["{", "}"],
+  ["while", "done"],
+  ["until", "done"],
+  ["for", "done"],
+  ["select", "done"],
+]);
+
+const bothShellExecutions = (
+  left: ShellExecution,
+  right: ShellExecution,
+): ShellExecution => {
+  if (left === "skipped" || right === "skipped") {
+    return "skipped";
+  }
+  if (left === "unresolved" || right === "unresolved") {
+    return "unresolved";
+  }
+  return "runs";
+};
+
+const shellBranchExecution = (
+  outcome: ShellStatus,
+  expected: ShellStatus,
+): ShellExecution => {
+  if (outcome === "unresolved") {
+    return "unresolved";
+  }
+  return outcome === expected ? "runs" : "skipped";
+};
+
+class ShellExecutablePositionState {
+  readonly positions = new Set<number>();
+  readonly findings = new Map<number, string>();
+  private readonly options: ShellExecutablePositionsOptions;
+  private readonly words: readonly string[];
+  private readonly frames: ShellControlFrame[] = [];
+  private execution: ShellExecution = "runs";
+  private terminated: ShellExecution = "runs";
+  private status: ShellStatus = "success";
+  private statement: "simple" | "short-circuit" = "simple";
+  private pipelineStatus: ShellStatus | undefined;
+  private assignmentStatus: ShellStatus | undefined;
+  private errexit: boolean;
+  private reason = "shell condition: execution is unresolved";
+
+  constructor(options: ShellExecutablePositionsOptions) {
+    this.options = options;
+    this.words = options.tokens.map(({ value }) => value);
+    this.errexit = options.initialErrexit;
+  }
+
+  scan() {
+    for (let index = 0; index < this.options.tokens.length; index += 1) {
+      const token = this.options.tokens[index];
+      if (token !== undefined) {
+        this.processToken(index, token);
+      }
+    }
+    return {
+      positions: this.frames.length === 0 ? this.positions : new Set<number>(),
+      findings: this.findings,
+    };
+  }
+
+  private processToken(index: number, token: ShellToken) {
+    if (token.role === "operator") {
+      this.processOperator(index, token.value);
+      return;
+    }
+    if (token.role === "assignment") {
+      this.processAssignment(token.value);
+      return;
+    }
+    if (token.role === "command") {
+      this.processCommand(index, token.value);
+    }
+  }
+
+  private processOperator(index: number, value: string) {
+    if (value === "if") {
+      this.beginIf(index);
+      return;
+    }
+    const terminator = SHELL_CONTROL_TERMINATORS.get(value);
+    if (terminator !== undefined) {
+      this.beginOpaque(value, terminator);
+      return;
+    }
+    const frame = this.frames.at(-1);
+    if (frame?.type === "if" && value === "then") {
+      this.enterIfBody(frame, index);
+      return;
+    }
+    if (frame?.type === "if" && (value === "else" || value === "elif")) {
+      this.enterAlternativeBranch(frame, value, index);
+      return;
+    }
+    if (this.endsFrame(frame, value)) {
+      this.endFrame(frame);
+      return;
+    }
+    if (value === "&&" || value === "||") {
+      this.processShortCircuit(value);
+      return;
+    }
+    if (value === "|") {
+      this.pipelineStatus = "unresolved";
+      return;
+    }
+    if (value === ";" || value === "\n") {
+      this.processSeparator(index, value);
+    }
+  }
+
+  private beginIf(index: number) {
+    this.frames.push({
+      type: "if",
+      parent: this.execution,
+      remaining: this.execution,
+      condition: "unresolved",
+      conditionStart: index + 1,
+      phase: "condition",
+    });
+    this.status = "success";
+    this.statement = "simple";
+    this.reason = "shell condition: if condition is not literally true";
+  }
+
+  private beginOpaque(value: string, terminator: string) {
+    this.frames.push({
+      type: "opaque",
+      parent: this.execution,
+      terminator,
+    });
+    this.execution = bothShellExecutions(this.execution, "unresolved");
+    this.reason = `shell condition: ${value} body is unresolved`;
+  }
+
+  private enterIfBody(
+    frame: Extract<ShellControlFrame, { type: "if" }>,
+    index: number,
+  ) {
+    const condition = this.options.tokens
+      .slice(frame.conditionStart, index)
+      .filter(
+        (item) =>
+          !(item.role === "operator" && [";", "\n"].includes(item.value)),
+      );
+    const literal = condition.length === 1 ? condition.at(0) : undefined;
+    if (literal?.role === "command" && literal.value === "true") {
+      frame.condition = "success";
+    } else if (literal?.role === "command" && literal.value === "false") {
+      frame.condition = "failure";
+    } else {
+      frame.condition = "unresolved";
+    }
+    frame.phase = "body";
+    this.execution = bothShellExecutions(
+      this.terminated,
+      this.scopeExecution(),
+    );
+    this.reason = "shell condition: if condition is not literally true";
+    this.status = "success";
+    this.statement = "simple";
+  }
+
+  private enterAlternativeBranch(
+    frame: Extract<ShellControlFrame, { type: "if" }>,
+    value: "else" | "elif",
+    index: number,
+  ) {
+    frame.remaining = bothShellExecutions(
+      frame.remaining,
+      shellBranchExecution(frame.condition, "failure"),
+    );
+    frame.condition = value === "else" ? "success" : "unresolved";
+    frame.phase = value === "else" ? "body" : "condition";
+    frame.conditionStart = index + 1;
+    this.execution = bothShellExecutions(
+      this.terminated,
+      this.scopeExecution(),
+    );
+    this.status = "success";
+    this.statement = "simple";
+  }
+
+  private endsFrame(frame: ShellControlFrame | undefined, value: string) {
+    if (frame?.type === "if") {
+      return value === "fi";
+    }
+    if (frame?.type === "opaque") {
+      return value === frame.terminator;
+    }
+    return false;
+  }
+
+  private endFrame(frame: ShellControlFrame | undefined) {
+    if (frame === undefined) {
+      return;
+    }
+    this.frames.pop();
+    this.execution = bothShellExecutions(this.terminated, frame.parent);
+    this.status = "unresolved";
+    this.statement = "simple";
+  }
+
+  private processShortCircuit(value: "&&" | "||") {
+    this.assignmentStatus = undefined;
+    if (this.pipelineStatus !== undefined) {
+      this.status = this.pipelineStatus;
+    }
+    this.pipelineStatus = undefined;
+    let expected: ShellStatus = "success";
+    if (value === "||") {
+      expected = "failure";
+    }
+    this.execution = bothShellExecutions(
+      bothShellExecutions(this.terminated, this.scopeExecution()),
+      shellBranchExecution(this.status, expected),
+    );
+    this.statement = "short-circuit";
+    this.reason = `shell condition: ${this.status} prefix before ${value} does not guarantee execution`;
+  }
+
+  private processSeparator(index: number, value: ";" | "\n") {
+    const preceding = this.options.tokens[index - 1];
+    const continuesList =
+      value === "\n" &&
+      preceding?.role === "operator" &&
+      ["&&", "||", "|"].includes(preceding.value);
+    if (continuesList) {
+      return;
+    }
+    if (this.pipelineStatus !== undefined) {
+      this.status = this.pipelineStatus;
+    }
+    this.pipelineStatus = undefined;
+    this.assignmentStatus = undefined;
+    if (this.shouldStopAfterFailure()) {
+      this.terminated = "skipped";
+    }
+    this.execution = bothShellExecutions(
+      this.terminated,
+      this.scopeExecution(),
+    );
+    this.statement = "simple";
+  }
+
+  private shouldStopAfterFailure() {
+    const inCondition = this.frames.some(
+      (frame) => frame.type === "if" && frame.phase === "condition",
+    );
+    return (
+      this.execution === "runs" &&
+      this.status === "failure" &&
+      this.statement === "simple" &&
+      this.errexit &&
+      !inCondition
+    );
+  }
+
+  private processAssignment(value: string) {
+    if (this.execution !== "runs") {
+      return;
+    }
+    if (this.assignmentStatus === "unresolved" || !literalShellWord(value)) {
+      this.assignmentStatus = "unresolved";
+    } else {
+      this.assignmentStatus = "success";
+    }
+    this.status = this.assignmentStatus;
+  }
+
+  private processCommand(index: number, value: string) {
+    if (this.isNonExecutable()) {
+      this.findings.set(index, this.reason);
+    }
+    if (this.execution === "runs") {
+      this.recordPosition(index);
+      this.updateErrexit(value, index);
+      this.status = this.commandStatus(index, value);
+      this.updateConditionStatus(index, value);
+      if (value === "exit" || value === "return") {
+        this.terminated = "skipped";
+      }
+      return;
+    }
+    if (this.execution === "unresolved") {
+      this.status = "unresolved";
+      this.updateUnresolvedTermination(index, value);
+    }
+  }
+
+  private isNonExecutable() {
+    return (
+      this.execution !== "runs" ||
+      this.frames.some(
+        (frame) => frame.type === "opaque" || frame.phase === "condition",
+      )
+    );
+  }
+
+  private recordPosition(index: number) {
+    if (!this.isInsideOpaqueControl()) {
+      this.positions.add(index);
+    }
+  }
+
+  private isInsideOpaqueControl() {
+    return this.frames.some(
+      (frame) => frame.type === "opaque" || frame.phase === "condition",
+    );
+  }
+
+  private updateErrexit(value: string, index: number) {
+    const next = this.options.tokens[index + 1]?.value;
+    if (value === "set" && next === "+e") {
+      this.errexit = false;
+    }
+    if (value === "set" && next === "-e") {
+      this.errexit = true;
+    }
+  }
+
+  private commandStatus(index: number, value: string): ShellStatus {
+    const hasArguments = this.options.tokens[index + 1]?.role === "argument";
+    const args = shellCommandSpan(this.options.tokens, index + 1).words;
+    const safePrefix = SHELL_SAFE_PREFIXES.get(value)?.(args) === true;
+    const knownRunner = this.options.knownRunner({
+      words: this.words,
+      tokens: this.options.tokens,
+      index,
+    });
+    if (this.assignmentStatus !== "unresolved" && (safePrefix || knownRunner)) {
+      return "success";
+    }
+    if (!hasArguments && value === "false") {
+      return "failure";
+    }
+    return "unresolved";
+  }
+
+  private updateConditionStatus(index: number, value: string) {
+    const inCondition = this.frames.some(
+      (frame) => frame.type === "if" && frame.phase === "condition",
+    );
+    if (!inCondition) {
+      return;
+    }
+    const hasArguments = this.options.tokens[index + 1]?.role === "argument";
+    if (!hasArguments && value === "true") {
+      this.status = "success";
+      return;
+    }
+    if (!hasArguments && value === "false") {
+      this.status = "failure";
+      return;
+    }
+    this.status = "unresolved";
+  }
+
+  private updateUnresolvedTermination(index: number, value: string) {
+    const status = this.options.tokens[index + 1]?.value ?? "";
+    if (
+      (value === "exit" || value === "return") &&
+      !/^[1-9]\d*$/u.test(status)
+    ) {
+      this.terminated = "unresolved";
+    }
+  }
+
+  private scopeExecution(): ShellExecution {
+    const frame = this.frames.at(-1);
+    if (frame === undefined) {
+      return "runs";
+    }
+    if (frame.type === "opaque") {
+      return bothShellExecutions(frame.parent, "unresolved");
+    }
+    if (frame.phase === "condition") {
+      return frame.remaining;
+    }
+    return bothShellExecutions(
+      frame.remaining,
+      shellBranchExecution(frame.condition, "success"),
+    );
+  }
+}
+
+const shellExecutablePositions = (options: ShellExecutablePositionsOptions) =>
+  new ShellExecutablePositionState(options).scan();
 
 const shellInvocationGates = ({
   command,
   matches,
   propagation,
+  knownRunner,
+  onUnresolved,
 }: ShellInvocationGatesOptions): boolean => {
   const pipefail = propagation?.pipefail ?? true;
   const scriptErrexit = propagation?.errexit ?? true;
   const tokens = shellTokens(command.replaceAll(/\\\r?\n/gu, " "));
   const words = tokens.map(({ value }) => value);
+  const { positions: executablePositions, findings } = shellExecutablePositions(
+    {
+      tokens,
+      initialErrexit: scriptErrexit,
+      knownRunner: (invocation) =>
+        directTestRunner(invocation) ||
+        matches(invocation) ||
+        knownRunner?.(invocation) === true,
+    },
+  );
   let errexit = true;
   for (let index = 0; index < words.length; index += 1) {
     if (tokens[index]?.role !== "command") {
+      continue;
+    }
+    if (!executablePositions.has(index)) {
+      if (matches({ words, tokens, index })) {
+        onUnresolved?.(
+          findings.get(index) ??
+            "shell condition: malformed or unresolved compound command",
+        );
+      }
       continue;
     }
     if (words[index] === "set" && words[index + 1] === "+e") {
@@ -841,6 +1318,7 @@ const packageInvocationEnd = ({
 type GatingArgumentsOptions = {
   readonly command: string;
   readonly invocationEnd: (invocation: ShellInvocation) => number | undefined;
+  readonly onUnresolved?: (reason: string) => void;
   readonly propagation?: ShellPropagation;
 };
 
@@ -848,6 +1326,7 @@ const gatingArguments = ({
   command,
   invocationEnd,
   propagation,
+  onUnresolved,
 }: GatingArgumentsOptions): readonly string[][] => {
   const tokens = shellTokens(command.replaceAll(/\\\r?\n/gu, " "));
   const words = tokens.map(({ value }) => value);
@@ -860,6 +1339,7 @@ const gatingArguments = ({
         command,
         matches: ({ index: cursor }) => cursor === index,
         ...(propagation === undefined ? {} : { propagation }),
+        ...(onUnresolved === undefined ? {} : { onUnresolved }),
       })
     ) {
       continue;
@@ -968,8 +1448,10 @@ export const packageTestExecutionFailure = ({
     for (const { command, packageScript } of commands.flatMap(
       (workflowCommand) => rootScriptCommands(workflowCommand, rootScripts),
     )) {
+      const conditions: string[] = [];
       const invocations = gatingArguments({
         command,
+        onUnresolved: (reason) => conditions.push(reason),
         invocationEnd: ({ words, tokens, index }) =>
           packageInvocationEnd({
             words,
@@ -984,6 +1466,9 @@ export const packageTestExecutionFailure = ({
           }),
         ...(packageScript ? { propagation: PACKAGE_SCRIPT_PROPAGATION } : {}),
       });
+      if (conditions.length > 0) {
+        directExecutionFailure += `; ${conditions[0]}`;
+      }
       for (const arguments_ of invocations) {
         if (collection === undefined) {
           return undefined;
@@ -1045,16 +1530,23 @@ export const managedServiceRunnerFailure = ({
   gatingJobs,
 }: ManagedServiceRunnerOptions): string | undefined => {
   const runner = shellWords(command);
-  return gatingCommandExecutionFailure({
+  let condition: string | undefined;
+  const failure = gatingCommandExecutionFailure({
     commandMatches: (candidate) =>
       shellInvocationGates({
         command: candidate,
+        onUnresolved: (reason) => {
+          condition ??= reason;
+        },
         matches: ({ words, index }) =>
           runner.every((word, offset) => words[index + offset] === word),
       }),
     gatingJobs,
     missingMessage: `job condition: no gating job executes the ${gate} runner`,
   });
+  return failure !== undefined && condition !== undefined
+    ? `${failure}; ${condition}`
+    : failure;
 };
 
 type RootCommandOptions = {
@@ -1068,16 +1560,23 @@ export const rootCommandExecutionFailure = ({
   gatingJobs,
 }: RootCommandOptions): string | undefined => {
   const runner = shellWords(command);
-  return gatingCommandExecutionFailure({
+  let condition: string | undefined;
+  const failure = gatingCommandExecutionFailure({
     commandMatches: (candidate) =>
       shellInvocationGates({
         command: candidate,
+        onUnresolved: (reason) => {
+          condition ??= reason;
+        },
         matches: ({ words, index }) =>
           runner.every((word, offset) => words[index + offset] === word),
       }),
     gatingJobs,
     missingMessage: `job condition: no gating job executes ${command}`,
   });
+  return failure !== undefined && condition !== undefined
+    ? `${failure}; ${condition}`
+    : failure;
 };
 
 const packageScripts = (packageFile: string): PackageScripts | undefined => {
@@ -1266,7 +1765,23 @@ const shellTokens = (command: string): ShellToken[] => {
     }
     if (
       commandPosition &&
-      ["{", "}", "then", "else", "elif", "do"].includes(raw)
+      [
+        "{",
+        "}",
+        "if",
+        "then",
+        "else",
+        "elif",
+        "fi",
+        "while",
+        "until",
+        "for",
+        "select",
+        "case",
+        "do",
+        "done",
+        "esac",
+      ].includes(raw)
     ) {
       tokens.push({ value, role: "operator" });
       commandPosition = true;
@@ -1413,6 +1928,53 @@ const testWrapperCollectionFailure = (
   return "runner command: unrecognized test wrapper";
 };
 
+type KnownPackageRunnerOptions = {
+  readonly invocation: ShellInvocation;
+  readonly scripts: PackageScripts;
+  readonly visited: ReadonlySet<string>;
+};
+
+const knownPackageRunner = ({
+  invocation,
+  scripts,
+  visited,
+}: KnownPackageRunnerOptions): boolean => {
+  if (directTestRunner(invocation)) {
+    return true;
+  }
+  const { words, index } = invocation;
+  const name = words[index + 2];
+  if (
+    words[index] !== "bun" ||
+    words[index + 1] !== "run" ||
+    name === undefined ||
+    !name.startsWith("test:") ||
+    visited.has(name)
+  ) {
+    return false;
+  }
+  const body = scripts[name];
+  return (
+    typeof body === "string" &&
+    shellInvocationGates({
+      command: body,
+      propagation: PACKAGE_SCRIPT_PROPAGATION,
+      matches: (child) =>
+        knownPackageRunner({
+          invocation: child,
+          scripts,
+          visited: new Set([...visited, name]),
+        }),
+    })
+  );
+};
+
+const collectablePackageRunner = (words: readonly string[], index: number) =>
+  words[index] === "bun" &&
+  (words[index + 1] === "test" ||
+    words[index + 1]?.endsWith("scripts/run-tests.ts") ||
+    (words[index + 1] === "run" && words[index + 2]?.startsWith("test:")));
+
 export const packageTestCollectionFailure = ({
   forwardedArguments = [],
   candidate,
@@ -1434,13 +1996,21 @@ export const packageTestCollectionFailure = ({
   // Every gating runner in the script counts: the file is collected when any
   // of them collects it, and the first failure is reported only when none do.
   let firstFailure: string | undefined;
+  const conditions: string[] = [];
   for (let index = 0; index < words.length; index += 1) {
     if (
-      words[index] !== "bun" ||
+      !collectablePackageRunner(words, index) ||
       !shellInvocationGates({
         command: normalizedCommand,
         matches: ({ index: cursor }) => cursor === index,
         propagation: PACKAGE_SCRIPT_PROPAGATION,
+        knownRunner: (invocation) =>
+          knownPackageRunner({
+            invocation,
+            scripts,
+            visited: new Set([...visited, scriptName]),
+          }),
+        onUnresolved: (reason) => conditions.push(`runner command: ${reason}`),
       })
     ) {
       continue;
@@ -1504,6 +2074,7 @@ export const packageTestCollectionFailure = ({
   }
   return (
     firstFailure ??
+    conditions.at(0) ??
     "runner command: test script does not invoke a gating test runner"
   );
 };

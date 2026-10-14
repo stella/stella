@@ -404,7 +404,7 @@ context("test registration census", () => {
         packageTestCollectionFailure({
           candidate: "packages/fixture/src/a.test.ts",
           packageDirectory: "packages/fixture",
-          scripts: { test: "echo start | cat && bun test src" },
+          scripts: { test: "true && bun test src" },
         }),
       ).toBeUndefined();
       expect(
@@ -520,7 +520,7 @@ context("test registration census", () => {
       expect(
         packageTestExecutionFailure({
           rootScripts: { check: "bun --filter @stll/fixture test" },
-          gatingJobs: new Map([["checks", ["echo cd && bun run check"]]]),
+          gatingJobs: new Map([["checks", [": cd && bun run check"]]]),
           packageDirectory: "packages/fixture",
           packageName: "@stll/fixture",
           shardedPackages: new Set<string>(),
@@ -792,6 +792,94 @@ context("test registration census", () => {
         gatingJobs: gatingJobs("bun run test:postgres"),
       }),
     ).toBe(
+      "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
+    );
+  });
+
+  check.each([
+    "true",
+    ": literal",
+    "cd packages/fixture",
+    "export FIXTURE=literal",
+    "FIXTURE=literal",
+    "set -e",
+    "set -o pipefail",
+    "bun test unit",
+  ])("credits a runner after a known safe prefix: %s", (prefix) => {
+    expect(
+      rootCommandExecutionFailure({
+        command: "bun scripts/test-gate.ts",
+        gatingJobs: new Map([
+          ["checks", [`${prefix} && bun scripts/test-gate.ts`]],
+        ]),
+      }),
+    ).toBeUndefined();
+  });
+
+  check("does not trust a delegated script that only prints a runner", () => {
+    expect(
+      packageTestCollectionFailure({
+        candidate: "packages/fixture/integration/a.test.ts",
+        packageDirectory: "packages/fixture",
+        scripts: {
+          test: "bun run test:setup && bun test integration",
+          "test:setup": "echo bun test",
+        },
+      }),
+    ).toBeDefined();
+  });
+
+  check.each([
+    "false && RUNNER",
+    "false && FIXTURE=literal && RUNNER",
+    'X="$VALUE" Y=literal && RUNNER',
+    'if [ -n "$X" ]; then exit 0; fi; RUNNER',
+    '[ -n "$X" ] && RUNNER',
+    "unknown-cmd && RUNNER",
+    "false | true && RUNNER",
+    "unknown-cmd | true && RUNNER",
+    "if unknown-cmd; true; then RUNNER; fi",
+    "$COMMAND && RUNNER",
+    'cd "$DIRECTORY" && RUNNER',
+    'X="$VALUE" && RUNNER',
+    "$(unknown-cmd) && RUNNER",
+    'case "$SUBJECT" in ready) RUNNER;; esac',
+    "true || RUNNER",
+    "if false; then RUNNER; fi",
+    'if [ "$CONDITION" = yes ]; then RUNNER; fi',
+    "if check-condition; then RUNNER; fi",
+    "case ready in waiting) RUNNER;; esac",
+    "while false; do RUNNER; done",
+    "until true; do RUNNER; done",
+    "for item in; do RUNNER; done",
+    "false\nRUNNER",
+    "false; RUNNER",
+  ])("does not credit a runner in a skipped shell branch: %s", (shape) => {
+    const gatingJobs = (runner: string) =>
+      new Map([["checks", [shape.replace("RUNNER", () => runner)]]]);
+    expect(
+      packageTestExecutionFailure({
+        gatingJobs: gatingJobs("bun --filter @stll/orphan test"),
+        packageDirectory: "packages/orphan",
+        packageName: "@stll/orphan",
+        shardedPackages: new Set<string>(),
+      }),
+    ).toContain("job condition: no gating job executes @stll/orphan test");
+    expect(
+      rootCommandExecutionFailure({
+        command: "bun scripts/test-gate.ts",
+        gatingJobs: gatingJobs("bun scripts/test-gate.ts"),
+      }),
+    ).toContain(
+      "job condition: no gating job executes bun scripts/test-gate.ts",
+    );
+    expect(
+      managedServiceRunnerFailure({
+        command: "bun run test:postgres",
+        gate: "STELLA_RUN_POSTGRES_TESTS",
+        gatingJobs: gatingJobs("bun run test:postgres"),
+      }),
+    ).toContain(
       "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
     );
   });

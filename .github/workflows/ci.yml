@@ -2904,8 +2904,8 @@ jobs:
             mapfile -t files < "$RUNNER_TEMP/tauri-changed-files"
             required=$(bun scripts/check-tauri-package-alignment.ts --requires-check "${files[@]}")
           fi
+          bun test scripts/check-tauri-package-alignment.test.ts
           if [[ "$required" == true ]]; then
-            bun test scripts/check-tauri-package-alignment.test.ts
             bun scripts/check-tauri-package-alignment.ts
           fi
 
