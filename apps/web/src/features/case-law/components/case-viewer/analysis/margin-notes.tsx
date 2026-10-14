@@ -13,7 +13,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Building2Icon, LockIcon, Trash2Icon } from "@stll/ui/icons";
+import { Building2Icon, LockIcon, PenIcon, Trash2Icon } from "@stll/ui/icons";
 import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
@@ -67,6 +67,8 @@ export type CommentMarginItem = {
   mine: boolean;
   visibility: "private" | "shared";
   onDelete: () => void;
+  /** Rewrites the comment's words; absent where a comment is not editable. */
+  onEdit?: ((body: string) => void) | undefined;
   onToggleVisibility: () => void;
 };
 
@@ -75,6 +77,9 @@ export type ComposerMarginItem = {
   kind: "composer";
   id: string;
   startAnchorId: string;
+  /** The words and audience the composer opens with, when editing. */
+  initialBody?: string | undefined;
+  initialVisibility?: "private" | "shared" | undefined;
   onCancel: () => void;
   onSubmit: (body: string, visibility: "private" | "shared") => void;
 };
@@ -613,8 +618,10 @@ const ComposerNote = ({
 }) => {
   const t = useTranslations();
   const position = notePlacementPresentation(placement);
-  const [body, setBody] = useState("");
-  const [visibility, setVisibility] = useState<"private" | "shared">("private");
+  const [body, setBody] = useState(item.initialBody ?? "");
+  const [visibility, setVisibility] = useState<"private" | "shared">(
+    item.initialVisibility ?? "private",
+  );
   const shared = visibility === "shared";
   const visibilityLabel = shared
     ? t("legalReader.annotations.visibilityShared")
@@ -717,8 +724,36 @@ const CommentNote = ({
   presence,
 }: NoteProps<CommentMarginItem>) => {
   const t = useTranslations();
+  const [editing, setEditing] = useState(false);
   const shared = item.visibility === "shared";
   const position = notePlacementPresentation(placement);
+  const onEdit = item.onEdit;
+
+  if (editing && onEdit !== undefined) {
+    return (
+      <ComposerNote
+        item={{
+          id: item.id,
+          kind: "composer",
+          startAnchorId: item.startAnchorId,
+          initialBody: item.text,
+          initialVisibility: item.visibility,
+          onCancel: () => setEditing(false),
+          onSubmit: (body, visibility) => {
+            if (body !== item.text) {
+              onEdit(body);
+            }
+            if (visibility !== item.visibility) {
+              item.onToggleVisibility();
+            }
+            setEditing(false);
+          },
+        }}
+        measureRef={measureRef}
+        placement={placement}
+      />
+    );
+  }
 
   const stripe =
     presence === "dimmed"
@@ -814,6 +849,21 @@ const CommentNote = ({
               <Building2Icon className="size-3" />
             )}
           </Tooltip>
+          {onEdit !== undefined && (
+            <Tooltip
+              content={t("common.edit")}
+              render={
+                <button
+                  aria-label={t("common.edit")}
+                  className="text-foreground-disabled hover:text-foreground rounded-sm p-0.5"
+                  onClick={() => setEditing(true)}
+                  type="button"
+                />
+              }
+            >
+              <PenIcon className="size-3" />
+            </Tooltip>
+          )}
           <Tooltip
             content={t("common.delete")}
             render={

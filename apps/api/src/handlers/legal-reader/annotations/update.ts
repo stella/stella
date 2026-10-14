@@ -11,8 +11,14 @@ import {
   updateAnnotationBodySchema,
 } from "@/api/handlers/legal-reader/annotations/schema";
 import type { UpdateAnnotationBody } from "@/api/handlers/legal-reader/annotations/schema";
-import { annotationAuditResourceType } from "@/api/handlers/legal-reader/annotations/target";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
+import {
+  annotationAuditSubject,
+  DOCUMENT_ANNOTATION_REACH,
+} from "@/api/handlers/legal-reader/annotations/target";
+import type {
+  AnnotationAuthorScope,
+  AnnotationReach,
+} from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
@@ -71,12 +77,15 @@ const changesFor = (
 type UpdateReaderAnnotationProps = AnnotationAuthorScope & {
   annotationId: SafeId<"legalReaderAnnotation">;
   change: UpdateAnnotationBody;
+  /** The marks the calling route may change. */
+  reach: AnnotationReach;
 };
 
 export const updateReaderAnnotationHandler = async function* ({
   annotationId,
   change: body,
   organizationId,
+  reach,
   recordAuditEvent,
   safeDb,
   userId,
@@ -90,22 +99,34 @@ export const updateReaderAnnotationHandler = async function* ({
           wholeAnnotationSql({
             annotationId,
             organizationId,
+            reach,
             userId,
           }),
         )
         .returning({
           id: legalReaderAnnotations.id,
           targetType: legalReaderAnnotations.targetType,
+          verificationClaimId: legalReaderAnnotations.verificationClaimId,
+          verificationRunId: legalReaderAnnotations.verificationRunId,
+          workspaceId: legalReaderAnnotations.workspaceId,
         });
       const first = mutatedRows.at(0);
       if (first !== undefined) {
+        const subject = annotationAuditSubject({
+          annotationId,
+          targetType: requireAnnotationTargetType(first.targetType),
+          verificationClaimId: first.verificationClaimId,
+          verificationRunId: first.verificationRunId,
+          workspaceId: first.workspaceId,
+        });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,
-          resourceType: annotationAuditResourceType(
-            requireAnnotationTargetType(first.targetType),
-          ),
-          resourceId: annotationId,
-          metadata: { change: body.change },
+          resourceType: subject.resourceType,
+          resourceId: subject.resourceId,
+          ...(subject.workspaceId === undefined
+            ? {}
+            : { workspaceId: subject.workspaceId }),
+          metadata: { ...subject.metadata, change: body.change },
         });
       }
       return mutatedRows;
@@ -135,6 +156,7 @@ const updateReaderAnnotation = createSafeRootHandler(
       annotationId,
       change: body,
       organizationId: session.activeOrganizationId,
+      reach: DOCUMENT_ANNOTATION_REACH,
       recordAuditEvent,
       safeDb,
       userId: user.id,

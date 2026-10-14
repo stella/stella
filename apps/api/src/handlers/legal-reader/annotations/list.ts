@@ -1,9 +1,10 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-annotations";
+import type { ReaderAnnotationTargetType } from "@stll/api-contract/legal-reader-annotations";
 
 import { member, user } from "@/api/db/auth-schema";
 import { legalReaderAnnotations } from "@/api/db/schema";
@@ -12,7 +13,10 @@ import {
   annotationTargetTypeSchema,
   requireAnnotationTargetType,
 } from "@/api/handlers/legal-reader/annotations/schema";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
+import type {
+  AnnotationAuthorScope,
+  VerificationClaimRef,
+} from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import {
@@ -87,6 +91,10 @@ const UNPROJECTED_ANNOTATION_COLUMNS = [
   // The document the caller named in the query; echoing it repeats the ask.
   "targetId",
   "targetType",
+  // A claim comment's matter, run and claim: the caller named the claim.
+  "workspaceId",
+  "verificationRunId",
+  "verificationClaimId",
 ] as const satisfies readonly (keyof AnnotationRow)[];
 
 type MissingProjectedAnnotationColumn = UnprojectedColumns<
@@ -114,7 +122,14 @@ type ListReaderAnnotationsProps = Omit<
   AnnotationAuthorScope,
   "recordAuditEvent"
 > & {
-  query: Static<typeof querySchema>;
+  query: Omit<Static<typeof querySchema>, "targetType"> & {
+    targetType: ReaderAnnotationTargetType;
+  };
+  /**
+   * The claim a `verification-claim` listing reads, from the matter route's
+   * authorized context; absent for every other target.
+   */
+  verificationClaim?: VerificationClaimRef;
 };
 
 export const listReaderAnnotationsHandler = async function* ({
@@ -122,18 +137,31 @@ export const listReaderAnnotationsHandler = async function* ({
   query,
   safeDb,
   userId,
+  verificationClaim,
 }: ListReaderAnnotationsProps) {
+  const targetType = requireAnnotationTargetType(query.targetType);
+  if (
+    (targetType === "verification-claim") !==
+      (verificationClaim !== undefined) ||
+    (verificationClaim !== undefined &&
+      verificationClaim.claimId !== query.targetId)
+  ) {
+    return panic("A claim listing must name the claim its matter route read");
+  }
   const limit = normalizeTenantPageLimit(
     query.limit ?? LIMITS.readerAnnotationsPageSizeDefault,
   );
   const conditions = [
     eq(legalReaderAnnotations.organizationId, organizationId),
-    eq(
-      legalReaderAnnotations.targetType,
-      requireAnnotationTargetType(query.targetType),
-    ),
+    eq(legalReaderAnnotations.targetType, targetType),
     eq(legalReaderAnnotations.targetId, query.targetId),
   ];
+  if (verificationClaim !== undefined) {
+    conditions.push(
+      eq(legalReaderAnnotations.workspaceId, verificationClaim.workspaceId),
+      eq(legalReaderAnnotations.verificationRunId, verificationClaim.runId),
+    );
+  }
 
   if (query.cursor) {
     const cursor = annotationCursor.decode(query.cursor);

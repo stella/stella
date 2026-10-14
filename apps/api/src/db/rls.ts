@@ -594,6 +594,39 @@ export const authoredNotePolicies = () => [
   }),
 ];
 
+/**
+ * A reader's own notes, some of which belong to a matter. A note without a
+ * workspace is an organization note exactly as in `authoredNotePolicies`; one
+ * with a workspace is reachable only while the caller may open that matter
+ * and `matterRowCheck` (the row the note sits on) admits it, so the matter's
+ * walls bind every author, a shared note included.
+ */
+export const authoredOptionalMatterNotePolicies = (matterRowCheck: SQL) => {
+  const scope = sql`${organizationCheck} AND (workspace_id IS NULL OR (${workspaceCheck} AND ${matterRowCheck}))`;
+  return [
+    p.pgPolicy("organization_select", {
+      for: "select",
+      to: stella,
+      using: sql`${scope} AND (visibility = 'shared' OR ${userCheck})`,
+    }),
+    p.pgPolicy("author_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${scope} AND ${userCheck}`,
+    }),
+    p.pgPolicy("author_update", {
+      for: "update",
+      to: stella,
+      using: sql`${scope} AND ${userCheck}`,
+    }),
+    p.pgPolicy("author_delete", {
+      for: "delete",
+      to: stella,
+      using: sql`${scope} AND ${userCheck}`,
+    }),
+  ];
+};
+
 const organizationOptionalWorkspaceCheck = sql`(
   ${organizationCheck} AND
   (workspace_id IS NULL OR ${workspaceCheck})

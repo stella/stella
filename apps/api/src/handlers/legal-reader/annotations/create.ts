@@ -11,9 +11,12 @@ import {
   requireAnnotationTargetType,
   requireAnnotationVisibility,
 } from "@/api/handlers/legal-reader/annotations/schema";
-import type { CreateAnnotationBody } from "@/api/handlers/legal-reader/annotations/schema";
-import { annotationAuditResourceType } from "@/api/handlers/legal-reader/annotations/target";
-import type { AnnotationAuthorScope } from "@/api/handlers/legal-reader/annotations/target";
+import type { CreateAnnotationRequest } from "@/api/handlers/legal-reader/annotations/schema";
+import { annotationAuditSubject } from "@/api/handlers/legal-reader/annotations/target";
+import type {
+  AnnotationAuthorScope,
+  VerificationClaimRef,
+} from "@/api/handlers/legal-reader/annotations/target";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
@@ -30,7 +33,7 @@ const config = {
   body: createAnnotationBodySchema,
 } satisfies HandlerConfig;
 
-const annotationVisibility = ({ visibility }: CreateAnnotationBody) =>
+const annotationVisibility = ({ visibility }: CreateAnnotationRequest) =>
   requireAnnotationVisibility(visibility ?? "private");
 
 /**
@@ -41,7 +44,12 @@ const annotationVisibility = ({ visibility }: CreateAnnotationBody) =>
  * never from the request.
  */
 type CreateReaderAnnotationProps = AnnotationAuthorScope & {
-  body: CreateAnnotationBody;
+  body: CreateAnnotationRequest;
+  /**
+   * The claim a `verification-claim` request comments on, read by the matter
+   * route under the caller's scope; absent for every other target.
+   */
+  verificationClaim?: VerificationClaimRef;
 };
 
 export const createReaderAnnotationHandler = async function* ({
@@ -50,7 +58,17 @@ export const createReaderAnnotationHandler = async function* ({
   recordAuditEvent,
   safeDb,
   userId,
+  verificationClaim,
 }: CreateReaderAnnotationProps) {
+  const targetType = requireAnnotationTargetType(body.targetType);
+  if (
+    (targetType === "verification-claim") !==
+      (verificationClaim !== undefined) ||
+    (verificationClaim !== undefined &&
+      verificationClaim.claimId !== body.targetId)
+  ) {
+    return panic("A claim comment must name the claim its matter route read");
+  }
   if (body.spans.some((span) => span.endOffset <= span.startOffset)) {
     return Result.err(
       new HandlerError({
@@ -60,7 +78,6 @@ export const createReaderAnnotationHandler = async function* ({
     );
   }
 
-  const targetType = requireAnnotationTargetType(body.targetType);
   const targetId = body.targetId;
   const groupId =
     body.spans.length > 1 ? (body.requestId ?? randomUUIDv7()) : null;
@@ -76,6 +93,9 @@ export const createReaderAnnotationHandler = async function* ({
         userId,
         targetType,
         targetId,
+        workspaceId: verificationClaim?.workspaceId ?? null,
+        verificationRunId: verificationClaim?.runId ?? null,
+        verificationClaimId: verificationClaim?.claimId ?? null,
         groupId,
         kind: body.kind,
         visibility,
@@ -173,11 +193,22 @@ export const createReaderAnnotationHandler = async function* ({
       }
       const first = mutatedRows.at(0);
       if (first !== undefined) {
+        const subject = annotationAuditSubject({
+          annotationId: first.id,
+          targetType,
+          verificationClaimId: verificationClaim?.claimId ?? null,
+          verificationRunId: verificationClaim?.runId ?? null,
+          workspaceId: verificationClaim?.workspaceId ?? null,
+        });
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
-          resourceType: annotationAuditResourceType(targetType),
-          resourceId: first.id,
+          resourceType: subject.resourceType,
+          resourceId: subject.resourceId,
+          ...(subject.workspaceId === undefined
+            ? {}
+            : { workspaceId: subject.workspaceId }),
           metadata: {
+            ...subject.metadata,
             targetId,
             targetType,
             kind: body.kind,

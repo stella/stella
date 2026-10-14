@@ -75,7 +75,7 @@ type ReaderAnnotations = {
  * the reader picks a colour. One row per paragraph, under one group when
  * there are several, as the server lays them out.
  */
-const pendingRows = ({
+export const pendingRows = ({
   author,
   input,
   stamp,
@@ -111,7 +111,7 @@ const pendingRows = ({
 };
 
 /** The rows one change reaches: the whole group of the named row. */
-const rowsOfSame = (
+export const rowsOfSame = (
   rows: readonly ReaderAnnotation[],
   id: string,
 ): ((row: ReaderAnnotation) => boolean) => {
@@ -123,7 +123,7 @@ const rowsOfSame = (
       row.groupId === target.groupId);
 };
 
-const applyChange = (
+export const applyChange = (
   row: ReaderAnnotation,
   change: UpdateAnnotationInput,
 ): ReaderAnnotation => {
