@@ -11,7 +11,9 @@ import {
   claimPageNumbers,
   locateClaimsOnPages,
   resolvePdfClaimLocations,
+  selectionVisitKey,
   translatePageRange,
+  visitSelection,
 } from "@/features/avt/original-pdf.logic";
 import type { VerificationRun } from "@/features/avt/types";
 import { extractPDFPageSearchTexts } from "@/lib/pdf/pdf-search";
@@ -244,6 +246,26 @@ describe("resolvePdfClaimLocations", () => {
         claims: onPage,
       }),
     ).toEqual({ located: [], unlocated: [claimId(1)] });
+  });
+});
+
+// The PDF viewer does not render pages under happy-dom, so the scroll-once
+// rule is held here, on the visit keys the drawn box compares.
+describe("selection visits", () => {
+  test("A, then an unlocated claim, then A again shows A's box anew", () => {
+    const first = { id: "A", serial: 0 };
+    const unlocated = visitSelection(first, "U");
+    const again = visitSelection(unlocated, "A");
+    expect(selectionVisitKey(again)).not.toBe(selectionVisitKey(first));
+    expect(selectionVisitKey(unlocated)).not.toBe(selectionVisitKey(first));
+  });
+
+  test("the same selection redrawn keeps its visit, so it is not shown twice", () => {
+    const first = { id: "A", serial: 0 };
+    expect(visitSelection(first, "A")).toBe(first);
+    expect(selectionVisitKey(visitSelection(first, "A"))).toBe(
+      selectionVisitKey(first),
+    );
   });
 });
 

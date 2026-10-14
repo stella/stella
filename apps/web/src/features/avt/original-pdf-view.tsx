@@ -9,6 +9,8 @@
  * they stay one click away.
  */
 
+import * as React from "react";
+
 import { useQuery } from "@tanstack/react-query";
 
 import { textMarkBoxClass } from "@stll/ui/text-mark";
@@ -20,8 +22,13 @@ import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import {
   claimPageNumbers,
   resolvePdfClaimLocations,
+  selectionVisitKey,
+  visitSelection,
 } from "@/features/avt/original-pdf.logic";
-import type { LocatedPdfClaim } from "@/features/avt/original-pdf.logic";
+import type {
+  LocatedPdfClaim,
+  SelectionVisit,
+} from "@/features/avt/original-pdf.logic";
 import { originalPdfPagesOptions } from "@/features/avt/queries";
 import { STATE_COLOR } from "@/features/avt/state-chip";
 import type { VerificationClaim, VerificationRun } from "@/features/avt/types";
@@ -31,24 +38,25 @@ import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
 
 const CLAIM_ATTRIBUTE = "data-avt-claim";
 const ROOT_ATTRIBUTE = "data-avt-original-pdf";
-/** The claim last brought into view, kept on the pane's own element. */
-const SHOWN_ATTRIBUTE = "data-avt-shown-claim";
+/** The selection visit last brought into view, kept on the pane's element. */
+const SHOWN_ATTRIBUTE = "data-avt-shown-visit";
 
 /**
- * Bring the selected claim's box into view once, when it is drawn: a page
- * scrolled away and back does not pull the reader to it again.
+ * Bring the selected claim's box into view once per selection visit, when it
+ * is drawn: a page scrolled away and back within the same visit does not
+ * pull the reader to it again, and selecting the claim anew does.
  */
-const showSelectedOnce = (id: string, element: HTMLElement | null) => {
+const showSelectedOnce = (visitKey: string, element: HTMLElement | null) => {
   const root = element?.closest(`[${ROOT_ATTRIBUTE}]`);
   if (
     element === null ||
     root === null ||
     root === undefined ||
-    root.getAttribute(SHOWN_ATTRIBUTE) === id
+    root.getAttribute(SHOWN_ATTRIBUTE) === visitKey
   ) {
     return;
   }
-  root.setAttribute(SHOWN_ATTRIBUTE, id);
+  root.setAttribute(SHOWN_ATTRIBUTE, visitKey);
   element.scrollIntoView({ block: "nearest", inline: "nearest" });
 };
 
@@ -106,6 +114,17 @@ export const OriginalPdfView = ({
     return claim === undefined ? [] : [claim];
   });
 
+  // Each change of selection is a new visit, adjusted during render.
+  const [visit, setVisit] = React.useState<SelectionVisit>({
+    id: selected,
+    serial: 0,
+  });
+  const nextVisit = visitSelection(visit, selected);
+  if (nextVisit !== visit) {
+    setVisit(nextVisit);
+  }
+  const visitKey = selectionVisitKey(nextVisit);
+
   const renderClaimMarks = (pageId: string) => (
     <ClaimPageMarks
       claimById={claimById}
@@ -113,6 +132,7 @@ export const OriginalPdfView = ({
       markOf={markOf}
       pageId={pageId}
       selected={selected}
+      visitKey={visitKey}
     />
   );
 
@@ -133,7 +153,10 @@ export const OriginalPdfView = ({
           const claim = claims.find((candidate) => candidate.id === id);
           if (claim !== undefined) {
             // A claim picked by its box is already in view.
-            event.currentTarget.setAttribute(SHOWN_ATTRIBUTE, claim.id);
+            event.currentTarget.setAttribute(
+              SHOWN_ATTRIBUTE,
+              selectionVisitKey(visitSelection(nextVisit, claim.id)),
+            );
             onSelect(claim.id);
           }
         }}
@@ -165,6 +188,8 @@ type ClaimPageMarksProps = {
   locatedByPage: ReadonlyMap<number, readonly LocatedPdfClaim[]>;
   claimById: ReadonlyMap<ClaimId, VerificationClaim>;
   selected: ClaimId | null;
+  /** The current selection visit, which the selected box shows once. */
+  visitKey: string;
   markOf: (claim: VerificationClaim) => OriginalClaimMark;
 };
 
@@ -177,6 +202,7 @@ const ClaimPageMarks = ({
   locatedByPage,
   claimById,
   selected,
+  visitKey,
   markOf,
 }: ClaimPageMarksProps) => {
   const page = usePDFStore((state) => state.pages.get(pageId));
@@ -230,7 +256,7 @@ const ClaimPageMarks = ({
               ref={
                 active && boxIndex === 0
                   ? (element: HTMLDivElement | null) => {
-                      showSelectedOnce(claim.id, element);
+                      showSelectedOnce(visitKey, element);
                     }
                   : undefined
               }

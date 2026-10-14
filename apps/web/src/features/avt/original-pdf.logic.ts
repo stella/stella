@@ -111,6 +111,25 @@ export const claimPageNumbers = (
     ),
   ].toSorted((a, b) => a - b);
 
+/**
+ * One stretch of the same selection. Every change of selection starts a new
+ * visit, even back to a claim selected before, so its box is brought into
+ * view again; a page redrawn within one visit is not.
+ */
+export type SelectionVisit = { id: string | null; serial: number };
+
+export const visitSelection = (
+  previous: SelectionVisit,
+  selected: string | null,
+): SelectionVisit =>
+  previous.id === selected
+    ? previous
+    : { id: selected, serial: previous.serial + 1 };
+
+/** The key a visit's box is brought into view under, once. */
+export const selectionVisitKey = ({ id, serial }: SelectionVisit): string =>
+  `${String(serial)}:${id ?? ""}`;
+
 type ResolvePdfClaimLocationsArgs = Omit<LocateClaimsOnPagesArgs, "pages"> & {
   /** The page texts once read; undefined while reading or skipped. */
   pages: ReadonlyMap<number, PageSearchText> | undefined;
