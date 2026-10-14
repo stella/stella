@@ -40,6 +40,7 @@ export const REVIEW_RESET_SWEEP = [
   ["correspondence_drop_logs", "generic"],
   ["correspondence_filers", "generic"],
   ["desktop_presence", "generic"],
+  ["desktop_time_entry_batches", "generic"],
   ["document_processing_runs", "generic"],
   ["document_reference_counters", "generic"],
   ["document_review_findings", "generic"],

@@ -6,6 +6,7 @@ import { entities, extractedContent, fields } from "@/api/db/schema";
 import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { flowOwnedEntityVisibilitySql } from "@/api/lib/flows/visibility";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -57,6 +58,7 @@ import {
   DEFAULT_COMPAT_SEARCH_LIMIT,
   ensureWorkspaceAccess,
   errorResult,
+  internalFailureResult,
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
@@ -659,7 +661,10 @@ const handleCompatFetchTool: McpToolHandler<
   );
 
   if (entityResult.isErr()) {
-    return notFoundResult("Document not found or not accessible");
+    const error = entityResult.error;
+    return HandlerError.is(error) && error.status === 404
+      ? notFoundResult("Document not found or not accessible")
+      : internalFailureResult(error);
   }
 
   let url = buildMatterUrl(fetchPayload.workspaceId);

@@ -34,8 +34,8 @@ test("retains a task linked to an active review before the deletion fence", asyn
       expect((await fixture.read()).steps.at(0)?.reviewTaskEntityId).toBeNull();
       let linked = false;
       const baseSafeDb = fixture.safeDb(database);
-      // Schedule the real link write when deletion starts acquiring its fences:
-      // the earlier admission snapshot has already returned in the old path.
+      // Schedule the real link write when deletion starts acquiring its fences,
+      // after admission has been read; the link must still keep the task.
       const safeDb: SafeDb = async (work, retry) =>
         await baseSafeDb(
           async (tx) =>
