@@ -66,9 +66,14 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
         `CREATE TABLE ${schema}.case_law_sources (LIKE public.case_law_sources INCLUDING ALL)`,
       ),
     );
+    // Temporary on purpose: VACUUM only marks pages all-visible behind the
+    // oldest snapshot held by any session in the database, so a shared table
+    // loses its index-only plan whenever another suite has a transaction open.
+    // A temporary table's horizon ignores other sessions, and the single pooled
+    // connection keeps it alive for the whole suite.
     await db.execute(
       sql.raw(
-        `CREATE TABLE ${schema}.case_law_decisions (LIKE public.case_law_decisions INCLUDING ALL)`,
+        `CREATE TEMPORARY TABLE case_law_decisions (LIKE public.case_law_decisions INCLUDING ALL)`,
       ),
     );
     await db.execute(sql.raw(`SET search_path TO ${schema}, public`));

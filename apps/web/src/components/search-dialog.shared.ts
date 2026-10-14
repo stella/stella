@@ -37,7 +37,13 @@ export const TIME_PRESET_TRANSLATION_KEYS = {
   year: "search.updatedWithinOptions.year",
 } as const satisfies Record<TimePreset, TranslationKey>;
 
-export type FacetBucket = { value: string; label?: string; count: number };
+export type FacetBucket = {
+  value: string;
+  label?: string;
+  count: number;
+  /** Replaces the bare count when the number needs words to read right. */
+  countLabel?: string;
+};
 
 export const EMPTY_FACET_BUCKETS: readonly FacetBucket[] = [];
 export const EMPTY_SEARCH_HITS: readonly GlobalSearchHit[] = [];

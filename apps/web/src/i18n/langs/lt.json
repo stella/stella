@@ -363,6 +363,8 @@
       "chooseList": "Pasirinkti sąrašą",
       "createList": "Sukurti sąrašą",
       "evidenceList": "Faktai iš",
+      "loadSample": "Įkelti pavyzdinę bylą",
+      "loadSampleFailed": "Nepavyko įkelti pavyzdinės bylos",
       "noLists": "Šioje byloje nėra sąrašų.",
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
     }
@@ -4517,6 +4519,8 @@
   },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
+    "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
     "dateTo": "Iki",

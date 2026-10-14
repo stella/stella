@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 3,
+  "reason": "No throw is added in apps/web/src/lib/files/queries.ts. The line counter strips string literals before comments, so the apostrophe in the filesKeys comment hides its closing */ and the three existing APIError throws after it; the new doc comment's */ closes that span and the counter sees them again."
+}
