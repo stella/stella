@@ -365,12 +365,14 @@ describe("deferred scout emission recovery", () => {
     const hearingId = await seedHearing();
     await enrol();
     // The emitter reinserts its intent before its admission check, after recovery's precheck.
+    // The revocation stands in for another actor, so it runs with the fixture
+    // owner's rights rather than the scoped system role writing the intent.
     await db.execute(sql`CREATE FUNCTION scout_recovery_test_revoke_hearing() RETURNS trigger AS $$
       BEGIN
         DELETE FROM feature_enrolments WHERE organization_id = NEW.organization_id AND feature_id = 'signals';
         RETURN NEW;
       END;
-    $$ LANGUAGE plpgsql`);
+    $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public`);
     await db.execute(
       sql`CREATE TRIGGER scout_recovery_test_revoke_hearing BEFORE INSERT ON pending_scout_emissions FOR EACH ROW WHEN (NEW.source_kind = 'infosoud-hearing') EXECUTE FUNCTION scout_recovery_test_revoke_hearing()`,
     );

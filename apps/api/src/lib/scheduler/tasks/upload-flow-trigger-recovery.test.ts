@@ -241,18 +241,19 @@ describe("durable upload-trigger recovery", () => {
       workspaceId,
       fileName: "fixture.PDF",
     };
-    await recordUploadTriggeredFlowIntents(
-      asTestRaw<Parameters<typeof recordUploadTriggeredFlowIntents>[0]>(
-        database,
-      ),
-      upload,
-    );
-    await recordUploadTriggeredFlowIntents(
-      asTestRaw<Parameters<typeof recordUploadTriggeredFlowIntents>[0]>(
-        database,
-      ),
-      upload,
-    );
+    // Recording runs inside the upload's own transaction, never on the pool.
+    const recordInTransaction = async () =>
+      await database.transaction(
+        async (tx) =>
+          await recordUploadTriggeredFlowIntents(
+            asTestRaw<Parameters<typeof recordUploadTriggeredFlowIntents>[0]>(
+              tx,
+            ),
+            upload,
+          ),
+      );
+    await recordInTransaction();
+    await recordInTransaction();
     const receipts = await receiptsFor(entityId);
     expect(
       receipts.filter((receipt) => receipt.definitionId === definitionId),

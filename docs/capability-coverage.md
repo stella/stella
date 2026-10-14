@@ -161,6 +161,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `entities.stamps.check` | read | stella:read | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. No JSON-transport alternative: the lookup reads a reference out of the supplied document's bytes; no capability accepts the reference on its own |
 | `entities.summaries.count` | read | stella:read | — | covered by `list_documents` |
 | `entities.summaries.list` | read | stella:read | — | covered by `list_documents` |
+| `entities.transfer-eligibility.get` | read | stella:read | — | covered by `list_documents` |
 | `entities.upload` | write | stella:documents_write | — | not runnable over the generic transport: requires a file in `file`, which JSON cannot carry. Use uploads.create then uploads.update instead: presign with purpose entity_create, PUT the bytes to the returned URL, then finalize |
 | `entities.versions.delete` | write, destructive | stella:documents_write | — | covered by `delete_document` |
 | `entities.versions.description.update` | write | stella:documents_write | — | covered by `save_document` |

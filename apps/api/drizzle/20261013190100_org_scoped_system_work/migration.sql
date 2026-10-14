@@ -21,6 +21,8 @@ GRANT SELECT ON TABLE
   public."organization", public."member", public."document_review_findings", public."feature_enrolments"
 TO stella_system;
 --> statement-breakpoint
+-- Contact writes fire the invoker-rights sanctions mark upsert triggers, so the
+-- marks table is written whenever contacts are.
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   public."contacts", public."workspaces", public."workspace_members", public."entities",
   public."entity_versions", public."fields", public."task_assignees", public."desktop_edit_sessions",
@@ -30,7 +32,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   public."work_obligations", public."pdf_signing_sessions", public."work_obligation_events", public."time_entries",
   public."search_projection_repair_queue", public."search_history_entries", public."search_history_owners", public."search_history_tombstones",
   public."mcp_user_connections", public."mcp_oauth_state", public."sharepoint_connections", public."sharepoint_oauth_state",
-  public."invitation"
+  public."invitation", public."sanctions_contact_marks"
 TO stella_system;
 --> statement-breakpoint
 -- stella-migration-safety: reviewed grant-privileges - The login may select a NOLOGIN, NOBYPASSRLS organization-scoped system role for row-proven owner work.
@@ -57,7 +59,8 @@ BEGIN
       ('work_obligation_events', 'write'), ('time_entries', 'write'), ('search_projection_repair_queue', 'write'),
       ('search_history_entries', 'write'), ('search_history_owners', 'write'), ('search_history_tombstones', 'write'),
       ('mcp_user_connections', 'write'), ('mcp_oauth_state', 'write'),
-      ('sharepoint_connections', 'write'), ('sharepoint_oauth_state', 'write'), ('invitation', 'write')
+      ('sharepoint_connections', 'write'), ('sharepoint_oauth_state', 'write'), ('invitation', 'write'),
+      ('sanctions_contact_marks', 'write')
     ) AS owned(table_name, access_mode)
   LOOP
     IF target.table_name = 'organization' THEN

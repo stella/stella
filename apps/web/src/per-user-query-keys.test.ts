@@ -122,7 +122,7 @@ const FEATURE_VISIBILITY =
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
-  "entities/transfer-eligibility.ts": {
+  "entities/transfer-eligibility/get.ts": {
     kind: "keyed",
     calls: ['api.entities()["transfer-eligibility"].post'],
     files: ["lib/workspaces/queries/transfer-eligibility.ts"],

@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { is } from "drizzle-orm";
+import { is, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import {
   boolean,
@@ -279,15 +279,24 @@ const organizationCredentialTables = () => {
 
 const handledMemberTables = async (omittedDelete?: PgTable) => {
   const handled = new Set<string>();
+  const organizationId = mintAuthProviderId<"organization">();
+  const memberId = mintAuthProviderIdValue();
   // Only awaited statements reach this transport; constructing a builder or
   // declaring a cleanup disposition cannot satisfy the guard.
   const database = drizzle(async (query) => {
-    const table = /^(?:delete from|update) "([^"]+)"/u.exec(query)?.at(1);
+    // Counted cleanups wrap their delete in `WITH removed AS (...)`.
+    const table = /^(?:WITH removed AS \()?(?:delete from|update) "([^"]+)"/u
+      .exec(query)
+      ?.at(1);
     if (table !== undefined) {
       handled.add(table);
     }
     if (query.includes("AS aggregate_context")) {
       return { rows: [["fixture_owner", "", "", "", "", ""]] };
+    }
+    // Removal starts from the persisted membership row it is removing.
+    if (query.startsWith('select "organization_id" from "member"')) {
+      return { rows: [[organizationId]] };
     }
     return { rows: query.startsWith("select count(*)") ? [[0]] : [] };
   });
@@ -300,6 +309,14 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
             if (query.includes("advisory_xact_lock")) {
               return aggregateExecutionRows(statement);
             }
+            // Owner writes prove their organization from the locked member row.
+            if (query.includes('AS "organizationId"')) {
+              return [{ organizationId, workspaceId: null, id: memberId }];
+            }
+            if (query.startsWith("WITH removed AS (")) {
+              await target.execute(statement);
+              return [{ count: 0 }];
+            }
             return await target.execute(statement);
           };
         }
@@ -311,17 +328,27 @@ const handledMemberTables = async (omittedDelete?: PgTable) => {
         if (property === "delete") {
           return (table: PgTable) =>
             table === omittedDelete
-              ? { where: async () => [] }
+              ? {
+                  // A declared but never-run cleanup: the counted statement
+                  // still executes, yet deletes nothing from the table.
+                  where: () => ({
+                    returning: (fields: Record<string, SQL>) =>
+                      target
+                        .select(fields)
+                        .from(table)
+                        .where(sql`false`),
+                  }),
+                }
               : target.delete(table);
         }
         return Reflect.get(target, property, receiver);
       },
     });
   await removeOrganizationMemberInTransaction(asTestRaw(createTransaction()), {
-    organizationId: mintAuthProviderId<"organization">(),
+    organizationId,
     userId: mintAuthProviderId<"user">(),
     actorUserId: mintAuthProviderId<"user">(),
-    memberId: mintAuthProviderIdValue(),
+    memberId,
   });
   return handled;
 };

@@ -30,6 +30,10 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createCopyToWorkspace } from "./copy";
 
+// Flow-task admission reads the caller identity; these entities are not
+// flow-linked, so no enrolment is needed.
+const CALLER_IDENTITY = { email: "member@example.test", emailVerified: true };
+
 // Every copy is a real server-side copy inside a real store, so the keys the
 // copy wrote and the keys a rollback returned are read back from it.
 const fileBytes = new TextEncoder().encode("file content");
@@ -421,6 +425,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -607,6 +612,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -746,6 +752,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -884,6 +891,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -1028,6 +1036,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -1164,6 +1173,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -1277,6 +1287,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -1503,6 +1514,7 @@ describe("copy-to-workspace", () => {
       ) => await callback(tx),
     });
     const { safeDb, scopedDb } = createScopedDbMock(transactionFixture, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -1630,6 +1642,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -1782,6 +1795,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -1878,6 +1892,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),
@@ -1929,6 +1944,7 @@ describe("copy-to-workspace", () => {
     };
 
     const { safeDb, scopedDb } = createScopedDbMock(tx, {
+      featureAccess: { identity: CALLER_IDENTITY },
       entityTransferEligibility: [documentId, folderId, childDocId].map(
         (entityId) => ({ entityId, eligible: true }),
       ),

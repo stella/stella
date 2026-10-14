@@ -42,10 +42,10 @@ import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { waitForBlockedPid } from "@/api/tests/helpers/flow-review-gate";
 import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 import {
   DEADLINE_DISPATCH_RECOVERY,

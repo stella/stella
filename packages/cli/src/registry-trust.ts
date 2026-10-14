@@ -523,9 +523,6 @@ export const validateFetchedToolsList = (rawBody: string): TrustResult => {
     featureAccess.output.conditionalInputs ?? {},
   )) {
     for (const schema of Object.values(schemas)) {
-      if (schema === undefined) {
-        continue;
-      }
       if (Buffer.byteLength(JSON.stringify(schema)) > MAX_TOOL_SCHEMA_BYTES) {
         return {
           ok: false,

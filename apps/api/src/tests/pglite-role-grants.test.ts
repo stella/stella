@@ -55,8 +55,11 @@ const CATALOG_VERIFIED_ROLES = new Set([SYSTEM_RLS_ROLE_NAME]);
  */
 const COLUMN_UNSCOPED_ROLES = new Set(["public"]);
 
+// A role-membership grant (`GRANT role TO CURRENT_USER WITH SET TRUE, ...`)
+// ends in a `WITH` option list; without it the lazy body would run on into
+// the next statement's grant and misread its verbs.
 const GRANT_STATEMENT =
-  /\bGRANT\b([\s\S]*?)\bTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)\s*(?:;|$)/gu;
+  /\bGRANT\b([\s\S]*?)\bTO\s+("?[a-zA-Z_][a-zA-Z0-9_]*"?)(?:\s+WITH\s+[^;]*)?\s*(?:;|$)/gu;
 
 const OBJECT_CLAUSE = /\bON\s+(?:TABLE\s+)?([\s\S]*?)$/u;
 

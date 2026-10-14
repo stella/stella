@@ -4,73 +4,73 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## flow_definitions · `flowDefinitions` · flows.ts:59 · rls
+## flow_definitions · `flowDefinitions` · flows.ts:60 · rls
 
 Org-scoped, reusable flow recipe: a linear list of typed `steps` plus a `trigger` describing how runs are kicked off.
 
 ```text
-flow_definitions.id                  pUuid               pk,not null       flows.ts:62
-flow_definitions.organization_id     safeOrganizationId  fk,not null       flows.ts:63
-flow_definitions.name                varchar             not null          flows.ts:66
-flow_definitions.description         text                null              flows.ts:67
-flow_definitions.steps               jsonb               not null          flows.ts:68
-flow_definitions.trigger             jsonb               not null          flows.ts:69
-flow_definitions.enabled             boolean             default,not null  flows.ts:70
-flow_definitions.created_by_user_id  text                fk,null           flows.ts:71
-flow_definitions.created_at          timestamptz         default,not null  flows.ts:74
-flow_definitions.updated_at          timestamptz         default,not null  flows.ts:75
+flow_definitions.id                  pUuid               pk,not null       flows.ts:63
+flow_definitions.organization_id     safeOrganizationId  fk,not null       flows.ts:64
+flow_definitions.name                varchar             not null          flows.ts:67
+flow_definitions.description         text                null              flows.ts:68
+flow_definitions.steps               jsonb               not null          flows.ts:69
+flow_definitions.trigger             jsonb               not null          flows.ts:70
+flow_definitions.enabled             boolean             default,not null  flows.ts:71
+flow_definitions.created_by_user_id  text                fk,null           flows.ts:72
+flow_definitions.created_at          timestamptz         default,not null  flows.ts:75
+flow_definitions.updated_at          timestamptz         default,not null  flows.ts:76
 ```
 
-## flow_upload_trigger_intents · `flowUploadTriggerIntents` · flows.ts:91 · rls
+## flow_upload_trigger_intents · `flowUploadTriggerIntents` · flows.ts:93 · rls
 
 ```text
-flow_upload_trigger_intents.definition_id    safeUuid            not null          flows.ts:94
-flow_upload_trigger_intents.entity_id        safeUuid            not null          flows.ts:95
-flow_upload_trigger_intents.workspace_id     safeWorkspaceId     not null          flows.ts:96
-flow_upload_trigger_intents.organization_id  safeOrganizationId  not null          flows.ts:97
-flow_upload_trigger_intents.file_extension   text                null              flows.ts:98
-flow_upload_trigger_intents.status           text                default,not null  flows.ts:99
-flow_upload_trigger_intents.skip_reason      text                null              flows.ts:103
-flow_upload_trigger_intents.retry_at         timestamptz         default,not null  flows.ts:106
-flow_upload_trigger_intents.created_at       timestamptz         default,not null  flows.ts:107
+flow_upload_trigger_intents.definition_id    safeUuid            not null          flows.ts:96
+flow_upload_trigger_intents.entity_id        safeUuid            not null          flows.ts:97
+flow_upload_trigger_intents.workspace_id     safeWorkspaceId     not null          flows.ts:98
+flow_upload_trigger_intents.organization_id  safeOrganizationId  not null          flows.ts:99
+flow_upload_trigger_intents.file_extension   text                null              flows.ts:100
+flow_upload_trigger_intents.status           text                default,not null  flows.ts:101
+flow_upload_trigger_intents.skip_reason      text                null              flows.ts:105
+flow_upload_trigger_intents.retry_at         timestamptz         default,not null  flows.ts:108
+flow_upload_trigger_intents.created_at       timestamptz         default,not null  flows.ts:109
 ```
 
-## flow_runs · `flowRuns` · flows.ts:183
+## flow_runs · `flowRuns` · flows.ts:194
 
 Workspace-scoped execution record for one flow run.
 
 ```text
-flow_runs.id                   pUuid            pk,not null             flows.ts:186
-flow_runs.workspace_id         safeWorkspaceId  fk,not null             flows.ts:187
-flow_runs.definition_id        safeUuid         fk,null                 flows.ts:193  Nullable + ON DELETE SET NULL: a run must outlive its definition.
-flow_runs.definition_snapshot  jsonb            not null                flows.ts:197
-flow_runs.status               text             default,not null        flows.ts:200
-flow_runs.recovery_state       text             null                    flows.ts:201
-flow_runs.current_step_index   integer          default,not null        flows.ts:202
-flow_runs.trigger_source       jsonb            not null                flows.ts:203
-flow_runs.input_entity_ids     safeUuid         array,default,not null  flows.ts:204
-flow_runs.error                text             null                    flows.ts:208
-flow_runs.started_at           timestamptz      null                    flows.ts:209
-flow_runs.finished_at          timestamptz      null                    flows.ts:210
-flow_runs.created_at           timestamptz      default,not null        flows.ts:211
+flow_runs.id                   pUuid            pk,not null             flows.ts:197
+flow_runs.workspace_id         safeWorkspaceId  fk,not null             flows.ts:198
+flow_runs.definition_id        safeUuid         fk,null                 flows.ts:204  Nullable + ON DELETE SET NULL: a run must outlive its definition.
+flow_runs.definition_snapshot  jsonb            not null                flows.ts:208
+flow_runs.status               text             default,not null        flows.ts:211
+flow_runs.recovery_state       text             null                    flows.ts:212
+flow_runs.current_step_index   integer          default,not null        flows.ts:213
+flow_runs.trigger_source       jsonb            not null                flows.ts:214
+flow_runs.input_entity_ids     safeUuid         array,default,not null  flows.ts:215
+flow_runs.error                text             null                    flows.ts:219
+flow_runs.started_at           timestamptz      null                    flows.ts:220
+flow_runs.finished_at          timestamptz      null                    flows.ts:221
+flow_runs.created_at           timestamptz      default,not null        flows.ts:222
 ```
 
-## flow_run_steps · `flowRunSteps` · flows.ts:265
+## flow_run_steps · `flowRunSteps` · flows.ts:277
 
 One step in a run.
 
 ```text
-flow_run_steps.{...entityFeatureGateColumns()}           spread                             flows.ts:268
-flow_run_steps.{...entityFeatureWorkspaceGateColumns()}  spread                             flows.ts:269
-flow_run_steps.id                                        pUuid            pk,not null       flows.ts:270
-flow_run_steps.workspace_id                              safeWorkspaceId  not null          flows.ts:271
-flow_run_steps.run_id                                    safeUuid         not null          flows.ts:272
-flow_run_steps.index                                     integer          not null          flows.ts:273
-flow_run_steps.kind                                      text             not null          flows.ts:274
-flow_run_steps.status                                    text             default,not null  flows.ts:275
-flow_run_steps.output                                    jsonb            null              flows.ts:279
-flow_run_steps.error                                     text             null              flows.ts:280
-flow_run_steps.review_task_entity_id                     safeUuid         fk,null           flows.ts:290  The task a review gate raises for its reviewer while the run waits.
-flow_run_steps.started_at                                timestamptz      null              flows.ts:294
-flow_run_steps.finished_at                               timestamptz      null              flows.ts:295
+flow_run_steps.{...entityFeatureGateColumns()}           spread                             flows.ts:280
+flow_run_steps.{...entityFeatureWorkspaceGateColumns()}  spread                             flows.ts:281
+flow_run_steps.id                                        pUuid            pk,not null       flows.ts:282
+flow_run_steps.workspace_id                              safeWorkspaceId  not null          flows.ts:283
+flow_run_steps.run_id                                    safeUuid         not null          flows.ts:284
+flow_run_steps.index                                     integer          not null          flows.ts:285
+flow_run_steps.kind                                      text             not null          flows.ts:286
+flow_run_steps.status                                    text             default,not null  flows.ts:287
+flow_run_steps.output                                    jsonb            null              flows.ts:291
+flow_run_steps.error                                     text             null              flows.ts:292
+flow_run_steps.review_task_entity_id                     safeUuid         fk,null           flows.ts:302  The task a review gate raises for its reviewer while the run waits.
+flow_run_steps.started_at                                timestamptz      null              flows.ts:306
+flow_run_steps.finished_at                               timestamptz      null              flows.ts:307
 ```

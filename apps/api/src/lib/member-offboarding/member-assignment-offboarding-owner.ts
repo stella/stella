@@ -8,6 +8,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { invitation, member, organization } from "@/api/db/auth-schema";
 import {
   assertCallerOrg,
+  combineOrgScopes,
   proveOrgScope,
   withOrgScope,
 } from "@/api/db/org-scope";
@@ -86,6 +87,17 @@ type ClearMemberAssignmentsOptions = {
   reassignTo?: SafeId<"user"> | undefined;
   recordAuditEvent?: AuditRecorder | undefined;
 };
+
+/**
+ * Collects the audit events a scoped role produces so they are recorded after
+ * the caller's role and settings are restored.
+ */
+const bufferAuditEvents =
+  (sink: Parameters<AuditRecorder>[1][]): AuditRecorder =>
+  async (_auditTx, events) => {
+    sink.push(events);
+    await Promise.resolve();
+  };
 
 const removalBusy = () =>
   new HandlerError({
@@ -373,10 +385,7 @@ const clearMemberObligationOwners = async ({
                     const changedOwners = [ownedRow].filter(({ entityId }) =>
                       changedIds.has(entityId),
                     );
-                    const recorder = ((_auditTx, events) => {
-                      auditEvents.push(events);
-                      return Promise.resolve();
-                    }) satisfies AuditRecorder;
+                    const recorder = bufferAuditEvents(auditEvents);
                     await recorder(
                       auditTx,
                       changedOwners.map((row) => ({
@@ -953,37 +962,58 @@ const cancelMemberSigningSessions = async ({
         return 0;
       }
       const [, organizationSessions] = next;
-      const held = await lockOpenSigningPage({
+      // Signing sessions force row security and give the table owner no
+      // UPDATE policy, so a row lock taken in the caller's context can see
+      // nothing and silently skip every session. Prove the organization from
+      // the sessions' matters, then lock and close inside that scope.
+      let provenScope: OrgScope | undefined;
+      const provenMatters = new Set<string>();
+      for (const session of organizationSessions) {
+        if (provenMatters.has(session.workspaceId)) {
+          continue;
+        }
+        provenMatters.add(session.workspaceId);
+        // db-await-in-loop: each matter of the bounded page proves its organization once, before any session lock.
+        const proof = await proveOrgScope(tx, {
+          table: "workspaces",
+          where: eq(workspaces.id, session.workspaceId),
+        });
+        if (proof.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        if (provenScope === undefined) {
+          provenScope = proof.value;
+          continue;
+        }
+        const merged = combineOrgScopes(provenScope, proof.value);
+        if (merged.isErr()) {
+          abortTransaction(removalBusy());
+        }
+        provenScope = merged.value;
+      }
+      const organizationScope =
+        provenScope ?? panic("Signing page requires a matter");
+      assertAssignmentScope(organizationScope, scope);
+      const closed: {
+        session: (typeof organizationSessions)[number];
+        auditEvents: Parameters<AuditRecorder>[1][];
+      }[] = [];
+      const heldCount = await withOrgScope({
         tx,
-        sessions: organizationSessions,
-      });
-      const changedCounts = await mapWithConcurrency({
-        items: held,
-        limit: 1,
-        operation: async (session) => {
-          const proof = await proveOrgScope(tx, {
-            table: "pdfSigningSessions",
-            where: sql`${and(
-              eq(pdfSigningSessions.id, session.id),
-              eq(pdfSigningSessions.workspaceId, session.workspaceId),
-              eq(pdfSigningSessions.createdBy, userId),
-              eq(pdfSigningSessions.status, "open"),
-            )}`,
+        scope: organizationScope,
+        actor: { type: "system" },
+        fn: async (scopedTx) => {
+          const held = await lockOpenSigningPage({
+            tx: scopedTx,
+            sessions: organizationSessions,
           });
-          if (proof.isErr()) {
-            abortTransaction(removalBusy());
-          }
-          assertAssignmentScope(proof.value, scope);
-          const auditEvents: Parameters<AuditRecorder>[1][] = [];
-          const bufferAudit = (async (_auditTx, events) => {
-            auditEvents.push(events);
-          }) satisfies AuditRecorder;
-          const changed = await withOrgScope({
-            tx,
-            scope: proof.value,
-            actor: { type: "system" },
-            fn: async (scopedTx) =>
-              await transitionBatch({
+          await mapWithConcurrency({
+            items: held,
+            limit: 1,
+            operation: async (session) => {
+              const auditEvents: Parameters<AuditRecorder>[1][] = [];
+              const bufferAudit = bufferAuditEvents(auditEvents);
+              const changed = await transitionBatch({
                 tx: scopedTx,
                 spec: TRANSITIONS.pdfSigningSessions,
                 ids: [session.id],
@@ -1004,41 +1034,41 @@ const cancelMemberSigningSessions = async ({
                     resourceType: AUDIT_RESOURCE_TYPE.PDF_SIGNING_SESSION,
                     rows: rows.map(() => ({
                       ...session,
-                      organizationId: proof.value.organizationId,
+                      organizationId: organizationScope.organizationId,
                     })),
                     recordAuditEvent: bufferAudit,
                   }),
-              }),
+              });
+              if (changed.length !== 1) {
+                panic("Locked signing sessions changed during member removal");
+              }
+              closed.push({ session, auditEvents });
+            },
           });
-          if (changed.length !== 1) {
-            panic("Locked signing sessions changed during member removal");
-          }
-          const recordMemberTransitionAuditEvent =
-            recordAuditEvent ??
-            createBackgroundAuditRecorder({
-              organizationId: proof.value.organizationId,
-              workspaceId: session.workspaceId,
-              userId: actorUserId,
-              execution: {
-                performer: { type: "user", id: actorUserId },
-                trigger: { type: "system", source: "membership_removal" },
-              },
-            });
-          for (const events of auditEvents) {
-            // db-await-in-loop: replay exact transition events after the scoped role restores.
-            await recordMemberTransitionAuditEvent(tx, events);
-          }
-          return changed.length;
+          return held.length;
         },
       });
-      const changedCount = changedCounts.reduce(
-        (count, value) => count + value,
-        0,
-      );
-      if (changedCount !== held.length) {
+      if (closed.length !== heldCount) {
         panic("Locked signing sessions changed during member removal");
       }
-      return changedCount + (await closeNextOrganization(index + 1));
+      for (const { session, auditEvents } of closed) {
+        const recordMemberTransitionAuditEvent =
+          recordAuditEvent ??
+          createBackgroundAuditRecorder({
+            organizationId: organizationScope.organizationId,
+            workspaceId: session.workspaceId,
+            userId: actorUserId,
+            execution: {
+              performer: { type: "user", id: actorUserId },
+              trigger: { type: "system", source: "membership_removal" },
+            },
+          });
+        for (const events of auditEvents) {
+          // db-await-in-loop: replay exact transition events after the scoped role restores.
+          await recordMemberTransitionAuditEvent(tx, events);
+        }
+      }
+      return closed.length + (await closeNextOrganization(index + 1));
     };
     // db-await-in-loop: bounded signing pages must lock, transition and audit in organization/session order before the next page.
     await closeNextOrganization(0);
@@ -1686,9 +1716,7 @@ const cancelScopedMemberFlowRunBatch = async ({
     limit: 1,
     operation: async ({ run: lockedRun, scope }) => {
       const auditEvents: Parameters<AuditRecorder>[1][] = [];
-      const bufferAuditEvent = (async (_auditTx, events) => {
-        auditEvents.push(events);
-      }) satisfies AuditRecorder;
+      const bufferAuditEvent = bufferAuditEvents(auditEvents);
       const changedCount = await withOrgScope({
         tx,
         scope,
@@ -2017,9 +2045,7 @@ const cancelMemberDesktopSessions = async ({
           abortTransaction(removalBusy());
         }
         const auditEvents: Parameters<AuditRecorder>[1][] = [];
-        const bufferAudit = (async (_auditTx, events) => {
-          auditEvents.push(events);
-        }) satisfies AuditRecorder;
+        const bufferAudit = bufferAuditEvents(auditEvents);
         const changed = await withOrgScope({
           tx,
           scope: proof.value,

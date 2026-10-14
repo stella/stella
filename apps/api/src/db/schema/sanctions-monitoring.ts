@@ -1,3 +1,4 @@
+import { systemScopePolicies } from "@/api/db/system-scope-policies";
 import {
   SANCTIONS_SCREENING_STATUSES,
   SANCTIONS_REVIEW_DISPOSITIONS,
@@ -86,6 +87,8 @@ export const sanctionsContactMarks = p.pgTable(
       })
       .onDelete("cascade"),
     ...monitoringPolicies("sanctions_contact_marks"),
+    // Contact writes under the system role fire the mark upsert triggers.
+    ...systemScopePolicies(table),
   ],
 );
 

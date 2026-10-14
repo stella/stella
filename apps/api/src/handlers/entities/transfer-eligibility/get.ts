@@ -4,7 +4,10 @@ import { t } from "elysia";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { readEntityTransferEligibility } from "@/api/lib/flows/review-gate-task";
+import {
+  FLOW_TASK_FEATURE_ACCESS,
+  readEntityTransferEligibility,
+} from "@/api/lib/flows/review-gate-task";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
@@ -13,6 +16,7 @@ const config = {
     "Read copy and move eligibility for entity subtrees in this matter. Transfers revalidate admission when submitted.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  featureAccess: FLOW_TASK_FEATURE_ACCESS,
   mcp: { type: "covered", by: "list_documents" },
   access: "read",
   body: t.Object({

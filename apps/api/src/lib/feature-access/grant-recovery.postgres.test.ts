@@ -27,12 +27,10 @@ import { resumeSignalsAfterGrant } from "@/api/lib/signals/grant-recovery";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import {
-  flowReviewGateFixture,
-  waitForBlockedPid,
-} from "@/api/tests/helpers/flow-review-gate";
+import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { withOrgScopedFixture } from "@/api/tests/helpers/org-scoped-fixture";
 import { createTestState } from "@/api/tests/helpers/test-state";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import * as v from "valibot";
 
 import { FLOW_RUN_TERMINAL_STATUSES } from "@stll/api-contract";
 
@@ -10,6 +11,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type { FeatureAccessRequirement } from "@/api/lib/auth/feature-access/requirements";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -138,6 +140,10 @@ type ReadEntityTransferEligibilityOptions = Omit<
   "entityId" | "access"
 > & { entityIds: readonly SafeId<"entity">[] };
 
+const transferEligibilityRows = v.array(
+  v.object({ entityId: v.string(), eligible: v.boolean() }),
+);
+
 /** Read only a decision for each supplied root, with no descendant identifiers. */
 export const readEntityTransferEligibility = async (
   tx: Transaction,
@@ -153,10 +159,7 @@ export const readEntityTransferEligibility = async (
   if (workspace === undefined) {
     return [];
   }
-  return await tx.execute<{
-    entityId: SafeId<"entity">;
-    eligible: boolean;
-  }>(sql`
+  const result = await tx.execute(sql`
     WITH roots AS (
       SELECT ${entities.id} AS root_id
       FROM ${entities}
@@ -192,6 +195,17 @@ export const readEntityTransferEligibility = async (
       FROM bounded
     ) eligibility
   `);
+  // Drivers differ in how `execute` returns rows; decide per requested root so
+  // only identifiers the caller supplied leave this function.
+  const eligibility = new Map(
+    v
+      .parse(transferEligibilityRows, executedRows(result))
+      .map(({ entityId, eligible }) => [entityId, eligible]),
+  );
+  return [...new Set(entityIds)].flatMap((entityId) => {
+    const eligible = eligibility.get(entityId);
+    return eligible === undefined ? [] : [{ entityId, eligible }];
+  });
 };
 
 /** Writers take admission before tree/entity locks and evaluate current links. */
