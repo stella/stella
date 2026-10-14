@@ -581,11 +581,13 @@ const SearchControls = ({
                 })}
                 matchText={foldSearchMatchText}
                 groups={
-                  facets?.court.map(({ tierLabel, courts: options }) => ({
-                    value: tierLabel,
-                    label: t(tierLabel),
-                    courts: options,
-                  })) ?? []
+                  facets === null
+                    ? []
+                    : facets.court.map(({ tierLabel, courts: options }) => ({
+                        value: tierLabel,
+                        label: t(tierLabel),
+                        courts: options,
+                      }))
                 }
                 selected={courts}
                 onChange={setCourts}

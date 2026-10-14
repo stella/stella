@@ -58,9 +58,13 @@ export const validateAppToolArguments = (
   if (validate(arguments_)) {
     return { status: "valid", arguments: arguments_ } as const;
   }
+  // Ajv always records why a compiled validator rejected its input.
+  const errors =
+    validate.errors ??
+    panic("App input validator rejected without errors", name);
   const fields = [
     ...new Set(
-      (validate.errors ?? []).map(({ instancePath, params }) => {
+      errors.map(({ instancePath, params }) => {
         const missing = params["missingProperty"];
         return (
           instancePath.replace(/^\//u, "").replaceAll("/", ".") ||

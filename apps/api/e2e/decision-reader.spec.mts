@@ -11,12 +11,12 @@ import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import type { Block } from "@stll/legal-ast/document-ast";
 import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
 
+import APP_INPUT_SCHEMAS from "../../../packages/mcp-apps/src/shared/generated/input-schemas.json" with { type: "json" };
 import type {
   blocksDecisionOutput,
   openDecisionOutput,
   provisionPreviewOutput,
 } from "../src/lib/chat/decision-reader-projections";
-import APP_INPUT_SCHEMAS from "../../../packages/mcp-apps/src/shared/generated/input-schemas.json" with { type: "json" };
 
 type ReaderPage = v.InferInput<typeof blocksDecisionOutput>;
 type ReaderPreview = v.InferInput<typeof provisionPreviewOutput>;

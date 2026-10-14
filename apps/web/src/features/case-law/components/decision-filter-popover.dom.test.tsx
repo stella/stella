@@ -46,7 +46,9 @@ const renderFilter = (court?: string) => {
             type: undefined,
           }}
           onDateRangeChange={() => {}}
-          onSelect={(key, value) => selected.push({ key, value })}
+          onSelect={(key, value) => {
+            selected.push({ key, value });
+          }}
         />
       </FormattingProvider>
     </IntlProvider>,

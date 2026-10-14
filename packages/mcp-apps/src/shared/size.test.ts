@@ -9,7 +9,9 @@ test("shared bridge reports natural short heights, caps long inline content and 
   const reporter = createAppSizeReporter({
     app: {
       sendSizeChanged: async ({ height }) => {
-        heights.push(height);
+        if (height !== undefined) {
+          heights.push(height);
+        }
       },
     },
     measure: () => ({

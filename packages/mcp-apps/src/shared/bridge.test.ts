@@ -159,6 +159,7 @@ test("Retry repeats the failed new court selection rather than the earlier succe
       connect: async () => {},
       openLink: async () => ({}),
       requestDisplayMode: async () => ({ mode: "inline" }),
+      onteardown: undefined,
     },
   });
   await bridge.call({
@@ -280,6 +281,7 @@ test("a locally refused filter preserves its page input and leaves Next working 
       connect: async () => {},
       openLink: async () => ({}),
       requestDisplayMode: async () => ({ mode: "inline" }),
+      onteardown: undefined,
     },
   });
   await bridge.call({

@@ -25,6 +25,8 @@ const warning = (code: CaseLawSearchWarningCode): CaseLawSearchWarning => {
       return { code, ...text, filters: ["court"] };
     case "no_hits":
       return { code, ...text };
+    default:
+      throw new TypeError(`Unknown warning code: ${code satisfies never}`);
   }
 };
 
