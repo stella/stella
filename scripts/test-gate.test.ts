@@ -220,6 +220,31 @@ context("test registration census", () => {
     },
   );
 
+  check.each(["process.env", "Bun.env", "import.meta.env"])(
+    "environment aliases of %s cannot hide callback early returns",
+    (environment) => {
+      const source = `
+      const enabled = ${environment}.RUN_TESTS === "true";
+      const inherited = enabled;
+      let mutable = ${environment}.RUN_TESTS === "true";
+      test("reviewer callback", () => {
+        if (!enabled) return;
+      });
+      test("two-hop alias", () => {
+        if (!inherited) return;
+      });
+      test("mutable alias", () => {
+        if (!mutable) return;
+      });
+    `;
+      expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+        { identity: "fixture.test.ts::mutable alias", type: "disabled" },
+        { identity: "fixture.test.ts::reviewer callback", type: "disabled" },
+        { identity: "fixture.test.ts::two-hop alias", type: "disabled" },
+      ]);
+    },
+  );
+
   check("finds focused registrations through namespace imports", () => {
     const source = `
       import * as bt from "bun:test";
@@ -1960,6 +1985,34 @@ jobs:
   );
 
   check.each([
+    ["!needs.plan.outputs.selected", false],
+    ["needs.plan.outputs.selected", true],
+    ["needs.plan.outputs.selected == 'false'", true],
+    ["needs.plan.outputs.selected == 'true'", false],
+  ] as const)(
+    "composite output string condition: %s",
+    (condition, credited) => {
+      const analysis = analyzeGatingWorkflow(
+        {
+          jobs: {
+            plan: {
+              outputs: { selected: `\${{ false }}` },
+              steps: [{ run: "echo plan" }],
+            },
+            checks: {
+              "runs-on": "ubuntu-latest",
+              steps: [{ if: condition, run: "bun test scripts/named.test.ts" }],
+            },
+            "ci-result": { needs: ["plan", "checks"] },
+          },
+        },
+        [],
+      );
+      expect(analysis.jobs.has("checks")).toBe(credited);
+    },
+  );
+
+  check.each([
     {
       condition: "steps.missing.outcome == 'success'",
       preceding: [],
@@ -2046,6 +2099,77 @@ jobs:
       ).toBe(credited);
       if (!credited) {
         expect(analysis.findings.length).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  check.each(["outcome", "conclusion"])(
+    "only proven earlier skips resolve steps.*.%s",
+    (member) => {
+      const runner = "bun test scripts/named.test.ts";
+      const cases = [
+        { earlier: [], later: [], credited: false, events: undefined },
+        {
+          earlier: [],
+          later: [{ id: "prep", run: "echo later" }],
+          credited: false,
+          events: undefined,
+        },
+        {
+          earlier: [{ id: "prep", if: false, run: "echo skipped" }],
+          later: [],
+          credited: true,
+          events: ["pull_request", "merge_group"],
+        },
+        {
+          earlier: [
+            {
+              id: "prep",
+              if: "github.event_name == 'pull_request'",
+              run: "echo selected",
+            },
+          ],
+          later: [],
+          credited: true,
+          events: ["merge_group"],
+        },
+        {
+          earlier: [
+            { id: "prep", if: "vars.UNRESOLVED == 'on'", run: "echo unknown" },
+          ],
+          later: [],
+          credited: false,
+          events: undefined,
+        },
+      ];
+      for (const { earlier, later, credited, events } of cases) {
+        const analysis = analyzeGatingWorkflow(
+          {
+            jobs: {
+              checks: {
+                "runs-on": "ubuntu-latest",
+                steps: [
+                  ...earlier,
+                  { if: `steps.prep.${member} == 'skipped'`, run: runner },
+                  ...later,
+                ],
+              },
+              "ci-result": { needs: ["checks"] },
+            },
+          },
+          [],
+        );
+        const command = analysis.jobs
+          .get("checks")
+          ?.find(({ command: candidate }) => candidate === runner);
+        expect(command !== undefined).toBe(credited);
+        if (events !== undefined) {
+          expect(command?.events).toEqual(events);
+        } else {
+          expect(analysis.findings.join("\n")).toContain(
+            `steps.prep.${member}`,
+          );
+        }
       }
     },
   );

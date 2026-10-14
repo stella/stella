@@ -237,7 +237,9 @@ const simpleOutputAtom = (
     }
     const substituted = substitutedOutput(first.value, options);
     if (substituted !== undefined) {
-      return substituted;
+      return substituted.type === "unresolved"
+        ? substituted
+        : { type: "literal", value: true };
     }
     if (outputs.has(first.value)) {
       return {
@@ -389,6 +391,27 @@ type CompileOutputAliasesOptions = {
   readonly boundReferences: ReadonlySet<string>;
 };
 
+const hasBooleanOutputValue = (input: readonly Token[]): boolean => {
+  const tokens = ungroupTokens(input);
+  for (const operator of ["||", "&&"]) {
+    const index = topLevelOperator(tokens, new Set([operator]));
+    if (index !== -1) {
+      return (
+        hasBooleanOutputValue(tokens.slice(0, index)) &&
+        hasBooleanOutputValue(tokens.slice(index + 1))
+      );
+    }
+  }
+  const first = tokens.at(0);
+  return (
+    topLevelOperator(tokens, COMPARISONS) !== -1 ||
+    (first?.kind === "op" && first.value === "!") ||
+    (tokens.length === 1 &&
+      first?.kind === "word" &&
+      ["true", "false"].includes(first.value))
+  );
+};
+
 export const compileOutputAliases = ({
   aliases,
   boundReferences,
@@ -411,15 +434,30 @@ export const compileOutputAliases = ({
       };
     }
     visiting.add(reference);
-    const parsed = OperationResult.try(() =>
-      parseOutputCondition(tokenize(definition.expression), {
+    const parsed = OperationResult.try(() => {
+      const tokens = ungroupTokens(tokenize(definition.expression));
+      const first = tokens.at(0);
+      // Copying an output preserves its 'true'/'false' string value.
+      if (tokens.length === 1 && first?.kind === "word") {
+        const copied = resolveAlias(first.value);
+        if (copied !== undefined) {
+          return copied;
+        }
+      }
+      if (!hasBooleanOutputValue(tokens)) {
+        return {
+          type: "unresolved",
+          reason: `composite output may be an empty or non-boolean string: ${reference}`,
+        } as const;
+      }
+      return parseOutputCondition(tokens, {
         outputs: definition.outputs,
         context: { values: {} },
         substitutions: new Map(),
         resolveAlias,
         boundReferences,
-      }),
-    );
+      });
+    });
     const node: OutputCondition = parsed.isOk()
       ? parsed.value
       : {

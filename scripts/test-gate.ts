@@ -520,13 +520,82 @@ const registrationTitle = (
 };
 
 const containsEnvironmentReturn = (node: ts.Node): boolean => {
+  const bindings = new Map<string, ts.Expression[]>();
+  const source = node.getSourceFile();
+  const bindNames = (
+    name: ts.BindingName,
+    initializer: ts.Expression,
+  ): void => {
+    if (ts.isIdentifier(name)) {
+      const initializers = bindings.get(name.text) ?? [];
+      initializers.push(initializer);
+      bindings.set(name.text, initializers);
+      return;
+    }
+    for (const element of name.elements) {
+      if (ts.isBindingElement(element)) {
+        bindNames(element.name, initializer);
+      }
+    }
+  };
+  const collectBindings = (candidate: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(candidate) &&
+      candidate.initializer !== undefined
+    ) {
+      bindNames(candidate.name, candidate.initializer);
+    }
+    ts.forEachChild(candidate, collectBindings);
+  };
+  collectBindings(source);
+  const isEnvironmentRoot = (candidate: ts.Node): boolean => {
+    if (
+      !ts.isPropertyAccessExpression(candidate) ||
+      candidate.name.text !== "env"
+    ) {
+      return false;
+    }
+    const object = candidate.expression;
+    if (ts.isIdentifier(object) && ["process", "Bun"].includes(object.text)) {
+      return true;
+    }
+    return (
+      ts.isMetaProperty(object) &&
+      object.keywordToken === ts.SyntaxKind.ImportKeyword &&
+      object.name.text === "meta"
+    );
+  };
+  const containsEnvironment = (
+    candidate: ts.Node,
+    visited: ReadonlySet<string> = new Set(),
+  ): boolean => {
+    if (isEnvironmentRoot(candidate)) {
+      return true;
+    }
+    if (ts.isIdentifier(candidate) && !visited.has(candidate.text)) {
+      const initializers = bindings.get(candidate.text);
+      if (
+        initializers?.some((initializer) =>
+          containsEnvironment(
+            initializer,
+            new Set([...visited, candidate.text]),
+          ),
+        )
+      ) {
+        return true;
+      }
+    }
+    return (
+      ts.forEachChild(candidate, (child) =>
+        containsEnvironment(child, visited) ? true : undefined,
+      ) === true
+    );
+  };
   let found = false;
-  const containsEnvironment = (candidate: ts.Node): boolean =>
-    candidate.getText().includes("process.env");
   const containsReturn = (candidate: ts.Node): boolean => {
     let result = false;
     const findReturn = (child: ts.Node): void => {
-      if (ts.isReturnStatement(child)) {
+      if (ts.isReturnStatement(child) || ts.isContinueStatement(child)) {
         result = true;
       } else {
         ts.forEachChild(child, findReturn);
@@ -3351,10 +3420,7 @@ const gatingEventContext = (
       if (id !== undefined && unresolvedSteps.has(id)) {
         return undefined;
       }
-      return (
-        context.fallback?.(reference) ??
-        (id === undefined ? undefined : "skipped")
-      );
+      return context.fallback?.(reference);
     },
   };
 };
@@ -3866,25 +3932,24 @@ type CollectorOutputConditionOptions = {
   readonly context: ReturnType<typeof gatingEventContext>;
 };
 
-const collectorOutputConditionFailure = ({
+const collectorOutputConditionAnalysis = ({
   conditions,
   producers,
   substitutions,
   context,
-}: CollectorOutputConditionOptions): string | undefined => {
+}: CollectorOutputConditionOptions) => {
   const expressions = conditions.flatMap((condition) => {
     if (typeof condition === "string") {
       return [conditionExpression(condition)];
     }
     return condition === false ? ["false"] : [];
   });
-  const result = conjunctiveOutputConditions({
+  return conjunctiveOutputConditions({
     conditions: expressions,
     outputs: producers,
     substitutions,
     context,
   });
-  return result.type === "consistent" ? undefined : result.reason;
 };
 
 type EarlierStepResultsOptions = {
@@ -3926,7 +3991,7 @@ const earlierStepResults = ({
       unresolvedSteps,
     };
     const conditionPath = [...conditions, step["if"]];
-    const failed = collectorOutputConditionFailure({
+    const result = collectorOutputConditionAnalysis({
       conditions: conditionPath,
       producers,
       substitutions,
@@ -3937,14 +4002,18 @@ const earlierStepResults = ({
           .join(" && "),
       ),
     });
-    const executable = failed === undefined;
-    if (ignoresFailure(step["continue-on-error"], options)) {
-      unresolvedSteps.add(id);
+    if (result.type === "contradictory") {
+      stepResults.set(id, { outcome: "skipped", conclusion: "skipped" });
+      continue;
     }
-    stepResults.set(id, {
-      outcome: executable ? "success" : "skipped",
-      conclusion: executable ? "success" : "skipped",
-    });
+    if (
+      result.type === "unresolved" ||
+      ignoresFailure(step["continue-on-error"], options)
+    ) {
+      unresolvedSteps.add(id);
+      continue;
+    }
+    stepResults.set(id, { outcome: "success", conclusion: "success" });
   }
   return snapshots;
 };
@@ -4002,7 +4071,7 @@ const executingCollectorLegs = ({
         variables,
         ...prior,
       };
-      const outputFailure = collectorOutputConditionFailure({
+      const outputResult = collectorOutputConditionAnalysis({
         conditions: [root?.["if"], job["if"], step["if"]],
         producers,
         substitutions,
@@ -4013,7 +4082,7 @@ const executingCollectorLegs = ({
             .join(" && "),
         ),
       });
-      if (outputFailure !== undefined) {
+      if (outputResult.type !== "consistent") {
         const outcomeReferences = [root?.["if"], job["if"], step["if"]].flatMap(
           (condition) =>
             typeof condition === "string"
@@ -4027,7 +4096,7 @@ const executingCollectorLegs = ({
             `step outcome has no earlier executable success: ${reference}`,
           );
         }
-        unresolvedContexts.add(outputFailure);
+        unresolvedContexts.add(outputResult.reason);
         continue;
       }
       if (

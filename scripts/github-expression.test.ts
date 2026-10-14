@@ -112,6 +112,43 @@ describe("bounded output condition conjunctions", () => {
     ).toBe("consistent");
   });
 
+  test.each([
+    ["needs.plan.outputs.boolean", "consistent"],
+    ["!needs.plan.outputs.boolean", "contradictory"],
+    ["needs.plan.outputs.boolean == 'false'", "contradictory"],
+    ["needs.plan.outputs.boolean == 'true'", "consistent"],
+    ["!needs.plan.outputs.copy", "contradictory"],
+    ["needs.plan.outputs.possibly_empty", "unresolved"],
+  ] as const)(
+    "preserves job output string semantics: %s",
+    (condition, type) => {
+      const substitutions = compileOutputAliases({
+        aliases: new Map([
+          [
+            "needs.plan.outputs.boolean",
+            { expression: `${output} == 'true'`, outputs },
+          ],
+          [
+            "needs.plan.outputs.copy",
+            { expression: "needs.plan.outputs.boolean", outputs },
+          ],
+          [
+            "needs.plan.outputs.possibly_empty",
+            { expression: `${output} && ${output}`, outputs },
+          ],
+        ]),
+        boundReferences: new Set(),
+      });
+      expect(
+        conjunctiveOutputConditions({
+          conditions: [`${output} == 'true'`, condition],
+          outputs,
+          substitutions,
+        }).type,
+      ).toBe(type);
+    },
+  );
+
   test("applies the DNF cap after substituting a composite alias", () => {
     const producers = new Map(
       Array.from(
