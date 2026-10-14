@@ -2120,28 +2120,27 @@
     "showAllPermissions": "{count, plural, zero {Rādīt visas # atļaujas} one {Rādīt # atļauju} other {Rādīt visas # atļaujas}}",
     "signedInAs": "Pierakstījies kā <email>{accountEmail}</email>",
     "summaryAdminRead": "audita žurnāls",
-    "summaryAdminWrite": "organizācijas dalībnieki un iestatījumi, ieskaitot to dzēšanu",
-    "summaryBillingWrite": "laika ieraksti, ieskaitot to dzēšanu",
-    "summaryChat": "tērzēšanas, ieskaitot to dzēšanu",
-    "summaryContactsWrite": "kontaktpersonas, ieskaitot to dzēšanu",
-    "summaryDocumentsWrite": "dokumenti, ieskaitot to dzēšanu",
+    "summaryAdminWrite": "organizācijas dalībnieki un iestatījumi",
+    "summaryBillingWrite": "laika ieraksti",
+    "summaryChat": "sarunas",
+    "summaryContactsWrite": "kontaktpersonas",
+    "summaryDocumentsWrite": "dokumenti",
     "summaryExternalMcps": "pievienotie ārējie rīki",
-    "summaryFeedback": "atsauksmes",
-    "summaryKnowledgeWrite": "klauzulas un pārbaudes ceļveži, ieskaitot klauzulu dzēšanu",
+    "summaryKnowledgeWrite": "klauzulas un pārbaudes ceļveži",
     "summaryLawRead": "publiski pieejamos tiesību aktus un judikatūru",
-    "summaryLineChange": "<group>Var mainīt:</group> {items} ({count})",
+    "summaryLineChange": "<group>Izveidot un rediģēt:</group> {items}",
     "summaryLineOther": "<group>Arī:</group> {items}",
-    "summaryLineRead": "<group>Var lasīt:</group> {items} ({count})",
-    "summaryMattersWrite": "lietas un uzdevumi, ieskaitot to dzēšanu",
-    "summaryOfflineAccess": "pastāvīga pieteikšanās",
-    "summaryOnboarding": "prakses jurisdikcijas",
+    "summaryLineRead": "<group>Lasīt:</group> {items}",
+    "summaryLineUse": "<group>Lietot:</group> {items}",
+    "summaryMattersWrite": "lietas un uzdevumi",
     "summaryProfile": "profils",
     "summaryRead": "dokumenti, lietas un kontakti",
     "summaryReadAnonymized": "anonimizēti dokumenti un lietas",
     "summarySearch": "meklēšana",
     "summarySearchAnonymized": "anonimizēta meklēšana",
-    "summarySkills": "prasmes, ieskaitot to dzēšanu",
-    "summaryTemplates": "dokumentu veidnes, ieskaitot to dzēšanu",
+    "summarySkills": "prasmes",
+    "summaryStaySignedIn": "Palikt pierakstītam",
+    "summaryTemplates": "dokumentu veidnes",
     "summaryTemplatesAnonymized": "anonimizētas dokumentu veidnes",
     "title": "Autorizēt piekļuvi",
     "unverifiedApp": "Nepārbaudīta lietotne",
@@ -3170,14 +3169,14 @@
         "steps": {
           "basics": {
             "body": "Pievienojiet nosaukumu un aprakstu. Ja vajadzīgs, attieciniet to tikai uz vienu dokumenta veidu.",
-            "title": "Piešķiriet plānam nosaukumu"
+            "title": "Piešķiriet pārbaudes ceļvedim nosaukumu"
           },
           "create": {
-            "body": "Sāciet ar tukšu plānu.",
-            "title": "Izveidojiet plānu"
+            "body": "Sāciet ar tukšu pārbaudes ceļvedi.",
+            "title": "Izveidojiet pārbaudes ceļvedi"
           },
           "overview": {
-            "body": "Plānā tiek saglabāti jautājumi un noteikumi citiem dokumentiem.",
+            "body": "Pārbaudes ceļvedī tiek saglabāti jautājumi un noteikumi citiem dokumentiem.",
             "title": "Saglabājiet pārskatīšanas procesu"
           },
           "positions": {
@@ -3185,7 +3184,7 @@
             "title": "Pievienojiet pārskatīšanas noteikumus"
           }
         },
-        "title": "Izveidojiet plānu"
+        "title": "Izveidojiet pārbaudes ceļvedi"
       },
       "tabularReview": {
         "description": "Iegūstiet atbildes no daudziem failiem vienlaikus",
@@ -3618,6 +3617,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Izveidojiet līgumu pārbaudes ceļvedi pozīciju pa pozīcijai, balstoties uz iepriekš parakstītajiem līgumiem, īsu interviju un tirgū ierastajiem standartiem.",
+          "name": "Izveidot pārbaudes ceļvedi"
+        }
+      },
       "builtInSection": "Iebūvētās prasmes",
       "deleteFile": "Dzēst failu",
       "deleteFileConfirm": "Dzēst failu? Šo darbību nevar atsaukt.",
@@ -4446,7 +4451,7 @@
         "governingLaw": "Piemērojamās tiesības",
         "liabilityCap": "Atbildības ierobežojums",
         "missing": "Nav norādīts",
-        "outsidePlaybook": "Neatbilst vadlīnijām",
+        "outsidePlaybook": "Neatbilst pārbaudes ceļvedim",
         "termination": "Līguma izbeigšana"
       },
       "searchPlaceholder": "Kas jums jāpaveic?",

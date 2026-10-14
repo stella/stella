@@ -1,19 +1,16 @@
 import { panic } from "better-result";
-import {
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
 
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { CI_GENERATED_FILES } from "./generated-files";
+import {
+  generatedInputGit,
+  generatedInputTreeHash,
+} from "./generated-input-identity";
 
-const generated = new Set<string>(CI_GENERATED_FILES);
 const hashSchema = v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u));
 const preparedManifestSchema = v.strictObject({
   sourceSha: v.pipe(v.string(), v.regex(/^[a-f0-9]{40}$/u)),
@@ -26,16 +23,6 @@ const preparedManifestSchema = v.strictObject({
 export const generatedFileHash = (bytes: Uint8Array | string) =>
   hashSha256Hex(bytes);
 
-const git = (root: string, args: string[]) => {
-  const result = Bun.spawnSync(["git", ...args], { cwd: root });
-  if (result.exitCode !== 0) {
-    panic(
-      `Generated source input inventory failed: ${result.stderr.toString()}`,
-    );
-  }
-  return result.stdout.toString();
-};
-
 export const generatedInputIdentity = (root: string) => {
   const compiler = v.parse(
     v.object({ version: v.string() }),
@@ -47,10 +34,18 @@ export const generatedInputIdentity = (root: string) => {
     ),
   );
   return {
-    sourceSha: git(root, ["rev-parse", "HEAD"]).trim(),
-    inputHash: trackedInputHash(root, {
-      excluded: generated,
-      context: { bun: Bun.version, compiler: compiler.version },
+    sourceSha: generatedInputGit({
+      root,
+      args: ["rev-parse", "HEAD"],
+      onFailure: panic,
+    }).trim(),
+    inputHash: generatedInputTreeHash({
+      root,
+      toolchain: { bun: Bun.version, compiler: compiler.version },
+      generatedOutputs: "exclude",
+      createHasher: createSha256,
+      hashFile: generatedFileHash,
+      onFailure: panic,
     }),
     bunVersion: Bun.version,
     compilerVersion: compiler.version,
@@ -65,38 +60,16 @@ type TrackedInputHashOptions = {
 export const trackedInputHash = (
   root: string,
   { excluded, context }: TrackedInputHashOptions,
-) => {
-  const hash = createSha256();
-  hash.update(JSON.stringify(context));
-  // A full tracked inventory covers new workspace inputs without another glob.
-  // Producers exclude only the canonical outputs that they regenerate.
-  for (const entry of git(root, ["ls-files", "--stage", "-z"]).split("\0")) {
-    if (entry === "") {
-      continue;
-    }
-    const separator = entry.indexOf("\t");
-    if (separator === -1) {
-      panic("Generated source input inventory has no path");
-    }
-    const file = entry.slice(separator + 1);
-    if (excluded.has(file)) {
-      continue;
-    }
-    const absolute = path.join(root, file);
-    const bytes = (() => {
-      if (entry.startsWith("160000 ")) {
-        return entry.slice(0, separator);
-      }
-      return lstatSync(absolute).isSymbolicLink()
-        ? readlinkSync(absolute)
-        : readFileSync(absolute);
-    })();
-    hash.update(
-      JSON.stringify([entry.slice(0, 6), file, generatedFileHash(bytes)]),
-    );
-  }
-  return hash.digest("hex");
-};
+) =>
+  generatedInputTreeHash({
+    root,
+    toolchain: context,
+    generatedOutputs: "exclude",
+    excluded,
+    createHasher: createSha256,
+    hashFile: generatedFileHash,
+    onFailure: panic,
+  });
 
 const resultManifestSchema = v.strictObject({
   inputHash: hashSchema,

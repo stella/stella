@@ -2123,28 +2123,27 @@ type Messages = {
     "showAllPermissions": "{count, plural, one {Show the permission} other {Show all # permissions}}";
     "signedInAs": "Signed in as <email>{accountEmail}</email>";
     "summaryAdminRead": "audit log";
-    "summaryAdminWrite": "organization members and settings, including deleting them";
-    "summaryBillingWrite": "time entries, including deleting them";
-    "summaryChat": "chats, including deleting them";
-    "summaryContactsWrite": "contacts, including deleting them";
-    "summaryDocumentsWrite": "documents, including deleting them";
+    "summaryAdminWrite": "organization members and settings";
+    "summaryBillingWrite": "time entries";
+    "summaryChat": "chats";
+    "summaryContactsWrite": "contacts";
+    "summaryDocumentsWrite": "documents";
     "summaryExternalMcps": "connected integrations";
-    "summaryFeedback": "feedback";
-    "summaryKnowledgeWrite": "clauses and playbooks, including deleting clauses";
+    "summaryKnowledgeWrite": "clauses and playbooks";
     "summaryLawRead": "public statutes and case law";
-    "summaryLineChange": "<group>Can change:</group> {items} ({count})";
+    "summaryLineChange": "<group>Create and edit:</group> {items}";
     "summaryLineOther": "<group>Also:</group> {items}";
-    "summaryLineRead": "<group>Can read:</group> {items} ({count})";
-    "summaryMattersWrite": "matters and tasks, including deleting them";
-    "summaryOfflineAccess": "staying signed in";
-    "summaryOnboarding": "practice jurisdictions";
+    "summaryLineRead": "<group>Read:</group> {items}";
+    "summaryLineUse": "<group>Use:</group> {items}";
+    "summaryMattersWrite": "matters and tasks";
     "summaryProfile": "profile";
     "summaryRead": "documents, matters and contacts";
     "summaryReadAnonymized": "anonymized documents and matters";
     "summarySearch": "search";
     "summarySearchAnonymized": "anonymized search";
-    "summarySkills": "skills, including deleting them";
-    "summaryTemplates": "templates, including deleting them";
+    "summarySkills": "skills";
+    "summaryStaySignedIn": "Stay signed in";
+    "summaryTemplates": "templates";
     "summaryTemplatesAnonymized": "anonymized templates";
     "title": "Authorize access";
     "unverifiedApp": "Unverified app";
@@ -3621,6 +3620,12 @@ type Messages = {
   };
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.";
+          "name": "Build a playbook";
+        };
+      };
       "builtInSection": "Built-in skills";
       "deleteFile": "Delete file";
       "deleteFileConfirm": "Delete file? This cannot be undone.";

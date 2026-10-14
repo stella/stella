@@ -1526,6 +1526,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "OSV_SCANNER_PRIMARY_RELEASE_URL",
   "OSV_SCANNER_RELEASE_VERSION",
   "OSV_SCANNER_SHA256",
+  // Worker-local custom lint reports, merged before the coverage census.
+  "OXLINT_RULE_COVERAGE_PATH",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
   "PRODUCT_MEDIA_S3_BUCKET",
@@ -1625,6 +1627,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Queue proof outcomes and resolved hosted-runner image for static receipts.
+  "CHECK_OUTCOMES",
+  "ImageOS",
+  "ImageVersion",
   // Internal handoff between the code-quality supervisor and its process group.
   "CODE_QUALITY_PROCESS_GROUP",
   // CI installer budget selected from restored package-cache contents.
