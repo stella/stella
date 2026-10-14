@@ -285,10 +285,8 @@ test("dynamic API shard counts certify the selected partition and allow zero API
     taskIds: ["@stll/scripts#test"],
     output: "",
   });
-  for (const count of [1, 2, 3, 4]) {
-    for (const [index, shard] of (
-      ["api-1", "api-2", "api-3", "api-4"] as const
-    ).entries()) {
+  for (const count of [1, 2]) {
+    for (const [index, shard] of (["api-1", "api-2"] as const).entries()) {
       if (index >= count) {
         expect(() => apiShardValue(shard, count)).toThrow(
           "outside the planned shard count",

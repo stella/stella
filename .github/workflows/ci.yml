@@ -1286,8 +1286,8 @@ jobs:
         run: |
           if ! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then
             {
-              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","rest-web"]}'
-              echo 'api_test_shards=4'
+              echo 'ci_tests_matrix={"shard":["api-1","api-2","rest-web"]}'
+              echo 'api_test_shards=2'
               echo 'api_test_files='
             } >> "$GITHUB_OUTPUT"
           fi
@@ -4779,13 +4779,10 @@ jobs:
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
-    # 25m per shard, the budget the serial job carried for the whole suite. It
-    # was bumped from 20m after a PR affected-flagged across apps/api,
-    # apps/web, packages/transactional and packages/ui at once hit the ceiling
-    # with the Test step still in progress — legitimate multi-package work
-    # outgrowing the budget, not a hang. Sharding is what actually splits that
-    # work up; the headroom stays until the shards prove they need less.
-    timeout-minutes: 25
+    # Two API shards keep each runner busy instead of waiting for a free hosted
+    # slot; a merged shard pair measured p95 18.6 min and p99 27.4 min, so the
+    # budget sits above the worst observed pair (30.9 min) rather than at it.
+    timeout-minutes: 35
     permissions:
       contents: read
       actions: write

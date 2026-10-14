@@ -53,13 +53,7 @@ test("dispatches and unreadable scopes retain four shards without invoking the s
       },
     });
     expect(plan.impact).toEqual(allApiTests());
-    expect(plan.matrix.shard).toEqual([
-      "api-1",
-      "api-2",
-      "api-3",
-      "api-4",
-      "rest-web",
-    ]);
+    expect(plan.matrix.shard).toEqual(["api-1", "api-2", "rest-web"]);
   }
 });
 
