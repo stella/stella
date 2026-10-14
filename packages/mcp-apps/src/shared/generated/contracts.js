@@ -361,8 +361,8 @@ var xn = E(2, (e, r) => e.map(r)),
   Un = E(2, (e, r) => e.tap(r)),
   jn = E(2, (e, r) => e.tapAsync(r)),
   Bn = E(2, (e, r) => e.tapError(r)),
-  Wn = E(2, (e, r) => e.tapErrorAsync(r)),
-  Hn = E(2, (e, r) => e.tapBoth(r)),
+  Hn = E(2, (e, r) => e.tapErrorAsync(r)),
+  Wn = E(2, (e, r) => e.tapBoth(r)),
   Mn = E(2, (e, r) => e.tapBothAsync(r));
 var Fn = E(2, (e, r) => e.unwrapOr(r));
 var ve = { ABSENT: "absent", PRESENT: "present" },
@@ -419,7 +419,7 @@ var Ie = { EXACT: "exact", AT_LEAST: "at-least", ESTIMATE: "estimate" },
 var me = ["function_words_optional", "no_hits", "no_hits_filtered"],
   rr = ["matter", "contact", "case-law", ..._e, "chat"];
 var Te = { type: "complete" },
-  W = { type: "truncated", reason: "exclusion_budget" };
+  H = { type: "truncated", reason: "exclusion_budget" };
 import * as u from "valibot";
 var It = () =>
     "(?<=\\s|^)(?:\\p{L} (?:\\p{L} ){2,}\\p{L})(?: ?[,:;.!?])?(?=\\s|$)",
@@ -427,17 +427,17 @@ var It = () =>
   mt = / {2,}/gu,
   Tt = / /gu,
   Ae,
-  H,
+  W,
   At = (e) => e.replace(be(), (r) => r.replace(Tt, "")).replace(mt, " "),
   M = (e) => {
-    if (e === Ae && H !== void 0) return H;
+    if (e === Ae && W !== void 0) return W;
     let r = e;
     for (;;) {
       let o = At(r);
       if (o === r) break;
       r = o;
     }
-    return ((Ae = e), (H = r), r);
+    return ((Ae = e), (W = r), r);
   };
 var F = (e, r) => e.normalize(r);
 var bt = new RegExp(
@@ -494,7 +494,7 @@ var h = () =>
   _ = () => y.pipe(y.string(), y.metadata({ [Re]: { role: "publicUrl" } }));
 var z = T.union([
   v(T.strictObject({ type: T.literal(Te.type) })),
-  v(T.strictObject({ type: T.literal(W.type), reason: T.literal(W.reason) })),
+  v(T.strictObject({ type: T.literal(H.type), reason: T.literal(H.reason) })),
 ]);
 import * as b from "valibot";
 var xe = b.strictObject({
@@ -649,7 +649,7 @@ var ke = (e) => Object.hasOwn(kt, e),
   Ut = 128,
   jt = 8,
   Bt = 16,
-  Wt = n.variant("status", [
+  Ht = n.variant("status", [
     n.strictObject({
       status: n.literal("identified"),
       identifiers: n.pipe(
@@ -666,7 +666,7 @@ var ke = (e) => Object.hasOwn(kt, e),
     start: we,
     end: n.optional(we),
   }),
-  Ht = n.strictObject({
+  Wt = n.strictObject({
     raw: n.pipe(n.string(), n.nonEmpty(), n.maxLength(Ut)),
     parts: n.pipe(n.tupleWithRest([De], De), n.minLength(1), n.maxLength(jt)),
     reporter: n.optional(X),
@@ -675,8 +675,8 @@ var ke = (e) => Object.hasOwn(kt, e),
     type: n.literal("citation"),
     cite: n.pipe(n.string(), n.nonEmpty()),
     href: n.optional(n.string()),
-    target: n.optional(Wt),
-    pin: n.optional(Ht),
+    target: n.optional(Ht),
+    pin: n.optional(Wt),
   },
   k = n.variant("type", [
     n.object({
@@ -786,7 +786,7 @@ var ee = ["decision-title", "section-heading"],
   ];
 var ne = ["related-proceedings", "metadata-table"];
 var Gt = { heading: ee, paragraph: te, table: ne, image: [] };
-var He = (e) => {
+var We = (e) => {
     let r = "";
     for (let o of e)
       if (o.type === "text") r += o.text;
@@ -794,14 +794,14 @@ var He = (e) => {
         r += `
 `;
       else if (o.type === "page-anchor");
-      else r += He(o.children);
+      else r += We(o.children);
     return r;
   },
   Yt = /(?<![ \t])[ \t]+\n/gu,
   Xt = /\u00a0/gu,
   Z = (e) =>
     M(
-      He(e)
+      We(e)
         .replace(Xt, " ")
         .replace(
           Yt,
@@ -836,7 +836,7 @@ var re = t.array(t.lazy(() => k)),
   Jt = t.check(Vt, "Image src must be an https URL"),
   qt = t.pipe(t.string(), t.url(), Jt),
   Be = t.optional(t.pipe(t.number(), t.integer(), t.minValue(2))),
-  We = t.optional(t.pipe(t.number(), t.integer(), t.minValue(1))),
+  He = t.optional(t.pipe(t.number(), t.integer(), t.minValue(1))),
   Me = {
     id: t.string(),
     anchorId: t.string(),
@@ -869,8 +869,8 @@ var Ge = {
     type: t.literal("image"),
     src: qt,
     alt: t.optional(t.string()),
-    width: We,
-    height: We,
+    width: He,
+    height: He,
   },
   Xe = {
     inlines: re,
