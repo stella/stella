@@ -23,12 +23,10 @@ import { reconcileOrphanedFlowRuns } from "@/api/lib/flows/flow-run-worker";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import {
-  flowReviewGateFixture,
-  waitForBlockedPid,
-} from "@/api/tests/helpers/flow-review-gate";
+import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { createTestState } from "@/api/tests/helpers/test-state";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const testState = createTestState({ file: import.meta.path, config: env });
 
