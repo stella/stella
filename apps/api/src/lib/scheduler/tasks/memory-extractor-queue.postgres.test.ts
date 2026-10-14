@@ -4,6 +4,7 @@ import { sql } from "drizzle-orm";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import {
   buildClaimMemoryExtractionQueueQuery,
@@ -24,9 +25,9 @@ describe.skipIf(!enabled)("memory extraction tenant queue (postgres)", () => {
       );
       const now = new Date("2026-10-14T12:00:00.000Z");
       const leaseExpiresAt = new Date("2026-10-14T12:30:00.000Z");
-      const firstId = createSafeId<"organization">();
-      const secondId = createSafeId<"organization">();
-      const futureId = createSafeId<"organization">();
+      const firstId = mintAuthProviderId<"organization">();
+      const secondId = mintAuthProviderId<"organization">();
+      const futureId = mintAuthProviderId<"organization">();
       await db.execute(sql`CREATE SCHEMA ${schema}`);
       try {
         // Copy migrated columns without foreign keys or triggers; no fixture
