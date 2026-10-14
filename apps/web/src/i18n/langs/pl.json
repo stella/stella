@@ -351,6 +351,12 @@
       "attentionComplete": "<strong>Wszystkie twierdzenia wymagające oceny zostały rozpatrzone.</strong> {count, plural, one {Pozostałe # rutynowe ustalenie nie wymaga indywidualnej weryfikacji.} few {Pozostałe # rutynowe ustalenia nie wymagają indywidualnej weryfikacji.} many {Pozostałych # rutynowych ustaleń nie trzeba weryfikować indywidualnie.} other {Pozostałego # rutynowego ustalenia nie trzeba weryfikować indywidualnie.}}",
       "attentionOpen": "<strong>{count, plural, one {# twierdzenie wymaga} few {# twierdzenia wymagają} many {# twierdzeń wymaga} other {# twierdzenia wymaga}} Twojej oceny</strong> — sprzeczności i sporne interpretacje. {routineCount, plural, one {Pozostałe # jest rutynowe i nie wymaga indywidualnego zatwierdzenia.} few {Pozostałe # są rutynowe i nie wymagają indywidualnego zatwierdzenia.} many {Pozostałych # jest rutynowych i nie wymaga indywidualnego zatwierdzenia.} other {Pozostałego # rutynowego ustalenia nie trzeba indywidualnie zatwierdzać.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporne} other {}}{reviewStatus, select, reviewed {, zweryfikowane} disputed {, zakwestionowane} other {}})",
+      "documentView": {
+        "label": "Widok dokumentu",
+        "original": "Oryginał",
+        "reading": "Widok do czytania"
+      },
+      "notLocated": "{count, plural, one {Nie znaleziono # twierdzenia w oryginale} few {Nie znaleziono # twierdzeń w oryginale} many {Nie znaleziono # twierdzeń w oryginale} other {Nie znaleziono # twierdzenia w oryginale}}",
       "selectClaim": "Wybierz twierdzenie, aby przejrzeć powiązane wpisy.",
       "showQueue": "Pokaż kolejkę",
       "stats": {

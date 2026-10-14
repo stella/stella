@@ -351,6 +351,12 @@
       "attentionComplete": "<strong>Minden mérlegelést igénylő állítás rendezve van.</strong> {count, plural, one {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.} other {A fennmaradó # rutinjellegű megállapítás nem igényel egyedi ellenőrzést.}}",
       "attentionOpen": "<strong>{count, plural, one {# állítás} other {# állítás}} igényli az Ön mérlegelését</strong> — ellentmondások és vitatott értelmezések. {routineCount, plural, one {A másik # rutinjellegű, és nem igényel egyedi jóváhagyást.} other {A többi # rutinjellegű, és nem igényel egyedi jóváhagyást.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vitatott} other {}}{reviewStatus, select, reviewed {, ellenőrzött} disputed {, vitatott} other {}})",
+      "documentView": {
+        "label": "Dokumentumnézet",
+        "original": "Eredeti",
+        "reading": "Olvasási nézet"
+      },
+      "notLocated": "{count, plural, one {# állítás nem található az eredetiben} other {# állítás nem található az eredetiben}}",
       "selectClaim": "Válasszon egy állítást a kapcsolódó nyilvántartás megtekintéséhez.",
       "showQueue": "Várólista megjelenítése",
       "stats": {

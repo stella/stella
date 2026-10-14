@@ -351,6 +351,12 @@
       "attentionComplete": "<strong>Kõik inimese otsust nõudvad väited on käsitletud.</strong> {count, plural, one {# tavapärast otsustust ei pea eraldi üle vaatama.} other {# tavapärast otsustust ei pea eraldi üle vaatama.}}",
       "attentionOpen": "<strong>{count, plural, one {# väide vajab} other {# väidet vajavad}} teie otsust</strong>: vastuolud ja vaidlustatud tõlgendused. {routineCount, plural, one {Ülejäänud # väide on tavapärane ega vaja eraldi kinnitamist.} other {Ülejäänud # väidet on tavapärased ega vaja eraldi kinnitamist.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, vaidlustatud} other {}}{reviewStatus, select, reviewed {, kontrollitud} disputed {, vaidlustatud} other {}})",
+      "documentView": {
+        "label": "Dokumendivaade",
+        "original": "Originaal",
+        "reading": "Lugemisvaade"
+      },
+      "notLocated": "{count, plural, one {# väidet ei leitud originaalist} other {# väidet ei leitud originaalist}}",
       "selectClaim": "Valige väide, et selle aluseks olev register üle vaadata.",
       "showQueue": "Näita järjekorda",
       "stats": {

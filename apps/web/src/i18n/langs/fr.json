@@ -351,6 +351,12 @@
       "attentionComplete": "<strong>Toutes les affirmations nécessitant un jugement ont été traitées.</strong> {count, plural, one {La # détermination de routine ne nécessite pas d’examen individuel.} other {Les # déterminations de routine ne nécessitent pas d’examen individuel.}}",
       "attentionOpen": "<strong>{count, plural, one {# affirmation requiert} other {# affirmations requièrent}} votre jugement</strong> — contradictions et interprétations contestées. {routineCount, plural, one {L’autre # est de routine et ne nécessite pas de validation individuelle.} other {Les # autres sont de routine et ne nécessitent pas de validation individuelle.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contestée} other {}}{reviewStatus, select, reviewed {, examinée} disputed {, désaccord signalé} other {}})",
+      "documentView": {
+        "label": "Affichage du document",
+        "original": "Original",
+        "reading": "Mode lecture"
+      },
+      "notLocated": "{count, plural, one {# affirmation introuvable dans l’original} other {# affirmations introuvables dans l’original}}",
       "selectClaim": "Sélectionnez une affirmation pour inspecter le dossier.",
       "showQueue": "Afficher la file",
       "stats": {

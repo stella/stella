@@ -351,6 +351,12 @@
       "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}",
       "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong> — conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} other {}})",
+      "documentView": {
+        "label": "Document view",
+        "original": "Original",
+        "reading": "Reading view"
+      },
+      "notLocated": "{count, plural, one {# claim was not located in the original} other {# claims were not located in the original}}",
       "selectClaim": "Select a claim to inspect the record.",
       "showQueue": "Show queue",
       "stats": {

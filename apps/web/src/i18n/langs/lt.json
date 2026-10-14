@@ -351,6 +351,12 @@
       "attentionComplete": "<strong>Visi žmogaus sprendimo reikalaujantys teiginiai sutvarkyti.</strong> {count, plural, one {# įprasto sprendimo atskirai peržiūrėti nereikia.} few {# įprastų sprendimų atskirai peržiūrėti nereikia.} many {# įprastų sprendimų atskirai peržiūrėti nereikia.} other {# įprasto sprendimo atskirai peržiūrėti nereikia.}}",
       "attentionOpen": "<strong>{count, plural, one {# teiginiui reikia} few {# teiginiams reikia} many {# teiginių reikia} other {# teiginio reikia}} jūsų sprendimo</strong>: prieštaravimai ir ginčijami aiškinimai. {routineCount, plural, one {Kitas # teiginys yra įprastas ir jo nereikia atskirai patvirtinti.} few {Kiti # teiginiai yra įprasti ir jų nereikia atskirai patvirtinti.} many {Kitų # teiginių nereikia atskirai patvirtinti.} other {Kito # teiginio nereikia atskirai patvirtinti.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, ginčijama} other {}}{reviewStatus, select, reviewed {, peržiūrėta} disputed {, užginčyta} other {}})",
+      "documentView": {
+        "label": "Dokumento rodinys",
+        "original": "Originalas",
+        "reading": "Skaitymo rodinys"
+      },
+      "notLocated": "{count, plural, one {# teiginys originale nerastas} few {# teiginiai originale nerasti} many {# teiginio originale nerasta} other {# teiginių originale nerasta}}",
       "selectClaim": "Pasirinkite teiginį, kad patikrintumėte jo pagrindą registre.",
       "showQueue": "Rodyti eilę",
       "stats": {

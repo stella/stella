@@ -351,6 +351,12 @@
       "attentionComplete": "<strong>Se han resuelto todas las afirmaciones que requerían una valoración.</strong> {count, plural, one {La # determinación rutinaria no requiere revisión individual.} other {Las # determinaciones rutinarias no requieren revisión individual.}}",
       "attentionOpen": "<strong>{count, plural, one {# afirmación requiere} other {# afirmaciones requieren}} su valoración</strong>: conflictos e interpretaciones cuestionadas. {routineCount, plural, one {La otra # es rutinaria y no requiere aprobación individual.} other {Las otras # son rutinarias y no requieren aprobación individual.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, cuestionada} other {}}{reviewStatus, select, reviewed {, revisada} disputed {, impugnada} other {}})",
+      "documentView": {
+        "label": "Vista del documento",
+        "original": "Original",
+        "reading": "Vista de lectura"
+      },
+      "notLocated": "{count, plural, one {# afirmación no se ha localizado en el original} other {# afirmaciones no se han localizado en el original}}",
       "selectClaim": "Seleccione una afirmación para examinar el registro.",
       "showQueue": "Mostrar cola",
       "stats": {

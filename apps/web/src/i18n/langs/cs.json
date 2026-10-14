@@ -351,6 +351,12 @@
       "attentionComplete": "<strong>Všechna tvrzení vyžadující úsudek byla vyřízena.</strong> {count, plural, one {Zbývající # rutinní závěr nevyžaduje samostatnou kontrolu.} few {Zbývající # rutinní závěry nevyžadují samostatnou kontrolu.} other {Zbývajících # rutinních závěrů nevyžaduje samostatnou kontrolu.}}",
       "attentionOpen": "<strong>{count, plural, one {# tvrzení vyžaduje} few {# tvrzení vyžadují} other {# tvrzení vyžaduje}} váš úsudek</strong> — rozpory a sporné výklady. {routineCount, plural, one {Zbývající # tvrzení je rutinní a nevyžaduje samostatné schválení.} few {Zbývající # tvrzení jsou rutinní a nevyžadují samostatné schválení.} other {Zbývajících # tvrzení je rutinních a nevyžaduje samostatné schválení.}}",
       "claimAnnouncement": " ({state}{contested, select, true {, sporné} other {}}{reviewStatus, select, reviewed {, zkontrolované} disputed {, zpochybněné} other {}})",
+      "documentView": {
+        "label": "Zobrazení dokumentu",
+        "original": "Originál",
+        "reading": "Text ke čtení"
+      },
+      "notLocated": "{count, plural, one {# tvrzení se v originálu nepodařilo najít} few {# tvrzení se v originálu nepodařilo najít} other {# tvrzení se v originálu nepodařilo najít}}",
       "selectClaim": "Vyberte tvrzení a prohlédněte si související záznamy.",
       "showQueue": "Zobrazit frontu",
       "stats": {
