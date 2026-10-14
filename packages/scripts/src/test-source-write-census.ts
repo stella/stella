@@ -371,7 +371,7 @@ export const runSourceWriteCensus = ({
       child.error?.message ||
       child.stderr ||
       child.stdout ||
-      `exit ${child.status}, signal ${child.signal}`;
+      `exit ${child.status ?? "none"}, signal ${child.signal ?? "none"}`;
     return [`Source-write census failed: ${detail}`];
   }
   return [];
