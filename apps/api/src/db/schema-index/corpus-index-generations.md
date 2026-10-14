@@ -70,6 +70,6 @@ The generation that serves one jurisdiction when it is not the family's serving 
 corpus_index_jurisdiction_serving.family           text         not null          corpus-index-generations.ts:300
 corpus_index_jurisdiction_serving.jurisdiction     varchar      not null          corpus-index-generations.ts:301
 corpus_index_jurisdiction_serving.generation       varchar      not null          corpus-index-generations.ts:302
-corpus_index_jurisdiction_serving.from_generation  varchar      not null          corpus-index-generations.ts:309
+corpus_index_jurisdiction_serving.from_generation  varchar      not null          corpus-index-generations.ts:309  The generation the jurisdiction was served by until the flip: the one whose copies are erased, and the only one.
 corpus_index_jurisdiction_serving.flipped_at       timestamptz  default,not null  corpus-index-generations.ts:314
 ```

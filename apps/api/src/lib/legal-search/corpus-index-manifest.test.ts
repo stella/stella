@@ -502,6 +502,7 @@ const EXPECTED_DOCSTORE_BLOCKSIZE = {
   case_law_v6: 1_000_000,
   case_law_v7: 65_536,
   case_law_v8: 65_536,
+  case_law_v9: 65_536,
   legislation_v2: 1_000_000,
   legislation_v3: 1_000_000,
 } as const satisfies Record<keyof typeof CORPUS_INDEX_MANIFESTS, number>;
@@ -521,6 +522,7 @@ const EXPECTED_INDEXING = {
   case_law_v6: BUILT_THROUGH_V7_INDEXING,
   case_law_v7: BUILT_THROUGH_V7_INDEXING,
   case_law_v8: V8_INDEXING,
+  case_law_v9: V8_INDEXING,
   legislation_v2: BUILT_THROUGH_V7_INDEXING,
   legislation_v3: V8_INDEXING,
 } as const satisfies Record<

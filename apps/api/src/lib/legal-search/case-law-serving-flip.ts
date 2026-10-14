@@ -47,7 +47,6 @@ import {
   corpusIndexManifestCoversJurisdiction,
   corpusIndexManifestDigest,
   corpusIndexManifestIsPartial,
-  corpusIndexManifestScopeJurisdictions,
   corpusIndexRoute,
   requireCorpusIndexManifest,
   type CorpusIndexManifest,
@@ -197,8 +196,7 @@ const readFlipRegistryTx = async (
       .limit(1)
   ).at(0);
   if (
-    row === undefined ||
-    row.status !== "building" ||
+    row?.status !== "building" ||
     row.manifestDigest !== corpusIndexManifestDigest(manifest) ||
     serving.value.generation === manifest.generation
   ) {
@@ -210,7 +208,13 @@ const readFlipRegistryTx = async (
       }),
     };
   }
-  if (row.cluster !== serving.value.cluster) {
+  // Counted rather than compared: a read spans exactly one cluster, however
+  // many the contract declares.
+  const clusters = new Set<QuickwitCluster>([
+    row.cluster,
+    serving.value.cluster,
+  ]);
+  if (clusters.size > 1) {
     return {
       type: "refused",
       refusal: new CaseLawServingFlipClusterMismatchError({
@@ -586,14 +590,4 @@ export const purgeFlippedJurisdictionBatchTx = async (
     nextAfterEntityId:
       decisions.length < limit ? null : (decisions.at(-1)?.id ?? null),
   };
-};
-
-/** The jurisdictions a partial generation holds, for a runbook to enumerate. */
-export const caseLawServingFlipJurisdictions = (
-  generation: string,
-): readonly string[] => {
-  const scope = corpusIndexManifestScopeJurisdictions(
-    requireCorpusIndexManifest("case_law", generation),
-  );
-  return scope ?? [];
 };

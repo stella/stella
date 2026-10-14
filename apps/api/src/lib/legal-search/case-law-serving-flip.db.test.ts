@@ -292,7 +292,7 @@ const flipContext = (engine: Engine): CaseLawServingFlipContext => ({
 const flip = async (
   engine: Engine,
   mode: CaseLawServingFlipOptions["mode"] = "apply",
-  generation = V9.generation,
+  generation: string = V9.generation,
 ) =>
   await flipCaseLawJurisdictionServing(flipContext(engine), {
     jurisdiction: "CZE",

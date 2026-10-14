@@ -95,16 +95,25 @@ export const readCaseLawProvisionKeys = async (
       caseLawJurisdictionHasProvisionKeys(jurisdiction),
     )
     .map(({ id }) => id);
-  const byDecision = new Map<string, ProvisionLinkRow[]>();
+  // Every decision starts with no links, so a decision the read returns
+  // nothing for maps to no keys without a lookup fallback.
+  const byDecision = new Map(
+    decisions.map(({ id }): [string, ProvisionLinkRow[]] => [String(id), []]),
+  );
   if (keyed.length > 0) {
     for (const row of await readProvisionLinkRows(tx, keyed)) {
-      const key = String(row.decisionId);
-      byDecision.set(key, [...(byDecision.get(key) ?? []), row]);
+      const rows = byDecision.get(String(row.decisionId));
+      if (rows === undefined) {
+        // The read is filtered to the requested decisions.
+        return panic("A provision-link read returned an unrequested decision", {
+          decisionId: row.decisionId,
+        });
+      }
+      rows.push(row);
     }
   }
   return new Map(
-    decisions.map(({ id }): [string, readonly string[]] => {
-      const rows = byDecision.get(String(id)) ?? [];
+    [...byDecision].map(([id, rows]): [string, readonly string[]] => {
       const rowsCapped = rows.length > PROVISION_LINK_READ_MAX_ROWS;
       const { keys, dropped } = provisionKeysOfLinks(
         rowsCapped ? rows.slice(0, PROVISION_LINK_READ_MAX_ROWS) : rows,
@@ -117,7 +126,7 @@ export const readCaseLawProvisionKeys = async (
           keptKeys: keys.length,
         });
       }
-      return [String(id), keys];
+      return [id, keys];
     }),
   );
 };
