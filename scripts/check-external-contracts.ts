@@ -39,7 +39,7 @@ import {
 } from "./external-contract-pin-allowances";
 import {
   createGitBaselineReader,
-  readGitTrackedFiles,
+  readGitHeadBlobIds,
 } from "./offline-git-read";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
@@ -1010,6 +1010,14 @@ export const hasChangedLocalRuntimeClosure = ({
     if (!reachesPinnedSdk) {
       continue;
     }
+    if (previous.dataBlobIds.size !== present.dataBlobIds.size) {
+      return invalidate(`Runtime data membership changed for ${owner}`);
+    }
+    for (const [file, id] of previous.dataBlobIds) {
+      if (present.dataBlobIds.get(file) !== id) {
+        return invalidate(`Runtime data blob changed: ${file} in ${owner}`);
+      }
+    }
     if (previous.files.size !== present.files.size) {
       const changed = [
         ...new Set([...previous.files.keys(), ...present.files.keys()]),
@@ -1022,7 +1030,6 @@ export const hasChangedLocalRuntimeClosure = ({
       const next = present.files.get(file);
       if (
         next === undefined ||
-        previous.dataHashes.get(file) !== present.dataHashes.get(file) ||
         executable(file, source) !== executable(file, next)
       ) {
         return invalidate(
@@ -1144,6 +1151,10 @@ export const checkContractEntry = ({
     }
     return currentSources.get(file);
   };
+  const currentObjects =
+    baseline?.files === undefined || admitted === undefined
+      ? undefined
+      : readGitHeadBlobIds(root);
   const usageChanged =
     baseline !== undefined &&
     admitted !== undefined &&
@@ -1160,11 +1171,8 @@ export const checkContractEntry = ({
       current: Object.assign(currentSource, {
         byteLength: (file: string) => readBytes(file)?.byteLength,
         files:
-          baseline.files === undefined ? undefined : readGitTrackedFiles(root),
-        digest: (file: string) => {
-          const bytes = readBytes(file);
-          return bytes === undefined ? undefined : hash(bytes);
-        },
+          currentObjects === undefined ? undefined : [...currentObjects.keys()],
+        blobId: (file: string) => currentObjects?.get(file),
       }),
     });
   let defaultDriftReason = "pin has no dated allowance";

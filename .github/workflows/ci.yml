@@ -3763,11 +3763,11 @@ jobs:
             # Hydrate a partial clone before verification disables Git transport.
             git show "$base:$baseline_path" > /dev/null
           fi
-          # Hydrate source/config blobs for either snapshot's local import closure.
+          # Hydrate parsed source/config blobs; data leaves use tree object identities.
           git ls-tree -r --name-only "$base" > "$RUNNER_TEMP/external-contract-baseline-paths"
           while IFS= read -r file; do
             case "$file" in
-              *.ts|*.tsx|*.js|*.jsx|*.mts|*.cts|*.mjs|*.cjs|*.json|*.css|*.html|*.txt|*.svg|*.typ|*.md|*.graphql|*.ttf|*.docx|bun.lock)
+              *.ts|*.tsx|*.js|*.jsx|*.mts|*.cts|*.mjs|*.cjs|package.json|*/package.json|tsconfig*.json|*/tsconfig*.json|packages/typescript-config/*.json|bun.lock)
                 printf '%s:%s\n' "$base" "$file" ;;
             esac
           done < "$RUNNER_TEMP/external-contract-baseline-paths" > "$RUNNER_TEMP/external-contract-baseline-objects"

@@ -11,7 +11,6 @@ import path from "node:path";
 import ts from "typescript";
 
 import { isPathInside, repoRelativePath } from "@stll/portable-path";
-import { sha256Hex } from "@stll/sha256/bun";
 
 import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options";
 import {
@@ -426,7 +425,7 @@ export const runtimeModuleReferences = ({
 
 export type RuntimeSnapshotReader = ((file: string) => string | undefined) & {
   files?: readonly string[] | undefined;
-  digest?: ((file: string) => string | undefined) | undefined;
+  blobId?: ((file: string) => string | undefined) | undefined;
   byteLength?: ((file: string) => number | undefined) | undefined;
 };
 type GeneratedClosureDefinition = Pick<
@@ -761,14 +760,14 @@ type LiteralAssetOptions = {
   importer: string;
   options: ts.CompilerOptions;
   repositoryRoot: string;
-  readAbsolute: (file: string) => string | undefined;
+  hasBlob: (file: string) => boolean;
 };
 const resolveLiteralAsset = ({
   specifier,
   importer,
   options,
   repositoryRoot,
-  readAbsolute,
+  hasBlob,
 }: LiteralAssetOptions) => {
   const assets = specifier.startsWith(".")
     ? [path.resolve(path.dirname(importer), specifier)]
@@ -805,7 +804,7 @@ const resolveLiteralAsset = ({
     (candidate) =>
       !RUNTIME_SOURCE.test(candidate) &&
       !DECLARATION_SOURCE.test(candidate) &&
-      readAbsolute(candidate) !== undefined,
+      hasBlob(candidate),
   );
 };
 
@@ -823,10 +822,23 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
   const configs = new Map<string, ts.CompilerOptions>();
   const resolutions = new Map<string, LocalImportResolution>();
   const generated = createGeneratedClosureReader(snapshot);
+  const hasBlob = (file: string) => {
+    const absolute = canonical(file);
+    return (
+      isPathInside(repositoryRoot, absolute) &&
+      !repoRelativePath(repositoryRoot, absolute)
+        .split("/")
+        .includes("node_modules") &&
+      snapshot.read.blobId?.(repoRelativePath(repositoryRoot, absolute)) !==
+        undefined
+    );
+  };
   const host = {
     fileExists: (file: string) =>
       !DECLARATION_SOURCE.test(file) &&
-      (readAbsolute(file) !== undefined ||
+      ((RUNTIME_SOURCE.test(file)
+        ? readAbsolute(file) !== undefined
+        : hasBlob(file)) ||
         generated.derived(repoRelativePath(repositoryRoot, canonical(file)))),
     readFile: readAbsolute,
     directoryExists: (directory: string) =>
@@ -941,7 +953,7 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
       importer,
       options,
       repositoryRoot,
-      readAbsolute,
+      hasBlob,
     });
     if (asset !== undefined) {
       const result = {
@@ -995,7 +1007,7 @@ export const createLocalRuntimeClosureReader = (
   return (roots: readonly string[]) => {
     const files = new Map<string, string>();
     const generatedLeaves = new Map<string, string>();
-    const dataHashes = new Map<string, string>();
+    const dataBlobIds = new Map<string, string>();
     const visited = new Set<string>();
     const countedFiles = new Set<string>();
     const references: RuntimeModuleReference[] = [];
@@ -1074,6 +1086,15 @@ export const createLocalRuntimeClosureReader = (
         }
         continue;
       }
+      if (!RUNTIME_SOURCE.test(file)) {
+        const id = options.read.blobId?.(relative);
+        if (id === undefined) {
+          problems.push(`Cannot resolve runtime data blob ${relative}`);
+          continue;
+        }
+        dataBlobIds.set(relative, id);
+        continue;
+      }
       const text = readAbsolute(file);
       if (text === undefined) {
         problems.push(`Cannot read local runtime source ${relative}`);
@@ -1083,17 +1104,6 @@ export const createLocalRuntimeClosureReader = (
       if (accountingProblem !== undefined) {
         problems.push(accountingProblem);
         break;
-      }
-      if (!RUNTIME_SOURCE.test(file)) {
-        const digest =
-          options.read.digest === undefined
-            ? sha256Hex(text)
-            : options.read.digest(relative);
-        if (digest === undefined) {
-          problems.push(`Cannot fingerprint runtime data input ${relative}`);
-          continue;
-        }
-        dataHashes.set(relative, digest);
       }
       if (entry.mode === "input") {
         continue;
@@ -1105,9 +1115,6 @@ export const createLocalRuntimeClosureReader = (
         problems.push(
           `Generated module ${relative} has no registered generator`,
         );
-        continue;
-      }
-      if (!RUNTIME_SOURCE.test(file)) {
         continue;
       }
       for (const reference of runtimeModuleReferences({
@@ -1167,7 +1174,7 @@ export const createLocalRuntimeClosureReader = (
     return {
       files,
       generated: generatedLeaves,
-      dataHashes,
+      dataBlobIds,
       references,
       problems: [...problems, ...metadataProblems],
     };

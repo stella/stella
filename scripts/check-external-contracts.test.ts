@@ -25,7 +25,7 @@ import {
   checkContractEntry,
   readBaselinePins,
   hasChangedExecutableUsage,
-  hasChangedLocalRuntimeClosure,
+  hasChangedLocalRuntimeClosure as compareLocalRuntimeClosure,
   REMOVED_PIN,
   checkExternalContracts,
   findDependencyCatalogProblems,
@@ -39,12 +39,45 @@ import {
   readPin,
   uncharacterisedFromSource,
 } from "./check-external-contracts";
-import { createLocalRuntimeClosureReader } from "./external-contract-evidence";
+import {
+  createLocalRuntimeClosureReader as readLocalClosure,
+  type RuntimeSnapshotReader,
+} from "./external-contract-evidence";
 import { createGitBaselineReader } from "./offline-git-read";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
   type OutboundTransportCensusEntry,
 } from "./outbound-transport-census";
+
+// Map fixtures model object identity without a Git repository; production readers use tree metadata.
+const withBlobIds = (read: RuntimeSnapshotReader): RuntimeSnapshotReader => {
+  if (read.blobId !== undefined) {
+    return read;
+  }
+  return Object.assign((file: string) => read(file), {
+    files: read.files,
+    byteLength: read.byteLength,
+    blobId: (file: string) => {
+      const text = read(file);
+      return text === undefined
+        ? undefined
+        : sha256Hex(
+            `blob ${new TextEncoder().encode(text).byteLength}\0${text}`,
+          );
+    },
+  });
+};
+const hasChangedLocalRuntimeClosure = (
+  options: Parameters<typeof compareLocalRuntimeClosure>[0],
+) =>
+  compareLocalRuntimeClosure({
+    ...options,
+    baseline: withBlobIds(options.baseline),
+    current: withBlobIds(options.current),
+  });
+const createLocalRuntimeClosureReader = (
+  options: Parameters<typeof readLocalClosure>[0],
+) => readLocalClosure({ ...options, read: withBlobIds(options.read) });
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const directDependencies = readDirectDependencies(ROOT);
@@ -1254,27 +1287,40 @@ test("literal dynamic imports with options compare payload data and keep unchang
   ).toBe(true);
 });
 
-test("runtime and generator input visits count each file's original bytes once", () => {
+test("large runtime and generator data leaves compare blob IDs without reading or charging bytes", () => {
   const files = new Map([
     [
       "owner.ts",
       'import sdk from "vendor"; import "./generated/adapter"; import "./payload.json";',
     ],
     ["generator.ts", 'export const generate = () => "output";'],
-    ["payload.json", "{}"],
   ]);
-  const measured = new Map<string, number>();
-  const read = Object.assign((file: string) => files.get(file), {
-    byteLength: (file: string) => {
-      measured.set(file, (measured.get(file) ?? 0) + 1);
-      return file === "payload.json"
-        ? 20 * 1024 * 1024
-        : files.get(file)?.length;
-    },
-  });
+  let measuredDataBytes = 0;
+  const snapshots = (id: string | undefined) =>
+    Object.assign(
+      (file: string) => {
+        if (file === "payload.json") {
+          return panic("Data leaf content must not be read");
+        }
+        return files.get(file);
+      },
+      {
+        blobId: (file: string) => (file === "payload.json" ? id : undefined),
+        byteLength: (file: string) => {
+          if (file === "payload.json") {
+            measuredDataBytes += 1;
+            return 64 * 1024 * 1024;
+          }
+          return files.get(file)?.length;
+        },
+      },
+    );
   const options = {
     root: "/fixture",
-    read,
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: snapshots("a".repeat(40)),
+    current: snapshots("a".repeat(40)),
     registryFiles: [],
     generators: [
       {
@@ -1286,21 +1332,28 @@ test("runtime and generator input visits count each file's original bytes once",
       },
     ] as const,
   };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
   expect(
-    createLocalRuntimeClosureReader(options)(["owner.ts"]).problems,
-  ).toEqual([]);
-  expect(measured.get("payload.json")).toBe(1);
-  expect(
-    createLocalRuntimeClosureReader({
+    hasChangedLocalRuntimeClosure({
       ...options,
-      read: Object.assign((file: string) => files.get(file), {
-        byteLength: (file: string) =>
-          file === "payload.json" ? 33 * 1024 * 1024 : files.get(file)?.length,
-      }),
+      current: snapshots("b".repeat(40)),
+    }),
+  ).toBe(true);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: snapshots(undefined),
+    }),
+  ).toBe(true);
+  expect(
+    readLocalClosure({
+      root: options.root,
+      read: snapshots(undefined),
+      generators: options.generators,
+      registryFiles: [],
     })(["owner.ts"]).problems.join("\n"),
-  ).toContain(
-    "Local runtime closure exceeds its traversal bound at payload.json",
-  );
+  ).toContain("Cannot resolve runtime data blob payload.json");
+  expect(measuredDataBytes).toBe(0);
 });
 
 test("published packages with workspace-like names stop the local closure", () => {
@@ -1558,7 +1611,7 @@ test("private package imports stop at external assets and track their alias mani
   ).toBe(true);
 });
 
-test("generated data inputs compare original bytes rather than lossy decoded text", () => {
+test("generated data inputs compare blob identities despite identical decoded text", () => {
   const files = new Map([
     [
       "owner.ts",
@@ -1570,7 +1623,7 @@ test("generated data inputs compare original bytes rather than lossy decoded tex
   const read = (bytes: Uint8Array) =>
     Object.assign((file: string) => files.get(file), {
       files: [...files.keys()],
-      digest: (file: string) =>
+      blobId: (file: string) =>
         file === "input.bin"
           ? sha256Hex(bytes)
           : sha256Hex(files.get(file) ?? ""),

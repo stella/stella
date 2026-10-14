@@ -243,16 +243,21 @@ test("the offline baseline reader uses the merge base and preserves absent files
       `import { createGitBaselineReader } from './scripts/offline-git-read.ts';
        process.env['GIT_TRACE2_EVENT'] = ${JSON.stringify(batchTrace)};
        const read = createGitBaselineReader(${JSON.stringify({ root: directory, base })});
-       console.log(JSON.stringify({ size: read.byteLength('data/font.ttf'), sibling: read('data/config.json') }));`,
+       console.log(JSON.stringify({ blob: read.blobId('data/font.ttf'), sibling: read.blobId('data/config.json') }));`,
       "--check",
     );
     expect(binary.exitCode).toBe(0);
     expect(JSON.parse(binary.stdout.toString())).toEqual({
-      size: 6,
-      sibling: '{"original":true}',
+      blob: git(["rev-parse", `${base}:data/font.ttf`]),
+      sibling: git(["rev-parse", `${base}:data/config.json`]),
     });
-    expect(readFileSync(batchTrace, "utf-8")).toContain('"cat-file","--batch"');
+    expect(readFileSync(batchTrace, "utf-8")).not.toContain('"cat-file"');
+    expect(readFileSync(batchTrace, "utf-8")).not.toContain('"show"');
     writeFileSync(path.join(directory, "baseline.txt"), "changed\n");
+    writeFileSync(
+      path.join(directory, "data/font.ttf"),
+      new Uint8Array([0, 255, 10, 128, 13, 3]),
+    );
     writeFileSync(path.join(directory, "introduced.txt"), "new\n");
     git(["add", "."]);
     git([
@@ -265,6 +270,20 @@ test("the offline baseline reader uses the merge base and preserves absent files
       "-m",
       "head",
     ]);
+    const headObjects = runPreloaded(
+      `import { readGitHeadBlobIds } from './scripts/offline-git-read.ts';
+       const objects = readGitHeadBlobIds(${JSON.stringify(directory)});
+       console.log(JSON.stringify({ changed: objects.get('data/font.ttf'), absent: objects.get('data/missing.ttf') ?? null }));`,
+      "--check",
+    );
+    expect(headObjects.exitCode).toBe(0);
+    expect(JSON.parse(headObjects.stdout.toString())).toEqual({
+      changed: git(["rev-parse", "HEAD:data/font.ttf"]),
+      absent: null,
+    });
+    expect(JSON.parse(headObjects.stdout.toString()).changed).not.toBe(
+      JSON.parse(binary.stdout.toString()).blob,
+    );
     const read = (file: string, ref = base) =>
       runPreloaded(
         `import { createGitBaselineReader } from './scripts/offline-git-read.ts';
