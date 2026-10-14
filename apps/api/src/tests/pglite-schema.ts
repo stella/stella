@@ -17,6 +17,11 @@ const WORKSPACE_AUTHORIZATION_MIGRATION_PATH = nodePath.join(
   "20260710173000_scalable_workspace_authorization",
   "migration.sql",
 );
+const MATTER_VISIBILITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261014120000_matter_visibility",
+  "migration.sql",
+);
 const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260803120000_chat_thread_turn_workspace_cascade",
@@ -273,6 +278,21 @@ export const installPgliteWorkspaceAccessObjects = async (
   ];
   for (const migrationPath of migrationPaths) {
     await installPgliteMigration({ db, migrationPath });
+  }
+  // The push already created `workspaces.visibility`; only the access view's
+  // three-level rewrite is replayed, over the view installed above.
+  const accessViewStatements = readMigrationStatements(
+    MATTER_VISIBILITY_MIGRATION_PATH,
+  ).filter((statement) =>
+    executableSql(statement).startsWith(
+      `CREATE OR REPLACE VIEW public.${WORKSPACE_ACCESS_VIEW_NAME}`,
+    ),
+  );
+  if (accessViewStatements.length !== 1) {
+    panic("Matter visibility migration must replace the access view once");
+  }
+  for (const statement of accessViewStatements) {
+    await db.execute(sql.raw(statement));
   }
   // The replay above rewrites every `workspace_*` policy to the plain matter
   // check, so a table whose policies carry a further predicate in the schema
