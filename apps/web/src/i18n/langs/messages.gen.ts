@@ -1322,7 +1322,9 @@ type Messages = {
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
       "category": {
+        "connectors": "Connections";
         "entities": "In this matter";
+        "registries": "Registries";
         "sources": "Sources";
       };
       "corpus": {

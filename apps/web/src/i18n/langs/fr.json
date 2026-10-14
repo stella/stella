@@ -1319,7 +1319,9 @@
     "maxAttachmentsReached": "Maximum {count} fichiers par message",
     "mention": {
       "category": {
+        "connectors": "Connexions",
         "entities": "Dans ce dossier",
+        "registries": "Registres",
         "sources": "Sources"
       },
       "corpus": {

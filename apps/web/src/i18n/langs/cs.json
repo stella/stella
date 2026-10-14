@@ -1319,7 +1319,9 @@
     "maxAttachmentsReached": "Maximálně {count} souborů na zprávu",
     "mention": {
       "category": {
+        "connectors": "Připojení",
         "entities": "V tomto spisu",
+        "registries": "Rejstříky",
         "sources": "Zdroje"
       },
       "corpus": {

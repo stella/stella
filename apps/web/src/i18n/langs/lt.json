@@ -1319,7 +1319,9 @@
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {
       "category": {
+        "connectors": "Ryšiai",
         "entities": "Šioje byloje",
+        "registries": "Registrai",
         "sources": "Šaltiniai"
       },
       "corpus": {

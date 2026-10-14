@@ -2,14 +2,19 @@ import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { businessRegistryCallScope } from "@/api/handlers/chat/tools/source-scope";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import type { RegistryHandler } from "@/api/lib/business-registries/dispatch";
+import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 
 import {
   BUSINESS_REGISTRY_LOOKUP_TOOL_NAME,
   createBusinessRegistryTools,
 } from "./business-registry-tools.js";
+import type { BusinessRegistryCallScope } from "./business-registry-tools.js";
 
 type ToolInputJsonSchema = {
   properties?: {
@@ -133,11 +138,15 @@ describe("a jurisdiction with more than one register", () => {
     },
   });
 
-  const executorFor = (handlers: readonly RegistryHandler[]) => {
+  const executorFor = (
+    handlers: readonly RegistryHandler[],
+    scopeCall?: BusinessRegistryCallScope,
+  ) => {
     const tool =
       createBusinessRegistryTools({
         organizationId: toSafeId<"organization">("fixture-org"),
         enabledHandlers: handlers,
+        scopeCall,
       })[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME] ??
       panic("Expected a registry tool");
     return {
@@ -193,6 +202,39 @@ describe("a jurisdiction with more than one register", () => {
     expect(result).toEqual({
       error: "Registry 'rpo' does not cover jurisdiction CZ",
     });
+  });
+
+  test("holds a chip-scoped turn to the named register: pins it, refuses others", async () => {
+    const calls: string[] = [];
+    const rpo = recordingHandler(BUSINESS_REGISTRY_DISPATCH.rpo, calls);
+    const { execute } = executorFor(
+      [
+        recordingHandler(BUSINESS_REGISTRY_DISPATCH.ares, calls),
+        recordingHandler(BUSINESS_REGISTRY_DISPATCH.orsr, calls),
+        rpo,
+      ],
+      businessRegistryCallScope([rpo]),
+    );
+    const context = { emitCustomEvent: () => undefined };
+
+    // The default SK register is orsr; the chip names rpo, so rpo answers.
+    await execute({ jurisdiction: "SK", query: "31333532" }, context);
+    expect(calls).toEqual(["rpo"]);
+
+    const otherRegister = await rejectionOf(
+      execute(
+        { jurisdiction: "SK", query: "31333532", registry: "orsr" },
+        context,
+      ),
+    );
+    const otherJurisdiction = await rejectionOf(
+      execute({ jurisdiction: "CZ", query: "27082440" }, context),
+    );
+
+    expect(otherRegister).toBeInstanceOf(ChatToolError);
+    expect(String(otherRegister)).toContain("Registry orsr is not one of them");
+    expect(String(otherJurisdiction)).toContain("None of them serves CZ");
+    expect(calls).toEqual(["rpo"]);
   });
 
   test("lists each jurisdiction once and says what the extra register covers", () => {

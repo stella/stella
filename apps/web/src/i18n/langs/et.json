@@ -1319,7 +1319,9 @@
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {
+        "connectors": "Ühendused",
         "entities": "Selles toimikus",
+        "registries": "Registrid",
         "sources": "Allikad"
       },
       "corpus": {
