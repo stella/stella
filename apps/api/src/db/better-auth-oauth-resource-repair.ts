@@ -21,10 +21,10 @@
  * functions (`seedOAuthResources`, `backfillOAuthClients`) rather than
  * reimplementing their semantics, which is what keeps a resource seeded by a
  * deploy identical to one seeded by the cutover: a missing resource is
- * inserted, and a matching one is left alone. The exact policy that excluded
- * OAuth protocol scopes is upgraded before seeding, so refresh grants retain
- * offline_access. Every other conflicting definition refuses the transaction.
- * The identity half of the cutover
+ * inserted, and a matching one is left alone. Before seeding, a stored Stella
+ * resource whose scopes an earlier release configured differently is brought
+ * to this release's scopes (`reconcileStoredScopes`); every other conflicting
+ * definition refuses the transaction. The identity half of the cutover
  * (`backfillAccounts`) stays private to that command; it needs the manifest and
  * the freeze, and nothing about adding an audience touches identities.
  *
@@ -57,15 +57,14 @@ import { sql, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { assertBetterAuthOAuthPolicyCensus } from "../lib/db/better-auth-oauth-policy-census";
+import { executedRows } from "../lib/db/executed-rows";
 import { isRecord } from "../lib/type-guards";
-import {
-  buildBetterAuthOAuthResources,
-  predecessorOAuthResourceScopes,
-} from "../mcp/resource-policy-contract";
+import { buildBetterAuthOAuthResources } from "../mcp/resource-policy-contract";
 import {
   backfillOAuthClients,
   seedOAuthResources,
 } from "../scripts/better-auth-17-backfill.logic";
+import type { BetterAuthExpectedOAuthResource } from "../scripts/better-auth-migration-audit.logic";
 import { onlineMigrationParams } from "./online-migration-connection";
 import type {
   OnlineMigrationConnection,
@@ -144,6 +143,178 @@ const readStoredOrigin = async (
   return origin ?? null;
 };
 
+type BoundTransaction = ReturnType<typeof bindTo>;
+
+const sortedScopes = (scopes: readonly string[]) =>
+  [...new Set(scopes)].toSorted();
+
+const writeRepairEvent = (record: Record<string, unknown>) => {
+  process.stderr.write(
+    `${JSON.stringify({ ...record, repair: REPAIR_NAME })}\n`,
+  );
+};
+
+/**
+ * A plain read: the migrate entrypoint runs repairs while holding the
+ * online-migrations lock, so no other deploy rewrites the policy between this
+ * read and the update, and the seeder locks each row it then verifies.
+ */
+const readStoredPolicies = async (
+  transaction: BoundTransaction,
+  expectedResources: readonly BetterAuthExpectedOAuthResource[],
+) => {
+  const rows = await transaction.execute(sql`
+    SELECT identifier, name, disabled, allowed_scopes AS "allowedScopes"
+      FROM oauth_resource
+     WHERE identifier IN (${sql.join(
+       expectedResources.map(({ identifier }) => sql`${identifier}`),
+       sql`, `,
+     )})
+  `);
+  const stored = new Map<
+    string,
+    { allowedScopes: string[] | null; disabled: boolean; name: string }
+  >();
+  for (const row of executedRows(rows)) {
+    if (
+      !isRecord(row) ||
+      typeof row["identifier"] !== "string" ||
+      typeof row["name"] !== "string" ||
+      typeof row["disabled"] !== "boolean"
+    ) {
+      return panic(
+        `Online repair ${REPAIR_NAME}: oauth_resource has an invalid shape`,
+      );
+    }
+    const allowedScopes = row["allowedScopes"];
+    stored.set(row["identifier"], {
+      allowedScopes:
+        Array.isArray(allowedScopes) &&
+        allowedScopes.every((scope) => typeof scope === "string")
+          ? allowedScopes
+          : null,
+      disabled: row["disabled"],
+      name: row["name"],
+    });
+  }
+  return stored;
+};
+
+/**
+ * Brings every stored Stella resource to the scopes this release configures.
+ *
+ * The scope sets are code: a release that moves a tool between audiences, or
+ * gives one audience a new scope, changes `buildBetterAuthOAuthResources()`,
+ * and the boot census then accepts only the new set. So the deploy rewrites a
+ * stored row whose scopes differ, in both directions, before the seeder checks
+ * it. Trust stays narrow: the row must be one of this deployment's configured
+ * identifiers with the configured name, enabled, and hold only scopes that
+ * some configured resource still grants. Anything else (a foreign scope, a
+ * renamed or disabled audience) is left untouched for the seeder to refuse,
+ * because that is a policy this code never wrote.
+ *
+ * A scope a resource loses but another configured resource still grants has
+ * moved audiences. Consents that covered the narrowed resource and hold that
+ * scope gain the resource it moved to, so the people who already approved it
+ * are not asked again when their client connects there. Tokens are left alone:
+ * the provider intersects a grant with every resource it names, so a token for
+ * the narrowed resource refreshes with the scopes that resource still allows,
+ * and the moved scope is only ever served by the resource it moved to.
+ */
+const reconcileStoredScopes = async (
+  transaction: BoundTransaction,
+  expectedResources: readonly BetterAuthExpectedOAuthResource[],
+): Promise<void> => {
+  const vocabulary = new Set<string>(
+    expectedResources.flatMap(({ allowedScopes }) => allowedScopes),
+  );
+  const stored = await readStoredPolicies(transaction, expectedResources);
+  const changes = expectedResources.flatMap((resource) => {
+    const current = stored.get(resource.identifier);
+    if (
+      current === undefined ||
+      current.disabled ||
+      current.name !== resource.name ||
+      current.allowedScopes === null ||
+      !current.allowedScopes.every((scope) => vocabulary.has(scope))
+    ) {
+      return [];
+    }
+    const before = sortedScopes(current.allowedScopes);
+    const after = sortedScopes(resource.allowedScopes);
+    if (JSON.stringify(before) === JSON.stringify(after)) {
+      return [];
+    }
+    return [
+      {
+        added: after.filter((scope) => !before.includes(scope)),
+        allowedScopes: after,
+        identifier: resource.identifier,
+        removed: before.filter((scope) => !after.includes(scope)),
+      },
+    ];
+  });
+  if (changes.length === 0) {
+    return;
+  }
+
+  await transaction.execute(sql`
+    WITH expected AS (
+      SELECT * FROM jsonb_to_recordset(${JSON.stringify(changes)}::text::jsonb)
+        AS policy(identifier text, "allowedScopes" jsonb)
+    )
+    UPDATE oauth_resource actual
+       SET allowed_scopes = ARRAY(
+             SELECT jsonb_array_elements_text(expected."allowedScopes")
+           ),
+           updated_at = now()
+      FROM expected
+     WHERE actual.identifier = expected.identifier
+  `);
+  for (const { added, identifier, removed } of changes) {
+    writeRepairEvent({
+      added,
+      event: "oauth_resource_scopes_reconciled",
+      identifier,
+      removed,
+    });
+  }
+
+  const moves = changes.flatMap(({ identifier: from, removed }) =>
+    removed.flatMap((scope) =>
+      expectedResources
+        .filter(
+          ({ allowedScopes, identifier }) =>
+            identifier !== from && allowedScopes.includes(scope),
+        )
+        .map(({ identifier: to }) => ({ from, scope, to })),
+    ),
+  );
+  for (const { from, scope, to } of moves) {
+    const extended = await transaction.execute(sql`
+      UPDATE oauth_consent
+         SET resources = array_append(resources, ${to}::text),
+             updated_at = now()
+       WHERE ${from} = ANY(resources)
+         AND ${scope} = ANY(scopes)
+         AND NOT (${to} = ANY(resources))
+      RETURNING id, client_id AS "clientId"
+    `);
+    for (const row of executedRows(extended)) {
+      if (isRecord(row)) {
+        writeRepairEvent({
+          clientId: row["clientId"],
+          consentId: row["id"],
+          event: "oauth_consent_resource_extended",
+          from,
+          scope,
+          to,
+        });
+      }
+    }
+  }
+};
+
 const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
   const origin = await readStoredOrigin(connection);
   if (origin === null) {
@@ -164,31 +335,7 @@ const repair = async (connection: OnlineMigrationConnection): Promise<void> => {
     );
     const transaction = bindTo(connection);
 
-    // Contract step of the protocol-scope rollout: only the exact
-    // predecessor policy gains protocol scopes. The previous release already
-    // accepts the configured set, so its tasks keep booting after this
-    // rewrite. Unknown definitions remain untouched and fail the seeder.
-    const policies = expectedResources.map((resource) => ({
-      ...resource,
-      predecessorScopes: predecessorOAuthResourceScopes(resource.allowedScopes),
-    }));
-    await transaction.execute(sql`
-      WITH expected AS (
-        SELECT * FROM jsonb_to_recordset(${JSON.stringify(policies)}::text::jsonb)
-          AS policy(identifier text, name text, "allowedScopes" jsonb, "predecessorScopes" jsonb)
-      )
-      UPDATE oauth_resource actual
-         SET allowed_scopes = ARRAY(
-               SELECT jsonb_array_elements_text(expected."allowedScopes")
-             ),
-             updated_at = now()
-        FROM expected
-       WHERE actual.identifier = expected.identifier
-         AND actual.name = expected.name
-         AND actual.disabled = false
-         AND ARRAY(SELECT unnest(actual.allowed_scopes) ORDER BY 1)
-             = ARRAY(SELECT jsonb_array_elements_text(expected."predecessorScopes") ORDER BY 1)
-    `);
+    await reconcileStoredScopes(transaction, expectedResources);
 
     const seeded = await seedOAuthResources(transaction, expectedResources);
     if (Result.isError(seeded)) {
