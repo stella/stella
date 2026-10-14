@@ -1,3 +1,14 @@
+-- A rename is a one-time owner cutover; its secret must match the existing URL.
+\if :{?renamed_owner}
+\set ECHO none
+\getenv owner_password POSTGRES_PASSWORD
+\if :{?owner_password}
+\else
+\echo 'POSTGRES_PASSWORD must contain the existing database login password.'
+\quit 1
+\endif
+\endif
+
 -- The image entrypoint connects as the owner; the readiness helper may use
 -- a socket peer session to assume the NOLOGIN bootstrap role for repairs.
 \if :{?owner}
@@ -153,3 +164,21 @@ WHERE extension.extname = 'pg_stat_statements' AND relation.relkind IN ('r', 'v'
 
 SELECT format('ALTER ROLE %I NOSUPERUSER NOBYPASSRLS CREATEROLE CREATEDB', :'owner')
 \gexec
+
+\if :{?renamed_owner}
+-- MD5 verifiers include the role name. Rename and replace the verifier in one
+-- transaction, excluding both the password and verifier from statement logs.
+BEGIN;
+SET LOCAL log_statement = 'none';
+SET LOCAL log_duration = off;
+SET LOCAL log_min_duration_statement = -1;
+SET LOCAL log_min_duration_sample = -1;
+SET LOCAL log_min_error_statement = 'panic';
+SELECT format('ALTER ROLE %I RENAME TO %I', :'owner', :'renamed_owner')
+\gexec
+SET LOCAL password_encryption = 'scram-sha-256';
+SELECT format('ALTER ROLE %I PASSWORD %L', :'renamed_owner', :'owner_password')
+\gexec
+COMMIT;
+\unset owner_password
+\endif

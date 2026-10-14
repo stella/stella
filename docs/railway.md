@@ -398,8 +398,8 @@ be demoted in place. Back up the database and stop the API during this cutover.
    railway ssh --service Postgres -- sh -ec '
      test -n "$POSTGRES_PASSWORD"
      psql -X -h /var/run/postgresql -U postgres -d "$POSTGRES_DB" \
-       -v ON_ERROR_STOP=1 -v owner=postgres \
-       -f /usr/local/share/stella/upgrade-owner.sql
+       -v ON_ERROR_STOP=1 -v owner=postgres -v renamed_owner=stella_owner \
+       -f /docker-entrypoint-initdb.d/init.sql
    '
    ```
 
