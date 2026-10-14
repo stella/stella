@@ -110,7 +110,7 @@ const seedPersistedThread = (client: InstanceType<typeof QueryClient>) => {
 // breadcrumb's own read.
 const organizationSettings = {
   declaredFeatureIds: [],
-  deploymentFeatures: {},
+  deploymentFeatures: { legalLists: true },
   capabilities: {},
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",
