@@ -44,7 +44,8 @@ on:
         value: ${{ jobs.publish.outputs.head }}
 
 concurrency:
-  group: marketing-screenshots-update-${{ inputs.branch || inputs.ref || 'main' }}
+  # Main and an explicit main SHA can select the same publication branch.
+  group: marketing-screenshots-update-${{ inputs.branch || 'main' }}
   cancel-in-progress: false
 
 permissions: {}
@@ -247,7 +248,8 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Create the baseline review branch
+      - name: Prepare the baseline review publication
+        id: publication
         if: steps.changes.outputs.result == 'changed' && needs.select.outputs.target == 'new-pr'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
@@ -256,13 +258,29 @@ jobs:
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
-            await github.rest.git.createRef({
-              ...context.repo, ref: `refs/heads/${process.env.BRANCH}`, sha: process.env.CAPTURE_HEAD,
+            const { owner, repo } = context.repo;
+            const branch = process.env.BRANCH;
+            const head = process.env.CAPTURE_HEAD;
+            const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+              owner, repo, ref: `heads/${branch}`, per_page: 100,
             });
+            const matches = refs.filter(ref => ref.ref === `refs/heads/${branch}`);
+            if (matches.length > 1) throw new Error('Ambiguous baseline publication branch');
+            if (matches.length === 1) {
+              const published = matches[0].object.sha;
+              core.setOutput('result', published === head ? 'append' : 'reuse');
+              core.setOutput('head', published);
+              return;
+            }
+            await github.rest.git.createRef({
+              owner, repo, ref: `refs/heads/${branch}`, sha: head,
+            });
+            core.setOutput('result', 'append');
+            core.setOutput('head', head);
 
       - name: Push regenerated baselines
         id: commit
-        if: steps.changes.outputs.result == 'changed'
+        if: steps.changes.outputs.result == 'changed' && steps.publication.outputs.result != 'reuse'
         uses: stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           token: ${{ steps.app-token.outputs.token }}
@@ -280,7 +298,8 @@ jobs:
           BRANCH: ${{ needs.select.outputs.branch }}
           CAPTURE_HEAD: ${{ needs.select.outputs.head }}
           COMMIT_OPERATION: ${{ steps.commit.outputs.operation }}
-          PUBLISHED_HEAD: ${{ steps.commit.outputs.commit-sha }}
+          PUBLICATION_RESULT: ${{ steps.publication.outputs.result }}
+          PUBLISHED_HEAD: ${{ steps.commit.outputs.commit-sha || steps.publication.outputs.head }}
         with:
           github-token: ${{ steps.app-token.outputs.token || github.token }}
           script: |
@@ -289,6 +308,14 @@ jobs:
             const { readFileSync } = require('node:fs');
             const { owner, repo } = context.repo;
             const { CHANGE_RESULT: result, TARGET: target, BRANCH: branch, CAPTURE_HEAD: head } = process.env;
+            class BaselinePublicationConflict extends Error {
+              constructor(message) {
+                super(`BASELINE_PUBLICATION_CONFLICT: ${message}`);
+                this.name = 'BaselinePublicationConflict';
+                this.code = 'BASELINE_PUBLICATION_CONFLICT';
+              }
+            }
+            const refuse = message => { throw new BaselinePublicationConflict(message); };
             if (result === 'no-change') {
               core.setOutput('result', 'no-change');
               core.setOutput('head', head);
@@ -297,35 +324,48 @@ jobs:
               return;
             }
             if (result !== 'changed') throw new Error('Missing baseline change classification');
-            if (process.env.COMMIT_OPERATION !== 'committed'
+            if ((process.env.COMMIT_OPERATION !== 'committed' && process.env.PUBLICATION_RESULT !== 'reuse')
               || !/^[0-9a-f]{40}$/u.test(process.env.PUBLISHED_HEAD || ''))
               throw new Error('Changed PNGs were not committed');
             const { data: remote } = await github.rest.git.getRef({ owner, repo, ref: `heads/${branch}` });
             if (remote.object.sha === head) throw new Error('Changed PNGs were not committed');
-            if (remote.object.sha !== process.env.PUBLISHED_HEAD) throw new Error('Publication branch moved after the push');
+            if (remote.object.sha !== process.env.PUBLISHED_HEAD) refuse('Publication branch moved after the push');
             const { data: commit } = await github.rest.repos.compareCommits({ owner, repo, base: head, head: remote.object.sha });
             if (commit.status !== 'ahead' || commit.commits.length === 0
               || commit.commits[0].parents.length !== 1 || commit.commits[0].parents[0].sha !== head)
-              throw new Error('Publication does not append to the captured head');
+              refuse('Publication does not append to the captured head');
             const expected = execFileSync('git', ['diff', '--cached', '--name-only', '-z']).toString().split('\0').filter(Boolean);
             if (!expected.length) throw new Error('Changed result has no staged PNGs');
-            if (commit.files?.length !== expected.length) throw new Error('Publication has an unexpected file set');
+            if (commit.files?.length !== expected.length) refuse('Publication has an unexpected file set');
             for (const name of expected) {
               if (!/^apps\/landing\/public\/media\/products\/[A-Za-z0-9][A-Za-z0-9._-]*\.png$/u.test(name))
                 throw new Error('Publication contains a non-baseline path');
               const content = readFileSync(name);
               const blob = createHash('sha1').update(`blob ${content.length}\0`).update(content).digest('hex');
               if (!commit.files.some(file => file.filename === name && file.sha === blob))
-                throw new Error(`Published PNG does not match capture: ${name}`);
+                refuse(`Published PNG does not match capture: ${name}`);
             }
             let review;
             if (target === 'new-pr') {
-              const { data: pull } = await github.rest.pulls.create({
-                owner, repo, head: branch, base: 'main', draft: true,
-                title: 'chore: refresh pre-release marketing screenshots',
-                body: `Regenerated product PNGs for review, captured from ${head}.`,
+              const pulls = await github.paginate(github.rest.pulls.list, {
+                owner, repo, state: 'all', head: `${owner}:${branch}`, per_page: 100,
               });
-              review = pull.html_url;
+              const candidates = pulls.filter(pull => pull.head.ref === branch
+                && pull.head.repo?.full_name === `${owner}/${repo}` && pull.base.ref === 'main');
+              if (candidates.length > 1) refuse('Multiple baseline review pull requests');
+              if (candidates.length === 1) {
+                const pull = candidates[0];
+                if (pull.head.sha !== remote.object.sha || (pull.state !== 'open' && !pull.merged_at))
+                  refuse('Existing baseline pull request does not represent this publication');
+                review = pull.html_url;
+              } else {
+                const { data: pull } = await github.rest.pulls.create({
+                  owner, repo, head: branch, base: 'main', draft: true,
+                  title: 'chore: refresh pre-release marketing screenshots',
+                  body: `Regenerated product PNGs for review, captured from ${head}.`,
+                });
+                review = pull.html_url;
+              }
             } else if (target === 'existing-pr') {
               review = `${context.serverUrl}/${owner}/${repo}/compare/${branch}`;
             } else {

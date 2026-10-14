@@ -267,6 +267,21 @@ describe("pre-release screenshot workflow", () => {
       paths: "apps/landing/public/media/products/*.png",
     });
     expect(
+      steps.find((step) => step.name === "Push regenerated baselines")?.if,
+    ).toBe(
+      "steps.changes.outputs.result == 'changed' && steps.publication.outputs.result != 'reuse'",
+    );
+    expect(
+      steps.find(
+        (step) => step.name === "Verify publication and report review result",
+      )?.env,
+    ).toMatchObject({
+      PUBLICATION_RESULT: githubExpression("steps.publication.outputs.result"),
+      PUBLISHED_HEAD: githubExpression(
+        "steps.commit.outputs.commit-sha || steps.publication.outputs.head",
+      ),
+    });
+    expect(
       position("Verify publication and report review result"),
     ).toBeGreaterThan(position("Push regenerated baselines"));
   });
@@ -555,17 +570,34 @@ describe("publication verification", () => {
     "publish",
     "Verify publication and report review result",
   );
-  const scenario = () => ({
-    result: "changed",
-    target: "existing-pr",
-    remote: PUBLISHED,
-    operation: "committed",
-    published: PUBLISHED,
-    status: "ahead",
-    commits: [{ parents: [{ sha: HEAD }] }],
-    expected: [PRODUCT],
-    files: [{ filename: PRODUCT, sha: BLOB }],
+  const reviewPull = (mergedAt: string | null = null) => ({
+    head: {
+      ref: "release/test",
+      sha: PUBLISHED,
+      repo: { full_name: "stella/stella" },
+    },
+    base: { ref: "main" },
+    state: "open",
+    merged_at: mergedAt,
+    html_url: "https://github.com/stella/stella/pull/1",
   });
+  const scenario = () => {
+    const pulls: ReturnType<typeof reviewPull>[] = [];
+    return {
+      result: "changed",
+      target: "existing-pr",
+      remote: PUBLISHED,
+      operation: "committed",
+      publication: "append",
+      pulls,
+      failure: "",
+      published: PUBLISHED,
+      status: "ahead",
+      commits: [{ parents: [{ sha: HEAD }] }],
+      expected: [PRODUCT],
+      files: [{ filename: PRODUCT, sha: BLOB }],
+    };
+  };
   const verifyFor = async (input: ReturnType<typeof scenario>) => {
     const outputs: Record<string, string> = {};
     const reviews: unknown[] = [];
@@ -597,6 +629,7 @@ describe("publication verification", () => {
           BRANCH: "release/test",
           CAPTURE_HEAD: HEAD,
           COMMIT_OPERATION: input.operation,
+          PUBLICATION_RESULT: input.publication,
           PUBLISHED_HEAD: input.published,
         },
       },
@@ -638,12 +671,30 @@ describe("publication verification", () => {
         summary: builder,
       },
       github: {
+        paginate: async (_route: unknown, params: unknown) => {
+          if (input.failure === "list-pulls") {
+            throw new TypeError("API list failure");
+          }
+          expect(params).toMatchObject({
+            state: "all",
+            head: "stella:release/test",
+          });
+          return input.pulls;
+        },
         rest: {
           git: {
-            getRef: async () => ({ data: { object: { sha: input.remote } } }),
+            getRef: async () => {
+              if (input.failure === "get-ref") {
+                throw new TypeError("API lookup failure");
+              }
+              return { data: { object: { sha: input.remote } } };
+            },
           },
           repos: {
             compareCommits: async (params: unknown) => {
+              if (input.failure === "compare") {
+                throw new TypeError("API comparison failure");
+              }
               expect(params).toMatchObject({ base: HEAD, head: input.remote });
               return {
                 data: {
@@ -655,8 +706,13 @@ describe("publication verification", () => {
             },
           },
           pulls: {
+            list: "pulls.list",
             create: async (request: unknown) => {
+              if (input.failure === "create-pull") {
+                throw new TypeError("API create failure");
+              }
               reviews.push(request);
+              input.pulls.push(reviewPull());
               return {
                 data: { html_url: "https://github.com/stella/stella/pull/1" },
               };
@@ -692,6 +748,236 @@ describe("publication verification", () => {
     });
     expect(result.outputs.result).toBe("published");
   });
+  const prepare = executable(
+    "publish",
+    "Prepare the baseline review publication",
+  );
+  const publicationState = () => {
+    const extraRefs: { ref: string; object: { sha: string } }[] = [];
+    return { branchHead: "", creations: 0, commits: 0, failure: "", extraRefs };
+  };
+  const prepareFor = async (state: ReturnType<typeof publicationState>) => {
+    const outputs: Record<string, string> = {};
+    await prepare.runInNewContext({
+      context: { repo: { owner: "stella", repo: "stella" } },
+      process: { env: { BRANCH: "release/test", CAPTURE_HEAD: HEAD } },
+      core: {
+        setOutput: (name: string, value: string) => {
+          outputs[name] = value;
+        },
+      },
+      github: {
+        paginate: async (_route: unknown, params: unknown) => {
+          if (state.failure === "list") {
+            throw new TypeError("API ref list failure");
+          }
+          expect(params).toMatchObject({ ref: "heads/release/test" });
+          return state.branchHead
+            ? [
+                {
+                  ref: "refs/heads/release/test",
+                  object: { sha: state.branchHead },
+                },
+                ...state.extraRefs,
+              ]
+            : state.extraRefs;
+        },
+        rest: {
+          git: {
+            listMatchingRefs: "git.listMatchingRefs",
+            createRef: async (params: unknown) => {
+              if (state.failure === "create") {
+                throw new TypeError("API ref create failure");
+              }
+              if (state.branchHead) {
+                throw new TypeError("Reference already exists");
+              }
+              expect(params).toMatchObject({
+                ref: "refs/heads/release/test",
+                sha: HEAD,
+              });
+              state.branchHead = HEAD;
+              state.creations += 1;
+            },
+          },
+        },
+      },
+    });
+    return outputs;
+  };
+  const publishCycle = async (
+    state: ReturnType<typeof publicationState>,
+    input: ReturnType<typeof scenario>,
+  ) => {
+    const selected = await prepareFor(state);
+    input.target = "new-pr";
+    input.publication = String(selected.result);
+    const predicate = v.parse(
+      v.string(),
+      stepsOf(publishWorkflow, "publish").find(
+        (step) => step.name === "Push regenerated baselines",
+      )?.if,
+    );
+    const shouldCommit = new Script(`Boolean(${predicate})`).runInNewContext({
+      steps: {
+        changes: { outputs: { result: input.result } },
+        publication: { outputs: { result: selected.result } },
+      },
+    });
+    if (shouldCommit) {
+      state.commits += 1;
+      state.branchHead = PUBLISHED;
+      input.operation = "committed";
+    } else {
+      input.operation = "";
+    }
+    input.remote = state.branchHead;
+    input.published = state.branchHead;
+    return verifyFor(input);
+  };
+  test("repeated publication of one captured tree creates one branch, commit, and review", async () => {
+    const state = publicationState();
+    const input = scenario();
+    const first = await publishCycle(state, input);
+    const second = await publishCycle(state, input);
+    expect(first.outputs).toEqual({ result: "published", head: PUBLISHED });
+    expect(second.outputs).toEqual(first.outputs);
+    expect(first.reviews).toHaveLength(1);
+    expect(second.reviews).toEqual([]);
+    expect(input.pulls).toHaveLength(1);
+    expect(state.creations).toBe(1);
+    expect(state.commits).toBe(1);
+  });
+  test("recovers a branch created before its baseline commit", async () => {
+    const state = publicationState();
+    state.branchHead = HEAD;
+    const result = await publishCycle(state, scenario());
+    expect(result.outputs.result).toBe("published");
+    expect(state.creations).toBe(0);
+    expect(state.commits).toBe(1);
+  });
+  test("recovers a committed baseline whose review pull request was not created", async () => {
+    const state = publicationState();
+    state.branchHead = PUBLISHED;
+    const result = await publishCycle(state, scenario());
+    expect(result.outputs.result).toBe("published");
+    expect(result.reviews).toHaveLength(1);
+    expect(state.creations).toBe(0);
+    expect(state.commits).toBe(0);
+  });
+  test("rejects different PNG content on a reused publication with a typed conflict", async () => {
+    const state = publicationState();
+    state.branchHead = PUBLISHED;
+    const input = scenario();
+    input.files = [{ filename: PRODUCT, sha: HEAD }];
+    expect(await rejectionOf(publishCycle(state, input))).toMatchObject({
+      name: "BaselinePublicationConflict",
+      code: "BASELINE_PUBLICATION_CONFLICT",
+      message: expect.stringContaining("does not match capture"),
+    });
+    expect(state.commits).toBe(0);
+    expect(input.pulls).toEqual([]);
+  });
+  test("matching-ref prefixes do not count as the publication branch", async () => {
+    const state = publicationState();
+    state.extraRefs.push({
+      ref: "refs/heads/release/test-other",
+      object: { sha: PUBLISHED },
+    });
+    expect(await prepareFor(state)).toEqual({ result: "append", head: HEAD });
+    expect(state.creations).toBe(1);
+  });
+  test("refuses ambiguous exact publication refs", async () => {
+    const state = publicationState();
+    state.branchHead = PUBLISHED;
+    state.extraRefs.push({
+      ref: "refs/heads/release/test",
+      object: { sha: PUBLISHED },
+    });
+    expect(await rejectionOf(prepareFor(state))).toMatchObject({
+      message: "Ambiguous baseline publication branch",
+    });
+  });
+  for (const failure of ["list", "create"]) {
+    test(`propagates publication ref API ${failure} failure`, async () => {
+      const state = publicationState();
+      state.failure = failure;
+      expect(await rejectionOf(prepareFor(state))).toMatchObject({
+        name: "TypeError",
+        message: `API ref ${failure} failure`,
+      });
+    });
+  }
+  for (const failure of ["list-pulls", "create-pull"]) {
+    test(`propagates review API ${failure} failure`, async () => {
+      const input = scenario();
+      input.target = "new-pr";
+      input.failure = failure;
+      expect(await rejectionOf(verifyFor(input))).toMatchObject({
+        name: "TypeError",
+        message:
+          failure === "list-pulls" ? "API list failure" : "API create failure",
+      });
+    });
+  }
+  for (const failure of ["get-ref", "compare"]) {
+    test(`propagates publication verification API ${failure} failure`, async () => {
+      const input = scenario();
+      input.failure = failure;
+      expect(await rejectionOf(verifyFor(input))).toMatchObject({
+        name: "TypeError",
+        message:
+          failure === "get-ref"
+            ? "API lookup failure"
+            : "API comparison failure",
+      });
+    });
+  }
+  test("reuses a merged review at the verified publication head", async () => {
+    const input = scenario();
+    input.target = "new-pr";
+    const pull = reviewPull("2026-01-01T00:00:00Z");
+    pull.state = "closed";
+    input.pulls.push(pull);
+    const result = await verifyFor(input);
+    expect(result.reviews).toEqual([]);
+    expect(result.outputs.result).toBe("published");
+  });
+  const reviewConflicts = [
+    {
+      name: "duplicate review",
+      change: (input: ReturnType<typeof scenario>) => {
+        input.pulls.push(reviewPull(), reviewPull());
+      },
+    },
+    {
+      name: "review at another head",
+      change: (input: ReturnType<typeof scenario>) => {
+        const pull = reviewPull();
+        pull.head.sha = HEAD;
+        input.pulls.push(pull);
+      },
+    },
+    {
+      name: "closed unmerged review",
+      change: (input: ReturnType<typeof scenario>) => {
+        const pull = reviewPull();
+        pull.state = "closed";
+        input.pulls.push(pull);
+      },
+    },
+  ];
+  for (const { name, change } of reviewConflicts) {
+    test(`reports typed conflict for ${name}`, async () => {
+      const input = scenario();
+      input.target = "new-pr";
+      change(input);
+      expect(await rejectionOf(verifyFor(input))).toMatchObject({
+        name: "BaselinePublicationConflict",
+        code: "BASELINE_PUBLICATION_CONFLICT",
+      });
+    });
+  }
   const refused = [
     {
       name: "no-op push",

@@ -34,6 +34,9 @@ commit and PNG hashes before reporting `published`; an absent commit, changed
 branch or mismatched PNG fails loudly. Identical PNGs report `no-change` without
 a push. Changes captured from main open a separate draft baseline review PR;
 they never modify the release commit or push directly to main.
+Repeating a capture for the same main SHA verifies and reuses its publication
+branch and review PR. Conflicting publication content reports
+`BASELINE_PUBLICATION_CONFLICT` without rewriting the branch.
 
 The `marketing-screenshots` artifact and workflow summary retain the regenerated
 PNGs and review result. Capture uses the workflow revision's composite action
