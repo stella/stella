@@ -400,8 +400,37 @@ describe("presigned upload mutation flow", () => {
       holdBudget();
     }
 
-    expect(await finalizing).toMatchObject({ code: 422 });
+    const finalized = await finalizing;
+    expect(finalized).toMatchObject({ code: 422 });
     expect(UPLOAD_FINALIZE_ADMISSION.inUseBytes()).toBe(0);
+
+    // The stored result replays at once even while the budget is full.
+    const holdAgain = await UPLOAD_FINALIZE_ADMISSION.acquire(
+      LIMITS.uploadFinalizeInFlightBytes,
+      0,
+    );
+    if (holdAgain === null) {
+      throw new Error("Expected the idle admission budget to admit the hold.");
+    }
+    try {
+      const startedAt = performance.now();
+      const replayed = await finalizeUpload.handler(
+        asTestRaw<FinalizeCtx>(
+          createContext({
+            params: { workspaceId: ids.wsA1, uploadId },
+            workspaceId: ids.wsA1,
+            organizationId: ids.orgA,
+            userId: ids.userA1,
+          }),
+        ),
+      );
+      expect(replayed).toEqual(finalized);
+      expect(performance.now() - startedAt).toBeLessThan(
+        LIMITS.uploadFinalizeAdmissionWaitMs,
+      );
+    } finally {
+      holdAgain();
+    }
   });
 
   test("rejects a rule match deep inside a large document and stores nothing", async () => {

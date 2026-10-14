@@ -115,6 +115,36 @@ const fileSecurityRejectionDetails = (
   };
 };
 
+type TerminalUploadFields = Pick<
+  ClaimedRow,
+  "status" | "finalizedResult" | "rejectReason" | "rejectionDetails"
+>;
+
+/**
+ * The stored response of an upload that already reached a terminal state,
+ * or null while it can still be finalized.
+ */
+const replayTerminalUpload = (
+  row: TerminalUploadFields,
+): Result<
+  { finalizedResult: PendingUploadFinalizedResult },
+  HandlerError
+> | null => {
+  if (row.status === "finalized" && row.finalizedResult) {
+    return Result.ok({ finalizedResult: row.finalizedResult });
+  }
+  if (row.status === "rejected") {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        message: row.rejectReason ?? "Upload was previously rejected",
+        ...row.rejectionDetails,
+      }),
+    );
+  }
+  return null;
+};
+
 const finalizeUpload = createSafeHandler(
   config,
   async function* ({
@@ -136,7 +166,14 @@ const finalizeUpload = createSafeHandler(
             userId: { eq: user.id },
             workspaceId: { eq: workspaceId },
           },
-          columns: { purpose: true, declaredSize: true },
+          columns: {
+            purpose: true,
+            declaredSize: true,
+            status: true,
+            finalizedResult: true,
+            rejectReason: true,
+            rejectionDetails: true,
+          },
         }),
       ),
     );
@@ -151,6 +188,12 @@ const finalizeUpload = createSafeHandler(
     });
     if (Result.isError(authorization)) {
       return Result.err(authorization.error);
+    }
+    // A finished upload answers with its stored result at once; only work
+    // that still has to read the file waits for capacity.
+    const replay = replayTerminalUpload(pending);
+    if (replay !== null) {
+      return replay;
     }
 
     // The staged file is read, scanned and may be rewritten in memory, so
@@ -267,17 +310,9 @@ const claimAndFinalize = async function* ({
         new HandlerError({ status: 404, message: "Upload not found" }),
       );
     }
-    if (existing.status === "finalized" && existing.finalizedResult) {
-      return Result.ok({ finalizedResult: existing.finalizedResult });
-    }
-    if (existing.status === "rejected") {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: existing.rejectReason ?? "Upload was previously rejected",
-          ...existing.rejectionDetails,
-        }),
-      );
+    const replay = replayTerminalUpload(existing);
+    if (replay !== null) {
+      return replay;
     }
     const expiredRows = yield* Result.await(
       safeDb((tx) =>
