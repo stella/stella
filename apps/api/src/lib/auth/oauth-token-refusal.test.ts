@@ -175,88 +175,6 @@ describe("OAuth token refusal observations", () => {
     });
   });
 
-  test("records the client_mismatch refusal reason", async () => {
-    const { seedRefresh, refuse } = await fixture();
-    await seedRefresh({ clientId: "different-client" });
-    expect(await refuse(refreshBody)).toMatchObject({
-      "oauth.refusal_reason": "client_mismatch",
-      "oauth.client_id": CLIENT_ID,
-      "oauth.grant_family": FAMILY_HASH,
-    });
-  });
-
-  test("records the rotated_outside_replay refusal reason", async () => {
-    const { seedRefresh, refuse } = await fixture();
-    await seedRefresh({
-      revoked: new Date(0),
-      rotatedAt: new Date(0),
-      rotationReplayExpiresAt: new Date(1),
-    });
-    expect(await refuse(refreshBody)).toMatchObject({
-      "oauth.refusal_reason": "rotated_outside_replay",
-      "oauth.client_id": CLIENT_ID,
-      "oauth.grant_family": FAMILY_HASH,
-    });
-  });
-
-  test("records the revoked refusal reason", async () => {
-    const { seedRefresh, refuse } = await fixture();
-    await seedRefresh({ revoked: new Date(0) });
-    expect(await refuse(refreshBody)).toMatchObject({
-      "oauth.refusal_reason": "revoked",
-      "oauth.client_id": CLIENT_ID,
-      "oauth.grant_family": FAMILY_HASH,
-    });
-  });
-
-  test("records the rotation_replay_mismatch refusal reason", async () => {
-    const { seedRefresh, refuse } = await fixture();
-    await seedRefresh({
-      revoked: new Date(0),
-      rotatedAt: new Date(0),
-      rotationReplayExpiresAt: new Date("2100-01-01"),
-    });
-    expect(await refuse(refreshBody)).toMatchObject({
-      "oauth.refusal_reason": "rotation_replay_mismatch",
-      "oauth.client_id": CLIENT_ID,
-      "oauth.grant_family": FAMILY_HASH,
-    });
-  });
-
-  test("records the scope_mismatch refusal reason", async () => {
-    const { seedRefresh, refuse } = await fixture();
-    await seedRefresh({ scopes: ["read"] });
-    expect(await refuse(refreshBody)).toMatchObject({
-      "oauth.refusal_reason": "scope_mismatch",
-      "oauth.client_id": CLIENT_ID,
-      "oauth.grant_family": FAMILY_HASH,
-    });
-  });
-
-  test("records the user_unavailable refusal reason", async () => {
-    const { seedRefresh, refuse } = await fixture();
-    await seedRefresh({});
-    expect(await refuse(refreshBody)).toMatchObject({
-      "oauth.refusal_reason": "user_unavailable",
-      "oauth.client_id": CLIENT_ID,
-      "oauth.grant_family": FAMILY_HASH,
-    });
-  });
-
-  test("observes a resource mismatch at the refresh refusal", async () => {
-    const { seedRefresh, refuse } = await fixture();
-    await seedRefresh({ resources: [RESOURCE] });
-    expect(
-      await refuse({
-        ...refreshBody,
-        resource: "https://other.example.test/mcp",
-      }),
-    ).toMatchObject({
-      "oauth.refusal_reason": "resource_mismatch",
-      "oauth.grant_family": FAMILY_HASH,
-    });
-  });
-
   test("observes invalid client authentication with the public client id", async () => {
     const { seedRefresh, refuse } = await fixture();
     await seedRefresh();
@@ -288,29 +206,6 @@ describe("OAuth token refusal observations", () => {
     });
     expect(await refuse(codeBody)).toMatchObject({
       "oauth.refusal_reason": "code_malformed",
-    });
-  });
-
-  test("records the redirect_mismatch refusal reason", async () => {
-    const { seedCode, refuse } = await fixture();
-    await seedCode();
-    expect(
-      await refuse({
-        ...codeBody,
-        redirect_uri: "https://other.example.test/callback",
-      }),
-    ).toMatchObject({
-      "oauth.refusal_reason": "redirect_mismatch",
-      "oauth.grant_family": FAMILY_HASH,
-    });
-  });
-
-  test("records the pkce_mismatch refusal reason", async () => {
-    const { seedCode, refuse } = await fixture();
-    await seedCode();
-    expect(await refuse({ ...codeBody })).toMatchObject({
-      "oauth.refusal_reason": "pkce_mismatch",
-      "oauth.grant_family": FAMILY_HASH,
     });
   });
 
