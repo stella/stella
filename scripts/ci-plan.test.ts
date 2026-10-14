@@ -4117,7 +4117,9 @@ const runChangedFilesStep = ({
       readFileSync(nodePath.join(directory, "api-test-changed-paths"), "utf-8")
         .split("\0")
         .filter(Boolean),
-    ).toEqual(baseRef === "main" && gitShim === undefined ? paths : []);
+    ).toEqual(
+      baseRef === "main" && gitShim === undefined ? paths.toSorted() : [],
+    );
     return new Map(
       readFileSync(output, "utf-8")
         .trim()
@@ -5552,7 +5554,9 @@ test("workflow and planner changes run every planner test as a merge-group gate"
     for (const { job, step } of selected) {
       expect(admitted, file).toContain(job);
       expect(resultJob.needs, file).toContain(job);
-      expect(jobScopes[job], job).toBe("package_checks_required");
+      expect(jobScopes[job], job).toBe(
+        job === "dated-waiver-expiry" ? null : "package_checks_required",
+      );
       const body = v.parse(v.record(v.string(), v.unknown()), ciJobs[job]);
       expect(body["continue-on-error"] ?? false, job).toBe(false);
       expect(step["continue-on-error"] ?? false, file).toBe(false);
@@ -6321,17 +6325,19 @@ test("API planning only loads dependencies after installation and emits install-
       const declared = TRUSTED_OUTPUT_PRODUCERS.find(
         (producer) => producer.stepId === "api-tests",
       );
+      const declaredShards =
+        declared?.declaredShards ?? panic("Missing declared API shard set");
       const emittedMatrix = v.parse(
         v.object({ shard: v.array(v.string()) }),
         JSON.parse(matrixLine?.slice("ci_tests_matrix=".length) ?? "null"),
       );
       expect(
         emittedMatrix.shard.every((shard) =>
-          declared?.declaredShards?.some((candidate) => candidate === shard),
+          declaredShards.some((candidate) => candidate === shard),
         ),
       ).toBe(true);
       if (!selected && expected === "4") {
-        expect(emittedMatrix.shard).toEqual(declared?.declaredShards);
+        expect(emittedMatrix.shard).toEqual([...declaredShards]);
       }
       if (selected) {
         expect(values).toContain(`ci_tests_matrix=${selected}\n`);

@@ -1,5 +1,7 @@
 import ts from "typescript";
 
+import { literalMemberName, literalPropertyName } from "./test-gate-members";
+
 const UNKNOWN = Symbol("unknown service condition");
 // The runner requires a nonempty value, but does not pin its contents.
 const PRESENT = Symbol("required service environment");
@@ -16,19 +18,24 @@ const truth = (value: ConditionValue) =>
 
 const environmentName = (node: ts.Expression): string | undefined => {
   if (
-    ts.isPropertyAccessExpression(node) &&
-    node.expression.getText() === "process.env"
+    !ts.isPropertyAccessExpression(node) &&
+    !ts.isElementAccessExpression(node)
   ) {
-    return node.name.text;
+    return undefined;
   }
+  const environment = node.expression;
   if (
-    ts.isElementAccessExpression(node) &&
-    node.expression.getText() === "process.env" &&
-    ts.isStringLiteral(node.argumentExpression)
+    !ts.isPropertyAccessExpression(environment) &&
+    !ts.isElementAccessExpression(environment)
   ) {
-    return node.argumentExpression.text;
+    return undefined;
   }
-  return undefined;
+  const process = environment.expression;
+  return ts.isIdentifier(process) &&
+    process.text === "process" &&
+    literalMemberName(environment) === "env"
+    ? literalMemberName(node)
+    : undefined;
 };
 
 export const requiredServiceEnvironment = (
@@ -46,7 +53,7 @@ export const requiredServiceEnvironment = (
         for (const property of options.properties) {
           if (
             !ts.isPropertyAssignment(property) ||
-            property.name.getText() !== "requiredEnv" ||
+            literalPropertyName(property.name) !== "requiredEnv" ||
             !ts.isArrayLiteralExpression(property.initializer)
           ) {
             continue;
@@ -222,8 +229,15 @@ export const registrationRunsWithService = (
       }
       return false;
     }
-    if (ts.isPropertyAccessExpression(expression)) {
-      if (["skip", "todo", "fixme"].includes(expression.name.text)) {
+    if (
+      ts.isPropertyAccessExpression(expression) ||
+      ts.isElementAccessExpression(expression)
+    ) {
+      const member = literalMemberName(expression);
+      if (member === undefined) {
+        return false;
+      }
+      if (["skip", "todo", "fixme"].includes(member)) {
         return false;
       }
       return helpersActive(expression.expression);
@@ -233,15 +247,21 @@ export const registrationRunsWithService = (
     }
     const helper = expression.expression;
     if (
-      ts.isPropertyAccessExpression(helper) &&
-      ["skipIf", "todoIf", "if"].includes(helper.name.text)
+      ts.isPropertyAccessExpression(helper) ||
+      ts.isElementAccessExpression(helper)
     ) {
-      const condition = expression.arguments.at(0);
-      if (
-        condition === undefined ||
-        evaluate(condition) !== (helper.name.text === "if")
-      ) {
+      const member = literalMemberName(helper);
+      if (member === undefined) {
         return false;
+      }
+      if (["skipIf", "todoIf", "if"].includes(member)) {
+        const condition = expression.arguments.at(0);
+        if (
+          condition === undefined ||
+          evaluate(condition) !== (member === "if")
+        ) {
+          return false;
+        }
       }
     }
     return helpersActive(helper);

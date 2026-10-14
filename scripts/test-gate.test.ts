@@ -379,6 +379,25 @@ context("test registration census", () => {
       false,
     ],
     ['test.skipIf(!runPostgres)("registration", () => {});', true],
+    ['test["skipIf"](!runPostgres)("registration", () => {});', true],
+    ['test[`skipIf`](!runPostgres)("registration", () => {});', true],
+    [
+      'if (runPostgres) test["skipIf"](runPostgres)("registration", () => {});',
+      false,
+    ],
+    [
+      'if (runPostgres) test[`skipIf`](runPostgres)("registration", () => {});',
+      false,
+    ],
+    [
+      'if (runPostgres) test["todoIf"](runPostgres)("registration", () => {});',
+      false,
+    ],
+    [
+      'if (runPostgres) test["if"](!runPostgres)("registration", () => {});',
+      false,
+    ],
+    ['if (runPostgres) test["skip"]("registration", () => {});', false],
     ['test.todoIf(!runPostgres)("registration", () => {});', true],
     ['test.if(runPostgres)("registration", () => {});', true],
     ['if (!runPostgres) {} else test("registration", () => {});', true],
@@ -2343,6 +2362,118 @@ context("root test runner coverage", () => {
     }
   }
 
+  check.each(["step", "job", "workflow", "cd"] as const)(
+    "resolves the %s working directory before collecting Bun paths",
+    (scope) => {
+      const defaults = { run: { "working-directory": "packages/fixture" } };
+      const parsed = {
+        ...(scope === "workflow" ? { defaults } : {}),
+        jobs: {
+          checks: {
+            "runs-on": "ubuntu-latest",
+            ...(scope === "job" ? { defaults } : {}),
+            steps: [
+              {
+                ...(scope === "step"
+                  ? { "working-directory": "packages/fixture" }
+                  : {}),
+                run:
+                  scope === "cd"
+                    ? "cd packages/fixture && bun test src"
+                    : "bun test src",
+              },
+            ],
+          },
+          "ci-result": { needs: ["checks"] },
+        },
+      };
+      const topology = {
+        workflow: JSON.stringify(parsed),
+        gatingJobs: gatingWorkflowJobs(parsed),
+        shardedPackages: new Set<string>(),
+      };
+      expect(
+        firstCollectionFailure({
+          file: "packages/fixture/src/selected.test.ts",
+          scenarios: new Map(),
+          topology,
+        }),
+      ).toBeUndefined();
+      expect(
+        firstCollectionFailure({
+          file: "src/root.test.ts",
+          scenarios: new Map(),
+          topology,
+        }),
+      ).toBeDefined();
+      expect(
+        firstCollectionFailure({
+          file: "scripts/root.test.ts",
+          scenarios: new Map(),
+          topology,
+        }),
+      ).toBeDefined();
+    },
+  );
+
+  check(
+    "step directory overrides both defaults and rejects dynamic directories",
+    () => {
+      const step = {
+        "working-directory": "packages/fixture",
+        run: "bun test src",
+      };
+      const workflow = {
+        defaults: { run: { "working-directory": "packages/wrong" } },
+        jobs: {
+          checks: {
+            "runs-on": "ubuntu-latest",
+            defaults: { run: { "working-directory": "packages/other" } },
+            steps: [step],
+          },
+          "ci-result": { needs: ["checks"] },
+        },
+      };
+      expect(
+        gatingWorkflowJobs(workflow).get("checks")?.at(0)?.workingDirectory,
+      ).toBe("packages/fixture");
+      step["working-directory"] = `\${{ inputs.directory }}`;
+      const analysis = analyzeGatingWorkflow(workflow);
+      expect(analysis.jobs.get("checks")).toEqual([]);
+      expect(analysis.findings.join("\n")).toContain(
+        "unresolved working-directory",
+      );
+    },
+  );
+
+  check(
+    "package scripts collect direct Bun paths after literal directory changes",
+    () => {
+      const scripts = { test: "cd src && bun test ./selected.test.ts" };
+      expect(
+        packageTestCollectionFailure({
+          candidate: "packages/fixture/src/selected.test.ts",
+          packageDirectory: "packages/fixture",
+          scripts,
+        }),
+      ).toBeUndefined();
+      expect(
+        packageTestCollectionFailure({
+          candidate: "packages/fixture/selected.test.ts",
+          packageDirectory: "packages/fixture",
+          scripts,
+        }),
+      ).toContain("outside the collector directory");
+      expect(
+        packageTestCollectionFailure({
+          candidate: "packages/fixture/src/selected.test.ts",
+          packageDirectory: "packages/fixture",
+          scripts: { test: 'cd "$TARGET" && bun test' },
+        }),
+      ).toContain("shell condition:");
+    },
+  );
+
   check("counts the actual root collectors and their file boundaries", () => {
     const workflow = `jobs:
   root-tests:
@@ -2779,6 +2910,16 @@ context("root test runner coverage", () => {
             job.replace(
               '          exit "$status"\n',
               '          exit "$status"\n          echo done\n',
+            ),
+          ),
+      ],
+      [
+        "collector directory changes",
+        (source) =>
+          editJob(source, "e2e-production-shard", (job) =>
+            job.replace(
+              "      - name: Run Playwright shard\n",
+              "      - name: Run Playwright shard\n        working-directory: apps/web\n",
             ),
           ),
       ],
@@ -3358,6 +3499,60 @@ context("Playwright configuration filters", () => {
 });
 
 context("Playwright CLI selection", () => {
+  check("resolves workflow and package-script Playwright directories", () => {
+    const workflow = {
+      jobs: {
+        browser: {
+          "runs-on": "ubuntu-latest",
+          steps: [
+            {
+              "working-directory": "apps/desktop",
+              run: "bun run test:browser",
+            },
+          ],
+        },
+        "ci-result": { needs: ["browser"] },
+      },
+    };
+    const collection = gatingPlaywrightCollection({
+      file: "apps/desktop/tests/browser/one.spec.ts",
+      packageFile: "apps/desktop/package.json",
+      scripts: {
+        "test:browser":
+          "cd tests/browser && playwright test --config ../../playwright.config.ts",
+      },
+      topology: {
+        workflow: JSON.stringify(workflow),
+        gatingJobs: gatingWorkflowJobs(workflow),
+        shardedPackages: new Set<string>(),
+      },
+      readConfig: () =>
+        'import { defineConfig } from "@playwright/test"; export default defineConfig({testDir:"./tests/browser",testMatch:"**/one.spec.ts"});',
+    });
+    expect(collection).toEqual({ type: "collected" });
+    expect(
+      packageTestExecutionFailure({
+        packageDirectory: "apps/desktop",
+        packageName: "@stll/desktop",
+        scriptName: "test:browser",
+        shardedPackages: new Set<string>(),
+        gatingJobs: new Map([
+          [
+            "browser",
+            [
+              {
+                command: "bun run test:browser",
+                workingDirectory: "apps/extension",
+                environment: {},
+                propagation: { errexit: true, pipefail: false },
+              },
+            ],
+          ],
+        ]),
+      }),
+    ).toBeDefined();
+  });
+
   check.each([
     {
       body: "playwright test one.spec.ts",

@@ -24,6 +24,7 @@ import {
 } from "./github-expression";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { unlistedTests } from "./run-unlisted-script-tests";
+import { literalMemberName } from "./test-gate-members";
 import {
   TRUSTED_OUTPUT_PRODUCERS,
   type TrustedOutputProducer,
@@ -413,9 +414,7 @@ const registrationName = (
   if (base === undefined || base.type === "unresolved") {
     return base;
   }
-  const property = ts.isPropertyAccessExpression(expression)
-    ? expression.name.text
-    : literalTitle(expression.argumentExpression);
+  const property = literalMemberName(expression);
   if (property === undefined) {
     return {
       type: "unresolved",
@@ -1036,6 +1035,7 @@ type ShellPropagation = {
 };
 
 type GatingCommand = {
+  readonly workingDirectory?: string;
   readonly command: string;
   readonly environment: Readonly<Record<string, unknown>>;
   readonly propagation: ShellPropagation;
@@ -1582,10 +1582,97 @@ const shellInvocationGates = ({
   return false;
 };
 
+type InvocationDirectoryOptions = ShellInvocation & {
+  readonly workingDirectory?: string;
+  readonly propagation?: ShellPropagation;
+};
+
+const literalDirectory = (
+  directory: unknown,
+  base: string,
+): string | undefined => {
+  if (
+    typeof directory !== "string" ||
+    directory.length === 0 ||
+    directory === "-" ||
+    /[~*?[\]{}]/u.test(directory) ||
+    !literalShellWord(directory) ||
+    directory.includes("${{") ||
+    path.posix.isAbsolute(directory)
+  ) {
+    return undefined;
+  }
+  const resolved = path.posix.normalize(path.posix.join(base, directory));
+  return resolved === ".." || resolved.startsWith("../") ? undefined : resolved;
+};
+
+type EffectiveWorkingDirectoryOptions = {
+  readonly root: Record<string, unknown> | undefined;
+  readonly job: Record<string, unknown>;
+  readonly step: Record<string, unknown>;
+};
+
+const effectiveWorkingDirectory = ({
+  root,
+  job,
+  step,
+}: EffectiveWorkingDirectoryOptions): string | undefined =>
+  literalDirectory(
+    step["working-directory"] ??
+      workflowRecord(workflowRecord(job["defaults"])?.["run"])?.[
+        "working-directory"
+      ] ??
+      workflowRecord(workflowRecord(root?.["defaults"])?.["run"])?.[
+        "working-directory"
+      ] ??
+      ".",
+    ".",
+  );
+
+const invocationWorkingDirectory = ({
+  tokens,
+  words,
+  index,
+  workingDirectory = ".",
+  propagation = { errexit: true, pipefail: true },
+}: InvocationDirectoryOptions): string | undefined => {
+  let directory = workingDirectory;
+  for (let cursor = 0; cursor < index; cursor += 1) {
+    if (tokens[cursor]?.role !== "command") {
+      continue;
+    }
+    if (words[cursor] === "pushd" || words[cursor] === "popd") {
+      return undefined;
+    }
+    if (words[cursor] !== "cd") {
+      continue;
+    }
+    const arguments_ = shellCommandSpan(tokens, cursor + 1).words;
+    if (
+      arguments_.length !== 1 ||
+      approvedInvocationFailure({
+        tokens,
+        index: cursor,
+        propagation,
+        knownRunner: directTestRunner,
+      }) !== undefined
+    ) {
+      return undefined;
+    }
+    const resolved = literalDirectory(arguments_.at(0), directory);
+    if (resolved === undefined) {
+      return undefined;
+    }
+    directory = resolved;
+  }
+  return directory;
+};
+
 type PackageInvocationOptions = ShellInvocation & {
   readonly packageDirectory: string;
   readonly packageName: string;
   readonly scriptName: string;
+  readonly workingDirectory?: string;
   readonly propagation?: ShellPropagation;
 };
 
@@ -1596,59 +1683,49 @@ const packageInvocationEnd = ({
   packageDirectory,
   packageName,
   scriptName,
+  workingDirectory = ".",
   propagation,
 }: PackageInvocationOptions): number | undefined => {
   if (words[index] !== "bun") {
     return undefined;
   }
+  const directory = invocationWorkingDirectory({
+    words,
+    tokens,
+    index,
+    workingDirectory,
+    ...(propagation === undefined ? {} : { propagation }),
+  });
+  if (directory === undefined) {
+    return undefined;
+  }
   if (
+    directory === "." &&
     words[index + 1] === "--filter" &&
     words[index + 2] === packageName &&
     words[index + 3] === scriptName
   ) {
     return index + 4;
   }
-  const cwdOffset = words[index + 1] === "run" ? 2 : 1;
+  const offset = words[index + 1] === "run" ? 2 : 1;
   if (
-    words[index + cwdOffset] === "--cwd" &&
-    words[index + cwdOffset + 1] === packageDirectory &&
-    words[index + cwdOffset + 2] === scriptName
+    words[index + offset] === "--cwd" &&
+    literalDirectory(words[index + offset + 1], directory) ===
+      packageDirectory &&
+    words[index + offset + 2] === scriptName
   ) {
-    return index + cwdOffset + 3;
+    return index + offset + 3;
   }
-  // An adjacent directory change must succeed before this runner executes.
-  // Workflow errexit also enforces that contract across statement separators.
-  const preceding = tokens
-    .slice(0, index)
-    .filter(
-      (token) => token.role !== "assignment" && token.role !== "redirect",
-    );
-  const separator = preceding.at(-1);
-  const directory = preceding.at(-2);
-  const changeDirectory = preceding.at(-3);
-  const directoryPrefix = preceding.at(-4);
-  if (
+  return directory === packageDirectory &&
     words[index + 1] === "run" &&
-    words[index + 2] === scriptName &&
-    separator?.role === "operator" &&
-    (separator.value === "&&" ||
-      ((propagation?.errexit ?? true) &&
-        (directoryPrefix === undefined ||
-          (directoryPrefix.role === "operator" &&
-            (directoryPrefix.value === "\n" ||
-              directoryPrefix.value === ";"))) &&
-        (separator.value === "\n" || separator.value === ";"))) &&
-    directory?.role === "argument" &&
-    directory.value === packageDirectory &&
-    changeDirectory?.role === "command" &&
-    changeDirectory.value === "cd"
-  ) {
-    return index + 3;
-  }
-  return undefined;
+    words[index + 2] === scriptName
+    ? index + 3
+    : undefined;
 };
 
 type GatingArgumentsOptions = {
+  readonly workingDirectory?: string;
+  readonly onDirectory?: (directory: string, arguments_: string[]) => void;
   readonly command: string;
   readonly invocationEnd: (invocation: ShellInvocation) => number | undefined;
   readonly onUnresolved?: (reason: string) => void;
@@ -1656,6 +1733,8 @@ type GatingArgumentsOptions = {
 };
 
 const gatingArguments = ({
+  workingDirectory = ".",
+  onDirectory,
   command,
   invocationEnd,
   propagation,
@@ -1677,7 +1756,20 @@ const gatingArguments = ({
     ) {
       continue;
     }
-    invocations.push(shellCommandSpan(tokens, end).words);
+    const directory = invocationWorkingDirectory({
+      words,
+      tokens,
+      index,
+      workingDirectory,
+      ...(propagation === undefined ? {} : { propagation }),
+    });
+    if (directory === undefined) {
+      onUnresolved?.("runner working-directory: unresolved directory change");
+      continue;
+    }
+    const arguments_ = shellCommandSpan(tokens, end).words;
+    invocations.push(arguments_);
+    onDirectory?.(directory, arguments_);
   }
   return invocations;
 };
@@ -1690,12 +1782,14 @@ const repositoryRootScripts = (): PackageScripts => {
 
 // A root script body runs as a package script, not under the workflow shell.
 type RootCommand = {
+  readonly workingDirectory: string;
   readonly command: string;
   readonly packageScript: boolean;
   readonly propagation: ShellPropagation;
 };
 
 type RootScriptExpansionOptions = {
+  readonly workingDirectory?: string;
   readonly command: string;
   readonly scripts: PackageScripts;
   readonly propagation: ShellPropagation;
@@ -1703,13 +1797,16 @@ type RootScriptExpansionOptions = {
 };
 
 const expandRootScripts = ({
+  workingDirectory = ".",
   command,
   scripts,
   propagation,
   visited = new Set(),
 }: RootScriptExpansionOptions): RootCommand[] => {
   const packageScript = visited.size > 0;
-  const expanded: RootCommand[] = [{ command, packageScript, propagation }];
+  const expanded: RootCommand[] = [
+    { command, packageScript, propagation, workingDirectory },
+  ];
   const commandWords = shellWords(command, "include");
   const invokedNames = new Set(
     commandWords.flatMap((word, index) => {
@@ -1728,13 +1825,18 @@ const expandRootScripts = ({
     }
     const invocations = gatingArguments({
       command,
+      workingDirectory,
       invocationEnd: ({ words, tokens, index }) =>
         words[index] === "bun" &&
         words[index + 1] === "run" &&
         words[index + 2] === name &&
-        !tokens
-          .slice(0, index)
-          .some((token) => token.role === "command" && token.value === "cd")
+        invocationWorkingDirectory({
+          words,
+          tokens,
+          index,
+          workingDirectory,
+          propagation,
+        }) === "."
           ? index + 3
           : undefined,
       propagation: packageScript ? PACKAGE_SCRIPT_PROPAGATION : propagation,
@@ -1768,13 +1870,14 @@ const rootScriptCommands = (
     commands = new Map();
     expandedRootCommands.set(scripts, commands);
   }
-  const cacheKey = `${workflowCommand.propagation.errexit}:${workflowCommand.propagation.pipefail}:${workflowCommand.command}`;
+  const cacheKey = `${workflowCommand.workingDirectory ?? "."}:${workflowCommand.propagation.errexit}:${workflowCommand.propagation.pipefail}:${workflowCommand.command}`;
   const cached = commands.get(cacheKey);
   if (cached !== undefined) {
     return cached;
   }
   const expanded = expandRootScripts({
     command: workflowCommand.command,
+    workingDirectory: workflowCommand.workingDirectory ?? ".",
     scripts,
     propagation: workflowCommand.propagation,
   });
@@ -1977,8 +2080,16 @@ const shardedExecutionFailure = ({
   }
   const invocations = gatingArguments({
     command: run.command,
+    workingDirectory: run.workingDirectory ?? ".",
     propagation: run.propagation,
-    invocationEnd: ({ words, index }) =>
+    invocationEnd: ({ words, tokens, index }) =>
+      invocationWorkingDirectory({
+        words,
+        tokens,
+        index,
+        workingDirectory: run.workingDirectory ?? ".",
+        propagation: run.propagation,
+      }) === "." &&
       words[index] === "bun" &&
       words[index + 1] === "run" &&
       words[index + 2] === "test" &&
@@ -2030,12 +2141,18 @@ export const packageTestExecutionFailure = ({
 }: PackageTestExecutionOptions): string | undefined => {
   let directExecutionFailure = `job condition: no gating job executes ${packageName} ${scriptName}`;
   for (const commands of gatingJobs.values()) {
-    for (const { command, packageScript, propagation } of commands.flatMap(
-      (workflowCommand) => rootScriptCommands(workflowCommand, rootScripts),
+    for (const {
+      command,
+      packageScript,
+      propagation,
+      workingDirectory,
+    } of commands.flatMap((workflowCommand) =>
+      rootScriptCommands(workflowCommand, rootScripts),
     )) {
       const conditions: string[] = [];
       const invocations = gatingArguments({
         command,
+        workingDirectory,
         ...(!packageScript ? { propagation } : {}),
         onUnresolved: (reason) => {
           conditions.push(reason);
@@ -2048,9 +2165,8 @@ export const packageTestExecutionFailure = ({
             packageDirectory,
             packageName,
             scriptName,
-            ...(packageScript
-              ? { propagation: PACKAGE_SCRIPT_PROPAGATION }
-              : {}),
+            workingDirectory,
+            propagation,
           }),
         ...(packageScript ? { propagation: PACKAGE_SCRIPT_PROPAGATION } : {}),
       });
@@ -2110,14 +2226,25 @@ export const managedServiceRunnerFailure = ({
   const runner = shellWords(command);
   let condition: string | undefined;
   const failure = gatingCommandExecutionFailure({
-    commandMatches: ({ command: candidate, propagation }) =>
+    commandMatches: ({
+      command: candidate,
+      propagation,
+      workingDirectory = ".",
+    }) =>
       shellInvocationGates({
         command: candidate,
         propagation,
         onUnresolved: (reason) => {
           condition ??= reason;
         },
-        matches: ({ words, index }) =>
+        matches: ({ words, tokens, index }) =>
+          invocationWorkingDirectory({
+            words,
+            tokens,
+            index,
+            workingDirectory,
+            propagation,
+          }) === "." &&
           runner.every((word, offset) => words[index + offset] === word),
       }),
     gatingJobs,
@@ -2141,14 +2268,25 @@ export const rootCommandExecutionFailure = ({
   const runner = shellWords(command);
   let condition: string | undefined;
   const failure = gatingCommandExecutionFailure({
-    commandMatches: ({ command: candidate, propagation }) =>
+    commandMatches: ({
+      command: candidate,
+      propagation,
+      workingDirectory = ".",
+    }) =>
       shellInvocationGates({
         command: candidate,
         propagation,
         onUnresolved: (reason) => {
           condition ??= reason;
         },
-        matches: ({ words, index }) =>
+        matches: ({ words, tokens, index }) =>
+          invocationWorkingDirectory({
+            words,
+            tokens,
+            index,
+            workingDirectory,
+            propagation,
+          }) === "." &&
           runner.every((word, offset) => words[index + offset] === word),
       }),
     gatingJobs,
@@ -2481,6 +2619,7 @@ const bunArgumentCollectionFailure = (
 };
 
 type PackageTestCollectionOptions = {
+  readonly workingDirectory?: string;
   readonly forwardedArguments?: readonly string[];
   readonly candidate: string;
   readonly packageDirectory: string;
@@ -2555,7 +2694,80 @@ const collectablePackageRunner = (words: readonly string[], index: number) =>
     words[index + 1]?.endsWith("scripts/run-tests.ts") ||
     (words[index + 1] === "run" && words[index + 2]?.startsWith("test:")));
 
+type PackageRunnerCollectionOptions = PackageTestCollectionOptions & {
+  readonly invocation: ShellInvocation;
+  readonly directory: string;
+};
+
+const packageRunnerCollectionFailure = ({
+  candidate,
+  packageDirectory,
+  scripts,
+  scriptName = "test",
+  visited = new Set(),
+  forwardedArguments = [],
+  invocation: { words, tokens, index },
+  directory,
+}: PackageRunnerCollectionOptions): string | undefined => {
+  const relativeCandidate = repoRelativePath(directory, candidate);
+  if (relativeCandidate === ".." || relativeCandidate.startsWith("../")) {
+    return "runner working-directory: file is outside the collector directory";
+  }
+  const delegatedScript = words[index + 2];
+  if (words[index + 1] === "run" && delegatedScript?.startsWith("test:")) {
+    if (directory !== packageDirectory) {
+      return "runner working-directory: delegated script is outside its package";
+    }
+    const { words: delegatedArguments, end: boundary } = shellCommandSpan(
+      tokens,
+      index + 3,
+    );
+    const delegatedFailure = packageTestCollectionFailure({
+      candidate,
+      packageDirectory,
+      scriptName: delegatedScript,
+      workingDirectory: directory,
+      scripts,
+      forwardedArguments: [
+        ...(delegatedArguments.at(0) === "--"
+          ? delegatedArguments.slice(1)
+          : delegatedArguments),
+        ...(boundary === -1 ? forwardedArguments : []),
+      ],
+      visited: new Set([...visited, scriptName]),
+    });
+    return delegatedFailure;
+  }
+  if (words[index + 1]?.endsWith("scripts/run-tests.ts")) {
+    if (
+      literalDirectory(words[index + 1], directory) !==
+      path.posix.join(packageDirectory, "scripts/run-tests.ts")
+    ) {
+      return "runner working-directory: wrapper path does not resolve to its owner";
+    }
+    const { words: remaining, end: boundary } = shellCommandSpan(
+      tokens,
+      index + 2,
+    );
+    const failure = bunArgumentCollectionFailure(relativeCandidate, [
+      ...remaining,
+      ...(boundary === -1 ? forwardedArguments : []),
+    ]);
+    const wrapperFailure =
+      failure ?? testWrapperCollectionFailure(packageDirectory, candidate);
+    return wrapperFailure;
+  }
+  if (words[index + 1] !== "test") {
+    return "runner command: unsupported package runner";
+  }
+  const { words: remaining, end } = shellCommandSpan(tokens, index + 2);
+  const arguments_ = [...remaining, ...(end === -1 ? forwardedArguments : [])];
+  const failure = bunArgumentCollectionFailure(relativeCandidate, arguments_);
+  return failure;
+};
+
 export const packageTestCollectionFailure = ({
+  workingDirectory,
   forwardedArguments = [],
   candidate,
   packageDirectory,
@@ -2597,58 +2809,27 @@ export const packageTestCollectionFailure = ({
     ) {
       continue;
     }
-    const delegatedScript = words[index + 2];
-    if (words[index + 1] === "run" && delegatedScript?.startsWith("test:")) {
-      const { words: delegatedArguments, end: boundary } = shellCommandSpan(
-        tokens,
-        index + 3,
-      );
-      const delegatedFailure = packageTestCollectionFailure({
-        candidate,
-        packageDirectory,
-        scriptName: delegatedScript,
-        scripts,
-        forwardedArguments: [
-          ...(delegatedArguments.at(0) === "--"
-            ? delegatedArguments.slice(1)
-            : delegatedArguments),
-          ...(boundary === -1 ? forwardedArguments : []),
-        ],
-        visited: new Set([...visited, scriptName]),
-      });
-      if (delegatedFailure === undefined) {
-        return undefined;
-      }
-      firstFailure ??= delegatedFailure;
+    const directory = invocationWorkingDirectory({
+      words,
+      tokens,
+      index,
+      workingDirectory: workingDirectory ?? packageDirectory,
+      propagation: PACKAGE_SCRIPT_PROPAGATION,
+    });
+    if (directory === undefined) {
+      firstFailure ??= "runner working-directory: unresolved directory change";
       continue;
     }
-    if (words[index + 1]?.endsWith("scripts/run-tests.ts")) {
-      const { words: remaining, end: boundary } = shellCommandSpan(
-        tokens,
-        index + 2,
-      );
-      const failure = bunArgumentCollectionFailure(
-        repoRelativePath(packageDirectory, candidate),
-        [...remaining, ...(boundary === -1 ? forwardedArguments : [])],
-      );
-      const wrapperFailure =
-        failure ?? testWrapperCollectionFailure(packageDirectory, candidate);
-      if (wrapperFailure === undefined) {
-        return undefined;
-      }
-      firstFailure ??= wrapperFailure;
-      continue;
-    }
-    if (words[index + 1] !== "test") {
-      continue;
-    }
-    const { words: remaining, end } = shellCommandSpan(tokens, index + 2);
-    const arguments_ = [
-      ...remaining,
-      ...(end === -1 ? forwardedArguments : []),
-    ];
-    const relativeCandidate = repoRelativePath(packageDirectory, candidate);
-    const failure = bunArgumentCollectionFailure(relativeCandidate, arguments_);
+    const failure = packageRunnerCollectionFailure({
+      candidate,
+      packageDirectory,
+      scripts,
+      scriptName,
+      visited,
+      forwardedArguments,
+      invocation: { words, tokens, index },
+      directory,
+    });
     if (failure === undefined) {
       return undefined;
     }
@@ -3666,6 +3847,13 @@ const analyzeWorkflowWithProducerDeclarations = (
           }
           return [];
         }
+        const workingDirectory = effectiveWorkingDirectory({ root, job, step });
+        if (workingDirectory === undefined) {
+          findings.add(
+            `job condition: ${name}/step-${stepIndex + 1} has unresolved working-directory`,
+          );
+          return [];
+        }
         const environment = {
           ...workflowRecord(root?.["env"]),
           ...workflowRecord(job["env"]),
@@ -3673,6 +3861,7 @@ const analyzeWorkflowWithProducerDeclarations = (
         };
         return [...executingLegs.values()].map((leg) => ({
           command: executableShell(command),
+          workingDirectory,
           environment: Object.fromEntries(
             Object.entries(environment).map(([key, value]) => [
               key,
@@ -3926,9 +4115,7 @@ const isPlaywrightDefineConfig = (
     ) {
       continue;
     }
-    const property = ts.isPropertyAccessExpression(callee)
-      ? callee.name.text
-      : literalTitle(callee.argumentExpression);
+    const property = literalMemberName(callee);
     if (
       ts.isIdentifier(callee.expression) &&
       callee.expression.text === bindings.name.text &&
@@ -4232,7 +4419,7 @@ const playwrightConfigCollection = (
         return playwrightGlobMatches(value, relative);
       }
       value.lastIndex = 0;
-      return value.test(file);
+      return value.test(path.join(ROOT, file));
     };
     const testMatch = scope.get("testMatch");
     const match = testMatch === undefined ? undefined : patterns(testMatch);
@@ -4421,8 +4608,17 @@ export const gatingPlaywrightCollection = ({
     ) {
       continue;
     }
-    const bodies = gatingArguments({
+    const bodies: {
+      readonly workingDirectory: string;
+      readonly arguments_: readonly string[];
+    }[] = [];
+    gatingArguments({
       command,
+      workingDirectory: packageDirectory,
+      propagation: PACKAGE_SCRIPT_PROPAGATION,
+      onDirectory: (workingDirectory, arguments_) => {
+        bodies.push({ workingDirectory, arguments_ });
+      },
       invocationEnd: ({ words, index }) =>
         words[index] === "playwright" && words[index + 1] === "test"
           ? index + 2
@@ -4430,9 +4626,10 @@ export const gatingPlaywrightCollection = ({
     });
     for (const commands of topology.gatingJobs.values()) {
       const invocations = commands.flatMap(
-        ({ command: workflowCommand, propagation }) =>
+        ({ command: workflowCommand, propagation, workingDirectory = "." }) =>
           gatingArguments({
             command: workflowCommand,
+            workingDirectory,
             propagation,
             invocationEnd: ({ words, tokens, index }) =>
               packageInvocationEnd({
@@ -4442,6 +4639,7 @@ export const gatingPlaywrightCollection = ({
                 packageDirectory,
                 packageName,
                 scriptName,
+                workingDirectory,
                 propagation,
               }),
           }).map((arguments_) => ({
@@ -4453,7 +4651,7 @@ export const gatingPlaywrightCollection = ({
       for (const body of bodies) {
         const selections = invocations.map(({ workflowCommand, arguments_ }) =>
           playwrightCLI(
-            [...body, ...arguments_],
+            [...body.arguments_, ...arguments_],
             `${command} (workflow: ${workflowCommand})`,
           ),
         );
@@ -4461,14 +4659,17 @@ export const gatingPlaywrightCollection = ({
           if (cli.type === "unresolved") {
             const configFile = path.join(
               ROOT,
-              packageDirectory,
+              body.workingDirectory,
               cli.configName,
             );
             if (
               existsSync(configFile) &&
               playwrightConfigCollection({
                 file,
-                configFile: path.posix.join(packageDirectory, cli.configName),
+                configFile: path.posix.join(
+                  body.workingDirectory,
+                  cli.configName,
+                ),
                 source: readConfig(configFile),
                 readConfig,
                 projects: [],
@@ -4485,7 +4686,11 @@ export const gatingPlaywrightCollection = ({
           ) {
             continue;
           }
-          const configFile = path.join(ROOT, packageDirectory, cli.configName);
+          const configFile = path.join(
+            ROOT,
+            body.workingDirectory,
+            cli.configName,
+          );
           if (!existsSync(configFile)) {
             finding = {
               type: "unresolved",
@@ -4495,7 +4700,7 @@ export const gatingPlaywrightCollection = ({
           }
           const collection = playwrightConfigCollection({
             file,
-            configFile: path.posix.join(packageDirectory, cli.configName),
+            configFile: path.posix.join(body.workingDirectory, cli.configName),
             source: readConfig(configFile),
             readConfig,
             projects: cli.projects,
@@ -4626,21 +4831,31 @@ const executedScenarioFailure = ({
     return `ledger collector: ${scenario.collector.job} does not reach ci-result`;
   }
   const runner = shellWords(scenario.collector.command);
-  const collectedCommands = commands.flatMap(
-    ({ command, propagation, environment }) =>
-      gatingArguments({
-        command,
-        propagation,
-        invocationEnd: ({ words, index }) =>
-          runner.every((word, offset) => words[index + offset] === word)
-            ? index
-            : undefined,
-      }).map((words) => ({
-        command: words.map((word) => JSON.stringify(word)).join(" "),
-        propagation,
-        environment,
-      })),
-  );
+  const collectedCommands: GatingCommand[] = [];
+  for (const {
+    command,
+    propagation,
+    environment,
+    workingDirectory = ".",
+  } of commands) {
+    gatingArguments({
+      command,
+      workingDirectory,
+      propagation,
+      invocationEnd: ({ words, index }) =>
+        runner.every((word, offset) => words[index + offset] === word)
+          ? index
+          : undefined,
+      onDirectory: (directory, words) => {
+        collectedCommands.push({
+          command: words.map((word) => JSON.stringify(word)).join(" "),
+          workingDirectory: directory,
+          propagation,
+          environment,
+        });
+      },
+    });
+  }
   if (collectedCommands.length === 0) {
     return `ledger collector: no gating invocation of ${scenario.collector.command} in ${scenario.collector.job}`;
   }
@@ -4694,6 +4909,9 @@ const pinnedScenarioFailure = ({
   }
   if ((step["if"] ?? "") !== scenario.collector.condition) {
     return `pinned collector: ${stepName} condition differs from the recorded literal`;
+  }
+  if (effectiveWorkingDirectory({ root, job, step }) !== ".") {
+    return `pinned collector: ${stepName} does not use the pinned repository working-directory`;
   }
   const shards = new Set(matrixLegs(job).map((leg) => leg["shard"]));
   if (
@@ -4911,6 +5129,167 @@ const scenarioCollectionFailure = ({
   }
 };
 
+type DirectWorkflowCollectionOptions = {
+  readonly file: string;
+  readonly topology: RepositoryTestExecutionTopology;
+};
+
+const directWorkflowCollectionFailure = ({
+  file,
+  topology,
+}: DirectWorkflowCollectionOptions): string | undefined => {
+  const isRepositoryScript =
+    file.startsWith("scripts/") || file.startsWith(".oxlint-plugins/");
+  const isUnlistedScript =
+    isRepositoryScript &&
+    new Bun.Glob("scripts/**/*.test.ts").match(file) &&
+    unlistedTests([file], topology.workflow).length === 1;
+  const conditions: string[] = [];
+  const commandMatches = (gatingCommand: GatingCommand): boolean => {
+    const { command, propagation } = gatingCommand;
+    return shellInvocationGates({
+      command,
+      propagation,
+      onUnresolved: (reason) => {
+        conditions.push(reason);
+      },
+      matches: ({ words, tokens, index }) => {
+        const workingDirectory = invocationWorkingDirectory({
+          words,
+          tokens,
+          index,
+          workingDirectory: gatingCommand.workingDirectory ?? ".",
+          propagation,
+        });
+        if (workingDirectory === undefined) {
+          conditions.push(
+            "runner working-directory: unresolved directory change",
+          );
+          return false;
+        }
+        const nested = nestedShellInvocation({ words, tokens, index });
+        if (nested.type === "unsupported") {
+          conditions.push(nested.reason);
+          return false;
+        }
+        if (nested.type === "supported") {
+          return commandMatches({
+            command: nested.body,
+            workingDirectory,
+            propagation: nested.propagation,
+            environment: gatingCommand.environment,
+          });
+        }
+        if (
+          isUnlistedScript &&
+          workingDirectory === "." &&
+          words[index] === "bun" &&
+          words[index + 1] === "scripts/run-unlisted-script-tests.ts"
+        ) {
+          return true;
+        }
+        if (words[index] !== "bun") {
+          return false;
+        }
+        const { words: invocation } = shellCommandSpan(tokens, index);
+        if (
+          workingDirectory === "." &&
+          words[index + 1] === "scripts/run-custom-lint-tests.ts"
+        ) {
+          const args = invocation.slice(2);
+          if (
+            args.some(
+              (argument) =>
+                argument === "--timeout" || argument.startsWith("--timeout="),
+            )
+          ) {
+            return false;
+          }
+          const runner = customLintTestCommand(args);
+          return (
+            packageTestCollectionFailure({
+              candidate: file,
+              packageDirectory: ".",
+              scripts: {
+                test: ["bun", ...runner.slice(1)]
+                  .map((word) => JSON.stringify(word))
+                  .join(" "),
+              },
+            }) === undefined
+          );
+        }
+        const line = invocation.map((word) => JSON.stringify(word)).join(" ");
+        if (
+          packageTestCollectionFailure({
+            candidate: file,
+            packageDirectory: workingDirectory,
+            scripts: { test: line },
+          }) === undefined
+        ) {
+          return true;
+        }
+        const cwdIndex = invocation.indexOf("--cwd");
+        let packageDirectory = workingDirectory;
+        let scriptIndex = invocation[1] === "run" ? 2 : 1;
+        if (cwdIndex !== -1) {
+          if (cwdIndex !== scriptIndex) {
+            return false;
+          }
+          const resolved = literalDirectory(
+            invocation[cwdIndex + 1],
+            workingDirectory,
+          );
+          if (resolved === undefined) {
+            conditions.push("runner working-directory: unresolved Bun --cwd");
+            return false;
+          }
+          packageDirectory = resolved;
+          scriptIndex = cwdIndex + 2;
+        } else if (invocation[1] !== "run") {
+          return false;
+        }
+        const scriptName = invocation[scriptIndex];
+        if (scriptName === undefined) {
+          return false;
+        }
+        const manifest = path.posix.join(packageDirectory, "package.json");
+        if (!existsSync(path.join(ROOT, manifest))) {
+          return false;
+        }
+        const scripts = packageScripts(manifest);
+        const testCommand = scripts?.[scriptName];
+        if (typeof testCommand !== "string") {
+          return false;
+        }
+        const arguments_ = invocation
+          .slice(scriptIndex + 1)
+          .map((word) => JSON.stringify(word))
+          .join(" ");
+        return (
+          packageTestCollectionFailure({
+            candidate: file,
+            packageDirectory,
+            scriptName,
+            scripts: {
+              ...scripts,
+              [scriptName]: `${testCommand} ${arguments_}`,
+            },
+          }) === undefined
+        );
+      },
+    });
+  };
+  const failure = gatingCommandExecutionFailure({
+    commandMatches,
+    gatingJobs: topology.gatingJobs,
+    missingMessage: `job condition: no gating job collects ${file}`,
+  });
+  const condition = conditions.at(0);
+  return failure !== undefined && condition !== undefined
+    ? `${failure}; ${condition}`
+    : failure;
+};
+
 export const firstCollectionFailure = ({
   file,
   scenarios,
@@ -4920,124 +5299,13 @@ export const firstCollectionFailure = ({
   if (scenario !== undefined) {
     return scenarioCollectionFailure({ file, scenario, topology });
   }
-  if (file.startsWith("scripts/") || file.startsWith(".oxlint-plugins/")) {
-    const isUnlistedScript =
-      new Bun.Glob("scripts/**/*.test.ts").match(file) &&
-      unlistedTests([file], topology.workflow).length === 1;
-    const conditions: string[] = [];
-    const commandMatches = (gatingCommand: GatingCommand): boolean => {
-      const { command, propagation } = gatingCommand;
-      return shellInvocationGates({
-        command,
-        propagation,
-        onUnresolved: (reason) => {
-          conditions.push(reason);
-        },
-        matches: ({ words, tokens, index }) => {
-          const nested = nestedShellInvocation({ words, tokens, index });
-          if (nested.type === "unsupported") {
-            conditions.push(nested.reason);
-            return false;
-          }
-          if (nested.type === "supported") {
-            return commandMatches({
-              command: nested.body,
-              propagation: nested.propagation,
-              environment: gatingCommand.environment,
-            });
-          }
-          if (
-            isUnlistedScript &&
-            words[index] === "bun" &&
-            words[index + 1] === "scripts/run-unlisted-script-tests.ts"
-          ) {
-            return true;
-          }
-          if (words[index] !== "bun") {
-            return false;
-          }
-          const { words: invocation } = shellCommandSpan(tokens, index);
-          if (words[index + 1] === "scripts/run-custom-lint-tests.ts") {
-            const args = invocation.slice(2);
-            if (
-              args.some(
-                (argument) =>
-                  argument === "--timeout" || argument.startsWith("--timeout="),
-              )
-            ) {
-              return false;
-            }
-            const runner = customLintTestCommand(args);
-            return (
-              packageTestCollectionFailure({
-                candidate: file,
-                packageDirectory: ".",
-                scripts: {
-                  test: ["bun", ...runner.slice(1)]
-                    .map((word) => JSON.stringify(word))
-                    .join(" "),
-                },
-              }) === undefined
-            );
-          }
-          const line = invocation.map((word) => JSON.stringify(word)).join(" ");
-          if (
-            packageTestCollectionFailure({
-              candidate: file,
-              packageDirectory: ".",
-              scripts: { test: line },
-            }) === undefined
-          ) {
-            return true;
-          }
-          const cwdIndex = invocation.indexOf("--cwd");
-          if (
-            cwdIndex === -1 ||
-            (invocation[cwdIndex - 1] !== "bun" &&
-              !(
-                invocation[cwdIndex - 1] === "run" &&
-                invocation[cwdIndex - 2] === "bun"
-              )) ||
-            invocation[cwdIndex + 2] !== "test"
-          ) {
-            return false;
-          }
-          const packageDirectory = invocation[cwdIndex + 1];
-          if (packageDirectory === undefined) {
-            return false;
-          }
-          const manifest = path.posix.join(packageDirectory, "package.json");
-          if (!existsSync(path.join(ROOT, manifest))) {
-            return false;
-          }
-          const scripts = packageScripts(manifest);
-          const testCommand = scripts?.["test"];
-          if (typeof testCommand !== "string") {
-            return false;
-          }
-          const arguments_ = invocation
-            .slice(cwdIndex + 3)
-            .map((word) => JSON.stringify(word))
-            .join(" ");
-          return (
-            packageTestCollectionFailure({
-              candidate: file,
-              packageDirectory,
-              scripts: { ...scripts, test: `${testCommand} ${arguments_}` },
-            }) === undefined
-          );
-        },
-      });
-    };
-    const failure = gatingCommandExecutionFailure({
-      commandMatches,
-      gatingJobs: topology.gatingJobs,
-      missingMessage: `job condition: no gating job collects ${file}`,
-    });
-    const condition = conditions.at(0);
-    return failure !== undefined && condition !== undefined
-      ? `${failure}; ${condition}`
-      : failure;
+  const directFailure = directWorkflowCollectionFailure({ file, topology });
+  if (
+    file.startsWith("scripts/") ||
+    file.startsWith(".oxlint-plugins/") ||
+    directFailure === undefined
+  ) {
+    return directFailure;
   }
   const packageFile = nearestPackage(file);
   if (packageFile === undefined) {
