@@ -1,0 +1,112 @@
+name: Install scoped Bun dependencies
+description: Restore a sealed scope-specific package store and run one frozen install.
+inputs:
+  flags:
+    description: Ordered JSON array of frozen install flags and filters.
+    required: true
+  log-file:
+    description: Complete installer log path.
+    required: false
+    default: ""
+  installer-budget-ms:
+    description: Optional installer warning budget in milliseconds.
+    required: false
+    default: ""
+outputs:
+  cache-hit:
+    description: Whether the exact scoped archive was restored.
+    value: ${{ steps.cache.outputs.cache-hit }}
+  key:
+    description: Frozen-input and platform identity of the store.
+    value: ${{ steps.identity.outputs.key }}
+  restore-ms:
+    description: Archive restoration and verification elapsed time in milliseconds.
+    value: ${{ steps.restore-time.outputs.milliseconds }}
+  install-ms:
+    description: Frozen install and sealing elapsed time in milliseconds.
+    value: ${{ steps.install-time.outputs.milliseconds }}
+runs:
+  using: composite
+  steps:
+    - name: Derive complete install-store identity
+      id: identity
+      shell: bash
+      env:
+        STELLA_CI_INSTALL_FLAGS: ${{ inputs.flags }}
+      run: |
+        bun scripts/ci-install-store.ts key >> "$GITHUB_OUTPUT"
+        echo "artifact-id=$(bun -e 'console.log(crypto.randomUUID())')" >> "$GITHUB_OUTPUT"
+        echo "start=$(bun -e 'console.log(Date.now())')" >> "$GITHUB_OUTPUT"
+    - name: Restore exact complete install store
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.identity.outputs.store }}
+        key: ${{ steps.identity.outputs.key }}
+    - name: Record restore time and verify exact store
+      id: restore-time
+      shell: bash
+      env:
+        BUN_INSTALL_CACHE_DIR: ${{ steps.identity.outputs.store }}
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        STORE_KEY: ${{ steps.identity.outputs.key }}
+        START_MS: ${{ steps.identity.outputs.start }}
+      run: |
+        # Later host and container steps must resolve the same global-store links.
+        echo "BUN_INSTALL_CACHE_DIR=$BUN_INSTALL_CACHE_DIR" >> "$GITHUB_ENV"
+        outcome=cold
+        if [[ "$CACHE_HIT" == true ]]; then
+          # An archive under an immutable key cannot be replaced, so a failed
+          # verification falls back to a cold frozen install instead of failing.
+          if ! bun scripts/ci-install-store.ts verify "$STORE_KEY"; then
+            echo "::warning title=install-store-invalid::Restored install store $STORE_KEY failed verification; installing cold."
+            rm -rf "$BUN_INSTALL_CACHE_DIR"
+          else
+            outcome=hit
+          fi
+        fi
+        echo "outcome=$outcome" >> "$GITHUB_OUTPUT"
+        end=$(bun -e 'console.log(Date.now())')
+        echo "milliseconds=$((end - START_MS))" >> "$GITHUB_OUTPUT"
+        echo "start=$end" >> "$GITHUB_OUTPUT"
+    - name: Run frozen install with progress watchdog
+      id: install
+      shell: bash
+      env:
+        BUN_INSTALL_CACHE_DIR: ${{ steps.identity.outputs.store }}
+        STELLA_CI_INSTALL_FLAGS: ${{ inputs.flags }}
+        INSTALL_LOG: ${{ inputs.log-file }}
+        STELLA_CI_INSTALL_BUDGET_MS: ${{ inputs.installer-budget-ms }}
+        STELLA_CI_INSTALL_RESTORE: ${{ steps.restore-time.outputs.outcome }}
+        STELLA_CI_INSTALL_KEY: ${{ steps.identity.outputs.key }}
+        NPM_TOKEN: ""
+      run: bun scripts/ci-install.ts "${INSTALL_LOG:-$RUNNER_TEMP/bun-install/$GITHUB_JOB.log}"
+    - name: Record install time and seal successful store
+      id: install-time
+      if: ${{ always() && steps.install.outcome != 'skipped' }}
+      shell: bash
+      env:
+        INSTALL_OUTCOME: ${{ steps.install.outcome }}
+        BUN_INSTALL_CACHE_DIR: ${{ steps.identity.outputs.store }}
+        STORE_KEY: ${{ steps.identity.outputs.key }}
+        START_MS: ${{ steps.restore-time.outputs.start }}
+      run: |
+        if [[ "$INSTALL_OUTCOME" == success ]]; then
+          bun scripts/ci-install-store.ts seal "$STORE_KEY"
+        fi
+        end=$(bun -e 'console.log(Date.now())')
+        echo "milliseconds=$((end - START_MS))" >> "$GITHUB_OUTPUT"
+    - name: Save complete store from main
+      if: ${{ github.ref == 'refs/heads/main' }}
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ steps.identity.outputs.store }}
+        key: ${{ steps.identity.outputs.key }}
+    - name: Upload bounded installer failure log
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: bun-install-${{ github.job }}-${{ steps.identity.outputs.artifact-id }}
+        path: ${{ runner.temp }}/bun-install/*.log
+        if-no-files-found: ignore
+        retention-days: 7

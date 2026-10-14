@@ -39,6 +39,10 @@ impl DesktopHttpClient {
     self.0.get(url)
   }
 
+  pub fn put(&self, url: impl reqwest::IntoUrl) -> reqwest::RequestBuilder {
+    self.0.put(url)
+  }
+
   pub fn post(&self, url: impl reqwest::IntoUrl) -> reqwest::RequestBuilder {
     self.0.post(url)
   }

@@ -337,6 +337,18 @@
       }
     },
     {
+      "id": "google/gemini-4-argon",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "google/gemini-4-argon:batch",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
       "id": "google/gemini-nano-banana-2.1",
       "reasoning": {
         "default_effort": "minimal"
@@ -392,6 +404,12 @@
     },
     {
       "id": "meta/muse-spark-1.3-contributor",
+      "reasoning": {
+        "default_effort": "medium"
+      }
+    },
+    {
+      "id": "meta/muse-wonder",
       "reasoning": {
         "default_effort": "medium"
       }

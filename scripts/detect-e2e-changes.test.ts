@@ -14,6 +14,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -856,7 +857,9 @@ describe("detect-e2e-changes", () => {
     );
 
     const driftGuard = ciChecksRestStep("Model catalog snapshot drift check");
-    const driftGuardCondition = requiredExpression(driftGuard["if"]);
+    const driftGuardCondition = requiredExpression(
+      withoutStaticReuseCondition(driftGuard)["if"],
+    );
     const driftGuardRun = requiredExpression(driftGuard["run"]);
     expect(driftGuardCondition).toContain(
       "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",
@@ -1126,7 +1129,12 @@ describe("detect-e2e-changes", () => {
     ).toContain("^[0-9a-f]{40}$");
     expect(
       validateSteps.find(({ name }) => name === "Verify main ancestry")?.run,
-    ).toContain("git merge-base --is-ancestor");
+    ).toContain(
+      'bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"',
+    );
+    expect(
+      validateSteps.find(({ name }) => name === "Fetch main history")?.run,
+    ).toContain("show origin/main:scripts/verify-release-tree-proof.sh");
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
@@ -1436,9 +1444,7 @@ describe("detect-e2e-changes", () => {
       ciBrowser,
       "Restore Bun install cache",
     );
-    expect(cachedSetup["uses"]).toMatch(
-      /^stella\/\.github\/actions\/setup-bun-cached@/u,
-    );
+    expect(cachedSetup["uses"]).toMatch(/^oven-sh\/setup-bun@[a-f0-9]{40}$/u);
     expect(contractRecord(cachedSetup["with"])["bun-version-file"]).toBe(
       "package.json",
     );

@@ -37,6 +37,11 @@ import {
   TriangleAlertIcon,
   Undo2Icon,
 } from "@stll/ui/icons";
+import {
+  MATTER_TINT_GROUND,
+  matterTint,
+  resolveMatterColor,
+} from "@stll/ui/matter-colors";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Separator } from "@stll/ui/separator";
 import { stellaToast } from "@stll/ui/toast";
@@ -66,11 +71,6 @@ import {
   ENTITY_VERSION_UPLOAD_RESULT,
   uploadEntityVersion,
 } from "@/lib/files/upload-entity-version";
-import {
-  MATTER_TINT_GROUND,
-  matterTint,
-  resolveMatterColor,
-} from "@/lib/matter-colors";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
 import {
   MAX_PAGE_EDITOR_PAGES,

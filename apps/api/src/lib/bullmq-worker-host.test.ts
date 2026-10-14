@@ -60,6 +60,21 @@ describe("createBullMqWorkerHost mode", () => {
   });
 });
 
+describe("owner-connection host admission", () => {
+  test("every queue host checks its login before starting workers", () => {
+    const hosts = sourceFiles(SRC_DIR).filter((file) =>
+      /\bcreateBullMqWorkerHost\s*\(/u.test(readFileSync(file, "utf-8")),
+    );
+    expect(hosts.length).toBeGreaterThan(0);
+    for (const file of hosts) {
+      const source = readFileSync(file, "utf-8");
+      const check = source.indexOf("await assertDatabaseLoginPosture(rootDb)");
+      expect(check).toBeGreaterThanOrEqual(0);
+      expect(check).toBeLessThan(source.indexOf("createBullMqWorkerHost("));
+    }
+  });
+});
+
 describe("background queue workers", () => {
   test("every queue worker is started by a host, so the mode switch covers it", () => {
     const hosted = new Set(
