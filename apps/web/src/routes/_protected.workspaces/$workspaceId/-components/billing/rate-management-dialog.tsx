@@ -178,6 +178,23 @@ const RateTablesView = ({
     },
   });
 
+  // The form awaits the outcome: undefined closes it, a message marks the name
+  // field. A named handler rather than an inline async callback, so the form
+  // owns the promise instead of the JSX dropping it.
+  const submitRateTable: Parameters<
+    typeof CreateRateTableForm
+  >[0]["onSubmit"] = async (values) =>
+    await createTable.mutateAsync({ workspaceId, ...values }).then(
+      () => {
+        setShowForm(false);
+        return undefined;
+      },
+      (error: unknown) => {
+        notifyUserError(error, t("common.somethingWentWrong"));
+        return apiFieldIssueMessage(error, "name");
+      },
+    );
+
   const handleSetDefault = (id: string) => {
     updateTable.mutate(
       { workspaceId, id, isDefault: true },
@@ -217,18 +234,7 @@ const RateTablesView = ({
       {showForm && (
         <CreateRateTableForm
           onCancel={() => setShowForm(false)}
-          onSubmit={async (values) =>
-            createTable.mutateAsync({ workspaceId, ...values }).then(
-              () => {
-                setShowForm(false);
-                return undefined;
-              },
-              (error: unknown) => {
-                notifyUserError(error, t("common.somethingWentWrong"));
-                return apiFieldIssueMessage(error, "name");
-              },
-            )
-          }
+          onSubmit={submitRateTable}
         />
       )}
 

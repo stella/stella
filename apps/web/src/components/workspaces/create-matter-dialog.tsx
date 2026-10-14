@@ -7,6 +7,7 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import type { ContactType } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -504,6 +505,7 @@ const CreateMatterDialogBody = ({
             <Input
               aria-invalid={nameInvalid}
               autoFocus={!!selectedClient}
+              maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
               ref={nameInputRef}
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {
