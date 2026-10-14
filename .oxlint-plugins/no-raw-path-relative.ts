@@ -4,7 +4,7 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged, Variable } from "@oxlint/plugins";
 
-import { guardEnforcesLine } from "../scripts/guard-rollouts";
+import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import type { ScopeContext } from "./utils.ts";
 import {
   filenameForContext,

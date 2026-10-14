@@ -5,8 +5,8 @@ import path from "node:path";
 import {
   isPathInside,
   repoRelativePath,
-} from "../packages/portable-path/src/index";
-import { GUARD_ROLLOUTS } from "./guard-rollout-policy";
+} from "../packages/portable-path/src/index.ts";
+import { GUARD_ROLLOUTS } from "./guard-rollout-policy.ts";
 
 export const changedLineNumbers = (diff: string): ReadonlySet<number> => {
   const lines = new Set<number>();

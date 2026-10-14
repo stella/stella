@@ -6,7 +6,7 @@ import ts from "typescript";
 
 import oxlintConfig from "../oxlint.config.ts";
 import { GENERATORS } from "./generated-files";
-import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollout-policy";
+import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollout-policy.ts";
 import { readScopes } from "./oxlint-config-scopes.ts";
 import { severityOf } from "./oxlint-effective-config.ts";
 import { parseSource } from "./parse-memo.ts";

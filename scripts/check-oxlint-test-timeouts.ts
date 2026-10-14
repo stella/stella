@@ -3,7 +3,7 @@ import path from "node:path";
 import ts from "typescript";
 
 import { repoRelativePath } from "../packages/portable-path/src/index";
-import { guardEnforcesLine } from "./guard-rollouts";
+import { guardEnforcesLine } from "./guard-rollouts.ts";
 
 const TEST_DIRECTORY = path.resolve(
   import.meta.dirname,

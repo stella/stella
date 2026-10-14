@@ -18,7 +18,7 @@ import {
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
-import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollout-policy";
+import { GUARD_ROLLOUTS, type GuardRollout } from "./guard-rollout-policy.ts";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;

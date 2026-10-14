@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { changedLineNumbers, guardEnforcesLine } from "./guard-rollouts";
+import { changedLineNumbers, guardEnforcesLine } from "./guard-rollouts.ts";
 
 test("diff scope excludes deletion hunks and includes every inserted line", () => {
   expect([
