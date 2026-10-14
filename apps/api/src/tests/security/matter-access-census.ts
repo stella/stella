@@ -360,14 +360,35 @@ const recordDataFlow = (
   ) {
     mutatedNames.add(node.expression.expression.text);
   }
+  // A write to any member of a binding (`ids[0] = …`, `result.value = …`,
+  // `result.value.ids = …`, `delete result.value`) replaces part of what it
+  // holds, so the root binding never derives either.
+  const writtenRoot = (target: ts.Expression): string | undefined => {
+    let current: ts.Expression = target;
+    while (
+      ts.isPropertyAccessExpression(current) ||
+      ts.isElementAccessExpression(current) ||
+      ts.isParenthesizedExpression(current) ||
+      ts.isNonNullExpression(current)
+    ) {
+      current = current.expression;
+    }
+    return current !== target && ts.isIdentifier(current)
+      ? current.text
+      : undefined;
+  };
+  let written: string | undefined;
   if (
     ts.isBinaryExpression(node) &&
     node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
-    node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
-    ts.isElementAccessExpression(node.left) &&
-    ts.isIdentifier(node.left.expression)
+    node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
   ) {
-    mutatedNames.add(node.left.expression.text);
+    written = writtenRoot(node.left);
+  } else if (ts.isDeleteExpression(node)) {
+    written = writtenRoot(node.expression);
+  }
+  if (written !== undefined) {
+    mutatedNames.add(written);
   }
 };
 
