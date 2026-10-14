@@ -6,7 +6,8 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
-import type { ContactType } from "@stll/api-contract";
+import { DEFAULT_MATTER_VISIBILITY } from "@stll/api-contract";
+import type { ContactType, MatterVisibility } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -48,6 +49,7 @@ import {
   compareMembersByCollaboratorStats,
   getPossibleDuplicateMatters,
 } from "@/components/workspaces/create-matter-dialog.logic";
+import { MatterVisibilityChoice } from "@/components/workspaces/matter-visibility";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -213,6 +215,9 @@ const CreateMatterDialogBody = ({
   const createContact = useCreateContact();
   const [name, setName] = useState("");
   const [ownerType, setOwnerType] = useState<"client" | "personal">("client");
+  const [visibility, setVisibility] = useState<MatterVisibility>(
+    DEFAULT_MATTER_VISIBILITY,
+  );
   const [selectedClient, setSelectedClient] =
     useState<MatterDraftClient | null>(draftClient);
   const [memberQuery, setMemberQuery] = useState("");
@@ -301,6 +306,7 @@ const CreateMatterDialogBody = ({
       if (ownerType === "personal") {
         return {
           name: trimmedName,
+          visibility,
         };
       }
       if (selectedClient) {
@@ -308,6 +314,7 @@ const CreateMatterDialogBody = ({
           clientId: selectedClient.id,
           memberUserIds: selectedMemberUserIds,
           name: trimmedName,
+          visibility,
         };
       }
       return null;
@@ -424,12 +431,14 @@ const CreateMatterDialogBody = ({
         dirty={
           name !== "" ||
           ownerType !== "client" ||
+          visibility !== DEFAULT_MATTER_VISIBILITY ||
           selectedClient?.id !== draftClient?.id ||
           selectedMemberUserIds.length > 0
         }
         onDiscard={() => {
           setName("");
           setOwnerType("client");
+          setVisibility(DEFAULT_MATTER_VISIBILITY);
           setSelectedClient(draftClient);
           setSelectedMemberUserIds([]);
         }}
@@ -521,6 +530,8 @@ const CreateMatterDialogBody = ({
             ) : null}
           </Field>
         </section>
+
+        <MatterVisibilityChoice onChange={setVisibility} value={visibility} />
 
         {possibleDuplicates.length > 0 && (
           <section className="bg-muted/30 space-y-2 rounded-lg border px-3 py-3">

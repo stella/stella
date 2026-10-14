@@ -5667,7 +5667,7 @@
     },
     "create": {
       "ownerTypeToggle": "Aktentyp",
-      "personalDescription": "Persönliche Akten sind privat und benötigen keinen Klienten. Sie können später hochgestuft werden, um sie mit dem Team zu teilen."
+      "personalDescription": "Für interne Arbeit ohne Klient, etwa Vorlagen, Know-how oder interne Verwaltung."
     },
     "createNewWorkspace": "Neue Akte erstellen",
     "defaultName": "Ohne Titel",
@@ -6120,7 +6120,7 @@
     },
     "ownerType": {
       "client": "Klient",
-      "personal": "Persönlich"
+      "personal": "Ohne Klient"
     },
     "parties": {
       "addParty": "Partei hinzufügen",
@@ -6139,11 +6139,11 @@
         "third_party": "Dritte Partei",
         "witness": "Zeuge"
       },
-      "personalDescription": "Persönliche Akten sind nur für Sie sichtbar. Stufen Sie sie auf einen Klienten hoch, um sie mit dem Team zu teilen.",
-      "personalLabel": "Persönlich",
-      "promoteCta": "Zu Klient hochstufen",
-      "promoteDescription": "Fügen Sie einen Klienten hinzu, um diese Akte mit dem Team zu teilen. Diese Aktion ist endgültig — hochgestufte Akten können nicht wieder persönlich werden.",
-      "promotedSuccess": "Akte hochgestuft",
+      "personalDescription": "Diese Akte hat keinen Klienten. Einen Klienten hinzuzufügen ändert nicht, wer die Akte sieht.",
+      "personalLabel": "Ohne Klient",
+      "promoteCta": "Klient festlegen",
+      "promoteDescription": "Wählen Sie den Klienten für diese Akte. Wer die Akte sieht, bleibt unverändert.",
+      "promotedSuccess": "Klient festgelegt",
       "removeClient": "Klient entfernen",
       "removeParty": "Partei entfernen",
       "removePartyConfirm": "Möchten Sie diese Partei wirklich aus der Akte entfernen?",
@@ -6501,6 +6501,24 @@
       },
       "useTemplate": "Voreinstellung verwenden…",
       "viewSettings": "Ansichtseinstellungen"
+    },
+    "visibility": {
+      "confirmAction": "Sichtbar machen",
+      "confirmCancel": "Privat lassen",
+      "confirmDescription": "Eigentümer und Administratoren des Teams können dann <bdi>{matterName}</bdi> und alles darin öffnen: Dokumente, Aufgaben, Zeiteinträge und KI-Chats zur Akte.",
+      "confirmNote": "Bisherige Mitglieder behalten ihren Zugriff. Die Änderung wird im Aktivitätsprotokoll festgehalten, und Sie können die Akte wieder privat machen.",
+      "confirmTitle": "Akte für das Team sichtbar machen?",
+      "label": "Wer diese Akte sehen kann",
+      "madeOrganization": "Akte ist für das Team sichtbar",
+      "madePrivate": "Akte ist jetzt privat",
+      "organizationDescription": "Eigentümer und Administratoren des Teams sowie alle, die Sie als Mitglied hinzufügen.",
+      "organizationSummary": "Eigentümer und Administratoren des Teams sowie die Mitglieder der Akte.",
+      "private": "Privat",
+      "privateBadgeTitle": "Nur die Mitglieder dieser Akte können sie sehen",
+      "privateDescription": "Nur Sie und die Mitglieder, die Sie hinzufügen. Eigentümer und Administratoren können sie erst öffnen, wenn sie hinzugefügt werden.",
+      "privateSummary": "Nur die Mitglieder der Akte.",
+      "settingLabel": "Wer sieht",
+      "summaryReadOnly": "{summary} Nur der Lead der Akte oder ein Administrator kann das ändern."
     },
     "workflow": {
       "allManualInputsDescription": "Fügen Sie mindestens eine KI-Eigenschaft hinzu, um den Arbeitsablauf zu starten",

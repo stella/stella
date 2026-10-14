@@ -5667,7 +5667,7 @@
     },
     "create": {
       "ownerTypeToggle": "Ügy típusa",
-      "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."
+      "personalDescription": "Ügyfél nélküli belső munkához, például sablonokhoz, know-how-hoz vagy belső adminisztrációhoz."
     },
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",
@@ -6120,7 +6120,7 @@
     },
     "ownerType": {
       "client": "Ügyfél",
-      "personal": "Személyes"
+      "personal": "Ügyfél nélkül"
     },
     "parties": {
       "addParty": "Fél hozzáadása",
@@ -6139,11 +6139,11 @@
         "third_party": "Harmadik fél",
         "witness": "Tanú"
       },
-      "personalDescription": "A személyes ügyek csak az Ön számára láthatók. Léptesse elő ügyfélüggyé a csapattal való megosztáshoz.",
-      "personalLabel": "Személyes",
-      "promoteCta": "Előléptetés ügyfélüggyé",
-      "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges — az előléptetett ügy nem vonható vissza személyesre.",
-      "promotedSuccess": "Ügy előléptetve",
+      "personalDescription": "Ennek az ügynek nincs ügyfele. Ügyfél hozzáadása nem változtat azon, ki látja az ügyet.",
+      "personalLabel": "Ügyfél nélkül",
+      "promoteCta": "Ügyfél beállítása",
+      "promoteDescription": "Válassza ki az ügy ügyfelét. Az, hogy ki látja az ügyet, nem változik.",
+      "promotedSuccess": "Ügyfél beállítva",
       "removeClient": "Ügyfél eltávolítása",
       "removeParty": "Fél eltávolítása",
       "removePartyConfirm": "Biztosan eltávolítja ezt a felet az ügyből?",
@@ -6501,6 +6501,24 @@
       },
       "useTemplate": "Előbeállítás használata…",
       "viewSettings": "Nézetbeállítások"
+    },
+    "visibility": {
+      "confirmAction": "Láthatóvá tétel",
+      "confirmCancel": "Maradjon privát",
+      "confirmDescription": "A csapat tulajdonosai és adminisztrátorai megnyithatják a(z) <bdi>{matterName}</bdi> ügyet és annak teljes tartalmát: az ügyhöz kapcsolódó dokumentumokat, feladatokat, időbejegyzéseket és AI-csevegéseket.",
+      "confirmNote": "A jelenlegi tagok megtartják a hozzáférésüket. A módosítás bekerül a tevékenységnaplóba, és az ügyet később ismét priváttá teheti.",
+      "confirmTitle": "Láthatóvá teszi az ügyet a csapat számára?",
+      "label": "Ki láthatja ezt az ügyet",
+      "madeOrganization": "Az ügy látható a csapat számára",
+      "madePrivate": "Az ügy mostantól privát",
+      "organizationDescription": "A csapat tulajdonosai és adminisztrátorai, valamint mindenki, akit tagként hozzáad.",
+      "organizationSummary": "A csapat tulajdonosai és adminisztrátorai, valamint az ügy tagjai.",
+      "private": "Privát",
+      "privateBadgeTitle": "Ezt az ügyet csak a tagjai látják",
+      "privateDescription": "Csak Ön és a hozzáadott tagok. A tulajdonosok és adminisztrátorok csak akkor nyithatják meg, ha hozzáadják őket.",
+      "privateSummary": "Csak az ügy tagjai.",
+      "settingLabel": "Ki látja",
+      "summaryReadOnly": "{summary} Ezt csak az ügy felelőse vagy egy adminisztrátor módosíthatja."
     },
     "workflow": {
       "allManualInputsDescription": "A munkafolyamat indításához adjon hozzá legalább egy AI tulajdonságot",

@@ -5667,7 +5667,7 @@
     },
     "create": {
       "ownerTypeToggle": "Bylos tipas",
-      "personalDescription": "Asmeninės bylos yra privačios ir nereikalauja kliento. Galite jas vėliau paaukštinti, kad pasidalintumėte su komanda."
+      "personalDescription": "Vidiniam darbui be kliento, pavyzdžiui, šablonams, žinioms ar vidinei administracijai."
     },
     "createNewWorkspace": "Sukurti naują bylą",
     "defaultName": "Be pavadinimo",
@@ -6120,7 +6120,7 @@
     },
     "ownerType": {
       "client": "Klientas",
-      "personal": "Asmeninė"
+      "personal": "Be kliento"
     },
     "parties": {
       "addParty": "Pridėti šalį",
@@ -6139,11 +6139,11 @@
         "third_party": "Trečioji šalis",
         "witness": "Liudytojas"
       },
-      "personalDescription": "Asmeninės bylos yra privačios. Paaukštinkite į klientinę, kad pasidalintumėte su komanda.",
-      "personalLabel": "Asmeninė",
-      "promoteCta": "Paaukštinti į klientinę",
-      "promoteDescription": "Susiekite klientą, kad pasidalintumėte byla su komanda. Tai negrįžtama — paaukštintos bylos negali tapti asmeninėmis.",
-      "promotedSuccess": "Byla paaukštinta",
+      "personalDescription": "Ši byla neturi kliento. Pridėjus klientą nesikeičia, kas mato bylą.",
+      "personalLabel": "Be kliento",
+      "promoteCta": "Nustatyti klientą",
+      "promoteDescription": "Pasirinkite šios bylos klientą. Kas mato bylą, nesikeičia.",
+      "promotedSuccess": "Klientas nustatytas",
       "removeClient": "Pašalinti klientą",
       "removeParty": "Pašalinti šalį",
       "removePartyConfirm": "Ar tikrai norite pašalinti šią šalį iš bylos?",
@@ -6501,6 +6501,24 @@
       },
       "useTemplate": "Naudoti išankstinį nustatymą…",
       "viewSettings": "Rodinio nustatymai"
+    },
+    "visibility": {
+      "confirmAction": "Padaryti matomą",
+      "confirmCancel": "Palikti privačią",
+      "confirmDescription": "Komandos savininkai ir administratoriai galės atidaryti bylą <bdi>{matterName}</bdi> ir visą jos turinį: su byla susietus dokumentus, užduotis, laiko įrašus ir DI pokalbius.",
+      "confirmNote": "Esami nariai išsaugo prieigą. Pakeitimas įrašomas į veiklos žurnalą, o bylą vėl galite padaryti privačią.",
+      "confirmTitle": "Padaryti bylą matomą komandai?",
+      "label": "Kas mato šią bylą",
+      "madeOrganization": "Byla matoma komandai",
+      "madePrivate": "Byla dabar privati",
+      "organizationDescription": "Komandos savininkai ir administratoriai bei visi, kuriuos pridėsite kaip narius.",
+      "organizationSummary": "Komandos savininkai ir administratoriai bei bylos nariai.",
+      "private": "Privati",
+      "privateBadgeTitle": "Šią bylą mato tik jos nariai",
+      "privateDescription": "Tik jūs ir jūsų pridėti nariai. Savininkai ir administratoriai negali jos atidaryti, kol nėra pridėti.",
+      "privateSummary": "Tik bylos nariai.",
+      "settingLabel": "Kas mato",
+      "summaryReadOnly": "{summary} Tai pakeisti gali tik už bylą atsakingas asmuo arba administratorius."
     },
     "workflow": {
       "allManualInputsDescription": "Norėdami paleisti darbo eigą, pridėkite bent vieną DI savybę",

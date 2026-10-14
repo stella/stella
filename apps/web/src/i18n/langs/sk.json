@@ -5667,7 +5667,7 @@
     },
     "create": {
       "ownerTypeToggle": "Typ spisu",
-      "personalDescription": "Osobné spisy sú súkromné a nepotrebujú klienta. Neskôr ich môžete povýšiť, aby ste ich zdieľali s tímom."
+      "personalDescription": "Na internú prácu bez klienta, napríklad vzory, know-how alebo internú administratívu."
     },
     "createNewWorkspace": "Vytvoriť nový spis",
     "defaultName": "Bez názvu",
@@ -6120,7 +6120,7 @@
     },
     "ownerType": {
       "client": "Klient",
-      "personal": "Osobný"
+      "personal": "Bez klienta"
     },
     "parties": {
       "addParty": "Pridať stranu",
@@ -6139,11 +6139,11 @@
         "third_party": "Tretia strana",
         "witness": "Svedok"
       },
-      "personalDescription": "Osobné spisy sú iba pre vás. Povýšte ich na klientsky spis, aby ste ich zdieľali s tímom.",
-      "personalLabel": "Osobný",
-      "promoteCta": "Povýšiť na klientsky spis",
-      "promoteDescription": "Priraďte klienta na zdieľanie tohto spisu s tímom. Akcia je nezvratná — povýšené spisy nie je možné vrátiť na osobné.",
-      "promotedSuccess": "Spis povýšený",
+      "personalDescription": "Tento spis nemá klienta. Pridanie klienta nemení, kto spis vidí.",
+      "personalLabel": "Bez klienta",
+      "promoteCta": "Nastaviť klienta",
+      "promoteDescription": "Vyberte klienta pre tento spis. Kto spis vidí, sa nezmení.",
+      "promotedSuccess": "Klient nastavený",
       "removeClient": "Odstrániť klienta",
       "removeParty": "Odstrániť stranu",
       "removePartyConfirm": "Naozaj chcete odstrániť túto stranu zo spisu?",
@@ -6501,6 +6501,24 @@
       },
       "useTemplate": "Použiť predvoľbu…",
       "viewSettings": "Nastavenia zobrazenia"
+    },
+    "visibility": {
+      "confirmAction": "Sprístupniť",
+      "confirmCancel": "Ponechať súkromný",
+      "confirmDescription": "Vlastníci a administrátori tímu budú môcť otvoriť spis <bdi>{matterName}</bdi> a všetko v ňom: dokumenty, úlohy, časové záznamy a AI chaty naviazané na spis.",
+      "confirmNote": "Súčasní členovia si prístup ponechajú. Zmena sa zapíše do záznamu všetkých aktivít a spis môžete znova nastaviť ako súkromný.",
+      "confirmTitle": "Sprístupniť spis tímu?",
+      "label": "Kto spis uvidí",
+      "madeOrganization": "Spis je viditeľný pre tím",
+      "madePrivate": "Spis je teraz súkromný",
+      "organizationDescription": "Vlastníci a administrátori tímu a všetci, ktorých pridáte ako členov.",
+      "organizationSummary": "Vlastníci a administrátori tímu a členovia spisu.",
+      "private": "Súkromný",
+      "privateBadgeTitle": "Spis vidia len jeho členovia",
+      "privateDescription": "Len vy a členovia, ktorých pridáte. Vlastníci a administrátori ho neotvoria, kým ich nepridáte.",
+      "privateSummary": "Len členovia spisu.",
+      "settingLabel": "Kto vidí",
+      "summaryReadOnly": "{summary} Zmeniť to môže len vedúci spisu alebo administrátor."
     },
     "workflow": {
       "allManualInputsDescription": "Na spustenie pracovného postupu pridajte aspoň jednu AI vlastnosť",

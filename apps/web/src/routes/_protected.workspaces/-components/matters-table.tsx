@@ -25,6 +25,7 @@ import { cn } from "@stll/ui/utils";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { useMatterContextMenu } from "@/components/workspaces/matter-context-menu";
+import { PrivateMatterBadge } from "@/components/workspaces/matter-visibility";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -197,6 +198,7 @@ const NameCell = ({ workspace }: CellProps) => (
     >
       {workspace.name}
     </BidiText>
+    <PrivateMatterBadge visibility={workspace.visibility} />
   </div>
 );
 

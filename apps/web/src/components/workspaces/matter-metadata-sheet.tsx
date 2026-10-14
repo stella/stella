@@ -28,6 +28,7 @@ import { MatterNumberHint } from "@/components/matter-number-hint";
 import { LeadSection } from "@/components/workspaces/lead-section";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
 import { resolveReferenceEdit } from "@/components/workspaces/matter-metadata-sheet.logic";
+import { VisibilitySection } from "@/components/workspaces/matter-visibility";
 import { MembersSection } from "@/components/workspaces/members-section";
 import { PartiesSection } from "@/components/workspaces/parties-section";
 import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
@@ -423,6 +424,14 @@ export const MatterMetadataPanel = ({
 
         {/* Lead */}
         <LeadSection workspaceId={workspaceId} />
+
+        {/* Visibility */}
+        <VisibilitySection
+          leadUserId={workspace.leadUserId}
+          matterName={workspace.name}
+          visibility={workspace.visibility}
+          workspaceId={workspaceId}
+        />
 
         {/* Members */}
         <MembersSection workspaceId={workspaceId} />

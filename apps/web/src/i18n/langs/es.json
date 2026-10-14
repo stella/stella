@@ -5667,7 +5667,7 @@
     },
     "create": {
       "ownerTypeToggle": "Tipo de asunto",
-      "personalDescription": "Los asuntos personales son privados y no requieren cliente. Puede promocionarlos más tarde para compartir con el equipo."
+      "personalDescription": "Para trabajo interno sin cliente, como plantillas, know-how o administración interna."
     },
     "createNewWorkspace": "Crear nuevo asunto",
     "defaultName": "Sin título",
@@ -6120,7 +6120,7 @@
     },
     "ownerType": {
       "client": "Cliente",
-      "personal": "Personal"
+      "personal": "Sin cliente"
     },
     "parties": {
       "addParty": "Añadir parte",
@@ -6139,11 +6139,11 @@
         "third_party": "Tercero",
         "witness": "Testigo"
       },
-      "personalDescription": "Los asuntos personales son privados. Promocione a un cliente para compartir con el equipo.",
-      "personalLabel": "Personal",
-      "promoteCta": "Promocionar a cliente",
-      "promoteDescription": "Asigne un cliente para compartir este asunto con el equipo. Es irreversible — los asuntos promocionados no pueden volver a ser personales.",
-      "promotedSuccess": "Asunto promocionado",
+      "personalDescription": "Este asunto no tiene cliente. Añadir uno no cambia quién puede verlo.",
+      "personalLabel": "Sin cliente",
+      "promoteCta": "Establecer cliente",
+      "promoteDescription": "Elige el cliente de este asunto. Quién puede ver el asunto no cambia.",
+      "promotedSuccess": "Cliente establecido",
       "removeClient": "Eliminar cliente",
       "removeParty": "Eliminar parte",
       "removePartyConfirm": "¿Está seguro de que desea eliminar esta parte del asunto?",
@@ -6501,6 +6501,24 @@
       },
       "useTemplate": "Usar preajuste…",
       "viewSettings": "Configuración de vista"
+    },
+    "visibility": {
+      "confirmAction": "Hacer visible",
+      "confirmCancel": "Mantener privado",
+      "confirmDescription": "Los propietarios y administradores del equipo podrán abrir <bdi>{matterName}</bdi> y todo su contenido: documentos, tareas, registros de tiempo y chats de IA vinculados al asunto.",
+      "confirmNote": "Los miembros actuales conservan su acceso. El cambio queda en el registro de actividad y puedes volver a hacer privado el asunto.",
+      "confirmTitle": "¿Hacer visible este asunto para el equipo?",
+      "label": "Quién puede ver este asunto",
+      "madeOrganization": "El asunto es visible para el equipo",
+      "madePrivate": "El asunto ahora es privado",
+      "organizationDescription": "Los propietarios y administradores del equipo, y todas las personas que añadas como miembros.",
+      "organizationSummary": "Los propietarios y administradores del equipo, y los miembros del asunto.",
+      "private": "Privado",
+      "privateBadgeTitle": "Solo los miembros de este asunto pueden verlo",
+      "privateDescription": "Solo tú y los miembros que añadas. Los propietarios y administradores no pueden abrirlo salvo que se les añada.",
+      "privateSummary": "Solo los miembros del asunto.",
+      "settingLabel": "Quién lo ve",
+      "summaryReadOnly": "{summary} Solo el responsable del asunto o un administrador puede cambiarlo."
     },
     "workflow": {
       "allManualInputsDescription": "Añada al menos una propiedad de IA para iniciar el flujo de trabajo",

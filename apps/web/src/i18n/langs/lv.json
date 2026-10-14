@@ -5667,7 +5667,7 @@
     },
     "create": {
       "ownerTypeToggle": "Lietas veids",
-      "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
+      "personalDescription": "Iekšējam darbam bez klienta, piemēram, veidnēm, zinātībai vai iekšējai administrācijai."
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
@@ -6120,7 +6120,7 @@
     },
     "ownerType": {
       "client": "Klients",
-      "personal": "Personīga"
+      "personal": "Bez klienta"
     },
     "parties": {
       "addParty": "Pievienot pusi",
@@ -6139,11 +6139,11 @@
         "third_party": "Trešā puse",
         "witness": "Liecinieks"
       },
-      "personalDescription": "Personīgās lietas ir tikai jums. Paaugstiniet klientam, lai dalītos ar komandu.",
-      "personalLabel": "Personīga",
-      "promoteCta": "Paaugstināt klientam",
-      "promoteDescription": "Pievienojiet klientu, lai dalītos ar šo lietu komandai. Tas ir neatgriezeniski — paaugstinātās lietas nevar atgriezties personīgās.",
-      "promotedSuccess": "Lieta paaugstināta",
+      "personalDescription": "Šai lietai nav klienta. Klienta pievienošana nemaina, kas redz lietu.",
+      "personalLabel": "Bez klienta",
+      "promoteCta": "Iestatīt klientu",
+      "promoteDescription": "Izvēlieties šīs lietas klientu. Tas, kas redz lietu, nemainās.",
+      "promotedSuccess": "Klients iestatīts",
       "removeClient": "Noņemt klientu",
       "removeParty": "Noņemt pusi",
       "removePartyConfirm": "Vai tiešām vēlaties noņemt šo pusi no lietas?",
@@ -6501,6 +6501,24 @@
       },
       "useTemplate": "Lietot iepriekšiestatījumu…",
       "viewSettings": "Skata iestatījumi"
+    },
+    "visibility": {
+      "confirmAction": "Padarīt redzamu",
+      "confirmCancel": "Atstāt privātu",
+      "confirmDescription": "Komandas īpašnieki un administratori varēs atvērt lietu <bdi>{matterName}</bdi> un visu tās saturu: ar lietu saistītos dokumentus, uzdevumus, laika ierakstus un AI tērzēšanas.",
+      "confirmNote": "Esošie dalībnieki saglabā piekļuvi. Izmaiņas tiek ierakstītas darbību žurnālā, un lietu var atkal padarīt privātu.",
+      "confirmTitle": "Padarīt lietu redzamu komandai?",
+      "label": "Kas var redzēt šo lietu",
+      "madeOrganization": "Lieta ir redzama komandai",
+      "madePrivate": "Lieta tagad ir privāta",
+      "organizationDescription": "Komandas īpašnieki un administratori, kā arī visi, kurus pievienosiet kā dalībniekus.",
+      "organizationSummary": "Komandas īpašnieki un administratori, kā arī lietas dalībnieki.",
+      "private": "Privāta",
+      "privateBadgeTitle": "Šo lietu redz tikai tās dalībnieki",
+      "privateDescription": "Tikai jūs un jūsu pievienotie dalībnieki. Īpašnieki un administratori to nevar atvērt, ja vien viņi nav pievienoti.",
+      "privateSummary": "Tikai lietas dalībnieki.",
+      "settingLabel": "Kas redz",
+      "summaryReadOnly": "{summary} To var mainīt tikai lietas atbildīgais vai administrators."
     },
     "workflow": {
       "allManualInputsDescription": "Lai palaistu darbplūsmu, pievienojiet vismaz vienu AI rekvizītu",

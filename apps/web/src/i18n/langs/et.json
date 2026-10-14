@@ -5667,7 +5667,7 @@
     },
     "create": {
       "ownerTypeToggle": "Toimiku tüüp",
-      "personalDescription": "Isiklikud toimikud on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."
+      "personalDescription": "Kliendita sisemiseks tööks, näiteks mallide, oskusteabe või sisemise halduse jaoks."
     },
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",
@@ -6120,7 +6120,7 @@
     },
     "ownerType": {
       "client": "Klient",
-      "personal": "Isiklik"
+      "personal": "Kliendita"
     },
     "parties": {
       "addParty": "Lisa osapool",
@@ -6139,11 +6139,11 @@
         "third_party": "Kolmas isik",
         "witness": "Tunnistaja"
       },
-      "personalDescription": "Isiklikud toimikud on ainult teile nähtavad. Edutage kliendile, et meeskonnaga jagada.",
-      "personalLabel": "Isiklik",
-      "promoteCta": "Eduta kliendile",
-      "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline — edutatud toimikuid ei saa tagasi isiklikuks muuta.",
-      "promotedSuccess": "Toimik edutatud",
+      "personalDescription": "Sellel toimikul pole klienti. Kliendi lisamine ei muuda, kes toimikut näeb.",
+      "personalLabel": "Kliendita",
+      "promoteCta": "Määra klient",
+      "promoteDescription": "Valige selle toimiku klient. See, kes toimikut näeb, jääb samaks.",
+      "promotedSuccess": "Klient määratud",
       "removeClient": "Eemalda klient",
       "removeParty": "Eemalda osapool",
       "removePartyConfirm": "Kas olete kindel, et soovite selle osapoole toimikust eemaldada?",
@@ -6501,6 +6501,24 @@
       },
       "useTemplate": "Kasuta eelseadet…",
       "viewSettings": "Vaate seaded"
+    },
+    "visibility": {
+      "confirmAction": "Tee nähtavaks",
+      "confirmCancel": "Jäta privaatseks",
+      "confirmDescription": "Meeskonna omanikud ja administraatorid saavad avada toimiku <bdi>{matterName}</bdi> ja kogu selle sisu: toimikuga seotud dokumendid, ülesanded, ajakanded ja AI-vestlused.",
+      "confirmNote": "Praegused liikmed säilitavad juurdepääsu. Muudatus salvestatakse tegevuslogisse ja toimiku saab uuesti privaatseks muuta.",
+      "confirmTitle": "Kas teha toimik meeskonnale nähtavaks?",
+      "label": "Kes seda toimikut näeb",
+      "madeOrganization": "Toimik on meeskonnale nähtav",
+      "madePrivate": "Toimik on nüüd privaatne",
+      "organizationDescription": "Meeskonna omanikud ja administraatorid ning kõik, kelle lisate liikmeks.",
+      "organizationSummary": "Meeskonna omanikud ja administraatorid ning toimiku liikmed.",
+      "private": "Privaatne",
+      "privateBadgeTitle": "Seda toimikut näevad ainult selle liikmed",
+      "privateDescription": "Ainult teie ja lisatud liikmed. Omanikud ja administraatorid ei saa seda avada, kui neid pole lisatud.",
+      "privateSummary": "Ainult toimiku liikmed.",
+      "settingLabel": "Kes näeb",
+      "summaryReadOnly": "{summary} Seda saab muuta ainult toimiku vastutaja või administraator."
     },
     "workflow": {
       "allManualInputsDescription": "Töövoo käivitamiseks lisage vähemalt üks tehisintellekti omadus",

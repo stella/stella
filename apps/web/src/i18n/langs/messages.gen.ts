@@ -5670,7 +5670,7 @@ type Messages = {
     };
     "create": {
       "ownerTypeToggle": "Matter type";
-      "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team.";
+      "personalDescription": "For internal work without a client, such as templates, know-how or internal administration.";
     };
     "createNewWorkspace": "Create new matter";
     "defaultName": "Untitled";
@@ -6123,7 +6123,7 @@ type Messages = {
     };
     "ownerType": {
       "client": "Client";
-      "personal": "Personal";
+      "personal": "No client";
     };
     "parties": {
       "addParty": "Add party";
@@ -6142,11 +6142,11 @@ type Messages = {
         "third_party": "Third party";
         "witness": "Witness";
       };
-      "personalDescription": "Personal matters are private to you. Promote to a client to share with the team.";
-      "personalLabel": "Personal";
-      "promoteCta": "Promote to client";
-      "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.";
-      "promotedSuccess": "Matter promoted";
+      "personalDescription": "This matter has no client. Adding one does not change who can see it.";
+      "personalLabel": "No client";
+      "promoteCta": "Set client";
+      "promoteDescription": "Choose the client for this matter. Who can see the matter stays the same.";
+      "promotedSuccess": "Client set";
       "removeClient": "Remove client";
       "removeParty": "Remove party";
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?";
@@ -6504,6 +6504,24 @@ type Messages = {
       };
       "useTemplate": "Use preset…";
       "viewSettings": "View settings";
+    };
+    "visibility": {
+      "confirmAction": "Make visible";
+      "confirmCancel": "Keep private";
+      "confirmDescription": "Team owners and admins will be able to open <bdi>{matterName}</bdi> and everything in it: documents, tasks, time entries and AI chats linked to the matter.";
+      "confirmNote": "Current members keep their access. The change is recorded in the activity log, and you can make the matter private again.";
+      "confirmTitle": "Make this matter visible to the team?";
+      "label": "Who can see this matter";
+      "madeOrganization": "Matter is visible to the team";
+      "madePrivate": "Matter is now private";
+      "organizationDescription": "Team owners and admins, and everyone you add as a member.";
+      "organizationSummary": "Team owners and admins, and this matter's members.";
+      "private": "Private";
+      "privateBadgeTitle": "Only this matter's members can see it";
+      "privateDescription": "Only you and the members you add. Owners and admins can't open it unless they're added.";
+      "privateSummary": "Only this matter's members.";
+      "settingLabel": "Who can see";
+      "summaryReadOnly": "{summary} Only the matter lead or an admin can change this.";
     };
     "workflow": {
       "allManualInputsDescription": "Please add at least one AI property to start the workflow";

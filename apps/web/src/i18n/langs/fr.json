@@ -5667,7 +5667,7 @@
     },
     "create": {
       "ownerTypeToggle": "Type de dossier",
-      "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
+      "personalDescription": "Pour le travail interne sans client, comme les modèles, le savoir-faire ou l'administration interne."
     },
     "createNewWorkspace": "Créer un nouveau dossier",
     "defaultName": "Sans titre",
@@ -6120,7 +6120,7 @@
     },
     "ownerType": {
       "client": "Client",
-      "personal": "Personnel"
+      "personal": "Sans client"
     },
     "parties": {
       "addParty": "Ajouter une partie",
@@ -6139,11 +6139,11 @@
         "third_party": "Tiers",
         "witness": "Témoin"
       },
-      "personalDescription": "Les dossiers personnels sont privés. Promouvoir vers un client pour partager avec l'équipe.",
-      "personalLabel": "Personnel",
-      "promoteCta": "Promouvoir au client",
-      "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
-      "promotedSuccess": "Dossier promu",
+      "personalDescription": "Ce dossier n'a pas de client. En ajouter un ne change pas qui peut le voir.",
+      "personalLabel": "Sans client",
+      "promoteCta": "Définir le client",
+      "promoteDescription": "Choisissez le client de ce dossier. Les personnes qui peuvent voir le dossier restent les mêmes.",
+      "promotedSuccess": "Client défini",
       "removeClient": "Retirer le client",
       "removeParty": "Retirer la partie",
       "removePartyConfirm": "Voulez-vous vraiment retirer cette partie du dossier ?",
@@ -6501,6 +6501,24 @@
       },
       "useTemplate": "Utiliser le préréglage…",
       "viewSettings": "Paramètres de la vue"
+    },
+    "visibility": {
+      "confirmAction": "Rendre visible",
+      "confirmCancel": "Garder privé",
+      "confirmDescription": "Les propriétaires et administrateurs de l'équipe pourront ouvrir <bdi>{matterName}</bdi> et tout son contenu : documents, tâches, saisies de temps et conversations IA liées au dossier.",
+      "confirmNote": "Les membres actuels conservent leur accès. La modification est inscrite au journal d'activité, et vous pouvez rendre le dossier privé à nouveau.",
+      "confirmTitle": "Rendre ce dossier visible pour l'équipe ?",
+      "label": "Qui peut voir ce dossier",
+      "madeOrganization": "Le dossier est visible pour l'équipe",
+      "madePrivate": "Le dossier est désormais privé",
+      "organizationDescription": "Les propriétaires et administrateurs de l'équipe, et toutes les personnes que vous ajoutez comme membres.",
+      "organizationSummary": "Les propriétaires et administrateurs de l'équipe, et les membres du dossier.",
+      "private": "Privé",
+      "privateBadgeTitle": "Seuls les membres de ce dossier peuvent le voir",
+      "privateDescription": "Vous et les membres que vous ajoutez. Les propriétaires et administrateurs ne peuvent pas l'ouvrir sans y être ajoutés.",
+      "privateSummary": "Seuls les membres du dossier.",
+      "settingLabel": "Qui voit",
+      "summaryReadOnly": "{summary} Seul le responsable du dossier ou un administrateur peut modifier ce réglage."
     },
     "workflow": {
       "allManualInputsDescription": "Veuillez ajouter au moins une propriété IA pour démarrer le flux de travail",

@@ -21,6 +21,7 @@ import { InlineEdit } from "@/components/inline-edit";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
+import { PrivateMatterBadge } from "@/components/workspaces/matter-visibility";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { useQueryView } from "@/lib/use-query-view";
@@ -134,6 +135,7 @@ export const MatterCard = ({
                   </Link>
                 )}
               </h2>
+              <PrivateMatterBadge visibility={workspace.visibility} />
               {rename.status !== "editing" && workspace.reference && (
                 <span className="text-muted-foreground inline-flex shrink-0 items-center gap-1.5 font-mono text-xs">
                   <span

@@ -5667,7 +5667,7 @@
     },
     "create": {
       "ownerTypeToggle": "Tipo de caso",
-      "personalDescription": "Casos pessoais são privados para você e não precisam de cliente. Você pode promovê-los depois para compartilhar com a equipe."
+      "personalDescription": "Para trabalho interno sem cliente, como modelos, know-how ou administração interna."
     },
     "createNewWorkspace": "Criar novo caso",
     "defaultName": "Sem título",
@@ -6120,7 +6120,7 @@
     },
     "ownerType": {
       "client": "Cliente",
-      "personal": "Pessoal"
+      "personal": "Sem cliente"
     },
     "parties": {
       "addParty": "Adicionar parte",
@@ -6139,11 +6139,11 @@
         "third_party": "Terceiro",
         "witness": "Testemunha"
       },
-      "personalDescription": "Casos pessoais são privados para você. Promova para um cliente para compartilhar com a equipe.",
-      "personalLabel": "Pessoal",
-      "promoteCta": "Promover para cliente",
-      "promoteDescription": "Associe um cliente para compartilhar este caso com a equipe. Esta ação é unidirecional; casos promovidos não podem voltar a ser pessoais.",
-      "promotedSuccess": "Caso promovido",
+      "personalDescription": "Este caso não tem cliente. Adicionar um não muda quem pode vê-lo.",
+      "personalLabel": "Sem cliente",
+      "promoteCta": "Definir cliente",
+      "promoteDescription": "Escolha o cliente deste caso. Quem pode ver o caso continua igual.",
+      "promotedSuccess": "Cliente definido",
       "removeClient": "Remover cliente",
       "removeParty": "Remover parte",
       "removePartyConfirm": "Tem certeza de que deseja remover esta parte do caso?",
@@ -6501,6 +6501,24 @@
       },
       "useTemplate": "Usar predefinição…",
       "viewSettings": "Configurações da visualização"
+    },
+    "visibility": {
+      "confirmAction": "Tornar visível",
+      "confirmCancel": "Manter privado",
+      "confirmDescription": "Proprietários e administradores da equipe poderão abrir <bdi>{matterName}</bdi> e todo o seu conteúdo: documentos, tarefas, lançamentos de horas e chats de IA vinculados ao caso.",
+      "confirmNote": "Os membros atuais mantêm o acesso. A alteração fica no registro de atividades, e você pode tornar o caso privado novamente.",
+      "confirmTitle": "Tornar este caso visível para a equipe?",
+      "label": "Quem pode ver este caso",
+      "madeOrganization": "O caso está visível para a equipe",
+      "madePrivate": "O caso agora é privado",
+      "organizationDescription": "Proprietários e administradores da equipe, e todas as pessoas que você adicionar como membros.",
+      "organizationSummary": "Proprietários e administradores da equipe, e os membros do caso.",
+      "private": "Privado",
+      "privateBadgeTitle": "Somente os membros deste caso podem vê-lo",
+      "privateDescription": "Somente você e os membros que adicionar. Proprietários e administradores não podem abri-lo a menos que sejam adicionados.",
+      "privateSummary": "Somente os membros do caso.",
+      "settingLabel": "Quem vê",
+      "summaryReadOnly": "{summary} Somente o responsável pelo caso ou um administrador pode alterar isso."
     },
     "workflow": {
       "allManualInputsDescription": "Adicione pelo menos uma propriedade de IA para iniciar o fluxo de trabalho",

@@ -22,7 +22,6 @@ import {
 } from "@stll/ui/dialog";
 import {
   BuildingIcon,
-  LockIcon,
   PlusIcon,
   TrashIcon,
   UserIcon,
@@ -127,15 +126,12 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   }
 
   const { client } = workspace;
-  const personalSection = !client ? (
+  const noClientSection = !client ? (
     <div className="flex flex-col p-3">
       <section className="bg-muted/30 flex flex-col gap-2 rounded-md border p-3">
-        <div className="flex items-center gap-2">
-          <LockIcon className="text-muted-foreground size-4" />
-          <h3 className="text-sm font-medium">
-            {t("workspaces.parties.personalLabel")}
-          </h3>
-        </div>
+        <h3 className="text-sm font-medium">
+          {t("workspaces.parties.personalLabel")}
+        </h3>
         <p className="text-muted-foreground text-sm">
           {t("workspaces.parties.personalDescription")}
         </p>
@@ -146,7 +142,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
 
   return (
     <div className="flex flex-col">
-      {personalSection}
+      {noClientSection}
       {/* Client sub-section */}
       {client && (
         <section>
