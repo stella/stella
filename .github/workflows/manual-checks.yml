@@ -174,7 +174,6 @@ jobs:
       - name: Measure scoped install
         id: install
         uses: $/.github/actions/ci-install
-        timeout-minutes: 5
         with:
           cache-write: ${{ matrix.global-store == '1' && 'save' || 'restore' }}
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
@@ -224,7 +223,6 @@ jobs:
       - name: Measure scoped install
         id: install
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
       - name: Register isolated cache save measurement

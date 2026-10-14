@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { ReactNode } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic } from "better-result";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -18,7 +20,6 @@ import {
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
-  CopyIcon,
   EyeOffIcon,
   LockKeyholeIcon,
   PauseIcon,
@@ -30,6 +31,7 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
+import { PreviewPane } from "@stll/ui/preview-pane";
 import {
   Select,
   SelectItem,
@@ -38,6 +40,8 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import type { ClipboardSourceAppVisual } from "../clipboard/clipboard-types";
+import type { DesktopMessages } from "../i18n/index";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -49,14 +53,10 @@ import {
   appTotals,
   calendarDate,
   durationParts,
-  documentName,
-  proposeBlocks,
   shiftDate,
   timedSegments,
-  topAppNames,
-  totalDurationMs,
 } from "./activity-logic";
-import type { ActivityBlock, TimedSegment } from "./activity-logic";
+import type { TimedSegment } from "./activity-logic";
 import {
   ACTIVITY_CHANGED_EVENT,
   ACTIVITY_RETENTIONS,
@@ -68,6 +68,12 @@ import type {
   ActivityDetailsAccess,
   ActivityRetention,
 } from "./activity-types";
+import { ActivityDayReview, ActivityMatterHeading } from "./ActivityDayReview";
+import type { ActivityReviewStatus } from "./ActivityDayReview";
+import { ActivitySourceIcon } from "./ActivitySourceIcon";
+import "./welcome-preview.css";
+import { ActivityTimeline } from "./ActivityTimeline";
+import previewApps from "./preview-apps.json" with { type: "json" };
 
 type ActivityView =
   | { type: "loading" }
@@ -79,6 +85,9 @@ type ActivityDialog =
   | { date: string; type: "deleteDay" }
   | { type: "deleteAll" }
   | { days: number; type: "deleteOtherAccountHistory" }
+  | { type: "eraseMissingKeyAll" }
+  | { type: "eraseUnrecoverableOtherAccounts" }
+  | { type: "eraseUnreadableAll" }
   | { app: ActivityAppExclusion; type: "excludeApp" };
 
 type ActivityCommand =
@@ -125,23 +134,109 @@ const reportActivityError = (
   });
 };
 
-const ActivityShell = ({ children }: React.PropsWithChildren) => {
-  const t = useTranslations("activity");
-  return (
-    <main className="bg-background text-foreground min-h-dvh">
-      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-6 pt-10 pb-8">
-        <h1 className="text-lg font-semibold">{t("title")}</h1>
-        {children}
-      </div>
-    </main>
-  );
-};
+const ActivityShell = ({ children }: React.PropsWithChildren) => (
+  <main className="bg-background text-foreground min-h-dvh">
+    <div className="mx-auto flex max-w-5xl flex-col gap-6 px-6 pt-10 pb-8">
+      {children}
+    </div>
+  </main>
+);
 
 const ErrorLine = ({ message }: { message: string }) => (
   <p className="text-destructive text-sm" role="alert">
     {message}
   </p>
 );
+
+const ActivityWelcomePreview = ({
+  snapshot,
+}: {
+  snapshot: ActivityDaySnapshot;
+}) => {
+  const t = useTranslations("activity");
+  const startMs = Temporal.PlainDate.from("2026-10-08").toZonedDateTime({
+    plainTime: "09:00",
+    timeZone: Temporal.Now.timeZoneId(),
+  }).epochMilliseconds;
+  const matter = {
+    id: "riverside-lease",
+    name: t("welcomePreviewMatter"),
+    reference: null,
+    color: "--option-emerald",
+    clientName: null,
+    signals: {
+      lastWorkedAt: null,
+      newlyAssignedAt: null,
+      upcomingDeadline: null,
+    },
+  };
+  let cursor = startMs;
+  const segments: TimedSegment[] = [];
+  for (const { appIdentifier, appName, minutes } of previewApps) {
+    const segmentStartMs = cursor;
+    cursor += minutes * 60_000;
+    segments.push({
+      appIdentifier,
+      appName,
+      startMs: segmentStartMs,
+      endMs: cursor,
+      matterId: matter.id,
+      document: null,
+      windowTitle: null,
+    });
+  }
+  const newest = segments.at(-1);
+  if (!newest) {
+    return panic("The activity preview must contain sample apps");
+  }
+  return (
+    <PreviewPane
+      aria-hidden="true"
+      inert
+      data-activity-preview=""
+      className="pointer-events-none w-full p-0 [&>div]:h-auto [&>div]:p-4"
+    >
+      <div className="flex flex-col gap-4">
+        <ActivityTimeline
+          mode="preview"
+          segments={segments.map((segment) => ({
+            ...segment,
+            type: "active",
+            matter,
+            confidence: "strong",
+            evidence: [],
+            drafted: false,
+          }))}
+          snapshot={{ ...snapshot, date: "2026-10-08", recordingStatus: "off" }}
+          candidates={[]}
+          disabled
+          onAssign={() =>
+            panic("Static activity previews cannot assign matters")
+          }
+        />
+        <div data-activity-preview-totals="">
+          <AppTotals
+            segments={segments}
+            sourceAppVisuals={snapshot.sourceAppVisuals}
+            sampleDuration={{
+              identifier: newest.appIdentifier,
+              durationMs: newest.endMs - newest.startMs - 60_000,
+            }}
+          />
+        </div>
+        <div
+          data-activity-preview-matter=""
+          className="flex flex-wrap items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium"
+        >
+          <ActivityMatterHeading matter={matter} />
+          <span className="text-muted-foreground ms-auto text-sm font-normal tabular-nums">
+            <Duration durationMs={cursor - startMs} />
+          </span>
+        </div>
+      </div>
+    </PreviewPane>
+  );
+};
 
 type ActivityWelcomeProps = {
   onStart: () => void;
@@ -158,25 +253,33 @@ const ActivityWelcome = ({
   return (
     <section className="flex flex-col gap-4 rounded-2xl border p-6">
       <h2 className="text-base font-semibold">{t("welcomeTitle")}</h2>
-      <p className="text-muted-foreground text-sm leading-relaxed">
-        {t("welcomeDescription")}
-      </p>
-      <div className="flex gap-3">
-        <LockKeyholeIcon
-          aria-hidden="true"
-          className="text-muted-foreground mt-0.5 size-4 shrink-0"
-        />
-        <div className="flex flex-col gap-1">
-          <h3 className="text-sm font-medium">{t("welcomeLocalTitle")}</h3>
-          <p className="text-muted-foreground text-sm leading-relaxed">
-            {t("welcomeLocalDescription")}
-          </p>
-        </div>
-      </div>
-      <p className="text-muted-foreground text-sm leading-relaxed">
-        {t("welcomeControlDescription")}
-      </p>
-      <CaptureDetailsControl onCommand={onCommand} snapshot={snapshot} />
+      <ActivityWelcomePreview snapshot={snapshot} />
+
+      <ul className="text-muted-foreground flex flex-col gap-2 text-sm">
+        <li className="flex items-center gap-2">
+          <LockKeyholeIcon aria-hidden="true" className="size-4 shrink-0" />
+          {t("welcomeLocalFact")}
+        </li>
+        <li className="flex items-center gap-2">
+          <EyeOffIcon aria-hidden="true" className="size-4 shrink-0" />
+          {t("welcomePrivacyFact")}
+        </li>
+        <li className="flex items-center gap-2">
+          <PauseIcon aria-hidden="true" className="size-4 shrink-0" />
+          {t("welcomeControlFact")}
+        </li>
+      </ul>
+      <details className="text-muted-foreground text-xs">
+        <summary className="flex min-h-11 cursor-pointer items-center">
+          {t("welcomeLearnMore")}
+        </summary>
+        <p className="leading-relaxed text-pretty">{t("welcomeDetails")}</p>
+      </details>
+      <CaptureDetailsControl
+        onCommand={onCommand}
+        snapshot={snapshot}
+        description="collapsed"
+      />
       <div>
         <Button onClick={onStart}>{t("welcomeStart")}</Button>
       </div>
@@ -226,9 +329,11 @@ const DetailsAccessNotice = ({
 type CaptureDetailsControlProps = {
   onCommand: RunCommand;
   snapshot: ActivityDaySnapshot;
+  description?: "visible" | "collapsed";
 };
 
 const CaptureDetailsControl = ({
+  description = "visible",
   onCommand,
   snapshot,
 }: CaptureDetailsControlProps) => {
@@ -245,9 +350,11 @@ const CaptureDetailsControl = ({
         />
         <span>{t("captureDetails")}</span>
       </Label>
-      <p className="text-muted-foreground text-xs">
-        {t("captureDetailsDescription")}
-      </p>
+      {description === "visible" ? (
+        <p className="text-muted-foreground text-xs">
+          {t("captureDetailsDescription")}
+        </p>
+      ) : null}
       <DetailsAccessNotice
         access={snapshot.detailsAccess}
         onCommand={onCommand}
@@ -279,7 +386,11 @@ const CaptureDetailsControl = ({
                     })
                   }
                 />
-                <span>
+                <span className="flex items-center gap-1.5">
+                  <ActivitySourceIcon
+                    appIdentifier={browser.identifier}
+                    sourceAppVisuals={snapshot.sourceAppVisuals}
+                  />
                   {t("captureBrowserTitles", { browser: browser.name })}
                 </span>
               </Label>
@@ -301,7 +412,37 @@ const CaptureDetailsControl = ({
   );
 };
 
-const DeletionOnlyNotice = ({ onDelete }: { onDelete: () => void }) => {
+const DELETION_ONLY_NOTICE = {
+  available: "errorRead",
+  pending: "errorRead",
+  unavailable: "errorRead",
+  keyMissing: "deletionOnly",
+  unreadable: "unreadableEraseNotice",
+  incompatible: "incompatibleActivity",
+} as const satisfies Record<
+  ActivityDaySnapshot["deletionStatus"],
+  keyof DesktopMessages["activity"]
+>;
+
+const BLOCKED_DELETION_NOTICE = {
+  available: "pendingActivityProtected",
+  pending: "pendingActivityProtected",
+  unavailable: "errorRead",
+  keyMissing: "pendingActivityProtected",
+  unreadable: "unreadableEraseNotice",
+  incompatible: "incompatibleActivity",
+} as const satisfies Record<
+  ActivityDaySnapshot["deletionStatus"],
+  keyof DesktopMessages["activity"]
+>;
+
+const DeletionOnlyNotice = ({
+  onErase,
+  keyStatus,
+}: {
+  onErase: () => void;
+  keyStatus: ActivityDaySnapshot["deletionStatus"];
+}) => {
   const t = useTranslations("activity");
   return (
     <section className="flex flex-col gap-4 rounded-2xl border p-6">
@@ -310,13 +451,19 @@ const DeletionOnlyNotice = ({ onDelete }: { onDelete: () => void }) => {
           aria-hidden="true"
           className="text-destructive mt-0.5 size-4 shrink-0"
         />
-        <p className="text-sm leading-relaxed">{t("deletionOnly")}</p>
+        <p className="text-sm leading-relaxed">
+          {t(DELETION_ONLY_NOTICE[keyStatus])}
+        </p>
       </div>
-      <div>
-        <Button onClick={onDelete} variant="destructive">
-          {t("deleteAll")}
-        </Button>
-      </div>
+      {keyStatus === "keyMissing" || keyStatus === "unreadable" ? (
+        <div>
+          <Button onClick={onErase} variant="destructive">
+            {keyStatus === "unreadable"
+              ? t("unreadableEraseAction")
+              : t("deleteAll")}
+          </Button>
+        </div>
+      ) : null}
     </section>
   );
 };
@@ -325,34 +472,42 @@ type DayHeaderProps = {
   onNavigate: (date: string) => void;
   onToggleRecording: () => void;
   snapshot: ActivityDaySnapshot;
+  navigationDisabled: boolean;
 };
 
 const DayHeader = ({
   onNavigate,
   onToggleRecording,
   snapshot,
+  navigationDisabled,
 }: DayHeaderProps) => {
   const t = useTranslations("activity");
   const format = useFormatter();
   const recording = snapshot.recordingStatus === "recording";
   return (
-    <header className="flex flex-wrap items-center justify-between gap-3">
+    <header className="flex flex-wrap items-center gap-3">
       <nav aria-label={t("dayNavigation")} className="flex items-center gap-1">
         <Button
           aria-label={t("previousDay")}
-          disabled={snapshot.date <= snapshot.earliestDate}
+          disabled={
+            navigationDisabled || snapshot.date <= snapshot.earliestDate
+          }
           onClick={() => onNavigate(shiftDate(snapshot.date, -1))}
           size="icon"
           variant="ghost"
         >
           <ChevronLeftIcon aria-hidden="true" className="rtl:rotate-180" />
         </Button>
-        <h2 className="min-w-48 text-center text-sm font-medium">
-          {format.dateTime(calendarDate(snapshot.date), { dateStyle: "full" })}
-        </h2>
+        <h1 className="text-lg font-semibold text-balance">
+          {snapshot.date === snapshot.today
+            ? t("today")
+            : format.dateTime(calendarDate(snapshot.date), {
+                dateStyle: "full",
+              })}
+        </h1>
         <Button
           aria-label={t("nextDay")}
-          disabled={snapshot.date >= snapshot.today}
+          disabled={navigationDisabled || snapshot.date >= snapshot.latestDate}
           onClick={() => onNavigate(shiftDate(snapshot.date, 1))}
           size="icon"
           variant="ghost"
@@ -360,7 +515,11 @@ const DayHeader = ({
           <ChevronRightIcon aria-hidden="true" className="rtl:rotate-180" />
         </Button>
         {snapshot.date === snapshot.today ? null : (
-          <Button onClick={() => onNavigate(snapshot.today)} variant="ghost">
+          <Button
+            disabled={navigationDisabled}
+            onClick={() => onNavigate(snapshot.today)}
+            variant="ghost"
+          >
             {t("today")}
           </Button>
         )}
@@ -392,7 +551,13 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
     );
   }
   return (
-    <span className="text-muted-foreground flex items-center gap-1 text-xs">
+    <span className="text-muted-foreground bg-muted flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs">
+      {snapshot.recordingStatus === "recording" ? (
+        <span
+          data-activity-recording
+          className="bg-destructive size-1.5 rounded-full"
+        />
+      ) : null}
       <LockKeyholeIcon aria-hidden="true" className="size-3" />
       {status} · {t("encrypted")}
     </span>
@@ -400,45 +565,47 @@ const PersistenceBadge = ({ snapshot }: { snapshot: ActivityDaySnapshot }) => {
 };
 
 type DayContentProps = {
+  header: React.ReactNode;
   onCommand: RunCommand;
-  onExclude: (app: ActivityAppExclusion) => void;
   snapshot: ActivityDaySnapshot;
+  reviewVisible: boolean;
+  onReviewStatusChange: (status: ActivityReviewStatus) => void;
 };
 
-const DayContent = ({ onCommand, onExclude, snapshot }: DayContentProps) => {
+const DayContent = ({
+  header,
+  onCommand,
+  snapshot,
+  reviewVisible,
+  onReviewStatusChange,
+}: DayContentProps) => {
   const t = useTranslations("activity");
-  if (snapshot.unreadable) {
+  if (snapshot.unreadable && !reviewVisible) {
     return (
-      <p className="text-muted-foreground text-sm">{t("unreadableDay")}</p>
+      <>
+        {header}
+        <p className="text-muted-foreground text-sm">{t("unreadableDay")}</p>
+      </>
     );
   }
-  const segments = timedSegments(snapshot.segments);
-  if (segments.length === 0) {
-    return <p className="text-muted-foreground text-sm">{t("empty")}</p>;
+  if (snapshot.segments.length === 0 && !reviewVisible) {
+    return (
+      <>
+        {header}
+        <p className="text-muted-foreground text-sm">{t("empty")}</p>
+      </>
+    );
   }
   return (
-    <>
-      <section className="flex flex-col gap-1">
-        <h3 className="text-muted-foreground text-xs font-medium">
-          {t("totalActive")}
-        </h3>
-        <p className="text-2xl font-semibold tabular-nums">
-          <Duration durationMs={totalDurationMs(segments)} />
-        </p>
-      </section>
-      <ProposedBlocks
-        date={snapshot.date}
-        onCommand={onCommand}
-        segments={segments}
-      />
-      <AppTotals
-        onCommand={onCommand}
-        onExclude={onExclude}
-        segments={segments}
-        appNameOnlyApps={snapshot.appNameOnlyApps}
-      />
-      <SegmentList segments={segments} />
-    </>
+    <ActivityDayReview
+      key={snapshot.date}
+      onReviewStatusChange={onReviewStatusChange}
+      header={header}
+      snapshot={snapshot}
+      onCopy={(text, onSuccess) =>
+        onCommand("activity_copy_text", { text }, onSuccess)
+      }
+    />
   );
 };
 
@@ -454,98 +621,23 @@ const Duration = ({ durationMs }: { durationMs: number }) => {
   return t("durationUnderMinute");
 };
 
-const useTimeRange = () => {
-  const format = useFormatter();
-  return (startMs: number, endMs: number) =>
-    format.dateTimeRange(new Date(startMs), new Date(endMs), {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-};
-
-type ProposedBlocksProps = {
-  date: string;
-  onCommand: RunCommand;
-  segments: readonly TimedSegment[];
-};
-
-const ProposedBlocks = ({ date, onCommand, segments }: ProposedBlocksProps) => {
-  const t = useTranslations("activity");
-  const format = useFormatter();
-  const timeRange = useTimeRange();
-  const [copiedStartMs, setCopiedStartMs] = useState<number | null>(null);
-  const blocks = proposeBlocks(segments);
-  const hours = (block: ActivityBlock) =>
-    format.number(block.roundedTenths / 10, {
-      maximumFractionDigits: 1,
-      minimumFractionDigits: 1,
-    });
-  const summary = (block: ActivityBlock) =>
-    t(block.document ? "blockSummaryWithDocument" : "blockSummary", {
-      document: block.document ? documentName(block.document) : "",
-      apps: format.list(topAppNames(block), { type: "conjunction" }),
-      date: format.dateTime(calendarDate(date), { dateStyle: "medium" }),
-      hours: hours(block),
-      time: timeRange(block.startMs, block.endMs),
-    });
-  if (blocks.length === 0) {
-    return null;
-  }
-  return (
-    <section className="flex flex-col gap-2">
-      <div className="flex flex-col gap-0.5">
-        <h3 className="text-sm font-semibold">{t("proposedBlocks")}</h3>
-        <p className="text-muted-foreground text-xs">
-          {t("proposedBlocksDescription")}
-        </p>
-      </div>
-      <ul className="flex flex-col divide-y rounded-xl border">
-        {blocks.map((block) => (
-          <li className="flex items-center gap-3 px-4 py-3" key={block.startMs}>
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-sm font-medium tabular-nums">
-                {timeRange(block.startMs, block.endMs)} ·{" "}
-                {t("hours", { hours: hours(block) })}
-              </span>
-              <span className="text-muted-foreground truncate text-xs">
-                {format.list(topAppNames(block), { type: "conjunction" })}
-              </span>
-              <ActivityDetails
-                document={block.document}
-                windowTitles={block.windowTitles}
-              />
-            </div>
-            <Button
-              onClick={() =>
-                onCommand("activity_copy_text", { text: summary(block) }, () =>
-                  setCopiedStartMs(block.startMs),
-                )
-              }
-              size="sm"
-              variant="ghost"
-            >
-              <CopyIcon aria-hidden="true" />
-              {copiedStartMs === block.startMs ? t("copied") : t("copySummary")}
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-};
-
 type AppTotalsProps = {
-  onCommand: RunCommand;
-  appNameOnlyApps: readonly ActivityAppExclusion[];
-  onExclude: (app: ActivityAppExclusion) => void;
+  sampleDuration?: { identifier: string; durationMs: number };
+  sourceAppVisuals: readonly ClipboardSourceAppVisual[];
+  controls?: {
+    onCommand: RunCommand;
+    appNameOnlyApps: readonly ActivityAppExclusion[];
+    onExclude: (app: ActivityAppExclusion) => void;
+    deletionDisabled: boolean;
+  };
   segments: readonly TimedSegment[];
 };
 
 const AppTotals = ({
-  onCommand,
-  appNameOnlyApps,
-  onExclude,
+  sampleDuration,
+  controls,
   segments,
+  sourceAppVisuals,
 }: AppTotalsProps) => {
   const t = useTranslations("activity");
   return (
@@ -557,62 +649,62 @@ const AppTotals = ({
             className="flex items-center gap-3 px-4 py-2"
             key={app.identifier}
           >
-            <span className="min-w-0 flex-1 truncate text-sm">{app.name}</span>
-            <span className="text-muted-foreground text-sm tabular-nums">
-              <Duration durationMs={app.durationMs} />
-            </span>
-            <AppDetailCaptureButton
-              app={app}
-              onCommand={onCommand}
-              mode={appDetailCaptureMode({
-                appIdentifier: app.identifier,
-                appNameOnlyApps,
-              })}
+            <ActivitySourceIcon
+              appIdentifier={app.identifier}
+              sourceAppVisuals={sourceAppVisuals}
             />
-            <Button
-              aria-label={t("excludeApp", { name: app.name })}
-              onClick={() =>
-                onExclude({
-                  identifier: app.identifier,
-                  name: app.name,
-                })
-              }
-              size="icon"
-              title={t("excludeApp", { name: app.name })}
-              variant="ghost"
-            >
-              <EyeOffIcon aria-hidden="true" />
-            </Button>
+            <bdi className="min-w-0 flex-1 truncate text-sm">{app.name}</bdi>
+            <span className="text-muted-foreground text-sm tabular-nums">
+              {sampleDuration?.identifier === app.identifier ? (
+                <span className="inline-grid">
+                  <span
+                    data-activity-preview-duration-before=""
+                    className="col-start-1 row-start-1"
+                  >
+                    <Duration durationMs={sampleDuration.durationMs} />
+                  </span>
+                  <span
+                    data-activity-preview-duration-after=""
+                    className="col-start-1 row-start-1"
+                  >
+                    <Duration durationMs={app.durationMs} />
+                  </span>
+                </span>
+              ) : (
+                <Duration durationMs={app.durationMs} />
+              )}
+            </span>
+            {controls ? (
+              <>
+                <AppDetailCaptureButton
+                  app={app}
+                  onCommand={controls.onCommand}
+                  mode={appDetailCaptureMode({
+                    appIdentifier: app.identifier,
+                    appNameOnlyApps: controls.appNameOnlyApps,
+                  })}
+                />
+                <Button
+                  disabled={controls.deletionDisabled}
+                  aria-label={t("excludeApp", { name: app.name })}
+                  onClick={() =>
+                    controls.onExclude({
+                      identifier: app.identifier,
+                      name: app.name,
+                    })
+                  }
+                  size="icon"
+                  title={t("excludeApp", { name: app.name })}
+                  variant="ghost"
+                >
+                  <EyeOffIcon aria-hidden="true" />
+                </Button>
+              </>
+            ) : null}
           </li>
         ))}
       </ul>
     </section>
-  );
-};
-
-type ActivityDetailsProps = {
-  document: string | null;
-  windowTitles: readonly string[];
-};
-
-const ActivityDetails = ({ document, windowTitles }: ActivityDetailsProps) => {
-  const format = useFormatter();
-  return (
-    <>
-      {document ? (
-        <span
-          className="text-muted-foreground truncate text-xs"
-          title={document}
-        >
-          {documentName(document)}
-        </span>
-      ) : null}
-      {windowTitles.length > 0 ? (
-        <span className="text-muted-foreground truncate text-xs">
-          {format.list(windowTitles, { type: "conjunction" })}
-        </span>
-      ) : null}
-    </>
   );
 };
 
@@ -687,44 +779,17 @@ const AppDetailCaptureButton = ({
   }
 };
 
-const SegmentList = ({ segments }: { segments: readonly TimedSegment[] }) => {
-  const t = useTranslations("activity");
-  const timeRange = useTimeRange();
-  return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-sm font-semibold">{t("timeline")}</h3>
-      <ol className="flex flex-col divide-y rounded-xl border">
-        {segments.map((segment) => (
-          <li
-            className="flex items-center gap-3 px-4 py-2 text-sm"
-            key={`${segment.startMs}-${segment.appIdentifier}`}
-          >
-            <span className="text-muted-foreground w-32 shrink-0 tabular-nums">
-              {timeRange(segment.startMs, segment.endMs)}
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="truncate">{segment.appName}</span>
-              <ActivityDetails
-                document={segment.document}
-                windowTitles={segment.windowTitle ? [segment.windowTitle] : []}
-              />
-            </div>
-            <span className="text-muted-foreground tabular-nums">
-              <Duration durationMs={segment.endMs - segment.startMs} />
-            </span>
-          </li>
-        ))}
-      </ol>
-    </section>
-  );
-};
-
 type OtherAccountHistoryProps = {
   days: number;
   onDelete: () => void;
+  deletionDisabled: boolean;
 };
 
-const OtherAccountHistory = ({ days, onDelete }: OtherAccountHistoryProps) => {
+const OtherAccountHistory = ({
+  days,
+  onDelete,
+  deletionDisabled,
+}: OtherAccountHistoryProps) => {
   const t = useTranslations("activity");
   if (days === 0) {
     return null;
@@ -732,7 +797,12 @@ const OtherAccountHistory = ({ days, onDelete }: OtherAccountHistoryProps) => {
   return (
     <div className="text-muted-foreground flex items-center justify-between gap-3 text-xs">
       <p>{t("otherAccountHistory", { days })}</p>
-      <Button onClick={onDelete} size="sm" variant="ghost">
+      <Button
+        disabled={deletionDisabled}
+        onClick={onDelete}
+        size="sm"
+        variant="ghost"
+      >
         {t("deleteOtherAccountHistory")}
       </Button>
     </div>
@@ -743,6 +813,8 @@ type ActivitySettingsProps = {
   onCommand: RunCommand;
   onDeleteAll: () => void;
   onDeleteDay: () => void;
+  deletionDisabled: boolean;
+  recoveryEraseStatus: "available" | "blocked";
   snapshot: ActivityDaySnapshot;
 };
 
@@ -750,6 +822,8 @@ const ActivitySettings = ({
   onCommand,
   onDeleteAll,
   onDeleteDay,
+  deletionDisabled,
+  recoveryEraseStatus,
   snapshot,
 }: ActivitySettingsProps) => {
   const t = useTranslations("activity");
@@ -766,7 +840,13 @@ const ActivitySettings = ({
                 className="flex items-center justify-between gap-2 text-sm"
                 key={app.identifier}
               >
-                <span className="truncate">{app.name}</span>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <ActivitySourceIcon
+                    appIdentifier={app.identifier}
+                    sourceAppVisuals={snapshot.sourceAppVisuals}
+                  />
+                  <bdi className="truncate">{app.name}</bdi>
+                </span>
                 <AppDetailCaptureButton
                   app={app}
                   onCommand={onCommand}
@@ -816,7 +896,11 @@ const ActivitySettings = ({
                 className="bg-muted flex items-center gap-1 rounded-full py-0.5 ps-3 pe-1 text-xs"
                 key={app.identifier}
               >
-                {app.name}
+                <ActivitySourceIcon
+                  appIdentifier={app.identifier}
+                  sourceAppVisuals={snapshot.sourceAppVisuals}
+                />
+                <bdi>{app.name}</bdi>
                 <Button
                   aria-label={t("removeExclusion", { name: app.name })}
                   onClick={() =>
@@ -834,14 +918,29 @@ const ActivitySettings = ({
           </ul>
         )}
       </div>
+      {deletionDisabled && snapshot.deletionStatus !== "incompatible" ? (
+        <p className="text-muted-foreground text-xs">
+          {t(BLOCKED_DELETION_NOTICE[snapshot.deletionStatus])}
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
-        <Button onClick={onDeleteDay} variant="outline">
+        <Button
+          disabled={deletionDisabled}
+          onClick={onDeleteDay}
+          variant="outline"
+        >
           <Trash2Icon aria-hidden="true" />
           {t("deleteDay")}
         </Button>
-        <Button onClick={onDeleteAll} variant="destructive">
+        <Button
+          disabled={deletionDisabled && recoveryEraseStatus === "blocked"}
+          onClick={onDeleteAll}
+          variant="destructive"
+        >
           <Trash2Icon aria-hidden="true" />
-          {t("deleteAll")}
+          {snapshot.deletionStatus === "unreadable"
+            ? t("unreadableEraseAction")
+            : t("deleteAll")}
         </Button>
       </div>
     </section>
@@ -849,18 +948,25 @@ const ActivitySettings = ({
 };
 
 type ActivityDialogViewProps = {
+  deletionStatus: ActivityDaySnapshot["deletionStatus"];
   dialog: ActivityDialog;
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
   onClose: () => void;
   onCommand: RunCommand;
 };
 
 const ActivityDialogView = ({
+  deletionStatus,
   dialog,
+  sourceAppVisuals,
   onClose,
   onCommand,
 }: ActivityDialogViewProps) => {
   const t = useTranslations("activity");
   const format = useFormatter();
+  if (deletionStatus === "incompatible") {
+    return null;
+  }
   switch (dialog.type) {
     case "closed":
       return null;
@@ -899,7 +1005,15 @@ const ActivityDialogView = ({
               onClose,
             )
           }
-          title={t("excludeApp", { name: dialog.app.name })}
+          title={
+            <span className="flex items-center gap-2">
+              <ActivitySourceIcon
+                appIdentifier={dialog.app.identifier}
+                sourceAppVisuals={sourceAppVisuals}
+              />
+              {t("excludeApp", { name: dialog.app.name })}
+            </span>
+          }
         />
       );
     case "deleteOtherAccountHistory":
@@ -910,7 +1024,56 @@ const ActivityDialogView = ({
           })}
           onClose={onClose}
           onConfirm={() =>
-            onCommand("activity_delete_other_account_history", {}, onClose)
+            onCommand(
+              "activity_delete_other_account_history",
+              { recovery: "preserve" },
+              onClose,
+            )
+          }
+          title={t("deleteOtherAccountHistory")}
+        />
+      );
+    case "eraseMissingKeyAll":
+      return (
+        <ConfirmDialog
+          description={t("missingKeyEraseConfirmation")}
+          onClose={onClose}
+          onConfirm={() =>
+            onCommand(
+              "activity_delete_all",
+              { recovery: "discardMissingKey" },
+              onClose,
+            )
+          }
+          title={t("deleteAll")}
+        />
+      );
+    case "eraseUnreadableAll":
+      return (
+        <ConfirmDialog
+          description={t("unreadableEraseConfirmation")}
+          onClose={onClose}
+          onConfirm={() =>
+            onCommand(
+              "activity_delete_all",
+              { recovery: "discardUnreadable" },
+              onClose,
+            )
+          }
+          title={t("unreadableEraseAction")}
+        />
+      );
+    case "eraseUnrecoverableOtherAccounts":
+      return (
+        <ConfirmDialog
+          description={t("unrecoverableOtherHistoryConfirmation")}
+          onClose={onClose}
+          onConfirm={() =>
+            onCommand(
+              "activity_delete_other_account_history",
+              { recovery: "discardUnrecoverable" },
+              onClose,
+            )
           }
           title={t("deleteOtherAccountHistory")}
         />
@@ -920,7 +1083,9 @@ const ActivityDialogView = ({
         <ConfirmDialog
           description={t("deleteAllConfirmation")}
           onClose={onClose}
-          onConfirm={() => onCommand("activity_delete_all", {}, onClose)}
+          onConfirm={() =>
+            onCommand("activity_delete_all", { recovery: "preserve" }, onClose)
+          }
           title={t("deleteAll")}
         />
       );
@@ -936,7 +1101,7 @@ type ConfirmDialogProps = {
   description: string;
   onClose: () => void;
   onConfirm: () => void;
-  title: string;
+  title: ReactNode;
 };
 
 const ConfirmDialog = ({
@@ -980,12 +1145,20 @@ const ConfirmDialog = ({
   );
 };
 
-const ActivityApp = () => {
+const REVIEW_PENDING = {
+  editing: false,
+  submitting: true,
+  discarding: true,
+  retry: true,
+  saved: false,
+} as const satisfies Record<ActivityReviewStatus, boolean>;
+
+const useActivityDay = (
+  date: string | null,
+  onReadError: (message: string) => void,
+) => {
   const t = useTranslations("activity");
-  const [date, setDate] = useState<string | null>(null);
   const [view, setView] = useState<ActivityView>({ type: "loading" });
-  const [error, setError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<ActivityDialog>({ type: "closed" });
   const requestId = useRef(0);
   const errorRead = t("errorRead");
 
@@ -1004,7 +1177,10 @@ const ActivityApp = () => {
               DESKTOP_TELEMETRY_OPERATIONS.activityRead,
               DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
             );
-            setView({ type: "failed" });
+            setView((previousView) =>
+              previousView.type === "ready" ? previousView : { type: "failed" },
+            );
+            onReadError(errorRead);
             return undefined;
           }
           setView({ snapshot: value, type: "ready" });
@@ -1018,7 +1194,10 @@ const ActivityApp = () => {
             DESKTOP_TELEMETRY_OPERATIONS.activityRead,
             DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
           );
-          setView({ type: "failed" });
+          setView((previousView) =>
+            previousView.type === "ready" ? previousView : { type: "failed" },
+          );
+          onReadError(errorRead);
         });
     };
     readDay();
@@ -1037,24 +1216,128 @@ const ActivityApp = () => {
       disposed = true;
       stopListening();
     };
-  }, [date]);
+  }, [date, errorRead, onReadError]);
+
+  return view;
+};
+
+const ActivityApp = () => {
+  const t = useTranslations("activity");
+  const [date, setDate] = useState<string | null>(null);
+  const [errorMessage, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<ActivityDialog>({ type: "closed" });
+  const [reviewStatus, setReviewStatus] =
+    useState<ActivityReviewStatus>("editing");
+  const reviewStatusRef = useRef<ActivityReviewStatus>("editing");
+  const onReviewStatusChange = useCallback((status: ActivityReviewStatus) => {
+    reviewStatusRef.current = status;
+    setReviewStatus(status);
+  }, []);
+  const reviewUnresolved = REVIEW_PENDING[reviewStatus];
+  const view = useActivityDay(date, setError);
+  const errorRead = t("errorRead");
 
   const runCommand = (
     command: ActivityCommand,
     args: Record<string, unknown> = {},
     onSuccess?: () => void,
   ) => {
+    const pending =
+      REVIEW_PENDING[reviewStatusRef.current] ||
+      (view.type === "ready" &&
+        (view.snapshot.pendingBatch !== null ||
+          view.snapshot.deletionStatus !== "available"));
+    const confirmedRecoveryErase =
+      ((command === "activity_delete_all" &&
+        (args["recovery"] === "discardMissingKey" ||
+          args["recovery"] === "discardUnreadable")) ||
+        (command === "activity_delete_other_account_history" &&
+          args["recovery"] === "discardUnrecoverable")) &&
+      reviewStatusRef.current !== "submitting" &&
+      reviewStatusRef.current !== "discarding";
+    const inactiveRecoveryPreflight =
+      command === "activity_delete_other_account_history" &&
+      args["recovery"] === "preserve" &&
+      !REVIEW_PENDING[reviewStatusRef.current] &&
+      view.type === "ready" &&
+      view.snapshot.pendingBatch === null &&
+      (view.snapshot.deletionStatus === "keyMissing" ||
+        view.snapshot.deletionStatus === "unreadable");
+    if (
+      pending &&
+      !confirmedRecoveryErase &&
+      !inactiveRecoveryPreflight &&
+      (command === "activity_delete_day" ||
+        command === "activity_delete_all" ||
+        command === "activity_delete_other_account_history" ||
+        (command === "activity_exclude_app" && args["history"] === "delete"))
+    ) {
+      setError(
+        view.type === "ready"
+          ? t(BLOCKED_DELETION_NOTICE[view.snapshot.deletionStatus])
+          : t("pendingActivityProtected"),
+      );
+      return;
+    }
     setError(null);
     invoke(command, args)
       .then(() => {
         onSuccess?.();
         return undefined;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         reportActivityError(
           DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
           DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
         );
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          error.type === "incompatible"
+        ) {
+          setDialog({ type: "closed" });
+          setError(t("incompatibleActivity"));
+          return;
+        }
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          (error.type === "keyMissing" || error.type === "unreadable") &&
+          (command === "activity_delete_all" ||
+            command === "activity_delete_other_account_history")
+        ) {
+          if (command === "activity_delete_other_account_history") {
+            setDialog({ type: "eraseUnrecoverableOtherAccounts" });
+            return;
+          }
+          setDialog({
+            type:
+              error.type === "unreadable"
+                ? "eraseUnreadableAll"
+                : "eraseMissingKeyAll",
+          });
+          return;
+        }
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          error.type === "pendingBatch"
+        ) {
+          setError(t("pendingActivityProtected"));
+          return;
+        }
+        if (
+          typeof error === "object" &&
+          error !== null &&
+          "type" in error &&
+          error.type === "unavailable"
+        ) {
+          setError(t("errorRead"));
+          return;
+        }
         setError(
           command === "activity_copy_text" ? t("errorCopy") : t("errorUpdate"),
         );
@@ -1080,13 +1363,24 @@ const ActivityApp = () => {
   }
 
   const { snapshot } = view;
-  if (snapshot.persistence === "initializing") {
+  const reviewPending = reviewUnresolved || snapshot.pendingBatch !== null;
+  const reviewVisible =
+    reviewStatus !== "editing" || snapshot.pendingBatch !== null;
+  const deletionDisabled =
+    reviewPending || snapshot.deletionStatus !== "available";
+  if (snapshot.persistence === "initializing" && !reviewVisible) {
     // The store announces itself with a change event once it is open.
     return <main className="bg-background min-h-dvh" />;
   }
   const otherAccountHistory = (
     <OtherAccountHistory
       days={snapshot.otherAccountHistoryDays}
+      deletionDisabled={
+        reviewPending ||
+        (deletionDisabled &&
+          snapshot.deletionStatus !== "keyMissing" &&
+          snapshot.deletionStatus !== "unreadable")
+      }
       onDelete={() =>
         setDialog({
           days: snapshot.otherAccountHistoryDays,
@@ -1097,22 +1391,38 @@ const ActivityApp = () => {
   );
   const dialogView = (
     <ActivityDialogView
+      deletionStatus={snapshot.deletionStatus}
       dialog={dialog}
+      sourceAppVisuals={snapshot.sourceAppVisuals}
       onClose={() => setDialog({ type: "closed" })}
       onCommand={runCommand}
     />
   );
-  if (snapshot.persistence === "deletionOnly") {
+  if (snapshot.persistence === "deletionOnly" && !reviewVisible) {
     return (
       <ActivityShell>
-        <DeletionOnlyNotice onDelete={() => setDialog({ type: "deleteAll" })} />
+        <DeletionOnlyNotice
+          keyStatus={snapshot.deletionStatus}
+          onErase={() =>
+            setDialog({
+              type:
+                snapshot.deletionStatus === "unreadable"
+                  ? "eraseUnreadableAll"
+                  : "eraseMissingKeyAll",
+            })
+          }
+        />
         {otherAccountHistory}
-        {error ? <ErrorLine message={error} /> : null}
+        {errorMessage ? <ErrorLine message={errorMessage} /> : null}
         {dialogView}
       </ActivityShell>
     );
   }
-  if (snapshot.recordingStatus === "off") {
+  if (
+    snapshot.recordingStatus === "off" &&
+    !reviewVisible &&
+    snapshot.deletionStatus !== "pending"
+  ) {
     return (
       <ActivityShell>
         <ActivityWelcome
@@ -1125,7 +1435,7 @@ const ActivityApp = () => {
           }
         />
         {otherAccountHistory}
-        {error ? <ErrorLine message={error} /> : null}
+        {errorMessage ? <ErrorLine message={errorMessage} /> : null}
         {dialogView}
       </ActivityShell>
     );
@@ -1133,30 +1443,73 @@ const ActivityApp = () => {
 
   return (
     <ActivityShell>
-      <DayHeader
-        onNavigate={(next) => setDate(next === snapshot.today ? null : next)}
-        onToggleRecording={() =>
-          runCommand("activity_set_recording_status", {
-            status:
-              snapshot.recordingStatus === "recording" ? "paused" : "recording",
-          })
-        }
-        snapshot={snapshot}
-      />
-      {error ? <ErrorLine message={error} /> : null}
+      {errorMessage ? <ErrorLine message={errorMessage} /> : null}
+      {snapshot.deletionStatus === "incompatible" ? (
+        <ErrorLine message={t("incompatibleActivity")} />
+      ) : null}
       <DayContent
-        onCommand={runCommand}
-        onExclude={(app) => setDialog({ app, type: "excludeApp" })}
-        snapshot={snapshot}
-      />
-      <ActivitySettings
-        onCommand={runCommand}
-        onDeleteAll={() => setDialog({ type: "deleteAll" })}
-        onDeleteDay={() =>
-          setDialog({ date: snapshot.date, type: "deleteDay" })
+        reviewVisible={reviewVisible}
+        onReviewStatusChange={onReviewStatusChange}
+        header={
+          <DayHeader
+            navigationDisabled={
+              reviewStatus === "submitting" || reviewStatus === "discarding"
+            }
+            onNavigate={(next) =>
+              setDate(next === snapshot.today ? null : next)
+            }
+            onToggleRecording={() =>
+              runCommand("activity_set_recording_status", {
+                status:
+                  snapshot.recordingStatus === "recording"
+                    ? "paused"
+                    : "recording",
+              })
+            }
+            snapshot={snapshot}
+          />
         }
+        onCommand={runCommand}
         snapshot={snapshot}
       />
+      <details>
+        <summary className="text-muted-foreground cursor-pointer text-sm">
+          {t("settings")}
+        </summary>
+        <AppTotals
+          controls={{
+            onCommand: runCommand,
+            deletionDisabled,
+            onExclude: (app) => setDialog({ app, type: "excludeApp" }),
+            appNameOnlyApps: snapshot.appNameOnlyApps,
+          }}
+          segments={timedSegments(snapshot.segments)}
+          sourceAppVisuals={snapshot.sourceAppVisuals}
+        />
+        <ActivitySettings
+          deletionDisabled={deletionDisabled}
+          recoveryEraseStatus={
+            snapshot.deletionStatus === "unreadable" &&
+            reviewStatus !== "submitting" &&
+            reviewStatus !== "discarding"
+              ? "available"
+              : "blocked"
+          }
+          onCommand={runCommand}
+          onDeleteAll={() =>
+            setDialog({
+              type:
+                snapshot.deletionStatus === "unreadable"
+                  ? "eraseUnreadableAll"
+                  : "deleteAll",
+            })
+          }
+          onDeleteDay={() =>
+            setDialog({ date: snapshot.date, type: "deleteDay" })
+          }
+          snapshot={snapshot}
+        />
+      </details>
       {otherAccountHistory}
       {dialogView}
     </ActivityShell>

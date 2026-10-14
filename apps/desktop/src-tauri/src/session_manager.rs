@@ -713,6 +713,17 @@ impl SessionManager {
     }
   }
 
+  /// Resolve an exact local edit path. The activity matcher accepts its opaque
+  /// matter ID only when it belongs to the current caller's candidate set.
+  pub(crate) fn activity_matter_for_document(&self, document: &str) -> Option<String> {
+    let session = self
+      .sessions
+      .values()
+      .find(|session| session.file_path == document)?;
+    self.linked_account.as_ref()?;
+    Some(session.workspace_id.clone())
+  }
+
   /// Expose the HTTP client so callers can download outside the lock.
   pub fn http_client(&self) -> &DesktopHttpClient {
     &self.http_client
