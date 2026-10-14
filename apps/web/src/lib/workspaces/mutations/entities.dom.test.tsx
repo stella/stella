@@ -63,6 +63,7 @@ const { toSafeId } = await import("@/lib/safe-id");
 const { rootKeys } = await import("@/lib/auth-queries");
 const { propertiesKeys } = await import("@/lib/workspaces/queries/properties");
 const { fileMetadataOptions } = await import("@/lib/files/file-metadata-query");
+const { fileOptions, textFileOptions } = await import("@/lib/files/queries");
 
 const entity = (id: string) =>
   ({
@@ -126,6 +127,28 @@ const mount = async (Component: () => ReactNode) => {
       mimeType: "text/markdown",
       originalMimeType: "text/markdown",
     },
+  );
+  const downloadedA = {
+    fileId: "file-A",
+    fileName: "A.md",
+    mimeType: "text/markdown",
+    originalMimeType: "text/markdown",
+  };
+  client.setQueryData(
+    fileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+    { ...downloadedA, buffer: new ArrayBuffer(0) },
+  );
+  client.setQueryData(
+    fileOptions({
+      workspaceId: "matter",
+      fieldId: "field-A",
+      purpose: "native-display",
+    }).queryKey,
+    { ...downloadedA, buffer: new ArrayBuffer(0) },
+  );
+  client.setQueryData(
+    textFileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+    { ...downloadedA, text: "# A" },
   );
   const root = createRootRoute({
     component: () => (
@@ -350,6 +373,26 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     );
     expect(view.container.textContent).toContain("new-A.md");
     await act(async () => confirm(0));
+    // Every cached copy of the bytes the previews read carries the new name.
+    expect(
+      view.client.getQueryData(
+        fileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+      ),
+    ).toMatchObject({ fileName: "new-A.md" });
+    expect(
+      view.client.getQueryData(
+        fileOptions({
+          workspaceId: "matter",
+          fieldId: "field-A",
+          purpose: "native-display",
+        }).queryKey,
+      ),
+    ).toMatchObject({ fileName: "new-A.md" });
+    expect(
+      view.client.getQueryData(
+        textFileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+      ),
+    ).toMatchObject({ fileName: "new-A.md", text: "# A" });
     await waitFor(() =>
       expect(view.getByRole("link", { name: "A.md" })).toBeDefined(),
     );

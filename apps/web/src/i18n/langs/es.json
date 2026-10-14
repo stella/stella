@@ -363,6 +363,8 @@
       "chooseList": "Elegir una lista",
       "createList": "Crear una lista",
       "evidenceList": "Hechos de",
+      "loadSample": "Cargar caso de ejemplo",
+      "loadSampleFailed": "No se pudo cargar el caso de ejemplo",
       "noLists": "Este asunto no tiene listas.",
       "pickList": "Elija la lista con cuyos hechos se contrastan los documentos de este asunto."
     }
@@ -4517,6 +4519,8 @@
   },
   "search": {
     "aiRefine": "Mejorar consulta con IA",
+    "caseLawMatchingDecisions": "{count, plural, one {# resolución coincidente} other {# resoluciones coincidentes}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ resolución coincidente} other {#+ resoluciones coincidentes}}",
     "continueInChat": "Continuar en el chat",
     "dateFrom": "Desde",
     "dateTo": "Hasta",

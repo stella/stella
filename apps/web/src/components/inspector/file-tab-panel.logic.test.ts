@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  getFileTabDisplayState,
   getFileTabNativePreviewKind,
   getMarkdownDraftSyncDecision,
   shouldRunFileAnonymizationPipeline,
@@ -76,6 +77,65 @@ describe("file tab native preview kind", () => {
           "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       }),
     ).toBe("office");
+  });
+
+  test("reads a plain-text file without a PDF derivative", () => {
+    expect(
+      getFileTabNativePreviewKind({
+        fileName: "notes.txt",
+        mimeType: "text/plain",
+      }),
+    ).toBe("text");
+    expect(
+      getFileTabNativePreviewKind({
+        fileName: "Notes.TXT",
+        mimeType: "application/octet-stream",
+      }),
+    ).toBe("text");
+    // Markdown sent as text/plain keeps its editor.
+    expect(
+      getFileTabNativePreviewKind({
+        fileName: "notes.md",
+        mimeType: "text/plain",
+      }),
+    ).toBe("markdown");
+  });
+
+  test("shows plain text without measuring a PDF page", () => {
+    const state = getFileTabDisplayState({
+      activeId: "field",
+      minimized: false,
+      scaleOffsets: new Map(),
+      tab: {
+        type: "pdf",
+        id: "field",
+        entityId: "entity",
+        label: "notes",
+        fileName: "notes.txt",
+        mimeType: "text/plain",
+        pdfFileId: null,
+        workspaceId: "workspace",
+      },
+    });
+    expect(state.isPlainTextDisplay).toBe(true);
+    expect(state.requiresPdfMeasurement).toBe(false);
+    expect(
+      getFileTabDisplayState({
+        activeId: "field",
+        minimized: false,
+        scaleOffsets: new Map(),
+        tab: {
+          type: "pdf",
+          id: "field",
+          entityId: "entity",
+          label: "brief",
+          fileName: "brief.pdf",
+          mimeType: "application/pdf",
+          pdfFileId: null,
+          workspaceId: "workspace",
+        },
+      }).requiresPdfMeasurement,
+    ).toBe(true);
   });
 
   test("keeps unsupported MIME types on the PDF fallback", () => {
