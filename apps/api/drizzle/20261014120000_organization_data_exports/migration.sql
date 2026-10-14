@@ -16,7 +16,7 @@ CREATE TABLE "organization_data_exports" (
 	"part_count" integer,
 	"plan" jsonb,
 	"parts" jsonb DEFAULT '[]'::jsonb NOT NULL,
-	"attempts" integer DEFAULT 0 NOT NULL,
+	"attempt" integer DEFAULT 0 NOT NULL,
 	"failures" integer DEFAULT 0 NOT NULL,
 	"problem_count" integer DEFAULT 0 NOT NULL,
 	"error" text,
@@ -29,6 +29,7 @@ CREATE TABLE "organization_data_exports" (
 	CONSTRAINT "organization_data_exports_version_scope_check" CHECK ("organization_data_exports"."version_scope" IN ('all', 'current'))
 );--> statement-breakpoint
 ALTER TABLE "organization_data_exports" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "organization_data_exports" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "organization_data_exports" ADD CONSTRAINT "organization_data_exports_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "organization_data_exports" ADD CONSTRAINT "organization_data_exports_requested_by_user_id_fk" FOREIGN KEY ("requested_by") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE UNIQUE INDEX "organization_data_exports_one_active_uidx" ON "organization_data_exports" USING btree ("organization_id") WHERE "organization_data_exports"."status" IN ('queued', 'running');--> statement-breakpoint
@@ -51,4 +52,20 @@ CREATE POLICY "organization_update" ON "organization_data_exports" AS PERMISSIVE
 CREATE POLICY "organization_delete" ON "organization_data_exports" AS PERMISSIVE FOR DELETE TO "stella" USING (organization_id =
   (SELECT current_setting(
     'app.organization_id', true
-  )));
+  )));--> statement-breakpoint
+CREATE POLICY "review_reset_owner_select" ON "organization_data_exports" FOR SELECT TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_data_exports'::regclass)
+  AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);--> statement-breakpoint
+CREATE POLICY "review_reset_owner_delete" ON "organization_data_exports" FOR DELETE TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_data_exports'::regclass)
+  AND organization_id = nullif(current_setting('app.correspondence_review_reset_organization_id', true), '')
+);--> statement-breakpoint
+CREATE POLICY "maintenance_owner_select" ON "organization_data_exports" FOR SELECT TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_data_exports'::regclass)
+);--> statement-breakpoint
+CREATE POLICY "maintenance_owner_update" ON "organization_data_exports" FOR UPDATE TO PUBLIC USING (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_data_exports'::regclass)
+) WITH CHECK (
+  current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_data_exports'::regclass)
+);

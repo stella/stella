@@ -60,6 +60,8 @@ import {
   getDataExportQueue,
 } from "@/api/lib/data-export-queue";
 import type { DataExportJobData } from "@/api/lib/data-export-queue";
+import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
+import { transition } from "@/api/lib/db/transitions";
 import { errorTag } from "@/api/lib/errors/utils";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
@@ -67,17 +69,13 @@ import { logger } from "@/api/lib/observability/logger";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { createRootMembershipScopedDb } from "@/api/lib/root-scoped-db";
+import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import {
   multipartPartBytes,
   openS3StreamingUpload,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
-import {
-  brandPersistedDataExportId,
-  brandPersistedOrganizationId,
-  brandPersistedUserId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedDataExportId } from "@/api/lib/safe-id-boundaries";
 
 // One export per API process; the global cap bounds all processes together.
 const WORKER_CONCURRENCY = 1;
@@ -134,13 +132,14 @@ const ownRow = ({ exportId, organizationId }: RunIds) =>
 /**
  * Every write a run makes is fenced on the attempt it claimed: once the
  * maintenance sweep hands a stalled run to a new attempt, the old worker's
- * writes match nothing.
+ * writes match nothing. Status changes go through DATA_EXPORT_TRANSITIONS,
+ * which applies the same fence.
  */
 const ownRun = (ids: RunIds, attempt: number) =>
   and(
     ownRow(ids),
     eq(organizationDataExports.status, "running"),
-    eq(organizationDataExports.attempts, attempt),
+    eq(organizationDataExports.attempt, attempt),
   );
 
 /** The requester lost the export permission while the run was going. */
@@ -153,8 +152,10 @@ export class DataExportPartTooLargeError extends TaggedError(
   "DataExportPartTooLargeError",
 )<{ message: string }> {}
 
+type RunTransaction = Parameters<Parameters<ScopedDb>[0]>[0];
+
 const readAuthorized = async (
-  tx: Parameters<Parameters<ScopedDb>[0]>[0],
+  tx: RunTransaction,
   { organizationId, userId }: RunIds,
 ): Promise<boolean> => {
   const roles = await tx
@@ -171,29 +172,64 @@ const readAuthorized = async (
   );
 };
 
+/** Audits a status change of the run's export, in the change's transaction. */
+const recordStatusChange =
+  (ids: RunIds, metadata: Record<string, string | number>) =>
+  async (
+    tx: RunTransaction,
+    row: { id: SafeId<"dataExport">; status: string },
+  ) => {
+    const record = createBackgroundAuditRecorder({
+      execution: {
+        performer: { id: "data-export", name: "Data export", type: "service" },
+        trigger: {
+          source: "action",
+          type: "user_dispatch",
+          userId: ids.userId,
+        },
+      },
+      organizationId: ids.organizationId,
+      workspaceId: null,
+      userId: ids.userId,
+    });
+    await record(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.DATA_EXPORT,
+      resourceId: row.id,
+      metadata: { status: row.status, ...metadata },
+    });
+  };
+
 const markFailed = async (
   db: ScopedDb,
   ids: RunIds,
   attempt: number,
   message: string,
 ) => {
-  await db(async (tx) => {
-    // audit: skip - terminal bookkeeping on an export whose request is audited
-    await tx
-      .update(organizationDataExports)
-      .set({
-        status: "failed",
-        error: message.slice(0, ERROR_MESSAGE_MAX_CHARS),
-        completedAt: new Date(),
-      })
-      .where(ownRun(ids, attempt));
-  });
+  await db(
+    async (tx) =>
+      await transition({
+        tx,
+        spec: DATA_EXPORT_TRANSITIONS,
+        id: ids.exportId,
+        options: {
+          from: ["running"],
+          to: "failed",
+          fence: attempt,
+          set: {
+            error: message.slice(0, ERROR_MESSAGE_MAX_CHARS),
+            completedAt: new Date(),
+          },
+        },
+        recordTransitionAuditEvent: recordStatusChange(ids, { attempt }),
+      }),
+  );
 };
 
 /** Why a run handed itself back to the queue. */
 const RESUME_REASON = {
-  /** Graceful shutdown: not a failure, does not use up the budget. */
-  SHUTDOWN: "shutdown",
+  /** Graceful stop on deploy: not a failure, does not use up the budget. */
+  GRACEFUL_STOP: "graceful_stop",
   FAILURE: "failure",
 } as const;
 type ResumeReason = (typeof RESUME_REASON)[keyof typeof RESUME_REASON];
@@ -205,19 +241,27 @@ const markResumable = async (
   attempt: number,
   reason: ResumeReason,
 ) => {
-  await db(async (tx) => {
-    // audit: skip - lifecycle transition of an audited export request
-    await tx
-      .update(organizationDataExports)
-      .set({
-        status: "queued",
-        failures:
-          reason === RESUME_REASON.FAILURE
-            ? sql`${organizationDataExports.failures} + 1`
-            : organizationDataExports.failures,
-      })
-      .where(ownRun(ids, attempt));
-  });
+  await db(
+    async (tx) =>
+      await transition({
+        tx,
+        spec: DATA_EXPORT_TRANSITIONS,
+        id: ids.exportId,
+        options: {
+          from: ["running"],
+          to: "queued",
+          fence: attempt,
+          set:
+            reason === RESUME_REASON.FAILURE
+              ? { failures: sql`${organizationDataExports.failures} + 1` }
+              : {},
+        },
+        recordTransitionAuditEvent: recordStatusChange(ids, {
+          attempt,
+          reason,
+        }),
+      }),
+  );
 };
 
 type MarkReadyArgs = {
@@ -245,33 +289,23 @@ const markReady = async ({
   values,
   audit,
 }: MarkReadyArgs): Promise<boolean> => {
-  const recordAuditEvent = createBackgroundAuditRecorder({
-    execution: {
-      performer: { id: "data-export", name: "Data export", type: "service" },
-      trigger: { source: "action", type: "user_dispatch", userId: ids.userId },
-    },
-    organizationId: ids.organizationId,
-    workspaceId: null,
-    userId: ids.userId,
-  });
-  return await db(async (tx) => {
-    const updated = await tx
-      .update(organizationDataExports)
-      .set({ status: "ready", heartbeatAt: values.completedAt, ...values })
-      .where(ownRun(ids, attempt))
-      .returning({ id: organizationDataExports.id });
-    // Superseded by a newer attempt: that attempt owns the row now.
-    if (updated.length === 0) {
-      return false;
-    }
-    await recordAuditEvent(tx, {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.DATA_EXPORT,
-      resourceId: ids.exportId,
-      metadata: { status: "ready", ...audit },
-    });
-    return true;
-  });
+  const moved = await db(
+    async (tx) =>
+      await transition({
+        tx,
+        spec: DATA_EXPORT_TRANSITIONS,
+        id: ids.exportId,
+        options: {
+          from: ["running"],
+          to: "ready",
+          fence: attempt,
+          set: { heartbeatAt: values.completedAt, ...values },
+        },
+        recordTransitionAuditEvent: recordStatusChange(ids, audit),
+      }),
+  );
+  // Stale: superseded by a newer attempt, which owns the row now.
+  return moved.type === "transitioned";
 };
 
 type ClaimedRun = {
@@ -280,8 +314,123 @@ type ClaimedRun = {
   versionScope: "all" | "current";
   plan: DataExportPlanRecord | null;
   parts: DataExportPartRecord[];
-  attempts: number;
+  attempt: number;
   failures: number;
+};
+
+type ClaimResult = {
+  run: ClaimedRun | undefined;
+  authorized: boolean;
+  organizationName: string;
+};
+
+/** Move a queued export to running and advance its attempt fence. */
+const claimRun = async (
+  db: ScopedDb,
+  ids: RunIds,
+  now: Date,
+): Promise<ClaimResult> =>
+  await db(async (tx) => {
+    const authorized = await readAuthorized(tx, ids);
+    const orgRows = await tx
+      .select({ name: organization.name })
+      .from(organization)
+      .where(eq(organization.id, ids.organizationId));
+    const organizationName = orgRows.at(0)?.name ?? "";
+    const current = (
+      await tx
+        .select({ attempt: organizationDataExports.attempt })
+        .from(organizationDataExports)
+        // No row lock: the attempt fence below makes a concurrent claim of
+        // the same export go stale.
+        .where(and(ownRow(ids), eq(organizationDataExports.status, "queued")))
+    ).at(0);
+    if (current === undefined) {
+      return { run: undefined, authorized, organizationName };
+    }
+    const attempt = current.attempt + 1;
+    const moved = await transition({
+      tx,
+      spec: DATA_EXPORT_TRANSITIONS,
+      id: ids.exportId,
+      options: {
+        from: ["queued"],
+        to: "running",
+        fence: current.attempt,
+        nextFence: attempt,
+        set: {
+          startedAt: sql`COALESCE(${organizationDataExports.startedAt}, ${now})`,
+          heartbeatAt: now,
+        },
+      },
+      recordTransitionAuditEvent: recordStatusChange(ids, { attempt }),
+    });
+    if (moved.type === "stale") {
+      return { run: undefined, authorized, organizationName };
+    }
+    const run = (
+      await tx
+        .select({
+          createdAt: organizationDataExports.createdAt,
+          startedAt: organizationDataExports.startedAt,
+          versionScope: organizationDataExports.versionScope,
+          plan: organizationDataExports.plan,
+          parts: organizationDataExports.parts,
+          attempt: organizationDataExports.attempt,
+          failures: organizationDataExports.failures,
+        })
+        .from(organizationDataExports)
+        .where(ownRun(ids, attempt))
+    ).at(0);
+    return { run, authorized, organizationName };
+  });
+
+type HeartbeatValues = {
+  progress?: ExportProgress;
+  plan?: DataExportPlanRecord;
+  checkpoint?: DataExportPartRecord;
+};
+
+/**
+ * Record liveness, and optionally progress, the plan or a finished part.
+ * Fenced on the run's attempt; never changes the export's status.
+ */
+type WriteHeartbeatArgs = HeartbeatValues & {
+  db: ScopedDb;
+  ids: RunIds;
+  attempt: number;
+  now: Date;
+};
+
+const writeHeartbeat = async ({
+  db,
+  ids,
+  attempt,
+  progress,
+  plan,
+  checkpoint,
+  now,
+}: WriteHeartbeatArgs) => {
+  await db(async (tx) => {
+    // audit: skip - progress counters and checkpoints on an export whose status changes are audited
+    await tx
+      .update(organizationDataExports)
+      .set({
+        heartbeatAt: now,
+        mattersDone: progress?.mattersDone,
+        bytesDone: progress?.bytesDone,
+        problemCount: progress?.problemCount,
+        plan,
+        mattersTotal: plan?.mattersTotal,
+        bytesTotal: plan?.bytesTotal,
+        partCount: plan?.parts.length,
+        parts:
+          checkpoint === undefined
+            ? undefined
+            : sql`${organizationDataExports.parts} || ${JSON.stringify([checkpoint])}::text::jsonb`,
+      })
+      .where(ownRun(ids, attempt));
+  });
 };
 
 /**
@@ -295,62 +444,30 @@ export const runDataExport = async (
 ): Promise<DataExportRunOutcome> => {
   const { exportId, organizationId, userId } = ids;
   const now = deps.now();
-  const claimed = await deps.db(async (tx) => {
-    const authorized = await readAuthorized(tx, ids);
-    // audit: skip - lifecycle transition of an audited export request
-    const rows = await tx
-      .update(organizationDataExports)
-      .set({
-        status: "running",
-        attempts: sql`${organizationDataExports.attempts} + 1`,
-        startedAt: sql`COALESCE(${organizationDataExports.startedAt}, ${now})`,
-        heartbeatAt: now,
-      })
-      .where(and(ownRow(ids), eq(organizationDataExports.status, "queued")))
-      .returning({
-        createdAt: organizationDataExports.createdAt,
-        startedAt: organizationDataExports.startedAt,
-        versionScope: organizationDataExports.versionScope,
-        plan: organizationDataExports.plan,
-        parts: organizationDataExports.parts,
-        attempts: organizationDataExports.attempts,
-        failures: organizationDataExports.failures,
-      });
-    const orgRows = await tx
-      .select({ name: organization.name })
-      .from(organization)
-      .where(eq(organization.id, organizationId));
-    return {
-      row: rows.at(0),
-      authorized,
-      organizationName: orgRows.at(0)?.name ?? "",
-    };
-  });
-  if (claimed.row === undefined) {
+  const claimed = await claimRun(deps.db, ids, now);
+  if (claimed.run === undefined) {
     return DATA_EXPORT_RUN_OUTCOME.SKIPPED;
   }
-  const run: ClaimedRun = claimed.row;
+  const run = claimed.run;
   // The read scope is the requester's live membership: a demoted admin
   // would silently export only part of the organisation. Refuse instead.
   if (!claimed.authorized) {
     await markFailed(
       deps.db,
       ids,
-      run.attempts,
+      run.attempt,
       DATA_EXPORT_FAILURE_MESSAGE.notAuthorized,
     );
     return DATA_EXPORT_RUN_OUTCOME.FAILED;
   }
 
-  const heartbeat = async (
-    values: Partial<typeof organizationDataExports.$inferInsert>,
-  ) => {
-    await deps.db(async (tx) => {
-      // audit: skip - progress counters and checkpoints on an audited export
-      await tx
-        .update(organizationDataExports)
-        .set({ ...values, heartbeatAt: deps.now() })
-        .where(ownRun(ids, run.attempts));
+  const heartbeat = async (values: HeartbeatValues) => {
+    await writeHeartbeat({
+      db: deps.db,
+      ids,
+      attempt: run.attempt,
+      now: deps.now(),
+      ...values,
     });
   };
 
@@ -378,12 +495,7 @@ export const runDataExport = async (
         scope,
       }));
     if (run.plan === null) {
-      await heartbeat({
-        plan,
-        mattersTotal: plan.mattersTotal,
-        bytesTotal: plan.bytesTotal,
-        partCount: plan.parts.length,
-      });
+      await heartbeat({ plan });
     }
     const manifest = await buildDataExport({
       exportId,
@@ -410,17 +522,10 @@ export const runDataExport = async (
         }
       },
       onProgress: async (progress: ExportProgress) => {
-        await heartbeat({
-          mattersDone: progress.mattersDone,
-          bytesDone: progress.bytesDone,
-          problemCount: progress.problemCount,
-        });
+        await heartbeat({ progress });
       },
       onPartComplete: async (part) => {
-        const checkpoint: DataExportPartRecord = part;
-        await heartbeat({
-          parts: sql`${organizationDataExports.parts} || ${JSON.stringify([checkpoint])}::text::jsonb`,
-        });
+        await heartbeat({ checkpoint: part });
       },
       now: deps.now,
     });
@@ -435,7 +540,7 @@ export const runDataExport = async (
     const finished = await markReady({
       db: deps.db,
       ids,
-      attempt: run.attempts,
+      attempt: run.attempt,
       values: {
         problemCount: manifest.problems.length,
         mattersDone: plan.mattersTotal,
@@ -454,25 +559,30 @@ export const runDataExport = async (
   } catch (error) {
     // Boundary of a background job: every failure ends in a row state.
     if (error instanceof DataExportNotAuthorizedError) {
-      await markFailed(deps.db, ids, run.attempts, error.message);
+      await markFailed(deps.db, ids, run.attempt, error.message);
       return DATA_EXPORT_RUN_OUTCOME.FAILED;
     }
     if (error instanceof DataExportPartTooLargeError) {
-      await markFailed(deps.db, ids, run.attempts, error.message);
+      await markFailed(deps.db, ids, run.attempt, error.message);
       return DATA_EXPORT_RUN_OUTCOME.FAILED;
     }
     if (deps.signal.aborted) {
-      await markResumable(deps.db, ids, run.attempts, RESUME_REASON.SHUTDOWN);
+      await markResumable(
+        deps.db,
+        ids,
+        run.attempt,
+        RESUME_REASON.GRACEFUL_STOP,
+      );
       return DATA_EXPORT_RUN_OUTCOME.RESUMABLE;
     }
     captureError(error, { exportId, organizationId });
     logger.error("data_export.attempt_failed", {
       exportId,
-      attempt: String(run.attempts),
+      attempt: String(run.attempt),
       "error.type": errorTag(error),
     });
     if (run.failures + 1 < DATA_EXPORT_MAX_FAILURES) {
-      await markResumable(deps.db, ids, run.attempts, RESUME_REASON.FAILURE);
+      await markResumable(deps.db, ids, run.attempt, RESUME_REASON.FAILURE);
       return DATA_EXPORT_RUN_OUTCOME.RESUMABLE;
     }
     // Parts already written stay until the bucket lifecycle expires them;
@@ -480,7 +590,7 @@ export const runDataExport = async (
     await markFailed(
       deps.db,
       ids,
-      run.attempts,
+      run.attempt,
       DATA_EXPORT_FAILURE_MESSAGE.failed,
     );
     return DATA_EXPORT_RUN_OUTCOME.FAILED;
@@ -559,15 +669,24 @@ export const initDataExportWorker = (_context: BullMqWorkerContext) => {
   const worker = new BullMqWorker<DataExportJobData>(
     DATA_EXPORT_QUEUE_NAME,
     async (job) => {
+      // A member run with no matter pinned: every read, and the export's
+      // own row, goes through the requester's membership as it stands when
+      // each transaction runs, so revoked access reads nothing.
+      const actor = createRootRunActor(
+        {
+          organizationId: job.data.organizationId,
+          workspaceId: null,
+          userId: job.data.userId,
+          runId: job.data.exportId,
+        },
+        brandPersistedDataExportId,
+      );
       const ids = {
-        exportId: brandPersistedDataExportId(job.data.exportId),
-        organizationId: brandPersistedOrganizationId(job.data.organizationId),
-        userId: brandPersistedUserId(job.data.userId),
+        exportId: actor.runId,
+        organizationId: actor.organizationId,
+        userId: actor.userId,
       };
-      const db = createRootMembershipScopedDb({
-        organizationId: ids.organizationId,
-        userId: ids.userId,
-      });
+      const db = actor.inputDb;
       const pacer = createExportPacer();
       try {
         const outcome = await runDataExport(

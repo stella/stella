@@ -8,7 +8,7 @@ import { normalizeUnicode } from "@stll/text-normalize";
 
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
 import type { ZipCompression } from "@/api/handlers/data-exports/zip-writer";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 // Device names Windows refuses as a file or folder name, with or without an
 // extension.
@@ -99,8 +99,10 @@ export const sanitizeArchiveSegment = (name: string): string => {
   const normalized = normalizeUnicode(name, "NFC")
     .replace(CONTROL_CHARS_RE, "_")
     .trim();
+  // The shared sanitiser cuts at 255 UTF-16 units; keeping the extension
+  // there lets the byte budget below shorten the name, never the extension.
   const sanitized = normalizeUnicode(
-    sanitizeFilename(normalized),
+    sanitizeFilenamePreservingExtension(normalized),
     "NFC",
   ).trim();
   if (sanitized.length === 0) {

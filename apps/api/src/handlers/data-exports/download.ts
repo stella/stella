@@ -15,6 +15,7 @@ import {
   dataExportPartKey,
 } from "@/api/lib/data-export-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 
 const DOWNLOAD_FILE = {
@@ -48,6 +49,9 @@ const config = {
     consumesServices: false,
   },
   access: "write",
+  realtime: noResourceSetUpdates(
+    "Signing a download link only records an audit event.",
+  ),
   params: t.Object({ exportId: tSafeId("dataExport") }),
   body: t.Object({
     file: t.Union([

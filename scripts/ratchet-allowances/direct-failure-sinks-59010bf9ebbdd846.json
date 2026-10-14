@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/data-exports/create.ts",
+  "delta": 1,
+  "reason": "A failed queue handoff after a data export row commits is recorded and the request still succeeds: the maintenance sweep hands queued exports to the queue again, so the requester is not shown an error for work that will run."
+}

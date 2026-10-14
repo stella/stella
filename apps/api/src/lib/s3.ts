@@ -1183,7 +1183,6 @@ const readableChunks = async function* (
   const reader = stream.getReader();
   try {
     for (;;) {
-      // db-await-in-loop: sequential reads of one response body; each read waits for the next chunk
       const { done, value } = await reader.read();
       if (done) {
         return;

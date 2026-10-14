@@ -12,6 +12,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { enqueueDataExport } from "@/api/lib/data-export-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const config = {
   contract: "patch",
@@ -37,6 +38,9 @@ const config = {
     consumesServices: false,
   },
   access: "write",
+  realtime: noResourceSetUpdates(
+    "Exports are not a live resource set: clients follow an export by polling data-exports.get.",
+  ),
   body: t.Object({
     versions: t.UnionEnum(DATA_EXPORT_VERSION_SCOPE_VALUES, {
       description:
@@ -78,7 +82,7 @@ const createDataExport = createSafeRootHandler(
         exportId,
         organizationId,
         userId: user.id,
-        attempts: 0,
+        attempt: 0,
       }).catch((error: unknown) => {
         captureError(error, { exportId, operation: "data_export.enqueue" });
       });

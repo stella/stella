@@ -100,6 +100,7 @@ export const brandPersistedReportExportId = (
   reportExportId: string,
 ): SafeId<"reportExport"> => toSafeId<"reportExport">(reportExportId);
 
+// parser-output-unchanged: Adds the data export id brander; no parser calls it.
 export const brandPersistedDataExportId = (
   dataExportId: string,
 ): SafeId<"dataExport"> => toSafeId<"dataExport">(dataExportId);

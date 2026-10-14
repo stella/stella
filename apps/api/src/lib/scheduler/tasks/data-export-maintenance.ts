@@ -1,15 +1,25 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import type { AnyColumn } from "drizzle-orm";
 
+import type { Transaction } from "@/api/db/root";
 import {
   DATA_EXPORT_MAX_FAILURES,
   organizationDataExports,
 } from "@/api/db/schema";
 import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+  createBackgroundAuditRecorder,
+} from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
+import {
   DATA_EXPORT_HEARTBEAT_STALE_MS,
   enqueueDataExport,
 } from "@/api/lib/data-export-queue";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { DATA_EXPORT_TRANSITIONS } from "@/api/lib/db/data-export-transition-spec";
+import { transition } from "@/api/lib/db/transitions";
 import {
   brandPersistedDataExportId,
   brandPersistedOrganizationId,
@@ -55,14 +65,86 @@ const atOrBefore = (column: AnyColumn, cutoff: Date) =>
 const before = (column: AnyColumn, cutoff: Date) =>
   sql<boolean>`${column} < ${cutoff.toISOString()}::timestamptz`;
 
+type SweepRow = {
+  id: SafeId<"dataExport">;
+  organizationId: SafeId<"organization">;
+  requestedBy: string | null;
+  attempt: number;
+};
+
+const sweepColumns = {
+  id: organizationDataExports.id,
+  organizationId: organizationDataExports.organizationId,
+  requestedBy: organizationDataExports.requestedBy,
+  attempt: organizationDataExports.attempt,
+};
+
+/** Audits one status change the sweep makes, for the export's organisation. */
+const recordSweepChange =
+  (row: SweepRow, reason: string) =>
+  async (tx: Transaction, changed: { id: string; status: string }) => {
+    const record = createBackgroundAuditRecorder({
+      execution: {
+        performer: {
+          id: "data-export-maintenance",
+          name: "Data export maintenance",
+          type: "service",
+        },
+        trigger: { type: "system", source: MAINTAIN_DATA_EXPORTS_TASK },
+      },
+      organizationId: row.organizationId,
+      workspaceId: null,
+      userId: row.requestedBy ?? "data-export-maintenance",
+    });
+    await record(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.DATA_EXPORT,
+      resourceId: changed.id,
+      metadata: { status: changed.status, reason },
+    });
+  };
+
+/** Apply `move` to every row in its own short transaction; count the moved. */
+const moveEach = async (
+  db: SchedulerDb,
+  rows: readonly SweepRow[],
+  move: (tx: Transaction, row: SweepRow) => Promise<{ type: string }>,
+  summary: MaintenanceSummary,
+): Promise<number> => {
+  const results = await Promise.all(
+    rows.map(
+      async (row) =>
+        await Result.tryPromise(
+          async () =>
+            await withAggregateTransaction(
+              db,
+              async (tx: Transaction) => await move(tx, row),
+            ),
+        ),
+    ),
+  );
+  let moved = 0;
+  for (const result of results) {
+    if (Result.isError(result)) {
+      summary.errors.push(result.error);
+      continue;
+    }
+    // A stale move means the row changed under the sweep; nothing to do.
+    if (result.value.type === "transitioned") {
+      moved += 1;
+    }
+  }
+  return moved;
+};
+
 // The bucket lifecycle deletes export objects (the API role may not); this
 // only stops offering them. `expires_at` counts from the run's start, which
 // no object of the export predates, so a row turns `expired` no later than
 // the lifecycle could remove its files and no link is ever signed for a
 // removed object.
 const expireReady = async ({ db, summary, now }: StepArgs) => {
-  const due = db
-    .select({ id: organizationDataExports.id })
+  const due = await db
+    .select(sweepColumns)
     .from(organizationDataExports)
     .where(
       and(
@@ -72,108 +154,152 @@ const expireReady = async ({ db, summary, now }: StepArgs) => {
     )
     .orderBy(asc(organizationDataExports.expiresAt))
     .limit(BATCH_SIZE);
-  // audit: skip - retention lifecycle of an export whose request and downloads are audited
-  const expired = await db
-    .update(organizationDataExports)
-    .set({ status: "expired" })
-    .where(
-      and(
-        inArray(organizationDataExports.id, due),
-        eq(organizationDataExports.status, "ready"),
-      ),
-    )
-    .returning({ id: organizationDataExports.id });
-  summary.expired += expired.length;
+  summary.expired += await moveEach(
+    db,
+    due,
+    async (tx, row) =>
+      await transition({
+        tx,
+        spec: DATA_EXPORT_TRANSITIONS,
+        id: row.id,
+        options: { from: ["ready"], to: "expired", fence: row.attempt },
+        recordTransitionAuditEvent: recordSweepChange(row, "expired"),
+      }),
+    summary,
+  );
 };
 
 const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
   const staleBefore = new Date(now.getTime() - DATA_EXPORT_HEARTBEAT_STALE_MS);
+  const stale = await db
+    .select({ ...sweepColumns, failures: organizationDataExports.failures })
+    .from(organizationDataExports)
+    .where(
+      and(
+        eq(organizationDataExports.status, "running"),
+        before(organizationDataExports.heartbeatAt, staleBefore),
+      ),
+    )
+    .orderBy(asc(organizationDataExports.heartbeatAt))
+    .limit(BATCH_SIZE);
   // A worker that vanished (crash, killed deploy) leaves its checkpoints:
   // hand the run back so the next attempt resumes. A lost worker counts as
-  // a failure (a graceful shutdown hands itself back without one); an
-  // export out of failures is failed. If the old worker is in fact alive,
-  // its writes stop matching here: they require `running` and the attempt
-  // number it claimed.
-  // audit: skip - lifecycle bookkeeping for a run whose worker disappeared
-  const resumed = await db
-    .update(organizationDataExports)
-    .set({
-      status: "queued",
-      failures: sql`${organizationDataExports.failures} + 1`,
-    })
-    .where(
-      and(
-        eq(organizationDataExports.status, "running"),
-        before(organizationDataExports.heartbeatAt, staleBefore),
-        lt(organizationDataExports.failures, DATA_EXPORT_MAX_FAILURES - 1),
-      ),
-    )
-    .returning({ id: organizationDataExports.id });
-  summary.resumed += resumed.length;
-  // audit: skip - terminal bookkeeping for a run out of attempts
-  const failed = await db
-    .update(organizationDataExports)
-    .set({ status: "failed", error: STALE_RUN_ERROR, completedAt: now })
-    .where(
-      and(
-        eq(organizationDataExports.status, "running"),
-        before(organizationDataExports.heartbeatAt, staleBefore),
-        gte(organizationDataExports.failures, DATA_EXPORT_MAX_FAILURES - 1),
-      ),
-    )
-    .returning({ id: organizationDataExports.id });
+  // a failure (a graceful stop hands itself back without one); an export
+  // out of failures is failed. Both moves are fenced on the attempt seen
+  // here, and a live old worker's writes stop matching once the row is no
+  // longer `running` at its attempt.
+  const resumable = stale.filter(
+    (row) => row.failures < DATA_EXPORT_MAX_FAILURES - 1,
+  );
+  const exhausted = stale.filter(
+    (row) => row.failures >= DATA_EXPORT_MAX_FAILURES - 1,
+  );
+  summary.resumed += await moveEach(
+    db,
+    resumable,
+    async (tx, row) =>
+      await transition({
+        tx,
+        spec: DATA_EXPORT_TRANSITIONS,
+        id: row.id,
+        options: {
+          from: ["running"],
+          to: "queued",
+          fence: row.attempt,
+          set: { failures: sql`${organizationDataExports.failures} + 1` },
+        },
+        recordTransitionAuditEvent: recordSweepChange(row, "worker_lost"),
+      }),
+    summary,
+  );
   // Parts already written age out through the bucket lifecycle.
-  summary.failedStale += failed.length;
+  summary.failedStale += await moveEach(
+    db,
+    exhausted,
+    async (tx, row) =>
+      await transition({
+        tx,
+        spec: DATA_EXPORT_TRANSITIONS,
+        id: row.id,
+        options: {
+          from: ["running"],
+          to: "failed",
+          fence: row.attempt,
+          set: { error: STALE_RUN_ERROR, completedAt: now },
+        },
+        recordTransitionAuditEvent: recordSweepChange(row, "out_of_attempts"),
+      }),
+    summary,
+  );
 };
 
 const requeueQueued = async ({ db, deps, summary, now }: StepArgs) => {
   const settledBefore = new Date(now.getTime() - QUEUED_HANDOFF_SETTLE_MS);
+  const settled = and(
+    eq(organizationDataExports.status, "queued"),
+    before(organizationDataExports.createdAt, settledBefore),
+  );
+  // An export whose requester's account was deleted cannot run as anyone.
+  const abandoned = await db
+    .select(sweepColumns)
+    .from(organizationDataExports)
+    .where(and(settled, isNull(organizationDataExports.requestedBy)))
+    .orderBy(asc(organizationDataExports.createdAt))
+    .limit(BATCH_SIZE);
+  await moveEach(
+    db,
+    abandoned,
+    async (tx, row) =>
+      await transition({
+        tx,
+        spec: DATA_EXPORT_TRANSITIONS,
+        id: row.id,
+        options: {
+          from: ["queued"],
+          to: "failed",
+          fence: row.attempt,
+          set: { error: ABANDONED_ERROR, completedAt: now },
+        },
+        recordTransitionAuditEvent: recordSweepChange(row, "requester_deleted"),
+      }),
+    summary,
+  );
   const queued = await db
     .select({
       id: organizationDataExports.id,
       organizationId: organizationDataExports.organizationId,
       requestedBy: organizationDataExports.requestedBy,
-      attempts: organizationDataExports.attempts,
+      attempt: organizationDataExports.attempt,
     })
     .from(organizationDataExports)
-    .where(
-      and(
-        eq(organizationDataExports.status, "queued"),
-        before(organizationDataExports.createdAt, settledBefore),
-      ),
-    )
+    .where(and(settled, isNotNull(organizationDataExports.requestedBy)))
     .orderBy(asc(organizationDataExports.createdAt))
     .limit(BATCH_SIZE);
-  for (const row of queued) {
-    const requestedBy = row.requestedBy;
-    if (requestedBy === null) {
-      // audit: skip - an export whose requester was deleted cannot run as anyone
-      // db-await-in-loop: one conditional update per abandoned row; bounded by BATCH_SIZE
-      await db
-        .update(organizationDataExports)
-        .set({ status: "failed", error: ABANDONED_ERROR, completedAt: now })
-        .where(
-          and(
-            eq(organizationDataExports.id, row.id),
-            eq(organizationDataExports.status, "queued"),
-          ),
-        );
-      continue;
-    }
-    // Idempotent: the job id derives from the export and its attempt count,
-    // so a row still waiting for a free slot is not queued twice.
-    // db-await-in-loop: one idempotent queue handoff per queued export; bounded by BATCH_SIZE
-    const handedOff = await Result.tryPromise(
-      async () =>
-        await deps.enqueue({
-          exportId: brandPersistedDataExportId(row.id),
-          organizationId: brandPersistedOrganizationId(row.organizationId),
-          userId: brandPersistedUserId(requestedBy),
-          attempts: row.attempts,
-        }),
-    );
-    if (Result.isError(handedOff)) {
-      summary.errors.push(handedOff.error);
+  // Idempotent: the job id derives from the export and its attempt count,
+  // so a row still waiting for a free slot is not queued twice.
+  const handoffs = await Promise.all(
+    queued.flatMap((row) => {
+      const requestedBy = row.requestedBy;
+      return requestedBy === null
+        ? []
+        : [
+            Result.tryPromise(
+              async () =>
+                await deps.enqueue({
+                  exportId: brandPersistedDataExportId(row.id),
+                  organizationId: brandPersistedOrganizationId(
+                    row.organizationId,
+                  ),
+                  userId: brandPersistedUserId(requestedBy),
+                  attempt: row.attempt,
+                }),
+            ),
+          ];
+    }),
+  );
+  for (const handoff of handoffs) {
+    if (Result.isError(handoff)) {
+      summary.errors.push(handoff.error);
       continue;
     }
     summary.requeued += 1;

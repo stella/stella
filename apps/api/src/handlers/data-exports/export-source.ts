@@ -46,7 +46,6 @@ import type {
   RecordTable,
   SourceDocument,
   SourceDocumentFile,
-  SourceDocumentVersion,
   SourceMatter,
   SourceMatterSummary,
   SourceOrganizationRecords,
@@ -72,6 +71,7 @@ import {
   TIME_ENTRY_COLUMNS,
 } from "@/api/handlers/data-exports/records";
 import { captureError } from "@/api/lib/analytics/capture";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/files/utils";
 import { openS3ObjectStream } from "@/api/lib/s3";
@@ -83,10 +83,6 @@ export const DATA_EXPORT_PAGE_SIZE = 500;
 const FOLDER_KIND = "folder";
 const TASK_KIND = "task";
 const DELETING_STATUS = "deleting";
-
-type CollectedVersion = Omit<SourceDocumentVersion, "files"> & {
-  files: SourceDocumentFile[];
-};
 
 const groupBy = <T>(rows: readonly T[], key: (row: T) => string) => {
   const grouped = new Map<string, T[]>();
@@ -459,39 +455,29 @@ const assembleDocuments = ({
   exportedVersions,
   fileRows,
 }: MatterEntityRows): SourceDocument[] => {
-  const filesByVersion = new Map<string, SourceDocumentFile[]>();
-  for (const row of fileRows.toSorted((a, b) => (a.id < b.id ? -1 : 1))) {
-    if (row.content.type !== "file") {
-      continue;
-    }
-    const versionId = String(row.entityVersionId);
-    const list = filesByVersion.get(versionId) ?? [];
-    list.push({
-      fieldId: String(row.id),
-      fileId: row.content.id,
-      fileName: row.content.fileName,
-      mimeType: row.content.mimeType,
-      sizeBytes: row.content.sizeBytes,
-      sha256: row.content.sha256Hex,
-    });
-    filesByVersion.set(versionId, list);
-  }
-  const versionsByEntity = new Map<string, CollectedVersion[]>();
-  for (const row of exportedVersions) {
-    const entityId = String(row.entityId);
-    const list = versionsByEntity.get(entityId) ?? [];
-    list.push({
-      id: String(row.id),
-      versionNumber: row.versionNumber,
-      stamp: row.stamp,
-      label: row.label,
-      description: row.description,
-      createdAt: row.createdAt,
-      createdBy: row.createdBy,
-      files: filesByVersion.get(String(row.id)) ?? [],
-    });
-    versionsByEntity.set(entityId, list);
-  }
+  const files = fileRows
+    .toSorted((a, b) => (a.id < b.id ? -1 : 1))
+    .flatMap((row) =>
+      row.content.type === "file"
+        ? [
+            {
+              versionId: String(row.entityVersionId),
+              file: {
+                fieldId: String(row.id),
+                fileId: row.content.id,
+                fileName: row.content.fileName,
+                mimeType: row.content.mimeType,
+                sizeBytes: row.content.sizeBytes,
+                sha256: row.content.sha256Hex,
+              } satisfies SourceDocumentFile,
+            },
+          ]
+        : [],
+    );
+  const filesByVersion = groupBy(files, (entry) => entry.versionId);
+  const versionsByEntity = groupBy(exportedVersions, (row) =>
+    String(row.entityId),
+  );
   const documents: SourceDocument[] = [];
   for (const row of documentRows) {
     if (row.kind !== "document" && row.kind !== "message") {
@@ -509,7 +495,20 @@ const assembleDocuments = ({
       createdBy: row.createdBy,
       updatedAt: row.updatedAt,
       lastEditedBy: row.lastEditedBy,
-      versions: versionsByEntity.get(String(row.id)) ?? [],
+      versions: arrayOrEmpty(versionsByEntity.get(String(row.id))).map(
+        (version) => ({
+          id: String(version.id),
+          versionNumber: version.versionNumber,
+          stamp: version.stamp,
+          label: version.label,
+          description: version.description,
+          createdAt: version.createdAt,
+          createdBy: version.createdBy,
+          files: arrayOrEmpty(filesByVersion.get(String(version.id))).map(
+            (entry) => entry.file,
+          ),
+        }),
+      ),
     });
   }
   return documents;
@@ -584,13 +583,13 @@ const loadMatter = async (
       })),
     documents: assembleDocuments(entityRows),
     tasks: table(TASK_COLUMNS, taskRows, (row) => ({
-      assignees: (assigneesByTask.get(String(row.id)) ?? []).map((assignee) =>
-        projectRecord(assignee, TASK_ASSIGNEE_COLUMNS),
+      assignees: arrayOrEmpty(assigneesByTask.get(String(row.id))).map(
+        (assignee) => projectRecord(assignee, TASK_ASSIGNEE_COLUMNS),
       ),
     })),
     timeEntries: table(TIME_ENTRY_COLUMNS, records.timeEntryRows),
     invoices: table(INVOICE_COLUMNS, records.invoiceRows, (row) => ({
-      lines: (linesByInvoice.get(String(row.id)) ?? []).map((line) =>
+      lines: arrayOrEmpty(linesByInvoice.get(String(row.id))).map((line) =>
         projectRecord(line, INVOICE_LINE_COLUMNS),
       ),
     })),
@@ -808,16 +807,16 @@ const loadOrganizationRecords = async (
       rows.relationshipRows,
     ),
     clauses: table(CLAUSE_COLUMNS, rows.clauseRows, (row) => ({
-      versions: (versionsByClause.get(String(row.id)) ?? []).map((version) =>
-        projectRecord(version, CLAUSE_VERSION_COLUMNS),
+      versions: arrayOrEmpty(versionsByClause.get(String(row.id))).map(
+        (version) => projectRecord(version, CLAUSE_VERSION_COLUMNS),
       ),
-      variants: (variantsByClause.get(String(row.id)) ?? []).map((variant) =>
-        projectRecord(variant, CLAUSE_VARIANT_COLUMNS),
+      variants: arrayOrEmpty(variantsByClause.get(String(row.id))).map(
+        (variant) => projectRecord(variant, CLAUSE_VARIANT_COLUMNS),
       ),
     })),
     templates: table(TEMPLATE_COLUMNS, rows.templateRows, (row) => ({
-      versions: (versionsByTemplate.get(String(row.id)) ?? []).map((version) =>
-        projectRecord(version, TEMPLATE_VERSION_COLUMNS),
+      versions: arrayOrEmpty(versionsByTemplate.get(String(row.id))).map(
+        (version) => projectRecord(version, TEMPLATE_VERSION_COLUMNS),
       ),
     })),
     unassignedTimeEntries: table(TIME_ENTRY_COLUMNS, rows.unassignedRows),

@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/data-exports/export-source.ts",
+  "delta": 1,
+  "reason": "A stored file that cannot be read during a data export is listed under the manifest's problems for the requester; telemetry records the failure without the object key."
+}

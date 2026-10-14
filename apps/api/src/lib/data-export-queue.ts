@@ -68,8 +68,8 @@ type EnqueueDataExportArgs = {
   exportId: SafeId<"dataExport">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  /** Attempts already started; a resume gets a job of its own. */
-  attempts: number;
+  /** The export's attempt counter; each resume gets a job of its own. */
+  attempt: number;
 };
 
 /** Idempotent per export attempt: the job id derives from both. */
@@ -77,11 +77,11 @@ export const enqueueDataExport = async ({
   exportId,
   organizationId,
   userId,
-  attempts,
+  attempt,
 }: EnqueueDataExportArgs): Promise<QueueRequeueOutcome> =>
   await requeueDeterministicJob({
     data: { exportId, organizationId, userId },
-    jobId: createBullMqJobId(organizationId, exportId, String(attempts)),
+    jobId: createBullMqJobId(organizationId, exportId, String(attempt)),
     name: DATA_EXPORT_JOB_NAME,
     queue: getDataExportQueue(),
   });

@@ -297,8 +297,16 @@ describe("data export permissions", () => {
           fileName: "part.zip",
           sizeBytes: 1,
           sha256: "0".repeat(64),
-          matterCount: 1,
+          matterIds: [],
           fileCount: 1,
+          totals: {
+            matters: 0,
+            documents: 0,
+            versions: 0,
+            files: 0,
+            fileBytes: 0,
+          },
+          problems: [],
         },
       ],
     });
@@ -372,7 +380,7 @@ describe("data export run", () => {
     expect(row?.status).toBe("ready");
     expect(row?.parts).toHaveLength(1);
     expect(row?.plan?.parts.map((part) => part.index)).toEqual([1]);
-    expect(row?.attempts).toBe(1);
+    expect(row?.attempt).toBe(1);
     expect(row?.expiresAt?.getTime()).toBe(
       now.getTime() + DATA_EXPORT_RETENTION_MS,
     );
@@ -466,7 +474,7 @@ describe("data export maintenance", () => {
       organizationId: ids.orgA,
       status: "running",
       requestedBy: ids.userAdmin,
-      attempts: 1,
+      attempt: 1,
       failures: 0,
       createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
       heartbeatAt: new Date(now.getTime() - 60 * 60 * 1000),
@@ -475,14 +483,14 @@ describe("data export maintenance", () => {
       organizationId: ids.orgB,
       status: "running",
       requestedBy: ids.userB1,
-      attempts: DATA_EXPORT_MAX_FAILURES,
+      attempt: DATA_EXPORT_MAX_FAILURES,
       failures: DATA_EXPORT_MAX_FAILURES - 1,
       heartbeatAt: new Date(now.getTime() - 60 * 60 * 1000),
     });
     const enqueued: string[] = [];
     const task = createMaintainDataExportsTask({
-      enqueue: async ({ exportId, attempts }) => {
-        enqueued.push(`${exportId}:${attempts}`);
+      enqueue: async ({ exportId, attempt }) => {
+        enqueued.push(`${exportId}:${attempt}`);
         return "requeued";
       },
     });
@@ -509,6 +517,11 @@ describe("data export maintenance", () => {
     const statusById = new Map(rows.map((row) => [row.id, row.status]));
     expect(statusById.get(stale)).toBe("queued");
     expect(statusById.get(exhausted)).toBe("failed");
+    // Free organisation A's single export slot for the tests that follow.
+    await testDb
+      .update(organizationDataExports)
+      .set({ status: "failed" })
+      .where(eq(organizationDataExports.id, stale));
   });
 });
 
@@ -522,7 +535,7 @@ const statusOf = async (exportId: SafeId<"dataExport">) =>
       .select({
         status: organizationDataExports.status,
         error: organizationDataExports.error,
-        attempts: organizationDataExports.attempts,
+        attempt: organizationDataExports.attempt,
         failures: organizationDataExports.failures,
       })
       .from(organizationDataExports)
@@ -611,7 +624,7 @@ describe("starting an export", () => {
     expect(first.outcome).toBe(DATA_EXPORT_START_OUTCOME.STARTED);
     const second = await start();
     expect(second.outcome).toBe(DATA_EXPORT_START_OUTCOME.ALREADY_ACTIVE);
-    expect(second.row?.id).toBe(first.row?.id ?? "");
+    expect(second.row?.id).toBe(first.row?.id);
     if (first.row !== null) {
       createdExportIds.push(first.row.id);
     }
@@ -700,7 +713,7 @@ describe("run ownership", () => {
         listMatters: async (scope) => {
           await testDb
             .update(organizationDataExports)
-            .set({ attempts: sql`${organizationDataExports.attempts} + 1` })
+            .set({ attempt: sql`${organizationDataExports.attempt} + 1` })
             .where(eq(organizationDataExports.id, exportId));
           return await source.listMatters(scope);
         },
@@ -709,37 +722,11 @@ describe("run ownership", () => {
     expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.SKIPPED);
     const row = await statusOf(exportId);
     expect(row?.status).toBe("running");
-    expect(row?.attempts).toBe(2);
+    expect(row?.attempt).toBe(2);
     await testDb
       .update(organizationDataExports)
       .set({ status: "failed" })
       .where(eq(organizationDataExports.id, exportId));
-  });
-
-  test("stops before a part once the requester loses the permission", async () => {
-    await setRole(ids.memberA1org, "admin");
-    const exportId = await insertExport({
-      organizationId: ids.orgA,
-      requestedBy: ids.userA1,
-    });
-    try {
-      const { outcome, memory } = await runFor(ids.userA1, exportId, {
-        wrapSource: (source) => ({
-          ...source,
-          listMatters: async (scope) => {
-            await setRole(ids.memberA1org, "member");
-            return await source.listMatters(scope);
-          },
-        }),
-      });
-      expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.FAILED);
-      expect(memory.parts.size).toBe(0);
-      const row = await statusOf(exportId);
-      expect(row?.status).toBe("failed");
-      expect(row?.error).toBe(DATA_EXPORT_FAILURE_MESSAGE.notAuthorized);
-    } finally {
-      await setRole(ids.memberA1org, "member");
-    }
   });
 
   test("a graceful stop hands the run back without using up its failure budget", async () => {

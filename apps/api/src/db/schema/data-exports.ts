@@ -1,3 +1,4 @@
+import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import {
   jsonb,
   organization,
@@ -87,6 +88,8 @@ const sqlValues = (values: readonly string[]) =>
  */
 export const ACTIVE_DATA_EXPORT_PREDICATE = sql`status IN (${sqlValues(ACTIVE_DATA_EXPORT_STATUSES)})`;
 
+const DATA_EXPORT_OWNER_CHECK = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_data_exports'::regclass)`;
+
 export const organizationDataExports = p.pgTable(
   "organization_data_exports",
   {
@@ -120,7 +123,7 @@ export const organizationDataExports = p.pgTable(
     parts: jsonb("parts").$type<DataExportPartRecord[]>().notNull().default([]),
     // Runs started for this export, resumes included. Fences run-owned
     // writes: a superseded run's attempt no longer matches.
-    attempts: p.integer("attempts").notNull().default(0),
+    attempt: p.integer("attempt").notNull().default(0),
     // Attempts that ended in an error or a lost worker; bounded by
     // DATA_EXPORT_MAX_FAILURES.
     failures: p.integer("failures").notNull().default(0),
@@ -160,5 +163,18 @@ export const organizationDataExports = p.pgTable(
       sql`${table.versionScope} IN (${sqlValues(DATA_EXPORT_VERSION_SCOPE_VALUES)})`,
     ),
     ...orgPolicies(),
+    // Row-level security is forced, so the table owner needs its own
+    // policies: the review reset clears the table by organization, and the
+    // maintenance sweep reads and updates exports across organizations.
+    ...reviewResetOwnerPolicies("organization_data_exports"),
+    p.pgPolicy("maintenance_owner_select", {
+      for: "select",
+      using: DATA_EXPORT_OWNER_CHECK,
+    }),
+    p.pgPolicy("maintenance_owner_update", {
+      for: "update",
+      using: DATA_EXPORT_OWNER_CHECK,
+      withCheck: DATA_EXPORT_OWNER_CHECK,
+    }),
   ],
 );

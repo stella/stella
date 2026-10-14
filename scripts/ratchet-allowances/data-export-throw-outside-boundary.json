@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 1,
+  "reason": "openS3ObjectStream in s3.ts throws inside the documents-credentials run callback, which retries and classifies failures through rejection like the neighbouring bounded readers; the caller converts the rejection into a manifest problem."
+}

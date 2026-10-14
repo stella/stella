@@ -21,10 +21,7 @@ import type {
   SourceMatterSummary,
   SourceOrganizationRecords,
 } from "@/api/handlers/data-exports/build-export";
-import {
-  DATA_EXPORT_JSON_SCHEMA_PATH,
-  buildDataExportJsonSchema,
-} from "@/api/handlers/data-exports/manifest-json-schema";
+import { buildDataExportJsonSchema } from "@/api/handlers/data-exports/manifest-json-schema";
 import {
   dataExportManifestSchema,
   partManifestSchema,
@@ -428,13 +425,20 @@ describe("organisation data export builder", () => {
     });
     const { manifest, zips } = await run(world);
     expect(
-      manifest.problems.map(({ fileId, reason }) => ({ fileId, reason })),
+      manifest.problems.map((problem) =>
+        problem.reason === "matter_unavailable"
+          ? { matterId: problem.matterId, reason: problem.reason }
+          : { fileId: problem.fileId, reason: problem.reason },
+      ),
     ).toEqual([
       { fileId: "file-1", reason: "missing" },
       { fileId: "file-2", reason: "fetch_failed" },
       { fileId: "file-4", reason: "checksum_mismatch" },
     ]);
     for (const problem of manifest.problems) {
+      if (problem.reason === "matter_unavailable") {
+        throw new Error("no matter was planned away in this world");
+      }
       const entry = zips[0]?.file(problem.path) ?? null;
       if (problem.reason === "checksum_mismatch") {
         // Shipped as stored, so the person can still inspect it.
@@ -461,9 +465,11 @@ describe("organisation data export builder", () => {
       partTargetBytes: 10,
       completedParts: [firstPart],
     });
-    expect([...resumed.memory.parts.keys()]).toEqual([
-      first.manifest.parts[1]?.fileName,
-    ]);
+    const secondPart = first.manifest.parts.at(1);
+    if (secondPart === undefined) {
+      throw new Error("expected a second part");
+    }
+    expect([...resumed.memory.parts.keys()]).toEqual([secondPart.fileName]);
     expect(resumed.checkpoints.map((part) => part.index)).toEqual([2]);
     expect(resumed.manifest.parts.map((part) => part.sha256)).toEqual(
       first.manifest.parts.map((part) => part.sha256),
@@ -510,7 +516,10 @@ describe("organisation data export builder", () => {
       partTargetBytes: 10,
     });
     const committed: unknown = await Bun.file(
-      `${import.meta.dir}/../../../../../${DATA_EXPORT_JSON_SCHEMA_PATH}`,
+      new URL(
+        "../../../../../docs/data-export/stella-data-export.v1.schema.json",
+        import.meta.url,
+      ),
     ).json();
     // Drift guard: the published schema is exactly what the contract derives.
     expect(committed).toEqual(buildDataExportJsonSchema());
