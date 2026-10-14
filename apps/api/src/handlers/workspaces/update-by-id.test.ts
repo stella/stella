@@ -99,7 +99,8 @@ describe("updateWorkspace", () => {
       select: () => ({
         from: () => ({
           where: () => ({
-            for: async () =>
+            // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the row promise and drop the limit the contact lookup chains
+            for: () =>
               Object.assign(Promise.resolve([workspaceRow]), {
                 limit: async () => [],
               }),
