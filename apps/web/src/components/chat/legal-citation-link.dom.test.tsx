@@ -692,3 +692,21 @@ test("reply markdown and clarification analysis share bare-domain chips without 
   });
   expect(view.container.querySelector("img")).toBeNull();
 });
+
+test("relative Markdown destinations retain their original href through citation classification", async () => {
+  const label = "Relative source";
+  const href = "/github.com/stella";
+  const view = await renderChat(
+    <StreamdownMentionLink href={href} interactive>
+      {label}
+    </StreamdownMentionLink>,
+  );
+  const link = view.getByRole("link", { name: label });
+  expect(link.getAttribute("href")).toBe(href);
+  expect(
+    new URL(link.getAttribute("href") ?? "", window.location.href).origin,
+  ).toBe(window.location.origin);
+  expect(link.querySelector("svg")).toBeNull();
+  expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+  expect(link.getAttribute("target")).toBe("_blank");
+});

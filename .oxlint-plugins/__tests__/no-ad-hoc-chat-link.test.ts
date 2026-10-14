@@ -30,6 +30,25 @@ describe.serial(RULE_NAME, () => {
     expect(await lint(source)).toEqual([]);
   });
 
+  test("ignores anchors without an href", async () => {
+    expect(await lint("export const Label = () => <a>Label</a>;")).toEqual([]);
+    expect(
+      await lint('export const Label = () => <a id="label">Label</a>;'),
+    ).toEqual([]);
+  });
+
+  test("uses the final href contributor after JSX spreads", async () => {
+    const source = [
+      "export const One = () => <a {...props}>Link</a>;",
+      'export const Two = () => <a href="#section" {...props}>Link</a>;',
+      'export const Three = () => <a href="/matter" {...props}>Link</a>;',
+      'export const Four = () => <a {...props} href="#section">Link</a>;',
+      'export const Five = () => <a {...props} href="/matter">Link</a>;',
+      'export const Six = () => <a href="#section" href="https://example.org">Link</a>;',
+    ].join("\n");
+    expect(await lint(source)).toEqual([1, 2, 3, 6]);
+  });
+
   test("allows the shared anchor owner only", async () => {
     const source = "export const Link = () => <a href={href}>Title</a>;";
     expect(await lint(source, "packages/chat/src/link.tsx")).toEqual([]);
@@ -48,7 +67,12 @@ describe.serial(RULE_NAME, () => {
       'export const Two = () => <a href={sanitizeHref(citation.url)} target="_blank">Citation</a>;',
       "export const Three = () => <a href={sanitizeHref(citation.source_url)}>Source</a>;",
       "export const Four = () => <a href={sanitizeHref(citation.url)} {...props}>Citation</a>;",
+      "export const Five = () => <a {...props} href={sanitizeHref(citation.url)}>Citation</a>;",
+      "export const Six = () => <a {...props} href={sanitizeHref(citation.source_url)}>Source</a>;",
+      "export const Seven = () => <a {...props} href={sanitizeHref(citation.url)} target={target}>Citation</a>;",
     ].join("\n");
-    expect(await lint(source, "legal-citation-link.tsx")).toEqual([2, 3, 4]);
+    expect(await lint(source, "legal-citation-link.tsx")).toEqual([
+      2, 3, 4, 5, 6, 7,
+    ]);
   });
 });

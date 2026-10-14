@@ -29,6 +29,7 @@ type StatuteCitationLinks = Extract<LegalCitationLinks, { type: "statute" }>;
 
 type LegalCitationLinkProps = {
   source: ExternalSourceReference;
+  externalHref?: string;
   children: ReactNode;
   interactive: boolean;
   appearance: "inline" | "tray";
@@ -230,7 +231,10 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     return citation.url === null ? (
       <span>{props.children}</span>
     ) : (
-      <ChatLink href={citation.url} newTabLabel={t("common.openInNewTab")}>
+      <ChatLink
+        href={props.externalHref ?? citation.url}
+        newTabLabel={t("common.openInNewTab")}
+      >
         {props.children}
       </ChatLink>
     );

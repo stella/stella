@@ -4,6 +4,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const { cleanup, fireEvent, render } = await import("@testing-library/react");
 const { ChatLink } = await import("@stll/chat/link");
+const { EntityLink } = await import("./entity-link");
 const locales = [
   { locale: "en", catalogue: (await import("@/i18n/langs/en.json")).default },
   { locale: "cs", catalogue: (await import("@/i18n/langs/cs.json")).default },
@@ -138,3 +139,38 @@ test("a root-relative path containing a public hostname retains the current orig
   ).toBe(window.location.origin);
   expect(link.querySelector("svg")).toBeNull();
 });
+
+for (const href of ["www.github.com/stella/stella", "/github.com/stella"]) {
+  test(`entity links preserve anchor attributes and safe navigation for ${href}`, () => {
+    let clicks = 0;
+    const label = "Accessible source";
+    const view = render(
+      <EntityLink
+        aria-label={label}
+        href={href}
+        className="font-bold"
+        id="source-anchor"
+        onClick={(event) => {
+          event.preventDefault();
+          clicks += 1;
+        }}
+        rel="opener"
+        target="_self"
+        title="Source details"
+      >
+        {label}
+      </EntityLink>,
+    );
+    const link = view.getByRole("link", { name: label });
+    expect(link.id).toBe("source-anchor");
+    expect(link.getAttribute("title")).toBe("Source details");
+    expect(link.getAttribute("href")).toBe(
+      href.startsWith("/") ? href : `https://${href}`,
+    );
+    expect(link.classList.contains("font-bold")).toBe(false);
+    expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+    expect(link.getAttribute("target")).toBe("_blank");
+    fireEvent.click(link);
+    expect(clicks).toBe(1);
+  });
+}

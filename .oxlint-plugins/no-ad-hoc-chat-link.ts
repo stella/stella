@@ -35,14 +35,20 @@ export default eslintCompatPlugin({
             if (filename.endsWith(OWNER_PATH) || jsxName(node.name) !== "a") {
               return;
             }
-            const href = node.attributes.find(
+            const finalHrefOrSpread = node.attributes.findLast(
               (attribute) =>
-                attribute.type === "JSXAttribute" &&
-                attribute.name.type === "JSXIdentifier" &&
-                attribute.name.name === "href",
+                attribute.type === "JSXSpreadAttribute" ||
+                (attribute.name.type === "JSXIdentifier" &&
+                  attribute.name.name === "href"),
             );
-            const value =
-              href?.type === "JSXAttribute" ? href.value : undefined;
+            if (!finalHrefOrSpread) {
+              return;
+            }
+            if (finalHrefOrSpread.type === "JSXSpreadAttribute") {
+              context.report({ node, messageId: "sharedLink" });
+              return;
+            }
+            const value = finalHrefOrSpread.value;
             // Same-document navigation is not an external-link presentation.
             if (
               value?.type === "Literal" &&

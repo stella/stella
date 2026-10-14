@@ -1,5 +1,5 @@
 import { isValidElement, useState } from "react";
-import type { ReactNode } from "react";
+import type { AnchorHTMLAttributes, ReactNode } from "react";
 
 import { GitHubLogoIcon, XLogoIcon } from "@stll/ui/brand-icons";
 import { GlobeIcon } from "@stll/ui/icons";
@@ -47,17 +47,23 @@ const ProxyIcon = ({ src }: { src: string }) => {
 
 export type ChatLinkIconSource = { type: "proxy"; src: string };
 
+type ChatLinkProps = Omit<
+  AnchorHTMLAttributes<HTMLAnchorElement>,
+  "href" | "target" | "rel" | "className"
+> & {
+  href: string;
+  iconSource?: ChatLinkIconSource;
+  newTabLabel?: string;
+};
+
 export const ChatLink = ({
   children,
   href,
   iconSource,
   newTabLabel,
-}: {
-  children?: ReactNode;
-  href: string;
-  iconSource?: ChatLinkIconSource;
-  newTabLabel?: string;
-}) => {
+  title,
+  ...anchorProps
+}: ChatLinkProps) => {
   const target = normalizeChatLink(href);
   if (!target) {
     const parsed = URL.canParse(href) ? new URL(href) : null;
@@ -67,7 +73,14 @@ export const ChatLink = ({
       return <span>{children ?? href}</span>;
     }
     return (
-      <a className={CHAT_LINK_CLASS_NAME} href={href} {...CHAT_LINK_ATTRIBUTES}>
+      <a
+        {...anchorProps}
+        title={newTabLabel ?? title}
+        className={CHAT_LINK_CLASS_NAME}
+        href={href}
+        target={CHAT_LINK_ATTRIBUTES.target}
+        rel={CHAT_LINK_ATTRIBUTES.rel}
+      >
         <bdi>{children ?? href}</bdi>
       </a>
     );
@@ -94,10 +107,12 @@ export const ChatLink = ({
   }
   return (
     <a
-      title={newTabLabel}
+      {...anchorProps}
+      title={newTabLabel ?? title}
       className={CHAT_LINK_CLASS_NAME}
       href={target.href}
-      {...CHAT_LINK_ATTRIBUTES}
+      target={CHAT_LINK_ATTRIBUTES.target}
+      rel={CHAT_LINK_ATTRIBUTES.rel}
     >
       <span aria-hidden="true" className="me-1 inline-block align-[-0.125em]">
         {icon}

@@ -686,6 +686,7 @@ const ExternalCitationLink = ({
     <LegalCitationLink
       appearance="inline"
       interactive={interactive}
+      externalHref={href}
       source={source ?? { title: inlineLabel || hostname, url: url.toString() }}
       workspaceId={workspaceId}
     >

@@ -9,6 +9,7 @@ export const EntityLink = ({
   href,
   children,
   workspaceId,
+  ...anchorProps
 }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
   workspaceId?: string | undefined;
 }) => {
@@ -20,5 +21,9 @@ export const EntityLink = ({
     );
   }
 
-  return <ChatLink href={href ?? ""}>{children}</ChatLink>;
+  return (
+    <ChatLink {...anchorProps} href={href ?? ""}>
+      {children}
+    </ChatLink>
+  );
 };
