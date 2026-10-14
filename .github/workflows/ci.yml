@@ -3970,6 +3970,9 @@ jobs:
           bun --filter @stll/ai-catalog check:generations --check
 
       - name: Model task default evidence guard
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
           bun --filter @stll/ai-catalog check:defaults --self-test
