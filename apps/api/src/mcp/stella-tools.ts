@@ -82,6 +82,7 @@ import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidan
 import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
+  partialMatchesAppendedWarning,
   provisionCitedWidelyWarning,
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
@@ -1962,6 +1963,8 @@ type CaseLawSearchHit = SearchCaseLawSuccess["hits"][number];
  */
 type MergedCaseLawHit = {
   hit: CaseLawSearchHit;
+  /** `all_terms` when any query returned the decision as holding every word. */
+  match: CaseLawSearchHit["match"];
   matchedQueries: number[];
   rank: number;
 };
@@ -1990,11 +1993,19 @@ const mergeCaseLawSearchHits = (
     for (const [rank, hit] of hits.entries()) {
       const seen = merged.get(hit.decisionId);
       if (seen === undefined) {
-        merged.set(hit.decisionId, { hit, matchedQueries: [queryIndex], rank });
+        merged.set(hit.decisionId, {
+          hit,
+          match: hit.match,
+          matchedQueries: [queryIndex],
+          rank,
+        });
         continue;
       }
       // Queries are walked in index order, so this stays ascending.
       seen.matchedQueries.push(queryIndex);
+      if (hit.match === "all_terms") {
+        seen.match = "all_terms";
+      }
       if (rank < seen.rank) {
         seen.hit = hit;
         seen.rank = rank;
@@ -2005,6 +2016,11 @@ const mergeCaseLawSearchHits = (
   // is an opaque key, and all the order has to be is total and stable.
   return [...merged.values()].toSorted(
     (left, right) =>
+      // Partial matches follow every full match: within one query they are
+      // appended after it, and ranks of different queries are not comparable
+      // across that line.
+      Number(left.match === "some_terms") -
+        Number(right.match === "some_terms") ||
       left.rank - right.rank ||
       right.matchedQueries.length - left.matchedQueries.length ||
       (left.hit.decisionId < right.hit.decisionId ? -1 : 1),
@@ -2364,8 +2380,25 @@ const manyRequiredTermsWarnings = ({
       ];
 };
 
+/** `partial_matches_appended` for a phrasing whose page holds partial matches. */
+const partialMatchWarnings = (
+  hits: readonly CaseLawSearchHit[],
+): AgentCaseLawSearchWarning[] => {
+  const partial = hits.filter((hit) => hit.match === "some_terms").length;
+  return partial === 0 ? [] : [partialMatchesAppendedWarning({ partial })];
+};
+
+/** What a phrasing's page says beyond its filters, read from the page alone. */
+const phrasingAnswerWarnings = (
+  options: ManyRequiredTermsOptions,
+): AgentCaseLawSearchWarning[] => [
+  ...manyRequiredTermsWarnings(options),
+  ...partialMatchWarnings(options.page.hits),
+];
+
 const caseLawSearchResult = ({
   hit,
+  match,
   matchedQueries,
 }: ReturnType<typeof mergeCaseLawSearchHits>[number]) => {
   const resource = resourceRef({
@@ -2398,6 +2431,7 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
+    match,
     ...(hit.textWithheldReason === null
       ? {
           snippet: toPlainTextSnippet(hit.headline),
@@ -2785,7 +2819,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           ...outcome.page.warnings.map((warning) =>
             withFacetValues(warning, values),
           ),
-          ...manyRequiredTermsWarnings({
+          ...phrasingAnswerWarnings({
             guidance,
             subCursor,
             page: outcome.page,

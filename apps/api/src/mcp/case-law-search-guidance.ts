@@ -45,11 +45,11 @@ const DESCRIPTION_HEAD =
 const DESCRIPTION_TAIL =
   " Filters: court, language, dates, decision type, provision, " +
   "source_id (a `facets.source` bucket's `value`). Facets describe the " +
-  "first phrasing on page one, null later. Total is uncounted for " +
+  "first phrasing, page one only. Total is uncounted for " +
   "multiple phrasings. Function words are not required terms; " +
   "`searches[]` gives each phrasing's `queryUsed` and warnings, and " +
-  "`strict` requires every word. Hits carry citationAuthority " +
-  "(blended into ranking), matchingPassages, resourceName and caseNumber " +
+  "`strict` requires every word. Hits carry citationAuthority, " +
+  "matchingPassages, match (some_terms: not all words), resourceName and caseNumber " +
   "(a citable reference, not always a docket). read_case_law_decision " +
   "types it; read_case_law_citations " +
   "gives citing polarity.";

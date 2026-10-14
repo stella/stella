@@ -116,12 +116,16 @@ export const caseLawSearchWarnings = ({
  * - `provision_cited_widely`: the provision filter is cited by more decisions
  *   than one search can filter by, so the page holds the topic's best matches
  *   that cite it rather than every one; the count and the narrowing are said.
+ * - `partial_matches_appended`: a short, exhausted first page was topped up
+ *   with decisions that hold only some of the query's words. Each such hit is
+ *   marked `some_terms`; the total and facets still describe the strict set.
  */
 export const AGENT_CASE_LAW_SEARCH_WARNING_CODES = [
   "filter_read",
   "filter_dropped",
   "many_required_terms",
   "provision_cited_widely",
+  "partial_matches_appended",
 ] as const;
 
 type AgentCaseLawSearchWarningCode =
@@ -205,6 +209,17 @@ export const provisionCitedWidelyWarning = ({
   hint: "Add a subsection or letter to the provision, or more topic words, to narrow; or omit queries to list every decision citing it, with an exact total.",
 });
 
+export const partialMatchesAppendedWarning = ({
+  partial,
+}: {
+  /** How many hits on the page hold only some of the query's words. */
+  partial: number;
+}): AgentCaseLawSearchWarning => ({
+  code: "partial_matches_appended",
+  message: `Few decisions held every word, so ${String(partial)} hit${partial === 1 ? "" : "s"} marked match "some_terms" ${partial === 1 ? "was" : "were"} appended after the ones that did; the total and facets count only the decisions holding every word.`,
+  hint: 'Read the "all_terms" hits first; judge each "some_terms" hit by its snippet, or pass strict: true to search only for decisions holding every word.',
+});
+
 /**
  * The values a facet counted for an empty page's filters, appended to its
  * `no_hits_filtered` hint so the next call can pick a value that exists
@@ -260,6 +275,7 @@ export const AGENT_CASE_LAW_SEARCH_WARNING_PRODUCERS = {
       provision: "§ 2910 OZ",
       citingDecisions: 4037,
     }),
+  partial_matches_appended: () => partialMatchesAppendedWarning({ partial: 3 }),
   many_required_terms: () =>
     manyRequiredTermsWarning({
       terms: [

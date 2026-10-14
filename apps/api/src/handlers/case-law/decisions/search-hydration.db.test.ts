@@ -1411,6 +1411,7 @@ test("index search hits carry source text disposition and retain human excerpts"
       ),
     ),
     total: SEARCH_TOTAL_NOT_COUNTED,
+    match: "all_terms",
   });
   expect(
     page.hits.map(({ decisionId, textWithheldReason }) => ({

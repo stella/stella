@@ -247,6 +247,40 @@ test("the assembler ANDs filter clauses onto the free-text clause", () => {
   );
 });
 
+test("the assembler ORs the words under match any and leaves the filters ANDed", () => {
+  const filters = { jurisdiction: "CZE", language: "cs" };
+  const strict = caseLawCorpusQuery({
+    jurisdiction: undefined,
+    text: "promlčení náhrada škody",
+    filters,
+  });
+  const relaxed = caseLawCorpusQuery({
+    jurisdiction: undefined,
+    text: "promlčení náhrada škody",
+    filters,
+    match: "any",
+  });
+  expect(relaxed).toBe(
+    '("promlčení" OR "náhrada" OR "škody")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND language:"cs"',
+  );
+  // Asking for "all" explicitly is the default, byte for byte.
+  expect(
+    caseLawCorpusQuery({
+      jurisdiction: undefined,
+      text: "promlčení náhrada škody",
+      filters,
+      match: "all",
+    }),
+  ).toBe(strict);
+  expect(strict).toBe(
+    '("promlčení" AND "náhrada" AND "škody")' +
+      ' AND jurisdiction:"CZE"' +
+      ' AND language:"cs"',
+  );
+});
+
 test("a decision id set is a quoted term-set filter on the decision id", () => {
   expect(
     caseLawCorpusQuery({

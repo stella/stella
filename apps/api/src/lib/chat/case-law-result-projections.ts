@@ -16,6 +16,7 @@ import {
 import type { SearchTotal } from "@stll/api-contract/search";
 import { DECISION_PRIMARY_REFERENCE_TYPES } from "@stll/legal-ast/decision-identifier";
 
+import { DECISION_SEARCH_MATCHES } from "../case-law/search-match";
 import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "../case-law/search-warnings";
 import { SEARCH_PAGINATION_OUTCOME_SCHEMA } from "../search/pagination-outcome-projection";
 import { CASE_LAW_COURT_PROJECTION } from "./case-law-court-projection";
@@ -115,6 +116,9 @@ const caseLawSearchIdentityFields = {
   matchedQueries: v.array(v.number()),
   // Passages of the decision that matched, within the scanned window.
   matchingPassages: v.number(),
+  // Whether the decision holds every word of the query, or only some of them
+  // (appended after the others when few decisions held every word).
+  match: v.picklist(DECISION_SEARCH_MATCHES),
   // The publisher's own decision URL, which may embed the publisher's
   // own UUID — never a Stella tenant id, so it is forwarded unchanged.
   sourceUrl: v.nullable(publicUrl()),

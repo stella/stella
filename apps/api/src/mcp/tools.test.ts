@@ -2502,6 +2502,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           keywords: null,
           matchingPassages: 4,
+          match: "all_terms",
           languageAlternates: [
             {
               caseNumber: "29 Cdo 123/2024",
@@ -2626,6 +2627,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           keywords: null,
           matchingPassages: 4,
+          match: "all_terms",
           snippet: 'Relevant holding on "smlouva"',
           sourceUrl: "https://example.test/decision",
         },
@@ -2695,6 +2697,7 @@ describe("OpenAI-compatible MCP tools", () => {
       },
       keywords: { type: "keywords", items: ["Licensed keyword"], omitted: 0 },
       matchingPassages: 1,
+      match: "all_terms",
       languageAlternates: [],
       slug: "stable-official-slug",
       sourceUrl: "https://example.test/decision",
@@ -2885,6 +2888,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headnote: { type: "absent", reason: "not_published" },
           keywords: null,
           matchingPassages: 1,
+          match: "all_terms",
           slug: "stable-official-slug",
           sourceUrl: "https://example.test/decision",
         },
@@ -2943,6 +2947,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headnote: null,
           keywords: null,
           matchingPassages: 1,
+          match: "all_terms",
           snippet: "Relevant holding",
           sourceUrl: "https://example.test/decision",
         },
@@ -2950,6 +2955,76 @@ describe("OpenAI-compatible MCP tools", () => {
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
+  });
+
+  test("search_case_law marks partial matches and warns when any were appended", async () => {
+    const PARTIAL_ID = "f9c1f1a4-0a4f-4d7e-8a53-1d3b2f6a9e10";
+    const baseHit = {
+      caseNumber: "29 Cdo 123/2024",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationAuthority: 1,
+      citationCount: 1,
+      country: "CZE",
+      court: "Nejvyšší soud",
+      courtAbbreviation: "NS",
+      decisionDate: "2024-02-01",
+      decisionId: DECISION_ID,
+      decisionType: "judgment",
+      ecli: null,
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: "29 Cdo 123/2024",
+        },
+      ],
+      headline: "<mark>holding</mark>",
+      textWithheldReason: null,
+      language: "cs",
+      headnote: { type: "absent", reason: "not_published" },
+      keywords: null,
+      matchingPassages: 1,
+      match: "all_terms",
+      slug: "stable-official-slug",
+      sourceUrl: "https://example.test/decision",
+    };
+    searchDecisionsHandlerMock.mockResolvedValue({
+      paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+      facets: null,
+      hits: [
+        baseHit,
+        {
+          ...baseHit,
+          decisionId: PARTIAL_ID,
+          caseNumber: "29 Cdo 124/2024",
+          slug: "other-official-slug",
+          match: "some_terms",
+        },
+      ],
+      nextCursor: null,
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
+      queryUsed: "shareholder dispute",
+      warnings: [],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { country: "CZE", queries: ["shareholder dispute"] },
+      context: createContext(),
+      toolName: "search_case_law",
+    });
+
+    const payload = parseToolPayload(result) as {
+      results: { decisionId: string; match: string }[];
+      searches: { warnings: { code: string }[] }[];
+    };
+    expect(
+      payload.results.map(({ decisionId, match }) => ({ decisionId, match })),
+    ).toEqual([
+      { decisionId: DECISION_ID, match: "all_terms" },
+      { decisionId: PARTIAL_ID, match: "some_terms" },
+    ]);
+    expect(payload.searches.at(0)?.warnings.map(({ code }) => code)).toEqual([
+      "partial_matches_appended",
+    ]);
   });
 
   test("pending public countries return typed unavailable through real MCP output contracts", async () => {
@@ -3008,6 +3083,7 @@ describe("OpenAI-compatible MCP tools", () => {
     headnote: { type: "absent", reason: "not_published" },
     keywords: null,
     matchingPassages: 1,
+    match: "all_terms",
     slug: `slug-${decisionId}`,
     sourceUrl: "https://example.test/decision",
   });
@@ -3499,6 +3575,7 @@ describe("OpenAI-compatible MCP tools", () => {
               headnote: { type: "absent", reason: "not_published" },
               keywords: null,
               matchingPassages: 1,
+              match: "all_terms",
               slug: "stable-official-slug",
               sourceUrl: "https://example.test/decision",
             },

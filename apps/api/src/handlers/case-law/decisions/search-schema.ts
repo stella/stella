@@ -29,6 +29,7 @@ import { tDecisionPageOffset } from "@/api/lib/case-law/decision-page-offset";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { caseLawProvisionFilterSchema } from "@/api/lib/case-law/provision-filter";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
+import { DECISION_SEARCH_MATCHES } from "@/api/lib/case-law/search-match";
 import { searchSortSchema } from "@/api/lib/case-law/search-sort-schema";
 import {
   tPaginationCursor,
@@ -280,6 +281,10 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
           // window: breadth, not weight. One on the Postgres branch and on an
           // identifier lookup, which score whole decisions.
           matchingPassages: Type.Integer({ minimum: 1 }),
+          // Whether the decision holds every word of the query, or only some
+          // of them: a short first page is topped up with the latter, after
+          // every hit of the former.
+          match: t.UnionEnum([...DECISION_SEARCH_MATCHES]),
           createdAt: boundedString(bytes.date),
         },
         { additionalProperties: false },

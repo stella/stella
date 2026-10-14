@@ -220,6 +220,7 @@ const canonicalSearchHit = {
   citationAuthority: 0,
   citationCount: 0,
   matchingPassages: 1,
+  match: "all_terms",
 } satisfies PublicLawData<
   typeof api.case.decisions.search.post
 >["hits"][number];
