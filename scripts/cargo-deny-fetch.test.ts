@@ -31,7 +31,11 @@ attempts="$(grep -c "^deny" "$FETCH_TEST_CALLS")"
 const CRATES = "fetch --locked --manifest-path app/Cargo.toml";
 const ADVISORIES = "deny --manifest-path app/Cargo.toml fetch db index";
 
-const runFetch = (succeedOn: number, crates: "ok" | "down" = "ok") => {
+const runFetch = (
+  succeedOn: number,
+  crates: "ok" | "down" = "ok",
+  sources: string[] = ["db", "index"],
+) => {
   const directory = mkdtempSync(path.join(tmpdir(), "cargo-deny-fetch-"));
   const commands = path.join(directory, "commands");
   const calls = path.join(directory, "calls");
@@ -40,7 +44,7 @@ const runFetch = (succeedOn: number, crates: "ok" | "down" = "ok") => {
     writeFileSync(path.join(commands, "cargo"), cargo);
     chmodSync(path.join(commands, "cargo"), 0o755);
     writeFileSync(calls, "");
-    const result = spawnSync("bash", [script, "app/Cargo.toml"], {
+    const result = spawnSync("bash", [script, "app/Cargo.toml", ...sources], {
       encoding: "utf-8",
       env: {
         ...process.env,
@@ -68,6 +72,12 @@ test("dependency crates are fetched before the advisory database", () => {
   const result = runFetch(1);
   expect(result.status).toBe(0);
   expect(result.calls).toEqual([CRATES, ADVISORIES]);
+});
+
+test("without named sources only the dependency crates are fetched", () => {
+  const result = runFetch(1, "ok", []);
+  expect(result.status).toBe(0);
+  expect(result.calls).toEqual([CRATES]);
 });
 
 test("a transient fetch failure is retried until the download succeeds", () => {

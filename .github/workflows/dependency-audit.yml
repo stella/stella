@@ -128,7 +128,7 @@ jobs:
       - name: Fetch dependencies and advisory database
         env:
           CARGO_NET_RETRY: "5"
-        run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml
+        run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml db index
 
       - name: Save advisory database
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0

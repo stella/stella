@@ -9242,9 +9242,17 @@ jobs:
         if: matrix.os == 'macos'
         uses: ./.github/actions/cargo-deny
 
-      # Offline and deterministic: licenses, bans and sources read only the
-      # resolved dependency graph. Advisories need the published advisory
-      # database, so they run on the Dependency Audit schedule instead.
+      # Licenses, bans and sources read only the resolved dependency graph.
+      # The graph's crates for every target are fetched first with bounded
+      # retries; the check then runs once, offline. Advisories need the
+      # published advisory database, so they run on the Dependency Audit
+      # schedule instead.
+      - name: Fetch license audit inputs
+        if: matrix.os == 'macos'
+        env:
+          CARGO_NET_RETRY: "5"
+        run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml
+
       - name: License audit
         if: matrix.os == 'macos'
         run: cargo deny --offline --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph bans licenses sources
