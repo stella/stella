@@ -397,6 +397,7 @@ be demoted in place. Back up the database and stop the API during this cutover.
 
    Run this command only once. It preserves the initdb role as a passwordless
    `NOLOGIN` maintenance role; do not use that role in `DATABASE_URL`.
+
 3. Set Postgres `POSTGRES_USER=stella_owner` (and `PGUSER=stella_owner` if it is
    not a reference to `POSTGRES_USER`). Keep the password and database name.
    With the manifest's references, this changes `Postgres.DATABASE_URL` and the
