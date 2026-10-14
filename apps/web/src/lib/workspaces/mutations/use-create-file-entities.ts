@@ -29,7 +29,7 @@ import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
-import { retainActiveUpload } from "@/lib/uploads/active-uploads";
+import { withActiveUpload } from "@/lib/uploads/active-uploads";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
@@ -452,12 +452,7 @@ export const uploadFileEntitiesBatched = async (
     return [];
   }
 
-  const releaseActiveUpload = retainActiveUpload();
-  try {
-    return await runUploadBatch(options);
-  } finally {
-    releaseActiveUpload();
-  }
+  return await withActiveUpload(async () => await runUploadBatch(options));
 };
 
 const runUploadBatch = async ({

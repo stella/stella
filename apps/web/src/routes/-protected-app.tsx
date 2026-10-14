@@ -27,14 +27,14 @@ import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
 import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
 import { AppSidebar } from "@/components/app-sidebar";
-import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
 import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
-import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
+import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
+import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";

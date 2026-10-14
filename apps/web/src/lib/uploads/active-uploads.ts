@@ -31,6 +31,22 @@ export const retainActiveUpload = (): (() => void) => {
   };
 };
 
+/**
+ * Run one upload whose bytes live only in this page, counted as in flight
+ * until it settles. Every matter-file upload (new files and new versions)
+ * goes through here so a reload cannot drop it without a prompt.
+ */
+export const withActiveUpload = async <T>(
+  upload: () => Promise<T>,
+): Promise<T> => {
+  const release = retainActiveUpload();
+  try {
+    return await upload();
+  } finally {
+    release();
+  }
+};
+
 /** Test seam. Production batches release themselves. */
 export const resetActiveUploadsForTests = (): void => {
   useActiveUploadStore.setState({ count: 0 });

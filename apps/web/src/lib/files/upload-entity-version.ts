@@ -6,6 +6,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
+import { withActiveUpload } from "@/lib/uploads/active-uploads";
 
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
@@ -51,29 +52,13 @@ const abortUpload = async (
   }
 };
 
-/** Upload transformed bytes as a new version through the canonical file path. */
-export const uploadEntityVersion = async ({
+/** Hash, stage, and finalize the version bytes; the page holds them until this settles. */
+const putEntityVersion = async ({
   workspaceId,
   entityId,
-  file,
+  file: fileToUpload,
   signal,
 }: UploadEntityVersionOptions): Promise<EntityVersionUploadResult> => {
-  signal?.throwIfAborted();
-  const preflight = await preflightAttachedTemplateUpload([file]);
-  let fileToUpload: File;
-  switch (preflight.type) {
-    case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.cancelled:
-      return { type: ENTITY_VERSION_UPLOAD_RESULT.cancelled };
-    case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.ready:
-      fileToUpload = preflight.replacements.get(file) ?? file;
-      break;
-    default:
-      preflight satisfies never;
-      return panic(
-        `Unhandled attached-template preflight: ${String(preflight)}`,
-      );
-  }
-
   signal?.throwIfAborted();
   const sha256Hex = await hashSha256Hex(fileToUpload);
   signal?.throwIfAborted();
@@ -115,4 +100,38 @@ export const uploadEntityVersion = async ({
       }),
   });
   return { type: ENTITY_VERSION_UPLOAD_RESULT.uploaded };
+};
+
+/** Upload transformed bytes as a new version through the canonical file path. */
+export const uploadEntityVersion = async ({
+  workspaceId,
+  entityId,
+  file,
+  signal,
+}: UploadEntityVersionOptions): Promise<EntityVersionUploadResult> => {
+  signal?.throwIfAborted();
+  const preflight = await preflightAttachedTemplateUpload([file]);
+  let fileToUpload: File;
+  switch (preflight.type) {
+    case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.cancelled:
+      return { type: ENTITY_VERSION_UPLOAD_RESULT.cancelled };
+    case ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT.ready:
+      fileToUpload = preflight.replacements.get(file) ?? file;
+      break;
+    default:
+      preflight satisfies never;
+      return panic(
+        `Unhandled attached-template preflight: ${String(preflight)}`,
+      );
+  }
+
+  return await withActiveUpload(
+    async () =>
+      await putEntityVersion({
+        entityId,
+        file: fileToUpload,
+        signal,
+        workspaceId,
+      }),
+  );
 };
