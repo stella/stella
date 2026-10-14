@@ -42,6 +42,7 @@ import {
   requiresPackageChecks,
 } from "./ci-package-scope";
 import { extractPlanSelector } from "./ci-plan-selector";
+import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { routeSmokeAffected } from "./detect-route-smoke-changes";
 import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
@@ -393,12 +394,31 @@ test("every release requires both final image smokes regardless of other changed
 }, 30_000);
 
 test("API image construction and smoke orchestration changes require the final image", () => {
+  const block = GENERATORS.find(
+    ({ id }) => id === "api-image-install-tooling",
+  )?.blocks?.at(0);
+  if (block === undefined) {
+    panic("Missing API install tooling generator");
+  }
+  const dockerfile = readFileSync(
+    new URL(`../${block.path}`, import.meta.url),
+    "utf-8",
+  );
+  const copies = dockerfile.slice(
+    dockerfile.indexOf(block.begin),
+    dockerfile.indexOf(block.end),
+  );
+  const toolingFiles = [...copies.matchAll(/^COPY (\S+) \S+$/gmu)].map(
+    (match) => match.at(1) ?? panic("Missing generated COPY source"),
+  );
+  expect(toolingFiles.length).toBeGreaterThan(0);
   for (const file of [
     "apps/api/Dockerfile",
     "scripts/smoke-api-image.sh",
     ".dockerignore",
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
+    ...toolingFiles,
   ]) {
     expect(imageSmokePlan([file]).at(0), file).toBe("true");
   }
@@ -2239,6 +2259,7 @@ const jobSteps = (job: unknown) =>
       steps: v.pipe(
         v.unknown(),
         v.transform(flattenWorkflowSteps),
+        v.transform((steps) => steps.map(withoutStaticReuseCondition)),
         v.array(
           v.object({
             name: v.optional(v.string()),
@@ -2953,6 +2974,17 @@ const annotate = (logs: { build?: string; smoke?: string }) => {
 };
 
 test("a failed API image run annotates the failing lines, escaped", () => {
+  expect(
+    annotate({
+      build: [
+        "#13 120.001 ::error title=install-stall::kind=infra class=install-stall restore=cold idle_ms=120000",
+        "#13 120.002 Install finished; exit 1; signal SIGKILL",
+        "#13 ERROR: process did not complete successfully: exit code: 1",
+      ].join("\n"),
+    }),
+  ).toEqual([
+    "::error title=infra-stall::kind=infra class=install-stall restore=cold idle_ms=120000",
+  ]);
   expect(
     annotate({
       smoke: [
@@ -6010,27 +6042,31 @@ test("unavailable or malformed documentation and landing detectors widen workflo
   }
 });
 
-test("API test matrix drops API shards for web-only scope and keeps four in merge groups", () => {
+test("API test matrix omits unaffected API shards and keeps whole affected merge suites", () => {
   const web = planCiApiTests({
     event: "pull_request",
     scopeUnknown: false,
-    apiInScope: false,
+    testJobs: ["rest-web"],
     select: () => selectApiTestImpact({ changed: ["apps/web/src/page.tsx"] }),
   });
   expect(web.matrix.shard).toEqual(["rest-web"]);
   const queue = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
-    apiInScope: false,
+    testJobs: ["rest-web"],
     select: () => ({ mode: "none", files: [], shards: 0 }),
   });
-  expect(queue.matrix.shard).toEqual([
-    "api-1",
-    "api-2",
-    "api-3",
-    "api-4",
-    "rest-web",
-  ]);
+  expect(queue.matrix.shard).toEqual(["rest-web"]);
+  expect(
+    planCiApiTests({
+      event: "merge_group",
+      scopeUnknown: false,
+      testJobs: FULL_TEST_JOB_SHARDS,
+      select: () => {
+        throw new Error("Merge API files must not be narrowed");
+      },
+    }).matrix.shard,
+  ).toEqual(["api-1", "api-2", "api-3", "api-4", "rest-web"]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
   );
@@ -6238,7 +6274,7 @@ test("API planning only loads dependencies after installation and emits install-
     (step) => step.name === "Select affected API test files",
   );
   expect(select?.if).toBe(
-    "steps.completed-depth.outputs.run_required != 'false' && github.event_name == 'pull_request' && steps.api-test-deps.outcome == 'success'",
+    "steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'",
   );
   const plan = steps.find(
     (step) => step.name === "Plan API test files and shards",

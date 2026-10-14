@@ -1,4 +1,4 @@
-import { installTimeoutMs } from "./ci-install";
+import { installWarningBudgetMs } from "./ci-install";
 import { lexShell } from "./install-free-ci";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
@@ -67,19 +67,28 @@ type ScopedActionValidation = {
   windowsInstall: boolean;
 };
 
-export const SCOPED_INSTALL_STEP_MINUTES = {
-  windows: 5,
-  minimum: 2,
-  maximum: 10,
-} as const;
+type InstallDeadlineValidation = Pick<
+  ScopedActionValidation,
+  "name" | "job" | "step"
+>;
 
-// Linux full-scope cold restore + install measured 19.331 s in benchmark
-// run 38259500894. A 90 s installer cap reserves 30 s inside the 2 minute caller.
-export const SCOPED_INSTALL_PHASE_MS = {
-  restoreVerify: 15_000,
-  cleanup: 15_000,
-  e2eInstaller: 90_000,
-} as const;
+const installDeadlineProblems = ({
+  name,
+  job,
+  step,
+}: InstallDeadlineValidation) => {
+  const problems: string[] = [];
+  if (step["timeout-minutes"] !== undefined) {
+    problems.push(
+      `${name}: install must use the job timeout as its only deadline`,
+    );
+  }
+  const limit = job["timeout-minutes"];
+  if (typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) {
+    problems.push(`${name}: install needs a bounded job timeout`);
+  }
+  return problems;
+};
 
 const scopedActionProblems = ({
   name,
@@ -107,22 +116,7 @@ const scopedActionProblems = ({
   ) {
     problems.push(`${name}: ci-install action needs a retained failure log`);
   }
-  const minimum = windowsInstall
-    ? SCOPED_INSTALL_STEP_MINUTES.windows
-    : SCOPED_INSTALL_STEP_MINUTES.minimum;
-  const maximum = windowsInstall
-    ? minimum
-    : SCOPED_INSTALL_STEP_MINUTES.maximum;
-  const limit = step["timeout-minutes"];
-  if (
-    typeof limit !== "number" ||
-    limit < minimum ||
-    limit > maximum ||
-    (typeof job["timeout-minutes"] === "number" &&
-      limit >= job["timeout-minutes"])
-  ) {
-    problems.push(`${name}: install needs a bounded step timeout`);
-  }
+  problems.push(...installDeadlineProblems({ name, job, step }));
   const requested = inputs["installer-budget-ms"];
   if (requested !== undefined && typeof requested !== "string") {
     problems.push(
@@ -130,24 +124,11 @@ const scopedActionProblems = ({
     );
     return problems;
   }
-  let installerMs: number;
   try {
-    installerMs = installTimeoutMs(
-      windowsInstall ? "win32" : "linux",
-      requested,
-    );
+    installWarningBudgetMs(windowsInstall ? "win32" : "linux", requested);
   } catch {
     problems.push(`${name}: invalid installer budget`);
     return problems;
-  }
-  const requiredMs =
-    SCOPED_INSTALL_PHASE_MS.restoreVerify +
-    installerMs +
-    SCOPED_INSTALL_PHASE_MS.cleanup;
-  if (typeof limit === "number" && limit * 60_000 < requiredMs) {
-    problems.push(
-      `${name}: caller deadline must cover restore/verify, installer and cleanup`,
-    );
   }
   return problems;
 };
@@ -175,7 +156,7 @@ export const installWorkflowPolicy = (file: string): InstallWorkflowPolicy => {
   );
 };
 
-/** Windows workflows and CI's explicit cold installs must share the owner. */
+/** Windows workflows and CI installs share progress monitoring and retained logs. */
 export const boundedInstallProblems = (
   workflow: unknown,
   scope: "windows" | "all",
@@ -234,21 +215,7 @@ export const boundedInstallProblems = (
         if (!owner) {
           continue;
         }
-        const minimum =
-          Math.ceil(
-            installTimeoutMs(windowsInstall ? "win32" : "linux") / 60_000,
-          ) + 1;
-        const maximum = windowsInstall ? minimum : 10;
-        const limit = step["timeout-minutes"];
-        if (
-          typeof limit !== "number" ||
-          limit < minimum ||
-          limit > maximum ||
-          (typeof job["timeout-minutes"] === "number" &&
-            limit >= job["timeout-minutes"])
-        ) {
-          problems.push(`${name}: install needs a bounded step timeout`);
-        }
+        problems.push(...installDeadlineProblems({ name, job, step }));
         if (
           !uploads.some((upload) => steps.indexOf(upload) > index) ||
           !event.words.some((word) => word.includes("/bun-install/"))
@@ -267,15 +234,35 @@ export const compositeInstallProblems = (workflow: unknown) => {
     return boundedInstallProblems(workflow, "all");
   }
   const jobs = new Map<string, unknown>();
+  const directProblems: string[] = [];
   for (const [name, job] of Object.entries(workflow["jobs"])) {
     if (!isRecord(job) || !Array.isArray(job["steps"])) {
       jobs.set(name, job);
       continue;
     }
-    const steps = flattenWorkflowSteps(job["steps"]).filter(
+    const flattened = flattenWorkflowSteps(job["steps"]);
+    for (const step of flattened) {
+      if (typeof step["run"] !== "string") {
+        continue;
+      }
+      if (
+        lexShell(step["run"]).some(
+          (event) =>
+            event.type === "command" &&
+            event.words.at(0) === "bun" &&
+            event.words.at(1)?.endsWith("/ci-install.ts") === true,
+        )
+      ) {
+        directProblems.push(...installDeadlineProblems({ name, job, step }));
+      }
+    }
+    const steps = flattened.filter(
       (step) => isCiInstallAction(step) || isMisownedCiInstallAction(step),
     );
     jobs.set(name, { ...job, steps });
   }
-  return boundedInstallProblems({ jobs: Object.fromEntries(jobs) }, "all");
+  return [
+    ...directProblems,
+    ...boundedInstallProblems({ jobs: Object.fromEntries(jobs) }, "all"),
+  ];
 };

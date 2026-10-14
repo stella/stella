@@ -82,10 +82,6 @@ const OXC_PROJECT_PROXIES = [
     target: "apps/api/tsconfig.scripts.json",
   },
   {
-    config: "apps/api/src/mcp/apps/tsconfig.json",
-    target: "apps/api/tsconfig.mcp-apps.json",
-  },
-  {
     config: "apps/api/src/handlers/visual-sandbox/browser/tsconfig.json",
     target: "apps/api/tsconfig.visual-sandbox.json",
   },
@@ -794,6 +790,31 @@ const assert = (condition: boolean, message: string): void => {
   }
 };
 
+const selfTestGeneratedProjects = (): void => {
+  const generatedProject = "packages/example/src/generated/tsconfig.json";
+  const generatedSources = new Set([
+    "packages/example/src/generated/contracts.js",
+    "packages/example/src/generated/contracts.d.ts",
+  ]);
+  assert(
+    projectAccountingErrors(
+      ["packages/example/tsconfig.json", generatedProject],
+      [],
+      [],
+    ).length === 0,
+    "must discover a supplemental conventional project without a proxy",
+  );
+  assert(
+    findSourcesWithoutDiscoverableConfig(
+      generatedSources,
+      generatedSources,
+      new Map([[generatedProject, generatedSources]]),
+      (config) => config === generatedProject,
+    ).length === 0,
+    "must cover generated runtime JS and its declaration in their nearest conventional project",
+  );
+};
+
 const selfTest = (): void => {
   assert(isTypeScriptFile("src/new-file.ts"), "must recognize .ts files");
   assert(isTypeScriptFile("src/env.d.ts"), "must recognize declaration files");
@@ -937,6 +958,8 @@ const selfTest = (): void => {
     testProxySources.length === 0,
     "must accept a dedicated Oxc proxy for a co-located test project",
   );
+
+  selfTestGeneratedProjects();
 
   const sourceMaskedByUnregisteredConfig = findSourcesWithoutDiscoverableConfig(
     new Set(["apps/example/scripts/unregistered.ts"]),

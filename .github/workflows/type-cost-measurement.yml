@@ -1,0 +1,133 @@
+name: Measure compiler type cost
+run-name: "Compiler type cost ${{ github.sha }}"
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+    inputs:
+      projects:
+        description: Space-separated project paths from typecheck scripts (empty selects all)
+        type: string
+        default: apps/api/tsconfig.src.json apps/api/tsconfig.scripts.json apps/api/tsconfig.contracts.json apps/legal-atlas-runner/tsconfig.json tsconfig.scripts.json
+      trace:
+        description: Generate a trace during each measured project check
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: type-cost-measurement
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      matrix: ${{ steps.projects.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Select individual projects
+        id: projects
+        env:
+          TYPE_COST_PROJECTS: ${{ inputs.projects }}
+        run: |
+          matrix=$(python3 scripts/type-cost-projects.py)
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+      - name: Prepare shared compiler inputs once
+        run: |
+          bun test scripts/type-cost-measurement.test.ts
+          mkdir -p "$RUNNER_TEMP/type-cost-inputs"
+          bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/type-cost-inputs/generated"
+          bun --cwd=apps/extension x --no-install wxt prepare
+          tar -czf "$RUNNER_TEMP/type-cost-inputs/declarations.tar.gz" apps/api/.cache/typecheck-declarations apps/extension/.wxt
+      - name: Upload compiler inputs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: type-cost-inputs
+          path: ${{ runner.temp }}/type-cost-inputs
+          retention-days: 7
+          if-no-files-found: error
+
+  measure:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+      - name: Download compiler inputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: type-cost-inputs
+          path: ${{ runner.temp }}/type-cost-inputs
+      - name: Restore compiler inputs
+        run: |
+          bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/type-cost-inputs/generated"
+          tar -xzf "$RUNNER_TEMP/type-cost-inputs/declarations.tar.gz"
+      - name: Measure one cold project
+        env:
+          TYPE_COST_PROJECT: ${{ matrix.project }}
+          TYPE_COST_PACKAGE: ${{ matrix.package }}
+          TYPE_COST_TRACE: ${{ inputs.trace }}
+        # Main checks with Bun; tsgo supplies counters and traces that Bun does
+        # not expose. This measurement does not replace the ordinary checker.
+        run: |
+          output="$RUNNER_TEMP/type-cost-result"
+          mkdir -p "$output"
+          {
+            git rev-parse HEAD
+            printf 'project=%s\npackage=%s\ncompiler=tsgo\ncold=true\ntrace=%s\n' "$TYPE_COST_PROJECT" "$TYPE_COST_PACKAGE" "$TYPE_COST_TRACE"
+            bun --version
+            bun packages/scripts/src/tsc-native.ts --version
+          } > "$output/identity.txt"
+          flags=(--project "$TYPE_COST_PROJECT" --noEmit --incremental false --extendedDiagnostics)
+          if [[ "$TYPE_COST_TRACE" == true ]]; then
+            flags+=(--generateTrace "$output/trace")
+          fi
+          set +e
+          /usr/bin/time -v -o "$output/rss.txt" bun packages/scripts/src/tsc-native.ts "${flags[@]}" 2>&1 | tee "$output/diagnostics.txt"
+          status="${PIPESTATUS[0]}"
+          set -e
+          echo "$status" > "$output/exit-code.txt"
+          exit "$status"
+      - name: Upload diagnostics and trace
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: type-cost-${{ matrix.id }}
+          path: ${{ runner.temp }}/type-cost-result
+          retention-days: 14
+          if-no-files-found: warn

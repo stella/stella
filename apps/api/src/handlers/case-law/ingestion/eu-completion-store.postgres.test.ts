@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { initialBatchState } from "@stll/db-load-gate/health";
 import { createSha256 } from "@stll/sha256/node";
@@ -65,6 +65,19 @@ if (!databaseUrl || !enabled) {
           .delete(databaseBackfillStates)
           .where(
             sql`${databaseBackfillStates.name} LIKE ${`${escapeLike(`eu-completion:${sourceId}:`)}%`}`,
+          );
+        // One set-based delete by the indexed decision id, so removing the
+        // decisions does not cascade row by row through large job sets.
+        await db
+          .delete(caseLawIndexJobs)
+          .where(
+            inArray(
+              caseLawIndexJobs.decisionId,
+              db
+                .select({ id: caseLawDecisions.id })
+                .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.sourceId, sourceId)),
+            ),
           );
         await db
           .delete(caseLawDecisions)
@@ -1165,6 +1178,8 @@ if (!databaseUrl || !enabled) {
       expect(await state.store.getReceipt(newer.id)).not.toBeNull();
       expect(await state.store.compact({ limit: 100 })).toBe(0);
     });
+    // Below roughly 100000 rows the planner prefers hashing the receipts and
+    // index jobs over per-candidate index probes, so the scale is the point.
     test("finished 100000-row source bounds dry-run selection before receipt filtering", async () => {
       const state = await fixture();
       await db.execute(sql`

@@ -1,0 +1,61 @@
+name: Prove release PR tree
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, ready_for_review]
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  dispatch:
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.title, 'chore: release v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write
+    steps:
+      # Only main's verifier and dispatch logic execute with this token.
+      - name: Checkout trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Dispatch pinned release proofs once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROOF_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          bash scripts/verify-release-tree-proof.sh --allow-pr-head "$GITHUB_REPOSITORY" "$PROOF_SHA" "$PROOF_SHA" >/dev/null
+          for workflow in deploy-staging main-heavy; do
+            case "$workflow" in
+              deploy-staging) title="Staging release proof $PROOF_SHA" ;;
+              main-heavy) title="Main heavy suites $PROOF_SHA" ;;
+            esac
+            runs=$(bash scripts/gh-retry.sh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow.yml/runs?event=workflow_dispatch&per_page=100")
+            existing=$(jq -r --arg repo "$GITHUB_REPOSITORY" --arg title "$title" --arg path ".github/workflows/$workflow.yml" '
+              [.[].workflow_runs[] | select(.repository.full_name == $repo and .head_branch == "main" and
+                .path == $path and .display_title == $title)][0] // empty | .id
+            ' <<< "$runs")
+            if [[ -n "$existing" ]]; then
+              echo "Proof already dispatched: $workflow run $existing"
+              continue
+            fi
+            gh workflow run "$workflow.yml" --repo "$GITHUB_REPOSITORY" --ref main -f sha="$PROOF_SHA" -f release_candidate=true
+          done

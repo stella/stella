@@ -43,8 +43,29 @@ const script = new Script(`(async () => { ${source} })()`);
 const trusted = { login: "autofix-ci[bot]", id: 114_827_586, type: "Bot" };
 const armed = { enabledAt: "2026-10-04T12:00:00Z" };
 const pushedAt = "2026-10-04T12:01:00Z";
+const releaseApp = {
+  login: "stella-release-deployer[bot]",
+  id: 281_031_312,
+  type: "Bot",
+};
 const senders = [
   { name: "trusted sender", sender: trusted, disarm: false },
+  { name: "release App sender", sender: releaseApp, disarm: false },
+  {
+    name: "release App login with the autofix ID",
+    sender: { ...releaseApp, id: trusted.id },
+    disarm: true,
+  },
+  {
+    name: "autofix login with the release App ID",
+    sender: { ...trusted, id: releaseApp.id },
+    disarm: true,
+  },
+  {
+    name: "release App login as a user",
+    sender: { ...releaseApp, type: "User" },
+    disarm: true,
+  },
   {
     name: "human sender",
     sender: { login: "contributor", id: 12, type: "User" },

@@ -46,7 +46,12 @@ export const EXPENSE_CATEGORIES = [
 
 export type ExpenseCategory = (typeof EXPENSE_CATEGORIES)[number];
 
-export const TIME_ENTRY_SOURCES = ["manual", "timer", "suggested"] as const;
+export const TIME_ENTRY_SOURCES = [
+  "manual",
+  "timer",
+  "suggested",
+  "activity",
+] as const;
 
 export type TimeEntrySource = (typeof TIME_ENTRY_SOURCES)[number];
 
@@ -54,6 +59,7 @@ export const TIME_ENTRY_SOURCE = {
   MANUAL: "manual",
   TIMER: "timer",
   SUGGESTED: "suggested",
+  ACTIVITY: "activity",
 } as const satisfies Record<string, TimeEntrySource>;
 
 type MissingTimeEntrySource = Exclude<

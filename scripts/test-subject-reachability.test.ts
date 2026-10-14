@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import ts from "typescript";
 
 import {
   REACHABILITY_CATEGORIES,
@@ -44,6 +51,60 @@ const git = (root: string, ...args: string[]) => {
 };
 
 describe("test subject reachability", () => {
+  test("the compiler source index and independent sibling parses give identical findings", () => {
+    const input = fixture("");
+    const sibling = path.join(input.root, "apps/example/src/widget.ts");
+    const independentSibling = (filename: string) =>
+      ts.createSourceFile(
+        filename,
+        readFileSync(filename, "utf-8"),
+        ts.ScriptTarget.Latest,
+        true,
+        filename.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+      );
+    const sources = [
+      "import { reduceWidgetState } from './widget'; test('state', () => reduceWidgetState());",
+      "import { createHandler } from './widget.js'; const reduceWidgetState = () => 'stand-in'; test('state', () => createHandler());",
+      "const reduceWidgetState = () => 'stand-in'; test('state', () => reduceWidgetState());",
+    ];
+    for (const source of sources) {
+      writeFileSync(path.join(input.root, TEST_FILE), source);
+      const options = { repoRoot: input.root, files: input.files };
+      const indexed = analyzeTestSubjectReachability(options);
+      expect(indexed).toEqual(
+        analyzeTestSubjectReachability({
+          ...options,
+          siblingSource: independentSibling,
+        }),
+      );
+      if (source.includes("stand-in")) {
+        expect(indexed).toContainEqual({
+          file: TEST_FILE,
+          kind: "local-export-collision",
+          name: "reduceWidgetState",
+        });
+      } else {
+        expect(indexed).toEqual([]);
+      }
+    }
+    // An edited export must invalidate the next scan even when the test text is identical.
+    writeFileSync(sibling, "export const replacement = () => 'real';");
+    const options = { repoRoot: input.root, files: input.files };
+    const findings = analyzeTestSubjectReachability(options);
+    expect(findings).toEqual(
+      analyzeTestSubjectReachability({
+        ...options,
+        siblingSource: independentSibling,
+      }),
+    );
+    expect(findings.some(({ kind }) => kind === "local-export-collision")).toBe(
+      false,
+    );
+    expect(
+      findings.some(({ kind }) => kind === "no-classified-reachability"),
+    ).toBe(true);
+  });
+
   test("reports a stand-in state machine and component", () => {
     const input = fixture(
       "const reduceWidgetState = () => 'stand-in';\nconst WidgetPanel = () => null;\ntest('state', () => reduceWidgetState());\n",

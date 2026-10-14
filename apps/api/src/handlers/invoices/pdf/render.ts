@@ -113,7 +113,7 @@ const EN_LABELS = {
   exempt: "Exempt",
   nonPayer: "Not a VAT payer",
 } as const;
-const LABELS = {
+export const INVOICE_PDF_LABELS = {
   en: EN_LABELS,
   cs: {
     invoice: "Faktura",
@@ -615,22 +615,19 @@ const createInvoiceWriter = async ({ pdf, lang }: InvoiceWriterOptions) => {
   return { write, field, isolate, writeQr, finish };
 };
 
-export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
-  const { invoice, seller, totals, locale, lang, originalNumber } = options;
-  const l = LABELS[lang];
-  const pdf = PDF.create();
-  const { write, field, isolate, writeQr, finish } = await createInvoiceWriter({
-    pdf,
-    lang,
-  });
-  const titles = {
-    invoice: l.invoice,
-    advance: l.advance,
-    credit_note: l.credit,
-  } satisfies Record<InvoiceDocumentType, string>;
-  const title = `${titles[invoice.documentType]}${invoice.status === "draft" || invoice.invoiceNumber === null ? "" : ` ${invoice.invoiceNumber}`}`;
+/**
+ * Locale formatting shared by every invoice renderer, so the hand-placed
+ * layout and the Typst template print identical amounts, dates and rates.
+ */
+export const createInvoiceFormatters = ({
+  currency,
+  locale,
+}: {
+  currency: string;
+  locale: string;
+}) => {
   const money = (amountCents: number) =>
-    formatMoneyCents({ amountCents, currency: invoice.currency, locale });
+    formatMoneyCents({ amountCents, currency, locale });
   const date = (value: string) => {
     const parsed =
       parsePlainDate(value) ??
@@ -663,6 +660,27 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
       ? quantityFormat.format(parsed)
       : canonical;
   };
+  return { money, date, vatRate, quantity };
+};
+
+export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
+  const { invoice, seller, totals, locale, lang, originalNumber } = options;
+  const l = INVOICE_PDF_LABELS[lang];
+  const pdf = PDF.create();
+  const { write, field, isolate, writeQr, finish } = await createInvoiceWriter({
+    pdf,
+    lang,
+  });
+  const titles = {
+    invoice: l.invoice,
+    advance: l.advance,
+    credit_note: l.credit,
+  } satisfies Record<InvoiceDocumentType, string>;
+  const title = `${titles[invoice.documentType]}${invoice.status === "draft" || invoice.invoiceNumber === null ? "" : ` ${invoice.invoiceNumber}`}`;
+  const { money, date, vatRate, quantity } = createInvoiceFormatters({
+    currency: invoice.currency,
+    locale,
+  });
   const treatments = {
     domestic_vat: l.vat,
     reverse_charge: l.reverse,
