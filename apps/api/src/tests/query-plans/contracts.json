@@ -195,13 +195,13 @@
         "index": "case_law_decisions_pkey"
       },
       {
-        "position": "root/0/1/0/0/0/0",
+        "position": "root/0/1/0/0/0",
         "relation": "case_law_decisions",
         "nodeType": "Index Scan",
-        "index": "case_law_decisions_pkey"
+        "index": "case_law_decisions_provision_scope_cursor_idx"
       },
       {
-        "position": "root/0/1/0/0/0/1",
+        "position": "root/0/1/0/0/0/0/1",
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_pkey"
@@ -241,13 +241,13 @@
         "index": "case_law_decisions_pkey"
       },
       {
-        "position": "root/0/1/0/0/0/0",
+        "position": "root/0/1/0/0/1",
         "relation": "case_law_decisions",
         "nodeType": "Index Scan",
         "index": "case_law_decisions_pkey"
       },
       {
-        "position": "root/0/1/0/0/0/1",
+        "position": "root/0/1/0/0/1/0/1",
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_pkey"
@@ -287,13 +287,13 @@
         "index": "case_law_decisions_pkey"
       },
       {
-        "position": "root/0/1/0/0/0/0",
+        "position": "root/0/1/0/0/0",
         "relation": "case_law_decisions",
         "nodeType": "Index Scan",
-        "index": "case_law_decisions_pkey"
+        "index": "case_law_decisions_provision_scope_cursor_idx"
       },
       {
-        "position": "root/0/1/0/0/0/1",
+        "position": "root/0/1/0/0/0/0/1",
         "relation": "corpus_index_projection_states",
         "nodeType": "Index Scan",
         "index": "corpus_index_projection_states_pkey"

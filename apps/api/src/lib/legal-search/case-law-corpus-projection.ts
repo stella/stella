@@ -1,4 +1,4 @@
-import { type SQL, sql } from "drizzle-orm";
+import { type SQL, type SQLWrapper, sql } from "drizzle-orm";
 
 import {
   caseLawDecisions,
@@ -54,37 +54,48 @@ export const caseLawCorpusAppliedRevision = (generation: string) =>
       AND projection_state.entity_id = ${caseLawDecisions}.${sql.identifier(caseLawDecisions.id.name)}
   )`;
 
-/** The physical index this generation projects a decision's current country into. */
-const caseLawDecisionCorpusIndexIdSql = (generation: string) =>
-  caseLawIndexIdSql(
-    servingGenerationOfDecision(generation),
-    caseLawDecisions.country,
-  );
-
 /**
- * Accept a physical hit only when this generation recorded the current
- * decision in its current jurisdiction and has no queued mutation.
- *
- * Applied equals desired on every field that can change what is served, and
- * the applied revision sits in the index this generation routes the decision's
- * current country to. A queued mutation moves desired ahead of applied, and a
- * queued erasure leaves `desired_fingerprint` null, so neither is accepted. No
- * row at all means the generation does not hold the decision.
- *
- * The lookup is the states table's primary key, `(family, generation,
- * entity_id)`, once per candidate row.
+ * The served projection state of the decision at `generation`: applied equals
+ * desired on every field that can change what is served, and the applied
+ * revision sits in the index that generation routes the decision's current
+ * country to.
  */
-export const currentCaseLawCorpusProjection = (generation: string): SQL =>
-  sql`EXISTS (
-      SELECT 1
-      FROM ${corpusIndexProjectionStates}
-      WHERE ${corpusIndexProjectionStates.family} = ${CASE_LAW_FAMILY}
-        AND ${corpusIndexProjectionStates.generation} = ${servingGenerationOfDecision(generation)}
+const acceptedCaseLawProjectionStateAt = (generation: SQLWrapper): SQL => sql`
+        ${corpusIndexProjectionStates.family} = ${CASE_LAW_FAMILY}
+        AND ${corpusIndexProjectionStates.generation} = ${generation}
         AND ${corpusIndexProjectionStates.entityId} = ${caseLawDecisions.id}
         AND ${corpusIndexProjectionStates.desiredAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedEpoch} = ${corpusIndexProjectionStates.desiredEpoch}
         AND ${corpusIndexProjectionStates.appliedFingerprint} = ${corpusIndexProjectionStates.desiredFingerprint}
         AND ${corpusIndexProjectionStates.appliedIndexId} = ${corpusIndexProjectionStates.desiredIndexId}
-        AND ${corpusIndexProjectionStates.appliedIndexId} = (${caseLawDecisionCorpusIndexIdSql(generation)})
+        AND ${corpusIndexProjectionStates.appliedIndexId} = (${caseLawIndexIdSql(generation, caseLawDecisions.country)})`;
+
+/** The jurisdiction-serving pointer row of the decision's country. */
+const caseLawDecisionPointer = sql`
+        pointer.${sql.identifier(corpusIndexJurisdictionServing.family.name)} = ${CASE_LAW_FAMILY}
+        AND pointer.${sql.identifier(corpusIndexJurisdictionServing.jurisdiction.name)} = upper(${caseLawDecisions.country})`;
+
+/**
+ * Accept a physical hit only when the generation that serves the decision's
+ * country recorded the current decision in its current jurisdiction and has
+ * no queued mutation: the one the jurisdiction-serving pointer names, else
+ * the serving generation the caller passes.
+ *
+ * A queued mutation moves desired ahead of applied, and a queued erasure
+ * leaves `desired_fingerprint` null, so neither is accepted. No row at all
+ * means the generation does not hold the decision.
+ *
+ * The pointer is joined rather than read by a scalar subquery, so the
+ * generation is a plain column of the lookup and the states table's primary
+ * key, `(family, generation, entity_id)`, answers it once per candidate row.
+ */
+export const currentCaseLawCorpusProjection = (generation: string): SQL =>
+  sql`EXISTS (
+      SELECT 1
+      FROM (VALUES (1)) serving_anchor (present)
+      LEFT JOIN ${corpusIndexJurisdictionServing} pointer
+        ON ${caseLawDecisionPointer}
+      JOIN ${corpusIndexProjectionStates}
+        ON ${acceptedCaseLawProjectionStateAt(sql`COALESCE(pointer.${sql.identifier(corpusIndexJurisdictionServing.generation.name)}, ${generation})`)}
     )`;
