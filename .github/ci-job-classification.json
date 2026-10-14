@@ -5,289 +5,364 @@
   "workflows": [
     {
       "path": ".github/workflows/agent-sandbox-canary.yml",
-      "node": "n0015"
-    },
-    {
-      "path": ".github/workflows/ai-provider-canary.yml",
-      "node": "n0016"
-    },
-    {
-      "path": ".github/workflows/api-test-memory.yml",
-      "node": "n0017"
-    },
-    {
-      "path": ".github/workflows/audit-branch-protection.yml",
       "node": "n0018"
     },
     {
-      "path": ".github/workflows/audit-image.yml",
+      "path": ".github/workflows/ai-provider-canary.yml",
       "node": "n0019"
     },
     {
-      "path": ".github/workflows/auth-md-spec-check.yml",
+      "path": ".github/workflows/api-test-memory.yml",
       "node": "n0020"
     },
     {
-      "path": ".github/workflows/autofix.yml",
+      "path": ".github/workflows/audit-branch-protection.yml",
       "node": "n0021"
     },
     {
-      "path": ".github/workflows/bot-refresh-auto-merge.yml",
+      "path": ".github/workflows/audit-image.yml",
       "node": "n0022"
     },
     {
-      "path": ".github/workflows/build-api-image.yml",
+      "path": ".github/workflows/auth-md-spec-check.yml",
       "node": "n0023"
     },
     {
-      "path": ".github/workflows/bundle-size-nightly.yml",
+      "path": ".github/workflows/autofix.yml",
       "node": "n0024"
     },
     {
-      "path": ".github/workflows/cancel-stale-merge-groups.yml",
+      "path": ".github/workflows/bot-refresh-auto-merge.yml",
       "node": "n0025"
     },
     {
-      "path": ".github/workflows/catalogue-upstream.yml",
+      "path": ".github/workflows/build-api-image.yml",
       "node": "n0026"
     },
     {
-      "path": ".github/workflows/ci.yml",
+      "path": ".github/workflows/bundle-size-nightly.yml",
       "node": "n0027"
     },
     {
-      "path": ".github/workflows/cla-notify.yml",
+      "path": ".github/workflows/cancel-stale-merge-groups.yml",
       "node": "n0028"
     },
     {
-      "path": ".github/workflows/cla.yml",
+      "path": ".github/workflows/catalogue-upstream.yml",
       "node": "n0029"
     },
     {
-      "path": ".github/workflows/cleanup-queued-pr-runs.yml",
+      "path": ".github/workflows/ci.yml",
       "node": "n0030"
     },
     {
-      "path": ".github/workflows/codeql.yml",
+      "path": ".github/workflows/cla-notify.yml",
       "node": "n0031"
     },
     {
-      "path": ".github/workflows/dated-waiver-healing.yml",
+      "path": ".github/workflows/cla.yml",
       "node": "n0032"
     },
     {
-      "path": ".github/workflows/db-migrations.yml",
+      "path": ".github/workflows/cleanup-queued-pr-runs.yml",
       "node": "n0033"
     },
     {
-      "path": ".github/workflows/dependency-audit.yml",
+      "path": ".github/workflows/codeql.yml",
       "node": "n0034"
     },
     {
-      "path": ".github/workflows/dependency-malware-nightly.yml",
+      "path": ".github/workflows/dated-waiver-healing.yml",
       "node": "n0035"
     },
     {
-      "path": ".github/workflows/dependency-review.yml",
+      "path": ".github/workflows/db-migrations.yml",
       "node": "n0036"
     },
     {
-      "path": ".github/workflows/deploy-landing.yml",
+      "path": ".github/workflows/dependency-audit.yml",
       "node": "n0037"
     },
     {
-      "path": ".github/workflows/deploy-staging.yml",
+      "path": ".github/workflows/dependency-malware-nightly.yml",
       "node": "n0038"
     },
     {
-      "path": ".github/workflows/desktop-release-canary.yml",
+      "path": ".github/workflows/dependency-review.yml",
       "node": "n0039"
     },
     {
-      "path": ".github/workflows/disarm-auto-merge.yml",
+      "path": ".github/workflows/deploy-landing.yml",
       "node": "n0040"
     },
     {
-      "path": ".github/workflows/docs-source-policy.yml",
+      "path": ".github/workflows/deploy-staging.yml",
       "node": "n0041"
     },
     {
-      "path": ".github/workflows/fetch-public-documents.yml",
+      "path": ".github/workflows/desktop-release-canary.yml",
       "node": "n0042"
     },
     {
-      "path": ".github/workflows/journey-canary.yml",
+      "path": ".github/workflows/disarm-auto-merge.yml",
       "node": "n0043"
     },
     {
-      "path": ".github/workflows/label-sync.yml",
+      "path": ".github/workflows/docs-source-policy.yml",
       "node": "n0044"
     },
     {
-      "path": ".github/workflows/landing-canary.yml",
+      "path": ".github/workflows/fetch-public-documents.yml",
       "node": "n0045"
     },
     {
-      "path": ".github/workflows/main-heavy.yml",
+      "path": ".github/workflows/journey-canary.yml",
       "node": "n0046"
     },
     {
-      "path": ".github/workflows/main-pr-depth.yml",
+      "path": ".github/workflows/label-sync.yml",
       "node": "n0047"
     },
     {
-      "path": ".github/workflows/manual-checks.yml",
+      "path": ".github/workflows/landing-canary.yml",
       "node": "n0048"
     },
     {
-      "path": ".github/workflows/marketing-screenshots-capture.yml",
+      "path": ".github/workflows/main-heavy.yml",
       "node": "n0049"
     },
     {
-      "path": ".github/workflows/marketing-screenshots-publish.yml",
+      "path": ".github/workflows/main-pr-depth.yml",
       "node": "n0050"
     },
     {
-      "path": ".github/workflows/marketing-screenshots-update.yml",
+      "path": ".github/workflows/manual-checks.yml",
       "node": "n0051"
     },
     {
-      "path": ".github/workflows/marketing-screenshots.yml",
+      "path": ".github/workflows/marketing-screenshots-capture.yml",
       "node": "n0052"
     },
     {
-      "path": ".github/workflows/mcp-canary.yml",
+      "path": ".github/workflows/marketing-screenshots-publish.yml",
       "node": "n0053"
     },
     {
-      "path": ".github/workflows/mirror-ci-service-images.yml",
+      "path": ".github/workflows/marketing-screenshots-update.yml",
       "node": "n0054"
     },
     {
-      "path": ".github/workflows/model-catalog-check.yml",
+      "path": ".github/workflows/marketing-screenshots.yml",
       "node": "n0055"
     },
     {
-      "path": ".github/workflows/network-baseline-deliver.yml",
+      "path": ".github/workflows/mcp-canary.yml",
       "node": "n0056"
     },
     {
-      "path": ".github/workflows/network-baseline-record.yml",
+      "path": ".github/workflows/mirror-ci-service-images.yml",
       "node": "n0057"
     },
     {
-      "path": ".github/workflows/network-baseline-request.yml",
+      "path": ".github/workflows/model-catalog-check.yml",
       "node": "n0058"
     },
     {
-      "path": ".github/workflows/nightly-property-test.yml",
+      "path": ".github/workflows/network-baseline-deliver.yml",
       "node": "n0059"
     },
     {
-      "path": ".github/workflows/nightly-test.yml",
+      "path": ".github/workflows/network-baseline-record.yml",
       "node": "n0060"
     },
     {
-      "path": ".github/workflows/nightly-typecheck.yml",
+      "path": ".github/workflows/network-baseline-request.yml",
       "node": "n0061"
     },
     {
-      "path": ".github/workflows/pr-lint.yml",
+      "path": ".github/workflows/nightly-property-test.yml",
       "node": "n0062"
     },
     {
-      "path": ".github/workflows/provenance-nightly.yml",
+      "path": ".github/workflows/nightly-test.yml",
       "node": "n0063"
     },
     {
-      "path": ".github/workflows/provider-request-schemas-check.yml",
+      "path": ".github/workflows/nightly-typecheck.yml",
       "node": "n0064"
     },
     {
-      "path": ".github/workflows/publish-npm.yml",
+      "path": ".github/workflows/pr-lint.yml",
       "node": "n0065"
     },
     {
-      "path": ".github/workflows/publish-product-media.yml",
+      "path": ".github/workflows/provenance-nightly.yml",
       "node": "n0066"
     },
     {
-      "path": ".github/workflows/quarantine-prune.yml",
+      "path": ".github/workflows/provider-request-schemas-check.yml",
       "node": "n0067"
     },
     {
-      "path": ".github/workflows/query-perf.yml",
+      "path": ".github/workflows/publish-npm.yml",
       "node": "n0068"
     },
     {
-      "path": ".github/workflows/railway-smoke.yml",
+      "path": ".github/workflows/publish-product-media.yml",
       "node": "n0069"
     },
     {
-      "path": ".github/workflows/railway-template-source.yml",
+      "path": ".github/workflows/quarantine-prune.yml",
       "node": "n0070"
     },
     {
-      "path": ".github/workflows/release-desktop.yml",
+      "path": ".github/workflows/query-perf.yml",
       "node": "n0071"
     },
     {
-      "path": ".github/workflows/release-pr.yml",
+      "path": ".github/workflows/railway-smoke.yml",
       "node": "n0072"
     },
     {
-      "path": ".github/workflows/release-proof.yml",
+      "path": ".github/workflows/railway-template-source.yml",
       "node": "n0073"
     },
     {
-      "path": ".github/workflows/release-tag.yml",
+      "path": ".github/workflows/release-desktop.yml",
       "node": "n0074"
     },
     {
-      "path": ".github/workflows/release.yml",
+      "path": ".github/workflows/release-pr.yml",
       "node": "n0075"
     },
     {
-      "path": ".github/workflows/safe-chain-cache.yml",
+      "path": ".github/workflows/release-proof.yml",
       "node": "n0076"
     },
     {
-      "path": ".github/workflows/scheduled-run-alerts.yml",
+      "path": ".github/workflows/release-tag.yml",
       "node": "n0077"
     },
     {
-      "path": ".github/workflows/scorecard.yml",
+      "path": ".github/workflows/release.yml",
       "node": "n0078"
     },
     {
-      "path": ".github/workflows/security-txt-guard.yml",
+      "path": ".github/workflows/safe-chain-cache.yml",
       "node": "n0079"
     },
     {
-      "path": ".github/workflows/staging-response-policy.yml",
+      "path": ".github/workflows/scheduled-run-alerts.yml",
       "node": "n0080"
     },
     {
-      "path": ".github/workflows/sync-branch-protection.yml",
+      "path": ".github/workflows/scorecard.yml",
       "node": "n0081"
     },
     {
-      "path": ".github/workflows/type-cost-measurement.yml",
+      "path": ".github/workflows/security-txt-guard.yml",
       "node": "n0082"
     },
     {
-      "path": ".github/workflows/typecheck-base.yml",
+      "path": ".github/workflows/staging-response-policy.yml",
       "node": "n0083"
     },
     {
-      "path": ".github/workflows/visual-preview.yml",
+      "path": ".github/workflows/sync-branch-protection.yml",
       "node": "n0084"
+    },
+    {
+      "path": ".github/workflows/type-cost-measurement.yml",
+      "node": "n0085"
+    },
+    {
+      "path": ".github/workflows/typecheck-base.yml",
+      "node": "n0086"
+    },
+    {
+      "path": ".github/workflows/visual-preview.yml",
+      "node": "n0087"
+    },
+    {
+      "path": ".github/workflows/autofix-generated-conflicts.yml",
+      "node": "n0001"
+    },
+    {
+      "path": ".github/workflows/generated-conflicts-resolve.yml",
+      "node": "n0003"
+    },
+    {
+      "path": ".github/workflows/generated-conflicts-publish.yml",
+      "node": "n0002"
     }
   ],
   "nodes": [
     {
       "type": "metadata",
       "id": "n0001",
+      "repository": "candidate",
+      "path": ".github/workflows/autofix-generated-conflicts.yml",
+      "digest": "7e1e6262b734681fcede7120202263d48d6e5325a2f51b9ebd6ef00e60b17994",
+      "references": [],
+      "jobs": [
+        {
+          "id": "dispatch",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "77cf49db298a188344fca8873cc7f51fc055b185e8957d89f1377ebe05b06364"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0002",
+      "repository": "candidate",
+      "path": ".github/workflows/generated-conflicts-publish.yml",
+      "digest": "3e0f9cfb30fcdd56473f6934d03996f171e069a2997980f1ff0321c22e6acc35",
+      "references": [],
+      "jobs": [
+        {
+          "id": "publish",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "819af1c14934c870ebefc159e207908ef36e6afbd856d7050ba69d1136d8a192"
+        }
+      ],
+      "edges": {
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0131",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0003",
+      "repository": "candidate",
+      "path": ".github/workflows/generated-conflicts-resolve.yml",
+      "digest": "c2aafa46e7504ea8f0afb54cf9b6f52d0381aa0a9dd23aa29fd9a9d55234684a",
+      "references": [],
+      "jobs": [
+        {
+          "id": "resolve",
+          "kind": "ordinary",
+          "qualifier": "Checks; no publication, tag creation, or deployment.",
+          "digest": "9d64d115f95be71ebb7b0c87eb665b01feb19b026a07641b058925feacca3cf5"
+        }
+      ],
+      "edges": {
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776": "n0098",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0004",
       "repository": "candidate",
       "path": ".github/actions/build-e2e-web/action.yml",
       "digest": "6241f4dc74d7b1620cea9f6431140ce244070a735920d177643bda476c296b11",
@@ -297,7 +372,7 @@
     },
     {
       "type": "metadata",
-      "id": "n0002",
+      "id": "n0005",
       "repository": "candidate",
       "path": ".github/actions/build-web-image/action.yml",
       "digest": "33a61188582b26281a90cfbc9b16cd888ac56b87e6816158bbf6576635f83d46",
@@ -307,16 +382,16 @@
       ],
       "jobs": [],
       "edges": {
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a": "n0116",
-        "docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e": "n0109",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
-        "docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a": "n0103"
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a": "n0120",
+        "docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e": "n0113",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
+        "docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a": "n0107"
       }
     },
     {
       "type": "metadata",
-      "id": "n0003",
+      "id": "n0006",
       "repository": "candidate",
       "path": ".github/actions/cargo-deny/action.yml",
       "digest": "ca20eec30ca1b5887cc82b10c9c0c568c73322e15218b3076d10b7fdedb67efe",
@@ -326,21 +401,21 @@
     },
     {
       "type": "metadata",
-      "id": "n0004",
+      "id": "n0007",
       "repository": "candidate",
       "path": ".github/actions/ci-install/action.yml",
       "digest": "d3ac580b2a20d70841de986c683500f12994783f2f2d212b6c09d9a21f069a12",
       "references": ["$/.github/actions/ci-install"],
       "jobs": [],
       "edges": {
-        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0112",
-        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0114",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0116",
+        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0118",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0005",
+      "id": "n0008",
       "repository": "candidate",
       "path": ".github/actions/desktop-windows-build/action.yml",
       "digest": "b7053327161e6e2eccb2f3f81cc62878ee72d923b0a31a9f2c4b049afc59895a",
@@ -350,40 +425,40 @@
       ],
       "jobs": [],
       "edges": {
-        "baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759": "n0102",
-        "azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82": "n0120"
+        "baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759": "n0106",
+        "azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82": "n0124"
       }
     },
     {
       "type": "metadata",
-      "id": "n0006",
+      "id": "n0009",
       "repository": "candidate",
       "path": ".github/actions/marketing-capture/action.yml",
       "digest": "e15b3385afbe6b91f7907e97eafdd608fe0cc0923df889dad2eb83fe327c88bd",
       "references": ["./.github/actions/marketing-capture"],
       "jobs": [],
       "edges": {
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "./.github/actions/setup-e2e-stack": "n0012",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
-        "./.github/actions/setup-playwright": "n0013"
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "./.github/actions/setup-e2e-stack": "n0015",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0131",
+        "./.github/actions/setup-playwright": "n0016"
       }
     },
     {
       "type": "metadata",
-      "id": "n0007",
+      "id": "n0010",
       "repository": "candidate",
       "path": ".github/actions/osv-scanner/action.yml",
       "digest": "d3377f0ccbc214b2cd9c0eb9b1e60e19486eb811ef8b7e128ed8eaacb4504f00",
       "references": ["./.github/actions/osv-scanner"],
       "jobs": [],
       "edges": {
-        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0113"
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0117"
       }
     },
     {
       "type": "metadata",
-      "id": "n0008",
+      "id": "n0011",
       "repository": "candidate",
       "path": ".github/actions/prepare-network-baseline/action.yml",
       "digest": "d425e75433868ac78c6fecd95299187d5172f13102ebf130063ef56fb542c1ed",
@@ -393,7 +468,7 @@
     },
     {
       "type": "metadata",
-      "id": "n0009",
+      "id": "n0012",
       "repository": "candidate",
       "path": ".github/actions/promote-dispatch/action.yml",
       "digest": "04987e479f31fc1838fe8fd403d8fededb0562319ba1e608a258e28a36c01770",
@@ -403,7 +478,7 @@
     },
     {
       "type": "metadata",
-      "id": "n0010",
+      "id": "n0013",
       "repository": "candidate",
       "path": ".github/actions/provenance/action.yml",
       "digest": "ad7ce91c1fd75d5c025940e331bace2f3af9c72be0a1440f9c5068dcf5bb9a01",
@@ -414,36 +489,36 @@
       ],
       "jobs": [],
       "edges": {
-        "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6": "n0107"
+        "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6": "n0111"
       }
     },
     {
       "type": "metadata",
-      "id": "n0011",
+      "id": "n0014",
       "repository": "candidate",
       "path": ".github/actions/safe-chain/action.yml",
       "digest": "2b21b3a268171b8423851b70d5c3592eb2242c2a76cc85817d246a3fc0e2594b",
       "references": ["./.github/actions/safe-chain"],
       "jobs": [],
       "edges": {
-        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0113"
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0117"
       }
     },
     {
       "type": "metadata",
-      "id": "n0012",
+      "id": "n0015",
       "repository": "candidate",
       "path": ".github/actions/setup-e2e-stack/action.yml",
       "digest": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc",
       "references": ["./.github/actions/setup-e2e-stack"],
       "jobs": [],
       "edges": {
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125"
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129"
       }
     },
     {
       "type": "metadata",
-      "id": "n0013",
+      "id": "n0016",
       "repository": "candidate",
       "path": ".github/actions/setup-playwright/action.yml",
       "digest": "25c7fa4b135e32a251bc8ab924979a0823d6a06fc7acfdb6ab9dd61539f68613",
@@ -453,21 +528,21 @@
     },
     {
       "type": "metadata",
-      "id": "n0014",
+      "id": "n0017",
       "repository": "candidate",
       "path": ".github/actions/setup-production-e2e/action.yml",
       "digest": "26f719b87d4e8688022fb590ef614dc59679a8ee0db90b9265aebd2945c3188f",
       "references": ["./.github/actions/setup-production-e2e"],
       "jobs": [],
       "edges": {
-        "./.github/actions/setup-e2e-stack": "n0012",
-        "./.github/actions/setup-playwright": "n0013",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127"
+        "./.github/actions/setup-e2e-stack": "n0015",
+        "./.github/actions/setup-playwright": "n0016",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0131"
       }
     },
     {
       "type": "metadata",
-      "id": "n0015",
+      "id": "n0018",
       "repository": "candidate",
       "path": ".github/workflows/agent-sandbox-canary.yml",
       "digest": "5a9445eb54a5fb50a67e0c3a90487ee9a476b2592f7ebf24d0dbc5df8815cfeb",
@@ -481,14 +556,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129"
       }
     },
     {
       "type": "metadata",
-      "id": "n0016",
+      "id": "n0019",
       "repository": "candidate",
       "path": ".github/workflows/ai-provider-canary.yml",
       "digest": "826ce3b019abfbe2373e2e2d96b5c214333acfe37a139d25d50f776a86bce2d3",
@@ -508,15 +583,15 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0131"
       }
     },
     {
       "type": "metadata",
-      "id": "n0017",
+      "id": "n0020",
       "repository": "candidate",
       "path": ".github/workflows/api-test-memory.yml",
       "digest": "5999bb7c2326f81e4ade5f9628ac9f17f35cd2ac7ab06bb04afc2688573190e3",
@@ -536,17 +611,17 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
-        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0131",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0090"
       }
     },
     {
       "type": "metadata",
-      "id": "n0018",
+      "id": "n0021",
       "repository": "candidate",
       "path": ".github/workflows/audit-branch-protection.yml",
       "digest": "0ed8f15edefbb3702428c33abbaba757b2463a4f1be81fc4f1dbd9a8071cb8a3",
@@ -572,14 +647,14 @@
         }
       ],
       "edges": {
-        "stella/.github/.github/workflows/audit-branch-protection.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0088",
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "stella/.github/.github/workflows/audit-branch-protection.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0091",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0019",
+      "id": "n0022",
       "repository": "candidate",
       "path": ".github/workflows/audit-image.yml",
       "digest": "79071bf6b87aba7fb337cec002c56ce06063f2c4af239c37664772600f71c33d",
@@ -593,12 +668,12 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126"
       }
     },
     {
       "type": "metadata",
-      "id": "n0020",
+      "id": "n0023",
       "repository": "candidate",
       "path": ".github/workflows/auth-md-spec-check.yml",
       "digest": "0e1ce1b7d144b2a52e8096ff85c16e8092b15b91c8216f39b4f569e4ff3987f1",
@@ -612,16 +687,16 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
       }
     },
     {
       "type": "metadata",
-      "id": "n0021",
+      "id": "n0024",
       "repository": "candidate",
       "path": ".github/workflows/autofix.yml",
-      "digest": "982dc4ea3b176a44d3a3a4aa03e7c180da80caf5ea395b65b1c714fcd6d509ad",
+      "digest": "66be19c5ec7950d88f620881ab3984840dfbd49256364e5e938f544506179250",
       "references": [],
       "jobs": [
         {
@@ -646,19 +721,19 @@
           "id": "regenerate-derived-files",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9cb7a190fe1c9577f71952d52f81364f892563638b635781e171dfb4792da378"
+          "digest": "ebd93f829ebab2cf545db50fad37909d3440a5330b759a53ed42fd29f26fcddc"
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a": "n0111",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a": "n0115",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104"
       }
     },
     {
       "type": "metadata",
-      "id": "n0022",
+      "id": "n0025",
       "repository": "candidate",
       "path": ".github/workflows/bot-refresh-auto-merge.yml",
       "digest": "8f27439a123e85a54ed64229e98d4a77fb21bb34255b9112eea7261ef1bf1b75",
@@ -672,13 +747,13 @@
         }
       ],
       "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0023",
+      "id": "n0026",
       "repository": "candidate",
       "path": ".github/workflows/build-api-image.yml",
       "digest": "b8b06df8291e6406bd136dcdfa0edee588541e92ca33b34d07018b1ced94d1de",
@@ -698,17 +773,17 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0132",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
-        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0101",
-        "./.github/actions/provenance": "n0010"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0136",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
+        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0105",
+        "./.github/actions/provenance": "n0013"
       }
     },
     {
       "type": "metadata",
-      "id": "n0024",
+      "id": "n0027",
       "repository": "candidate",
       "path": ".github/workflows/bundle-size-nightly.yml",
       "digest": "9a8e35a2a0fe697ad5a61f2a34c95afb9c9feaac6c56e5c04b4b78ecfb46b358",
@@ -722,14 +797,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "./.github/actions/build-e2e-web": "n0001"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "./.github/actions/build-e2e-web": "n0004"
       }
     },
     {
       "type": "metadata",
-      "id": "n0025",
+      "id": "n0028",
       "repository": "candidate",
       "path": ".github/workflows/cancel-stale-merge-groups.yml",
       "digest": "0e642299cc3cfa49b7f79315088e5de8008f2e81e6d97923a4ce9d0425b7c1bd",
@@ -743,12 +818,12 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126"
       }
     },
     {
       "type": "metadata",
-      "id": "n0026",
+      "id": "n0029",
       "repository": "candidate",
       "path": ".github/workflows/catalogue-upstream.yml",
       "digest": "9728670166a622ba7cb197ee9e6572d2947384f93468703f8e24aa783ad5d6f6",
@@ -762,18 +837,18 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
-        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0090"
       }
     },
     {
       "type": "metadata",
-      "id": "n0027",
+      "id": "n0030",
       "repository": "candidate",
       "path": ".github/workflows/ci.yml",
-      "digest": "c78422ea2c0fc89ad5cbadd9037514c39c0ffae75373556d5985df60e43bbcb2",
+      "digest": "842cbeba00b2b3808dc5dd1cf81d4b01176ad5e1efb5a91763765f2cb9193bf6",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
@@ -816,7 +891,7 @@
           "id": "ci-checks-policy",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "bf3ebf2143b91897b6c725a4a58ba23c94f747ab77435886379513660b9a0ef4"
+          "digest": "9e8d8d40e5a2bb73533320c23b54297124a0d1da94e9083ad49079323d1ca6b6"
         },
         {
           "id": "ci-checks-rest",
@@ -1030,37 +1105,37 @@
         }
       ],
       "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
-        "$/.github/actions/ci-install": "n0004",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0112",
-        "rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7": "n0099",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
-        "stella/.github/.github/actions/changeset-policy@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0085",
-        "./.github/actions/prepare-network-baseline": "n0008",
-        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0114",
-        "./.github/actions/setup-playwright": "n0013",
-        "./.github/workflows/query-perf.yml": "n0068",
-        "./.github/actions/build-e2e-web": "n0001",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "./.github/actions/setup-production-e2e": "n0014",
-        "./.github/actions/setup-e2e-stack": "n0012",
-        "./.github/workflows/marketing-screenshots.yml": "n0052",
-        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0132",
-        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0101",
-        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0128",
-        "./.github/actions/desktop-windows-build": "n0005",
-        "./.github/actions/cargo-deny": "n0003",
-        "./.github/actions/safe-chain": "n0011",
-        "./.github/actions/osv-scanner": "n0007"
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
+        "$/.github/actions/ci-install": "n0007",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0116",
+        "rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7": "n0103",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0131",
+        "stella/.github/.github/actions/changeset-policy@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0088",
+        "./.github/actions/prepare-network-baseline": "n0011",
+        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0118",
+        "./.github/actions/setup-playwright": "n0016",
+        "./.github/workflows/query-perf.yml": "n0071",
+        "./.github/actions/build-e2e-web": "n0004",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "./.github/actions/setup-production-e2e": "n0017",
+        "./.github/actions/setup-e2e-stack": "n0015",
+        "./.github/workflows/marketing-screenshots.yml": "n0055",
+        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0136",
+        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0105",
+        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0132",
+        "./.github/actions/desktop-windows-build": "n0008",
+        "./.github/actions/cargo-deny": "n0006",
+        "./.github/actions/safe-chain": "n0014",
+        "./.github/actions/osv-scanner": "n0010"
       }
     },
     {
       "type": "metadata",
-      "id": "n0028",
+      "id": "n0031",
       "repository": "candidate",
       "path": ".github/workflows/cla-notify.yml",
       "digest": "d770a5b61018f57563bb2fbe3e3fd236a7bf6b557091035c216981942beb8831",
@@ -1077,7 +1152,7 @@
     },
     {
       "type": "metadata",
-      "id": "n0029",
+      "id": "n0032",
       "repository": "candidate",
       "path": ".github/workflows/cla.yml",
       "digest": "a1d17f2f77db2503a671a37546053e59b21856c67cb0c76f0a23ad7bd4401750",
@@ -1091,13 +1166,13 @@
         }
       ],
       "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0030",
+      "id": "n0033",
       "repository": "candidate",
       "path": ".github/workflows/cleanup-queued-pr-runs.yml",
       "digest": "d5674f7a11369898490a443c346c312ebbcfcd2959b464db654ca8617a6fdc1f",
@@ -1111,12 +1186,12 @@
         }
       ],
       "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119"
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123"
       }
     },
     {
       "type": "metadata",
-      "id": "n0031",
+      "id": "n0034",
       "repository": "candidate",
       "path": ".github/workflows/codeql.yml",
       "digest": "523167524fa4c46d6d2d29724cf774b0362ae7828c3b8a81b5e8524961b8c9f7",
@@ -1136,15 +1211,15 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0133",
-        "github/codeql-action/autobuild@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0117",
-        "github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0105"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0137",
+        "github/codeql-action/autobuild@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0121",
+        "github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0109"
       }
     },
     {
       "type": "metadata",
-      "id": "n0032",
+      "id": "n0035",
       "repository": "candidate",
       "path": ".github/workflows/dated-waiver-healing.yml",
       "digest": "af2b6ae07e5cf9c062b3565a1bf36ba675aa8e73fc2e6f0bd538751a783d42e3",
@@ -1158,14 +1233,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0033",
+      "id": "n0036",
       "repository": "candidate",
       "path": ".github/workflows/db-migrations.yml",
       "digest": "874ffa6138d9aa47feb985a13474e988d2a561294e7c2a1a93931d06a42cd10e",
@@ -1191,15 +1266,15 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
       }
     },
     {
       "type": "metadata",
-      "id": "n0034",
+      "id": "n0037",
       "repository": "candidate",
       "path": ".github/workflows/dependency-audit.yml",
       "digest": "6e448966a8321c7ecfb821dfa45645cd2c4e584f3bbbc8f0b333d88ba44b1eb7",
@@ -1219,14 +1294,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0035",
+      "id": "n0038",
       "repository": "candidate",
       "path": ".github/workflows/dependency-malware-nightly.yml",
       "digest": "650f2e20ef0e8393e06640c8ab03498dbe8dba18a71091bd9e33e263a8175b7d",
@@ -1246,15 +1321,15 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "./.github/actions/safe-chain": "n0011",
-        "./.github/actions/osv-scanner": "n0007"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "./.github/actions/safe-chain": "n0014",
+        "./.github/actions/osv-scanner": "n0010"
       }
     },
     {
       "type": "metadata",
-      "id": "n0036",
+      "id": "n0039",
       "repository": "candidate",
       "path": ".github/workflows/dependency-review.yml",
       "digest": "dce510dfec6fbabd822880ed94c8cdf3e66357b0173e1e2c146680bedd32aa4f",
@@ -1268,15 +1343,15 @@
         }
       ],
       "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294": "n0110"
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294": "n0114"
       }
     },
     {
       "type": "metadata",
-      "id": "n0037",
+      "id": "n0040",
       "repository": "candidate",
       "path": ".github/workflows/deploy-landing.yml",
       "digest": "ab4e00c6cb7770a5701cf31e07d057fa2e2ab11779392d5be499f3cb07d4017c",
@@ -1302,15 +1377,15 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0038",
+      "id": "n0041",
       "repository": "candidate",
       "path": ".github/workflows/deploy-staging.yml",
       "digest": "a3a150e7c37fae209661ac193414ec0892f54434c4a3a9c4228a84274fa45334",
@@ -1348,22 +1423,22 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0132",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
-        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0101",
-        "./.workflow-actions/.github/actions/provenance": "n0010",
-        "./.github/actions/build-web-image": "n0002",
-        "./.github/actions/promote-dispatch": "n0009",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "./.github/actions/setup-playwright": "n0013",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0136",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
+        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0105",
+        "./.workflow-actions/.github/actions/provenance": "n0013",
+        "./.github/actions/build-web-image": "n0005",
+        "./.github/actions/promote-dispatch": "n0012",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "./.github/actions/setup-playwright": "n0016",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0039",
+      "id": "n0042",
       "repository": "candidate",
       "path": ".github/workflows/desktop-release-canary.yml",
       "digest": "1e3f7dc5139e8307d45bc7acc07277b9f089a9ff702a732b578b2f2c4f2e6fd7",
@@ -1377,31 +1452,31 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126"
       }
     },
     {
       "type": "metadata",
-      "id": "n0040",
+      "id": "n0043",
       "repository": "candidate",
       "path": ".github/workflows/disarm-auto-merge.yml",
-      "digest": "5f188770b4839aacdb90d5318163faf20bb575184c951ec10256d35cd3c598d9",
+      "digest": "d69fbbe5c324c5654dec8966ee8615399d393dbbcc37685f92e15b13a3d45d03",
       "references": [],
       "jobs": [
         {
           "id": "disarm",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "18db72ba3e010154dc8fd0915743699d3cf586566b522f981935cb4591e71307"
+          "digest": "1cffa3c0f50131be8d5d206ed98998306f3a0d33084c46fe74e71b1fac32705a"
         }
       ],
       "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119"
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123"
       }
     },
     {
       "type": "metadata",
-      "id": "n0041",
+      "id": "n0044",
       "repository": "candidate",
       "path": ".github/workflows/docs-source-policy.yml",
       "digest": "21d266eb9f94fab1d9b9f1cd352508eab7f52ba1ae09df7e1659c82d55fdc184",
@@ -1415,13 +1490,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
       }
     },
     {
       "type": "metadata",
-      "id": "n0042",
+      "id": "n0045",
       "repository": "candidate",
       "path": ".github/workflows/fetch-public-documents.yml",
       "digest": "be2396ad04d9479f8ae5258bcc21ea2e1f86f612bce22393891ab7887a9e194d",
@@ -1435,13 +1510,13 @@
         }
       ],
       "edges": {
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0043",
+      "id": "n0046",
       "repository": "candidate",
       "path": ".github/workflows/journey-canary.yml",
       "digest": "295e9b1244813c39b8f491091bfc9c913d7aae2e5b90054891c78611e8eaa160",
@@ -1455,13 +1530,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104"
       }
     },
     {
       "type": "metadata",
-      "id": "n0044",
+      "id": "n0047",
       "repository": "candidate",
       "path": ".github/workflows/label-sync.yml",
       "digest": "3cd9b4cf1d1e128ca493b7e6f3eabbc163d5615c034e659d27c0a51721e22739",
@@ -1475,12 +1550,12 @@
         }
       ],
       "edges": {
-        "stella/.github/.github/workflows/label-sync.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0090"
+        "stella/.github/.github/workflows/label-sync.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0093"
       }
     },
     {
       "type": "metadata",
-      "id": "n0045",
+      "id": "n0048",
       "repository": "candidate",
       "path": ".github/workflows/landing-canary.yml",
       "digest": "4793b8321bfa9debefcacd69e8b00214af0c99f9fbd9a9c6983572a10e44421f",
@@ -1494,12 +1569,12 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126"
       }
     },
     {
       "type": "metadata",
-      "id": "n0046",
+      "id": "n0049",
       "repository": "candidate",
       "path": ".github/workflows/main-heavy.yml",
       "digest": "087f33decef048b2feec5944a43ef6c68ad9decb3320d3552c7fccef42dd8eff",
@@ -1525,14 +1600,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
-        "./.github/workflows/ci.yml": "n0027"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
+        "./.github/workflows/ci.yml": "n0030"
       }
     },
     {
       "type": "metadata",
-      "id": "n0047",
+      "id": "n0050",
       "repository": "candidate",
       "path": ".github/workflows/main-pr-depth.yml",
       "digest": "d8bde2ffbaa7373a9845e55a23f7149fb4e569bc359aa42099278825617328ac",
@@ -1558,14 +1633,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
-        "./.github/workflows/ci.yml": "n0027"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
+        "./.github/workflows/ci.yml": "n0030"
       }
     },
     {
       "type": "metadata",
-      "id": "n0048",
+      "id": "n0051",
       "repository": "candidate",
       "path": ".github/workflows/manual-checks.yml",
       "digest": "d36d1dac7dfff73094c138bdb89fb4b89b5ff2ebb7b31b80e79f168d3a8c59bd",
@@ -1591,17 +1666,17 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7": "n0099",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "$/.github/actions/ci-install": "n0004"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7": "n0103",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "$/.github/actions/ci-install": "n0007"
       }
     },
     {
       "type": "metadata",
-      "id": "n0049",
+      "id": "n0052",
       "repository": "candidate",
       "path": ".github/workflows/marketing-screenshots-capture.yml",
       "digest": "0771fbd3f13109f9cbf483f5a81cdaeb001b1eea7ab4a8ba37e7dd20a2ec5909",
@@ -1615,14 +1690,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "./.github/actions/marketing-capture": "n0006",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "./.github/actions/marketing-capture": "n0009",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0050",
+      "id": "n0053",
       "repository": "candidate",
       "path": ".github/workflows/marketing-screenshots-publish.yml",
       "digest": "4620f0bf72d007722a6886f2ebe840f762de110ca3887696ce9448f3a38e3803",
@@ -1636,16 +1711,16 @@
         }
       ],
       "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119",
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
-        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123",
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0131",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0090"
       }
     },
     {
       "type": "metadata",
-      "id": "n0051",
+      "id": "n0054",
       "repository": "candidate",
       "path": ".github/workflows/marketing-screenshots-update.yml",
       "digest": "9b7ec07f6cd37d0afbff40c30f64f478ed6067751a06565ffca26d8289656d60",
@@ -1659,12 +1734,12 @@
         }
       ],
       "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119"
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123"
       }
     },
     {
       "type": "metadata",
-      "id": "n0052",
+      "id": "n0055",
       "repository": "candidate",
       "path": ".github/workflows/marketing-screenshots.yml",
       "digest": "99e01737fd3bc5b99645ecfb5bcd2b5983900fb780f3c5f197447f78f3708236",
@@ -1678,14 +1753,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "./.github/actions/marketing-capture": "n0006",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "./.github/actions/marketing-capture": "n0009",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0053",
+      "id": "n0056",
       "repository": "candidate",
       "path": ".github/workflows/mcp-canary.yml",
       "digest": "d9334f9d44d730a7d202a0b0da377c630d8e54e945ee2dca32e24185448a3aa5",
@@ -1705,14 +1780,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0128"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0132"
       }
     },
     {
       "type": "metadata",
-      "id": "n0054",
+      "id": "n0057",
       "repository": "candidate",
       "path": ".github/workflows/mirror-ci-service-images.yml",
       "digest": "2ad43f1d6df46052d8b49a24bd8c2402b8399ac31025d3e7f9f1ffb46c3e685a",
@@ -1726,14 +1801,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0055",
+      "id": "n0058",
       "repository": "candidate",
       "path": ".github/workflows/model-catalog-check.yml",
       "digest": "33b6d98b7dd18ee59664f2fd8b536df376cbef627a9a37171a06ea53e85bb3be",
@@ -1747,16 +1822,16 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
-        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0090"
       }
     },
     {
       "type": "metadata",
-      "id": "n0056",
+      "id": "n0059",
       "repository": "candidate",
       "path": ".github/workflows/network-baseline-deliver.yml",
       "digest": "f1fe201835bcc843ea608dbb29d2b5e2c8bcf55420ebe4ade769dc9670f59094",
@@ -1770,14 +1845,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0057",
+      "id": "n0060",
       "repository": "candidate",
       "path": ".github/workflows/network-baseline-record.yml",
       "digest": "087b07000937dd06db73832608d4b38be58d1e5aa7baf2abae354a4099615979",
@@ -1803,19 +1878,19 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "./.github/actions/build-e2e-web": "n0001",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "./.github/actions/setup-production-e2e": "n0014",
-        "./.github/actions/prepare-network-baseline": "n0008",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
-        "./.github/workflows/network-baseline-deliver.yml": "n0056"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "./.github/actions/build-e2e-web": "n0004",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "./.github/actions/setup-production-e2e": "n0017",
+        "./.github/actions/prepare-network-baseline": "n0011",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
+        "./.github/workflows/network-baseline-deliver.yml": "n0059"
       }
     },
     {
       "type": "metadata",
-      "id": "n0058",
+      "id": "n0061",
       "repository": "candidate",
       "path": ".github/workflows/network-baseline-request.yml",
       "digest": "e5b9170561d5011316ac539902fdf23632e4b895cc6dcac6faceb62f2447bfc0",
@@ -1829,12 +1904,12 @@
         }
       ],
       "edges": {
-        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0119"
+        "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3": "n0123"
       }
     },
     {
       "type": "metadata",
-      "id": "n0059",
+      "id": "n0062",
       "repository": "candidate",
       "path": ".github/workflows/nightly-property-test.yml",
       "digest": "552d555b6b2db7838fa6e215aa0117d475f308c718b4f36cf544832d20cd502f",
@@ -1872,13 +1947,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
       }
     },
     {
       "type": "metadata",
-      "id": "n0060",
+      "id": "n0063",
       "repository": "candidate",
       "path": ".github/workflows/nightly-test.yml",
       "digest": "7d62a878690fc38f2f0d5d1050d68c085cf9a13507708b88548859027d31b852",
@@ -1946,18 +2021,18 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "./.github/actions/setup-e2e-stack": "n0012",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
-        "./.github/actions/setup-playwright": "n0013",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "./.github/workflows/marketing-screenshots.yml": "n0052"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "./.github/actions/setup-e2e-stack": "n0015",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
+        "./.github/actions/setup-playwright": "n0016",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "./.github/workflows/marketing-screenshots.yml": "n0055"
       }
     },
     {
       "type": "metadata",
-      "id": "n0061",
+      "id": "n0064",
       "repository": "candidate",
       "path": ".github/workflows/nightly-typecheck.yml",
       "digest": "c49f666e74e2e95a169c62d89add50572b39243c8d49e96c541424dda9d55cdf",
@@ -1983,13 +2058,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
       }
     },
     {
       "type": "metadata",
-      "id": "n0062",
+      "id": "n0065",
       "repository": "candidate",
       "path": ".github/workflows/pr-lint.yml",
       "digest": "e37b546b2141e4a2e3f4e049ae126beaa9858950aedc1290147191ec066a9fb2",
@@ -2003,12 +2078,12 @@
         }
       ],
       "edges": {
-        "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0092"
+        "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0095"
       }
     },
     {
       "type": "metadata",
-      "id": "n0063",
+      "id": "n0066",
       "repository": "candidate",
       "path": ".github/workflows/provenance-nightly.yml",
       "digest": "f9d16a2b647917b7cd1be17cf7513841c364583723084f16246b529fc8defaaf",
@@ -2022,12 +2097,12 @@
         }
       ],
       "edges": {
-        "stella/.github/.github/workflows/provenance-update.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0093"
+        "stella/.github/.github/workflows/provenance-update.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0096"
       }
     },
     {
       "type": "metadata",
-      "id": "n0064",
+      "id": "n0067",
       "repository": "candidate",
       "path": ".github/workflows/provider-request-schemas-check.yml",
       "digest": "4d49ea1a42b5131fba25e7a7d1de32674420f90b55d71f02a08c1fde9060239d",
@@ -2041,14 +2116,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0065",
+      "id": "n0068",
       "repository": "candidate",
       "path": ".github/workflows/publish-npm.yml",
       "digest": "d7c6470f4cee5ac5d41939a17f40415ab56e6e844ec955eebc0f52859c6b0d12",
@@ -2080,16 +2155,16 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0115",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0091"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0119",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
       }
     },
     {
       "type": "metadata",
-      "id": "n0066",
+      "id": "n0069",
       "repository": "candidate",
       "path": ".github/workflows/publish-product-media.yml",
       "digest": "893651361e2b23bfb2763a37c4e0e5d5d0832d8c866dfaa029fc8325d625d5d7",
@@ -2103,13 +2178,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0067",
+      "id": "n0070",
       "repository": "candidate",
       "path": ".github/workflows/quarantine-prune.yml",
       "digest": "da6eacbe2e1bfbec4d6fce788d2ac44268e7b42da4392de25b60aa1c9de8b356",
@@ -2123,15 +2198,15 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
-        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0087"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0090"
       }
     },
     {
       "type": "metadata",
-      "id": "n0068",
+      "id": "n0071",
       "repository": "candidate",
       "path": ".github/workflows/query-perf.yml",
       "digest": "86f4b0aa409538c8d3c2088abe68292f5b3b484d1e5e6b5ee2c8b8556989e7f3",
@@ -2145,14 +2220,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0069",
+      "id": "n0072",
       "repository": "candidate",
       "path": ".github/workflows/railway-smoke.yml",
       "digest": "3aad92d8d99ab6956a0c9d89e3d13ff8a498ac11c7341882f0ec13e31075aca6",
@@ -2166,13 +2241,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
       }
     },
     {
       "type": "metadata",
-      "id": "n0070",
+      "id": "n0073",
       "repository": "candidate",
       "path": ".github/workflows/railway-template-source.yml",
       "digest": "3e9edd242db4d27c5311f5aad89c49c3968090a0858bfa86e2f221a760b27373",
@@ -2186,13 +2261,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
       }
     },
     {
       "type": "metadata",
-      "id": "n0071",
+      "id": "n0074",
       "repository": "candidate",
       "path": ".github/workflows/release-desktop.yml",
       "digest": "ea8fc2623d4a7e8b471e1a238c8b78ad7e61f85f6d5ccd3fb273d280a2b5241b",
@@ -2236,17 +2311,17 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0128",
-        "./.release-tooling/desktop-windows-build": "n0005",
-        "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466": "n0121",
-        "aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd": "n0123"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0132",
+        "./.release-tooling/desktop-windows-build": "n0008",
+        "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466": "n0125",
+        "aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd": "n0127"
       }
     },
     {
       "type": "metadata",
-      "id": "n0072",
+      "id": "n0075",
       "repository": "candidate",
       "path": ".github/workflows/release-pr.yml",
       "digest": "1f9c14f2ddb40d3b0d7c0ef8caf7b7cd54c9d292615eb5677412ddaee75f1c1a",
@@ -2266,13 +2341,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/.github/workflows/changeset-release-pr.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0089"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/.github/workflows/changeset-release-pr.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0092"
       }
     },
     {
       "type": "metadata",
-      "id": "n0073",
+      "id": "n0076",
       "repository": "candidate",
       "path": ".github/workflows/release-proof.yml",
       "digest": "68371025462dcd384b1e597f9109d90f6a93aeee5a35299d32c8bc4ebd3bfca8",
@@ -2286,12 +2361,12 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126"
       }
     },
     {
       "type": "metadata",
-      "id": "n0074",
+      "id": "n0077",
       "repository": "candidate",
       "path": ".github/workflows/release-tag.yml",
       "digest": "b7bbe14281414b97be22c12e1dd0c018f04b79dd051043e568ec9d4bee79dc7c",
@@ -2311,14 +2386,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0075",
+      "id": "n0078",
       "repository": "candidate",
       "path": ".github/workflows/release.yml",
       "digest": "4b8a309fbdace50e3e599c6c40426a8371e499fbc6752b9fe15935a21dcdcb8b",
@@ -2368,23 +2443,23 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0132",
-        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0101",
-        "./.github/actions/provenance": "n0010",
-        "./.workflow-source/.github/actions/build-web-image": "n0002",
-        "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6": "n0107",
-        "./.workflow-source/.github/actions/provenance": "n0010",
-        "orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff": "n0126",
-        "./.github/actions/promote-dispatch": "n0009"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069": "n0136",
+        "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc": "n0105",
+        "./.github/actions/provenance": "n0013",
+        "./.workflow-source/.github/actions/build-web-image": "n0005",
+        "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6": "n0111",
+        "./.workflow-source/.github/actions/provenance": "n0013",
+        "orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff": "n0130",
+        "./.github/actions/promote-dispatch": "n0012"
       }
     },
     {
       "type": "metadata",
-      "id": "n0076",
+      "id": "n0079",
       "repository": "candidate",
       "path": ".github/workflows/safe-chain-cache.yml",
       "digest": "f85d4a6065211c25a597dbcbeaf10c8fce8e957b1e1e368115e8d34028bcfecd",
@@ -2398,13 +2473,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "./.github/actions/safe-chain": "n0011"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "./.github/actions/safe-chain": "n0014"
       }
     },
     {
       "type": "metadata",
-      "id": "n0077",
+      "id": "n0080",
       "repository": "candidate",
       "path": ".github/workflows/scheduled-run-alerts.yml",
       "digest": "26afd87e86c6ab078643b4a9f9710cd4d02e2428ca21fb6707c60533f1ef7657",
@@ -2418,12 +2493,12 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126"
       }
     },
     {
       "type": "metadata",
-      "id": "n0078",
+      "id": "n0081",
       "repository": "candidate",
       "path": ".github/workflows/scorecard.yml",
       "digest": "8d87d40e6eae148bda61b14c089feedabacafc771b1463f34be03042e3a221d2",
@@ -2437,14 +2512,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc": "n0108",
-        "github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0131"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc": "n0112",
+        "github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2": "n0135"
       }
     },
     {
       "type": "metadata",
-      "id": "n0079",
+      "id": "n0082",
       "repository": "candidate",
       "path": ".github/workflows/security-txt-guard.yml",
       "digest": "37b4ed6420ed5245548165e2fe6211060a49d3cfce9ffbc526c110a04ce9f7a4",
@@ -2458,12 +2533,12 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126"
       }
     },
     {
       "type": "metadata",
-      "id": "n0080",
+      "id": "n0083",
       "repository": "candidate",
       "path": ".github/workflows/staging-response-policy.yml",
       "digest": "958cbd4f08e28e69df9423e6d8790bcbbf4fbd25a7c345b10d77a1b5bb52b11b",
@@ -2477,13 +2552,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097"
       }
     },
     {
       "type": "metadata",
-      "id": "n0081",
+      "id": "n0084",
       "repository": "candidate",
       "path": ".github/workflows/sync-branch-protection.yml",
       "digest": "67f5473963e4735ec74811c7e75129e5e73b9c7b5fc57c78989e6d3e8092264b",
@@ -2497,13 +2572,13 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0082",
+      "id": "n0085",
       "repository": "candidate",
       "path": ".github/workflows/type-cost-measurement.yml",
       "digest": "06a186855bd18f4f263ebd211701f3558feca82274468353efef6ae20245f2f3",
@@ -2523,15 +2598,15 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0131"
       }
     },
     {
       "type": "metadata",
-      "id": "n0083",
+      "id": "n0086",
       "repository": "candidate",
       "path": ".github/workflows/typecheck-base.yml",
       "digest": "52942fcb384e3b190152cec70c169dfee67c361e71dfbbcce92d3c5882673e1b",
@@ -2545,14 +2620,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0084",
+      "id": "n0087",
       "repository": "candidate",
       "path": ".github/workflows/visual-preview.yml",
       "digest": "5c6bf5f772a638dde31de8ca60bafc054e5526ca1aab266d2e3387982372f489",
@@ -2566,14 +2641,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0094",
-        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0125"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8": "n0097",
+        "docker/login-action@dbcb813823bdd20940b903addbd779551569679f": "n0129"
       }
     },
     {
       "type": "metadata",
-      "id": "n0085",
+      "id": "n0088",
       "repository": "supplier1",
       "path": ".github/actions/changeset-policy/action.yml",
       "digest": "738a6bb23409ce8a3bf83588b999deef32da392f2d0d1a761fc17f74a03295bf",
@@ -2585,7 +2660,7 @@
     },
     {
       "type": "metadata",
-      "id": "n0086",
+      "id": "n0089",
       "repository": "supplier1",
       "path": ".github/actions/npm-independent-release/action.yml",
       "digest": "97b85acfff4913eb6dbc1dd5bcecadd1ecb3f177fa572fcd8130b08360f1dff0",
@@ -2594,14 +2669,14 @@
       ],
       "jobs": [],
       "edges": {
-        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0115",
-        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0127",
-        "stella/.github/.github/actions/npm-publish-hardened@42bd6a23099a2dc219dd1af9c55f8f0506fcfffd": "n0095"
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0119",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c": "n0131",
+        "stella/.github/.github/actions/npm-publish-hardened@42bd6a23099a2dc219dd1af9c55f8f0506fcfffd": "n0099"
       }
     },
     {
       "type": "metadata",
-      "id": "n0087",
+      "id": "n0090",
       "repository": "supplier1",
       "path": ".github/actions/signed-commit/action.yml",
       "digest": "81208f3202da284b34016692bd7e6d1303b6272f4115d091bb972cf454235d22",
@@ -2615,7 +2690,7 @@
     },
     {
       "type": "metadata",
-      "id": "n0088",
+      "id": "n0091",
       "repository": "supplier1",
       "path": ".github/workflows/audit-branch-protection.yml",
       "digest": "f7ef39fecd5bd888e9a376772e223fafa568c96ea03767be2e55552f8224ec5c",
@@ -2631,14 +2706,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0124"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
       }
     },
     {
       "type": "metadata",
-      "id": "n0089",
+      "id": "n0092",
       "repository": "supplier1",
       "path": ".github/workflows/changeset-release-pr.yml",
       "digest": "8f200a342f598241f346aae13420ee0737ad92cbcac483d147f1079261f59380",
@@ -2654,18 +2729,18 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0115",
-        "stella/.github/.github/actions/changeset-release-lifecycle@636b7841096c8f0cc5a1572077b78768ef8fea42": "n0096",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0128",
-        "stella/.github/.github/actions/sync-cargo-workspace-lock@636b7841096c8f0cc5a1572077b78768ef8fea42": "n0097",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0119",
+        "stella/.github/.github/actions/changeset-release-lifecycle@636b7841096c8f0cc5a1572077b78768ef8fea42": "n0100",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87": "n0132",
+        "stella/.github/.github/actions/sync-cargo-workspace-lock@636b7841096c8f0cc5a1572077b78768ef8fea42": "n0101",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133"
       }
     },
     {
       "type": "metadata",
-      "id": "n0090",
+      "id": "n0093",
       "repository": "supplier1",
       "path": ".github/workflows/label-sync.yml",
       "digest": "ea2f691e7e6e8e5237579704fa4cc760f6f70628048d306b7e5d365cb7ab84db",
@@ -2681,12 +2756,12 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126"
       }
     },
     {
       "type": "metadata",
-      "id": "n0091",
+      "id": "n0094",
       "repository": "supplier1",
       "path": ".github/workflows/npm-independent-release.yml",
       "digest": "f9031a3b4c193b6a82388aadb5be1a8f73790d9f8326b9961fac64985e4be3b5",
@@ -2702,14 +2777,14 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
-        "./.release-tooling/.github/actions/npm-independent-release": "n0086"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "./.release-tooling/.github/actions/npm-independent-release": "n0089"
       }
     },
     {
       "type": "metadata",
-      "id": "n0092",
+      "id": "n0095",
       "repository": "supplier1",
       "path": ".github/workflows/pr-lint.yml",
       "digest": "01dc7c187a0dc0c058479646ce496fe307e31270820225bb3ca7451a8ec133ba",
@@ -2726,15 +2801,15 @@
         }
       ],
       "edges": {
-        "ytanikin/PRConventionalCommits@b628c5a234cc32513014b7bfdd1e47b532124d98": "n0130",
-        "michalvankodev/copy-issue-labels@c4df96ee53d2cdf639ba169a26c43b04d5085cb3": "n0104",
-        "pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff": "n0098",
-        "kentaro-m/auto-assign-action@0a2c53d3721e4c5cfcce6afd4014aecc337979f6": "n0106"
+        "ytanikin/PRConventionalCommits@b628c5a234cc32513014b7bfdd1e47b532124d98": "n0134",
+        "michalvankodev/copy-issue-labels@c4df96ee53d2cdf639ba169a26c43b04d5085cb3": "n0108",
+        "pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff": "n0102",
+        "kentaro-m/auto-assign-action@0a2c53d3721e4c5cfcce6afd4014aecc337979f6": "n0110"
       }
     },
     {
       "type": "metadata",
-      "id": "n0093",
+      "id": "n0096",
       "repository": "supplier1",
       "path": ".github/workflows/provenance-update.yml",
       "digest": "c8c4d96f05bd6ea4acebaf332a4a989b5e32e9c5c0f4f13e4f02a8af9d668322",
@@ -2750,17 +2825,17 @@
         }
       ],
       "edges": {
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0122",
-        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0115",
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26": "n0118",
-        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0129",
-        "./.signed-commit/.github/actions/signed-commit": "n0087"
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1": "n0126",
+        "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020": "n0119",
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26": "n0122",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1": "n0133",
+        "./.signed-commit/.github/actions/signed-commit": "n0090"
       }
     },
     {
       "type": "metadata",
-      "id": "n0094",
+      "id": "n0097",
       "repository": "supplier1",
       "path": "actions/setup-bun-cached/action.yml",
       "digest": "865d7c5596178bf885c0d4b0f07c784fd93102e1807b19806a44a85380a33c7c",
@@ -2769,15 +2844,31 @@
       ],
       "jobs": [],
       "edges": {
-        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0100",
-        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0113",
-        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0112"
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0117",
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0116"
       }
     },
     {
       "type": "metadata",
-      "id": "n0095",
+      "id": "n0098",
       "repository": "supplier2",
+      "path": "actions/setup-bun-cached/action.yml",
+      "digest": "872c62f44f20aecdbb596464e761fc4ae644777dbb89143c4ce1cb363739dfd7",
+      "references": [
+        "stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776"
+      ],
+      "jobs": [],
+      "edges": {
+        "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
+        "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0117",
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0116"
+      }
+    },
+    {
+      "type": "metadata",
+      "id": "n0099",
+      "repository": "supplier3",
       "path": ".github/actions/npm-publish-hardened/action.yml",
       "digest": "c39892557e3f48af6663980fa708930f19805ca0054580b26df552fac60443b1",
       "references": [
@@ -2788,8 +2879,8 @@
     },
     {
       "type": "metadata",
-      "id": "n0096",
-      "repository": "supplier3",
+      "id": "n0100",
+      "repository": "supplier4",
       "path": ".github/actions/changeset-release-lifecycle/action.yml",
       "digest": "6b1eb4f9f47de784b978dcb4810153eba4bb7188980683628dd7bc81cf24cf5d",
       "references": [
@@ -2800,8 +2891,8 @@
     },
     {
       "type": "metadata",
-      "id": "n0097",
-      "repository": "supplier3",
+      "id": "n0101",
+      "repository": "supplier4",
       "path": ".github/actions/sync-cargo-workspace-lock/action.yml",
       "digest": "7b73a9100b970f85976a0dfcc039b870990615270b890985aa73cfe8b55d8955",
       "references": [
@@ -2812,217 +2903,217 @@
     },
     {
       "type": "supplier",
-      "id": "n0098",
+      "id": "n0102",
       "reference": "pascalgn/size-label-action@56b489b027932ec0cf60438a1a5f1a19c8fc71ff",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0099",
+      "id": "n0103",
       "reference": "rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0100",
+      "id": "n0104",
       "reference": "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0101",
+      "id": "n0105",
       "reference": "docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0102",
+      "id": "n0106",
       "reference": "baptiste0928/cargo-install@8195d4f734a149db85385bb4102b42efcd373759",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0103",
+      "id": "n0107",
       "reference": "docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0104",
+      "id": "n0108",
       "reference": "michalvankodev/copy-issue-labels@c4df96ee53d2cdf639ba169a26c43b04d5085cb3",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0105",
+      "id": "n0109",
       "reference": "github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0106",
+      "id": "n0110",
       "reference": "kentaro-m/auto-assign-action@0a2c53d3721e4c5cfcce6afd4014aecc337979f6",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0107",
+      "id": "n0111",
       "reference": "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0108",
+      "id": "n0112",
       "reference": "ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0109",
+      "id": "n0113",
       "reference": "docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0110",
+      "id": "n0114",
       "reference": "actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0111",
+      "id": "n0115",
       "reference": "autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0112",
+      "id": "n0116",
       "reference": "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0113",
+      "id": "n0117",
       "reference": "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0114",
+      "id": "n0118",
       "reference": "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0115",
+      "id": "n0119",
       "reference": "actions/setup-node@820762786026740c76f36085b0efc47a31fe5020",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0116",
+      "id": "n0120",
       "reference": "docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0117",
+      "id": "n0121",
       "reference": "github/codeql-action/autobuild@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0118",
+      "id": "n0122",
       "reference": "anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0119",
+      "id": "n0123",
       "reference": "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0120",
+      "id": "n0124",
       "reference": "azure/trusted-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0121",
+      "id": "n0125",
       "reference": "apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0122",
+      "id": "n0126",
       "reference": "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0123",
+      "id": "n0127",
       "reference": "aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0124",
+      "id": "n0128",
       "reference": "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0125",
+      "id": "n0129",
       "reference": "docker/login-action@dbcb813823bdd20940b903addbd779551569679f",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0126",
+      "id": "n0130",
       "reference": "orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0127",
+      "id": "n0131",
       "reference": "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0128",
+      "id": "n0132",
       "reference": "dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0129",
+      "id": "n0133",
       "reference": "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0130",
+      "id": "n0134",
       "reference": "ytanikin/PRConventionalCommits@b628c5a234cc32513014b7bfdd1e47b532124d98",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0131",
+      "id": "n0135",
       "reference": "github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0132",
+      "id": "n0136",
       "reference": "docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069",
       "binding": "immutable"
     },
     {
       "type": "supplier",
-      "id": "n0133",
+      "id": "n0137",
       "reference": "github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2",
       "binding": "immutable"
     }
