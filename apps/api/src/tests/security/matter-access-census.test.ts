@@ -179,6 +179,50 @@ describe("matter access census self-test", () => {
     }
   });
 
+  const readerWith = (body: string) => `
+    import { inArray } from "drizzle-orm";
+    import { rootDb } from "@/api/db/root";
+    import { entities } from "@/api/db/schema";
+    import { authorizedWorkspaceIds } from "${AUTHORIZED_WORKSPACE_OWNER_MODULE}";
+    export const readTitles = async (tx: Tx, other: string[]) => {
+      ${body}
+      return await rootDb
+        .select({ title: entities.name })
+        .from(entities)
+        .where(inArray(entities.workspaceId, ids));
+    };
+  `;
+
+  test("owner-derived narrowings stay screened", () => {
+    for (const body of [
+      "const ids = (await authorizedWorkspaceIds(tx)).value;",
+      "const authorized = await authorizedWorkspaceIds(tx); const ids = [...authorized.value];",
+      "const rows = await authorizedWorkspaceIds(tx); const ids = rows.value.map((row) => row.id);",
+      "const rows = await authorizedWorkspaceIds(tx); const ids = Array.from(rows.value).filter(Boolean);",
+    ]) {
+      expect(classifyReader(readerWith(body))).toEqual([true]);
+    }
+  });
+
+  test("a set mixing owner IDs with other IDs, or reassigned or mutated afterwards, is unscreened", () => {
+    for (const body of [
+      // mixed sources in one value
+      "const authorized = await authorizedWorkspaceIds(tx); const ids = [...authorized.value, ...other];",
+      "const authorized = await authorizedWorkspaceIds(tx); const ids = authorized.value.concat(other);",
+      "const ids = other.length > 0 ? other : (await authorizedWorkspaceIds(tx)).value;",
+      // reassigned from a caller-provided set
+      "let ids = (await authorizedWorkspaceIds(tx)).value; ids = other;",
+      "let ids = (await authorizedWorkspaceIds(tx)).value; ids += other;",
+      // mutated in place
+      "const ids = [...(await authorizedWorkspaceIds(tx)).value]; ids.push(...other);",
+      "const ids = [...(await authorizedWorkspaceIds(tx)).value]; ids[0] = other[0];",
+      // a projection that can return anything
+      "const ids = (await authorizedWorkspaceIds(tx)).value.map(() => other[0]);",
+    ]) {
+      expect(classifyReader(readerWith(body))).toEqual([false]);
+    }
+  });
+
   test("calling the owner does not screen a filter fed from another set", () => {
     const mixed = `
       import { inArray, sql } from "drizzle-orm";

@@ -21,10 +21,11 @@ import ts from "typescript";
  *   `workspace_id IN (…)`, or an `accessibleWorkspaceIds` /
  *   `activeWorkspaceIds` binding). It must obtain the set from the owner
  *   module: it calls a value-imported owner export, and every concrete filter
- *   (`inArray` set or SQL `ANY`/`IN` value) is derived from such a call
- *   through local bindings. Derivation is tracked by name across the file, so
- *   shadowed names and values passed in from callers are not proven (they
- *   count as not derived).
+ *   (`inArray` set or SQL `ANY`/`IN` value) is wholly derived from such a call
+ *   (see `derivesFromOwner`: only narrowings, never mixes; a binding derives
+ *   only if every assignment does and it is never mutated in place). Values
+ *   passed in from callers, shadowed names and values mutated through another
+ *   function count as not proven, except the last, a documented blind spot.
  *
  * A member that does not meet its signal's rule fails the census unless the
  * allowlist names `<file>::<signal>` with a reason.
@@ -76,6 +77,17 @@ const ASSIGNMENT_OPERATORS = new Set<ts.SyntaxKind>([
   ts.SyntaxKind.BarBarEqualsToken,
 ]);
 
+const NARROWING_METHODS = new Set(["filter", "slice", "toSorted"]);
+const MUTATING_METHODS = new Set([
+  "push",
+  "unshift",
+  "splice",
+  "fill",
+  "copyWithin",
+  "add",
+  "set",
+]);
+
 /** Every identifier a declaration binds, through destructuring. */
 const boundNames = (name: ts.BindingName): string[] => {
   if (ts.isIdentifier(name)) {
@@ -117,6 +129,212 @@ const literalText = (node: ts.Node): string | undefined => {
   return undefined;
 };
 
+type ProvenanceInput = {
+  ownerBindings: ReadonlySet<string>;
+  ownerNamespaces: ReadonlySet<string>;
+  derivations: readonly { names: string[]; from: ts.Node | null }[];
+  mutatedNames: ReadonlySet<string>;
+};
+
+const ownerProvenance = ({
+  ownerBindings,
+  ownerNamespaces,
+  derivations,
+  mutatedNames,
+}: ProvenanceInput) => {
+  // Provenance is conservative. A value derives from the owner only when the
+  // WHOLE value is the owner's result or a narrowing of it: the owner call
+  // itself (awaited or not), a property read on a derived value, a
+  // `filter`/`slice`/`toSorted` of one, a `map` that projects one property of
+  // each element, a spread/`Array.from`/`new Set` of exactly one derived
+  // value, or a conditional whose branches both derive. Anything that can mix
+  // in other values (array literals with other elements, concat, arbitrary
+  // calls) does not. A binding derives only when EVERY assignment to it does
+  // and it is never mutated in place; parameters never derive. Names are
+  // tracked file-wide, so shadowing errs towards "not derived".
+  const isOwnerCall = (node: ts.Node) =>
+    ts.isCallExpression(node) &&
+    ((ts.isIdentifier(node.expression) &&
+      ownerBindings.has(node.expression.text)) ||
+      (ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        ownerNamespaces.has(node.expression.expression.text)));
+  const isPropertyProjection = (node: ts.Expression | undefined) => {
+    if (node === undefined || !ts.isArrowFunction(node)) {
+      return false;
+    }
+    const [parameter] = node.parameters;
+    return (
+      node.parameters.length === 1 &&
+      parameter !== undefined &&
+      ts.isIdentifier(parameter.name) &&
+      ts.isPropertyAccessExpression(node.body) &&
+      ts.isIdentifier(node.body.expression) &&
+      node.body.expression.text === parameter.name.text
+    );
+  };
+  const derived = new Set<string>();
+  const derivesFromOwner = (node: ts.Node): boolean => {
+    if (
+      ts.isParenthesizedExpression(node) ||
+      ts.isAwaitExpression(node) ||
+      ts.isAsExpression(node) ||
+      ts.isSatisfiesExpression(node) ||
+      ts.isNonNullExpression(node)
+    ) {
+      return derivesFromOwner(node.expression);
+    }
+    if (isOwnerCall(node)) {
+      return true;
+    }
+    if (ts.isIdentifier(node)) {
+      return derived.has(node.text);
+    }
+    if (ts.isPropertyAccessExpression(node)) {
+      return derivesFromOwner(node.expression);
+    }
+    if (ts.isConditionalExpression(node)) {
+      return (
+        derivesFromOwner(node.whenTrue) && derivesFromOwner(node.whenFalse)
+      );
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+      const [only] = node.elements;
+      return (
+        node.elements.length === 1 &&
+        only !== undefined &&
+        ts.isSpreadElement(only) &&
+        derivesFromOwner(only.expression)
+      );
+    }
+    if (ts.isNewExpression(node)) {
+      const [only] = node.arguments ?? [];
+      return (
+        ts.isIdentifier(node.expression) &&
+        node.expression.text === "Set" &&
+        node.arguments?.length === 1 &&
+        only !== undefined &&
+        derivesFromOwner(only)
+      );
+    }
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression;
+      const [first] = node.arguments;
+      if (
+        ts.isPropertyAccessExpression(callee) &&
+        ts.isIdentifier(callee.expression) &&
+        callee.expression.text === "Array" &&
+        callee.name.text === "from"
+      ) {
+        return node.arguments.length === 1 && first !== undefined
+          ? derivesFromOwner(first)
+          : false;
+      }
+      if (ts.isPropertyAccessExpression(callee)) {
+        const method = callee.name.text;
+        if (NARROWING_METHODS.has(method)) {
+          return derivesFromOwner(callee.expression);
+        }
+        if (method === "map") {
+          return (
+            node.arguments.length === 1 &&
+            isPropertyProjection(first) &&
+            derivesFromOwner(callee.expression)
+          );
+        }
+      }
+    }
+    return false;
+  };
+  // Least fixpoint: a name joins only once all of its assignments derive.
+  const assignmentsByName = new Map<string, (ts.Node | null)[]>();
+  for (const { names, from } of derivations) {
+    for (const name of names) {
+      assignmentsByName.set(name, [
+        ...(assignmentsByName.get(name) ?? []),
+        from,
+      ]);
+    }
+  }
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const [name, sources] of assignmentsByName) {
+      if (
+        !derived.has(name) &&
+        !mutatedNames.has(name) &&
+        sources.every((from) => from !== null && derivesFromOwner(from))
+      ) {
+        derived.add(name);
+        changed = true;
+      }
+    }
+  }
+  return { isOwnerCall, derivesFromOwner };
+};
+
+type DataFlow = {
+  filterArguments: ts.Expression[];
+  derivations: { names: string[]; from: ts.Node | null }[];
+  mutatedNames: Set<string>;
+};
+
+/** Record filter values, assignments and in-place mutations of one node. */
+const recordDataFlow = (
+  node: ts.Node,
+  { filterArguments, derivations, mutatedNames }: DataFlow,
+): void => {
+  if (ts.isTemplateExpression(node)) {
+    let preceding = node.head.text;
+    for (const span of node.templateSpans) {
+      if (SQL_WORKSPACE_SET_BEFORE_VALUE.test(preceding)) {
+        filterArguments.push(span.expression);
+      }
+      preceding = span.literal.text;
+    }
+  }
+  if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+    derivations.push({
+      names: boundNames(node.name),
+      from: node.initializer,
+    });
+  }
+  if (
+    ts.isBinaryExpression(node) &&
+    ts.isIdentifier(node.left) &&
+    node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+    node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+  ) {
+    // `=`, `??=`, `||=` assign the right side; any other compound
+    // assignment (`+=`, …) mixes values and never derives.
+    derivations.push({
+      names: [node.left.text],
+      from: ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)
+        ? node.right
+        : null,
+    });
+  }
+  // In-place mutation (`ids.push(other)`, `set.add(other)`, `ids[i] = …`)
+  // can mix in any value, so the mutated binding never derives.
+  if (
+    ts.isCallExpression(node) &&
+    ts.isPropertyAccessExpression(node.expression) &&
+    ts.isIdentifier(node.expression.expression) &&
+    MUTATING_METHODS.has(node.expression.name.text)
+  ) {
+    mutatedNames.add(node.expression.expression.text);
+  }
+  if (
+    ts.isBinaryExpression(node) &&
+    node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+    node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+    ts.isElementAccessExpression(node.left) &&
+    ts.isIdentifier(node.left.expression)
+  ) {
+    mutatedNames.add(node.left.expression.text);
+  }
+};
+
 const readFacts = (file: string, source: string): Facts => {
   const sourceFile = ts.createSourceFile(
     file,
@@ -139,8 +357,10 @@ const readFacts = (file: string, source: string): Facts => {
   const ownerNamespaces = new Set<string>();
   /** Values handed to concrete workspace-set filters. */
   const filterArguments: ts.Expression[] = [];
-  /** `name <- initializer` edges for the derivation fixpoint below. */
-  const derivations: { names: string[]; from: ts.Node }[] = [];
+  /** `name <- value` edges; `null` marks an assignment that never derives. */
+  const derivations: { names: string[]; from: ts.Node | null }[] = [];
+  const mutatedNames = new Set<string>();
+  const flow: DataFlow = { filterArguments, derivations, mutatedNames };
   const visit = (node: ts.Node): void => {
     if (
       ts.isImportDeclaration(node) &&
@@ -225,28 +445,7 @@ const readFacts = (file: string, source: string): Facts => {
         }
       }
     }
-    if (ts.isTemplateExpression(node)) {
-      let preceding = node.head.text;
-      for (const span of node.templateSpans) {
-        if (SQL_WORKSPACE_SET_BEFORE_VALUE.test(preceding)) {
-          filterArguments.push(span.expression);
-        }
-        preceding = span.literal.text;
-      }
-    }
-    if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
-      derivations.push({
-        names: boundNames(node.name),
-        from: node.initializer,
-      });
-    }
-    if (
-      ts.isBinaryExpression(node) &&
-      ts.isIdentifier(node.left) &&
-      ASSIGNMENT_OPERATORS.has(node.operatorToken.kind)
-    ) {
-      derivations.push({ names: [node.left.text], from: node.right });
-    }
+    recordDataFlow(node, flow);
     const text = literalText(node);
     if (text !== undefined) {
       if (text.includes(VIEW_SQL_NAME)) {
@@ -269,33 +468,12 @@ const readFacts = (file: string, source: string): Facts => {
   };
   visit(sourceFile);
 
-  // A value derives from the owner when it contains an owner call or names a
-  // binding that does. File-level names: shadowing is a documented blind spot.
-  const derived = new Set<string>();
-  const isOwnerCall = (node: ts.Node) =>
-    ts.isCallExpression(node) &&
-    ((ts.isIdentifier(node.expression) &&
-      ownerBindings.has(node.expression.text)) ||
-      (ts.isPropertyAccessExpression(node.expression) &&
-        ts.isIdentifier(node.expression.expression) &&
-        ownerNamespaces.has(node.expression.expression.text)));
-  const derivesFromOwner = (node: ts.Node): boolean =>
-    isOwnerCall(node) ||
-    (ts.isIdentifier(node) && derived.has(node.text)) ||
-    (ts.forEachChild(node, (child) => derivesFromOwner(child) || undefined) ??
-      false);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const { names, from } of derivations) {
-      if (names.some((name) => !derived.has(name)) && derivesFromOwner(from)) {
-        for (const name of names) {
-          changed ||= !derived.has(name);
-          derived.add(name);
-        }
-      }
-    }
-  }
+  const { isOwnerCall, derivesFromOwner } = ownerProvenance({
+    ownerBindings,
+    ownerNamespaces,
+    derivations,
+    mutatedNames,
+  });
   const findOwnerCall = (node: ts.Node): boolean =>
     isOwnerCall(node) ||
     (ts.forEachChild(node, (child) => findOwnerCall(child) || undefined) ??
