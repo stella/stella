@@ -9,9 +9,14 @@ if [[ ! "$sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
   exit 1
 fi
 sha=$(git rev-parse --verify "$sha^{commit}")
+relation=main
 if ! git merge-base --is-ancestor "$sha" origin/main; then
-  echo "::error::Release SHA $sha is not an ancestor of origin/main" >&2
-  exit 1
+  if [[ -z "${RELEASE_PROOF_REPOSITORY:-}" ]]; then
+    echo "::error::Release SHA $sha is not an ancestor of origin/main" >&2
+    exit 1
+  fi
+  bash "${RELEASE_TREE_PROOF_VERIFIER:?trusted verifier is required}" --allow-pr-head "$RELEASE_PROOF_REPOSITORY" "$sha" "$sha" >/dev/null
+  relation=pr-head
 fi
 version=$(git show "$sha:VERSION" | tr -d '[:space:]')
 main_version=$(git show origin/main:VERSION | tr -d '[:space:]')
@@ -19,7 +24,7 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)\.[0-9]+)?$ ]]; th
   echo "::error::Invalid VERSION at release SHA: $version" >&2
   exit 1
 fi
-if [[ "$version" != "$main_version" ]]; then
+if [[ "$relation" == main ]] && [[ "$version" != "$main_version" ]]; then
   echo "::error::VERSION at release SHA ($version) does not match pending VERSION on main ($main_version)" >&2
   exit 1
 fi
