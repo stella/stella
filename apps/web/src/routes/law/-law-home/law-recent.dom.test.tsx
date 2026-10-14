@@ -13,6 +13,7 @@ import { browserStateStorage } from "@/lib/account/browser-storage";
 import type { LawRecentFilter } from "@/lib/law-search-history/law-search-history.logic";
 import { toSafeId } from "@/lib/safe-id";
 import { readStoredJson } from "@/lib/stored-json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render, screen, within, waitFor } =
@@ -95,7 +96,7 @@ afterEach(async () => {
   await act(async () => cleanup());
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const createSignedSession = ({

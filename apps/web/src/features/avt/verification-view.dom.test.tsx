@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import type { ClaimState, VerificationRun } from "./types";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
@@ -87,7 +89,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   fetchBoundary.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const claimFixtures = {
