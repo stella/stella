@@ -6,10 +6,11 @@ set -euo pipefail
 export GIT_NO_REPLACE_OBJECTS=1
 # Merge-group receipt: the merge queue fast-forwards main to the merge-group
 # commit, so that group's ci-result check run sits on the commit that lands.
-# A successful one from a merge_group run of ci.yml stands in for main/heavy
-# plus main/pr-depth (staging/verified stays required on its own). Every
-# GitHub Actions ci-result on the commit must bind to its run, and every
-# merge-group ci.yml one must be a completed success; anything else refuses.
+# A successful one from a merge_group run of ci.yml can stand in for main/heavy
+# plus main/pr-depth (see receipt_covers_release; staging/verified stays
+# required on its own). Every GitHub Actions ci-result on the commit must
+# bind to its run, and every merge-group ci.yml one must be a completed
+# success; anything else refuses.
 merge_group_receipt() (
   repo="$1"
   sha="$2"
@@ -57,6 +58,15 @@ if [[ "${1:-}" == --merge-group-receipt ]]; then
   merge_group_receipt "${2:?repository is required}" "${3:?target SHA is required}"
   exit 0
 fi
+# Whether a receipt may replace the heavy and PR-depth proofs is decided in one
+# place: check-release-receipt-coverage.sh, which also requires queue-validated
+# history since the previous release. Presence of a receipt alone never drops a
+# binding the fallback to main/heavy and main/pr-depth relies on. A missing or
+# failing coverage check counts as no coverage.
+receipt_coverage="$(dirname "${BASH_SOURCE[0]}")/check-release-receipt-coverage.sh"
+receipt_covers_release() {
+  RELEASE_TREE_PROOF_VERIFIER="${BASH_SOURCE[0]}" bash "$receipt_coverage" "$1" "$2" 2>/dev/null
+}
 # Discovery returns a candidate SHA or empty on a miss; callers still validate it.
 if [[ "${1:-}" == --find-proof ]]; then
   shift
@@ -68,7 +78,7 @@ if [[ "${1:-}" == --find-proof ]]; then
   receipt=''
   has_receipt() {
     if [[ -z "$receipt" ]]; then
-      if merge_group_receipt "$repo" "$sha" 2>/dev/null; then receipt=true; else receipt=false; fi
+      if receipt_covers_release "$repo" "$sha"; then receipt=true; else receipt=false; fi
     fi
     [[ "$receipt" == true ]]
   }
@@ -105,7 +115,8 @@ if [[ "${1:-}" == --find-proof ]]; then
     ' <<< "$proof_statuses" >/dev/null
   }
   # The release head's staging proof is always required; a receipt on the
-  # merged commit replaces the head's heavy and PR-depth proofs.
+  # merged commit that covers the release history replaces the head's heavy
+  # and PR-depth proofs.
   if ! bound '["staging/verified"]' || ! { bound "$suite_contexts" || has_receipt; }; then
     exit 0
   fi
@@ -165,8 +176,9 @@ if [[ $'\n'"$history"$'\n' == *$'\n'"$sha"$'\n'* ]]; then
     # tip they actually fetched, and every gate must bind to the squash parent.
     statuses=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$proof/statuses?per_page=100")
     bound_contexts=(staging/verified)
-    # A merge-group receipt on the landed commit replaces the head's suite proofs.
-    merge_group_receipt "$repo" "$sha" 2>/dev/null || bound_contexts+=(main/heavy main/pr-depth)
+    # Only a receipt that covers the release history replaces the head's suite
+    # proofs; otherwise the gate falls back to them, so they must bind too.
+    receipt_covers_release "$repo" "$sha" || bound_contexts+=(main/heavy main/pr-depth)
     for context in "${bound_contexts[@]}"; do
       jq -e --arg context "$context" --arg suffix "; main=$parents" '
         [.[][] | select(.context == $context)][0] |
