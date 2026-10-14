@@ -50,6 +50,11 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
         await client.unsafe(
           `CREATE ROLE ${ownerRole} NOLOGIN NOSUPERUSER NOBYPASSRLS`,
         );
+        // The test connection is a non-superuser CREATEROLE owner, so it
+        // needs explicit membership to hand tables to and act as this role.
+        await client.unsafe(
+          `GRANT ${ownerRole} TO CURRENT_USER WITH INHERIT TRUE, SET TRUE`,
+        );
         await client.unsafe(
           `GRANT USAGE ON SCHEMA ${schema} TO stella, ${ownerRole}`,
         );
