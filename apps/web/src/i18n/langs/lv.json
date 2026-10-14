@@ -4517,6 +4517,8 @@
   },
   "search": {
     "aiRefine": "Uzlabot vaicājumu ar AI",
+    "caseLawMatchingDecisions": "{count, plural, zero {# atbilstošu nolēmumu} one {# atbilstošs nolēmums} other {# atbilstoši nolēmumi}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ atbilstošu nolēmumu} one {#+ atbilstošs nolēmums} other {#+ atbilstoši nolēmumi}}",
     "continueInChat": "Turpināt tērzēšanā",
     "dateFrom": "No",
     "dateTo": "Līdz",

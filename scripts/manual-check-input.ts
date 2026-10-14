@@ -14,6 +14,7 @@ export type ManualCheck = (typeof MANUAL_CHECKS)[number];
 export const MANUAL_WORKFLOW_CHECKS = [
   ...MANUAL_CHECKS,
   "install-cache-benchmark",
+  "store-cache-save-benchmark",
 ] as const;
 
 const packageNames = (root: string) =>
