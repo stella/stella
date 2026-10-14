@@ -117,6 +117,10 @@ import {
   mentionAttrsToHref,
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
+import {
+  findChatRequestError,
+  type ChatRequestError,
+} from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -1004,7 +1008,15 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
 type ChatErrorTranslationKey =
   | (typeof CHAT_ERROR_TRANSLATION_KEYS)[keyof typeof CHAT_ERROR_TRANSLATION_KEYS]
   | "chat.sendErrorAnonymizationBlocked"
-  | "chat.sendError";
+  | "chat.sendError"
+  | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
+
+const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
+  preparation_failed: "chat.sendErrorPreparationFailed",
+  connection_failed: "chat.sendErrorConnectionFailed",
+  timed_out: "chat.sendErrorTimedOut",
+  not_started: "chat.sendErrorNotStarted",
+} as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
 
 const isMappedChatErrorKind = (
   message: string,
@@ -1012,6 +1024,10 @@ const isMappedChatErrorKind = (
   message in CHAT_ERROR_TRANSLATION_KEYS;
 
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
+  const requestError = findChatRequestError(error);
+  if (requestError !== undefined) {
+    return CHAT_REQUEST_ERROR_TRANSLATION_KEYS[requestError.kind];
+  }
   if (isThirdPartyBoundaryRefusalError(error)) {
     return "chat.sendErrorAnonymizationBlocked";
   }
