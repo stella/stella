@@ -7371,8 +7371,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Route count times per-route render time on a loaded runner: the slowest
+      # passing runs take about 3 minutes and a slow runner about 4.5.
       - name: Check route network baseline
-        timeout-minutes: 4
+        timeout-minutes: 8
         if: >-
           steps.e2e-stack.outputs.status == 'ready'
           && matrix.shard == 'network-baseline'
