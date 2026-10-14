@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { ElysiaCustomStatusResponse } from "elysia/error";
@@ -32,6 +32,7 @@ import {
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
+import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -274,6 +275,38 @@ describe.skipIf(!runPostgresTests || !databaseUrl)(
         expect(document?.currentVersion?.fields.map(({ id }) => id)).toContain(
           first.value.fileFieldId,
         );
+      });
+    }, 120_000);
+
+    test("a creator refused before its callback still returns the competing commit", async () => {
+      await withSampleFixture(async (fixture) => {
+        let entered = 0;
+        const result = await loadSampleCase({
+          ...fixture.first,
+          createDocument: async () => {
+            entered++;
+            const winner = await loadSampleCase(fixture.second);
+            if (winner.isErr()) {
+              throw winner.error;
+            }
+            return Result.err(
+              new OrganizationFileUsageError({
+                reason: "capacity_exceeded",
+                message: "Document capacity reached",
+              }),
+            );
+          },
+        });
+        if (result.isErr()) {
+          throw result.error;
+        }
+        expect(entered).toBe(1);
+        const replay = await loadSampleCase(fixture.second);
+        if (replay.isErr()) {
+          throw replay.error;
+        }
+        expect(result.value).toEqual(replay.value);
+        await assertSample(fixture);
       });
     }, 120_000);
 

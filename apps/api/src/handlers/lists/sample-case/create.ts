@@ -120,6 +120,20 @@ const readLockedSample = async (
   return { listId: list.id, ...list.sampleCase };
 };
 
+const readSampleReceipt = async (
+  scopedDb: ScopedDb,
+  workspaceId: SafeId<"workspace">,
+) => {
+  const result = await safeDbFromScoped(scopedDb)(
+    async (tx) => await readLockedSample(tx, workspaceId),
+  );
+  return result.mapError((error) =>
+    DocumentWriteRefusedError.is(error.cause)
+      ? documentWriteRefusalHandlerError(error.cause)
+      : error,
+  );
+};
+
 type LoadSampleCaseOptions = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
@@ -139,15 +153,7 @@ export const loadSampleCase = async ({
 }: LoadSampleCaseOptions) =>
   await Result.gen(async function* () {
     const existing = yield* Result.await(
-      safeDbFromScoped(scopedDb)(
-        async (tx) => await readLockedSample(tx, workspaceId),
-      ).then((result) =>
-        result.mapError((error) =>
-          DocumentWriteRefusedError.is(error.cause)
-            ? documentWriteRefusalHandlerError(error.cause)
-            : error,
-        ),
-      ),
+      readSampleReceipt(scopedDb, workspaceId),
     );
     if (existing !== undefined) {
       return Result.ok(existing);
@@ -307,6 +313,19 @@ export const loadSampleCase = async ({
       attempted.error.cause instanceof TransactionRollbackError
     ) {
       return Result.ok(concurrent.receipt);
+    }
+    if (attempted.isErr() || attempted.value.isErr()) {
+      // A competing commit can exhaust capacity before the buffer writer
+      // reaches afterCreate. Its refusal must still converge on that sample.
+      const winner = yield* Result.await(
+        readSampleReceipt(scopedDb, workspaceId),
+      );
+      if (winner !== undefined) {
+        if (attempted.isErr()) {
+          captureError(attempted.error, { workspaceId });
+        }
+        return Result.ok(winner);
+      }
     }
     if (attempted.isErr()) {
       if (HandlerError.is(attempted.error.cause)) {
