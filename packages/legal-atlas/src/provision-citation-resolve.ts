@@ -149,6 +149,11 @@ type CompiledResolver = {
    * as a further provision.
    */
   sentenceDesignator: RegExp;
+  /**
+   * The words prose puts between a provision and its act (`zákona`,
+   * `vyhlášky`), the profile's own lead-ins, read at the start of a text.
+   */
+  actLeadIn: RegExp;
   sectionUnits: ReadonlyMap<string, SectionUnit>;
   subdivisions: readonly {
     pattern: RegExp;
@@ -191,6 +196,10 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
     ),
     andFollowing: new RegExp(
       String.raw`(?<![\p{L}\p{N}])(?:${alternation(profile.andFollowingMarkers)})`,
+      "iu",
+    ),
+    actLeadIn: new RegExp(
+      String.raw`^[\s,]*(?:${alternation(profile.actLeadIns)})\s+`,
       "iu",
     ),
     sentenceDesignator: new RegExp(
@@ -733,4 +742,121 @@ export const resolveProvisionCitation = ({
     anchor: renderAnchor(profile, resolved),
     citation: renderCitation(resolved),
   };
+};
+
+/** One provision a running text cites, resolved, with where it stands. */
+export type LocatedProvisionCitationSpan = {
+  /** UTF-16 offsets into the text as given, end exclusive. */
+  start: number;
+  end: number;
+  citation: ResolvedProvisionCitation;
+};
+
+/** How far past a provision its act may stand, in characters. */
+const ACT_SEARCH_WINDOW = 160;
+
+const LEADING_SPACE = /^[\s,]*/u;
+
+const ACT_GAZETTE_AT_START = /^(?:č\.\s*)?\d{1,5}\s*\/\s*\d{4}(?![\p{N}])/iu;
+
+const WORD_CHARACTER = /[\p{L}\p{N}]/u;
+
+/**
+ * Where the act a text opens with ends: a gazette number with its
+ * collection (`č. 262/2006 Sb.`), or an alias or title the profile lists,
+ * longest first (`zákoníku práce`, `ZP`). Null when the text does not open
+ * with an act.
+ */
+const readActEnd = (
+  rest: string,
+  resolver: CompiledResolver,
+): number | null => {
+  const gazette = ACT_GAZETTE_AT_START.exec(rest);
+  if (gazette !== null) {
+    const afterNumber = rest.slice(gazette[0].length);
+    const collection = resolver.collections
+      .map(({ pattern }) => pattern.exec(afterNumber))
+      .find((match) => match !== null);
+    return gazette[0].length + (collection?.[0].length ?? 0);
+  }
+  for (const act of resolver.acts) {
+    const head = rest.slice(0, act.spelling.length);
+    const named = act.caseSensitive
+      ? head === act.key
+      : foldKey(head) === act.key;
+    if (named && !WORD_CHARACTER.test(rest.charAt(act.spelling.length))) {
+      return act.spelling.length;
+    }
+  }
+  return null;
+};
+
+/**
+ * Where the act right after a provision ends. The act directly after it is
+ * tried first, since a lead-in word can open a title (`zákoníku` in
+ * `zákoníku práce`); then past one of the profile's lead-ins (`zákona
+ * č. 262/2006 Sb.`). Anything else between them leaves it unlinked.
+ */
+const readActAfterProvision = (
+  after: string,
+  resolver: CompiledResolver,
+): number | null => {
+  const space = LEADING_SPACE.exec(after)?.[0].length ?? 0;
+  const direct = readActEnd(after.slice(space), resolver);
+  if (direct !== null) {
+    return space + direct;
+  }
+  const leadIn = resolver.actLeadIn.exec(after);
+  if (leadIn === null) {
+    return null;
+  }
+  const led = readActEnd(after.slice(leadIn[0].length), resolver);
+  return led === null ? null : leadIn[0].length + led;
+};
+
+/**
+ * Every provision a running text cites with its act, in text order, each
+ * resolved by {@link resolveProvisionCitation} against the same profile, so
+ * a provision linked in prose is the one a search filter names. A provision
+ * with no act right after it, or a span naming several provisions, is left
+ * out: the caller links nothing rather than a guess.
+ */
+export const locateProvisionCitations = ({
+  text,
+  profile,
+  citedOn,
+}: ResolveOptions): LocatedProvisionCitationSpan[] => {
+  const resolver = compiledFor(profile);
+  const sections = new RegExp(resolver.section.source, "giu");
+  const spans: LocatedProvisionCitationSpan[] = [];
+  let consumedTo = 0;
+  for (const match of text.matchAll(sections)) {
+    if (match.index < consumedTo) {
+      continue;
+    }
+    const { end: pathEnd } = readSubdivisionPath(
+      text,
+      match.index + match[0].length,
+      resolver,
+    );
+    const actEnd = readActAfterProvision(
+      text.slice(pathEnd, pathEnd + ACT_SEARCH_WINDOW),
+      resolver,
+    );
+    if (actEnd === null) {
+      continue;
+    }
+    const end = pathEnd + actEnd;
+    const citation = resolveProvisionCitation({
+      text: text.slice(match.index, end),
+      profile,
+      citedOn,
+    });
+    if (citation.status !== "resolved") {
+      continue;
+    }
+    spans.push({ start: match.index, end, citation });
+    consumedTo = end;
+  }
+  return spans;
 };
