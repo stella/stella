@@ -151,8 +151,11 @@ export type {
 } from "./chat-decision-passage-link";
 export {
   CHAT_CORPORA,
+  CHAT_CORPUS_HREF_PREFIX,
   formatChatCorpusId,
+  parseChatCorpusHref,
   parseChatCorpusId,
+  toChatCorpusHref,
 } from "./chat-corpus-scope";
 export type { ChatCorpus, ChatCorpusScope } from "./chat-corpus-scope";
 export {

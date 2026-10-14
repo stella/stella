@@ -986,7 +986,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, zero {# nolēmumu ir} one {# nolēmumam ir} other {# nolēmumiem ir}} šis lietas numurs. Izvēlieties tiesu.",
-    "searchAskPrompt": "{query} (judikatūra, {country})",
     "searchLabel": "Meklēt judikatūrā",
     "searchPlaceholder": "Lietas numurs, ECLI vai vārdi, piem. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1320,7 +1319,12 @@
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {
       "category": {
-        "entities": "Šajā lietā"
+        "entities": "Šajā lietā",
+        "sources": "Avoti"
+      },
+      "corpus": {
+        "caseLaw": "Judikatūra · {country}",
+        "legislation": "Tiesību akti · {country}"
       },
       "loadError": "Neizdevās ielādēt vienumus"
     },
@@ -4978,7 +4982,6 @@
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
     "publisherWindowInconsistent": "Šai dienai spēkā esošo redakciju nevar noteikt: izdevēja dati ir pretrunīgi.",
     "resolvedAlias": "Atpazīts kā {label}",
-    "searchAskPrompt": "{query} ({country} tiesību akti)",
     "searchLabel": "Meklēt tiesību aktos",
     "searchPlaceholder": "Numurs, nosaukums vai virsraksts, piem. 89/2012 Sb.",
     "showInText": "Rādīt tekstā",

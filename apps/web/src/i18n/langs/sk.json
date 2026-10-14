@@ -986,7 +986,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# rozhodnutie nesie} few {# rozhodnutia nesú} other {# rozhodnutí nesie}} túto spisovú značku. Vyberte súd.",
-    "searchAskPrompt": "{query} (judikatúra, {country})",
     "searchLabel": "Hľadať v judikatúre",
     "searchPlaceholder": "Spisová značka, ECLI alebo slová, napr. 1Cdo/12/2020",
     "searchUnavailable": {
@@ -1320,7 +1319,12 @@
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
-        "entities": "V tomto spise"
+        "entities": "V tomto spise",
+        "sources": "Zdroje"
+      },
+      "corpus": {
+        "caseLaw": "Judikatúra · {country}",
+        "legislation": "Právne predpisy · {country}"
       },
       "loadError": "Nepodarilo sa načítať položky"
     },
@@ -4978,7 +4982,6 @@
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
-    "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
     "showInText": "Zobraziť v texte",

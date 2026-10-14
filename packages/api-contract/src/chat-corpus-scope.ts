@@ -24,6 +24,18 @@ const CORPUS_ID_SEPARATOR = ":";
 export const formatChatCorpusId = ({ corpus, country }: ChatCorpusScope) =>
   `${corpus}${CORPUS_ID_SEPARATOR}${country}`;
 
+/** The link a corpus chip persists as: `#stella-corpus=case_law:CZE`. */
+export const CHAT_CORPUS_HREF_PREFIX = "#stella-corpus=";
+
+export const toChatCorpusHref = (scope: ChatCorpusScope) =>
+  `${CHAT_CORPUS_HREF_PREFIX}${formatChatCorpusId(scope)}`;
+
+/** A persisted corpus link back into its scope; null for any other href. */
+export const parseChatCorpusHref = (href: string): ChatCorpusScope | null =>
+  href.startsWith(CHAT_CORPUS_HREF_PREFIX)
+    ? parseChatCorpusId(href.slice(CHAT_CORPUS_HREF_PREFIX.length))
+    : null;
+
 /** A chip id back into its scope, or null for anything that is not one. */
 export const parseChatCorpusId = (id: string): ChatCorpusScope | null => {
   const [corpus, country, ...rest] = id.split(CORPUS_ID_SEPARATOR);

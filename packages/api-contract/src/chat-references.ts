@@ -1,3 +1,4 @@
+import { CHAT_CORPUS_HREF_PREFIX } from "./chat-corpus-scope";
 import { CHAT_RESOURCE_HREF_PREFIX } from "./resource-link";
 
 export const CHAT_MENTION_CATEGORIES = ["entity", "workspace"] as const;
@@ -30,7 +31,7 @@ export const CHAT_REFERENCE_HREF_PREFIXES = {
   decision: CHAT_RESOURCE_HREF_PREFIX.case_law_decision,
   // A public corpus scope chip ("@Case law · Czechia"): no resource row, so
   // its id is the scope itself (`formatChatCorpusId`).
-  corpus: "#stella-corpus=",
+  corpus: CHAT_CORPUS_HREF_PREFIX,
 } as const satisfies ChatReferenceHrefPrefixMap;
 
 export const CHAT_MENTION_HREF_PREFIXES = {

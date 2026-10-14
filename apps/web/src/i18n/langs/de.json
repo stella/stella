@@ -986,7 +986,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
-    "searchAskPrompt": "{query} (Rechtsprechung, {country})",
     "searchLabel": "Rechtsprechung durchsuchen",
     "searchPlaceholder": "Aktenzeichen, ECLI oder Stichwörter, z. B. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1320,7 +1319,12 @@
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {
-        "entities": "In dieser Akte"
+        "entities": "In dieser Akte",
+        "sources": "Quellen"
+      },
+      "corpus": {
+        "caseLaw": "Rechtsprechung · {country}",
+        "legislation": "Rechtsvorschriften · {country}"
       },
       "loadError": "Einträge konnten nicht geladen werden"
     },
@@ -4978,7 +4982,6 @@
     "provisionPromptSubjectUndated": "{provision} von {statute} ({eli})",
     "publisherWindowInconsistent": "Für dieses Datum lässt sich keine geltende Fassung bestimmen: Die Angaben des Herausgebers sind widersprüchlich.",
     "resolvedAlias": "Erkannt als {label}",
-    "searchAskPrompt": "{query} (Rechtsvorschriften: {country})",
     "searchLabel": "Rechtsvorschriften durchsuchen",
     "searchPlaceholder": "Nummer, Kurzname oder Titel, z. B. 89/2012 Sb.",
     "showInText": "Im Text anzeigen",

@@ -986,7 +986,6 @@
       }
     },
     "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
-    "searchAskPrompt": "{query} (teismų praktika, {country})",
     "searchLabel": "Ieškoti teismų praktikoje",
     "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
     "searchUnavailable": {
@@ -1320,7 +1319,12 @@
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {
       "category": {
-        "entities": "Šioje byloje"
+        "entities": "Šioje byloje",
+        "sources": "Šaltiniai"
+      },
+      "corpus": {
+        "caseLaw": "Teismų praktika · {country}",
+        "legislation": "Teisės aktai · {country}"
       },
       "loadError": "Nepavyko įkelti elementų"
     },
@@ -4978,7 +4982,6 @@
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
     "publisherWindowInconsistent": "Šiai dienai galiojančios redakcijos nustatyti negalima: leidėjo duomenys prieštaringi.",
     "resolvedAlias": "Atpažinta kaip {label}",
-    "searchAskPrompt": "{query} ({country} teisės aktai)",
     "searchLabel": "Ieškoti teisės aktų",
     "searchPlaceholder": "Numeris, pavadinimas arba antraštė, pvz. 89/2012 Sb.",
     "showInText": "Rodyti tekste",

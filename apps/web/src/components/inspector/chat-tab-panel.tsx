@@ -91,6 +91,7 @@ import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-co
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { chatThreadOptions } from "@/features/chat/queries";
+import { claimQueuedChatSend } from "@/features/chat/queued-chat-sends";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -479,6 +480,18 @@ export const ChatTabPanel = ({
   useMountEffect(() => {
     consumeRenameRequest();
     return useInspectorCommandStore.subscribe(consumeRenameRequest);
+  });
+
+  // A surface that opened this tab with its question queued ("Ask in chat"):
+  // send it once, through the same AI check and session a typed message takes.
+  useMountEffect(() => {
+    const queuedHtml = claimQueuedChatSend(threadRef);
+    if (queuedHtml !== null) {
+      detached(
+        handlePromptSubmit({ prompt: queuedHtml, files: [] }),
+        "chat-tab-panel.queued-send",
+      );
+    }
   });
 
   const handleComposerSubmit = useLatestCallback(

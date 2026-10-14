@@ -989,7 +989,6 @@ type Messages = {
       };
     };
     "sameCaseNumber": "{count, plural, one {# decision shares} other {# decisions share}} this case number. Pick the court.";
-    "searchAskPrompt": "{query} (case law of {country})";
     "searchLabel": "Search case law";
     "searchPlaceholder": "Case number, ECLI or words, e.g. 22 Cdo 2653/2012";
     "searchUnavailable": {
@@ -1324,6 +1323,11 @@ type Messages = {
     "mention": {
       "category": {
         "entities": "In this matter";
+        "sources": "Sources";
+      };
+      "corpus": {
+        "caseLaw": "Case law · {country}";
+        "legislation": "Legislation · {country}";
       };
       "loadError": "Failed to load items";
     };
@@ -4981,7 +4985,6 @@ type Messages = {
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})";
     "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.";
     "resolvedAlias": "Recognized as {label}";
-    "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
     "showInText": "Show in the text";
