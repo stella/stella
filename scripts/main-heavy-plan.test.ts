@@ -6,6 +6,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import eventPolicies from "../.github/ci-event-policy.json" with { type: "json" };
+import { childExitStatus } from "../packages/scripts/src/child-exit-status";
 import serviceImages from "./ci-service-images.json" with { type: "json" };
 import {
   contextFromNested,
@@ -47,6 +48,28 @@ const workflowSchema = v.object({
   ),
 });
 const workflow = v.parse(workflowSchema, Bun.YAML.parse(source));
+// Resolve the real-checkout baseline during suite setup, as the CI partition
+// tests do. Git history and lazy blob fetches are not unit-test work.
+const baselineGit = (args: string[]) => {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: root,
+    timeout: 5000,
+    killSignal: "SIGKILL",
+  });
+  if (childExitStatus(result) !== 0) {
+    panic(
+      `Heavy policy baseline unavailable: git ${args.join(" ")}; exit status ${result.exitCode}, signal ${String(result.signalCode)}; ${result.stderr.toString().trim() || "git produced no diagnostic"}`,
+    );
+  }
+  return result.stdout.toString().trim();
+};
+const baselineRevision = baselineGit(["merge-base", "origin/main", "HEAD"]);
+const original = v.parse(
+  workflowSchema,
+  Bun.YAML.parse(
+    baselineGit(["show", `${baselineRevision}:.github/workflows/ci.yml`]),
+  ),
+);
 const querySource = readFileSync(
   new URL("../.github/workflows/query-perf.yml", import.meta.url),
   "utf-8",
@@ -591,23 +614,6 @@ test("heavy planning rejects gate drift instead of omitting a job", () => {
 });
 
 test("heavy event policies exclude pull requests and preserve existing full certification", () => {
-  const base = Bun.spawnSync(["git", "merge-base", "origin/main", "HEAD"], {
-    cwd: root,
-  });
-  expect(base.exitCode).toBe(0);
-  const previous = Bun.spawnSync(
-    [
-      "git",
-      "show",
-      `${base.stdout.toString().trim()}:.github/workflows/ci.yml`,
-    ],
-    { cwd: root },
-  );
-  expect(previous.exitCode).toBe(0);
-  const original = v.parse(
-    workflowSchema,
-    Bun.YAML.parse(previous.stdout.toString()),
-  );
   let compared = 0;
   for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
     for (const depth of ["fast", "full"]) {

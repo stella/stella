@@ -1088,37 +1088,18 @@ const workspaceManifests = (): WorkspaceManifest[] =>
   );
 
 describe("parallel code-quality legs", () => {
-  test("quality steps have a bounded workflow deadline in every leg", () => {
+  test("quality steps use the job timeout as their only outer deadline", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
     const steps = workflow
       .split(/\n {6}- name: /u)
       .filter((step) => /^Code quality(?: \((?:web|rest)\))?\n/u.test(step));
     expect(steps).toHaveLength(3);
-    const assertDeadline = (step: string) => {
-      const minutes = Number(
-        /^ {8}timeout-minutes: (\d+)$/mu.exec(step)?.at(1),
-      );
-      if (
-        !Number.isSafeInteger(minutes) ||
-        minutes * 60_000 <= CODE_CHECK_EXECUTION_BUDGET_MS ||
-        minutes * 60_000 > CODE_CHECK_EXECUTION_BUDGET_MS + 60_000
-      ) {
-        throw new Error(
-          "Code-quality step must exceed the measured critical-path deadline by at most one minute",
-        );
-      }
-    };
     for (const step of steps) {
-      assertDeadline(step);
-      expect(() =>
-        assertDeadline(
-          step.replace(/timeout-minutes: \d+/u, "timeout-minutes: 8"),
-        ),
-      ).toThrow("measured critical-path deadline");
+      expect(step).not.toMatch(/^ {8}timeout-minutes:/mu);
     }
   });
 
-  test("the hard deadline follows the API parallel critical path and measured cold branches", () => {
+  test("the warning budget follows the API parallel critical path and measured cold branches", () => {
     expect(turboTasks()["@stll/api#lint"]?.["dependsOn"]).not.toContain(
       "typecheck",
     );
@@ -1328,6 +1309,7 @@ describe("check failure reporting", () => {
         mergeBase: "fixture-base",
         cwd: directory,
         timeoutMs: 1000,
+        stallMs: 1000,
         command: [
           process.execPath,
           "-e",
@@ -1339,7 +1321,7 @@ describe("check failure reporting", () => {
       });
       expect(result.unwrap()).toEqual({
         type: "fallback",
-        reason: "affected workspace planner timeout",
+        reason: "affected workspace planner stall",
       });
       const output = diagnostics.join("");
       expect(output).toContain("using full check scope");
@@ -1363,6 +1345,7 @@ describe("check failure reporting", () => {
         mergeBase: "fixture-base",
         cwd: directory,
         timeoutMs: 1000,
+        stallMs: 1000,
         command: [
           process.execPath,
           "-e",
@@ -1379,6 +1362,7 @@ describe("check failure reporting", () => {
         mergeBase: "fixture-base",
         cwd: directory,
         timeoutMs: 1000,
+        stallMs: 1000,
         command: [process.execPath, "-e", "process.exit(7)"],
         report: () => {},
       });
@@ -1391,7 +1375,7 @@ describe("check failure reporting", () => {
     }
   });
 
-  test("planning and sequential commands share one execution deadline", async () => {
+  test("sequential checks continue after their shared warning budget", async () => {
     let clock = 1000;
     const budgets: number[] = [];
     const output: string[] = [];
@@ -1399,7 +1383,7 @@ describe("check failure reporting", () => {
       await executeCheckCommands({
         commands,
         now: () => clock,
-        deadlineMs: 3000,
+        budgetDeadlineMs: 3000,
         runner: (_command, timeoutMs) => {
           budgets.push(timeoutMs);
           clock += 1500;
@@ -1409,10 +1393,10 @@ describe("check failure reporting", () => {
           output.push(text);
         },
       }),
-    ).toBe(1);
-    expect(budgets).toEqual([2000, 500]);
+    ).toBe(0);
+    expect(budgets).toEqual([2000, 500, 0]);
     expect(output.join("")).toContain(
-      "execution deadline exceeded before next command",
+      "execution warning budget exceeded; continuing checks",
     );
   });
   test("stops at the first failed command without retrying", async () => {

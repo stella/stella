@@ -24,6 +24,8 @@ import {
   rateLookupKey,
   resolveRate,
   resolveRatesInTransaction,
+  resolveWorkspaceRatesInTransaction,
+  workspaceRateLookupKey,
 } from "@/api/lib/billing/rates";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -589,4 +591,70 @@ describe("rate resolution across stored membership role values", () => {
       [rateLookupKey(owner)]: priced(DEFAULT_RATE),
     });
   });
+});
+
+test("bulk rates isolate matters and match singleton resolution across dates", async () => {
+  const secondTableId = toSafeId<"rateTable">(Bun.randomUUIDv7());
+  await testDb.insert(rateTables).values({
+    id: secondTableId,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA2,
+    name: "Second matter default",
+    currency: "EUR",
+    isDefault: true,
+  });
+  await testDb.insert(rateEntries).values({
+    id: toSafeId<"rateEntry">(Bun.randomUUIDv7()),
+    workspaceId: ids.wsA2,
+    rateTableId: secondTableId,
+    hourlyRate: cents(42_000),
+    effectiveFrom: "2025-01-01",
+    effectiveTo: "2025-12-31",
+  });
+  const lookups = [ids.wsA1, ids.wsA2].flatMap((workspaceId) =>
+    ["2024-12-31", "2025-01-01", "2025-12-31", "2026-01-01"].flatMap(
+      (dateWorked) =>
+        [ids.userA1, ids.userA2, ids.userB1].map((userId) => ({
+          workspaceId,
+          userId,
+          dateWorked,
+        })),
+    ),
+  );
+  const result = await scopedSafeDb()(async (tx) => {
+    const bulk = await resolveWorkspaceRatesInTransaction({ tx, lookups });
+    for (const lookup of lookups) {
+      const single = await resolveRatesInTransaction({
+        tx,
+        workspaceId: lookup.workspaceId,
+        lookups: [lookup],
+      });
+      expect(bulk.get(workspaceRateLookupKey(lookup))).toEqual(
+        single.get(rateLookupKey(lookup)),
+      );
+    }
+    const secondMatterLookup = {
+      workspaceId: ids.wsA2,
+      userId: ids.userA1,
+      dateWorked: "2025-01-01",
+    };
+    expect(bulk.get(workspaceRateLookupKey(secondMatterLookup))).toEqual({
+      hourlyRate: 42_000,
+      currency: "EUR",
+    });
+    expect(
+      bulk.get(
+        workspaceRateLookupKey({
+          ...secondMatterLookup,
+          dateWorked: "2026-01-01",
+        }),
+      ),
+    ).toBeUndefined();
+    expect(
+      bulk.get(
+        workspaceRateLookupKey({ ...secondMatterLookup, userId: ids.userB1 }),
+      ),
+    ).toBeUndefined();
+  });
+  expect(result.isOk()).toBe(true);
 });

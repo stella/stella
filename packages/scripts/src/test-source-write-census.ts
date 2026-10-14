@@ -384,7 +384,10 @@ if (import.meta.main) {
   const issues =
     files.length === 0
       ? ["Source-write census found no test files"]
-      : sourceWriteExceptionIssues(repositoryRoot, violations);
+      : sourceWriteExceptionIssues({
+          root: repositoryRoot,
+          observed: violations,
+        });
   if (issues.length > 0) {
     process.stderr.write(issues.join("\n"));
     process.exitCode = 1;

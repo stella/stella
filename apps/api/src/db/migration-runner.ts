@@ -28,6 +28,7 @@ import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { runOnlineMigrations } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
+import { terminateReserved } from "./sql-close";
 
 type LedgerRow = {
   id: number;
@@ -562,7 +563,7 @@ export const runMigrations = async ({
     const onlineConnection: OnlineMigrationConnection = {
       terminate: async () => {
         session.state = "terminated";
-        await connection.close({ timeout: 0 });
+        await terminateReserved(connection);
       },
       execute: async (query, params = []) => {
         await connection.unsafe(query, [...params]);

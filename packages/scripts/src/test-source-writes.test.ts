@@ -15,7 +15,12 @@ import {
   runSourceWriteCensus,
   writers,
 } from "./test-source-write-census";
-import { validateSourceWriteExceptions } from "./test-source-write-exceptions";
+import {
+  sourceWriteExceptionIssues,
+  validateSourceWriteExceptions,
+} from "./test-source-write-exceptions";
+
+const repositoryRoot = path.resolve(import.meta.dir, "../../..");
 
 // CI measured 6.83s on the failing runner and 3.86s on a passing runner.
 // Round twice the slower measurement up to 15s; the outer test gets twice
@@ -29,6 +34,96 @@ test(
   },
   CENSUS_BUDGET_MS * 2,
 );
+
+test("ledger failures report termination even when Git emits no stderr", () => {
+  for (const command of ["merge-base", "ls-tree", "show"]) {
+    for (const termination of [
+      { status: 1, signal: null, stderr: "" },
+      { status: null, signal: "SIGKILL", stderr: "" },
+      { status: 128, signal: null, stderr: "fatal: unavailable revision" },
+      { status: 0, signal: "SIGTERM", stderr: "" },
+    ] as const) {
+      const issues = sourceWriteExceptionIssues({
+        root: repositoryRoot,
+        observed: [],
+        git: (args) =>
+          args.at(0) === command
+            ? { ...termination, stdout: "" }
+            : { status: 0, signal: null, stdout: "fixture", stderr: "" },
+      });
+      expect(issues).toHaveLength(1);
+      expect(issues.at(0)).toContain(
+        `exit status ${String(termination.status)}, signal ${String(termination.signal)}`,
+      );
+      expect(issues.at(0)).toContain(
+        termination.stderr || "git produced no diagnostic",
+      );
+    }
+  }
+});
+
+test("ledger failures preserve a Git spawn error", () => {
+  const issues = sourceWriteExceptionIssues({
+    root: repositoryRoot,
+    observed: [],
+    git: () => ({
+      status: null,
+      signal: "SIGKILL",
+      stdout: "",
+      stderr: "",
+      error: new Error("spawnSync git ETIMEDOUT"),
+    }),
+  });
+  expect(issues).toEqual([
+    "Source-write ledger merge base unavailable: exit status null, signal SIGKILL; spawnSync git ETIMEDOUT",
+  ]);
+});
+
+test("ledger loading preserves the first rollout and shrink-only comparison", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-source-write-ledger-"));
+  const exception = {
+    source: "packages/example/src/example.test.ts",
+    operation: "writeFileSync",
+    destination: "packages/example/src/baseline.json",
+    reason: "Explicit regeneration of a committed baseline.",
+  };
+  const current = JSON.stringify([exception]);
+  const observed = [
+    `${exception.source}:12: ${exception.operation} writes into src (${exception.destination})`,
+  ];
+  try {
+    mkdirSync(path.join(root, "scripts"));
+    writeFileSync(
+      path.join(root, "scripts/test-source-write-exceptions.json"),
+      current,
+    );
+    for (const baseline of [null, current, "[]"]) {
+      const issues = sourceWriteExceptionIssues({
+        root,
+        observed,
+        git: (args) => {
+          let stdout = "fixture-revision";
+          if (args.at(0) === "ls-tree") {
+            stdout = baseline === null ? "" : "ledger";
+          }
+          if (args.at(0) === "show") {
+            stdout = baseline ?? "";
+          }
+          return { status: 0, signal: null, stderr: "", stdout };
+        },
+      });
+      expect(issues).toEqual(
+        baseline === "[]"
+          ? [
+              `Source-write exceptions may only shrink: ${exception.source}: ${exception.operation} writes into src (${exception.destination})`,
+            ]
+          : [],
+      );
+    }
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
 
 test("the census inspects test helper directories and fixture modules", () => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-source-write-census-"));
