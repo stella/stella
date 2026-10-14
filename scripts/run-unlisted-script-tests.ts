@@ -77,12 +77,17 @@ export const balanceTestFiles = (
   );
   const ordered = files
     .map((file) => ({ file, weight: weightOf(file) }))
-    .toSorted(
-      (a, b) =>
-        b.weight - a.weight ||
-        // oxlint-disable-next-line require-cached-collator/require-cached-collator -- repository paths, not display text
-        a.file.localeCompare(b.file),
-    );
+    .toSorted((a, b) => {
+      if (a.weight !== b.weight) {
+        return b.weight - a.weight;
+      }
+      // Repository paths, compared by code unit: the order only has to be
+      // stable, not linguistic.
+      if (a.file === b.file) {
+        return 0;
+      }
+      return a.file < b.file ? -1 : 1;
+    });
   for (const { file, weight } of ordered) {
     let lightest = lists[0] ?? panic("A balance has a group");
     for (const list of lists) {
