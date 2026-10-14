@@ -19,12 +19,9 @@ import { UnlocatedClaims } from "@/features/avt/original-claims";
 import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import {
   claimPageNumbers,
-  locateClaimsOnPages,
+  resolvePdfClaimLocations,
 } from "@/features/avt/original-pdf.logic";
-import type {
-  LocatedPdfClaim,
-  PdfClaimLocations,
-} from "@/features/avt/original-pdf.logic";
+import type { LocatedPdfClaim } from "@/features/avt/original-pdf.logic";
 import { originalPdfPagesOptions } from "@/features/avt/queries";
 import { STATE_COLOR } from "@/features/avt/state-chip";
 import type { VerificationClaim, VerificationRun } from "@/features/avt/types";
@@ -88,22 +85,14 @@ export const OriginalPdfView = ({
     }),
   );
 
-  const locate = (): PdfClaimLocations | null => {
-    if (pagesQuery.data !== undefined) {
-      return locateClaimsOnPages({
-        pages: pagesQuery.data,
-        blocks: run.blocks,
-        claims: run.claims,
-      });
-    }
-    // A file that cannot be read for boxes leaves every claim listed; the
-    // viewer shows its own error for a file that does not load.
-    if (fileQuery.isError || pagesQuery.isError) {
-      return { located: [], unlocated: run.claims.map((claim) => claim.id) };
-    }
-    return null;
-  };
-  const locations = locate();
+  // A file that cannot be read for boxes leaves every claim listed; the
+  // viewer shows its own error for a file that does not load.
+  const locations = resolvePdfClaimLocations({
+    pages: pagesQuery.data,
+    failed: fileQuery.isError || pagesQuery.isError,
+    blocks: run.blocks,
+    claims: run.claims,
+  });
 
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const locatedByPage = new Map<number, LocatedPdfClaim[]>();

@@ -111,6 +111,36 @@ export const claimPageNumbers = (
     ),
   ].toSorted((a, b) => a - b);
 
+type ResolvePdfClaimLocationsArgs = Omit<LocateClaimsOnPagesArgs, "pages"> & {
+  /** The page texts once read; undefined while reading or skipped. */
+  pages: ReadonlyMap<number, PageSearchText> | undefined;
+  /** The file or its page texts could not be read. */
+  failed: boolean;
+};
+
+/**
+ * The claims' places once they are known, or null while the page texts are
+ * still being read. A run with no claim on a PDF page reads no page text: every
+ * claim is unlocated at once, as is every claim of a file that cannot be read.
+ */
+export const resolvePdfClaimLocations = ({
+  pages,
+  failed,
+  blocks,
+  claims,
+}: ResolvePdfClaimLocationsArgs): PdfClaimLocations | null => {
+  if (claimPageNumbers(claims).length === 0) {
+    return locateClaimsOnPages({ pages: new Map(), blocks, claims });
+  }
+  if (pages !== undefined) {
+    return locateClaimsOnPages({ pages, blocks, claims });
+  }
+  if (failed) {
+    return locateClaimsOnPages({ pages: new Map(), blocks, claims });
+  }
+  return null;
+};
+
 type LocateClaimsOnPagesArgs = {
   /** The viewer's text of each page, by 1-based page number. */
   pages: ReadonlyMap<number, PageSearchText>;

@@ -10,6 +10,7 @@ import {
 import {
   claimPageNumbers,
   locateClaimsOnPages,
+  resolvePdfClaimLocations,
   translatePageRange,
 } from "@/features/avt/original-pdf.logic";
 import type { VerificationRun } from "@/features/avt/types";
@@ -202,6 +203,47 @@ describe("locateClaimsOnPages", () => {
         makeClaim({ suffix: 4, verdict: supported() }),
       ]),
     ).toEqual([1, 3]);
+  });
+});
+
+describe("resolvePdfClaimLocations", () => {
+  const blocks = storedBlocks([{ pageNumber: 1, text: "Rent fell due." }]);
+  const docxOnly = [
+    makeClaim({ suffix: 2, verdict: supported() }),
+    makeClaim({ suffix: 1, verdict: supported() }),
+  ];
+
+  test("a PDF run whose claims carry no page anchor lists every claim, reading no page text", () => {
+    // No page text is read for such a run, so there is never data or an
+    // error to wait for.
+    expect(
+      resolvePdfClaimLocations({
+        pages: undefined,
+        failed: false,
+        blocks,
+        claims: docxOnly,
+      }),
+    ).toEqual({ located: [], unlocated: [claimId(1), claimId(2)] });
+  });
+
+  test("waits for the page texts, and lists every claim when they cannot be read", () => {
+    const onPage = [pdfClaim(1, 1, 0, 4)];
+    expect(
+      resolvePdfClaimLocations({
+        pages: undefined,
+        failed: false,
+        blocks,
+        claims: onPage,
+      }),
+    ).toBeNull();
+    expect(
+      resolvePdfClaimLocations({
+        pages: undefined,
+        failed: true,
+        blocks,
+        claims: onPage,
+      }),
+    ).toEqual({ located: [], unlocated: [claimId(1)] });
   });
 });
 
