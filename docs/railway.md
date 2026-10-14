@@ -369,6 +369,53 @@ migrations, so a fresh managed Postgres needs no manual role setup.
 If a migration fails, Railway should not promote the API deployment. Fix the
 database/config problem, then redeploy the API service.
 
+### One-time database owner cutover
+
+An existing template database initialized with `POSTGRES_USER=postgres` needs
+an application owner login before deploying the API. The initdb role cannot
+be demoted in place. Back up the database and stop the API during this cutover.
+
+1. Change the Postgres service to build `docker/postgres/Dockerfile` from this
+   repository, using `railway/postgres.railway.json`. Keep the **existing volume
+   mount and `PGDATA` unchanged**: changing the data path can initialize a
+   different, empty cluster. The fresh-template paths above apply to new volumes.
+   Keep `POSTGRES_USER=postgres` until the command below finishes, and redeploy
+   Postgres. Its entrypoint leaves an existing cluster intact.
+2. Run the bundled initialization script once against the application database.
+   It creates a demoted login, retains the password, transfers application
+   ownership, and configures the `stella` role. The final command names the
+   application login `stella_owner`:
+
+   ```sh
+   railway ssh --service Postgres -- sh -ec '
+     psql -h /var/run/postgresql -U postgres -d "$POSTGRES_DB" \
+       -v ON_ERROR_STOP=1 -v owner=postgres \
+       -f /docker-entrypoint-initdb.d/init.sql \
+       -c "ALTER ROLE postgres RENAME TO stella_owner"
+   '
+   ```
+
+   Run this command only once. It preserves the initdb role as a passwordless
+   `NOLOGIN` maintenance role; do not use that role in `DATABASE_URL`.
+3. Set Postgres `POSTGRES_USER=stella_owner` (and `PGUSER=stella_owner` if it is
+   not a reference to `POSTGRES_USER`). Keep the password and database name.
+   With the manifest's references, this changes `Postgres.DATABASE_URL` and the
+   API's `DATABASE_URL` to use `stella_owner`. If the API has a literal URL,
+   change its username explicitly, retaining the password, host, port, and
+   database. Redeploy Postgres with its existing volume and data path.
+4. Check the new login through the private network, then redeploy the API. Its
+   pre-deploy command runs the committed migrations with that same login:
+
+   ```sh
+   railway ssh --service Postgres -- sh -ec '
+     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+       "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+   '
+   ```
+
+   Expect `stella_owner`, `f`, `f`; confirm migrations finish and API `/health`
+   returns HTTP 200. A failed cutover must be repaired before restarting the API.
+
 ### One-time auth backfill (updating across v0.7.28)
 
 Instances created before v0.7.28 that already have signed-in users must run a

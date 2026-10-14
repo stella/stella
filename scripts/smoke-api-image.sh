@@ -96,8 +96,9 @@ for ((attempt=0; attempt<60; attempt++)); do
 done
 [[ "$ready" == true ]] || { echo 'Disposable database/cache did not become ready.' >&2; exit 1; }
 
+database_owner=postgres
 psql_smoke() {
-  docker exec -i "$postgres" psql -U postgres -d stella -v ON_ERROR_STOP=1 "$@"
+  docker exec -i "$postgres" psql -U "$database_owner" -d stella -v ON_ERROR_STOP=1 "$@"
 }
 run_probe() {
   docker run --rm --name "$probe" --label "$owner_label=$run_id" --network "$network" "$@"
@@ -105,14 +106,48 @@ run_probe() {
 migrate() {
   # Non-RDS database: online index builds must not wait on EBS metrics or a
   # wall-clock busy window.
-  run_probe --env DATABASE_URL=postgres://postgres:smoke-only@smoke-postgres:5432/stella \
+  run_probe --env "DATABASE_URL=postgres://$database_owner:smoke-only@smoke-postgres:5432/stella" \
     --env DB_LOAD_GATE_EBS_SIGNAL=disabled --env 'DB_LOAD_GATE_BUSY_WINDOWS=[]' \
     "$image_id" bun /app/apps/api/src/db/migrate.js
 }
 
 printf 'Testing immutable local image %s (%s)\n' "$image_ref" "$image_id"
-bash "$repo/scripts/configure-test-postgres.sh" "$postgres" postgres
+api_env=(
+  --env BETTER_AUTH_SECRET=release-smoke-secret-at-least-32-chars
+  --env BETTER_AUTH_URL=http://localhost:3001
+  --env "CONTENT_ENCRYPTION_KEY=$(openssl rand -hex 32)"
+  --env EMAIL_PROVIDER=smtp --env FRONTEND_URL=http://localhost:3000
+  --env GOOGLE_GENERATIVE_AI_API_KEY=release-smoke
+  --env GOTENBERG_PASSWORD=smoke --env GOTENBERG_URL=http://127.0.0.1:3000 --env GOTENBERG_USERNAME=smoke
+  --env POSTHOG_HOST=http://127.0.0.1:9999 --env POSTHOG_KEY=phc_
+  --env REDIS_URL=redis://127.0.0.1:6379
+  --env S3_BUCKET=stella-smoke --env S3_ENDPOINT=http://127.0.0.1:9000 --env S3_REGION=us-east-1
+  --env SMTP_HOST=127.0.0.1 --env SMTP_PORT=1025
+  --env TRANSACTIONAL_EMAIL_FROM=noreply@example.invalid --env USE_MOCK_AI=false
+)
+# Apply the deployed migration bundle to the stock database before the owner cutover.
 migrate
+privileged_exit=0
+privileged_output=$(docker run --rm --name "$probe" --label "$owner_label=$run_id" \
+  --network "container:$postgres" "${api_env[@]}" \
+  --env DATABASE_URL=postgres://postgres:smoke-only@127.0.0.1:5432/stella \
+  "$image_id" timeout 30 /app/server 2>&1) || privileged_exit=$?
+if [[ "$privileged_exit" == 0 || "$privileged_exit" == 124 \
+  || "$privileged_output" != *'Database login requires NOSUPERUSER NOBYPASSRLS role attributes.'* ]]; then
+  printf 'FAIL: privileged database login did not fail startup\n%s\n' "$privileged_output" >&2
+  exit 1
+fi
+echo 'PASS: privileged database login refuses API startup'
+# The Railway guide uses this bundled SQL on an existing database, then switches its URL.
+docker cp "$repo/docker/postgres/init.sql" "$postgres:/docker-entrypoint-initdb.d/init.sql"
+docker exec "$postgres" psql -h /var/run/postgresql -U postgres -d stella \
+  -v ON_ERROR_STOP=1 -v owner=postgres -f /docker-entrypoint-initdb.d/init.sql \
+  -c 'ALTER ROLE postgres RENAME TO stella_owner'
+database_owner=stella_owner
+[[ "$(psql_smoke -tAc 'SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')" == 'f|f' ]]
+[[ "$(psql_smoke -tAc "SELECT pg_has_role(current_user, 'stella_public_sanctions_reader', 'SET')")" == t ]]
+migrate
+echo 'PASS: migrated database owner cutover'
 echo 'PASS: fresh database migrations'
 psql_smoke -c 'CREATE TABLE drizzle.__migration_history_smoke_backup AS SELECT * FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 2' >/dev/null
 [[ "$(psql_smoke -tAc 'SELECT count(*) FROM drizzle.__migration_history_smoke_backup')" == 2 ]]
@@ -143,18 +178,7 @@ migrate
 echo 'PASS: stale bundle refused with pending SQL and restored history accepted'
 
 docker run --detach --name "$api" --label "$owner_label=$run_id" --network "container:$postgres" \
-  --env BETTER_AUTH_SECRET=release-smoke-secret-at-least-32-chars \
-  --env BETTER_AUTH_URL=http://localhost:3001 \
-  --env "CONTENT_ENCRYPTION_KEY=$(openssl rand -hex 32)" \
-  --env DATABASE_URL=postgres://postgres:smoke-only@127.0.0.1:5432/stella \
-  --env EMAIL_PROVIDER=smtp --env FRONTEND_URL=http://localhost:3000 \
-  --env GOOGLE_GENERATIVE_AI_API_KEY=release-smoke \
-  --env GOTENBERG_PASSWORD=smoke --env GOTENBERG_URL=http://127.0.0.1:3000 --env GOTENBERG_USERNAME=smoke \
-  --env POSTHOG_HOST=http://127.0.0.1:9999 --env POSTHOG_KEY=phc_ \
-  --env REDIS_URL=redis://127.0.0.1:6379 \
-  --env S3_BUCKET=stella-smoke --env S3_ENDPOINT=http://127.0.0.1:9000 --env S3_REGION=us-east-1 \
-  --env SMTP_HOST=127.0.0.1 --env SMTP_PORT=1025 \
-  --env TRANSACTIONAL_EMAIL_FROM=noreply@example.invalid --env USE_MOCK_AI=false \
+  "${api_env[@]}" --env "DATABASE_URL=postgres://$database_owner:smoke-only@127.0.0.1:5432/stella" \
   "$image_id" >/dev/null
 ready=false
 for ((attempt=0; attempt<60; attempt++)); do
@@ -174,6 +198,8 @@ if [[ "$ready" != true ]]; then
   exit 1
 fi
 echo 'PASS: API /live and scheduler.started'
+docker exec "$api" bun -e 'const r = await fetch("http://127.0.0.1:3001/health"); process.exit(r.status === 200 ? 0 : 1)'
+echo 'PASS: API /health after database owner cutover'
 
 output=$(run_probe "$image_id" timeout 20 /app/collab 2>&1 || true)
 if grep -qiE 'cannot (find|resolve) (module|package)' <<< "$output" \

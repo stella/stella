@@ -112,6 +112,14 @@ WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'stella')
 \gexec
 SELECT format('GRANT stella TO %I WITH ADMIN TRUE, INHERIT FALSE, SET TRUE', :'owner')
 \gexec
+
+-- Migrations run as a superuser may rely on implicit SET rights instead of
+-- recording memberships. Restore required runtime roles on owner cutover.
+SELECT format('GRANT %I TO %I WITH ADMIN TRUE, INHERIT FALSE, SET TRUE', rolname, :'owner')
+FROM pg_roles
+WHERE rolname IN ('stella_ingestion', 'stella_public_sanctions_reader')
+  AND NOT pg_has_role(:'owner', oid, 'SET')
+\gexec
 -- Read protected settings for parity checks and other sessions' statistics
 -- for the migration load gate, without pg_monitor's table-scanning functions.
 SELECT format('GRANT pg_read_all_settings, pg_read_all_stats TO %I', :'owner')
