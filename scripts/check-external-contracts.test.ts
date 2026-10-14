@@ -1412,3 +1412,71 @@ test("private import maps with unproved branches cannot hide pinned SDK reachabi
     }),
   ).toBe(true);
 });
+for (const loader of [
+  'const load = require; load("./helper");',
+  "consume(require);",
+  'const load = module.require; load("./helper");',
+  'const load = module["require"]; load("./helper");',
+  'import { createRequire } from "node:module"; const load = createRequire(import.meta.url); load("./helper");',
+  'import { createRequire as factory } from "node:module"; const load = factory(import.meta.url); load("./helper");',
+]) {
+  test(`indirect loader invalidates closure: ${loader}`, () => {
+    const owner = `import sdk from "vendor"; ${loader}`;
+    const sources = new Map([
+      ["owner.ts", owner],
+      ["helper.ts", 'export const body = "old";'],
+    ]);
+    const baseline = (file: string) => sources.get(file);
+    const current = (file: string) =>
+      file === "helper.ts" ? 'export const body = "new";' : sources.get(file);
+    const options = {
+      root: "/fixture",
+      owners: ["owner.ts"],
+      sdks: ["vendor"],
+      baseline,
+      current,
+    };
+    expect(hasChangedLocalRuntimeClosure(options)).toBe(true);
+    expect(
+      hasChangedLocalRuntimeClosure({ ...options, current: baseline }),
+    ).toBe(true);
+    const closure = createLocalRuntimeClosureReader({
+      root: "/fixture",
+      read: baseline,
+    })(["owner.ts"]);
+    expect(
+      closure.problems.some((problem) =>
+        problem.includes("Indirect CommonJS loader use"),
+      ),
+    ).toBe(true);
+  });
+}
+for (const loader of [
+  'require("./helper");',
+  'module.require("./helper");',
+  'import { createRequire } from "node:module"; createRequire(import.meta.url)("./helper");',
+]) {
+  test(`direct literal loader keeps unchanged closure: ${loader}`, () => {
+    const owner = `import sdk from "vendor"; ${loader}`;
+    const sources = new Map([
+      ["owner.ts", owner],
+      ["helper.ts", 'export const body = "old";'],
+    ]);
+    const baseline = (file: string) => sources.get(file);
+    const options = {
+      root: "/fixture",
+      owners: ["owner.ts"],
+      sdks: ["vendor"],
+      baseline,
+      current: baseline,
+    };
+    expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+    expect(
+      hasChangedLocalRuntimeClosure({
+        ...options,
+        current: (file: string) =>
+          file === "helper.ts" ? 'export const body = "new";' : baseline(file),
+      }),
+    ).toBe(true);
+  });
+}

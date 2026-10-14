@@ -270,7 +270,7 @@ const typeOnlyExport = (node: ts.ExportDeclaration) => {
 
 type RuntimeModuleReference =
   | { readonly type: "literal"; readonly specifier: string }
-  | { readonly type: "dynamic" };
+  | { readonly type: "dynamic"; readonly reason?: string };
 
 type RuntimeModuleReferencesOptions = { file: string; text: string };
 
@@ -288,6 +288,43 @@ export const runtimeModuleReferences = ({
     return cached.references;
   }
   const references: RuntimeModuleReference[] = [];
+  const source = parseSource({
+    fileName: file.replace(/\.jsx$/u, ".tsx"),
+    text,
+  });
+  const factories = new Set(["createRequire"]);
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      typeOnlyImport(statement.importClause)
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings !== undefined && ts.isNamedImports(bindings)) {
+      for (const binding of bindings.elements) {
+        if (
+          !binding.isTypeOnly &&
+          (binding.propertyName ?? binding.name).text === "createRequire"
+        ) {
+          factories.add(binding.name.text);
+        }
+      }
+    }
+  }
+  const isLoader = (node: ts.Node) =>
+    (ts.isIdentifier(node) && node.text === "require") ||
+    (ts.isPropertyAccessExpression(node) && node.name.text === "require") ||
+    (ts.isElementAccessExpression(node) &&
+      ts.isStringLiteralLike(node.argumentExpression) &&
+      node.argumentExpression.text === "require");
+  const isFactory = (node: ts.Node) =>
+    (ts.isIdentifier(node) && factories.has(node.text)) ||
+    (ts.isPropertyAccessExpression(node) &&
+      node.name.text === "createRequire") ||
+    (ts.isElementAccessExpression(node) &&
+      ts.isStringLiteralLike(node.argumentExpression) &&
+      node.argumentExpression.text === "createRequire");
   const record = (expression: ts.Expression | undefined) => {
     if (expression !== undefined && ts.isStringLiteralLike(expression)) {
       references.push({ type: "literal", specifier: expression.text });
@@ -310,15 +347,16 @@ export const runtimeModuleReferences = ({
       return;
     }
     if (ts.isExportDeclaration(node)) {
-      const onlyTypes = typeOnlyExport(node);
+      if (typeOnlyExport(node)) {
+        return;
+      }
       if (
-        !onlyTypes &&
         node.moduleSpecifier !== undefined &&
         ts.isStringLiteral(node.moduleSpecifier)
       ) {
         record(node.moduleSpecifier);
+        return;
       }
-      return;
     }
     if (ts.isImportEqualsDeclaration(node)) {
       if (
@@ -329,18 +367,38 @@ export const runtimeModuleReferences = ({
       }
       return;
     }
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
-    ) {
-      record(node.arguments.at(0));
+    if (ts.isCallExpression(node)) {
+      const directFactory =
+        ts.isCallExpression(node.expression) &&
+        isFactory(node.expression.expression);
+      if (
+        node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        isLoader(node.expression) ||
+        directFactory
+      ) {
+        record(node.arguments.length === 1 ? node.arguments.at(0) : undefined);
+        for (const argument of node.arguments) {
+          visit(argument);
+        }
+        if (directFactory && ts.isCallExpression(node.expression)) {
+          for (const argument of node.expression.arguments) {
+            visit(argument);
+          }
+        }
+        return;
+      }
+    }
+    if (isLoader(node) || isFactory(node)) {
+      references.push({
+        type: "dynamic",
+        reason: "Indirect CommonJS loader use",
+      });
+      return;
     }
     ts.forEachChild(node, visit);
   };
   // parseSource selects JSX syntax from a .tsx suffix for both JS and TS sources.
-  visit(parseSource({ fileName: file.replace(/\.jsx$/u, ".tsx"), text }));
+  visit(source);
   const recent = referenceCache.get(file) ?? [];
   recent.push({ text, references });
   if (recent.length > 2) {
@@ -979,7 +1037,7 @@ export const createLocalRuntimeClosureReader = (
         switch (reference.type) {
           case "dynamic":
             problems.push(
-              `Cannot resolve non-literal local runtime reference from ${relative}`,
+              `${reference.reason ?? "Cannot resolve non-literal local runtime reference"} from ${relative}`,
             );
             break;
           case "literal": {
@@ -1250,7 +1308,7 @@ export const readFixtureEvidence = ({
           break;
         case "dynamic":
           problems.push(
-            `Cannot resolve non-literal runtime module reference from ${label(file)}`,
+            `${reference.reason ?? "Cannot resolve non-literal runtime module reference"} from ${label(file)}`,
           );
           break;
         default:
