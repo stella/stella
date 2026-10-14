@@ -145,6 +145,59 @@ context("test registration census", () => {
     ]);
   });
 
+  check("finds focus through literal element access", () => {
+    const source = `
+      import { it } from "bun:test";
+      import * as bt from "bun:test";
+      test["only"]("element test", () => {});
+      it[\`only\`]("element alias", () => {});
+      describe["only"]("element suite", () => {});
+      bt.test["only"]("namespace test", () => {});
+      bt["test"][\`only\`]("namespace element", () => {});
+    `;
+    expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+      { identity: "fixture.test.ts::element alias", type: "only" },
+      { identity: "fixture.test.ts::element suite", type: "only" },
+      { identity: "fixture.test.ts::element test", type: "only" },
+      { identity: "fixture.test.ts::namespace element", type: "only" },
+      { identity: "fixture.test.ts::namespace test", type: "only" },
+    ]);
+  });
+
+  check(
+    "reports dynamic registration keys without flagging ordinary objects",
+    () => {
+      const source = `
+      const key = getKey();
+      const title = getTitle();
+      test[key]("literal title", () => {});
+      test[key](title, () => {});
+      const focused = test[key];
+      focused("aliased literal title", () => {});
+      object[key]("ordinary object", () => {});
+      const other = { test: (_title: string, _callback: () => void) => {} };
+      other[key]("ordinary method", () => {});
+    `;
+      expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+        {
+          identity: "fixture.test.ts::<dynamic title at 5:7>",
+          type: "unresolved",
+          reason: "computed registration key is not literal",
+        },
+        {
+          identity: "fixture.test.ts::aliased literal title",
+          type: "unresolved",
+          reason: "computed registration key is not literal",
+        },
+        {
+          identity: "fixture.test.ts::literal title",
+          type: "unresolved",
+          reason: "computed registration key is not literal",
+        },
+      ]);
+    },
+  );
+
   check("inspects callbacks before trailing timeouts and suite options", () => {
     const source = `
       test("timed environment return", async () => {
@@ -2064,43 +2117,169 @@ context("root test runner coverage", () => {
     ).toContain(`ledger collector: checks does not reach ci-result`);
   });
 
-  check("scenario ledger growth reports only newly tracked files", () => {
-    const previous: TestScenario[] = [
-      {
-        type: "non-gating",
-        file: "scripts/retained.test.ts",
-        owningWorkflow: ".github/workflows/staging-smoke.yml",
-        reason: "deployed-environment scenario",
+  check("scenario ledger changes cannot add files or weaken coverage", () => {
+    const nonGating: TestScenario = {
+      type: "non-gating",
+      file: "scripts/executed.test.ts",
+      owningWorkflow: ".github/workflows/staging-smoke.yml",
+      reason: "deployed-environment scenario",
+    };
+    const executed: TestScenario = {
+      type: "executed",
+      file: "scripts/executed.test.ts",
+      reason: "local regression coverage",
+      collector: {
+        workflow: ".github/workflows/ci.yml",
+        job: "checks",
+        command: "bun test scripts/executed.test.ts",
       },
-      {
-        type: "non-gating",
-        file: "scripts/removed.test.ts",
-        owningWorkflow: ".github/workflows/staging-smoke.yml",
-        reason: "deployed-environment scenario",
+    };
+    const pinned: TestScenario = {
+      type: "pinned-collector",
+      file: "apps/web/e2e/specs/smoke.spec.ts",
+      reason: "production browser shard",
+      collector: {
+        workflow: ".github/workflows/ci.yml",
+        job: "e2e-production-shard",
+        step: "Run Playwright shard",
+        pin: "e2eProductionShards.planSha256",
+        condition: "success()",
       },
-    ];
-    const current: TestScenario[] = [
-      {
-        type: "non-gating",
-        file: "scripts/retained.test.ts",
-        owningWorkflow: ".github/workflows/staging-smoke.yml",
-        reason: "deployed-environment scenario",
+    };
+    const added: TestScenario = {
+      type: "executed",
+      file: "scripts/new.test.ts",
+      reason: "new local regression test",
+      collector: {
+        workflow: ".github/workflows/ci.yml",
+        job: "checks",
+        command: "bun test scripts/new.test.ts",
       },
-      {
-        type: "executed",
-        file: "scripts/new.test.ts",
-        reason: "new local regression test",
-        collector: {
-          workflow: ".github/workflows/ci.yml",
-          job: "checks",
-          command: "bun test scripts/new.test.ts",
-        },
-      },
-    ];
+    };
 
-    expect(scenarioLedgerGrowth(previous, current)).toEqual([
-      "scripts/new.test.ts",
+    expect(scenarioLedgerGrowth([nonGating], [nonGating, added])).toEqual([
+      "scenario ledger is shrink-only: added scripts/new.test.ts",
     ]);
+    expect(scenarioLedgerGrowth([executed], [executed])).toEqual([]);
+    expect(scenarioLedgerGrowth([nonGating], [])).toEqual([]);
+    expect(scenarioLedgerGrowth([nonGating], [executed])).toEqual([]);
+
+    const executedFromPinned: Extract<TestScenario, { type: "executed" }> = {
+      type: "executed",
+      file: pinned.file,
+      reason: pinned.reason,
+      collector: {
+        workflow: ".github/workflows/ci.yml",
+        job: "checks",
+        command: "bun --filter @stll/web test:e2e",
+      },
+    };
+    expect(scenarioLedgerGrowth([pinned], [executedFromPinned])).toEqual([]);
+
+    const executedToNonGating: TestScenario = {
+      type: "non-gating",
+      file: executed.file,
+      owningWorkflow: ".github/workflows/staging-smoke.yml",
+      reason: "deployed-environment scenario",
+    };
+    expect(scenarioLedgerGrowth([executed], [executedToNonGating])).toContain(
+      "scenario ledger cannot weaken scripts/executed.test.ts: executed -> non-gating",
+    );
+    expect(
+      scenarioLedgerGrowth(
+        [pinned],
+        [
+          {
+            type: "non-gating",
+            file: pinned.file,
+            owningWorkflow: ".github/workflows/staging-smoke.yml",
+            reason: "deployed-environment scenario",
+          },
+        ],
+      ),
+    ).toContain(
+      "scenario ledger cannot weaken apps/web/e2e/specs/smoke.spec.ts: pinned-collector -> non-gating",
+    );
+
+    const validUpgradeWorkflow = `jobs:
+  checks:
+    steps:
+      - run: bun --filter @stll/web test:e2e
+  ci-result:
+    needs: [checks]
+`;
+    expect(
+      firstCollectionFailure({
+        file: pinned.file,
+        scenarios: new Map([[pinned.file, executedFromPinned]]),
+        topology: {
+          gatingJobs: bashJobs([
+            ["checks", ["bun --filter @stll/web test:e2e"]],
+          ]),
+          shardedPackages: new Set<string>(),
+          workflow: validUpgradeWorkflow,
+        },
+      }),
+    ).toBeUndefined();
+
+    const invalidUpgrade: TestScenario = {
+      ...executedFromPinned,
+      collector: {
+        ...executedFromPinned.collector,
+        command: "bun test scripts/other.test.ts",
+      },
+    };
+    expect(
+      firstCollectionFailure({
+        file: pinned.file,
+        scenarios: new Map([[pinned.file, invalidUpgrade]]),
+        topology: {
+          gatingJobs: bashJobs([
+            ["checks", ["bun test scripts/other.test.ts"]],
+          ]),
+          shardedPackages: new Set<string>(),
+          workflow: "jobs: {}",
+        },
+      }),
+    ).toBeDefined();
+  });
+
+  check("removing a collector cannot downgrade its scenario", () => {
+    const previous: TestScenario = {
+      type: "executed",
+      file: "scripts/removed-collector.test.ts",
+      reason: "required root test",
+      collector: {
+        workflow: ".github/workflows/ci.yml",
+        job: "checks",
+        command: "bun test scripts/removed-collector.test.ts",
+      },
+    };
+    const current: TestScenario = {
+      type: "non-gating",
+      file: previous.file,
+      owningWorkflow: ".github/workflows/staging-smoke.yml",
+      reason: "deployed-environment scenario",
+    };
+    const removedRunnerWorkflow = `jobs:
+  ci-result:
+    needs: [checks]
+`;
+
+    expect(scenarioLedgerGrowth([previous], [current])).toContain(
+      "scenario ledger cannot weaken scripts/removed-collector.test.ts: executed -> non-gating",
+    );
+    expect(
+      firstCollectionFailure({
+        file: previous.file,
+        scenarios: new Map([[previous.file, current]]),
+        topology: {
+          gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(removedRunnerWorkflow)),
+          shardedPackages: new Set<string>(),
+          workflow: removedRunnerWorkflow,
+        },
+      }),
+    ).toBeUndefined();
   });
 
   check("pins the production Playwright collector to its workflow step", () => {

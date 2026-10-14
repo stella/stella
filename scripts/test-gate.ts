@@ -111,11 +111,17 @@ type DefaultOnContext = {
   readonly value: string | boolean;
 };
 
-export type RegistrationFinding = {
-  readonly identity: string;
-  readonly managedServiceGate?: (typeof SERVICE_GATES)[number];
-  readonly type: "disabled" | "only";
-};
+export type RegistrationFinding =
+  | {
+      readonly identity: string;
+      readonly managedServiceGate?: (typeof SERVICE_GATES)[number];
+      readonly type: "disabled" | "only";
+    }
+  | {
+      readonly identity: string;
+      readonly type: "unresolved";
+      readonly reason: string;
+    };
 
 const readJson = (file: string): unknown =>
   JSON.parse(readFileSync(path.join(ROOT, file), "utf-8"));
@@ -220,30 +226,47 @@ export const parseScenarioLedger = (
   });
 };
 
+type ScenarioBaseline = Pick<TestScenario, "file" | "type">;
+
 export const scenarioLedgerGrowth = (
-  previous: readonly { readonly file: string }[],
-  current: readonly { readonly file: string }[],
+  previous: readonly ScenarioBaseline[],
+  current: readonly ScenarioBaseline[],
 ): readonly string[] => {
-  const files = new Set(previous.map(({ file }) => file));
+  const baseline = new Map(previous.map((entry) => [entry.file, entry.type]));
   return current
-    .filter(({ file }) => !files.has(file))
-    .map(({ file }) => file)
+    .flatMap(({ file, type }) => {
+      const previousType = baseline.get(file);
+      if (previousType === undefined) {
+        return [`scenario ledger is shrink-only: added ${file}`];
+      }
+      if (type === "non-gating" && previousType !== "non-gating") {
+        return [
+          `scenario ledger cannot weaken ${file}: ${previousType} -> ${type}`,
+        ];
+      }
+      return [];
+    })
     .toSorted(compareCodeUnit);
 };
 
 const readNonGatingLedger = (): readonly TestScenario[] =>
   parseScenarioLedger(readJson(NON_GATING_LEDGER));
 
-const scenarioLedgerBaseline = (): readonly { readonly file: string }[] => {
+const scenarioLedgerBaseline = (): readonly ScenarioBaseline[] => {
   const options = { cwd: ROOT, encoding: "utf-8" } as const;
-  const onMain = execFileSync(
+  const mergeBase = execFileSync(
     "git",
-    ["ls-tree", "--name-only", "origin/main", "--", NON_GATING_LEDGER],
+    ["merge-base", "origin/main", "HEAD"],
+    options,
+  ).trim();
+  const inBase = execFileSync(
+    "git",
+    ["ls-tree", "--name-only", mergeBase, "--", NON_GATING_LEDGER],
     options,
   ).trim();
   const reference =
-    onMain === NON_GATING_LEDGER
-      ? "origin/main"
+    inBase === NON_GATING_LEDGER
+      ? mergeBase
       : execFileSync(
           "git",
           [
@@ -271,7 +294,16 @@ const scenarioLedgerBaseline = (): readonly { readonly file: string }[] => {
     if (!isRecord(entry) || typeof entry["file"] !== "string") {
       panic(`${NON_GATING_LEDGER} baseline contains an invalid file`);
     }
-    return { file: entry["file"] };
+    // The introduction inventory granted no execution proof; only its keys seed growth checks.
+    const type = "type" in entry ? entry["type"] : "non-gating";
+    if (
+      type !== "non-gating" &&
+      type !== "executed" &&
+      type !== "pinned-collector"
+    ) {
+      panic(`${NON_GATING_LEDGER} baseline contains an invalid kind`);
+    }
+    return { file: entry["file"], type };
   });
 };
 
@@ -306,32 +338,50 @@ const trackedFiles = (): string[] =>
     .filter(Boolean)
     .toSorted(compareCodeUnit);
 
+type RegistrationName =
+  | { readonly type: "resolved"; readonly name: string }
+  | { readonly type: "unresolved"; readonly reason: string };
+
 const registrationName = (
   expression: ts.Expression,
-  aliases: ReadonlyMap<string, string>,
-): string | undefined => {
+  aliases: ReadonlyMap<string, RegistrationName>,
+): RegistrationName | undefined => {
   if (ts.isCallExpression(expression)) {
     return registrationName(expression.expression, aliases);
   }
   if (ts.isIdentifier(expression)) {
     return aliases.get(expression.text);
   }
-  if (!ts.isPropertyAccessExpression(expression)) {
+  if (
+    !ts.isPropertyAccessExpression(expression) &&
+    !ts.isElementAccessExpression(expression)
+  ) {
     return undefined;
   }
   const base = registrationName(expression.expression, aliases);
-  if (base === TEST_RUNNER_NAMESPACE || base === "test") {
-    const registration = expression.name.text;
-    if (TEST_REGISTRATIONS.some((candidate) => candidate === registration)) {
-      return registration === "it" ? "test" : registration;
+  if (base === undefined || base.type === "unresolved") {
+    return base;
+  }
+  const property = ts.isPropertyAccessExpression(expression)
+    ? expression.name.text
+    : literalTitle(expression.argumentExpression);
+  if (property === undefined) {
+    return {
+      type: "unresolved",
+      reason: "computed registration key is not literal",
+    };
+  }
+  if (base.name === TEST_RUNNER_NAMESPACE || base.name === "test") {
+    if (TEST_REGISTRATIONS.some((candidate) => candidate === property)) {
+      return { type: "resolved", name: property === "it" ? "test" : property };
     }
-    if (base === TEST_RUNNER_NAMESPACE) {
+    if (base.name === TEST_RUNNER_NAMESPACE) {
       return undefined;
     }
   }
-  return base === undefined || !REGISTRATION_MODIFIERS.has(expression.name.text)
-    ? undefined
-    : `${base}.${expression.name.text}`;
+  return REGISTRATION_MODIFIERS.has(property)
+    ? { type: "resolved", name: `${base.name}.${property}` }
+    : undefined;
 };
 
 const literalTitle = (node: ts.Node | undefined): string | undefined => {
@@ -342,6 +392,30 @@ const literalTitle = (node: ts.Node | undefined): string | undefined => {
     return node.text;
   }
   return undefined;
+};
+
+type RegistrationIdentityOptions = {
+  readonly file: string;
+  readonly title: string | undefined;
+  readonly suites: readonly string[];
+  readonly source: ts.SourceFile;
+  readonly node: ts.CallExpression;
+};
+
+const registrationIdentity = ({
+  file,
+  title,
+  suites,
+  source,
+  node,
+}: RegistrationIdentityOptions): string => {
+  if (title !== undefined) {
+    return `${file}::${[...suites, title].join(" > ")}`;
+  }
+  const { line, character } = source.getLineAndCharacterOfPosition(
+    node.getStart(source),
+  );
+  return `${file}::<dynamic title at ${line + 1}:${character + 1}>`;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -527,14 +601,15 @@ const isConditionallyRegistered = (node: ts.CallExpression): boolean => {
   }
   return false;
 };
-export const parseTestRegistrations = (
-  file: string,
-  sourceText: string,
-): RegistrationFinding[] => {
-  const source = parseTypeScript(file, sourceText);
-  const aliases = new Map<string, string>();
+const registrationAliases = (
+  source: ts.SourceFile,
+): ReadonlyMap<string, RegistrationName> => {
+  const aliases = new Map<string, RegistrationName>();
   for (const registration of TEST_REGISTRATIONS) {
-    aliases.set(registration, registration === "it" ? "test" : registration);
+    aliases.set(registration, {
+      type: "resolved",
+      name: registration === "it" ? "test" : registration,
+    });
   }
 
   const discoverAliases = (node: ts.Node): void => {
@@ -549,14 +624,17 @@ export const parseTestRegistrations = (
           if (
             TEST_REGISTRATIONS.some((registration) => registration === imported)
           ) {
-            aliases.set(
-              element.name.text,
-              imported === "it" ? "test" : imported,
-            );
+            aliases.set(element.name.text, {
+              type: "resolved",
+              name: imported === "it" ? "test" : imported,
+            });
           }
         }
       } else if (isTestRunnerNamespaceImport(bindings, node.moduleSpecifier)) {
-        aliases.set(bindings.name.text, TEST_RUNNER_NAMESPACE);
+        aliases.set(bindings.name.text, {
+          type: "resolved",
+          name: TEST_RUNNER_NAMESPACE,
+        });
       }
     }
     if (
@@ -572,13 +650,31 @@ export const parseTestRegistrations = (
         const whenTrue = registrationName(node.initializer.whenTrue, aliases);
         const whenFalse = registrationName(node.initializer.whenFalse, aliases);
         if (whenTrue !== undefined && whenFalse !== undefined) {
-          aliases.set(node.name.text, `${whenTrue}|${whenFalse}|conditional`);
+          if (whenTrue.type === "unresolved") {
+            aliases.set(node.name.text, whenTrue);
+          } else if (whenFalse.type === "unresolved") {
+            aliases.set(node.name.text, whenFalse);
+          } else {
+            aliases.set(node.name.text, {
+              type: "resolved",
+              name: `${whenTrue.name}|${whenFalse.name}|conditional`,
+            });
+          }
         }
       }
     }
     ts.forEachChild(node, discoverAliases);
   };
   discoverAliases(source);
+  return aliases;
+};
+
+export const parseTestRegistrations = (
+  file: string,
+  sourceText: string,
+): RegistrationFinding[] => {
+  const source = parseTypeScript(file, sourceText);
+  const aliases = registrationAliases(source);
 
   const constantTitles = constantStringBindings(source);
 
@@ -621,22 +717,40 @@ export const parseTestRegistrations = (
     }
     if (
       (ts.isCallExpression(node.parent) ||
-        ts.isPropertyAccessExpression(node.parent)) &&
+        ts.isPropertyAccessExpression(node.parent) ||
+        ts.isElementAccessExpression(node.parent)) &&
       node.parent.expression === node
     ) {
       ts.forEachChild(node, visit);
       return;
     }
-    const name = registrationName(node.expression, aliases);
-    const hook =
-      name !== undefined && /^(?:after|before)(?:All|Each)$/u.test(name);
-    const title = hook
-      ? `hook:${name}`
-      : registrationTitle(node.arguments.at(0), constantTitles);
-    if (name === undefined) {
+    const registration = registrationName(node.expression, aliases);
+    if (registration === undefined) {
       ts.forEachChild(node, visit);
       return;
     }
+    if (registration.type === "unresolved") {
+      const title = registrationTitle(node.arguments.at(0), constantTitles);
+      const identity = registrationIdentity({
+        file,
+        title,
+        suites,
+        source,
+        node,
+      });
+      findings.push({
+        type: "unresolved",
+        identity,
+        reason: registration.reason,
+      });
+      ts.forEachChild(node, visit);
+      return;
+    }
+    const { name } = registration;
+    const hook = /^(?:after|before)(?:All|Each)$/u.test(name);
+    const title = hook
+      ? `hook:${name}`
+      : registrationTitle(node.arguments.at(0), constantTitles);
     const isOnly = name.split(/[.|]/u).includes("only");
     const callback = node.arguments.find(
       (argument, index) =>
@@ -673,11 +787,8 @@ export const parseTestRegistrations = (
         : controlledGate;
     if (title === undefined) {
       if (isOnly || isDisabled) {
-        const { line, character } = source.getLineAndCharacterOfPosition(
-          node.getStart(source),
-        );
         findings.push({
-          identity: `${file}::<dynamic title at ${line + 1}:${character + 1}>`,
+          identity: registrationIdentity({ file, title, suites, source, node }),
           ...(managedServiceGate === undefined ? {} : { managedServiceGate }),
           type: isOnly ? "only" : "disabled",
         });
@@ -685,7 +796,13 @@ export const parseTestRegistrations = (
       ts.forEachChild(node, visit);
       return;
     }
-    const identity = `${file}::${[...suites, title].join(" > ")}`;
+    const identity = registrationIdentity({
+      file,
+      title,
+      suites,
+      source,
+      node,
+    });
     if (isOnly) {
       findings.push({ identity, type: "only" });
     }
@@ -3949,7 +4066,9 @@ export const firstCollectionFailure = ({
       case "pinned-collector":
         return pinnedScenarioFailure({ file, scenario, topology });
       default:
-        return panic(`Unrecognized scenario: ${scenario satisfies never}`);
+        return panic(
+          `Unrecognized scenario: ${String(scenario satisfies never)}`,
+        );
     }
   }
   if (file.startsWith("scripts/") || file.startsWith(".oxlint-plugins/")) {
@@ -4265,13 +4384,23 @@ const run = (): void => {
   for (const file of files) {
     const source = readFileSync(path.join(ROOT, file), "utf-8");
     for (const finding of parseTestRegistrations(file, source)) {
-      if (finding.type === "only") {
-        errors.push(`${finding.identity}: .only is forbidden`);
-      } else if (
-        finding.managedServiceGate === undefined ||
-        !managedGates.has(finding.managedServiceGate)
-      ) {
-        actualDisabled.push(finding.identity);
+      switch (finding.type) {
+        case "only":
+          errors.push(`${finding.identity}: .only is forbidden`);
+          break;
+        case "unresolved":
+          errors.push(`${finding.identity}: ${finding.reason}`);
+          break;
+        case "disabled":
+          if (
+            finding.managedServiceGate === undefined ||
+            !managedGates.has(finding.managedServiceGate)
+          ) {
+            actualDisabled.push(finding.identity);
+          }
+          break;
+        default:
+          panic(`Unrecognized finding: ${String(finding satisfies never)}`);
       }
     }
   }
