@@ -6,19 +6,23 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { SAMPLE_FACTS, type SampleFact } from "@/features/avt/sample-case.data";
 import { sampleFactWrites } from "@/features/avt/sample-case.logic";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import {
+  legalListItemsOptions,
   legalListKeys,
   legalListsOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 
-export const SAMPLE_LIST_NAME = "Whitfield sample facts";
-export const SAMPLE_DOCUMENT_NAME = "Whitfield witness statement (sample).docx";
+const SAMPLE_LIST_NAME = "Whitfield sample facts";
+const SAMPLE_DOCUMENT_NAME = "Whitfield witness statement (sample).docx";
 const SAMPLE_DOCUMENT_URL = "/samples/avt/whitfield-witness-statement.docx";
 const SAMPLE_DOCUMENT_TIMEOUT_MS = 30_000;
 const FACT_WRITE_CONCURRENCY = 4;
+// 200 items a page; a sample list past this size is no longer the sample.
+const SAMPLE_LIST_MAX_PAGES = 10;
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
@@ -29,6 +33,7 @@ const DOCX_MIME_TYPE =
  */
 export const useLoadSampleCase = (workspaceId: string) => {
   const queryClient = useQueryClient();
+  const user = useAuthenticatedUser();
   const [, createFileEntities] = useCreateFileEntities(workspaceId);
   const scope = { workspaceId: toSafeId<"workspace">(workspaceId) };
 
@@ -48,11 +53,21 @@ export const useLoadSampleCase = (workspaceId: string) => {
         existing?.id ??
         unwrapEden(await api.lists(scope).put({ name: SAMPLE_LIST_NAME })).id;
 
-      const items = unwrapEden(
-        await api
-          .lists(scope)({ listId: toSafeId<"legalList">(listId) })
-          .items.get({ query: { limit: 200 } }),
-      ).items;
+      // Every page, so a fact past the first one is not created twice.
+      const items = (
+        await queryClient.fetchInfiniteQuery({
+          ...legalListItemsOptions({
+            workspaceId,
+            listId,
+            viewer: {
+              userId: user.id,
+              organizationId: user.activeOrganizationId,
+            },
+          }),
+          pages: SAMPLE_LIST_MAX_PAGES,
+          staleTime: 0,
+        })
+      ).pages.flatMap((page) => page.items);
       const writes = sampleFactWrites(SAMPLE_FACTS, items);
       const writeDetails = async (fact: SampleFact, itemEntityId: string) =>
         unwrapEden(

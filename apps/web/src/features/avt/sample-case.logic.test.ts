@@ -25,14 +25,19 @@ describe("sample case", () => {
   });
 
   test("a fact created without its detail gets the detail, not a duplicate", () => {
-    const [first, ...rest] = SAMPLE_FACTS;
-    const writes = sampleFactWrites(SAMPLE_FACTS, [
-      { id: "created-only", name: first?.statement ?? "", factDetails: null },
-    ]);
-    expect(writes.create).toEqual(rest);
-    expect(writes.completeDetails).toEqual([
-      { fact: first, itemEntityId: "created-only" },
-    ]);
+    const createdOnly = SAMPLE_FACTS.slice(0, 1);
+    const writes = sampleFactWrites(
+      SAMPLE_FACTS,
+      createdOnly.map((fact) => ({
+        id: "created-only",
+        name: fact.statement,
+        factDetails: null,
+      })),
+    );
+    expect(writes.create).toEqual(SAMPLE_FACTS.slice(1));
+    expect(writes.completeDetails).toEqual(
+      createdOnly.map((fact) => ({ fact, itemEntityId: "created-only" })),
+    );
   });
 
   test("statements carry no metadata prefix and stay unique", () => {
