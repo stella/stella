@@ -55,6 +55,7 @@
     "appearance.calendar",
     "auth.continueWithEmail",
     "avt.claimTypes.opinion.label",
+    "avt.verification.documentView.original",
     "billing.codes.activity",
     "billing.codes.codeLabelField",
     "billing.codes.task",
@@ -130,6 +131,7 @@
     "flows.trigger.manual",
     "folio.comments.visibility",
     "folio.deleted",
+    "folio.markupView.original",
     "guides.status.skipped",
     "inbox.view.new",
     "inspector.anonymization.deleteAction",
@@ -318,6 +320,12 @@
     ],
     "avt.claimDetail.sourceCount": [
       "fr"
+    ],
+    "avt.verification.documentView.original": [
+      "de",
+      "es",
+      "fr",
+      "pt-BR"
     ],
     "billing.codes.codeLabel": [
       "de",

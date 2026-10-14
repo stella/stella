@@ -62,7 +62,7 @@ export const resolveHighlightApi = (env: HighlightEnv): HighlightApi | null => {
   };
 };
 
-export type ClaimPaint = {
+type ClaimPaint = {
   location: LocatedClaim;
   state: ClaimState;
   mark: TextMarkState | null;

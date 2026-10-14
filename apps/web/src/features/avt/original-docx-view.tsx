@@ -31,6 +31,7 @@ import {
   claimHighlightName,
   locateClaimsInDocument,
 } from "@/features/avt/original-docx.logic";
+import type { ClaimLocations } from "@/features/avt/original-docx.logic";
 import { STATE_COLOR, StateSwatch } from "@/features/avt/state-chip";
 import type {
   ClaimState,
@@ -47,6 +48,9 @@ const MARK_STATES = Object.keys(MARK_PRIORITY).filter(
 const CLAIM_STATES = Object.keys(STATE_COLOR).filter(
   (state): state is ClaimState => state in STATE_COLOR,
 );
+
+/** Before Folio has handed over the document, no claim has a place yet. */
+const NOT_YET_LOCATED: ClaimLocations = { located: [], unlocated: [] };
 
 /** How one claim is drawn; `mark: null` leaves it unmarked but clickable. */
 export type OriginalClaimMark = {
@@ -80,7 +84,7 @@ export const OriginalDocxView = ({
   const locations = React.useMemo(
     () =>
       doc === null
-        ? null
+        ? NOT_YET_LOCATED
         : locateClaimsInDocument({
             doc,
             blocks: run.blocks,
@@ -90,7 +94,7 @@ export const OriginalDocxView = ({
   );
 
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
-  const marks = (locations?.located ?? []).flatMap((location) => {
+  const marks = locations.located.flatMap((location) => {
     const claim = claimById.get(location.claimId);
     return claim === undefined ? [] : [{ location, ...markOf(claim) }];
   });
@@ -102,7 +106,7 @@ export const OriginalDocxView = ({
         `${location.claimId}:${state}:${mark ?? "none"}`,
     )
     .join("|");
-  const unlocated = (locations?.unlocated ?? []).flatMap((id) => {
+  const unlocated = locations.unlocated.flatMap((id) => {
     const claim = claimById.get(id);
     return claim === undefined ? [] : [claim];
   });
