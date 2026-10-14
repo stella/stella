@@ -1,6 +1,10 @@
 import ts from "typescript";
 
-import { literalMemberName, literalPropertyName } from "./test-gate-members";
+import {
+  literalMemberName,
+  literalPropertyName,
+  unwrapTransparentExpression,
+} from "./test-gate-members";
 
 const UNKNOWN = Symbol("unknown service condition");
 // The runner requires a nonempty value, but does not pin its contents.
@@ -16,21 +20,22 @@ type ConditionValue =
 const truth = (value: ConditionValue) =>
   value === UNKNOWN ? UNKNOWN : Boolean(value);
 
-const environmentName = (node: ts.Expression): string | undefined => {
+const environmentName = (input: ts.Expression): string | undefined => {
+  const node = unwrapTransparentExpression(input);
   if (
     !ts.isPropertyAccessExpression(node) &&
     !ts.isElementAccessExpression(node)
   ) {
     return undefined;
   }
-  const environment = node.expression;
+  const environment = unwrapTransparentExpression(node.expression);
   if (
     !ts.isPropertyAccessExpression(environment) &&
     !ts.isElementAccessExpression(environment)
   ) {
     return undefined;
   }
-  const process = environment.expression;
+  const process = unwrapTransparentExpression(environment.expression);
   return ts.isIdentifier(process) &&
     process.text === "process" &&
     literalMemberName(environment) === "env"
@@ -134,16 +139,14 @@ export const serviceConditionEvaluator = ({
   discover(source);
 
   const evaluating = new Set<string>();
-  const valueOf = (node: ts.Expression): ConditionValue => {
+  const valueOf = (input: ts.Expression): ConditionValue => {
+    const node = unwrapTransparentExpression(input);
     const environment = environmentName(node);
     if (environment === gate) {
       return "true";
     }
     if (environment !== undefined) {
       return requiredEnvironment.has(environment) ? PRESENT : UNKNOWN;
-    }
-    if (ts.isParenthesizedExpression(node)) {
-      return valueOf(node.expression);
     }
     if (ts.isStringLiteral(node)) {
       return node.text;
@@ -208,7 +211,8 @@ export const registrationRunsWithService = (
   { evaluate, bindings }: ReturnType<typeof serviceConditionEvaluator>,
 ): boolean => {
   const resolving = new Set<string>();
-  const helpersActive = (expression: ts.Expression): boolean => {
+  const helpersActive = (input: ts.Expression): boolean => {
+    const expression = unwrapTransparentExpression(input);
     if (ts.isIdentifier(expression) && bindings.has(expression.text)) {
       const initializer = bindings.get(expression.text);
       if (initializer === undefined || resolving.has(expression.text)) {
@@ -245,7 +249,7 @@ export const registrationRunsWithService = (
     if (!ts.isCallExpression(expression)) {
       return true;
     }
-    const helper = expression.expression;
+    const helper = unwrapTransparentExpression(expression.expression);
     if (
       ts.isPropertyAccessExpression(helper) ||
       ts.isElementAccessExpression(helper)

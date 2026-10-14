@@ -24,7 +24,10 @@ import {
 } from "./github-expression";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { unlistedTests } from "./run-unlisted-script-tests";
-import { literalMemberName } from "./test-gate-members";
+import {
+  literalMemberName,
+  unwrapTransparentExpression,
+} from "./test-gate-members";
 import {
   TRUSTED_OUTPUT_PRODUCERS,
   type TrustedOutputProducer,
@@ -395,9 +398,10 @@ type RegistrationName =
   | { readonly type: "unresolved"; readonly reason: string };
 
 const registrationName = (
-  expression: ts.Expression,
+  input: ts.Expression,
   aliases: ReadonlyMap<string, RegistrationName>,
 ): RegistrationName | undefined => {
+  const expression = unwrapTransparentExpression(input);
   if (ts.isCallExpression(expression)) {
     return registrationName(expression.expression, aliases);
   }
@@ -434,7 +438,11 @@ const registrationName = (
     : undefined;
 };
 
-const literalTitle = (node: ts.Node | undefined): string | undefined => {
+const literalTitle = (input: ts.Node | undefined): string | undefined => {
+  const node =
+    input !== undefined && ts.isExpression(input)
+      ? unwrapTransparentExpression(input)
+      : input;
   if (node === undefined) {
     return undefined;
   }
@@ -493,9 +501,13 @@ const constantStringBindings = (
 };
 
 const registrationTitle = (
-  node: ts.Node | undefined,
+  input: ts.Node | undefined,
   constants: ReadonlyMap<string, string>,
 ): string | undefined => {
+  const node =
+    input !== undefined && ts.isExpression(input)
+      ? unwrapTransparentExpression(input)
+      : input;
   const literal = literalTitle(node);
   if (literal !== undefined) {
     return literal;
@@ -657,14 +669,14 @@ const assignedRegistrationAlias = (
 ) => {
   if (
     !ts.isBinaryExpression(node) ||
-    !ts.isIdentifier(node.left) ||
     node.operatorToken.kind < ts.SyntaxKind.FirstAssignment ||
     node.operatorToken.kind > ts.SyntaxKind.LastAssignment ||
     registrationName(node.right, aliases) === undefined
   ) {
     return undefined;
   }
-  return node.left.text;
+  const left = unwrapTransparentExpression(node.left);
+  return ts.isIdentifier(left) ? left.text : undefined;
 };
 
 const registrationAliases = (source: ts.SourceFile) => {
@@ -715,14 +727,15 @@ const registrationAliases = (source: ts.SourceFile) => {
       ts.isIdentifier(node.name) &&
       node.initializer !== undefined
     ) {
-      const direct = registrationName(node.initializer, aliases);
+      const initializer = unwrapTransparentExpression(node.initializer);
+      const direct = registrationName(initializer, aliases);
       if (direct !== undefined) {
         aliases.set(node.name.text, direct);
         declarations.set(node.name.text, node);
       }
-      if (ts.isConditionalExpression(node.initializer)) {
-        const whenTrue = registrationName(node.initializer.whenTrue, aliases);
-        const whenFalse = registrationName(node.initializer.whenFalse, aliases);
+      if (ts.isConditionalExpression(initializer)) {
+        const whenTrue = registrationName(initializer.whenTrue, aliases);
+        const whenFalse = registrationName(initializer.whenFalse, aliases);
         if (whenTrue !== undefined && whenFalse !== undefined) {
           declarations.set(node.name.text, node);
           if (whenTrue.type === "unresolved") {
@@ -762,21 +775,37 @@ const registrationAliases = (source: ts.SourceFile) => {
   return { aliases, invalidBindings };
 };
 
-const literalWindowsSkip = (expression: ts.Expression): boolean => {
+const literalWindowsSkip = (input: ts.Expression): boolean => {
+  const expression = unwrapTransparentExpression(input);
   if (!ts.isCallExpression(expression) || expression.arguments.length !== 1) {
     return false;
   }
-  const condition = expression.arguments.at(0);
+  const argument = expression.arguments.at(0);
+  if (argument === undefined) {
+    return false;
+  }
+  const condition = unwrapTransparentExpression(argument);
   if (
-    condition === undefined ||
     !ts.isBinaryExpression(condition) ||
-    condition.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken ||
-    !ts.isPropertyAccessExpression(condition.left) ||
-    !ts.isIdentifier(condition.left.expression) ||
-    condition.left.expression.text !== "process" ||
-    condition.left.name.text !== "platform" ||
-    !ts.isStringLiteral(condition.right) ||
-    condition.right.text !== "win32"
+    condition.operatorToken.kind !== ts.SyntaxKind.EqualsEqualsEqualsToken
+  ) {
+    return false;
+  }
+  const left = unwrapTransparentExpression(condition.left);
+  const right = unwrapTransparentExpression(condition.right);
+  if (
+    (!ts.isPropertyAccessExpression(left) &&
+      !ts.isElementAccessExpression(left)) ||
+    literalMemberName(left) !== "platform"
+  ) {
+    return false;
+  }
+  const process = unwrapTransparentExpression(left.expression);
+  if (
+    !ts.isIdentifier(process) ||
+    process.text !== "process" ||
+    !ts.isStringLiteral(right) ||
+    right.text !== "win32"
   ) {
     return false;
   }
@@ -802,6 +831,17 @@ const platformSkipMetadata = ({
   literalWindowsSkip(expression)
     ? { skippedOn: ["win32"] as const }
     : {};
+
+const registrationReference = (node: ts.Expression): ts.Expression => {
+  let reference = node;
+  while (
+    ts.isExpression(reference.parent) &&
+    unwrapTransparentExpression(reference.parent) === node
+  ) {
+    reference = reference.parent;
+  }
+  return reference;
+};
 
 export const parseTestRegistrations = (
   file: string,
@@ -855,11 +895,13 @@ export const parseTestRegistrations = (
       ts.forEachChild(node, visit);
       return;
     }
+    const reference = registrationReference(node);
+    const parent = reference.parent;
     if (
-      (ts.isCallExpression(node.parent) ||
-        ts.isPropertyAccessExpression(node.parent) ||
-        ts.isElementAccessExpression(node.parent)) &&
-      node.parent.expression === node
+      (ts.isCallExpression(parent) ||
+        ts.isPropertyAccessExpression(parent) ||
+        ts.isElementAccessExpression(parent)) &&
+      parent.expression === reference
     ) {
       ts.forEachChild(node, visit);
       return;
@@ -892,11 +934,13 @@ export const parseTestRegistrations = (
       ? `hook:${name}`
       : registrationTitle(node.arguments.at(0), constantTitles);
     const isOnly = name.split(/[.|]/u).includes("only");
-    const callback = node.arguments.find(
-      (argument, index) =>
-        (hook || index > 0) &&
-        (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)),
-    );
+    const callback = node.arguments
+      .map(unwrapTransparentExpression)
+      .find(
+        (argument, index) =>
+          (hook || index > 0) &&
+          (ts.isArrowFunction(argument) || ts.isFunctionExpression(argument)),
+      );
     const calleeDisabled =
       name.includes("|conditional") ||
       name
@@ -4010,8 +4054,9 @@ type PlaywrightConfigOptions = PlaywrightConfigSource & {
 };
 
 const playwrightObjectFields = (
-  expression: ts.Expression,
+  input: ts.Expression,
 ): Map<string, ts.Expression> | undefined => {
+  const expression = unwrapTransparentExpression(input);
   if (!ts.isObjectLiteralExpression(expression)) {
     return undefined;
   }
@@ -4026,18 +4071,6 @@ const playwrightObjectFields = (
     fields.set(property.name.text, property.initializer);
   }
   return fields;
-};
-
-const unwrapConfigExpression = (expression: ts.Expression): ts.Expression => {
-  let node = expression;
-  while (
-    ts.isParenthesizedExpression(node) ||
-    ts.isAsExpression(node) ||
-    ts.isSatisfiesExpression(node)
-  ) {
-    node = node.expression;
-  }
-  return node;
 };
 
 const writesConfigBinding = (source: ts.SourceFile, name: string): boolean => {
@@ -4083,8 +4116,9 @@ const writesConfigBinding = (source: ts.SourceFile, name: string): boolean => {
 
 const isPlaywrightDefineConfig = (
   source: ts.SourceFile,
-  callee: ts.Expression,
+  input: ts.Expression,
 ): boolean => {
+  const callee = unwrapTransparentExpression(input);
   for (const statement of source.statements) {
     if (
       !ts.isImportDeclaration(statement) ||
@@ -4121,9 +4155,10 @@ const isPlaywrightDefineConfig = (
       continue;
     }
     const property = literalMemberName(callee);
+    const namespace = unwrapTransparentExpression(callee.expression);
     if (
-      ts.isIdentifier(callee.expression) &&
-      callee.expression.text === bindings.name.text &&
+      ts.isIdentifier(namespace) &&
+      namespace.text === bindings.name.text &&
       property === "defineConfig" &&
       !writesConfigBinding(source, bindings.name.text)
     ) {
@@ -4188,14 +4223,7 @@ const playwrightConfigFields = ({
     let node = expression;
     const visited = new Set<string>();
     while (true) {
-      if (
-        ts.isParenthesizedExpression(node) ||
-        ts.isAsExpression(node) ||
-        ts.isSatisfiesExpression(node)
-      ) {
-        node = node.expression;
-        continue;
-      }
+      node = unwrapTransparentExpression(node);
       if (!ts.isIdentifier(node) || visited.has(node.text)) {
         return node;
       }
@@ -4239,12 +4267,12 @@ const playwrightConfigFields = ({
   if (exported === undefined) {
     return { type: "unresolved", field: "configuration object" };
   }
-  const exportedExpression = unwrapConfigExpression(exported.expression);
+  const exportedExpression = unwrapTransparentExpression(exported.expression);
   if (
     ts.isCallExpression(exportedExpression) &&
     !isPlaywrightDefineConfig(
       ast,
-      unwrapConfigExpression(exportedExpression.expression),
+      unwrapTransparentExpression(exportedExpression.expression),
     )
   ) {
     return {
@@ -4258,7 +4286,7 @@ const playwrightConfigFields = ({
     : [exportedExpression];
   const root = new Map<string, ts.Expression>();
   for (const layer of layers) {
-    const binding = unwrapConfigExpression(layer);
+    const binding = unwrapTransparentExpression(layer);
     if (ts.isIdentifier(binding) && writesConfigBinding(ast, binding.text)) {
       return { type: "unresolved", field: "reassigned configuration layer" };
     }

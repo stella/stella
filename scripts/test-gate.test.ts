@@ -36,6 +36,59 @@ const bashJobs = (entries: readonly (readonly [string, readonly string[]])[]) =>
   );
 
 context("test registration census", () => {
+  check.each([
+    "(EXPRESSION)",
+    "(EXPRESSION as typeof test)",
+    "(EXPRESSION satisfies typeof test)",
+    "EXPRESSION!",
+    "(<typeof test>EXPRESSION)",
+  ])("transparent wrappers preserve registration findings: %s", (shape) => {
+    for (const [member, type] of [
+      ["only", "only"],
+      ["skip", "disabled"],
+    ] as const) {
+      const expression = shape.replace("EXPRESSION", () => `test.${member}`);
+      for (const source of [
+        `${expression}("wrapped", () => {});`,
+        `const selected = ${expression}; selected("wrapped", () => {});`,
+        `${shape.replace("EXPRESSION", "test")}.${member}("wrapped", () => {});`,
+      ]) {
+        expect(parseTestRegistrations("fixture.test.ts", source)).toEqual([
+          { identity: "fixture.test.ts::wrapped", type },
+        ]);
+      }
+    }
+  });
+
+  check(
+    "transparent wrappers preserve conditional aliases, titles and callbacks",
+    () => {
+      expect(
+        parseTestRegistrations(
+          "fixture.test.ts",
+          `
+      const selected = (enabled ? test : test.only) satisfies typeof test;
+      selected(("wrapped" as const), () => {});
+      test("environment return", (() => { if (!process.env.CI) return; })!);
+    `,
+        ),
+      ).toEqual([
+        { identity: "fixture.test.ts::environment return", type: "disabled" },
+        { identity: "fixture.test.ts::wrapped", type: "disabled" },
+        { identity: "fixture.test.ts::wrapped", type: "only" },
+      ]);
+    },
+  );
+
+  check("wrapped conditional helper calls are inventoried once", () => {
+    expect(
+      parseTestRegistrations(
+        "fixture.test.ts",
+        '(test.skipIf(process.env.CI) as typeof test)("wrapped", () => {});',
+      ),
+    ).toEqual([{ identity: "fixture.test.ts::wrapped", type: "disabled" }]);
+  });
+
   check("mutable registration aliases cannot grant registration credit", () => {
     for (const source of [
       'let selected = test; selected = test.only; selected("focused", () => {});',
@@ -380,6 +433,15 @@ context("test registration census", () => {
     ],
     ['test.skipIf(!runPostgres)("registration", () => {});', true],
     ['test["skipIf"](!runPostgres)("registration", () => {});', true],
+    [
+      '(test["skipIf"] as typeof test.skipIf)((!runPostgres as boolean))!("registration", () => {});',
+      true,
+    ],
+    [
+      'if (runPostgres) (test["skipIf"] as typeof test.skipIf)(runPostgres)("registration", () => {});',
+      false,
+    ],
+    ['if (runPostgres) (test.skip)!("registration", () => {});', false],
     ['test[`skipIf`](!runPostgres)("registration", () => {});', true],
     [
       'if (runPostgres) test["skipIf"](runPostgres)("registration", () => {});',
