@@ -1,6 +1,9 @@
+import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
+
 import {
   caseLawDecisionCitationStatsState,
   desktopEditSessions,
+  desktopTimeEntryBatches,
   workObligations,
 } from "@/api/db/schema";
 import {
@@ -19,6 +22,7 @@ import type {
 } from "@/api/lib/db/status-tables.gen";
 import {
   defineKeyedTransitions,
+  defineScopedTransitions,
   defineTransitions,
 } from "@/api/lib/db/transitions";
 import type {
@@ -92,6 +96,15 @@ const DESKTOP_EDIT_SESSION_TRANSITIONS = defineTransitions(
   },
   { terminal: ["finalized", "cancelled", "expired"] },
 );
+
+const DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE = defineScopedTransitions({
+  table: desktopTimeEntryBatches,
+  key: "idempotencyKey",
+  scope: ["organizationId", "userId"],
+  stateColumn: "status",
+  edges: { committed: [], cancelled: [] },
+  initial: DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+});
 
 const WORK_OBLIGATION_TRANSITIONS = defineKeyedTransitions({
   table: workObligations,
@@ -186,6 +199,7 @@ export const TRANSITIONS = {
   corpusIndexProjectionStates: { unmanaged: UNMANAGED_REASONS.projection },
   correspondence: { unmanaged: UNMANAGED_REASONS.userWorkflow },
   desktopEditSessions: DESKTOP_EDIT_SESSION_TRANSITIONS,
+  desktopTimeEntryBatches: DESKTOP_TIME_ENTRY_BATCH_RECEIPT_LIFECYCLE,
   documentProcessingRuns: { unmanaged: UNMANAGED_REASONS.workerRun },
   documentReviewFindings: { unmanaged: UNMANAGED_REASONS.userDecision },
   documentReviewRuns: { unmanaged: UNMANAGED_REASONS.workerRun },

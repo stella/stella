@@ -52,6 +52,7 @@ export const AGGREGATE_LOCKS = {
   scoutCensus: { rank: 60, kind: "row" },
   desktopMembership: { rank: 70, kind: "row" },
   desktopCredential: { rank: 80, kind: "row" },
+  desktopBatch: { rank: 90, kind: "advisory" },
   workspace: { rank: 100, kind: "row" },
   memberCleanup: { rank: 110, kind: "row" },
   // A chat interaction's fences: the thread, then the turn awaiting input,
@@ -124,6 +125,7 @@ export const AGGREGATE_CHAINS = {
   ],
   professionalUseAcceptance: ["professionalUseAcceptance"],
   desktopRenewal: ["desktopMembership", "desktopCredential"],
+  desktopBatch: ["desktopBatch", "workspace"],
   documentSource: [
     "workspace",
     "entity",
@@ -183,6 +185,11 @@ type AggregateIdentities = {
     userId: SafeId<"user">;
   };
   desktopCredential: { id: string; userId: SafeId<"user"> };
+  desktopBatch: {
+    organizationId: SafeId<"organization">;
+    userId: SafeId<"user">;
+    idempotencyKey: string;
+  };
   orgFeatureAdmission: {
     organizationId: SafeId<"organization">;
     featureId: "flows" | "signals";
@@ -1111,6 +1118,17 @@ const rowStatement = (
 };
 const advisoryResource = (options: AdvisoryIdentityOptions) => {
   switch (options.aggregate) {
+    case "desktopBatch":
+      return {
+        first: sql`${0x0f_10_cc_ac}::integer`,
+        second: sql`hashtext(${JSON.stringify([options.id.organizationId, options.id.userId, options.id.idempotencyKey])})`,
+        order: [
+          options.aggregate,
+          options.id.organizationId,
+          options.id.userId,
+          options.id.idempotencyKey,
+        ],
+      };
     case "professionalUseAcceptance":
       return {
         first: sql`hashtext('professional-use')`,

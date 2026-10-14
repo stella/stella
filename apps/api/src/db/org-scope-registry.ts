@@ -145,6 +145,7 @@ import {
   desktopEditHandoffs,
   desktopEditSessions,
   desktopPresence,
+  desktopTimeEntryBatches,
   documentCounters,
   documentProcessingRuns,
   documentReferenceCounters,
@@ -950,6 +951,13 @@ export const ORG_SCOPE_TABLES = {
     organizationId: sql`${desktopPresence.organizationId}`,
     workspaceId: sql`NULL::uuid`,
     rowId: sql`ROW(${desktopPresence.userId}, ${desktopPresence.organizationId}, ${desktopPresence.desktopId})::text`,
+  },
+  desktopTimeEntryBatches: {
+    identityKind: "primary-key",
+    table: desktopTimeEntryBatches,
+    organizationId: sql`${desktopTimeEntryBatches.organizationId}`,
+    workspaceId: sql`NULL::uuid`,
+    rowId: sql`ROW(${desktopTimeEntryBatches.organizationId}, ${desktopTimeEntryBatches.userId}, ${desktopTimeEntryBatches.idempotencyKey})::text`,
   },
   documentReviewFindings: {
     identityKind: "primary-key",

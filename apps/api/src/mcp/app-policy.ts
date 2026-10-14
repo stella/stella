@@ -1,4 +1,5 @@
-import { MCP_APPS } from "./apps/manifest";
+import { MCP_APPS } from "@stll/mcp-apps/manifest";
+
 import type { McpMode } from "./constants";
 import { isMcpDescriptorFeatureEnabled } from "./feature-access";
 import type { McpFeatureAccessContext } from "./feature-access";
