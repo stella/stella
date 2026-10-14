@@ -85,7 +85,7 @@ export type PublicCrawlRule = {
 };
 
 /** The admitted jurisdictions' law subtrees, read from the admission state. */
-export const publicLawJurisdictionCrawlPaths = (): readonly `/${string}`[] =>
+const publicLawJurisdictionCrawlPaths = (): readonly `/${string}`[] =>
   PUBLIC_CASE_LAW_COUNTRIES.map(
     (country): `/${string}` => `/law/${toCaseLawCountryParam(country)}`,
   );
