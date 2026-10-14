@@ -422,6 +422,59 @@ describe("independent doctrinal reviews", () => {
         ),
     ).toEqual(review);
   });
+
+  test("a review applied after its decision was redacted is refused and stores no quote", async () => {
+    const labelled = await ingestRuleLabelled({
+      caseNumber: "30 Cdo 9822/2026",
+      cited: "sp. zn. 29 Cdo 9822/2015",
+      rawHash: "doctrine-redacted",
+    });
+    reviewedDecisions.push(labelled.citingDecisionId);
+    await db
+      .update(caseLawDecisions)
+      .set({
+        redactedAt: new Date("2026-10-01T00:00:00.000Z"),
+        fulltext: null,
+        sections: null,
+        documentAst: null,
+        contentHash: null,
+      })
+      .where(eq(caseLawDecisions.id, labelled.citingDecisionId));
+    const outcome = await applyReviewedCitationLabels({
+      transact: reviewedTransact,
+      input: [
+        {
+          kind: "doctrine",
+          citationId: labelled.id,
+          doctrinalTreatment: "distinguishes",
+          evidenceQuote: "does not apply",
+          passage: "The earlier ruling does not apply to these facts.",
+          reviewRef: "doctrine-after-redaction",
+          origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+        },
+      ],
+      resultsPath: resultsPath(),
+      domain: DOCTRINE_LABEL_DOMAIN,
+    });
+    if (outcome.isErr()) {
+      throw outcome.error;
+    }
+    expect(outcome.value).toMatchObject({
+      summary: { invalid: 1 },
+      relabelled: 0,
+    });
+    expect(
+      await db
+        .select()
+        .from(caseLawCitationDoctrineReviews)
+        .where(
+          eq(
+            caseLawCitationDoctrineReviews.citingDecisionId,
+            labelled.citingDecisionId,
+          ),
+        ),
+    ).toEqual([]);
+  });
 });
 
 describe("reviewed citation labels", () => {

@@ -408,12 +408,17 @@ const citationIdsOf = (entries: readonly ParsedEntry[]): string[] => [
   ),
 ];
 
+// A redacted decision answers neither lookup: a review prepared before the
+// redaction would otherwise store its erased wording again as evidence.
 const citationIdentitiesStatement = (ids: readonly string[]): SQL => sql`
-  SELECT id::text AS id,
-         citing_decision_id::text AS citing_decision_id,
-         citation_key
-    FROM case_law_citations
-   WHERE id IN (${sql.join(
+  SELECT c.id::text AS id,
+         c.citing_decision_id::text AS citing_decision_id,
+         c.citation_key
+    FROM case_law_citations c
+    JOIN case_law_decisions d
+      ON d.id = c.citing_decision_id
+     AND d.redacted_at IS NULL
+   WHERE c.id IN (${sql.join(
      ids.map((id) => sql`${id}::uuid`),
      sql`, `,
    )})
@@ -431,10 +436,11 @@ const decisionIdsOf = (entries: readonly ParsedEntry[]): string[] => [
 const existingDecisionsStatement = (ids: readonly string[]): SQL => sql`
   SELECT id::text AS id
     FROM case_law_decisions
-   WHERE id IN (${sql.join(
-     ids.map((id) => sql`${id}::uuid`),
-     sql`, `,
-   )})
+   WHERE redacted_at IS NULL
+     AND id IN (${sql.join(
+       ids.map((id) => sql`${id}::uuid`),
+       sql`, `,
+     )})
 `;
 
 const decisionIdRowSchema = v.object({ id: v.string() });
