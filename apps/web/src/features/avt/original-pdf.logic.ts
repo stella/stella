@@ -89,7 +89,7 @@ export const translatePageRange = ({
 };
 
 /** The merged glyph boxes of a range of the viewer's page text. */
-export const boxesForRange = (
+const boxesForRange = (
   page: PageSearchText,
   range: TextRange,
 ): PDFSearchBox[] =>

@@ -29,15 +29,18 @@ export const extractPDFPageSearchTextsInWorker = async ({
   signal,
 }: ExtractPDFPageSearchTextsInWorkerOptions): Promise<
   NumberedPageSearchText[]
-> => {
-  if (signal.aborted) {
-    throw abortError();
-  }
-  const worker = new Worker(
-    new URL("../../workers/pdf-page-text-worker.ts", import.meta.url),
-    { type: "module" },
-  );
-  return await new Promise<NumberedPageSearchText[]>((resolve, reject) => {
+> =>
+  await new Promise<NumberedPageSearchText[]>((resolve, reject) => {
+    // A call made after its signal aborted settles like an abort mid-call,
+    // without starting a worker.
+    if (signal.aborted) {
+      reject(abortError());
+      return;
+    }
+    const worker = new Worker(
+      new URL("../../workers/pdf-page-text-worker.ts", import.meta.url),
+      { type: "module" },
+    );
     const controller = new AbortController();
     const dispose = () => {
       controller.abort();
@@ -87,4 +90,3 @@ export const extractPDFPageSearchTextsInWorker = async ({
     const sendRequest = worker.postMessage.bind(worker);
     sendRequest(request, [bytes]);
   });
-};

@@ -27,6 +27,7 @@ import {
 } from "@/features/avt/original-pdf.logic";
 import type {
   LocatedPdfClaim,
+  PdfClaimLocations,
   SelectionVisit,
 } from "@/features/avt/original-pdf.logic";
 import { originalPdfPagesOptions } from "@/features/avt/queries";
@@ -62,6 +63,9 @@ const showSelectedOnce = (visitKey: string, element: HTMLElement | null) => {
 
 type ClaimId = VerificationClaim["id"];
 
+/** While the page text is still being read, no claim has a place yet. */
+const NOT_YET_LOCATED: PdfClaimLocations = { located: [], unlocated: [] };
+
 type OriginalPdfViewProps = {
   workspaceId: string;
   run: VerificationRun;
@@ -95,21 +99,25 @@ export const OriginalPdfView = ({
 
   // A file that cannot be read for boxes leaves every claim listed; the
   // viewer shows its own error for a file that does not load.
-  const locations = resolvePdfClaimLocations({
-    pages: pagesQuery.data,
-    failed: fileQuery.isError || pagesQuery.isError,
-    blocks: run.blocks,
-    claims: run.claims,
-  });
+  const locations =
+    resolvePdfClaimLocations({
+      pages: pagesQuery.data,
+      failed: fileQuery.isError || pagesQuery.isError,
+      blocks: run.blocks,
+      claims: run.claims,
+    }) ?? NOT_YET_LOCATED;
 
   const claimById = new Map(claims.map((claim) => [claim.id, claim]));
   const locatedByPage = new Map<number, LocatedPdfClaim[]>();
-  for (const location of locations?.located ?? []) {
-    const onPage = locatedByPage.get(location.pageNumber) ?? [];
-    onPage.push(location);
-    locatedByPage.set(location.pageNumber, onPage);
+  for (const location of locations.located) {
+    const onPage = locatedByPage.get(location.pageNumber);
+    if (onPage === undefined) {
+      locatedByPage.set(location.pageNumber, [location]);
+    } else {
+      onPage.push(location);
+    }
   }
-  const unlocated = (locations?.unlocated ?? []).flatMap((id) => {
+  const unlocated = locations.unlocated.flatMap((id) => {
     const claim = claimById.get(id);
     return claim === undefined ? [] : [claim];
   });
@@ -211,14 +219,15 @@ const ClaimPageMarks = ({
   }
   // Where claims overlap, the smaller one is drawn last so a click reaches
   // the claim the reader most plausibly meant; the selected one stays on top.
-  const onPage = (locatedByPage.get(page.proxy.pageNumber) ?? []).toSorted(
+  const located = locatedByPage.get(page.proxy.pageNumber);
+  if (located === undefined || located.length === 0) {
+    return null;
+  }
+  const onPage = located.toSorted(
     (a, b) =>
       Number(a.claimId === selected) - Number(b.claimId === selected) ||
       boxArea(b) - boxArea(a),
   );
-  if (onPage.length === 0) {
-    return null;
-  }
   return (
     <div
       aria-hidden={true}
