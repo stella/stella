@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
   type BrowserClientCapability,
+  type ChatCorpusScope,
 } from "@stll/api-contract";
 import { DOCX_SUGGESTION_SURFACE } from "@stll/api-contract/chat-docx-suggestions";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
@@ -25,6 +26,11 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
+import {
+  corpusScopeUnavailableReason,
+  OUT_OF_SCOPE_CORPUS_DIRECT_TOOLS,
+  restrictChatToolsToCorpusScope,
+} from "@/api/handlers/chat/tools/corpus-scope";
 import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
@@ -543,6 +549,13 @@ export type GetChatToolsProps = {
    * live execution path.
    */
   disabledNativeToolSlugs?: readonly string[] | undefined;
+  /**
+   * The corpus chips on the turn's latest user message. Script reads are held
+   * to them and direct tools over other public corpora are dropped; subagents
+   * inherit them through the props re-spread. Only the run set passes them:
+   * the validation set must keep every tool an earlier turn could have used.
+   */
+  corpusScopes?: readonly ChatCorpusScope[] | undefined;
   registryDispatch: Record<BusinessRegistrySlug, RegistryHandler>;
   skillMetadata?: readonly SkillMetadata[] | undefined;
   activeSkillContext?: ActiveChatSkillContext | null | undefined;
@@ -844,6 +857,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     webSearchProviders,
     externalTools = {},
     disabledNativeToolSlugs,
+    corpusScopes = [],
     registryDispatch,
     skillMetadata,
     activeSkillContext,
@@ -917,6 +931,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     unavailableReasons: new Map(),
   };
   const executionTools = buildChatCodeModeTools({
+    corpusScopes,
     featureAccessSnapshot,
     testDependencies,
     documentedReads: skillDeclarations.documentedChatReads,
@@ -1301,7 +1316,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   });
   const projected = props.projectToolSet?.(registered) ?? registered;
   const tools = Object.fromEntries(
-    Object.entries(projected).filter(([name]) =>
+    Object.entries(
+      restrictChatToolsToCorpusScope(projected, corpusScopes),
+    ).filter(([name]) =>
       isMcpDescriptorFeatureEnabled({
         context: {
           featureAccessSnapshot,
@@ -1334,6 +1351,12 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
       ...Object.keys(registered)
         .filter((name) => !(name in projected))
         .map((name) => [name, "subagents cannot call it"] as const),
+      ...(corpusScopes.length === 0
+        ? []
+        : [...OUT_OF_SCOPE_CORPUS_DIRECT_TOOLS].map(
+            (name) =>
+              [name, corpusScopeUnavailableReason(corpusScopes)] as const,
+          )),
     ]),
   };
   return tools;

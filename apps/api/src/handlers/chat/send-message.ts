@@ -2908,6 +2908,9 @@ export const createSendMessage = (
         // mounts no watcher to resolve them.
         const chatTools = getChatTools({
           ...chatToolContext,
+          // Corpus chips on the incoming message pin this turn's public-corpus
+          // reads; a continuation without a new user message carries none.
+          corpusScopes: parsedMessage.corpusScopes,
           modelAdmission,
           externalTools: externalMcpTools?.tools ?? {},
           skillMetadata: chatContext.skillMetadata,

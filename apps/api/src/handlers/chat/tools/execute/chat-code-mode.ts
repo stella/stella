@@ -14,9 +14,11 @@ import {
 import { panic, Result } from "better-result";
 
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import type { ChatCorpusScope } from "@stll/api-contract";
 import { listSkillMetadata } from "@stll/skills";
 import { readDocumentedChatReads } from "@stll/skills/frontmatter";
 
+import { scopeCorpusRead } from "@/api/handlers/chat/tools/corpus-scope";
 import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { runChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-script-read-boundary";
 import {
@@ -327,12 +329,15 @@ type BuildChatCodeModeProps = Omit<
   toolDefectMemo: ChatToolDefectMemo;
   /** Read when a script runs, after the turn's tool set is complete. */
   scriptCallTools: () => ChatScriptCallTools;
+  /** The turn's corpus chips; every script read is held to them. */
+  corpusScopes?: readonly ChatCorpusScope[] | undefined;
 };
 
 export const buildChatCodeMode = (
   props: BuildChatCodeModeProps,
 ): CreateCodeModeResult => {
   const {
+    corpusScopes = [],
     documentedReads,
     refRegistry,
     scriptCallTools,
@@ -356,6 +361,8 @@ export const buildChatCodeMode = (
             args: toolArgs,
             context,
             refRegistry,
+            scopeArgs: (args) =>
+              scopeCorpusRead({ scopes: corpusScopes, toolName, args }),
           }),
       }),
     // A script that calls a direct tool, an unprefixed read or a tool this
