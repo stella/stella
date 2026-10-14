@@ -1,5 +1,3 @@
-import { panic } from "better-result";
-
 import { isAiRequest } from "@/api/lib/observability/request-context";
 import type { RequestClass } from "@/api/lib/observability/request-metrics";
 
@@ -812,13 +810,15 @@ const routeLatencyClass = ({
   if (route === "unmatched") {
     return "crud";
   }
-  const declared =
+  // The census test pins this table to every route the API registers, so a
+  // served route always has a declaration. Only a sub-application mounted on
+  // its own (handler tests) reaches the fallback; failing the request over a
+  // metric label would turn a telemetry gap into an outage.
+  return (
     DECLARED_CLASSES.get(`${method} ${route}`) ??
-    DECLARED_CLASSES.get(`ALL ${route}`);
-  if (declared === undefined) {
-    return panic(`Missing route latency class: ${method} ${route}`);
-  }
-  return declared;
+    DECLARED_CLASSES.get(`ALL ${route}`) ??
+    "crud"
+  );
 };
 
 /** A model call moves a completed request into the AI latency series. */

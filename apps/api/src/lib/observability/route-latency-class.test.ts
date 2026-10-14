@@ -94,15 +94,17 @@ describe("the class a completed request is measured under", () => {
     });
   });
 
-  test("rejects missing classifications even after a model call", () => {
+  test("measures a route outside the served API without failing the request", () => {
+    // Only a sub-application mounted on its own reaches this: the census above
+    // fails CI for any route the API itself registers without a declaration.
     runWithRequestIdScope(() => {
-      expect(() =>
-        requestClassAtCompletion({ method: "GET", route: "/v1/new-route" }),
-      ).toThrow("Missing route latency class");
+      expect(
+        requestClassAtCompletion({ method: "POST", route: "/search" }),
+      ).toBe("crud");
       markAiRequest();
-      expect(() =>
-        requestClassAtCompletion({ method: "GET", route: "/v1/new-route" }),
-      ).toThrow("Missing route latency class");
+      expect(
+        requestClassAtCompletion({ method: "POST", route: "/search" }),
+      ).toBe("ai");
     });
   });
 
