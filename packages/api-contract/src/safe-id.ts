@@ -57,6 +57,7 @@ export type SafeIdType =
   | "correspondenceDropLog"
   | "contactExtractionUpload"
   | "contactImportRequest"
+  | "requestIdempotencyReceipt"
   | "contactRelationship"
   | "corpusIndexProjectionIntent"
   | "hostedCheckoutClaim"
