@@ -129,6 +129,12 @@ type CompiledResolver = {
    * Sentences are left out: a later `věta druhá` refines the same provision.
    */
   laterSubdivision: RegExp;
+  /**
+   * A connector and a bare number anywhere later (`§ 316 odst. 2 ZP a 3 ZP`):
+   * a continuation past the act name. A gazette number (`č. 262/2006`) is
+   * not one, so a number followed by `/` is left alone.
+   */
+  laterBareContinuation: RegExp;
   sectionUnits: ReadonlyMap<string, SectionUnit>;
   subdivisions: readonly {
     pattern: RegExp;
@@ -163,6 +169,10 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
             String.raw`(?:${termSource(text)})\s*${SUBDIVISION_VALUES[level]}`,
         )
         .join("|")})(?![\p{L}\p{N}])`,
+      "iu",
+    ),
+    laterBareContinuation: new RegExp(
+      String.raw`(?:[,;]|[-–—]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*\d{1,4}[a-z]?(?![\p{L}\p{N}])(?!\s*\/)`,
       "iu",
     ),
     letterContinuation: new RegExp(
@@ -626,7 +636,8 @@ export const resolveProvisionCitation = ({
     // A second provision anywhere after the first (`§ 316 ZP a § 317 ZP`),
     // past an act name the continuation check cannot see across.
     resolver.section.test(after) ||
-    resolver.laterSubdivision.test(after)
+    resolver.laterSubdivision.test(after) ||
+    resolver.laterBareContinuation.test(after)
   ) {
     return { status: "multiple_provisions" };
   }
