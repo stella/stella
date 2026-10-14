@@ -38,14 +38,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  tag:
-    name: Push release tag
+  candidate:
+    name: Select release preflight commit
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: release-app
     timeout-minutes: 15
     outputs:
       sha: ${{ steps.candidate.outputs.sha }}
+      value: ${{ steps.candidate.outputs.value }}
+      tag: ${{ steps.candidate.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -61,6 +62,33 @@ jobs:
           PROOF_SHA: ${{ inputs.proof_sha }}
         run: bash scripts/prepare-release-tag.sh --repo "$GITHUB_REPOSITORY" --sha "$REQUESTED_SHA" --proof-sha "$PROOF_SHA" >> "$GITHUB_OUTPUT"
 
+  marketing-screenshots:
+    name: Pre-release screenshot checklist
+    needs: candidate
+    uses: ./.github/workflows/marketing-screenshots-update.yml
+    with:
+      ref: ${{ needs.candidate.outputs.sha }}
+    secrets: inherit
+    permissions:
+      contents: read
+      pull-requests: read
+
+  tag:
+    name: Push release tag
+    needs: [candidate, marketing-screenshots]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: release-app
+    timeout-minutes: 15
+    outputs:
+      sha: ${{ needs.candidate.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
       - name: Preserve the trusted release guard
         run: |
           cp scripts/check-release-main-health.sh "$RUNNER_TEMP/check-release-main-health.sh"
@@ -69,7 +97,7 @@ jobs:
 
       - name: Checkout the verified commit
         env:
-          RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
+          RELEASE_SHA: ${{ needs.candidate.outputs.sha }}
         run: git checkout --detach "$RELEASE_SHA"
 
       - name: Setup Bun
@@ -91,7 +119,7 @@ jobs:
 
       - name: Require release changelog file
         env:
-          VERSION: ${{ steps.candidate.outputs.value }}
+          VERSION: ${{ needs.candidate.outputs.value }}
         run: bash scripts/check-release-changelog.sh --version "$VERSION"
 
       # A release whose npm publish failed or never ran leaves users on an
@@ -109,7 +137,7 @@ jobs:
       # Bun and Node built-ins plus npm on the runner.
       - name: Refuse a stable tag whose CLI release is not settled
         env:
-          VERSION: ${{ steps.candidate.outputs.value }}
+          VERSION: ${{ needs.candidate.outputs.value }}
         run: bun scripts/check-cli-release-coupling.ts --version "$VERSION"
 
       - name: Mint App token
@@ -129,8 +157,8 @@ jobs:
           RELEASE_TREE_PROOF_VERIFIER: ${{ runner.temp }}/verify-release-tree-proof.sh
           PROOF_SHA: ${{ steps.candidate.outputs.proof-sha }}
           RELEASE_HEALTH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.candidate.outputs.tag }}
-          RELEASE_SHA: ${{ steps.candidate.outputs.sha }}
+          TAG: ${{ needs.candidate.outputs.tag }}
+          RELEASE_SHA: ${{ needs.candidate.outputs.sha }}
           # Injected only for this step: the App token never touches disk via
           # persisted git credentials, so earlier steps (setup-bun, repo
           # scripts) run without it available.

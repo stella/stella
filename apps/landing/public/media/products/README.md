@@ -6,48 +6,38 @@ and available product states stay tied to production code.
 
 ## Refreshing the PNG screenshots
 
-The `.png` baselines come from CI, never from a developer machine. PR CI runs
-the `marketing-screenshots` check whenever a change can reach a captured
-surface, so a UI change fails the PR that makes it instead of the next nightly
-run. When the diff is intended, dispatch **Update marketing screenshots**
-(`.github/workflows/marketing-screenshots-update.yml`) from the default
-branch, naming the PR's branch:
+The `.png` baselines are regenerated on the pre-release runner. Pull-request,
+merge-group, main-heavy and nightly CI do not compare marketing screenshots.
+The release PR workflow regenerates its branch, and the release-tag preflight
+captures the selected main commit before tagging. Pixel differences become
+baseline changes for review, rather than merge failures.
+
+For a manual pre-release refresh, dispatch **Pre-release marketing screenshots**
+(`.github/workflows/marketing-screenshots-update.yml`) from `main`:
 
 ```sh
-gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
+gh workflow run marketing-screenshots-update.yml --ref main -f branch=<release-pr-branch>
 ```
 
-That run only starts **Capture marketing screenshots**
-(`marketing-screenshots-capture.yml`) on the branch's own ref. The capture
-runs the branch's app and spec code, holds no release secret, refuses to run
-on `main`, and uploads the regenerated PNGs as its `marketing-screenshots`
-artifact. When it completes, **Publish marketing screenshots**
-(`marketing-screenshots-publish.yml`) runs from `main`: it executes nothing
-from the branch, accepts only flat, regular `*.png` files with a PNG
-signature, mints the release App token, and appends one signed commit on the
-head the capture ran on, so a push that landed on the branch in the meantime
-makes it fail. The push re-runs the PR's checks against the new head.
-
-The capture body is the composite action `.github/actions/marketing-capture`
-resolved from the branch, and GitHub runs the capture workflow from the
-branch's own copy. A branch created before `marketing-screenshots-capture.yml`
-existed on `main` has no such copy, so the update dispatch fails for it with a
-"workflow not found" error: rebase the branch onto `main` first, then dispatch
-again.
-
-You can also start the capture directly on the branch, skipping the update
-dispatch; the publish run follows the same way:
+The branch must head one open same-repository pull request into `main`. To
+capture a main commit instead, omit `branch` and optionally supply its full SHA:
 
 ```sh
-gh workflow run marketing-screenshots-capture.yml --ref <pr-branch>
+gh workflow run marketing-screenshots-update.yml --ref main -f ref=<main-commit-sha>
 ```
 
-Because baselines and comparison render on the same runner image, the pixel
-tolerance only has to cover run-to-run noise.
+Capture and publication are jobs in the same workflow. Capture runs the selected
+app and spec code without the release App key. Publication runs no code from
+that tree: it accepts only flat, regular PNG files with a PNG signature, then
+uses the release App to append signed baseline commits. It verifies the remote
+commit and PNG hashes before reporting `published`; an absent commit, changed
+branch or mismatched PNG fails loudly. Identical PNGs report `no-change` without
+a push. Changes captured from main open a separate draft baseline review PR;
+they never modify the release commit or push directly to main.
 
-Only branches of this repository can be regenerated in place. For a fork PR,
-run the update against a same-repository branch carrying the change and
-commit the capture run's `marketing-screenshots` artifact to the PR.
+The `marketing-screenshots` artifact and workflow summary retain the regenerated
+PNGs and review result. Capture uses the workflow revision's composite action
+`.github/actions/marketing-capture`, with cache saves disabled.
 
 Running `bun --filter @stll/web test:e2e:marketing:update` locally is for
 debugging a capture; do not commit macOS-generated PNGs.

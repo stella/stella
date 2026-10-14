@@ -172,7 +172,6 @@ jobs:
       legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
-      marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
@@ -681,46 +680,6 @@ jobs:
           git show "$WORKFLOW_SHA:.github/workflows/ci.yml" > "$RUNNER_TEMP/main-heavy-ci.yml"
           git show "$WORKFLOW_SHA:scripts/main-heavy-plan.ts" > packages/scripts/.main-heavy-plan.ts
           bun packages/scripts/.main-heavy-plan.ts "$RUNNER_TEMP/main-heavy-ci.yml" >> "$GITHUB_OUTPUT"
-
-      - name: Plan release marketing screenshots
-        id: marketing-release
-        if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAVY_ONLY: ${{ inputs.heavy_only }}
-          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
-          REPOSITORY: ${{ github.repository }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [[ "${HEAVY_ONLY:-false}" == true ]]; then
-            required=false
-            if ! git diff --quiet HEAD^ HEAD -- VERSION; then
-              required=true
-            fi
-            echo "required=$required" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          required=false
-          number="$PR_NUMBER"
-          if [[ "$EVENT_NAME" == "merge_group" ]]; then
-            if [[ ! "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
-              echo "::error::Merge group ref does not name a pull request" >&2
-              exit 1
-            fi
-            number="${BASH_REMATCH[1]}"
-          fi
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            required=true
-          elif [[ -n "$number" ]]; then
-            state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number")
-            required=$(sed -n 's/^current_is_release=//p' <<< "$state")
-            if [[ "$required" != true && "$required" != false ]]; then
-              echo "::error::Release classifier returned no verdict" >&2
-              exit 1
-            fi
-          fi
-          echo "required=$required" >> "$GITHUB_OUTPUT"
 
       - name: Check changed file scope
         if: >-
@@ -5873,11 +5832,10 @@ jobs:
         uses: ./.github/actions/build-e2e-web
 
       - name: Upload production E2E web build
-        # The e2e shards and the marketing capture both serve this build.
+        # The E2E shards serve this build.
         if: >-
           needs.ci-plan.outputs.e2e_core_required == 'true'
           || needs.ci-plan.outputs.e2e_production_required == 'true'
-          || needs.ci-plan.outputs.marketing_screenshots_required == 'true'
           || needs.ci-plan.outputs.route_smoke_required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -6333,7 +6291,6 @@ jobs:
   # Browser checks use isolated parallel runners: broad production shards,
   # a small Vite dependency canary, and the built landing-page suite. The
   # production shards start only after their production build is published.
-  # Marketing screenshots remain in the nightly test workflow.
   # Heavy browser suites need a production artifact while the thin web-build
   # check skips. Reuse its build action; bundle/boot guards stay in web-build.
   heavy-web-build:
@@ -7346,105 +7303,6 @@ jobs:
 
       - name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        with:
-          retries: 0
-          script: |
-            let diagnostic;
-            let failureSummary = "failed-step lookup unavailable";
-            let evidenceTimer;
-            try {
-              const jobs = await Promise.race([
-                github.paginate(
-                  "GET /repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt_number}/jobs",
-                  {
-                    ...context.repo,
-                    run_id: context.runId,
-                    attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT),
-                    per_page: 100,
-                    request: { timeout: 10000 },
-                  },
-                ),
-                new Promise((_, reject) => {
-                  evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
-                }),
-              ]);
-              const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
-                .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
-              diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
-            } catch {
-              diagnostic = `${context.job}: cancelling failed merge group; failed-step lookup unavailable`;
-            } finally {
-              clearTimeout(evidenceTimer);
-            }
-            core.error(diagnostic);
-            try {
-              core.summary.addRaw(`Merge group failed: ${failureSummary}. Other jobs were cancelled to free runners.\n${diagnostic}\n`);
-              await core.summary.write();
-            } catch {
-              core.error(`${context.job}: cancellation step summary could not be written`);
-            }
-            await github.rest.actions.cancelWorkflowRun({
-              ...context.repo,
-              run_id: context.runId,
-            });
-
-  # Release candidates compare the captured PNGs before shipping, on the
-  # release pull request itself (fast depth) as well as its merge group. These
-  # images ship as landing-page assets, so a silent baseline
-  # invalidation puts a stale product shot on the marketing site. Regeneration
-  # happens on the runner (`marketing-screenshots-update.yml` dispatched on
-  # main with `-f branch=<this branch>`), which is also why the comparison
-  # tolerance can stay tight:
-  # baselines and comparison render on the same image.
-
-  marketing-screenshots:
-    # A bounded poll can expire while web-build is still waiting for a runner;
-    # declare the producer so artifact consumers start only after it succeeds.
-    needs: [ci-plan, web-build, heavy-web-build]
-    if: >-
-      inputs.pr_depth_only != true
-      &&
-      needs.ci-plan.outputs.run_required != 'false'
-      && (
-      github.event_name != 'pull_request' && (
-      (always()
-      && (github.event_name != 'merge_group' || !cancelled())
-      && (needs.ci-plan.outputs.trusted == 'true'
-          || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
-      && (needs.ci-plan.outputs.web_build_required != 'true'
-          || (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success'))
-      )
-      )
-      )
-    uses: ./.github/workflows/marketing-screenshots.yml
-    permissions:
-      actions: read
-      contents: read
-    with:
-      mode: check
-      ref: ${{ (inputs.heavy_only == true || inputs.pr_depth_only == true) && inputs.sha || '' }}
-      # Serve the same production build the e2e shards use whenever web-build
-      # runs in this workflow; the capture job builds it otherwise.
-      web-build-artifact: ${{ needs.ci-plan.outputs.web_build_required == 'true' && 'e2e-web-build' || '' }}
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
-  # Reusable workflow callers cannot have steps. Cancel immediately after
-  # this call fails, without a runner waiting or polling for its result.
-  marketing-screenshots-cancel:
-    needs: marketing-screenshots
-    if: failure() && github.event_name == 'merge_group'
-    runs-on: ubuntu-latest
-    timeout-minutes: 1
-    permissions:
-      actions: write
-    steps:
-      - name: Cancel merge group after failure in this job
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
@@ -8834,7 +8692,6 @@ jobs:
         web-image-smoke,
         mobile-build,
         landing-build,
-        marketing-screenshots,
         migration-upgrade-rehearsal,
         route-smoke,
         scan-engine-wasm-drift,
@@ -8941,7 +8798,6 @@ jobs:
             "fix-tests-on-base": "fix_tests_on_base_required",
             "landing-build": "landing_build_required",
             "legal-atlas-image": "legal_atlas_image_required",
-            "marketing-screenshots": "marketing_screenshots_required",
             "migration-upgrade-rehearsal": "migration_rehearsal_required",
             "mobile-build": "mobile_build_required",
             "parser-version-guard": "package_checks_required",

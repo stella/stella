@@ -465,44 +465,6 @@ test("source checkouts use the selected event SHA while tooling uses the workflo
       job,
     ).toBe(eventSha);
   }
-  const forwarded = ciWorkflow.jobs["marketing-screenshots"]?.with?.["ref"];
-  expect(expressionValue(forwarded, mainContext)).toBe(validatedSha);
-  expect(
-    expressionValue(forwarded, {
-      inputs: { heavy_only: false, pr_depth_only: false, sha: validatedSha },
-    }),
-  ).toBe("");
-  const marketing = v.parse(
-    v.object({ jobs: v.record(v.string(), jobSchema) }),
-    Bun.YAML.parse(
-      readFileSync(
-        new URL(
-          "../.github/workflows/marketing-screenshots.yml",
-          import.meta.url,
-        ),
-        "utf-8",
-      ),
-    ),
-  );
-  const marketingCheckouts =
-    marketing.jobs["check"]?.steps?.filter(({ uses }) =>
-      uses?.startsWith("actions/checkout@"),
-    ) ?? [];
-  expect(marketingCheckouts.length).toBeGreaterThan(0);
-  for (const checkout of marketingCheckouts) {
-    expect(
-      expressionValue(checkout.with?.["ref"], {
-        inputs: { ref: validatedSha },
-        github: { workflow: mainWorkflow.name },
-      }),
-    ).toBe(validatedSha);
-    expect(
-      expressionValue(checkout.with?.["ref"], {
-        inputs: { ref: validatedSha },
-        github: { workflow: "CI Checks" },
-      }),
-    ).toBe("");
-  }
 });
 
 test("only the final job can publish the main/heavy status", () => {

@@ -1,19 +1,10 @@
 name: Capture marketing screenshots
 description: Seed the app on the CI runner and either compare or rewrite the committed product screenshots
 
-# The one body behind both directions of the baselines. `check` and `update`
-# are separate jobs in marketing-screenshots.yml because only `update` may
-# declare the release-app environment, so "what CI compares" and "what CI
-# regenerates" have to meet here instead of in two drifting job bodies.
-#
-# The checkout stays with the caller: check captures the triggering ref,
-# update captures the branch it was told to regenerate.
-#
-# The web app is served from a production build, the same way the e2e shards
-# serve it, never from the Vite dev server: a cold dev start on a busy runner
-# can exceed any fixed wait, and a mid-session dependency re-optimize tears
-# frames. PR CI hands over the `web-build` job's artifact; the nightly and
-# update callers have no such job and build here.
+# The pre-release capture body. Cache saves are disabled because it may
+# execute a selected review tree from a workflow running on main.
+# The caller selects the checkout. A production web build keeps captures
+# reproducible without a dev server's dependency re-optimization.
 
 inputs:
   mode:
@@ -36,9 +27,6 @@ runs:
   using: composite
   steps:
     - name: Validate mode
-      # Both callers gate on the mode, but only one of them can see an
-      # unrecognised value: the check job runs on anything that is not
-      # `update`, so a typo fails here instead of skipping both jobs green.
       shell: bash
       env:
         MODE: ${{ inputs.mode }}
@@ -54,7 +42,7 @@ runs:
     - name: Setup Bun
       uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
       with:
-        save: ${{ github.ref == 'refs/heads/main' }}
+        save: false
 
     - name: Install dependencies
       shell: bash
@@ -71,7 +59,7 @@ runs:
         cp .env.example .env
 
     - name: Build production web
-      # No artifact was handed over (nightly, update): build the same bundle
+      # No artifact was handed over: build the same bundle
       # the `web-build` job in ci.yml produces, flags included, so a capture
       # renders the feature-complete surface on every caller.
       if: inputs.web-build-artifact == ''

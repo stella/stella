@@ -75,12 +75,6 @@
     "e2e-landing": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && ((needs.ci-plan.outputs.trusted == 'true'\n || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.e2e_landing_required == 'true' && needs.ci-plan.outputs.suite_depth == 'full' ) ) )"
     },
-    "marketing-screenshots": {
-      "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( needs.ci-plan.outputs.queue_depth != 'thin' && (always() && (github.event_name != 'merge_group' || !cancelled()) && (needs.ci-plan.outputs.trusted == 'true'\n    || github.event_name == 'workflow_dispatch')\n&& needs.ci-plan.outputs.marketing_screenshots_required == 'true' && (needs.ci-plan.outputs.web_build_required != 'true'\n    || (needs.web-build.result == 'success' || needs.heavy-web-build.result == 'success'))\n) ) )"
-    },
-    "marketing-screenshots-cancel": {
-      "if": "failure() && github.event_name == 'merge_group'"
-    },
     "e2e-report": {
       "if": "needs.ci-plan.outputs.run_required != 'false' && ( github.event_name != 'pull_request' && ( !cancelled() && needs.ci-plan.outputs.e2e_core_required == 'true' && (needs.e2e-production-shard.result == 'failure'\n    || needs.e2e-vite-canary.result == 'failure')\n) )"
     },

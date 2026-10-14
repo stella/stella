@@ -107,9 +107,6 @@ const context = (
   },
   steps: {
     "changed-files": { outputs: plan },
-    "marketing-release": {
-      outputs: { required: plan["marketing_screenshots_required"] },
-    },
   },
   needs: Object.fromEntries(
     ciNeeds.map((job) => [

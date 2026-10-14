@@ -318,24 +318,6 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Marketing captures run on PRs that touch the captured surfaces too; this
-  # nightly pass additionally covers what a per-file allowlist cannot see
-  # (dependency upgrades, seed drift) against the whole default-branch runtime.
-  marketing-screenshots:
-    uses: ./.github/workflows/marketing-screenshots.yml
-    permissions:
-      # The check job polls the calling run's artifacts; a caller that grants
-      # less than the callee requests fails at startup, before any job runs.
-      actions: read
-      contents: read
-    with:
-      mode: check
-    # Explicit, not `inherit`: a check run never pushes, so it has no business
-    # receiving the release App key.
-    secrets:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
   # Postgres-backed API suites that gate on STELLA_RUN_POSTGRES_TESTS=true and a
   # real DATABASE_URL. The plain `bun run test` above skips them (they no-op in
   # the skip branch); the shared runner executes them here and in required PR

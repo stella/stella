@@ -25,7 +25,6 @@ const PROMOTE_DISPATCH_ACTION = "uses: ./.github/actions/promote-dispatch";
 const WORKFLOW_RUN_WORKFLOWS = [
   "bot-refresh-auto-merge.yml",
   "cla.yml",
-  "marketing-screenshots-publish.yml",
   "publish-npm.yml",
   "release-desktop.yml",
   "scheduled-run-alerts.yml",

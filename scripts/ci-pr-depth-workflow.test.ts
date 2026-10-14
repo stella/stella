@@ -129,13 +129,11 @@ const ciJobs = v.parse(
 );
 const REUSE_SKIP = "needs.ci-plan.outputs.pr_depth_reused != 'true'";
 const MAIN_SKIP = "inputs.pr_depth_only != true";
-// Jobs that only orchestrate: the planner, the result gate and a cancellation
-// helper that acts on another job's failure.
+// Jobs that only orchestrate: the planner, the result gate and waiver expiry.
 const ORCHESTRATION_JOBS = new Set([
   "ci-plan",
   "ci-result",
   "dated-waiver-expiry",
-  "marketing-screenshots-cancel",
 ]);
 
 type SkipViolationsOptions = {

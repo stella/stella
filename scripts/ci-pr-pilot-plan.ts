@@ -35,8 +35,6 @@ export const PILOT_DEFERRED = [
   "stack-redaction-browsers",
   "e2e-vite-canary",
   "e2e-landing",
-  "marketing-screenshots",
-  "marketing-screenshots-cancel",
   "e2e-report",
   "api-image-smoke",
   "legal-atlas-image",

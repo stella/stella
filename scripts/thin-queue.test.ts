@@ -764,32 +764,6 @@ const assertMainSelection = (workflow: typeof main) => {
   }
 };
 
-test("failure-only cancellation jobs resolve both successful and failed dependencies", () => {
-  const cancellations = Object.entries(ci.jobs).filter(([, job]) =>
-    job.if?.includes("failure()"),
-  );
-  expect(cancellations.length).toBeGreaterThan(0);
-  for (const [id, job] of cancellations) {
-    for (const event of events) {
-      for (const failed of [false, true]) {
-        const value = context({ event, variable: "full", queueDepth: "full" });
-        value.failure = () => failed;
-        expect(selected(job.if, value), `${id}/${event.event}/${failed}`).toBe(
-          failed && event.event === "merge_group",
-        );
-        if (event.event === "merge_group") {
-          const unresolved = Object.fromEntries(
-            Object.entries(value).filter(([key]) => key !== "failure"),
-          );
-          expect(() => selected(job.if, unresolved)).toThrow(
-            "Unresolved queue workflow expression",
-          );
-        }
-      }
-    }
-  }
-});
-
 test("route smoke certifies planned queue and heavy builds while skipping PRs", () => {
   expect(eventPolicy["ci.yml/route-smoke"]).toBe("queue");
   const cases = events
@@ -855,11 +829,14 @@ test("unset and full preserve historical predicates except declared PR, Postgres
     [
       ...new Set([
         ...Object.keys(baseline.jobs).filter(
-          (id) => id !== "merge-group-fail-fast" && !collapsedJobs.has(id),
+          (id) =>
+            id !== "merge-group-fail-fast" &&
+            id !== "marketing-screenshots" &&
+            id !== "marketing-screenshots-cancel" &&
+            !collapsedJobs.has(id),
         ),
         "api-test-durations",
         "postgres-service-suites",
-        "marketing-screenshots-cancel",
         "ci-generated-sources",
         "ci-checks-docs",
         "code-quality-web-rest",
@@ -886,7 +863,11 @@ test("unset and full preserve historical predicates except declared PR, Postgres
     )) {
       const value = context({ event, variable, queueDepth: "full", proveFix });
       for (const [job, body] of Object.entries(baseline.jobs)) {
-        if (job === "merge-group-fail-fast") {
+        if (
+          job === "merge-group-fail-fast" ||
+          job === "marketing-screenshots" ||
+          job === "marketing-screenshots-cancel"
+        ) {
           continue;
         }
         let expected = selected(body.if, value);

@@ -393,12 +393,10 @@ test("capture landing product screenshots", async ({
           animations: "disabled",
           caret: "hide",
           clip: "clip" in capture ? capture.clip : DEFAULT_CLIP,
-          // Baselines are produced on the CI runner by the "Update marketing
-          // screenshots" workflow (.github/workflows/
-          // marketing-screenshots-update.yml) and compared on that same runner
-          // image, so this only has to absorb run-to-run rendering noise, not
-          // a macOS-to-Linux font gap. Dispatch that workflow on the branch
-          // when the UI change is intended.
+          // Pre-release baselines use one runner image, so local comparisons
+          // only absorb rendering noise. Regenerate through
+          // marketing-screenshots-update.yml on main with the release branch
+          // or selected main SHA; normal CI does not compare these PNGs.
           maxDiffPixelRatio: 0.005,
           scale: "css",
         });
