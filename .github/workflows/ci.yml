@@ -3422,7 +3422,7 @@ jobs:
             git show "$base:$baseline_path" > /dev/null
           fi
           # Pin and usage comparisons need local baseline blobs before network denial.
-          bun -e 'import { EXTERNAL_CONTRACTS } from "./packages/external-contracts/src/registry"; const files = new Set(["package.json", "apps/api/package.json", "bun.lock", ...Object.values(EXTERNAL_CONTRACTS).flatMap(entry => [...entry.owners.map(owner => owner.path), ...entry.pinSources.map(source => source.file)]), ...Object.values((await Bun.file("package.json").json()).patchedDependencies)]); console.log([...files].join("\n"));' > "$RUNNER_TEMP/external-contract-baseline-paths"
+          bun scripts/check-external-contracts.ts --baseline-files > "$RUNNER_TEMP/external-contract-baseline-paths"
           while IFS= read -r file; do
             if [ -n "$(git ls-tree --name-only "$base" -- "$file")" ]; then
               git show "$base:$file" > /dev/null

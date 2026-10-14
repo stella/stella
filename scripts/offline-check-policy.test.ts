@@ -211,6 +211,12 @@ test("the offline baseline reader uses the merge base and preserves absent files
     const patchFile = "patches/@tanstack%2Fai@0.65.1.patch";
     mkdirSync(path.join(directory, "patches"));
     writeFileSync(path.join(directory, patchFile), "patch baseline\n");
+    const routeFile =
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/client.ts";
+    mkdirSync(path.dirname(path.join(directory, routeFile)), {
+      recursive: true,
+    });
+    writeFileSync(path.join(directory, routeFile), "route baseline\n");
     git(["add", "."]);
     git([
       "-c",
@@ -251,6 +257,11 @@ test("the offline baseline reader uses the merge base and preserves absent files
     expect(patch.exitCode).toBe(0);
     expect(JSON.parse(patch.stdout.toString())).toEqual({
       baseline: "patch baseline\n",
+    });
+    const route = read(routeFile);
+    expect(route.exitCode).toBe(0);
+    expect(JSON.parse(route.stdout.toString())).toEqual({
+      baseline: "route baseline\n",
     });
     const absent = read("introduced.txt");
     expect(absent.exitCode).toBe(0);

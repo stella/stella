@@ -1040,7 +1040,20 @@ export const checkExternalContracts = (
   return problems;
 };
 
-if (import.meta.main) {
+if (import.meta.main && process.argv.includes("--baseline-files")) {
+  const manifest = v.parse(manifestSchema, json(ROOT, "package.json"));
+  const files = new Set([
+    "package.json",
+    "apps/api/package.json",
+    "bun.lock",
+    ...Object.values(EXTERNAL_CONTRACTS).flatMap((entry) => [
+      ...entry.owners.map(({ path: file }) => file),
+      ...entry.pinSources.map(({ file }) => file),
+    ]),
+    ...Object.values(manifest.patchedDependencies),
+  ]);
+  console.log([...files].join("\n"));
+} else if (import.meta.main) {
   const base = process.env["CHECK_BASE_REF"] ?? "origin/main";
   const baselineCache = new Map<string, string | undefined>();
   const baseline = (file: string) => {

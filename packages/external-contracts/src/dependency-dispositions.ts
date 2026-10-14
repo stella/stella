@@ -153,6 +153,8 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/playwright-tools":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
+  "@stll/portable-path":
+    "Workspace helpers for portable path identifiers and local filesystem containment.",
   "@stll/property-testing":
     "Workspace package used as an internal module; implementation stays within the monorepo.",
   "@stll/redis-config":
@@ -371,6 +373,7 @@ export const IN_PROCESS_DEPENDENCIES = {
     "In-process application utility, validation, formatting, or UI component.",
   "input-otp":
     "In-process application utility, validation, formatting, or UI component.",
+  isbot: "Local user-agent classification for server-side rendering.",
   jszip:
     "Local parsing, serialization, document processing, or embedded runtime utility.",
   katex:
@@ -422,6 +425,7 @@ export const IN_PROCESS_DEPENDENCIES = {
     "Local parsing, serialization, document processing, or embedded runtime utility.",
   scslre:
     "Repository tooling or local application library; no remote service client role identified.",
+  "shell-quote": "Local shell argument parsing for lint-runner validation.",
   sherif: "Repository or application build, validation, or release tooling.",
   slimdom:
     "Local parsing, serialization, document processing, or embedded runtime utility.",
