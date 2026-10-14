@@ -83,7 +83,7 @@
     "apps/web/src/components/workspaces/attached-template-upload-dialog.tsx": 1,
     "apps/web/src/components/workspaces/bulk-add-columns.tsx": 20,
     "apps/web/src/components/workspaces/cell-metadata-flags.tsx": 5,
-    "apps/web/src/components/workspaces/create-matter-dialog.tsx": 2,
+    "apps/web/src/components/workspaces/create-matter-dialog.tsx": 1,
     "apps/web/src/components/workspaces/create-property.tsx": 18,
     "apps/web/src/components/workspaces/editable-field.tsx": 1,
     "apps/web/src/components/workspaces/field-value-select.tsx": 1,

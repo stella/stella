@@ -5928,7 +5928,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "update_org_settings"
           ],
           "type": "string",
-          "description": "Administrative action to perform"
+          "description": "Administrative action; the settings fields apply only to update_org_settings"
         },
         "matter_id": {
           "type": "string",
@@ -5949,17 +5949,21 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding"
+          "description": "Matter-number pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern"
+          "description": "Matter-number zero-padding width; send with matter_number_pattern"
+        },
+        "matter_numbering_enabled": {
+          "type": "boolean",
+          "description": "Show the matter number beside the matter name in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
-          "description": "Toggle AI prompt caching (update_org_settings)"
+          "description": "Toggle AI prompt caching"
         },
         "document_processing_mode": {
           "enum": [
@@ -5967,18 +5971,18 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "searchable-text"
           ],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction (update_org_settings)"
+          "description": "Set automatic PDF searchable-text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60 (update_org_settings)"
+          "description": "Minimum time increment in minutes; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry (update_org_settings)"
+          "description": "Days a timekeeper may edit an entry"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -5990,11 +5994,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock (update_org_settings)"
+          "description": "Last day of the latest locked month, or null to unlock"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries (update_org_settings)"
+          "description": "Require a narrative on time entries"
         },
         "time_zone": {
           "anyOf": [
@@ -12413,7 +12417,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "update_org_settings"
           ],
           "type": "string",
-          "description": "Administrative action to perform"
+          "description": "Administrative action; the settings fields apply only to update_org_settings"
         },
         "matter_id": {
           "type": "string",
@@ -12434,17 +12438,21 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern (update_org_settings); send with matter_number_padding"
+          "description": "Matter-number pattern; send with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width (update_org_settings); send with matter_number_pattern"
+          "description": "Matter-number zero-padding width; send with matter_number_pattern"
+        },
+        "matter_numbering_enabled": {
+          "type": "boolean",
+          "description": "Show the matter number beside the matter name in titles"
         },
         "prompt_caching_enabled": {
           "type": "boolean",
-          "description": "Toggle AI prompt caching (update_org_settings)"
+          "description": "Toggle AI prompt caching"
         },
         "document_processing_mode": {
           "enum": [
@@ -12452,18 +12460,18 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "searchable-text"
           ],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction (update_org_settings)"
+          "description": "Set automatic PDF searchable-text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60 (update_org_settings)"
+          "description": "Minimum time increment in minutes; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry (update_org_settings)"
+          "description": "Days a timekeeper may edit an entry"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -12475,11 +12483,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock (update_org_settings)"
+          "description": "Last day of the latest locked month, or null to unlock"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries (update_org_settings)"
+          "description": "Require a narrative on time entries"
         },
         "time_zone": {
           "anyOf": [
