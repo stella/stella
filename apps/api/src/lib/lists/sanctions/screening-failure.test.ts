@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { Worker } from "node:worker_threads";
+import * as v from "valibot";
 
 import type { FailureGrade } from "@stll/errors";
 import { FAILURE_REASON_GRADE } from "@stll/errors";
@@ -244,14 +245,15 @@ test("every completed screening reports its budget share and warns above the pre
       message: "sanctions.screening_work_pressure",
       attributes: { source: "uk", limit },
     });
-    const parsed = metrics.map(
-      (line) => JSON.parse(line) as Record<string, unknown>,
+    const workUsageLine = v.object({
+      source: v.string(),
+      SanctionsScreeningWorkUsage: v.number(),
+    });
+    const parsed = metrics.map((line) =>
+      v.parse(workUsageLine, JSON.parse(line)),
     );
     expect(
-      parsed.map((line) => [
-        line["source"],
-        line["SanctionsScreeningWorkUsage"],
-      ]),
+      parsed.map((line) => [line.source, line.SanctionsScreeningWorkUsage]),
     ).toEqual([
       ["eu", 50],
       ["uk", ((Math.ceil(limit * SANCTIONS_WORK_PRESSURE) + 1) / limit) * 100],

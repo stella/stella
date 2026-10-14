@@ -567,7 +567,9 @@ test("a completed screening reports exactly the work it needed", () => {
   const usages: { spent: number; limit: number }[] = [];
   screen(index, query, {
     cutoff: DEFAULT_CUTOFF,
-    onWork: (usage) => usages.push(usage),
+    onWork: (usage) => {
+      usages.push(usage);
+    },
   }).unwrap();
   expect(usages).toHaveLength(1);
   const [usage] = usages;
@@ -584,7 +586,9 @@ test("a completed screening reports exactly the work it needed", () => {
   screen(index, query, {
     cutoff: DEFAULT_CUTOFF,
     maxWork: usage.spent - 1,
-    onWork: (failed) => rejected.push(failed),
+    onWork: (failed) => {
+      rejected.push(failed);
+    },
   });
   expect(rejected).toEqual([]);
 });
