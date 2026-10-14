@@ -224,6 +224,43 @@ describe("scripts and composite actions", () => {
     expect(report.errors).toEqual([retryError]);
   });
 
+  test("a curl in a substitution is not retried by an enclosing retry.sh", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
+        run: bash scripts/retry.sh echo "$(curl -fsSL https://example.com/tool)"
+`),
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Install tool: route curl (${WORKFLOW}) through scripts/retry.sh`,
+    ]);
+  });
+
+  test("a fetch script in a substitution is not retried by an enclosing retry.sh", () => {
+    const report = check({
+      ...tool,
+      [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
+        run: bash scripts/retry.sh echo "\`bash scripts/install-tool.sh\`"
+`),
+    });
+
+    expect(report.errors).toEqual([retryError]);
+  });
+
+  test("a substitution whose own command is retry.sh is retried", () => {
+    const report = check({
+      ...tool,
+      [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
+        run: tool="$(bash scripts/retry.sh bash scripts/install-tool.sh)"
+`),
+    });
+
+    expect(report.errors).toEqual([]);
+  });
+
   test("a sourced library is followed", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Install tool

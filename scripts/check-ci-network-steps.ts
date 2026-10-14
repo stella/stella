@@ -101,6 +101,82 @@ const PROSE = /^\s*(?:echo|printf|:)(?:\s|$)/u;
 // A `case` arm's pattern list (`a|b|scripts/x.sh)`) names paths, not commands.
 const CASE_PATTERN = /^\s*[^\s"'`$()=]+(?:\|[^\s"'`$()=]+)*\)/u;
 
+/** The end of a `$(...)` body starting at `start`, honoring nesting and quotes. */
+const substitutionEnd = (line: string, start: number): number => {
+  let depth = 1;
+  let quote: "'" | '"' | null = null;
+  for (let index = start; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === "\\" && quote !== "'") {
+      index += 1;
+    } else if (quote !== null) {
+      if (character === quote) {
+        quote = null;
+      }
+    } else if (character === "'" || character === '"') {
+      quote = character;
+    } else if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+  return line.length;
+};
+
+/**
+ * Lift command substitutions out of a line. The shell runs them before the
+ * enclosing command starts, so an enclosing retry.sh never retries them: each
+ * body becomes its own command line and the enclosing line keeps a
+ * placeholder.
+ */
+export const liftSubstitutions = (line: string): string[] => {
+  const lifted: string[] = [];
+  let outer = "";
+  let single = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index] ?? "";
+    if (character === "\\" && !single) {
+      outer += line.slice(index, index + 2);
+      index += 1;
+      continue;
+    }
+    if (character === "'") {
+      single = !single;
+      outer += character;
+      continue;
+    }
+    if (single) {
+      outer += character;
+      continue;
+    }
+    if (
+      character === "$" &&
+      line[index + 1] === "(" &&
+      line[index + 2] !== "("
+    ) {
+      const end = substitutionEnd(line, index + 2);
+      lifted.push(...liftSubstitutions(line.slice(index + 2, end)));
+      outer += "SUBSTITUTION";
+      index = end;
+      continue;
+    }
+    if (character === "`") {
+      const close = line.indexOf("`", index + 1);
+      const end = close === -1 ? line.length : close;
+      lifted.push(...liftSubstitutions(line.slice(index + 1, end)));
+      outer += "SUBSTITUTION";
+      index = end;
+      continue;
+    }
+    outer += character;
+  }
+  return [outer, ...lifted];
+};
+
 /** Drop comments and join continuation lines, keeping one logical line each. */
 const logicalLines = (source: string): string[] =>
   source
@@ -127,7 +203,8 @@ const logicalLines = (source: string): string[] =>
         }
       }
       return line;
-    });
+    })
+    .flatMap(liftSubstitutions);
 
 /** Split a logical line on command separators outside quotes. */
 const segments = (line: string): string[] => {
