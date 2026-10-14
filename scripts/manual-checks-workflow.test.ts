@@ -24,6 +24,21 @@ const workflowFile = new URL(
   import.meta.url,
 );
 const workflowText = readFileSync(workflowFile, "utf-8");
+
+test("manual dispatch exposes parity and seeded command proofs with no target", () => {
+  for (const check of ["typecheck-parity", "typecheck-probe"]) {
+    expect(validateManualCheckInput(check, "")).toEqual([]);
+    expect(validateManualCheckInput(check, "@stll/sha256")).toEqual([
+      `target must be empty for ${check}`,
+    ]);
+  }
+  expect(workflowText).toContain(
+    "typecheck-parity) bun run check:typecheck-parity ;;",
+  );
+  expect(workflowText).toContain(
+    "typecheck-probe) bash scripts/typecheck-command-probe.sh ;;",
+  );
+});
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
   if: v.optional(v.string()),

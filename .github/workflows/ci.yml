@@ -659,7 +659,6 @@ jobs:
         run: docker logout ghcr.io
 
       - name: Install heavy planner dependencies
-        timeout-minutes: 3
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         uses: $/.github/actions/ci-install
         with:
@@ -739,6 +738,7 @@ jobs:
         id: changed-files
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
           EVENT_NAME: ${{ github.event_name }}
           PR_TITLE: ${{ github.event.pull_request.title }}
           SUITE_DEPTH: ${{ steps.depth.outputs.suite_depth }}
@@ -747,7 +747,7 @@ jobs:
           changed_files=()
           scope_unknown=false
           if [[ "$EVENT_NAME" != "workflow_dispatch" && "${HEAVY_ONLY:-false}" != true ]]; then
-            base_ref="origin/$BASE_REF"
+            base_ref="${BASE_SHA:-origin/$BASE_REF}"
             changed_paths=$(mktemp)
             if git diff --name-only -z --no-renames "$base_ref"...HEAD > "$changed_paths"; then
               while IFS= read -r -d '' file; do
@@ -1284,7 +1284,7 @@ jobs:
 
       - name: Select affected API test files
         id: api-test-selection
-        if: steps.completed-depth.outputs.run_required != 'false' && github.event_name == 'pull_request' && steps.api-test-deps.outcome == 'success'
+        if: steps.completed-depth.outputs.run_required != 'false' && (github.event_name == 'pull_request' || github.event_name == 'merge_group') && steps.api-test-deps.outcome == 'success'
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_REF: ${{ github.base_ref || 'main' }}
@@ -1602,7 +1602,6 @@ jobs:
         id: install
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/agent-engine...","--filter","stella"]'
         env:
@@ -1723,7 +1722,6 @@ jobs:
 
       - name: Check image dependency trees and production runner
         id: api-deps
-        timeout-minutes: 10
         if: ${{ !cancelled() && needs.ci-plan.outputs.api_image_deps_required == 'true' }}
         env:
           NPM_TOKEN: ""
@@ -1974,7 +1972,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -2083,7 +2080,6 @@ jobs:
       - name: Install dependencies
         id: install
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -2193,7 +2189,6 @@ jobs:
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -2508,7 +2503,6 @@ jobs:
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -2791,7 +2785,7 @@ jobs:
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
     runs-on: ubuntu-latest
-    # Version-change parity measured 15m; retain 25m for repository checks.
+    # Retain the repository-check budget after moving optional compiler proofs.
     timeout-minutes: 40
     permissions:
       contents: read
@@ -2954,7 +2948,6 @@ jobs:
         id: install
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && steps.standalone_lockfiles.outcome == 'success' && (!(github.event_name != 'workflow_dispatch' && needs.ci-plan.outputs.lockfile_ages_required == 'true') || steps.lockfile_ages.outcome == 'success') }}
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -2971,85 +2964,6 @@ jobs:
       - name: Restore generated sources
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
-
-      - name: Select typecheck parity coverage
-        id: typecheck_parity_gate
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
-        # Compare resolved compilers and API project configuration, not unrelated
-        # lockfile edits. Scheduled and manual proofs always compare both checkers.
-        run: |
-          bun test scripts/typecheck-parity-gate.test.ts
-          bun --eval '
-          import ts from "typescript";
-          const git = (...args) => {
-            const child = Bun.spawnSync(["git", ...args], { stdout: "pipe", stderr: "pipe" });
-            if (child.exitCode !== 0) throw new Error(child.stderr.toString());
-            return child.stdout.toString().trim();
-          };
-          const versions = (ref) => {
-            const manifest = JSON.parse(git("show", `${ref}:package.json`));
-            const parsed = ts.parseConfigFileTextToJson("bun.lock", git("show", `${ref}:bun.lock`));
-            if (parsed.error) throw new Error("Cannot parse compiler lockfile");
-            const packages = parsed.config?.packages;
-            if (!packages || typeof manifest.packageManager !== "string" || !manifest.packageManager.startsWith("bun@")) {
-              throw new Error("Missing Bun or resolved compiler versions");
-            }
-            const compilers = [...new Set(Object.values(packages)
-              .filter(Array.isArray)
-              .map((entry) => entry[0])
-              .filter((pin) => typeof pin === "string" && /^(typescript|@typescript\/native-preview)@/u.test(pin)))].sort();
-            if (compilers.length === 0) throw new Error("Missing resolved TypeScript compiler versions");
-            return JSON.stringify([manifest.packageManager, compilers]);
-          };
-          const forced = ["schedule", "workflow_dispatch"].includes(process.env.EVENT_NAME);
-          const base = process.env.BASE_SHA || (forced ? "" : git("rev-parse", "HEAD^"));
-          const required = forced || versions(base) !== versions("HEAD") || git("diff", "--name-only", base, "HEAD", "--", "apps/api/tsconfig*.json", "scripts/typecheck-parity.ts") !== "";
-          console.log(`required=${required}`);
-          ' >> "$GITHUB_OUTPUT"
-
-      - name: Typecheck parity (all checked projects)
-        id: typecheck_parity
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
-        run: |
-          set -o pipefail
-          bun run check:typecheck-parity | tee "$RUNNER_TEMP/typecheck-parity.log"
-
-      - name: Record typecheck parity report
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
-        run: |
-          {
-            cat CLOUD_REPORT.md
-            printf '\n## CI parity output\n\n```text\n'
-            cat "$RUNNER_TEMP/typecheck-parity.log"
-            printf '\n```\n'
-          } > "$RUNNER_TEMP/CLOUD_REPORT.md"
-
-      - name: Upload typecheck parity report
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && steps.typecheck_parity_gate.outputs.required == 'true') }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: typecheck-parity-report
-          path: ${{ runner.temp }}/CLOUD_REPORT.md
-
-      - name: Typecheck command rejects errors
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: |
-          probe=packages/sha256/src/typecheck-command-probe.ts
-          trap 'rm -f "$probe"' EXIT
-          printf 'export const typecheckCommandProbe: number = "wrong";\n' > "$probe"
-          if bun run typecheck --filter=@stll/sha256 --only --force > "$RUNNER_TEMP/typecheck-command-probe.log" 2>&1; then
-            cat "$RUNNER_TEMP/typecheck-command-probe.log"
-            echo "The typecheck command accepted a seeded type error."
-            exit 1
-          fi
-          cat "$RUNNER_TEMP/typecheck-command-probe.log"
-          grep -q 'typecheck-command-probe.ts' "$RUNNER_TEMP/typecheck-command-probe.log"
-          grep -q '2322' "$RUNNER_TEMP/typecheck-command-probe.log"
-          rm "$probe"
-          bun run typecheck --filter=@stll/sha256 --only --force
 
       - name: Test oxlint plugins
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -4257,7 +4171,6 @@ jobs:
       - name: Install dependencies
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -4483,7 +4396,6 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install API script dependencies
-        timeout-minutes: 3
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
@@ -4704,7 +4616,6 @@ jobs:
       - name: Install dependencies
         if: steps.desktop-browser-tests.outputs.required == 'true' || steps.ui-browser-tests.outputs.required == 'true' || steps.extension-browser-tests.outputs.required == 'true'
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -4870,7 +4781,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -4894,7 +4804,6 @@ jobs:
           cp .env.example .env
 
       - name: Code quality
-        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -5013,7 +4922,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5037,7 +4945,6 @@ jobs:
           cp .env.example .env
 
       - name: Code quality (web)
-        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -5079,7 +4986,6 @@ jobs:
           bun scripts/typecheck-coverage.ts
 
       - name: Code quality (rest)
-        timeout-minutes: 19
         env:
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
@@ -5278,7 +5184,6 @@ jobs:
           no-cache: true
 
       - name: Install dependencies
-        timeout-minutes: 3
         run: bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/postgres.log" --frozen-lockfile --ignore-scripts --filter @stll/api --filter @stll/cli
         env:
           NPM_TOKEN: ""
@@ -5469,7 +5374,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5663,7 +5567,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5802,7 +5705,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5919,7 +5821,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -5987,7 +5888,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -6025,7 +5925,6 @@ jobs:
           bun scripts/bundle-baseline.ts --check
 
       - name: Prod-deps web boot smoke
-        timeout-minutes: 3
         # apps/web/Dockerfile's runner installs --production (deps-prod stage).
         # Reproduce that clean production tree and boot dist/runtime.js: a
         # devDependency reached by the SSR server bundle (dist/server/server.js)
@@ -6310,7 +6209,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -6408,7 +6306,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
@@ -6503,7 +6400,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -6561,7 +6457,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -6742,7 +6637,6 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
-        timeout-minutes: 2
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
@@ -7027,7 +6921,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -7146,7 +7039,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
@@ -7407,7 +7299,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
@@ -7669,7 +7560,6 @@ jobs:
 
       - name: Install dependencies
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/playwright-tools","--filter","!stella"]'
         env:
@@ -7810,7 +7700,6 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Install smoke dependencies
-        timeout-minutes: 3
         run: bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""
@@ -8124,7 +8013,6 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dependencies
-        timeout-minutes: 5
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
@@ -8297,7 +8185,6 @@ jobs:
           bun-version-file: package.json
 
       - name: Install scripts workspace dependencies
-        timeout-minutes: 5
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
@@ -8395,7 +8282,6 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
-        timeout-minutes: 3
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scan-engine","--filter","stella"]'
@@ -8651,7 +8537,6 @@ jobs:
       - name: Install desktop transport smoke dependencies
         if: matrix.os == 'macos'
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
         env:
@@ -8879,7 +8764,6 @@ jobs:
           bun-version-file: package.json
 
       - name: Install dated waiver guard dependencies
-        timeout-minutes: 3
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
