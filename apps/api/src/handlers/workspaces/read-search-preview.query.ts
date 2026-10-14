@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm";
 
 import { TASK_STATUS } from "@stll/api-contract";
+import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
@@ -52,7 +53,7 @@ const UNPROJECTED_PREVIEW_COLUMNS = [
   "entityFeatureGate", // RLS state is internal to the gate.
   "workspaceId", // Already supplied by the authorized route.
   "kind", // Each query fixes the kind; the response groups identify it.
-  "listItemType", // Task-list presentation is not part of a deadline highlight.
+  "listItemType", // Only filters agenda rows; never returned.
   "parentId", // Folder hierarchy belongs to document navigation.
   "displayName", // The highlight uses the same name as search results.
   "createdBy", // Actor profiles are not included in compact highlights.
@@ -125,6 +126,11 @@ export const readSearchPreviewHandler = async ({
               eq(entities.workspaceId, workspaceId),
               eq(entities.kind, "task"),
               flowReviewTaskVisibilityCondition({ organizationId, userId }),
+              // Reference list items (facts, issues, ...) are never agenda.
+              or(
+                isNull(entities.listItemType),
+                eq(entities.listItemType, LIST_ITEM_TYPE.TASK),
+              ),
               isNotNull(entities.dueDate),
               gte(entities.dueDate, sql`CURRENT_DATE`),
               or(

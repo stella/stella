@@ -68,7 +68,6 @@
     "apps/web/src/components/require-ai-key.tsx": 4,
     "apps/web/src/components/review-flags.tsx": 2,
     "apps/web/src/components/route-components.tsx": 2,
-    "apps/web/src/components/search-case-law-group.tsx": 2,
     "apps/web/src/components/search-company-result.tsx": 10,
     "apps/web/src/components/search-dialog-results.tsx": 10,
     "apps/web/src/components/search-dialog.tsx": 8,

@@ -66,6 +66,11 @@ describe("matter search preview", () => {
     const omittedTaskId = entityId();
     const completedTaskId = entityId();
     const overdueTaskIds = [entityId(), entityId(), entityId()];
+    // Dated before every task: they would lead the agenda if not filtered.
+    const referenceItems = [
+      { id: entityId(), listItemType: "fact" as const },
+      { id: entityId(), listItemType: "event" as const },
+    ];
     const recentDocumentId = entityId();
     const olderDocumentId = entityId();
     const legacyDocumentId = entityId();
@@ -113,6 +118,15 @@ describe("matter search preview", () => {
         dueDate: "2998-01-01",
         status: "done",
       },
+      ...referenceItems.map(({ id, listItemType }) => ({
+        id,
+        workspaceId: ids.wsA1,
+        kind: "task" as const,
+        listItemType,
+        name: `Dated ${listItemType} list item`,
+        dueDate: "2998-06-01",
+        status: "open",
+      })),
       ...overdueTaskIds.map((id, index) => ({
         id,
         workspaceId: ids.wsA1,
@@ -197,6 +211,11 @@ describe("matter search preview", () => {
     ).toBe(false);
     expect(
       result.upcomingAgenda.some(({ id }) => overdueTaskIds.includes(id)),
+    ).toBe(false);
+    expect(
+      result.upcomingAgenda.some(({ id }) =>
+        referenceItems.some((item) => item.id === id),
+      ),
     ).toBe(false);
     expect(
       result.recentDocuments.some(({ id }) => id === otherMatterDocumentId),
