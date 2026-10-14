@@ -359,7 +359,11 @@ export const runSourceWriteCensus = ({
     encoding: "utf-8",
     timeout: budgetMs,
   });
-  if (child.error?.code === "ETIMEDOUT") {
+  if (
+    child.error !== undefined &&
+    "code" in child.error &&
+    child.error.code === "ETIMEDOUT"
+  ) {
     return [`Source-write census exceeded budget ${budgetMs / 1000}s`];
   }
   if (child.status !== 0) {
