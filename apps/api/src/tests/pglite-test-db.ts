@@ -503,6 +503,16 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
   `,
+  // The serving pointer is written by the gated flip and deleted when a
+  // whole generation is promoted; ingestion may not rewrite its key.
+  `
+    GRANT SELECT, INSERT, DELETE ON TABLE "corpus_index_jurisdiction_serving"
+    TO stella_ingestion
+  `,
+  `
+    GRANT UPDATE (generation, flipped_at)
+      ON TABLE "corpus_index_jurisdiction_serving" TO stella_ingestion
+  `,
   // The withdrawal trail is append-only: ingestion records, the app reads.
   `
     GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"

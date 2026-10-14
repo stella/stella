@@ -40,11 +40,14 @@ import {
   type CorpusIndexReadTarget,
   type RegisteredCorpusIndexGroup,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
+import { readJurisdictionServingGenerationsTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
+  corpusIndexContractDigest,
   corpusIndexManifestDigest,
   requireCorpusIndexManifest,
   type CorpusIndexManifest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { CORPUS_READ_TARGET_IDENTITY_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 
 type CorpusIndexGroupTarget = {
   manifest: CorpusIndexManifest;
@@ -458,28 +461,23 @@ export type ServingCorpusIndexTargetError =
   | CorpusIndexGroupNotReadyError;
 
 /**
- * The serving generation and what a read of it reaches
- * (`corpusIndexReadTarget`). A family with no serving generation is refused
- * with `CorpusServingGenerationAbsentError`. A scoped read of a group that is
- * not attested is refused with `CorpusIndexGroupNotReadyError`, which each
- * caller answers as unavailable, rather than answering from an index nobody
- * proved: an empty or differently mapped index would read as a corpus with no
- * matches. A scoped read of a group under its manifest's contract reads no
- * enrollment.
+ * What a read of one generation reaches for a jurisdiction (`corpusIndexReadTarget`),
+ * after the registry says which of its groups are attested.
  */
-export const readServingCorpusIndexTargetTx = async (
+const resolveGenerationTargetTx = async (
   tx: ReadTransaction,
   {
-    family,
+    serving,
     jurisdiction,
-  }: { family: CorpusFamily; jurisdiction: string | undefined },
-): Promise<Result<ServingCorpusIndexTarget, ServingCorpusIndexTargetError>> => {
-  const servingRead = await readServingCorpusIndexGenerationTx(tx, family);
-  if (Result.isError(servingRead)) {
-    return Result.err(servingRead.error);
-  }
-  const serving = servingRead.value;
-  const manifest = requireCorpusIndexManifest(family, serving.generation);
+  }: {
+    serving: ServingCorpusIndexGeneration;
+    jurisdiction: string | undefined;
+  },
+): Promise<Result<ServingCorpusIndexTarget, CorpusIndexGroupNotReadyError>> => {
+  const manifest = requireCorpusIndexManifest(
+    serving.family,
+    serving.generation,
+  );
   const readsEnrollment =
     jurisdiction === undefined ||
     corpusIndexGroupContractForJurisdiction(manifest, jurisdiction).type !==
@@ -508,4 +506,139 @@ export const readServingCorpusIndexTargetTx = async (
     );
   }
   return Result.ok({ serving, manifest, ...resolution.target });
+};
+
+/**
+ * A generation other than the serving one that a jurisdiction was flipped to.
+ * It is building, not serving, and its row names the cluster its indexes live
+ * on.
+ */
+const readAttachedGenerationTx = async (
+  tx: ReadTransaction,
+  { family, generation }: { family: CorpusFamily; generation: string },
+): Promise<ServingCorpusIndexGeneration> => {
+  const row = (
+    await tx
+      .select({
+        cluster: corpusIndexGenerations.cluster,
+        family: corpusIndexGenerations.family,
+        generation: corpusIndexGenerations.generation,
+        manifestDigest: corpusIndexGenerations.manifestDigest,
+        status: corpusIndexGenerations.status,
+      })
+      .from(corpusIndexGenerations)
+      .where(
+        and(
+          eq(corpusIndexGenerations.family, family),
+          eq(corpusIndexGenerations.generation, generation),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  if (
+    row === undefined ||
+    (row.status !== "building" && row.status !== "serving")
+  ) {
+    return panic(
+      `A flipped jurisdiction names a generation that is not active: ${family}/${generation}`,
+    );
+  }
+  requireRegisteredCorpusIndexManifest(row);
+  return { family, generation: row.generation, cluster: row.cluster };
+};
+
+/**
+ * One read across the serving generation's indexes and the indexes of the
+ * generations that serve jurisdictions the serving generation no longer
+ * answers for. The cursor identity binds both, so a cursor minted before a
+ * flip cannot continue after it.
+ */
+const mergeAttachedTarget = (
+  primary: ServingCorpusIndexTarget,
+  attached: ServingCorpusIndexTarget,
+): ServingCorpusIndexTarget => ({
+  ...primary,
+  route: {
+    ...primary.route,
+    indexId: `${primary.route.indexId},${attached.route.indexId}`,
+  },
+  cursorTarget: corpusIndexContractDigest({
+    primary: primary.cursorTarget,
+    attached: attached.cursorTarget,
+  }).slice(0, CORPUS_READ_TARGET_IDENTITY_LENGTH),
+});
+
+/**
+ * The generation and indexes a read reaches, resolved through the
+ * jurisdiction-serving pointer (`corpus-index-jurisdiction-serving-store.ts`)
+ * and nothing else.
+ *
+ * A jurisdiction with no pointer row is served by the family's serving
+ * generation, whatever groups other generations declare or have attested: a
+ * group built beside the serving one, even one already created and attested
+ * with no document in it, is admitted for appends only and moves no reader.
+ * Only the gated flip writes the pointer
+ * (`flipCaseLawJurisdictionServing`).
+ *
+ * A family with no serving generation is refused with
+ * `CorpusServingGenerationAbsentError`. A scoped read of a group that is not
+ * attested is refused with `CorpusIndexGroupNotReadyError`, which each caller
+ * answers as unavailable, rather than answering from an index nobody proved:
+ * an empty or differently mapped index would read as a corpus with no
+ * matches. A scoped read of a group under its manifest's contract reads no
+ * enrollment.
+ */
+export const readServingCorpusIndexTargetTx = async (
+  tx: ReadTransaction,
+  {
+    family,
+    jurisdiction,
+  }: { family: CorpusFamily; jurisdiction: string | undefined },
+): Promise<Result<ServingCorpusIndexTarget, ServingCorpusIndexTargetError>> => {
+  const servingRead = await readServingCorpusIndexGenerationTx(tx, family);
+  if (Result.isError(servingRead)) {
+    return Result.err(servingRead.error);
+  }
+  const serving = servingRead.value;
+  const flipped = [
+    ...(await readJurisdictionServingGenerationsTx(tx, family)),
+  ].filter(([, generation]) => generation !== serving.generation);
+  if (jurisdiction !== undefined) {
+    const servedBy = flipped.find(
+      ([flippedJurisdiction]) =>
+        flippedJurisdiction === jurisdiction.toUpperCase(),
+    );
+    return await resolveGenerationTargetTx(tx, {
+      serving:
+        servedBy === undefined
+          ? serving
+          : await readAttachedGenerationTx(tx, {
+              family,
+              generation: servedBy[1],
+            }),
+      jurisdiction,
+    });
+  }
+  const primary = await resolveGenerationTargetTx(tx, {
+    serving,
+    jurisdiction: undefined,
+  });
+  if (primary.isErr()) {
+    return primary;
+  }
+  let merged = primary.value;
+  for (const [flippedJurisdiction, generation] of flipped) {
+    // db-await-in-loop: at most a handful of flipped jurisdictions per family
+    const attached = await resolveGenerationTargetTx(tx, {
+      serving: await readAttachedGenerationTx(tx, { family, generation }),
+      jurisdiction: flippedJurisdiction,
+    });
+    // An attached group that is not attested is left out of a generation-wide
+    // read, as any unattested group is; the flip requires it attested, so
+    // this is an attestation withdrawn since.
+    if (attached.isOk()) {
+      merged = mergeAttachedTarget(merged, attached.value);
+    }
+  }
+  return Result.ok(merged);
 };

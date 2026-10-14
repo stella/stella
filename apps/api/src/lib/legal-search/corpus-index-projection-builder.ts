@@ -4,6 +4,7 @@ import { Buffer } from "node:buffer";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import type { SafeId } from "@/api/lib/branded-types";
+import { PROVISION_KEYS_MAX_COUNT } from "@/api/lib/case-law/provision-keys";
 import {
   publisherHeadnoteOf,
   publisherKeywordsOf,
@@ -16,7 +17,10 @@ import {
   ChunkBudgetError,
 } from "@/api/lib/corpus-index/chunking";
 import type { CorpusDocumentPayload } from "@/api/lib/corpus-index/core";
-import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
+import {
+  PROVISION_KEYS_FIELD,
+  UNDATED_DECISION_TIMESTAMP,
+} from "@/api/lib/legal-search/corpus-index-config";
 import {
   COURT_PARTITION_FIELD,
   corpusIndexGroupContractForJurisdiction,
@@ -61,6 +65,7 @@ type CaseLawProjectionDocument = SharedProjectionDocument & {
   case_number: string;
   court: string;
   court_partition?: string;
+  provision_keys?: readonly string[];
   decision_date?: string;
   decision_date_ts: string;
   decision_year?: number;
@@ -181,12 +186,18 @@ const publisherProjection = (
 /**
  * What the decision's group contract adds to every passage. A court-partitioned
  * group routes splits by the partition, so a passage without it would land in
- * no partition the reader prunes to: it is written on each one.
+ * no partition the reader prunes to: it is written on each one. A group with
+ * provision keys writes them on every passage too, because a provision filter
+ * is one exact term and any passage a query reaches has to answer it; a
+ * decision with no recorded link writes none, rather than an empty array.
  */
 const groupContractFields = (
   manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
   input: CaseLawProjectionInput,
-): { [COURT_PARTITION_FIELD]?: string } => {
+): {
+  [COURT_PARTITION_FIELD]?: string;
+  [PROVISION_KEYS_FIELD]?: readonly string[];
+} => {
   const contract = corpusIndexGroupContractForJurisdiction(
     manifest,
     input.jurisdiction,
@@ -199,6 +210,17 @@ const groupContractFields = (
         [COURT_PARTITION_FIELD]:
           requireCourtPartitionIdentity(input).courtPartition,
       };
+    case "provision_keys_v1":
+      // The loader bounds the set; a larger one here is a caller that skipped
+      // it, and a passage must not carry what a request cannot.
+      if (input.provisionKeys.length > PROVISION_KEYS_MAX_COUNT) {
+        return panic(
+          `Provision keys exceed ${PROVISION_KEYS_MAX_COUNT}: ${input.documentId}`,
+        );
+      }
+      return input.provisionKeys.length === 0
+        ? {}
+        : { [PROVISION_KEYS_FIELD]: input.provisionKeys.toSorted() };
     default:
       contract satisfies never;
       return panic(`Unhandled group contract: ${String(contract)}`);

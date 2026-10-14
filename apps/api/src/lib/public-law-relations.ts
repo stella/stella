@@ -34,6 +34,7 @@ export const PUBLIC_LAW_RELATION_BY_SCHEMA_IMPORT = {
   caseLawSources: "case_law_sources",
   corpusIndexGenerations: "corpus_index_generations",
   corpusIndexGroupEnrollments: "corpus_index_group_enrollments",
+  corpusIndexJurisdictionServing: "corpus_index_jurisdiction_serving",
   corpusIndexProjectionIntents: "corpus_index_projection_intents",
   corpusIndexProjectionStates: "corpus_index_projection_states",
   legislationDocuments: "legislation_documents",
@@ -371,6 +372,13 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     index_group: "required",
     effective_digest: "required",
     provisioning_status: "required",
+  },
+  // Which generation answers a jurisdiction the serving generation no longer
+  // holds: the row the acceptance of every indexed hit follows.
+  corpus_index_jurisdiction_serving: {
+    family: "required",
+    jurisdiction: "required",
+    generation: "required",
   },
   // Exactly what deciding "this generation holds this decision now" reads.
   // The revision joins its physical passage count; work schedules and failure

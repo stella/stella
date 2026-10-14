@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-config";
 import {
   corpusIndexGroupConfig,
+  caseLawManifestGroups,
   resolveCorpusIndexGroupContract,
 } from "@/api/lib/legal-search/corpus-index-group-contract";
 import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
@@ -166,7 +167,8 @@ test("court stays a viable tag field in every index", () => {
     CORPUS_INDEX_MANIFESTS.case_law_v6,
     CORPUS_INDEX_MANIFESTS.case_law_v7,
   ]) {
-    for (const [group, countries] of CASE_LAW_INDEX_GROUPS) {
+    for (const group of caseLawManifestGroups(manifest)) {
+      const countries = CASE_LAW_INDEX_GROUPS.get(group) ?? [];
       const tags = corpusIndexGroupConfig(
         resolveCorpusIndexGroupContract({ manifest, indexGroup: group }),
       ).doc_mapping.tag_fields;

@@ -61,6 +61,21 @@ export type CaseLawProjectionInput = ProjectionInputBase & {
    * is assembled per row inside the canonical transaction.
    */
   metadata: Record<string, unknown> | null;
+  /**
+   * The provision keys of the decision's recorded provision links, distinct
+   * and sorted (`@/api/lib/case-law/provision-keys`). Empty for a decision of
+   * a group whose contract carries no such field: only a `provision_keys_v1`
+   * group reads them, writes them and fingerprints them.
+   */
+  provisionKeys: readonly string[];
+  /**
+   * The generation the jurisdiction-serving pointer names for this decision's
+   * jurisdiction, or null while the family's serving generation serves it. A
+   * generation that is not the one named holds no copy of the decision: its
+   * projection is an erasure, which is how what the old generation still
+   * holds is purged once the flip has moved readers.
+   */
+  servedBy: string | null;
 };
 
 export type LegislationV2ProjectionInput = ProjectionInputBase &
@@ -151,12 +166,14 @@ const publisherFingerprintFields = (
  * manifest's contract, so every such fingerprint keeps its bytes. A
  * court-partitioned group covers its effective contract and the court
  * identity it writes, so a contract change or a court correction re-projects
- * the decision.
+ * the decision. A group with provision keys covers its effective contract and
+ * the sorted keys it writes, so a link recorded, corrected or removed
+ * re-projects the decision.
  */
 const groupContractFingerprintFields = (
   manifest: CorpusIndexManifest,
   input: CaseLawProjectionInput,
-): { groupContract?: Record<string, string> } => {
+): { groupContract?: Record<string, string | readonly string[]> } => {
   const contract = corpusIndexGroupContractForJurisdiction(
     manifest,
     input.jurisdiction,
@@ -174,6 +191,13 @@ const groupContractFingerprintFields = (
         },
       };
     }
+    case "provision_keys_v1":
+      return {
+        groupContract: {
+          effectiveDigest: contract.effectiveDigest,
+          provisionKeys: input.provisionKeys.toSorted(),
+        },
+      };
     default:
       contract satisfies never;
       return panic(`Unhandled group contract: ${String(contract)}`);
@@ -194,6 +218,9 @@ export const deriveCorpusIndexProjectionDescriptor = (
     EMPTY_CORPUS_CONTENT_HASHES.includes(input.contentHash) ||
     !input.redistributionEligible ||
     (input.family === "case_law" && (input.redacted || input.listingOnly)) ||
+    (input.family === "case_law" &&
+      input.servedBy !== null &&
+      input.servedBy !== manifest.generation) ||
     // A withdrawn version is a tombstone the publisher no longer lists: it
     // stays openable by id, and no search may find it.
     (input.family === "legislation" && input.windowDisposition === "withdrawn")
