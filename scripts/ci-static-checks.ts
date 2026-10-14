@@ -32,8 +32,10 @@ class StaticCheckError extends Error {
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+export const staticReuseOutputName = (id: string) => `reuse_${id}`;
+
 export const staticReuseCondition = (id: string) =>
-  ` && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_${id} != 'true')`;
+  ` && (github.event_name == 'merge_group' || steps.static_receipts.outputs.${staticReuseOutputName(id)} != 'true')`;
 
 export const classifiedChecks = (workflow: unknown, job: string) => {
   const steps = workflowJobSteps(workflow, job).map((step) => {
@@ -475,7 +477,11 @@ const main = () => {
         console.log(`Static check receipt unavailable: ${resolved.message}`);
         return;
       case "available":
-        output(resolved.reused.map(({ id }) => `reuse_${id}=true\n`).join(""));
+        output(
+          resolved.reused
+            .map(({ id }) => `${staticReuseOutputName(id)}=true\n`)
+            .join(""),
+        );
         for (const { key, runId } of resolved.reused) {
           console.log(`reused ${key} from run ${runId}`);
         }

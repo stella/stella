@@ -13,8 +13,11 @@ import {
   parseTestRegistrations,
   rootCommandExecutionFailure,
   scenarioLedgerGrowth,
+  validateTrustedOutputProducers,
 } from "./test-gate";
 import type { TestScenario } from "./test-gate";
+import { TRUSTED_OUTPUT_PRODUCERS } from "./test-gate-output-producers";
+import type { TrustedOutputProducer } from "./test-gate-output-producers";
 
 const bashJobs = (entries: readonly (readonly [string, readonly string[]])[]) =>
   new Map(
@@ -1381,6 +1384,80 @@ jobs:
     ).toBeUndefined();
   });
 
+  check("trusted output producers keep their named producer and proof", () => {
+    const registry = [
+      {
+        workflow: ".github/workflows/ci.yml",
+        job: "ci-plan",
+        stepId: "selection",
+        outputNames: ["required"],
+        semantics: "selection",
+        proofTest: "scripts/ci-plan.test.ts",
+      },
+    ] as const satisfies readonly TrustedOutputProducer[];
+    const source = `jobs:
+  ci-plan:
+    outputs:
+      selected: \${{ steps.selection.outputs.required }}
+    steps:
+      - id: selection
+        run: echo 'required=true' >> "$GITHUB_OUTPUT"
+  checks:
+    if: needs.ci-plan.outputs.selected == 'true'
+    steps:
+      - run: bun test scripts/named.test.ts
+  ci-result:
+    needs: [ci-plan, checks]
+`;
+    const intact = Bun.YAML.parse(source);
+    expect(
+      validateTrustedOutputProducers({ workflow: intact, registry }).findings,
+    ).toEqual([]);
+    expect(analyzeGatingWorkflow(intact, registry).jobs.has("checks")).toBe(
+      true,
+    );
+    for (const [mutation, reason] of [
+      [source.replace("id: selection", "id: removed"), "step is missing"],
+      [
+        source.replace("required=true", "renamed=true"),
+        "output is missing or renamed",
+      ],
+    ]) {
+      const workflow = Bun.YAML.parse(mutation);
+      expect(
+        validateTrustedOutputProducers({ workflow, registry }).findings.join(
+          "\n",
+        ),
+      ).toContain(reason);
+      expect(analyzeGatingWorkflow(workflow, registry).jobs.has("checks")).toBe(
+        false,
+      );
+    }
+    expect(
+      validateTrustedOutputProducers({
+        workflow: intact,
+        registry: [
+          {
+            ...registry[0],
+            proofTest: "scripts/missing-proof.test.ts",
+          },
+        ],
+      }).findings.join("\n"),
+    ).toContain("proof test is missing");
+  });
+
+  check("registered repository producers still declare their outputs", () => {
+    const workflow = Bun.YAML.parse(
+      readFileSync(".github/workflows/ci.yml", "utf-8"),
+    );
+    expect(
+      validateTrustedOutputProducers({
+        workflow,
+        registry: TRUSTED_OUTPUT_PRODUCERS,
+      }).findings,
+    ).toEqual([]);
+  });
+
   check("unspecified Linux shell does not propagate pipeline failures", () => {
     const workflow = Bun.YAML.parse(`jobs:
   checks:
@@ -1417,6 +1494,12 @@ jobs:
     "output condition %s grants collection only for owned selection outputs",
     (condition, credited) => {
       const workflow = Bun.YAML.parse(`jobs:
+  ci-plan:
+    outputs:
+      package_checks_required: \${{ steps.selection.outputs.required }}
+    steps:
+      - id: selection
+        run: echo 'required=true' >> "$GITHUB_OUTPUT"
   checks:
     runs-on: ubuntu-latest
     steps:
@@ -1427,7 +1510,16 @@ jobs:
   ci-result:
     needs: [checks]
 `);
-      const topology = analyzeGatingWorkflow(workflow);
+      const topology = analyzeGatingWorkflow(workflow, [
+        {
+          workflow: ".github/workflows/ci.yml",
+          job: "ci-plan",
+          stepId: "selection",
+          outputNames: ["required"],
+          semantics: "selection",
+          proofTest: "scripts/ci-plan.test.ts",
+        },
+      ]);
       const failure = firstCollectionFailure({
         file: "scripts/named.test.ts",
         scenarios: new Map(),

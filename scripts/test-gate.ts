@@ -9,6 +9,7 @@ import ts from "typescript";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { compareCodeUnit } from "../packages/collation/src/collation";
+import { classifiedChecks, staticReuseOutputName } from "./ci-static-checks";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import {
   E2E_PRODUCTION_PLAN_PIN,
@@ -22,6 +23,10 @@ import {
 } from "./github-expression";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { unlistedTests } from "./run-unlisted-script-tests";
+import {
+  TRUSTED_OUTPUT_PRODUCERS,
+  type TrustedOutputProducer,
+} from "./test-gate-output-producers";
 import {
   registrationRunsWithService,
   requiredServiceEnvironment,
@@ -2782,12 +2787,14 @@ type ExecutableConditionOptions = GatingContextOptions & {
   readonly condition: unknown;
   readonly declaredInputs: ReadonlySet<string>;
   readonly dynamicMatrix: boolean;
+  readonly trustedOutputs: ReadonlySet<string>;
 };
 
 const executableCondition = ({
   condition,
   declaredInputs,
   dynamicMatrix,
+  trustedOutputs,
   ...contextOptions
 }: ExecutableConditionOptions): {
   readonly executable: boolean;
@@ -2805,7 +2812,7 @@ const executableCondition = ({
     if (
       /^steps\.[\w-]+\.(?:conclusion|outcome)$/u.test(reference) ||
       /^needs\.[\w-]+\.result$/u.test(reference) ||
-      /^needs\.ci-plan\.outputs\.[\w-]+$/u.test(reference)
+      trustedOutputs.has(reference)
     ) {
       return false;
     }
@@ -3064,6 +3071,167 @@ const hasTestCollector = (command: string): boolean => {
   );
 };
 
+const declaredSelectionOutputs = (
+  source: string,
+  outputNames: readonly string[],
+) => {
+  const sources = [source];
+  for (const match of source.matchAll(/\bscripts\/[\w./-]+\.ts\b/gu)) {
+    const script = match[0];
+    if (existsSync(path.join(ROOT, script))) {
+      sources.push(readFileSync(path.join(ROOT, script), "utf-8"));
+    }
+  }
+  const declarations = sources.join("\n");
+  return new Set(
+    outputNames.filter((name) => {
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+      return new RegExp(
+        `(?:["'\\x60]${escaped}(?:=|<<|["'\\x60])|\\b${escaped}=)`,
+        "u",
+      ).test(declarations);
+    }),
+  );
+};
+
+const registeredJobOutputs = (
+  jobs: Record<string, unknown>,
+  stepReferences: ReadonlyMap<string, ReadonlySet<string>>,
+) => {
+  const jobReferences = new Set<string>();
+  for (const [name, value] of Object.entries(jobs)) {
+    const outputs = workflowRecord(workflowRecord(value)?.["outputs"]) ?? {};
+    for (const [output, expression] of Object.entries(outputs)) {
+      if (typeof expression !== "string") {
+        continue;
+      }
+      const references = referencedContexts(expression).filter((reference) =>
+        reference.includes(".outputs."),
+      );
+      if (
+        references.length > 0 &&
+        references.every((reference) =>
+          stepReferences.get(name)?.has(reference),
+        )
+      ) {
+        jobReferences.add(`needs.${name}.outputs.${output}`);
+      }
+    }
+  }
+  return jobReferences;
+};
+
+type ValidateTrustedOutputProducersOptions = {
+  readonly workflow: unknown;
+  readonly registry: readonly TrustedOutputProducer[];
+  readonly scope?: "repository" | "present-jobs";
+};
+
+export const validateTrustedOutputProducers = ({
+  workflow,
+  registry,
+  scope = "repository",
+}: ValidateTrustedOutputProducersOptions) => {
+  const root = workflowRecord(workflow);
+  const jobs = workflowRecord(root?.["jobs"]) ?? {};
+  const resultNeeds = workflowRecord(jobs["ci-result"])?.["needs"];
+  const requiredJobs = new Set(
+    Array.isArray(resultNeeds) ? resultNeeds : [resultNeeds],
+  );
+  const findings: string[] = [];
+  const stepReferences = new Map<string, Set<string>>();
+  for (const producer of registry) {
+    const label = `trusted output producer: ${producer.job}/${producer.stepId}`;
+    if (producer.workflow !== ".github/workflows/ci.yml") {
+      findings.push(`${label} has unsupported workflow ${producer.workflow}`);
+      continue;
+    }
+    const job = workflowRecord(jobs[producer.job]);
+    if (job === undefined) {
+      if (scope === "repository" || requiredJobs.has(producer.job)) {
+        findings.push(`${label} job is missing`);
+      }
+      continue;
+    }
+    if (
+      !isTypeScriptTest(producer.proofTest) ||
+      !existsSync(path.join(ROOT, producer.proofTest))
+    ) {
+      findings.push(`${label} proof test is missing: ${producer.proofTest}`);
+      continue;
+    }
+    const steps = Array.isArray(job["steps"])
+      ? flattenWorkflowSteps(job["steps"])
+      : [];
+    const matches = steps.filter((step) => step["id"] === producer.stepId);
+    const step = matches.at(0);
+    if (matches.length !== 1 || step === undefined) {
+      findings.push(`${label} step is missing or duplicated`);
+      continue;
+    }
+    const source =
+      typeof step["run"] === "string"
+        ? step["run"]
+        : workflowRecord(step["with"])?.["script"];
+    if (typeof source !== "string") {
+      findings.push(`${label} output declaration is unavailable`);
+      continue;
+    }
+    let available: ReadonlySet<string>;
+    switch (producer.semantics) {
+      case "selection": {
+        available = declaredSelectionOutputs(source, producer.outputNames);
+        break;
+      }
+      case "content-reuse":
+        if (
+          source.trim() !==
+          `bun scripts/ci-static-checks.ts resolve ${producer.job}`
+        ) {
+          findings.push(`${label} content-reuse command changed`);
+          continue;
+        }
+        available = new Set(
+          classifiedChecks(workflow, producer.job)
+            .filter(
+              (check) =>
+                workflowRecord(check["env"])?.["CI_CHECK_KIND"] === "STATIC",
+            )
+            .flatMap((check) =>
+              typeof check["id"] === "string"
+                ? [staticReuseOutputName(check["id"])]
+                : [],
+            ),
+        );
+        break;
+      default:
+        return panic(
+          `Unrecognized output producer semantics: ${String(producer.semantics satisfies never)}`,
+        );
+    }
+    const references = stepReferences.get(producer.job) ?? new Set<string>();
+    for (const output of producer.outputNames) {
+      if (!available.has(output)) {
+        findings.push(`${label} output is missing or renamed: ${output}`);
+        continue;
+      }
+      references.add(`steps.${producer.stepId}.outputs.${output}`);
+    }
+    stepReferences.set(producer.job, references);
+  }
+  const jobReferences = registeredJobOutputs(jobs, stepReferences);
+  const references = new Map(
+    Object.keys(jobs).map(
+      (name) =>
+        [
+          name,
+          new Set([...jobReferences, ...(stepReferences.get(name) ?? [])]),
+        ] as const,
+    ),
+  );
+  return { references, findings };
+};
+
 export type GatingWorkflowAnalysis = {
   readonly findings: readonly string[];
   readonly jobs: ReadonlyMap<string, readonly GatingCommand[]>;
@@ -3071,6 +3239,7 @@ export type GatingWorkflowAnalysis = {
 
 export const analyzeGatingWorkflow = (
   workflow: unknown,
+  registry: readonly TrustedOutputProducer[] = TRUSTED_OUTPUT_PRODUCERS,
 ): GatingWorkflowAnalysis => {
   const root = workflowRecord(workflow);
   const jobs = workflowRecord(root?.["jobs"]);
@@ -3108,7 +3277,12 @@ export const analyzeGatingWorkflow = (
       entry.value,
     ]),
   );
-  const findings = new Set<string>();
+  const registered = validateTrustedOutputProducers({
+    workflow,
+    registry,
+    scope: "present-jobs",
+  });
+  const findings = new Set(registered.findings);
   const gating = new Map<string, readonly GatingCommand[]>();
   for (const name of names) {
     const job = workflowRecord(jobs[name]);
@@ -3135,12 +3309,16 @@ export const analyzeGatingWorkflow = (
               condition: job["if"],
               declaredInputs,
               dynamicMatrix,
+              trustedOutputs:
+                registered.references.get(name) ?? new Set<string>(),
             });
             const stepCondition = executableCondition({
               ...contextOptions,
               condition: step["if"],
               declaredInputs,
               dynamicMatrix,
+              trustedOutputs:
+                registered.references.get(name) ?? new Set<string>(),
             });
             if (
               !jobCondition.staticallyFalse &&
@@ -4416,6 +4594,12 @@ const validateExecutionTopology = (errors: string[]): void => {
   const workflow = readFileSync(
     path.join(ROOT, ".github/workflows/ci.yml"),
     "utf-8",
+  );
+  errors.push(
+    ...validateTrustedOutputProducers({
+      workflow: Bun.YAML.parse(workflow),
+      registry: TRUSTED_OUTPUT_PRODUCERS,
+    }).findings,
   );
   const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
   const gatingJobs = analysis.jobs;
