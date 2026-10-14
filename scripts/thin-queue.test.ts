@@ -1015,12 +1015,15 @@ type EvaluateOptions = {
   job?: string;
   result?: string;
   script?: string;
+  /** Release typechecks are planned only when VERSION changes. */
+  releaseTypecheck?: boolean;
 };
 const evaluate = ({
   queueDepth,
   job,
   result,
   script = outcome.run,
+  releaseTypecheck = job === "release-typecheck",
 }: EvaluateOptions) => {
   const dependencies = Object.fromEntries(
     needs.map((name) => {
@@ -1068,7 +1071,7 @@ const evaluate = ({
         ...plan,
         queue_depth: queueDepth,
         heavy_web_build_required: "false",
-        release_typecheck_required: "false",
+        release_typecheck_required: releaseTypecheck ? "true" : "false",
       }),
       NEEDS: JSON.stringify(dependencies),
     },
@@ -1092,6 +1095,20 @@ test("both queue depths require every planned admitted check to succeed", () => 
         ).toBe(1);
       }
     }
+  }
+}, 30_000);
+
+test("an unplanned release typecheck may be skipped at either queue depth", () => {
+  for (const queueDepth of ["thin", "full"]) {
+    expect(
+      evaluate({
+        queueDepth,
+        job: "release-typecheck",
+        result: "skipped",
+        releaseTypecheck: false,
+      }),
+      queueDepth,
+    ).toBe(0);
   }
 }, 30_000);
 
