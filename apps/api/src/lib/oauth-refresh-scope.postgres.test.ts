@@ -320,8 +320,8 @@ if (!runPostgres || !process.env["DATABASE_URL"]) {
           "oauth.grant_type": "refresh_token",
           "oauth.refusal_reason": "unclassified",
           "oauth.refusal_unclassified": true,
-          "oauth.client_id": null,
-          "oauth.grant_family": null,
+          "oauth.client_id": "none",
+          "oauth.grant_family": "none",
         },
       });
     });
