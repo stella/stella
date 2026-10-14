@@ -3320,6 +3320,7 @@ test.each([1, 2])(
       "--",
       "--project=docked-chat-geometry",
       `--shard=${shard}/2`,
+      "--workers=4",
     ]);
   },
 );

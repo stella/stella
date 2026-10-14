@@ -286,61 +286,19 @@
   },
   "retainedApiTaskDefaults": ["@stll/api#generate:capability-runtime"],
   "e2eProductionShards": {
-    "measurementNotes": "Successful Run Playwright shard step wall times from the 29 most recent completed merge-group CI runs sampled on 2026-10-13. Include successful jobs in cancelled workflows; exclude skipped, failed and cancelled steps and jobs. Nearest-rank empirical p50/p95: shard 1 = 363/381 seconds (5 samples), shard 2 = 402/409 seconds (4 samples). Sparse samples are not a population estimate. The existing task-budget policy applies: max(1.5 x p95, 2 x largest sample) + 30 seconds, rounded up to whole minutes for Actions. Both sequential general and geometry batches, container startup and teardown are included. Keep the two-shard split and concurrency: increasing the watchdog does not lengthen passing runs. Changes to the measured invocation require fresh samples; elapsed wall time is checked against the budget before the 30-second cleanup margin.",
+    "measurementNotes": "Successful Run Playwright shard step wall times from completed PR CI run 38483484944 on head b99f76716a879c0aac3028ffacf428f08c48d4b5. Both numeric shard jobs and steps succeeded: shard 1 = 419 seconds (job 115596764750), shard 2 = 464 seconds (job 115596764843). No numeric shards failed; the network-baseline shard skips this step and is excluded. The workflow failed in ci-checks-rest, outside these successful samples. Replace old-plan observations rather than mixing plans. One observation per shard means empirical p50 and p95 equal that observation; sparse samples are not a population estimate. The existing task-budget policy applies unchanged: max(1.5 x p95, 2 x largest sample) + 30 seconds, rounded up to whole minutes for Actions. Both sequential general and geometry batches, container startup and teardown are included. General uses two workers and isolated geometry uses four; the two-shard split, phase deadlines and cleanup guards remain. Changes to the measured invocation require fresh samples; elapsed wall time is checked against the budget before the 30-second cleanup margin.",
     "samples": [
       {
-        "runId": 38338932363,
-        "jobId": 115106312135,
+        "runId": 38483484944,
+        "jobId": 115596764750,
         "shard": 1,
-        "seconds": 269
+        "seconds": 419
       },
       {
-        "runId": 38338932363,
-        "jobId": 115106312158,
+        "runId": 38483484944,
+        "jobId": 115596764843,
         "shard": 2,
-        "seconds": 337
-      },
-      {
-        "runId": 38340008557,
-        "jobId": 115109297267,
-        "shard": 1,
-        "seconds": 363
-      },
-      {
-        "runId": 38340008557,
-        "jobId": 115109297303,
-        "shard": 2,
-        "seconds": 402
-      },
-      {
-        "runId": 38334060078,
-        "jobId": 115091088110,
-        "shard": 1,
-        "seconds": 335
-      },
-      {
-        "runId": 38334060078,
-        "jobId": 115091088151,
-        "shard": 2,
-        "seconds": 409
-      },
-      {
-        "runId": 38334058981,
-        "jobId": 115091890321,
-        "shard": 1,
-        "seconds": 381
-      },
-      {
-        "runId": 38338931769,
-        "jobId": 115106042303,
-        "shard": 1,
-        "seconds": 368
-      },
-      {
-        "runId": 38338931769,
-        "jobId": 115106042337,
-        "shard": 2,
-        "seconds": 405
+        "seconds": 464
       }
     ],
     "planFiles": [
@@ -348,6 +306,6 @@
       "apps/web/e2e/execution-profile.ts",
       "apps/web/e2e/shard-count.ts"
     ],
-    "planSha256": "82492733ea240200da1d501be897dfb998c348ad633960ea5a9428f8021f4a27"
+    "planSha256": "e0aacc20f0721f9a0b4b00d281aa01f275a49db0657f765bf4284521d061b867"
   }
 }
