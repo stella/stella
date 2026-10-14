@@ -1638,7 +1638,7 @@ jobs:
       "job condition: no gating job executes @stll/orphan test",
     );
     expect(analyzeGatingWorkflow(workflow("macos", planned)).findings).toEqual([
-      "job condition: package-check/step-1 has unresolved context matrix.os",
+      "job condition: package-check/step-1 has unresolved context unresolved condition disjuncts: unresolved condition atom: matrix.os == 'macos'",
     ]);
   });
 
@@ -1647,6 +1647,8 @@ jobs:
 jobs:
   package-check:
     steps:
+      - id: install
+        run: echo installed
       - if: steps.install.outcome == 'success'
         run: bun --filter @stll/orphan test
   ci-result:
@@ -2153,7 +2155,7 @@ jobs:
         source.replace(
           "      - run: bun test scripts/named.test.ts",
           () =>
-            `      - if: ${stepCondition}\n        run: bun test scripts/named.test.ts`,
+            `      - if: ${JSON.stringify(stepCondition)}\n        run: bun test scripts/named.test.ts`,
         ),
       );
       const analysis = analyzeGatingWorkflow(workflow, registry);
@@ -2282,10 +2284,10 @@ jobs:
   check.each([
     ["steps.setup.outputs.run_tests == 'true'", false],
     ["needs.setup.outputs.run_tests == 'true'", false],
-    ["true || steps.setup.outputs.run_tests == 'true'", false],
+    ["true || steps.setup.outputs.run_tests == 'true'", true],
     ["needs.ci-plan.outputs.package_checks_required == 'true'", true],
   ])(
-    "output condition %s grants collection only for owned selection outputs",
+    "output condition %s requires a resolved execution path",
     (condition, credited) => {
       const workflow = Bun.YAML.parse(`jobs:
   ci-plan:
@@ -2624,7 +2626,7 @@ jobs:
 `);
       const analysis = analyzeGatingWorkflow(workflow);
       expect(analysis.findings, value).toEqual([
-        "job condition: package-check/step-1 has unresolved context vars.SOME_TOGGLE",
+        `job condition: package-check/step-1 has unresolved context unresolved condition disjuncts: unresolved condition atom: vars.SOME_TOGGLE == '${value}'`,
       ]);
       expect(
         packageTestExecutionFailure({
@@ -2649,7 +2651,7 @@ jobs:
     needs: [package-check]
 `);
     expect(analyzeGatingWorkflow(workflow).findings).toEqual([
-      "job condition: package-check/step-1 has unresolved context inputs.RUN_TESTS",
+      "job condition: package-check/step-1 has unresolved context unresolved condition disjuncts: unresolved condition atom: inputs.RUN_TESTS == true",
     ]);
   });
 
