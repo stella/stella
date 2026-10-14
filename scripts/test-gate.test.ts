@@ -1200,16 +1200,38 @@ context("test registration census", () => {
     "set -e",
     "set -o pipefail",
     "bun test unit",
-  ])("credits a runner after a known safe prefix: %s", (prefix) => {
-    expect(
-      rootCommandExecutionFailure({
-        command: "bun scripts/test-gate.ts",
-        gatingJobs: bashJobs([
-          ["checks", [`${prefix} && bun scripts/test-gate.ts`]],
-        ]),
-      }),
-    ).toBeUndefined();
+  ])("checks runner ownership after a known safe prefix: %s", (prefix) => {
+    const failure = rootCommandExecutionFailure({
+      command: "bun scripts/test-gate.ts",
+      gatingJobs: bashJobs([
+        ["checks", [`${prefix} && bun scripts/test-gate.ts`]],
+      ]),
+    });
+    if (prefix === "cd packages/fixture") {
+      expect(failure).toBeDefined();
+    } else {
+      expect(failure).toBeUndefined();
+    }
   });
+
+  check(
+    "literal directory changes preserve package and workspace script invocations",
+    () => {
+      for (const command of [
+        "cd packages/fixture && bun run test",
+        "cd packages/fixture && bun --filter @stll/fixture test",
+      ]) {
+        expect(
+          packageTestExecutionFailure({
+            packageDirectory: "packages/fixture",
+            packageName: "@stll/fixture",
+            shardedPackages: new Set<string>(),
+            gatingJobs: bashJobs([["checks", [command]]]),
+          }),
+        ).toBeUndefined();
+      }
+    },
+  );
 
   check("does not trust a delegated script that only prints a runner", () => {
     expect(
@@ -2501,7 +2523,7 @@ context("root test runner coverage", () => {
       ).toBe("packages/fixture");
       step["working-directory"] = `\${{ inputs.directory }}`;
       const analysis = analyzeGatingWorkflow(workflow);
-      expect(analysis.jobs.get("checks")).toEqual([]);
+      expect(analysis.jobs.has("checks")).toBe(false);
       expect(analysis.findings.join("\n")).toContain(
         "unresolved working-directory",
       );
@@ -2570,6 +2592,29 @@ context("root test runner coverage", () => {
       }),
     ).toContain("unresolved directory change");
   });
+
+  check(
+    "explicit parent paths collect files outside a package without widening implicit filters",
+    () => {
+      const candidate = "scripts/transfer-read-guard.test.ts";
+      for (const selector of [
+        "../../scripts/transfer-read-guard.test.ts",
+        "scripts",
+        "",
+      ]) {
+        const failure = packageTestCollectionFailure({
+          candidate,
+          packageDirectory: "packages/scripts",
+          scripts: { test: `bun test ${selector}` },
+        });
+        if (selector.startsWith("../")) {
+          expect(failure).toBeUndefined();
+        } else {
+          expect(failure).toContain("outside the collector directory");
+        }
+      }
+    },
+  );
 
   check("counts the actual root collectors and their file boundaries", () => {
     const workflow = `jobs:

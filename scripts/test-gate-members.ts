@@ -34,8 +34,11 @@ export const literalMemberName = (
 };
 
 export const literalPropertyName = (
-  node: ts.PropertyName,
+  input: ts.PropertyName,
 ): string | undefined => {
+  const node = ts.isComputedPropertyName(input)
+    ? unwrapTransparentExpression(input.expression)
+    : input;
   if (
     ts.isIdentifier(node) ||
     ts.isStringLiteral(node) ||

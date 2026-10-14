@@ -1738,6 +1738,13 @@ const packageInvocationEnd = ({
   if (words[index] !== "bun") {
     return undefined;
   }
+  if (
+    words[index + 1] === "--filter" &&
+    words[index + 2] === packageName &&
+    words[index + 3] === scriptName
+  ) {
+    return index + 4;
+  }
   const directory = invocationWorkingDirectory({
     words,
     tokens,
@@ -1747,14 +1754,6 @@ const packageInvocationEnd = ({
   });
   if (directory === undefined) {
     return undefined;
-  }
-  if (
-    directory === "." &&
-    words[index + 1] === "--filter" &&
-    words[index + 2] === packageName &&
-    words[index + 3] === scriptName
-  ) {
-    return index + 4;
   }
   const offset = words[index + 1] === "run" ? 2 : 1;
   if (
@@ -2286,15 +2285,23 @@ export const managedServiceRunnerFailure = ({
         onUnresolved: (reason) => {
           condition ??= reason;
         },
-        matches: ({ words, tokens, index }) =>
-          invocationWorkingDirectory({
+        matches: ({ words, tokens, index }) => {
+          if (!runner.every((word, offset) => words[index + offset] === word)) {
+            return false;
+          }
+          const directory = invocationWorkingDirectory({
             words,
             tokens,
             index,
             workingDirectory,
             propagation,
-          }) === "." &&
-          runner.every((word, offset) => words[index + offset] === word),
+          });
+          if (directory === undefined) {
+            condition ??=
+              "shell condition: unresolved working-directory before runner";
+          }
+          return directory === ".";
+        },
       }),
     gatingJobs,
     missingMessage: `job condition: no gating job executes the ${gate} runner`,
@@ -2328,15 +2335,23 @@ export const rootCommandExecutionFailure = ({
         onUnresolved: (reason) => {
           condition ??= reason;
         },
-        matches: ({ words, tokens, index }) =>
-          invocationWorkingDirectory({
+        matches: ({ words, tokens, index }) => {
+          if (!runner.every((word, offset) => words[index + offset] === word)) {
+            return false;
+          }
+          const directory = invocationWorkingDirectory({
             words,
             tokens,
             index,
             workingDirectory,
             propagation,
-          }) === "." &&
-          runner.every((word, offset) => words[index + offset] === word),
+          });
+          if (directory === undefined) {
+            condition ??=
+              "shell condition: unresolved working-directory before runner";
+          }
+          return directory === ".";
+        },
       }),
     gatingJobs,
     missingMessage: `job condition: no gating job executes ${command}`,
@@ -2653,6 +2668,21 @@ const bunArgumentCollectionFailure = (
   ) {
     return "runner glob: test command excludes the file";
   }
+  if (relativeCandidate === ".." || relativeCandidate.startsWith("../")) {
+    const explicitPath = patterns.some((pattern) => {
+      if (!pattern.startsWith("../") && !pattern.startsWith("./")) {
+        return false;
+      }
+      const normalized = path.posix.normalize(pattern);
+      return (
+        relativeCandidate === normalized ||
+        relativeCandidate.startsWith(`${normalized}/`)
+      );
+    });
+    return explicitPath
+      ? undefined
+      : "runner working-directory: file is outside the collector directory";
+  }
   if (
     patterns.length === 0 ||
     patterns.some((pattern) =>
@@ -2759,9 +2789,6 @@ const packageRunnerCollectionFailure = ({
   directory,
 }: PackageRunnerCollectionOptions): string | undefined => {
   const relativeCandidate = repoRelativePath(directory, candidate);
-  if (relativeCandidate === ".." || relativeCandidate.startsWith("../")) {
-    return "runner working-directory: file is outside the collector directory";
-  }
   const delegatedScript = words[index + 2];
   if (words[index + 1] === "run" && delegatedScript?.startsWith("test:")) {
     if (directory !== packageDirectory) {
@@ -3154,7 +3181,7 @@ const executableMatrixLegs = ({
     (entry) =>
       entry.job === jobName &&
       entry.stepId === exported?.["step"] &&
-      entry.outputNames.includes(exported?.["output"] ?? "") &&
+      entry.outputNames.includes(exported["output"] ?? "") &&
       entry.declaredShards !== undefined,
   );
   if (
@@ -5029,10 +5056,7 @@ export const scenarioBlockerFailure = (
         /^(?<workflow>.+\.ya?ml)\/(?<job>[^/]+)\/(?<step>[\w-]+)\.outputs\.(?<output>[\w-]+)$/u.exec(
           blocker.producer,
         )?.groups;
-      if (
-        match === undefined ||
-        match["workflow"] !== ".github/workflows/ci.yml"
-      ) {
+      if (match?.["workflow"] !== ".github/workflows/ci.yml") {
         return "scenario blocker: selection producer reference is invalid";
       }
       const jobName = match["job"];
