@@ -3,6 +3,7 @@ import { useSyncExternalStore } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Result, TaggedError } from "better-result";
 
+import { PROFESSIONAL_USE_STATEMENT_VERSION } from "@stll/api-contract/professional-use";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -13,6 +14,8 @@ import { api } from "@/lib/api";
 import { authClient, isTwoFactorRedirect } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { fetchDevOtp } from "@/lib/dev-otp";
+import { toAPIError } from "@/lib/errors/api";
+import type { ToAPIErrorProps } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -54,6 +57,7 @@ const DEV_QUICK_START_COPY = {
 } as const;
 
 const DEV_QUICK_START_ERROR = {
+  professionalUse: "professionalUse",
   matterImport: "matterImport",
   matterImportRunning: "matterImportRunning",
   otpUnavailable: "otpUnavailable",
@@ -63,6 +67,8 @@ type DevQuickStartErrorCode =
   (typeof DEV_QUICK_START_ERROR)[keyof typeof DEV_QUICK_START_ERROR];
 
 const ERROR_MESSAGES = {
+  [DEV_QUICK_START_ERROR.professionalUse]:
+    "The professional-use statement could not be accepted.",
   [DEV_QUICK_START_ERROR.matterImport]:
     "The Harvey LAB import could not start.",
   [DEV_QUICK_START_ERROR.matterImportRunning]:
@@ -75,6 +81,11 @@ class DevQuickStartError extends TaggedError("DevQuickStartError")<{
   code: DevQuickStartErrorCode;
   message: string;
 }> {}
+
+// A developer tool: name the server's refusal instead of a generic failure,
+// so a new gate in front of a step is visible at once.
+const withServerReason = (message: string, error: ToAPIErrorProps) =>
+  `${message} (${String(error.status)}: ${toAPIError(error).message})`;
 
 const AUTHENTICATION_OUTCOME = {
   authenticated: "authenticated",
@@ -104,6 +115,22 @@ const authenticate = async ({ email }: DevQuickStartIdentity) => {
   }
   if (isTwoFactorRedirect(signedIn.data)) {
     return AUTHENTICATION_OUTCOME.twoFactorRequired;
+  }
+
+  // A new quick-start account has not seen the professional-use statement,
+  // and the API refuses its signed-in requests until it is accepted. Record
+  // it here as the sign-up page does, before any signed-in step runs.
+  const accepted = await api.me["professional-use"].post({
+    statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
+  });
+  if (accepted.error) {
+    throw new DevQuickStartError({
+      code: DEV_QUICK_START_ERROR.professionalUse,
+      message: withServerReason(
+        ERROR_MESSAGES[DEV_QUICK_START_ERROR.professionalUse],
+        accepted.error,
+      ),
+    });
   }
 
   return AUTHENTICATION_OUTCOME.authenticated;
@@ -162,7 +189,7 @@ const startMatterImport = async (
         : DEV_QUICK_START_ERROR.matterImport;
     throw new DevQuickStartError({
       code,
-      message: ERROR_MESSAGES[code],
+      message: withServerReason(ERROR_MESSAGES[code], response.error),
     });
   }
 
