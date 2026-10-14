@@ -148,7 +148,7 @@ test("the policy check invokes classification after a successful install", () =>
 });
 const fixture = () => {
   const workflow =
-    "jobs:\n  caller:\n    steps:\n      - parallel:\n          - uses: $/.github/actions/local\n          - uses: vendor/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n";
+    "jobs:\n  caller:\n    steps:\n      - parallel:\n          - uses: $/.github/actions/local\n  reusable:\n    uses: vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n";
   const action = "runs: {using: composite, steps: [{run: 'bun script.ts'}]}";
   const callee = "jobs: {child: {steps: [{run: 'echo child'}]}}";
   type SourceFixtureOptions = {
@@ -201,7 +201,7 @@ const fixture = () => {
         references: [],
         edges: {
           "$/.github/actions/local": "action",
-          "vendor/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":
+          "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa":
             "callee",
         },
       }),
@@ -219,7 +219,7 @@ const fixture = () => {
         file: ".github/workflows/reusable.yml",
         text: callee,
         references: [
-          "vendor/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         ],
         edges: {},
       }),
@@ -261,12 +261,33 @@ test("censuses every root, local action and reusable callee job without executio
   if (result.isOk()) {
     expect(result.value).toEqual({
       workflowCount: 1,
-      jobCount: 2,
+      jobCount: 3,
       documentCount: 3,
-      classifications: { ordinary: 2, support: 0, priority: 0 },
+      classifications: { ordinary: 3, support: 0, priority: 0 },
       dependencyCount: 3,
     });
   }
+});
+test("job-level reusable calls cannot replace callee classifications with a pinned supplier", () => {
+  const f = fixture();
+  const manifest: PublicMetadata = {
+    ...f.manifest,
+    nodes: f.manifest.nodes.map((node) =>
+      node.id === "callee"
+        ? {
+            type: "supplier",
+            id: node.id,
+            reference:
+              "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            binding: "immutable",
+          }
+        : node,
+    ),
+  };
+  failure(
+    verifyPublicMetadata({ manifest, reader: f.reader }),
+    "reusable workflow requires callee job metadata",
+  );
 });
 test("a callee cannot hide new jobs, changes or missing classifications", () => {
   const f = fixture();

@@ -67,6 +67,55 @@ const safePath = (path: string) => {
     reject("unsafe metadata path");
   }
 };
+type ReferenceOptions = {
+  callerRepository: string;
+  target: PublicMetadata["nodes"][number];
+  reference: string;
+  kind: "reusable-workflow" | "action";
+};
+const verifyReference = ({
+  callerRepository,
+  target,
+  reference,
+  kind,
+}: ReferenceOptions) => {
+  if (
+    kind === "reusable-workflow" &&
+    (target.type !== "metadata" || target.jobs.length === 0)
+  ) {
+    reject("reusable workflow requires callee job metadata");
+  }
+  if (target.type === "metadata") {
+    if (reference.startsWith("$/")) {
+      const local = reference.slice(2);
+      const exactPath = /\.ya?ml$/u.test(local)
+        ? target.path === local
+        : target.path === `${local}/action.yml` ||
+          target.path === `${local}/action.yaml`;
+      if (target.repository !== callerRepository || !exactPath) {
+        reject("source-relative metadata path mismatch");
+      }
+    }
+    if (!target.references.includes(reference)) {
+      reject("callee metadata reference mismatch");
+    }
+  } else {
+    if (reference.startsWith("$/") || reference.startsWith("./")) {
+      reject("local action requires metadata source");
+    }
+    if (reference !== target.reference) {
+      reject("supplier reference mismatch");
+    }
+    if (
+      target.binding === "immutable" &&
+      !/@[0-9a-f]{40}$/u.test(reference) &&
+      !/^docker:\/\/[^\s]+@sha256:[0-9a-f]{64}$/u.test(reference)
+    ) {
+      reject("mutable supplier marked immutable");
+    }
+  }
+};
+
 export type MetadataOptions = { manifest: unknown; reader: MetadataReader };
 export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
   Result.try({
@@ -147,41 +196,25 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
           ) {
             reject(`metadata edge totality mismatch: ${id}`);
           }
+          const reusableWorkflows = new Set(
+            Object.values(parsed.value.jobs).flatMap((job) =>
+              job.reusableWorkflow === null ? [] : [job.reusableWorkflow],
+            ),
+          );
           for (const reference of references) {
             const targetId = node.edges[reference];
             const target = targetId ? nodes.get(targetId) : undefined;
             if (!targetId || !target) {
               reject(`undeclared metadata edge: ${id}/${reference}`);
             }
-            if (target.type === "metadata") {
-              if (reference.startsWith("$/")) {
-                const local = reference.slice(2);
-                const exactPath = /\.ya?ml$/u.test(local)
-                  ? target.path === local
-                  : target.path === `${local}/action.yml` ||
-                    target.path === `${local}/action.yaml`;
-                if (target.repository !== node.repository || !exactPath) {
-                  reject("source-relative metadata path mismatch");
-                }
-              }
-              if (!target.references.includes(reference)) {
-                reject("callee metadata reference mismatch");
-              }
-            } else {
-              if (reference.startsWith("$/") || reference.startsWith("./")) {
-                reject("local action requires metadata source");
-              }
-              if (reference !== target.reference) {
-                reject("supplier reference mismatch");
-              }
-              if (
-                target.binding === "immutable" &&
-                !/@[0-9a-f]{40}$/u.test(reference) &&
-                !/^docker:\/\/[^\s]+@sha256:[0-9a-f]{64}$/u.test(reference)
-              ) {
-                reject("mutable supplier marked immutable");
-              }
-            }
+            verifyReference({
+              callerRepository: node.repository,
+              target,
+              reference,
+              kind: reusableWorkflows.has(reference)
+                ? "reusable-workflow"
+                : "action",
+            });
             visit(targetId);
           }
           documentCount += 1;

@@ -9,7 +9,11 @@ const STEP = v.strictObject({
   uses: v.nullable(v.string()),
   run: v.nullable(v.string()),
 });
-const JOB = v.strictObject({ digest: v.string(), steps: v.array(STEP) });
+const JOB = v.strictObject({
+  digest: v.string(),
+  reusableWorkflow: v.nullable(v.string()),
+  steps: v.array(STEP),
+});
 const DOCUMENT = v.strictObject({
   jobs: v.record(v.string(), JOB),
   steps: v.array(STEP),
@@ -126,7 +130,7 @@ if data.key?('jobs')
       raise 'job uses must be string' unless j['uses'].is_a?(String)
       ss << {'uses'=>j['uses'],'run'=>nil}
     end
-    jobs[id] = {'digest'=>Digest::SHA256.hexdigest(JSON.generate(canon(j))),'steps'=>ss}
+    jobs[id] = {'digest'=>Digest::SHA256.hexdigest(JSON.generate(canon(j))),'reusableWorkflow'=>j['uses'],'steps'=>ss}
   end
 end
 ss = []
