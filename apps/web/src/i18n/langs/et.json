@@ -4519,6 +4519,8 @@
   },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
+    "caseLawMatchingDecisions": "{count, plural, one {# sobiv kohtulahend} other {# sobivat kohtulahendit}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ sobiv kohtulahend} other {#+ sobivat kohtulahendit}}",
     "continueInChat": "Jätka vestluses",
     "dateFrom": "Alates",
     "dateTo": "Kuni",

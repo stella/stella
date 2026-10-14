@@ -4522,6 +4522,8 @@ type Messages = {
   };
   "search": {
     "aiRefine": "Improve query with AI";
+    "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}";
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}";
     "continueInChat": "Continue in chat";
     "dateFrom": "From";
     "dateTo": "To";

@@ -4519,6 +4519,8 @@
   },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
+    "caseLawMatchingDecisions": "{count, plural, one {# decisão correspondente} other {# decisões correspondentes}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ decisão correspondente} other {#+ decisões correspondentes}}",
     "continueInChat": "Continuar no chat",
     "dateFrom": "De",
     "dateTo": "Para",
