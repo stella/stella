@@ -144,6 +144,11 @@ type PeekPdfViewerProps = {
    * identity for as long as the viewer is mounted.
    */
   docxPlugins?: readonly Plugin[] | undefined;
+  /**
+   * Extra marks over each rendered PDF page, after the viewer's own
+   * overlays, positioned against the page box like any `PDFPage` overlay.
+   */
+  pdfPageOverlay?: ((pageId: string) => ReactNode) | undefined;
   errorFallback?: ((props: { reset: () => void }) => ReactNode) | undefined;
   onError?: ((error: Error) => void) | undefined;
   colorMode?: PDFColorMode | undefined;
@@ -193,6 +198,7 @@ const PeekPdfViewerContent = ({
   onWheelZoom,
   docxFitMode = "text-area",
   docxPlugins,
+  pdfPageOverlay,
   colorMode = "system",
 }: PeekPdfViewerProps) => {
   const isImageOrigin = mimeType?.startsWith("image/") ?? false;
@@ -210,17 +216,28 @@ const PeekPdfViewerContent = ({
 
   const renderPageOverlay = useCallback(
     (pageId: string) => (
-      <PeekPageOverlays
-        activePropertyId={activePropertyId}
-        entityId={entityId}
-        fieldId={fieldId}
-        onPeekNavigate={onPeekNavigate}
-        pageId={pageId}
-        viewId={viewId}
-        workspaceId={workspaceId}
-      />
+      <>
+        <PeekPageOverlays
+          activePropertyId={activePropertyId}
+          entityId={entityId}
+          fieldId={fieldId}
+          onPeekNavigate={onPeekNavigate}
+          pageId={pageId}
+          viewId={viewId}
+          workspaceId={workspaceId}
+        />
+        {pdfPageOverlay?.(pageId)}
+      </>
     ),
-    [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
+    [
+      activePropertyId,
+      entityId,
+      fieldId,
+      onPeekNavigate,
+      pdfPageOverlay,
+      viewId,
+      workspaceId,
+    ],
   );
 
   if (fileQuery.isError) {

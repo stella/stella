@@ -535,7 +535,7 @@ test("a rejected review restores the claim and attention queue and surfaces the 
   ).toBe(false);
 });
 
-test("a DOCX verification offers its original beside the reading view; a PDF one does not", async () => {
+test("a DOCX and a PDF verification both offer their original beside the reading view", async () => {
   await mount();
   const views = messages.avt.verification.documentView;
   expect(
@@ -568,6 +568,16 @@ test("a DOCX verification offers its original beside the reading view; a PDF one
       pageNumber: block.ordinal,
     })),
   });
-  expect(screen.queryByRole("tablist", { name: views.label })).toBeNull();
+  expect(
+    screen
+      .getByRole("tablist", { name: views.label })
+      .textContent?.includes(views.original),
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole("tab", { name: views.reading })
+      .getAttribute("aria-selected"),
+  ).toBe("true");
   expect(claimButton(1).getAttribute("aria-pressed")).toBe("true");
+  expect(requests).toEqual([]);
 });

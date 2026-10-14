@@ -13,14 +13,13 @@ import * as React from "react";
 
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
-import { ScrollArea } from "@stll/ui/scroll-area";
 import { textMarkHighlightRule } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
 
 import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+import { UnlocatedClaims } from "@/features/avt/original-claims";
+import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import {
   claimUnderPoint,
   MARK_PRIORITY,
@@ -31,7 +30,7 @@ import {
   claimHighlightName,
   locateClaimsInDocument,
 } from "@/features/avt/original-docx.logic";
-import { STATE_COLOR, StateSwatch } from "@/features/avt/state-chip";
+import { STATE_COLOR } from "@/features/avt/state-chip";
 import type {
   ClaimState,
   VerificationClaim,
@@ -47,12 +46,6 @@ const MARK_STATES = Object.keys(MARK_PRIORITY).filter(
 const CLAIM_STATES = Object.keys(STATE_COLOR).filter(
   (state): state is ClaimState => state in STATE_COLOR,
 );
-
-/** How one claim is drawn; `mark: null` leaves it unmarked but clickable. */
-export type OriginalClaimMark = {
-  state: ClaimState;
-  mark: TextMarkState | null;
-};
 
 type OriginalDocxViewProps = {
   workspaceId: string;
@@ -71,7 +64,6 @@ export const OriginalDocxView = ({
   markOf,
   onSelect,
 }: OriginalDocxViewProps) => {
-  const t = useTranslations();
   const [doc, setDoc] = React.useState<ProseMirrorNode | null>(null);
   // Folio keeps host plugins for as long as the editor is mounted, so the
   // array is made once.
@@ -230,35 +222,12 @@ export const OriginalDocxView = ({
           workspaceId={workspaceId}
         />
       </div>
-      {unlocated.length > 0 && (
-        <div className="flex max-h-32 shrink-0 flex-col border-t">
-          <ScrollArea axis="vertical" className="min-h-0">
-            <div className="space-y-1.5 px-4 py-2">
-              <p className="text-muted-foreground text-xs font-medium">
-                {t("avt.verification.notLocated", { count: unlocated.length })}
-              </p>
-              <ul className="flex flex-wrap gap-1.5">
-                {unlocated.map((claim) => (
-                  <li className="min-w-0" key={claim.id}>
-                    <Button
-                      aria-pressed={claim.id === selected}
-                      className="max-w-64"
-                      onClick={() => onSelect(claim.id)}
-                      size="sm"
-                      variant={claim.id === selected ? "secondary" : "outline"}
-                    >
-                      <StateSwatch state={markOf(claim).state} />
-                      <span className="truncate" dir="auto">
-                        {claim.text}
-                      </span>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </ScrollArea>
-        </div>
-      )}
+      <UnlocatedClaims
+        claims={unlocated}
+        markOf={markOf}
+        onSelect={onSelect}
+        selected={selected}
+      />
     </div>
   );
 };

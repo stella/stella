@@ -26,8 +26,9 @@ import { textMarkClass } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
+import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
-import type { OriginalClaimMark } from "@/features/avt/original-docx-view";
+import type { OriginalClaimMark } from "@/features/avt/original-claims";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -57,6 +58,7 @@ import {
 } from "@/features/avt/verdict";
 import {
   claimMark,
+  originalKind,
   selectClaimPresentation,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
@@ -71,8 +73,12 @@ const OriginalDocxView = React.lazy(async () => {
   const m = await import("@/features/avt/original-docx-view");
   return { default: m.OriginalDocxView };
 });
+const OriginalPdfView = React.lazy(async () => {
+  const m = await import("@/features/avt/original-pdf-view");
+  return { default: m.OriginalPdfView };
+});
 
-/** The reader's text of the stored blocks, or the file as Folio lays it out. */
+/** The reader's text of the stored blocks, or the file as it is laid out. */
 type DocumentView = "reading" | "original";
 
 type VerdictFilter =
@@ -114,11 +120,8 @@ export const VerificationView = ({
   const [filter, setFilter] = React.useState<VerdictFilter>("all");
   const [documentView, setDocumentView] =
     React.useState<DocumentView>("reading");
-  // Only a DOCX read through Folio has an original to lay the claims over
-  // here; a PDF's page text has no block ids.
-  const hasOriginal =
-    run.blocks.length > 0 &&
-    run.blocks.every((block) => block.kind === "docx-block");
+  const original = originalKind(run.blocks);
+  const hasOriginal = original !== null;
   const view = hasOriginal ? documentView : "reading";
 
   const matches = (claim: VerificationClaim, value: VerdictFilter) =>
@@ -162,6 +165,14 @@ export const VerificationView = ({
     document
       .querySelector(`#${claimDomId(id)}`)
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  };
+
+  // The original opens on the selected claim, as the reading view shows it.
+  const openDocumentView = (next: DocumentView) => {
+    setDocumentView(next);
+    if (next === "original" && selectedClaim !== undefined) {
+      scrollOriginalToClaim(run, selectedClaim);
+    }
   };
 
   const stepper = matchStepper({
@@ -325,7 +336,7 @@ export const VerificationView = ({
               )}
             >
               {hasOriginal && (
-                <Tabs onValueChange={setDocumentView} value={view}>
+                <Tabs onValueChange={openDocumentView} value={view}>
                   <TabsList
                     aria-label={t("avt.verification.documentView.label")}
                   >
@@ -344,14 +355,25 @@ export const VerificationView = ({
           {view === "original" ? (
             <div className="min-h-0 flex-1">
               <React.Suspense fallback={<Skeleton className="h-full w-full" />}>
-                <OriginalDocxView
-                  claims={claims}
-                  markOf={originalMark}
-                  onSelect={setSelected}
-                  run={run}
-                  selected={selected}
-                  workspaceId={workspaceId}
-                />
+                {original === "pdf" ? (
+                  <OriginalPdfView
+                    claims={claims}
+                    markOf={originalMark}
+                    onSelect={setSelected}
+                    run={run}
+                    selected={selected}
+                    workspaceId={workspaceId}
+                  />
+                ) : (
+                  <OriginalDocxView
+                    claims={claims}
+                    markOf={originalMark}
+                    onSelect={setSelected}
+                    run={run}
+                    selected={selected}
+                    workspaceId={workspaceId}
+                  />
+                )}
               </React.Suspense>
             </div>
           ) : (
@@ -413,13 +435,18 @@ const READER_STYLE = {
 
 const claimDomId = (claimId: string): string => `avt-claim-${claimId}`;
 
-/** Bring the original to a claim's block; the viewer retries while the
- *  document is still loading. */
+/** Bring the original to a claim's block or page; both viewers hold the
+ *  request while the document is still loading. On a PDF the claim's box
+ *  then brings itself into view once its page is drawn. */
 const scrollOriginalToClaim = (
   run: VerificationRun,
   claim: VerificationClaim,
 ): void => {
-  if (claim.anchor.type !== "docx-block") {
+  if (claim.anchor.type === "pdf-page") {
+    useInspectorCommandStore.getState().requestPdfPageScroll({
+      tabId: run.fileFieldId,
+      pageNumber: claim.anchor.pageNumber,
+    });
     return;
   }
   window.dispatchEvent(

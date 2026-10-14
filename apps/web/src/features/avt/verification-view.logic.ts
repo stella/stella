@@ -51,6 +51,26 @@ export const claimMark = ({
 };
 
 /**
+ * Which original the claims can be laid over: a DOCX read through Folio
+ * (block ids), or a PDF read page by page (page text offsets). A run with no
+ * stored text, or a mix the server never writes, has none.
+ */
+export const originalKind = (
+  blocks: readonly Pick<VerificationRun["blocks"][number], "kind">[],
+): "docx" | "pdf" | null => {
+  if (blocks.length === 0) {
+    return null;
+  }
+  if (blocks.every((block) => block.kind === "docx-block")) {
+    return "docx";
+  }
+  if (blocks.every((block) => block.kind === "pdf-page")) {
+    return "pdf";
+  }
+  return null;
+};
+
+/**
  * A run of claims that sit in the same DOCX block or on the same PDF page,
  * in reading order. The run stores each claim's own words and where they sit,
  * not the text around them, so the document pane renders these passages
