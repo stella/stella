@@ -17,6 +17,7 @@ import type { FileTabDisplayState } from "@/components/inspector/file-tab-panel.
 import { InspectorPdfErrorFallback } from "@/components/inspector/inspector-pdf-error-fallback";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MarkdownFileViewer } from "@/components/inspector/markdown-file-viewer";
+import { PlainTextFileViewer } from "@/components/inspector/plain-text-file-viewer";
 import type { DesktopOpenTarget } from "@/components/inspector/use-desktop-file-open";
 import type { DocxEditorBindings } from "@/components/inspector/use-docx-editor-bindings";
 import type { EmailAttachmentSelection } from "@/components/inspector/use-email-attachment-selection";
@@ -95,6 +96,7 @@ export const FileTabViewer = ({
     isMarkdownDisplay,
     isNativeDocxDisplay,
     isOfficeDisplay,
+    isPlainTextDisplay,
     officeViewerFormat,
     scaleOffset,
   },
@@ -161,6 +163,9 @@ export const FileTabViewer = ({
           tabId={tab.id}
         />
       );
+    }
+    if (isPlainTextDisplay) {
+      return <PlainTextFileViewer tab={tab} />;
     }
     if (isOfficeDisplay && officeViewerFormat !== null) {
       return (

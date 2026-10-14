@@ -14,11 +14,9 @@ import {
 } from "@/api/lib/flows/flow-executor";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import {
-  flowReviewGateFixture,
-  waitForBlockedPid,
-} from "@/api/tests/helpers/flow-review-gate";
+import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";

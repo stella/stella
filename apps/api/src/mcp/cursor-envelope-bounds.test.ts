@@ -5,6 +5,7 @@ import * as v from "valibot";
 
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 
 import { CONTACT_DISPLAY_NAME_MAX_LENGTH } from "@/api/handlers/contacts/list-query";
 import { encodeVersionCursor } from "@/api/handlers/entities/version-cursor";
@@ -23,10 +24,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { brandPersistedEntityVersionId } from "@/api/lib/safe-id-boundaries";
 import { encodeCursor } from "@/api/lib/search/cursor";
-import {
-  encodeGlobalSearchCursor,
-  GLOBAL_SEARCH_RESULT_LIMIT,
-} from "@/api/lib/search/pagination";
+import { encodeGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { isRecord } from "@/api/lib/type-guards";
 import { LAW_COMPAT_TOOL_SET } from "@/api/mcp/compat-law-tools";
 import { encodeCompatSearchCursor } from "@/api/mcp/compat-shared";
