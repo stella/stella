@@ -254,7 +254,7 @@ test("the reader draws each stored block with its claims marked on the stored wo
     );
     expect(paragraph?.tagName).toBe("P");
     expect(
-      paragraph?.textContent?.startsWith(stored.text.slice(0, 20)) === true,
+      paragraph?.textContent.startsWith(stored.text.slice(0, 20)) === true,
     ).toBe(true);
   }
   expect(
@@ -270,7 +270,7 @@ test("the reader draws each stored block with its claims marked on the stored wo
   expect(marks.at(0)?.getAttribute("aria-pressed")).toBe("true");
   const opinion = marks.at(5);
   if (opinion === undefined) {
-    return panic("Missing opinion claim mark");
+    panic("Missing opinion claim mark");
   }
   fireEvent.click(opinion);
   expect(opinion.getAttribute("aria-pressed")).toBe("true");
