@@ -7,6 +7,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import {
   PROVISION_KEY_MAX_BYTES,
   PROVISION_KEYS_MAX_COUNT,
+  PROVISION_KEYS_MAX_SERIALIZED_BYTES,
 } from "@/api/lib/case-law/provision-keys";
 import { UNDATED_DECISION_TIMESTAMP } from "@/api/lib/legal-search/corpus-index-config";
 import {
@@ -47,7 +48,7 @@ const CASE_LAW_INPUT = {
   redacted: false,
   listingOnly: false,
   provisionKeys: [],
-  servedBy: null,
+  vacatedFrom: null,
   caseNumber: "4 As 3/2008",
   identifiers: [
     { type: "source", value: "NSS-4-AS-3-2008" },
@@ -973,7 +974,7 @@ test("a key set at the cap fits a passage and one past it is refused", () => {
   const atCap = Array.from(
     { length: PROVISION_KEYS_MAX_COUNT },
     (_, index) =>
-      `${"x".repeat(PROVISION_KEY_MAX_BYTES - 8)}${String(index).padStart(8, "0")}`,
+      `${"x".repeat(PROVISION_KEY_MAX_BYTES - 2 - 8)}${String(index).padStart(8, "0")}`,
   );
   const [document] = buildCaseLawProjectionDocuments({
     manifest: CORPUS_INDEX_MANIFESTS.case_law_v9,
@@ -982,8 +983,15 @@ test("a key set at the cap fits a passage and one past it is refused", () => {
     revision: REVISION,
   });
   expect(document?.provision_keys).toHaveLength(PROVISION_KEYS_MAX_COUNT);
-  // Even keys of the longest admitted size, at the cap, stay far below the
-  // single-document ceiling a request is split against.
+  // The field as the projection sends it fits the budget the cap is derived
+  // from, and that budget is a small part of the single-document ceiling a
+  // request is split against.
+  expect(
+    Buffer.byteLength(JSON.stringify(document?.provision_keys), "utf-8"),
+  ).toBeLessThanOrEqual(PROVISION_KEYS_MAX_SERIALIZED_BYTES);
+  expect(PROVISION_KEYS_MAX_SERIALIZED_BYTES).toBeLessThanOrEqual(
+    CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES / 8,
+  );
   expect(Buffer.byteLength(JSON.stringify(document), "utf-8") + 1).toBeLessThan(
     CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES / 8,
   );

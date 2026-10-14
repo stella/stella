@@ -62,6 +62,7 @@ CREATE TABLE "corpus_index_jurisdiction_serving" (
   "family" text NOT NULL,
   "jurisdiction" varchar(3) NOT NULL,
   "generation" varchar(32) NOT NULL,
+  "from_generation" varchar(32) NOT NULL,
   "flipped_at" timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT "corpus_index_jurisdiction_serving_pkey"
     PRIMARY KEY ("family", "jurisdiction"),
@@ -99,7 +100,7 @@ REVOKE ALL PRIVILEGES ON TABLE "corpus_index_jurisdiction_serving" FROM PUBLIC;-
 GRANT SELECT ON TABLE "corpus_index_jurisdiction_serving" TO stella;--> statement-breakpoint
 GRANT SELECT, INSERT, DELETE ON TABLE "corpus_index_jurisdiction_serving"
   TO stella_ingestion;--> statement-breakpoint
-GRANT UPDATE ("generation", "flipped_at")
+GRANT UPDATE ("generation", "from_generation", "flipped_at")
   ON TABLE "corpus_index_jurisdiction_serving" TO stella_ingestion;--> statement-breakpoint
 GRANT SELECT ("family", "jurisdiction", "generation")
   ON TABLE "corpus_index_jurisdiction_serving" TO stella_public_law_reader;

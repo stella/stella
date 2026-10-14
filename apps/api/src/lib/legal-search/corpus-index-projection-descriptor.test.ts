@@ -34,7 +34,7 @@ const CASE_LAW_INPUT = {
   redacted: false,
   listingOnly: false,
   provisionKeys: [],
-  servedBy: null,
+  vacatedFrom: null,
   caseNumber: "4 As 3/2008",
   identifiers: [
     { type: "source", value: "NSS-4-AS-3-2008" },
@@ -665,13 +665,25 @@ test("a generation the jurisdiction-serving pointer moved away from owes its cop
     "upsert",
   );
   // After the flip the pointer names v9: v8 erases, v9 keeps.
-  const flipped = { ...CASE_LAW_INPUT, servedBy: "case_law_v9" };
+  const flipped = { ...CASE_LAW_INPUT, vacatedFrom: "case_law_v8" };
   expect(deriveCorpusIndexProjectionDescriptor(v8, flipped)).toEqual({
     action: "erase",
   });
   expect(deriveCorpusIndexProjectionDescriptor(v9, flipped).action).toBe(
     "upsert",
   );
+  // Only the vacated generation erases: a whole generation being built for
+  // promotion while the pointer is set still projects the decision, or its
+  // Czech search would be incomplete once the promotion clears the pointer.
+  for (const whole of [
+    CORPUS_INDEX_MANIFESTS.case_law_v5,
+    CORPUS_INDEX_MANIFESTS.case_law_v6,
+    CORPUS_INDEX_MANIFESTS.case_law_v7,
+  ]) {
+    expect(deriveCorpusIndexProjectionDescriptor(whole, flipped).action).toBe(
+      "upsert",
+    );
+  }
   // The fingerprint of what v9 keeps does not depend on where readers are
   // pointed, so the flip re-projects nothing there.
   expect(fingerprintOf(v9, flipped)).toBe(fingerprintOf(v9, CASE_LAW_INPUT));

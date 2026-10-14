@@ -469,6 +469,7 @@ export const flipCaseLawJurisdictionServing = async (
           family: target.family,
           jurisdiction,
           generation: target.generation,
+          fromGeneration: locked.previous,
         })
         .onConflictDoUpdate({
           target: [
@@ -477,6 +478,7 @@ export const flipCaseLawJurisdictionServing = async (
           ],
           set: {
             generation: target.generation,
+            fromGeneration: locked.previous,
             flippedAt: sql`clock_timestamp()`,
           },
         });
@@ -533,7 +535,10 @@ export const purgeFlippedJurisdictionBatchTx = async (
   const upper = jurisdiction.toUpperCase();
   const pointer = (
     await tx
-      .select({ generation: corpusIndexJurisdictionServing.generation })
+      .select({
+        generation: corpusIndexJurisdictionServing.generation,
+        fromGeneration: corpusIndexJurisdictionServing.fromGeneration,
+      })
       .from(corpusIndexJurisdictionServing)
       .where(
         and(
@@ -543,7 +548,7 @@ export const purgeFlippedJurisdictionBatchTx = async (
       )
       .limit(1)
   ).at(0);
-  if (pointer === undefined || pointer.generation === fromGeneration) {
+  if (pointer === undefined || pointer.fromGeneration !== fromGeneration) {
     return panic(
       `${upper} is not flipped away from ${fromGeneration}; nothing may be purged from it`,
     );

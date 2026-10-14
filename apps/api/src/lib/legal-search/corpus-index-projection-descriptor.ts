@@ -69,13 +69,15 @@ export type CaseLawProjectionInput = ProjectionInputBase & {
    */
   provisionKeys: readonly string[];
   /**
-   * The generation the jurisdiction-serving pointer names for this decision's
-   * jurisdiction, or null while the family's serving generation serves it. A
-   * generation that is not the one named holds no copy of the decision: its
-   * projection is an erasure, which is how what the old generation still
-   * holds is purged once the flip has moved readers.
+   * The generation the gated flip moved this decision's jurisdiction away
+   * from (the jurisdiction-serving pointer's `from_generation`), or null while
+   * no flip has happened. That generation, and only that one, holds no copy of
+   * the decision any more: its projection is an erasure, which is how what the
+   * vacated generation still holds is purged once readers have moved. Every
+   * other generation, a whole one being built for promotion included, projects
+   * the decision as usual.
    */
-  servedBy: string | null;
+  vacatedFrom: string | null;
 };
 
 export type LegislationV2ProjectionInput = ProjectionInputBase &
@@ -219,8 +221,7 @@ export const deriveCorpusIndexProjectionDescriptor = (
     !input.redistributionEligible ||
     (input.family === "case_law" && (input.redacted || input.listingOnly)) ||
     (input.family === "case_law" &&
-      input.servedBy !== null &&
-      input.servedBy !== manifest.generation) ||
+      input.vacatedFrom === manifest.generation) ||
     // A withdrawn version is a tombstone the publisher no longer lists: it
     // stays openable by id, and no search may find it.
     (input.family === "legislation" && input.windowDisposition === "withdrawn")

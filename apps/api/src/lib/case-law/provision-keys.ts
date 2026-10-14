@@ -31,18 +31,34 @@ const PROVISION_KEY_SEPARATOR = "|";
 const ANCHOR_SEPARATOR = CZ_PROFILE.anchor.join;
 
 /**
- * Most keys one decision writes on each passage.
+ * The most bytes the `provision_keys` array of one passage may take as the
+ * projection sends it (JSON-encoded, inside the NDJSON line).
  *
- * The keys ride on every passage of the decision, so the bound is a request
- * size bound: 256 keys of at most `PROVISION_KEY_MAX_BYTES` is under 64 KiB a
- * passage at the very worst, and about 10 KiB for real work identifiers and
- * anchors, which keeps a passage far from the single-document ceiling and a
- * revision from outgrowing an append request.
+ * The keys ride on every passage of the decision, so this is a per-passage
+ * request budget, and it is far below the single-document ceiling a request is
+ * split against (`provision-keys.test.ts` states the ratio against
+ * `CORPUS_PROJECTION_APPEND_MAX_SINGLE_REVISION_BYTES`). Real work identifiers
+ * and anchors take about a tenth of it.
  */
-export const PROVISION_KEYS_MAX_COUNT = 256;
+export const PROVISION_KEYS_MAX_SERIALIZED_BYTES = 64 * 1024;
 
-/** The most UTF-8 bytes one key may take; a longer one is never written. */
+/**
+ * The most bytes one key may take JSON-encoded, quotes and escapes included; a
+ * longer one is never written. Measured on the encoding, not on the text, so
+ * an escaped character cannot take a key past what the budget assumes.
+ */
 export const PROVISION_KEY_MAX_BYTES = 255;
+
+/**
+ * Most keys one decision writes on each passage, derived so the worst case
+ * provably fits the budget: an array of `n` keys of the longest admitted size
+ * is `1 + n * (PROVISION_KEY_MAX_BYTES + 1)` bytes (brackets, quotes inside
+ * the key size, one comma per key), so the cap is the largest `n` for which
+ * that stays within `PROVISION_KEYS_MAX_SERIALIZED_BYTES`.
+ */
+export const PROVISION_KEYS_MAX_COUNT = Math.floor(
+  (PROVISION_KEYS_MAX_SERIALIZED_BYTES - 1) / (PROVISION_KEY_MAX_BYTES + 1),
+);
 
 /**
  * Most link rows read for one decision. Past it the decision's links are
@@ -74,8 +90,9 @@ export const provisionKey = (
   anchorPrefix: string,
 ): string => `${workIdentifier}${PROVISION_KEY_SEPARATOR}${anchorPrefix}`;
 
-const byteLength = (value: string): number =>
-  new TextEncoder().encode(value).length;
+/** The bytes of a key as the projection sends it: JSON-encoded. */
+const encodedByteLength = (value: string): number =>
+  new TextEncoder().encode(JSON.stringify(value)).length;
 
 const compareText = (left: string, right: string): number => {
   if (left < right) {
@@ -117,7 +134,7 @@ export const provisionKeysOfLinks = (
       if (byKey.has(key)) {
         continue;
       }
-      if (byteLength(key) > PROVISION_KEY_MAX_BYTES) {
+      if (encodedByteLength(key) > PROVISION_KEY_MAX_BYTES) {
         overlong += 1;
         continue;
       }

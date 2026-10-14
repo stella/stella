@@ -13,7 +13,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { readCaseLawJurisdictionServingTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
+import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
@@ -301,7 +301,7 @@ const readCaseLawMaterials = async (
       jurisdiction,
     })),
   );
-  const servingByJurisdiction = await readCaseLawJurisdictionServingTx(
+  const vacatedByJurisdiction = await readCaseLawJurisdictionVacatedTx(
     tx,
     rows.map(({ jurisdiction }) => jurisdiction),
   );
@@ -311,8 +311,8 @@ const readCaseLawMaterials = async (
       identifiers:
         identifiersByDecision.get(row.documentId) ??
         panic(`Corpus projection material lost identifiers: ${row.documentId}`),
-      servedBy:
-        servingByJurisdiction.get(row.jurisdiction.toUpperCase()) ?? null,
+      vacatedFrom:
+        vacatedByJurisdiction.get(row.jurisdiction.toUpperCase()) ?? null,
       provisionKeys:
         provisionKeysByDecision.get(row.documentId) ??
         panic(

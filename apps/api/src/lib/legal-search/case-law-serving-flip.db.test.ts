@@ -40,7 +40,10 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
+  advanceCorpusProjectionDesiredStateTx,
+  ensureCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -652,4 +655,84 @@ test("a partial generation never serves a family, and promoting a whole one clea
       }),
   );
   expect(await pointerRows()).toEqual([]);
+});
+
+test("a whole generation built while the pointer is set projects the Czech decisions, and Czech search is complete once its promotion clears the pointer", async () => {
+  const engine = await buildV9();
+  await flip(engine);
+  expect(await pointerRows()).toMatchObject([
+    {
+      jurisdiction: "CZE",
+      generation: "case_law_v9",
+      fromGeneration: "case_law_v8",
+    },
+  ]);
+
+  // v7 stands for any whole generation built for promotion: the pointer
+  // vacated v8 only, so v7 is owed the Czech decision like any other.
+  const V7 = CORPUS_INDEX_MANIFESTS.case_law_v7;
+  await db.insert(corpusIndexGenerations).values({
+    family: "case_law",
+    generation: V7.generation,
+    cluster: "q09",
+    manifestDigest: corpusIndexManifestDigest(V7),
+    status: "building",
+  });
+  await inTx(
+    async (tx) =>
+      await ensureCorpusProjectionDesiredStateTx(
+        tx,
+        { family: "case_law", entityId: CZE_DECISION_ID },
+        V7.generation,
+      ),
+  );
+  const wholeState = (await statesOf(CZE_DECISION_ID)).find(
+    ({ generation }) => generation === V7.generation,
+  );
+  expect(wholeState).toMatchObject({
+    desiredAction: "upsert",
+    desiredIndexId: "case_law_v7_cs_sk",
+  });
+  // The vacated generation is the one that erases.
+  await inTx(
+    async (tx) =>
+      await purgeFlippedJurisdictionBatchTx(tx, {
+        jurisdiction: "CZE",
+        fromGeneration: "case_law_v8",
+        afterEntityId: null,
+        limit: 10,
+      }),
+  );
+  const states = await statesOf(CZE_DECISION_ID);
+  expect(
+    states.map(({ generation, desiredAction }) => [generation, desiredAction]),
+  ).toEqual([
+    ["case_law_v7", "upsert"],
+    ["case_law_v8", "erase"],
+    ["case_law_v9", "upsert"],
+  ]);
+
+  // The projection applies it, the promotion clears the pointer, and the
+  // decision is found: nothing the promotion relies on was erased.
+  await applyDesired(
+    "case_law_v7",
+    CZE_DECISION_ID,
+    toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-00000000050a",
+    ),
+  );
+  const { setServingCorpusIndexGenerationTx } =
+    await import("@/api/lib/legal-search/corpus-index-generation-store");
+  await inTx(
+    async (tx) =>
+      await setServingCorpusIndexGenerationTx(tx, {
+        family: "case_law",
+        generation: V7.generation,
+      }),
+  );
+  expect(await pointerRows()).toEqual([]);
+  expect(await acceptedBy("case_law_v7")).toEqual([CZE_DECISION_ID]);
+  const search = await read("CZE");
+  expect(search.serving.generation).toBe("case_law_v7");
+  expect(search.route.indexId).toBe("case_law_v7_cs_sk");
 });

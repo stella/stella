@@ -302,6 +302,15 @@ export const corpusIndexJurisdictionServing = p.pgTable(
     generation: p
       .varchar({ length: CORPUS_INDEX_GENERATION_MAX_LENGTH })
       .notNull(),
+    /**
+     * The generation the jurisdiction was served by until the flip: the one
+     * whose copies are erased, and the only one.
+     */
+    fromGeneration: p
+      .varchar("from_generation", {
+        length: CORPUS_INDEX_GENERATION_MAX_LENGTH,
+      })
+      .notNull(),
     flippedAt: timestamptz("flipped_at").defaultNow().notNull(),
   },
   (t) => [

@@ -42,12 +42,11 @@ export const readJurisdictionServingGenerationsTx = async (
 };
 
 /**
- * The generation serving each of these jurisdictions where it is not the
- * family's serving generation. One primary-key probe set for a page of
- * decisions, shared by the lock read, the batched material read and the
- * bootstrap.
+ * The generation each of these jurisdictions was flipped away from, for those
+ * that were. One primary-key probe set for a page of decisions, shared by the
+ * lock read, the batched material read and the bootstrap.
  */
-export const readCaseLawJurisdictionServingTx = async (
+export const readCaseLawJurisdictionVacatedTx = async (
   tx: ReadTransaction,
   jurisdictions: readonly string[],
 ): Promise<JurisdictionServingGenerations> => {
@@ -60,7 +59,7 @@ export const readCaseLawJurisdictionServingTx = async (
   const rows = await tx
     .select({
       jurisdiction: corpusIndexJurisdictionServing.jurisdiction,
-      generation: corpusIndexJurisdictionServing.generation,
+      generation: corpusIndexJurisdictionServing.fromGeneration,
     })
     .from(corpusIndexJurisdictionServing)
     .where(

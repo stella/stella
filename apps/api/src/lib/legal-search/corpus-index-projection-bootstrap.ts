@@ -13,7 +13,7 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { readCaseLawJurisdictionServingTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
+import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   corpusIndexManifestScopeJurisdictions,
   requireCorpusIndexManifest,
@@ -511,7 +511,7 @@ const bootstrapCaseLaw = async ({
         }
         values.push({ type: identifier.type, value: identifier.value });
       }
-      const servingByJurisdiction = await readCaseLawJurisdictionServingTx(
+      const vacatedByJurisdiction = await readCaseLawJurisdictionVacatedTx(
         tx,
         rows.map(({ jurisdiction }) => jurisdiction),
       );
@@ -552,8 +552,8 @@ const bootstrapCaseLaw = async ({
               decisionDate: row.decisionDate,
               ecli: row.ecli,
               metadata: row.metadata,
-              servedBy:
-                servingByJurisdiction.get(row.jurisdiction.toUpperCase()) ??
+              vacatedFrom:
+                vacatedByJurisdiction.get(row.jurisdiction.toUpperCase()) ??
                 null,
               provisionKeys:
                 provisionKeysByDecision.get(row.documentId) ??

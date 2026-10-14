@@ -510,7 +510,7 @@ export const ROLE_GRANT_STATEMENTS = [
     TO stella_ingestion
   `,
   `
-    GRANT UPDATE (generation, flipped_at)
+    GRANT UPDATE (generation, from_generation, flipped_at)
       ON TABLE "corpus_index_jurisdiction_serving" TO stella_ingestion
   `,
   // The withdrawal trail is append-only: ingestion records, the app reads.

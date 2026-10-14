@@ -5,6 +5,7 @@ import { propertyConfig } from "@stll/property-testing";
 
 import {
   PROVISION_KEY_MAX_BYTES,
+  PROVISION_KEYS_MAX_SERIALIZED_BYTES,
   PROVISION_KEYS_MAX_COUNT,
   provisionFilterKey,
   provisionKey,
@@ -75,8 +76,9 @@ test("a key past its byte bound is dropped and counted, never cut", () => {
   expect(
     provisionKeysOfLinks([{ workIdentifier: WORK, anchor: long }]),
   ).toEqual({ keys: [], dropped: 1 });
-  const fits = `par_${"1".repeat(PROVISION_KEY_MAX_BYTES - WORK.length - 5)}`;
-  expect(provisionKey(WORK, fits)).toHaveLength(PROVISION_KEY_MAX_BYTES);
+  // The encoding adds the two quotes.
+  const fits = `par_${"1".repeat(PROVISION_KEY_MAX_BYTES - 2 - WORK.length - 5)}`;
+  expect(provisionKey(WORK, fits)).toHaveLength(PROVISION_KEY_MAX_BYTES - 2);
   expect(
     provisionKeysOfLinks([{ workIdentifier: WORK, anchor: fits }]).dropped,
   ).toBe(0);
@@ -231,8 +233,35 @@ test("keys of any links are distinct, sorted, bounded, and independent of order"
   );
 });
 
-test("a worst-case key set stays far below a request", () => {
-  const key = "x".repeat(PROVISION_KEY_MAX_BYTES);
-  // Every passage carries the whole set, so the bound is per passage.
-  expect(PROVISION_KEYS_MAX_COUNT * (key.length + 4)).toBeLessThan(64 * 1024);
+test("the worst-case key set, as the projection serializes it, fits the passage budget", () => {
+  // Keys of the longest admitted size, more than the cap, through the real
+  // reduction; escaped characters are the worst case for the encoding.
+  const fillerLength = PROVISION_KEY_MAX_BYTES - 2 - WORK.length - 1 - 4 - 8;
+  const links = Array.from(
+    { length: PROVISION_KEYS_MAX_COUNT + 40 },
+    (_, index) => ({
+      workIdentifier: WORK,
+      anchor: `par_${"1".repeat(fillerLength)}${String(index).padStart(8, "0")}`,
+    }),
+  );
+  const { keys, dropped } = provisionKeysOfLinks(links);
+  expect(keys).toHaveLength(PROVISION_KEYS_MAX_COUNT);
+  expect(dropped).toBe(40);
+  const serialized = JSON.stringify({ provision_keys: keys });
+  const arrayBytes = new TextEncoder().encode(JSON.stringify(keys)).length;
+  expect(serialized).toContain(JSON.stringify(keys));
+  expect(arrayBytes).toBeLessThanOrEqual(PROVISION_KEYS_MAX_SERIALIZED_BYTES);
+  // The cap is the largest that fits: one more such key would not.
+  expect(arrayBytes + PROVISION_KEY_MAX_BYTES + 1).toBeGreaterThan(
+    PROVISION_KEYS_MAX_SERIALIZED_BYTES,
+  );
+  // And a key with characters the encoding escapes is measured encoded.
+  const escaped = provisionKeysOfLinks([
+    {
+      workIdentifier: WORK,
+      anchor: `par_${'"'.repeat(PROVISION_KEY_MAX_BYTES / 2)}`,
+    },
+  ]);
+  expect(escaped.keys).toEqual([]);
+  expect(escaped.dropped).toBe(1);
 });

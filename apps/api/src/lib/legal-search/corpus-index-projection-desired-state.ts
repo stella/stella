@@ -15,7 +15,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
-import { readCaseLawJurisdictionServingTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
+import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestCoversJurisdiction,
@@ -110,7 +110,7 @@ export type CaseLawProjectionCanonicalInput = {
   ecli: string | null;
   metadata: Record<string, unknown> | null;
   provisionKeys: readonly string[];
-  servedBy: string | null;
+  vacatedFrom: string | null;
   sourceDescriptor: Parameters<typeof isRedistributable>[0];
 };
 
@@ -130,7 +130,7 @@ export const caseLawProjectionInputFromCanonical = ({
   ecli,
   metadata,
   provisionKeys,
-  servedBy,
+  vacatedFrom,
   sourceDescriptor,
 }: CaseLawProjectionCanonicalInput): CaseLawProjectionInput => ({
   family: "case_law",
@@ -153,7 +153,7 @@ export const caseLawProjectionInputFromCanonical = ({
   ecli,
   metadata,
   provisionKeys,
-  servedBy,
+  vacatedFrom,
 });
 
 /**
@@ -464,8 +464,8 @@ const lockCaseLawProjectionInput = async (
       { id: row.documentId, jurisdiction: row.jurisdiction },
     ])
   ).get(String(row.documentId));
-  const servedBy =
-    (await readCaseLawJurisdictionServingTx(tx, [row.jurisdiction])).get(
+  const vacatedFrom =
+    (await readCaseLawJurisdictionVacatedTx(tx, [row.jurisdiction])).get(
       row.jurisdiction.toUpperCase(),
     ) ?? null;
   return {
@@ -476,7 +476,7 @@ const lockCaseLawProjectionInput = async (
       provisionKeys:
         provisionKeys ??
         panic(`Provision keys were not loaded for ${row.documentId}`),
-      servedBy,
+      vacatedFrom,
       sourceDescriptor: source.sourceDescriptor,
     }),
   };
