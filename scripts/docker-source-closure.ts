@@ -624,6 +624,18 @@ export const updateInstallToolingCopies = (root: string, write: boolean) => {
     files,
     entry: "/app/scripts/ci-install.ts",
   });
+  const undeclared = copies
+    .split("\n")
+    .map((line) => line.split(" ")[1])
+    .filter(
+      (origin): origin is string =>
+        origin !== undefined && !generator.inputs.includes(origin),
+    );
+  if (undeclared.length > 0) {
+    panic(
+      `API install tooling closure files missing from ${INSTALL_TOOLING_GENERATOR} inputs: ${undeclared.join(", ")}`,
+    );
+  }
   const file = path.join(root, block.path);
   const source = readFileSync(file, "utf-8");
   const begin = source.indexOf(block.begin);

@@ -66,7 +66,16 @@ const GENERATOR_DECLARATIONS = [
         end: "# END GENERATED INSTALL TOOLING",
       },
     ],
-    inputs: ["scripts/**", "packages/**", "bun.lock", "tsconfig*.json"],
+    // The closure has relative imports only, so it changes only through
+    // these files; the check fails when the closure outgrows this list.
+    inputs: [
+      "apps/api/Dockerfile",
+      "packages/scripts/src/child-exit-status.ts",
+      "packages/sha256/src/bun.ts",
+      "scripts/ci-install-store.ts",
+      "scripts/ci-install.ts",
+      "scripts/docker-source-closure.ts",
+    ],
     write: [
       "bun",
       "scripts/docker-source-closure.ts",

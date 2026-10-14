@@ -95,7 +95,7 @@ describe("Docker source closure", () => {
       ],
       [
         "install-tooling/dynamic.ts",
-        "import(process.env.MODULE);",
+        'const target = "./x.ts";\nimport(target);',
         "nonliteral runtime import",
       ],
     ] as const) {
