@@ -148,10 +148,75 @@ export const changedPaths = (
   return diff === null ? null : diff.split("\0").filter((file) => file !== "");
 };
 
-const run = (
+/** Every descendant of `root` in a `ps -A -o pid=,ppid=` snapshot, deepest last. */
+export const descendantPids = (snapshot: string, root: number): number[] => {
+  const children = new Map<number, number[]>();
+  for (const line of snapshot.split("\n")) {
+    const [pid, ppid] = line.trim().split(/\s+/u).map(Number);
+    if (
+      pid === undefined ||
+      ppid === undefined ||
+      Number.isNaN(pid) ||
+      Number.isNaN(ppid)
+    ) {
+      continue;
+    }
+    children.set(ppid, [...(children.get(ppid) ?? []), pid]);
+  }
+  const found: number[] = [];
+  const queue = [root];
+  for (let next = queue.shift(); next !== undefined; next = queue.shift()) {
+    for (const child of children.get(next) ?? []) {
+      found.push(child);
+      queue.push(child);
+    }
+  }
+  return found;
+};
+
+/** Generators and Turbo start their own children, so a timeout stops the whole tree. */
+const killProcessTree = (root: number) => {
+  const snapshot = Bun.spawnSync(["ps", "-A", "-o", "pid=,ppid="], {
+    stdout: "pipe",
+    stderr: "ignore",
+  }).stdout.toString();
+  for (const pid of [root, ...descendantPids(snapshot, root)]) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Already exited.
+    }
+  }
+};
+
+export const runBounded = async (
+  command: readonly string[],
+  { timeoutMs, cwd = REPO_ROOT }: { timeoutMs: number; cwd?: string },
+): Promise<{ status: number; timedOut: boolean; maxRssBytes: number }> => {
+  const child = Bun.spawn([...command], {
+    cwd,
+    stdout: "inherit",
+    stderr: "inherit",
+    env: { ...process.env, CODE_CHECK_CONCURRENCY: "1" },
+  });
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    killProcessTree(child.pid);
+  }, timeoutMs);
+  await child.exited;
+  clearTimeout(timer);
+  return {
+    status: childExitStatus(child),
+    timedOut,
+    maxRssBytes: child.resourceUsage()?.maxRSS ?? 0,
+  };
+};
+
+const run = async (
   commands: readonly string[][],
   dryRun: boolean,
-): { status: number; peakRssBytes: number } => {
+): Promise<{ status: number; peakRssBytes: number }> => {
   const deadline = Date.now() + TOTAL_TIME_CAP_MS;
   let peakRssBytes = 0;
   for (const command of commands) {
@@ -159,22 +224,17 @@ const run = (
     if (dryRun) {
       continue;
     }
-    const result = Bun.spawnSync(command, {
-      cwd: REPO_ROOT,
-      stdout: "inherit",
-      stderr: "inherit",
-      env: { ...process.env, CODE_CHECK_CONCURRENCY: "1" },
-      timeout: Math.max(1, deadline - Date.now()),
-      killSignal: "SIGKILL",
+    const result = await runBounded(command, {
+      timeoutMs: Math.max(1, deadline - Date.now()),
     });
-    peakRssBytes = Math.max(peakRssBytes, result.resourceUsage.maxRSS);
-    if (result.exitedDueToTimeout === true) {
+    peakRssBytes = Math.max(peakRssBytes, result.maxRssBytes);
+    if (result.timedOut) {
       process.stderr.write(
         `pre-push affected: the ${TOTAL_TIME_CAP_MS / 60_000}-minute time cap ran out during: ${command.join(" ")}\nCI runs the same checks.\n`,
       );
       return { status: PRE_PUSH_EXIT.unavailable, peakRssBytes };
     }
-    if (childExitStatus(result) !== 0) {
+    if (result.status !== 0) {
       process.stderr.write(
         `pre-push affected: failed: ${command.join(" ")}\nCI runs the same check; fix it before pushing.\n`,
       );
@@ -184,7 +244,7 @@ const run = (
   return { status: PRE_PUSH_EXIT.passed, peakRssBytes };
 };
 
-const main = (): number => {
+const main = async (): Promise<number> => {
   const startedAt = Date.now();
   const options = parsePrePushArgs(process.argv.slice(2));
   const changed = changedPaths(options.base);
@@ -195,7 +255,7 @@ const main = (): number => {
     process.stdout.write("pre-push affected: no changes against the base\n");
     return PRE_PUSH_EXIT.passed;
   }
-  const { status, peakRssBytes } = run(
+  const { status, peakRssBytes } = await run(
     prePushCommands({
       base: options.base,
       scriptTests: rootScriptTests(changed, (file) =>
@@ -211,5 +271,5 @@ const main = (): number => {
 };
 
 if (import.meta.main) {
-  process.exit(main());
+  process.exit(await main());
 }

@@ -871,15 +871,16 @@ export const codeCheckConcurrency = (
   memoryBytes = totalmem(),
   requested = process.env["CODE_CHECK_CONCURRENCY"],
 ): number => {
+  const memoryDefault = memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
   const override = Number(requested);
   if (
     requested !== undefined &&
     Number.isSafeInteger(override) &&
     override > 0
   ) {
-    return override;
+    return Math.min(override, memoryDefault);
   }
-  return memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
+  return memoryDefault;
 };
 
 const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [

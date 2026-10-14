@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -11,10 +12,12 @@ import path from "node:path";
 
 import {
   changedPaths,
+  descendantPids,
   parsePrePushArgs,
   PRE_PUSH_EXIT,
   prePushCommands,
   rootScriptTests,
+  runBounded,
   TOTAL_TIME_CAP_MS,
 } from "./pre-push-affected";
 
@@ -124,6 +127,44 @@ describe("pre-push affected checks", () => {
       ).toEqual(["scripts/tool.test.ts"]);
     } finally {
       rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  test("finds every descendant in a process snapshot", () => {
+    const snapshot = [
+      "  10   1",
+      "  11  10",
+      "  12  11",
+      "  13  10",
+      "  20   1",
+      "",
+    ].join("\n");
+    expect(descendantPids(snapshot, 10)).toEqual([11, 13, 12]);
+    expect(descendantPids(snapshot, 20)).toEqual([]);
+  });
+
+  test("a command that outlives its time cap is stopped with its descendants", async () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "pre-push-cap-"));
+    const pidFile = path.join(directory, "grandchild");
+    try {
+      const result = await runBounded(
+        ["bash", "-c", `sleep 30 & echo $! > "${pidFile}"; wait`],
+        { timeoutMs: 500, cwd: directory },
+      );
+      expect(result.timedOut).toBe(true);
+      expect(result.status).not.toBe(0);
+      const grandchild = Number(readFileSync(pidFile, "utf-8").trim());
+      const alive = () => {
+        try {
+          process.kill(grandchild, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      expect(alive()).toBe(false);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
     }
   });
 

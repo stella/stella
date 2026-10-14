@@ -1145,6 +1145,7 @@ describe("parallel code-quality legs", () => {
 
   test("a requested concurrency lowers the task count; invalid requests keep the memory default", () => {
     expect(codeCheckConcurrency(12 * 1024 ** 3, "1")).toBe(1);
+    expect(codeCheckConcurrency(8 * 1024 ** 3, "100")).toBe(2);
     for (const requested of ["0", "-1", "1.5", "many", ""]) {
       expect(codeCheckConcurrency(12 * 1024 ** 3, requested)).toBe(3);
     }
