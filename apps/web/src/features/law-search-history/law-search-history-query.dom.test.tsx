@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import { Temporal } from "@stll/time";
+import { stellaToast } from "@stll/ui/toast";
 
 import messages from "@/i18n/langs/en.json";
 import { MEMBER_SESSION } from "@/lib/account/auth-session.test-fixtures";
@@ -155,5 +156,82 @@ test("server history stays visible while a local import recovers", async () => {
     clockSource.mockRestore();
     storage.removeItem(scopedKey);
     storage.removeItem(LAW_HISTORY_STORAGE_KEY);
+  }
+});
+
+test("leaving the page during a local import does not report its cancellation", async () => {
+  const storage = browserStateStorage("local");
+  const scopedKey = userStorageKey(LAW_HISTORY_STORAGE_KEY, {
+    kind: "user",
+    userId: MEMBER_SESSION.user.id,
+  });
+  storage.setItem(
+    scopedKey,
+    JSON.stringify([{ query: "Local query", at: "2026-01-01T12:00:00Z" }]),
+  );
+  let clockRequested = false;
+  const writes: string[] = [];
+  const toasts = spyOn(stellaToast, "add");
+  const transport = spyOn(globalThis, "fetch").mockImplementation(
+    Object.assign(
+      async (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) => {
+        const request = input instanceof Request ? input : undefined;
+        const url = new URL(
+          request === undefined ? String(input) : request.url,
+        );
+        const method = init?.method ?? request?.method ?? "GET";
+        if (url.pathname.endsWith("/import-clock")) {
+          clockRequested = true;
+          const signal = init?.signal ?? request?.signal;
+          const pending = Promise.withResolvers<Response>();
+          signal?.addEventListener("abort", () =>
+            pending.reject(signal.reason),
+          );
+          return pending.promise;
+        }
+        if (method === "POST") {
+          writes.push(url.pathname);
+          return Response.json({ ok: true });
+        }
+        return Response.json({
+          items: [],
+          nextCursor: null,
+          scope: {
+            userId: MEMBER_SESSION.user.id,
+            organizationId: MEMBER_SESSION.session.activeOrganizationId,
+          },
+        });
+      },
+      { preconnect: () => undefined },
+    ),
+  );
+  const client = new QueryClient({
+    defaultOptions: { queries: { retryDelay: 0 } },
+  });
+  client.setQueryData(sessionOptions.queryKey, MEMBER_SESSION);
+  try {
+    const { result } = renderHook(() => useLawHistory(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>
+          <IntlProvider locale="en" messages={messages} timeZone="UTC">
+            {children}
+          </IntlProvider>
+        </QueryClientProvider>
+      ),
+    });
+    await waitFor(() => expect(clockRequested).toBe(true));
+    act(() => result.current.record.mutate({ kind: "search", query: "Next" }));
+    await act(async () => client.cancelQueries());
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(toasts).not.toHaveBeenCalled();
+  } finally {
+    await act(async () => cleanup());
+    client.clear();
+    toasts.mockRestore();
+    transport.mockRestore();
+    storage.removeItem(scopedKey);
   }
 });
