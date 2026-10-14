@@ -255,21 +255,23 @@ test("the shard index lists one all-bucket shard per jurisdiction", async () => 
     items: [],
   });
   expect(await refreshStatuteSitemapShards(refreshDb)).toMatchObject({
-    shards: 1,
+    shards: 2,
   });
   const shards = await listStatuteSitemapShardsHandler(legislationDb);
   if (!("items" in shards)) {
     panic("Expected a statute sitemap shard index.");
   }
 
+  // Slovakia's pages are public, so its statutes get a shard of their own.
   expect(shards.items).toEqual([
     { bucket: "all", country: "cze", lastmod: "2026-03-04" },
+    { bucket: "all", country: "svk", lastmod: "2026-01-15" },
   ]);
 });
 
 test("the index only lists currently published jurisdictions", async () => {
   await db.insert(statuteSitemapShards).values({
-    country: "SVK",
+    country: "POL",
     bucket: "all",
     total: 1,
     lastmod: "2026-01-15",
@@ -278,8 +280,10 @@ test("the index only lists currently published jurisdictions", async () => {
   if (!("items" in shards)) {
     panic("Expected a statute sitemap shard index.");
   }
+  // A stored shard of a pending country is never listed.
   expect(shards.items).toEqual([
     { bucket: "all", country: "cze", lastmod: "2026-03-04" },
+    { bucket: "all", country: "svk", lastmod: "2026-01-15" },
   ]);
 });
 

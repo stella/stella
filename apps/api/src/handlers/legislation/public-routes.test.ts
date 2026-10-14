@@ -31,7 +31,10 @@ describe("public statute routes", () => {
     async (country) => {
       const urls = [
         `/law/statutes?country=${country}`,
-        `/law/sitemap/statutes/shard?country=${country.toLowerCase()}`,
+        // A pages-public country's sitemap is a page route, and it is served.
+        ...(PUBLIC_COUNTRY_CAPABILITIES[country] === "pages_public"
+          ? []
+          : [`/law/sitemap/statutes/shard?country=${country.toLowerCase()}`]),
       ];
       for (const url of urls) {
         const response = await publicLegislationRoute.handle(
@@ -47,12 +50,12 @@ describe("public statute routes", () => {
     },
   );
 
-  test("pending public countries return typed unavailable for statute search and lookup", async () => {
+  // Its statute pages and sitemap are page routes, served from the database
+  // and covered by the page db tests; search and listing stay unavailable.
+  test("a pages-public country returns typed unavailable for statute search and listing", async () => {
     const urls = [
       "/law/statutes?country=SVK",
       "/law/statutes/facets?country=SVK",
-      "/law/statutes/by-slug/2012-89?country=SVK",
-      "/law/sitemap/statutes/shard?country=svk",
     ];
     const requests = urls.map((url) => new Request(`http://localhost${url}`));
     const search = await searchLegislationHandler(
