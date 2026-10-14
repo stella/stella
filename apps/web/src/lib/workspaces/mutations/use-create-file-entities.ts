@@ -21,6 +21,7 @@ import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { withActiveUpload } from "@/lib/files/active-uploads";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
@@ -29,7 +30,6 @@ import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
-import { withActiveUpload } from "@/lib/uploads/active-uploads";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,

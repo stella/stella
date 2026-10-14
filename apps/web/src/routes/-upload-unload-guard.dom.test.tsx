@@ -4,7 +4,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 import {
   resetActiveUploadsForTests,
   retainActiveUpload,
-} from "@/lib/uploads/active-uploads";
+} from "@/lib/files/active-uploads";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 const { act, cleanup, render } = await import("@testing-library/react");

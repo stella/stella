@@ -7,7 +7,7 @@ import {
   resetActiveUploadsForTests,
   retainActiveUpload,
   withActiveUpload,
-} from "@/lib/uploads/active-uploads";
+} from "@/lib/files/active-uploads";
 
 afterEach(() => {
   resetActiveUploadsForTests();

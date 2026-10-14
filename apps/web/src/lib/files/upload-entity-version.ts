@@ -5,8 +5,8 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { withActiveUpload } from "@/lib/files/active-uploads";
 import { toSafeId } from "@/lib/safe-id";
-import { withActiveUpload } from "@/lib/uploads/active-uploads";
 
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,

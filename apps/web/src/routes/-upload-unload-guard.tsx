@@ -1,5 +1,5 @@
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
-import { useActiveUpload } from "@/lib/uploads/active-uploads";
+import { useActiveUpload } from "@/lib/files/active-uploads";
 
 /** Warn before a reload drops an in-flight matter upload. */
 export const UploadUnloadGuard = () => {
