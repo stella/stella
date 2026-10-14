@@ -968,6 +968,8 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
         reordered.add("Prepare environment");
         reordered.add("Content delivery declarations");
         reordered.add("Test release image CI gate");
+        // Runs in the foreground beside the first background pair.
+        reordered.add("Test oxlint plugins");
       }
       expect(
         steps
