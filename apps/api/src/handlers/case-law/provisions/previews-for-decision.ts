@@ -3,6 +3,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import { provisionVersionAsOf } from "@stll/api-contract/provision-version-basis";
 import type { ProvisionVersionBasis } from "@stll/api-contract/provision-version-basis";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionHeadingAnchor } from "@stll/legal-ast/provision-preview";
 
@@ -152,6 +153,8 @@ type PreviewsForPageOptions<TRow extends CitationRow> = {
   page: Page<TRow>;
   decisionDate: string | null;
   legislationDb: LegislationReadDb;
+  /** The surface the previews are read for; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 /** A preview plus the key this page's items reference it by. */
@@ -181,6 +184,7 @@ export const attachDecisionProvisionPreviews = async <
   page,
   decisionDate,
   legislationDb,
+  surface,
 }: PreviewsForPageOptions<TRow>): Promise<PreviewsForPage<TRow>> => {
   const requests = workRequestsFor(page.items, decisionDate);
   const { versionByWork } = await resolveWorkVersions(requests, legislationDb);
@@ -197,7 +201,7 @@ export const attachDecisionProvisionPreviews = async <
             version,
             // db-await-in-loop: one storage read per distinct consolidation version, deduplicated above; the page bounds the set
             await readVersionBlocks({
-              surface: "pages",
+              surface,
               row: version,
               legislationDb,
               step: PREVIEWS_READ_STEP,

@@ -55,6 +55,31 @@ const fetchText = async (url: string): Promise<string> => {
   return await response.text();
 };
 
+const withoutTrailingSlashes = (
+  value: string | undefined,
+): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
+const parseExpectedRobots = (
+  value: string | undefined,
+): ExpectedRobots | null => {
+  switch (value) {
+    case "indexable":
+    case "noindex":
+      return value;
+    default:
+      return null;
+  }
+};
+
 const parseCliArgs = () => {
   const { values } = parseArgs({
     options: {
@@ -65,17 +90,17 @@ const parseCliArgs = () => {
       "out-dir": { type: "string", default: "." },
     },
   });
-  const baseUrl = values["base-url"]?.replace(/\/+$/u, "");
+  const baseUrl = withoutTrailingSlashes(values["base-url"]);
   const country = values.country?.toLowerCase();
   const sample = Number(values.sample);
-  const expectedRobots = values["expect-robots"];
+  const expectedRobots = parseExpectedRobots(values["expect-robots"]);
   if (
     baseUrl === undefined ||
     country === undefined ||
     !/^[a-z]{2,3}$/u.test(country) ||
     !Number.isInteger(sample) ||
     sample < 1 ||
-    (expectedRobots !== "indexable" && expectedRobots !== "noindex")
+    expectedRobots === null
   ) {
     return panic(
       "Usage: --base-url <url> --country <svk> [--sample 50] [--expect-robots indexable|noindex] [--out-dir dir]",
@@ -85,7 +110,7 @@ const parseCliArgs = () => {
     baseUrl,
     country,
     sample,
-    expectedRobots: expectedRobots satisfies ExpectedRobots,
+    expectedRobots,
     outDir: values["out-dir"] ?? ".",
   };
 };

@@ -115,6 +115,9 @@ describe("public country availability contract", () => {
       country: "SVK",
       reason: "pages_public",
     });
+    expect(refusal?.message).toBe(
+      "Public-law search is not available for this country; its public pages are.",
+    );
     expect(refusal?.hint).toContain("CZE");
     expect(refusal?.hint).not.toContain("SVK");
     expect(
@@ -123,6 +126,9 @@ describe("public country availability contract", () => {
         "SVK",
         "pages",
       ),
-    ).toMatchObject({ reason: "pending_public" });
+    ).toMatchObject({
+      reason: "pending_public",
+      message: "Public law for this country is not available.",
+    });
   });
 });

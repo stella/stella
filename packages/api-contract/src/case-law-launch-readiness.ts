@@ -106,14 +106,24 @@ export const isPublicCaseLawCountry = (
   PUBLIC_CASE_LAW_COUNTRIES.some((candidate) => candidate === country);
 
 /**
+ * A country whose pages open must have a case-law routing and display model:
+ * opening one without it does not compile, so its pages, sitemaps and crawl
+ * paths can never be dropped silently.
+ */
+const PAGES_PUBLIC_BROWSER_COUNTRIES: readonly CaseLawBrowserCountry[] =
+  PAGES_PUBLIC_COUNTRIES;
+
+/**
  * Countries whose decision pages are served, listed in sitemaps and open to
  * crawlers: the pages-public countries plus the search-admitted ones. A page
  * country needs no serving receipt; the receipt gates search admission only.
  */
 export const PUBLIC_CASE_LAW_PAGE_COUNTRIES: readonly PublicCaseLawCountry[] =
-  PAGES_PUBLIC_COUNTRIES.flatMap((country) => {
+  PAGES_PUBLIC_BROWSER_COUNTRIES.map((country) => {
     const parsed = v.safeParse(launchReadinessCountrySchema, country);
-    return parsed.success ? [parsed.output] : [];
+    return parsed.success
+      ? parsed.output
+      : panic("A pages-public country needs a case-law browser model.");
   });
 
 export const isPublicCaseLawPageCountry = (

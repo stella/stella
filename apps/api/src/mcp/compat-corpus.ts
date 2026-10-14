@@ -610,6 +610,7 @@ export const readCompatDecision = async ({
     // counts as demand for the publisher document.
     caller: "attributed",
     documentHydration: documentHydrationFor(context.thirdPartyOutboundPermit),
+    surface: "search",
   });
   if (decision === null || !isReadCaseLawDecisionSuccess(decision)) {
     return { type: "not_found" };

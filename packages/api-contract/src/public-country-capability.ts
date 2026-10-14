@@ -1,4 +1,5 @@
 // parser-output-unchanged: public admission metadata does not change parsed decision records.
+// parser-output-unchanged: the pages/search surface split gates public reads only; parsed decision records are identical.
 import { panic } from "better-result";
 import * as v from "valibot";
 
@@ -115,6 +116,18 @@ export type PublicCountryUnavailable = v.InferOutput<
 type ClosedCapability = Exclude<PublicCountryCapability, "admitted">;
 
 /**
+ * What a refusal says, by why it was refused. A pages-public country is only
+ * ever refused on search, and its pages stay public, so it must not be told
+ * that public law is unavailable.
+ */
+const PUBLIC_COUNTRY_UNAVAILABLE_MESSAGE = {
+  pages_public:
+    "Public-law search is not available for this country; its public pages are.",
+  pending_public: "Public law for this country is not available.",
+  withdrawn: "Public law for this country is not available.",
+} as const satisfies Record<ClosedCapability, string>;
+
+/**
  * Why a capability is closed on a surface, or null when it is open. The table
  * decides; the switch narrows, and an admitted country closed on any surface
  * is a broken table.
@@ -165,7 +178,7 @@ export const publicCountryUnavailableIn = (
     status: "unavailable",
     country,
     reason,
-    message: "Public law for this country is not available.",
+    message: PUBLIC_COUNTRY_UNAVAILABLE_MESSAGE[reason],
     hint: `Choose an available country: ${available.join(", ")}.`,
   };
 };

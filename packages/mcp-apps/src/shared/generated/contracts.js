@@ -55,7 +55,7 @@ var tt = a.strictObject({
       blocks: a.array(a.unknown()),
     }),
   ]),
-  ce = a.variant("status", [
+  le = a.variant("status", [
     a.strictObject({ status: a.literal("resolved"), document: rt }),
     a.strictObject({
       status: a.literal("not_found"),
@@ -73,29 +73,29 @@ var tt = a.strictObject({
     a.strictObject({ status: a.literal("country_unavailable") }),
   ]);
 import * as s from "valibot";
-var O = ["constitutional", "supreme", "regional", "other"];
+var C = ["constitutional", "supreme", "regional", "other"];
 import * as l from "valibot";
 var it = 400,
-  le = l.pipe(
+  pe = l.pipe(
     l.number(),
     l.integer(),
     l.minValue(0),
     l.maxValue(Number.MAX_SAFE_INTEGER),
   ),
-  pe = l.pipe(l.string(), l.maxLength(512)),
+  ue = l.pipe(l.string(), l.maxLength(512)),
   st = l.nullable(l.pipe(l.string(), l.maxLength(256))),
-  ue = l.nullable(
+  de = l.nullable(
     l.strictObject({
       buckets: l.pipe(
         l.array(
           l.strictObject({
-            court: pe,
-            courtName: pe,
+            court: ue,
+            courtName: ue,
             courtAbbreviation: st,
-            tier: l.picklist(O),
+            tier: l.picklist(C),
             year: l.pipe(l.number(), l.integer()),
-            count: le,
-            citationSum: l.nullable(le),
+            count: pe,
+            citationSum: l.nullable(pe),
             treatment: l.null(),
           }),
         ),
@@ -155,7 +155,7 @@ Caused by: ${o}`;
     }
     *[Symbol.iterator]() {
       return (
-        yield* de(this),
+        yield* ve(this),
         m("Unreachable: Err yielded in Panic but generator continued", this)
       );
     }
@@ -170,7 +170,7 @@ var m = (e, r) => {
       throw m(r, o);
     }
   },
-  j = async (e, r) => {
+  B = async (e, r) => {
     try {
       return await e();
     } catch (o) {
@@ -198,7 +198,7 @@ var ct = class e {
     return x(() => r(this.error), "tryRecover callback threw");
   }
   tryRecoverAsync(r) {
-    return j(() => r(this.error), "tryRecoverAsync callback threw");
+    return B(() => r(this.error), "tryRecoverAsync callback threw");
   }
   andThen(r) {
     return this;
@@ -225,7 +225,7 @@ var ct = class e {
     return Promise.resolve(this);
   }
   tapErrorAsync(r) {
-    return j(
+    return B(
       async () => (await r(this.error), this),
       "tapErrorAsync callback threw",
     );
@@ -234,7 +234,7 @@ var ct = class e {
     return x(() => (r.err(this.error), this), "tapBoth err callback threw");
   }
   tapBothAsync(r) {
-    return j(
+    return B(
       async () => (await r.err(this.error), this),
       "tapBothAsync err callback threw",
     );
@@ -249,7 +249,7 @@ var ct = class e {
     );
   }
 };
-var de = (e) => new ct(e);
+var ve = (e) => new ct(e);
 var lt = (e) =>
     e instanceof Error
       ? { name: e.name, message: e.message, stack: e.stack }
@@ -300,7 +300,7 @@ Caused by: ${et}`;
       }
       *[Symbol.iterator]() {
         return (
-          yield* de(this),
+          yield* ve(this),
           m(
             "Unreachable: Err yielded in TaggedError but generator continued",
             this,
@@ -331,7 +331,7 @@ var On = class extends w("UnhandledException") {
       super({ message: r, cause: e.cause });
     }
   },
-  Cn = class extends w("ResultDeserializationError") {
+  Rn = class extends w("ResultDeserializationError") {
     constructor(e) {
       super({
         message: e.issues
@@ -342,7 +342,7 @@ var On = class extends w("UnhandledException") {
       });
     }
   },
-  Rn = class extends w("ResultSerializationError") {
+  xn = class extends w("ResultSerializationError") {
     constructor(e) {
       super({
         message: "Failed to serialize Result payload",
@@ -351,30 +351,30 @@ var On = class extends w("UnhandledException") {
       });
     }
   };
-var xn = E(2, (e, r) => e.map(r)),
-  Nn = E(2, (e, r) => e.mapError(r)),
+var Nn = E(2, (e, r) => e.map(r)),
+  Pn = E(2, (e, r) => e.mapError(r)),
   Ln = E(2, (e, r) => e.tryRecover(r)),
-  Pn = E(2, (e, r) => e.andThen(r)),
-  wn = E(2, (e, r) => e.tryRecoverAsync(r)),
-  Dn = E(2, (e, r) => e.andThenAsync(r)),
-  kn = E(2, (e, r) => e.match(r)),
-  Un = E(2, (e, r) => e.tap(r)),
-  jn = E(2, (e, r) => e.tapAsync(r)),
-  Bn = E(2, (e, r) => e.tapError(r)),
-  Hn = E(2, (e, r) => e.tapErrorAsync(r)),
-  Wn = E(2, (e, r) => e.tapBoth(r)),
-  Mn = E(2, (e, r) => e.tapBothAsync(r));
-var Fn = E(2, (e, r) => e.unwrapOr(r));
-var ve = { ABSENT: "absent", PRESENT: "present" },
-  Ee = { SOURCE_LICENCE: "source_licence" };
-var he = "keywords";
+  wn = E(2, (e, r) => e.andThen(r)),
+  Dn = E(2, (e, r) => e.tryRecoverAsync(r)),
+  kn = E(2, (e, r) => e.andThenAsync(r)),
+  Un = E(2, (e, r) => e.match(r)),
+  jn = E(2, (e, r) => e.tap(r)),
+  Bn = E(2, (e, r) => e.tapAsync(r)),
+  Hn = E(2, (e, r) => e.tapError(r)),
+  Wn = E(2, (e, r) => e.tapErrorAsync(r)),
+  Mn = E(2, (e, r) => e.tapBoth(r)),
+  Fn = E(2, (e, r) => e.tapBothAsync(r));
+var Gn = E(2, (e, r) => e.unwrapOr(r));
+var Ee = { ABSENT: "absent", PRESENT: "present" },
+  he = { SOURCE_LICENCE: "source_licence" };
+var ye = "keywords";
 var dt = {
     ABSTRACT: "abstract",
     HEADNOTE: "headnote",
     LEGAL_SENTENCE: "legalSentence",
     SUMMARY: "summary",
   },
-  ye = Object.freeze(Object.values(dt)),
+  ge = Object.freeze(Object.values(dt)),
   vt = "_stellaDecisionTextAbsence",
   Et = "_stellaDecisionTextAbsenceVersion";
 var ht = Object.freeze([
@@ -384,10 +384,24 @@ var ht = Object.freeze([
     "sourceUrl",
     "documentUrl",
   ]),
-  zn = Object.freeze([...ye, ...ht]);
-var $n = Object.freeze([...ye, vt, Et]);
-import * as S from "valibot";
-var B = {
+  $n = Object.freeze([...ge, ...ht]);
+var Vn = Object.freeze([...ge, vt, Et]);
+import * as _ from "valibot";
+var yt = {
+    pages: {
+      admitted: !0,
+      pages_public: !0,
+      pending_public: !1,
+      withdrawn: !1,
+    },
+    search: {
+      admitted: !0,
+      pages_public: !1,
+      pending_public: !1,
+      withdrawn: !1,
+    },
+  },
+  D = {
     AUT: "pending_public",
     CZE: "admitted",
     EU: "pending_public",
@@ -396,122 +410,123 @@ var B = {
     SVK: "pending_public",
     USA: "pending_public",
   },
-  yt = (e) => Object.hasOwn(B, e),
-  ge = Object.keys(B).filter(yt),
-  Jn = ge.filter((e) => B[e] === "admitted"),
-  gt = "public_country_unavailable";
-var Se = S.strictObject({
-  code: S.literal(gt),
-  status: S.literal("unavailable"),
-  country: S.picklist(ge),
-  reason: S.picklist(["pending_public", "withdrawn"]),
-  message: S.string(),
-  hint: S.string(),
+  gt = (e) => Object.hasOwn(D, e),
+  H = Object.keys(D).filter(gt),
+  qn = H.filter((e) => D[e] === "admitted"),
+  Zn = H.filter((e) => yt.pages[D[e]]),
+  _t = "public_country_unavailable";
+var _e = _.strictObject({
+  code: _.literal(_t),
+  status: _.literal("unavailable"),
+  country: _.picklist(H),
+  reason: _.picklist(["pages_public", "pending_public", "withdrawn"]),
+  message: _.string(),
+  hint: _.string(),
 });
-var _e = ["document", "folder", "task", "message", "link"];
+var Se = ["document", "folder", "task", "message", "link"];
 var St = ["relevance", "newest"],
-  er = St[0];
-var _t = ["short", "medium", "long"],
-  tr = _t[0];
+  nr = St[0];
+var It = ["short", "medium", "long"],
+  rr = It[0];
 var Ie = { EXACT: "exact", AT_LEAST: "at-least", ESTIMATE: "estimate" },
   N = { EXACT: "exact", ESTIMATE: "estimate", NOT_COUNTED: "not_counted" },
-  nr = { type: N.NOT_COUNTED };
+  ir = { type: N.NOT_COUNTED };
 var me = ["function_words_optional", "no_hits", "no_hits_filtered"],
-  rr = ["matter", "contact", "case-law", ..._e, "chat"];
+  sr = ["matter", "contact", "case-law", ...Se, "chat"];
 var Te = { type: "complete" },
-  H = { type: "truncated", reason: "exclusion_budget" };
+  W = { type: "truncated", reason: "exclusion_budget" };
 import * as u from "valibot";
-var It = () =>
+var mt = () =>
     "(?<=\\s|^)(?:\\p{L} (?:\\p{L} ){2,}\\p{L})(?: ?[,:;.!?])?(?=\\s|$)",
-  be = () => new RegExp(It(), "gu"),
-  mt = / {2,}/gu,
-  Tt = / /gu,
+  be = () => new RegExp(mt(), "gu"),
+  Tt = / {2,}/gu,
+  At = / /gu,
   Ae,
-  W,
-  At = (e) => e.replace(be(), (r) => r.replace(Tt, "")).replace(mt, " "),
-  M = (e) => {
-    if (e === Ae && W !== void 0) return W;
+  M,
+  bt = (e) => e.replace(be(), (r) => r.replace(At, "")).replace(Tt, " "),
+  F = (e) => {
+    if (e === Ae && M !== void 0) return M;
     let r = e;
     for (;;) {
-      let o = At(r);
+      let o = bt(r);
       if (o === r) break;
       r = o;
     }
-    return ((Ae = e), (W = r), r);
+    return ((Ae = e), (M = r), r);
   };
-var F = (e, r) => e.normalize(r);
-var bt = new RegExp(
+var G = (e, r) => e.normalize(r);
+var ft = new RegExp(
     "[\x00" + "\uFEFF￾" + "\x00-\b\v\f\x0E-\x1F" + "​-‍" + "⁠" + "￹-￻" + "]",
     "gu",
   ),
-  G = (e) => e.replace(bt, "").replace(/\u00A0/gu, " ");
+  Y = (e) => e.replace(ft, "").replace(/\u00A0/gu, " ");
 var A = {
     CASE_NUMBER: "case-number",
     ECLI: "ecli",
     NEUTRAL_CITATION: "neutral-citation",
     REPORTER_CITATION: "reporter-citation",
   },
-  D = [A.CASE_NUMBER, A.NEUTRAL_CITATION, A.REPORTER_CITATION],
-  ft = 256,
+  k = [A.CASE_NUMBER, A.NEUTRAL_CITATION, A.REPORTER_CITATION],
+  Ct = 256,
   fe = 32,
   Ot = (e) =>
-    F(G(e), "NFKC")
+    G(Y(e), "NFKC")
       .toLocaleLowerCase("und")
       .replace(/[\p{P}\p{Z}\s]+/gu, "")
       .trim(),
-  Ct = u.check(
-    (e) => /\S/u.test(G(e)),
+  Rt = u.check(
+    (e) => /\S/u.test(Y(e)),
     "Identifier values must contain visible content",
   ),
-  Rt = u.check(
+  xt = u.check(
     (e) => Ot(e).length > 0,
     "Structured identifier values must contain searchable content",
   );
-var Oe = u.pipe(u.string(), u.maxLength(ft), Ct),
-  Y = u.pipe(Oe, Rt),
-  X = u.strictObject({ type: u.literal(A.REPORTER_CITATION), value: Y }),
-  K = u.variant("type", [
-    u.strictObject({ type: u.literal(A.CASE_NUMBER), value: Oe }),
-    u.strictObject({ type: u.literal(A.ECLI), value: Y }),
-    u.strictObject({ type: u.literal(A.NEUTRAL_CITATION), value: Y }),
-    X,
+var Ce = u.pipe(u.string(), u.maxLength(Ct), Rt),
+  X = u.pipe(Ce, xt),
+  K = u.strictObject({ type: u.literal(A.REPORTER_CITATION), value: X }),
+  z = u.variant("type", [
+    u.strictObject({ type: u.literal(A.CASE_NUMBER), value: Ce }),
+    u.strictObject({ type: u.literal(A.ECLI), value: X }),
+    u.strictObject({ type: u.literal(A.NEUTRAL_CITATION), value: X }),
+    K,
   ]);
-var Ce = ["filter_read", "filter_dropped", "many_required_terms"];
+var Oe = ["filter_read", "filter_dropped", "many_required_terms"];
 import * as T from "valibot";
 import * as y from "valibot";
 var Re = "chatProjection",
-  xt = new WeakMap(),
   Nt = new WeakMap(),
+  Pt = new WeakMap(),
   v = (e) => {
     let r = y.pipe(
       e,
-      y.transform((o) => (xt.set(o, e), o)),
+      y.transform((o) => (Nt.set(o, e), o)),
     );
-    return (Nt.set(r, e), r);
+    return (Pt.set(r, e), r);
   };
 var h = () =>
     y.pipe(y.string(), y.metadata({ [Re]: { role: "passthroughId" } })),
-  _ = () => y.pipe(y.string(), y.metadata({ [Re]: { role: "publicUrl" } }));
-var z = T.union([
+  S = () => y.pipe(y.string(), y.metadata({ [Re]: { role: "publicUrl" } }));
+var V = T.union([
   v(T.strictObject({ type: T.literal(Te.type) })),
-  v(T.strictObject({ type: T.literal(H.type), reason: T.literal(H.reason) })),
+  v(T.strictObject({ type: T.literal(W.type), reason: T.literal(W.reason) })),
 ]);
 import * as b from "valibot";
 var xe = b.strictObject({
   court: b.string(),
   courtAbbreviation: b.nullable(b.string()),
 });
-var L = s.strictObject({
+var P = s.strictObject({
     value: s.string(),
     label: s.nullable(s.string()),
     count: s.number(),
   }),
   Lt = s.strictObject({
-    ...L.entries,
+    ...P.entries,
     value: h(),
     countType: s.picklist(Object.values(Ie)),
   }),
-  Pt = s.strictObject({ tierLabel: s.picklist(O), courts: s.array(L) }),
+  wt = s.strictObject({ tierLabel: s.picklist(C), courts: s.array(P) }),
   Ne = (e) =>
     s.strictObject({
       type: s.literal(e),
@@ -522,16 +537,16 @@ var L = s.strictObject({
         s.maxValue(Number.MAX_SAFE_INTEGER),
       ),
     }),
-  wt = s.variant("type", [
+  Dt = s.variant("type", [
     v(Ne(N.EXACT)),
     v(Ne(N.ESTIMATE)),
     v(s.strictObject({ type: s.literal(N.NOT_COUNTED) })),
   ]),
-  ti = s.optional(s.picklist(D)),
-  Le = {
+  ri = s.optional(s.picklist(k)),
+  Pe = {
     appUrl: s.nullable(s.string()),
-    url: s.nullable(_()),
-    source_url: s.optional(_()),
+    url: s.nullable(S()),
+    source_url: s.optional(S()),
     caseNumber: s.string(),
     citationCount: s.number(),
     citationAuthority: s.number(),
@@ -545,33 +560,33 @@ var L = s.strictObject({
     language: s.string(),
     matchedQueries: s.array(s.number()),
     matchingPassages: s.number(),
-    sourceUrl: s.nullable(_()),
+    sourceUrl: s.nullable(S()),
   },
-  V = s.union([
-    v(Se),
+  J = s.union([
+    v(_e),
     v(
       s.strictObject({
         headnotes: s.picklist(["included", "omitted"]),
         facets: s.nullable(
           s.strictObject({
-            court: s.array(Pt),
-            courtYear: ue,
-            year: s.array(L),
-            decisionType: s.array(L),
+            court: s.array(wt),
+            courtYear: de,
+            year: s.array(P),
+            decisionType: s.array(P),
             source: s.array(Lt),
-            language: s.array(L),
+            language: s.array(P),
           }),
         ),
         nextCursor: s.nullable(h()),
-        paginationOutcome: s.optional(z),
+        paginationOutcome: s.optional(V),
         searches: s.array(
           s.strictObject({
             query: s.string(),
             queryUsed: s.string(),
-            paginationOutcome: s.optional(z),
+            paginationOutcome: s.optional(V),
             warnings: s.array(
               s.strictObject({
-                code: s.picklist([...me, ...Ce]),
+                code: s.picklist([...me, ...Oe]),
                 message: s.string(),
                 hint: s.string(),
               }),
@@ -582,18 +597,18 @@ var L = s.strictObject({
           s.union([
             v(
               s.strictObject({
-                ...Le,
+                ...Pe,
                 snippet: s.nullable(s.string()),
                 keywords: s.nullable(
                   s.strictObject({
-                    type: s.literal(he),
+                    type: s.literal(ye),
                     items: s.array(s.string()),
                     omitted: s.number(),
                   }),
                 ),
                 headnote: s.nullable(
                   s.strictObject({
-                    type: s.literal(ve.PRESENT),
+                    type: s.literal(Ee.PRESENT),
                     text: s.string(),
                     truncated: s.boolean(),
                   }),
@@ -602,10 +617,10 @@ var L = s.strictObject({
             ),
             v(
               s.strictObject({
-                ...Le,
+                ...Pe,
                 excerpt: s.strictObject({
                   type: s.literal("withheld"),
-                  reason: s.literal(Ee.SOURCE_LICENCE),
+                  reason: s.literal(he.SOURCE_LICENCE),
                 }),
                 keywords: s.null(),
                 headnote: s.null(),
@@ -613,18 +628,18 @@ var L = s.strictObject({
             ),
           ]),
         ),
-        total: wt,
+        total: Dt,
         nextStep: s.optional(s.string()),
       }),
     ),
   ]);
 import * as i from "valibot";
-var Pe = 60000,
-  J = 1,
-  q = 256;
+var Le = 60000,
+  q = 1,
+  Z = 256;
 import * as t from "valibot";
 import * as n from "valibot";
-var Dt = [
+var kt = [
     "missing-antecedent",
     "ambiguous-antecedent",
     "ambiguous-reporter",
@@ -632,7 +647,7 @@ var Dt = [
     "scope-unknown",
     "conflicting-parallels",
   ],
-  kt = {
+  Ut = {
     text: !1,
     "line-break": !1,
     "page-anchor": !1,
@@ -644,41 +659,41 @@ var Dt = [
     link: !0,
     citation: !0,
   };
-var ke = (e) => Object.hasOwn(kt, e),
-  f = n.array(n.lazy(() => k)),
-  Ut = 128,
-  jt = 8,
-  Bt = 16,
-  Ht = n.variant("status", [
+var ke = (e) => Object.hasOwn(Ut, e),
+  f = n.array(n.lazy(() => U)),
+  jt = 128,
+  Bt = 8,
+  Ht = 16,
+  Wt = n.variant("status", [
     n.strictObject({
       status: n.literal("identified"),
       identifiers: n.pipe(
-        n.tupleWithRest([K], K),
+        n.tupleWithRest([z], z),
         n.minLength(1),
         n.maxLength(fe),
       ),
     }),
-    n.strictObject({ status: n.literal("unresolved"), reason: n.picklist(Dt) }),
+    n.strictObject({ status: n.literal("unresolved"), reason: n.picklist(kt) }),
   ]),
-  we = n.pipe(n.string(), n.maxLength(Bt), n.regex(/^\*?\d+$/u)),
+  we = n.pipe(n.string(), n.maxLength(Ht), n.regex(/^\*?\d+$/u)),
   De = n.strictObject({
     kind: n.picklist(["page", "paragraph", "footnote"]),
     start: we,
     end: n.optional(we),
   }),
-  Wt = n.strictObject({
-    raw: n.pipe(n.string(), n.nonEmpty(), n.maxLength(Ut)),
-    parts: n.pipe(n.tupleWithRest([De], De), n.minLength(1), n.maxLength(jt)),
-    reporter: n.optional(X),
+  Mt = n.strictObject({
+    raw: n.pipe(n.string(), n.nonEmpty(), n.maxLength(jt)),
+    parts: n.pipe(n.tupleWithRest([De], De), n.minLength(1), n.maxLength(Bt)),
+    reporter: n.optional(K),
   }),
   Ue = {
     type: n.literal("citation"),
     cite: n.pipe(n.string(), n.nonEmpty()),
     href: n.optional(n.string()),
-    target: n.optional(Ht),
-    pin: n.optional(Wt),
+    target: n.optional(Wt),
+    pin: n.optional(Mt),
   },
-  k = n.variant("type", [
+  U = n.variant("type", [
     n.object({
       type: n.literal("text"),
       text: n.string(),
@@ -698,7 +713,7 @@ var ke = (e) => Object.hasOwn(kt, e),
       href: n.optional(n.string()),
     }),
   ]),
-  si = n.array(n.lazy(() => k));
+  ai = n.array(n.lazy(() => U));
 var je = (e) => {
     let r = [];
     for (let o of e) {
@@ -716,7 +731,7 @@ var je = (e) => {
     }
     return r.join("");
   },
-  Mt = n.pipe(
+  Ft = n.pipe(
     n.object({
       type: n.pipe(
         n.string(),
@@ -731,7 +746,7 @@ var je = (e) => {
       return typeof r === "string" ? { type: "text", text: r } : null;
     }),
   ),
-  Ft = n.union([
+  Gt = n.union([
     n.variant("type", [
       n.object({
         type: n.literal("text"),
@@ -756,15 +771,15 @@ var je = (e) => {
         href: n.optional(n.string()),
       }),
     ]),
-    Mt,
+    Ft,
   ]),
   g = n.pipe(
-    n.array(Ft),
+    n.array(Gt),
     n.transform((e) => e.filter((r) => r !== null)),
   ),
-  oi = n.object({ type: n.string(), children: n.optional(n.unknown()) });
-var ee = ["decision-title", "section-heading"],
-  te = [
+  ci = n.object({ type: n.string(), children: n.optional(n.unknown()) });
+var te = ["decision-title", "section-heading"],
+  ne = [
     "case-number",
     "intro",
     "history",
@@ -784,8 +799,8 @@ var ee = ["decision-title", "section-heading"],
     "panel",
     "unknown",
   ];
-var ne = ["related-proceedings", "metadata-table"];
-var Gt = { heading: ee, paragraph: te, table: ne, image: [] };
+var re = ["related-proceedings", "metadata-table"];
+var Yt = { heading: te, paragraph: ne, table: re, image: [] };
 var We = (e) => {
     let r = "";
     for (let o of e)
@@ -797,44 +812,44 @@ var We = (e) => {
       else r += We(o.children);
     return r;
   },
-  Yt = /(?<![ \t])[ \t]+\n/gu,
-  Xt = /\u00a0/gu,
-  Z = (e) =>
-    M(
+  Xt = /(?<![ \t])[ \t]+\n/gu,
+  Kt = /\u00a0/gu,
+  Q = (e) =>
+    F(
       We(e)
-        .replace(Xt, " ")
+        .replace(Kt, " ")
         .replace(
-          Yt,
+          Xt,
           `
 `,
         )
         .trim(),
     ),
-  Kt = (e) => e ?? "",
-  zt = (e) => {
+  zt = (e) => e ?? "",
+  $t = (e) => {
     switch (e.type) {
       case "heading":
-        return { ...e, plainText: e.plainText ?? Z(e.inlines) };
+        return { ...e, plainText: e.plainText ?? Q(e.inlines) };
       case "paragraph":
-        return { ...e, plainText: e.plainText ?? Z(e.inlines) };
+        return { ...e, plainText: e.plainText ?? Q(e.inlines) };
       case "image":
-        return { ...e, plainText: e.plainText ?? Kt(e.alt) };
+        return { ...e, plainText: e.plainText ?? zt(e.alt) };
       case "table":
         return {
           ...e,
           rows: e.rows.map((r) =>
-            r.map((o) => ({ ...o, plainText: o.plainText ?? Z(o.inlines) })),
+            r.map((o) => ({ ...o, plainText: o.plainText ?? Q(o.inlines) })),
           ),
         };
       default:
         return m(`Unhandled block: ${String(e)}`);
     }
   };
-var re = t.array(t.lazy(() => k)),
-  $t = "https:",
-  Vt = (e) => URL.canParse(e) && new URL(e).protocol === $t,
-  Jt = t.check(Vt, "Image src must be an https URL"),
-  qt = t.pipe(t.string(), t.url(), Jt),
+var ie = t.array(t.lazy(() => U)),
+  Vt = "https:",
+  Jt = (e) => URL.canParse(e) && new URL(e).protocol === Vt,
+  qt = t.check(Jt, "Image src must be an https URL"),
+  Zt = t.pipe(t.string(), t.url(), qt),
   Be = t.optional(t.pipe(t.number(), t.integer(), t.minValue(2))),
   He = t.optional(t.pipe(t.number(), t.integer(), t.minValue(1))),
   Me = {
@@ -842,8 +857,8 @@ var re = t.array(t.lazy(() => k)),
     anchorId: t.string(),
     type: t.literal("heading"),
     level: t.picklist([1, 2, 3, 4, 5, 6]),
-    role: t.optional(t.picklist(ee)),
-    inlines: re,
+    role: t.optional(t.picklist(te)),
+    inlines: ie,
   },
   Fe = t.variant("type", [
     t.object({
@@ -852,28 +867,28 @@ var re = t.array(t.lazy(() => k)),
       noteId: t.optional(t.string()),
     }),
   ]),
-  Zt = t.finite();
+  Qt = t.finite();
 var Ge = {
     id: t.string(),
     anchorId: t.string(),
     type: t.literal("paragraph"),
-    role: t.optional(t.picklist(te)),
+    role: t.optional(t.picklist(ne)),
     note: t.optional(Fe),
     listDepth: t.optional(t.picklist([1, 2, 3, 4])),
-    number: t.optional(t.pipe(t.number(), Zt)),
-    inlines: re,
+    number: t.optional(t.pipe(t.number(), Qt)),
+    inlines: ie,
   },
   Ye = {
     id: t.string(),
     anchorId: t.string(),
     type: t.literal("image"),
-    src: qt,
+    src: Zt,
     alt: t.optional(t.string()),
     width: He,
     height: He,
   },
   Xe = {
-    inlines: re,
+    inlines: ie,
     colSpan: Be,
     rowSpan: Be,
     header: t.optional(t.literal(!0)),
@@ -882,63 +897,63 @@ var Ge = {
     id: t.string(),
     anchorId: t.string(),
     type: t.literal("table"),
-    role: t.optional(t.picklist(ne)),
+    role: t.optional(t.picklist(re)),
     note: t.optional(Fe),
     plainText: t.string(),
   },
-  Qt = t.object({ ...Xe, plainText: t.string() }),
-  ie = t.variant("type", [
+  en = t.object({ ...Xe, plainText: t.string() }),
+  se = t.variant("type", [
     t.object({ ...Me, plainText: t.string() }),
     t.object({ ...Ge, plainText: t.string() }),
     t.object({ ...Ye, plainText: t.string() }),
-    t.object({ ...Ke, rows: t.array(t.array(Qt)) }),
+    t.object({ ...Ke, rows: t.array(t.array(en)) }),
   ]),
-  en = (e, r) => e.includes(r),
-  Q = (e, r) =>
+  tn = (e, r) => e.includes(r),
+  ee = (e, r) =>
     t.optional(
       t.pipe(
         t.string(),
-        t.transform((o) => (en(e, o) ? o : r)),
+        t.transform((o) => (tn(e, o) ? o : r)),
       ),
     ),
-  tn = t.object({ ...Xe, inlines: g, plainText: t.optional(t.string()) }),
-  nn = t.variant("type", [
+  nn = t.object({ ...Xe, inlines: g, plainText: t.optional(t.string()) }),
+  rn = t.variant("type", [
     t.object({
       ...Me,
       inlines: g,
-      role: Q(ee, void 0),
+      role: ee(te, void 0),
       plainText: t.optional(t.string()),
     }),
     t.object({
       ...Ge,
       inlines: g,
-      role: Q(te, "unknown"),
+      role: ee(ne, "unknown"),
       plainText: t.optional(t.string()),
     }),
     t.object({ ...Ye, plainText: t.optional(t.string()) }),
-    t.object({ ...Ke, role: Q(ne, void 0), rows: t.array(t.array(tn)) }),
+    t.object({ ...Ke, role: ee(re, void 0), rows: t.array(t.array(nn)) }),
   ]),
-  rn = t.union([
-    nn,
+  sn = t.union([
+    rn,
     t.pipe(
       t.object({
         type: t.pipe(
           t.string(),
-          t.check((e) => !Object.hasOwn(Gt, e)),
+          t.check((e) => !Object.hasOwn(Yt, e)),
         ),
       }),
       t.transform(() => null),
     ),
   ]),
-  di = t.object({
+  Ei = t.object({
     id: t.optional(t.string()),
     type: t.string(),
     role: t.optional(t.string()),
     inlines: t.optional(t.unknown()),
     rows: t.optional(t.unknown()),
   }),
-  vi = t.array(t.array(t.object({ inlines: t.unknown() }))),
-  Ei = t.object({ blocks: t.array(t.unknown()) });
+  hi = t.array(t.array(t.object({ inlines: t.unknown() }))),
+  yi = t.object({ blocks: t.array(t.unknown()) });
 var ze = t.object({
     system: t.string(),
     documentId: t.string(),
@@ -954,15 +969,15 @@ var ze = t.object({
     keywords: t.array(t.string()),
     statutes: t.array(t.string()),
   }),
-  sn = (e) =>
+  on = (e) =>
     (e.type === "paragraph" || e.type === "table") &&
     e.note?.type === "footnote"
       ? e.note
       : null,
-  on = (e) => {
+  an = (e) => {
     let r = null;
     for (let o of e) {
-      let d = sn(o);
+      let d = on(o);
       if (
         d !== null &&
         r !== null &&
@@ -975,20 +990,20 @@ var ze = t.object({
     }
     return !0;
   },
-  hi = t.pipe(
+  gi = t.pipe(
     t.object({
       version: t.literal(1),
       source: ze,
       metadata: $e,
-      blocks: t.array(ie),
+      blocks: t.array(se),
     }),
     t.check(
-      ({ blocks: e }) => on(e),
+      ({ blocks: e }) => an(e),
       "Adjacent footnote blocks sharing a noteId must repeat one label",
     ),
   ),
-  an = () => ({ system: "", documentId: "", webUrl: "", printUrl: "" }),
-  cn = () => ({
+  cn = () => ({ system: "", documentId: "", webUrl: "", printUrl: "" }),
+  ln = () => ({
     caseNumber: null,
     ecli: null,
     court: null,
@@ -997,27 +1012,27 @@ var ze = t.object({
     keywords: [],
     statutes: [],
   }),
-  ln = t.object({
+  pn = t.object({
     version: t.literal(1),
     source: t.optional(ze),
     metadata: t.optional($e),
-    blocks: t.array(rn),
+    blocks: t.array(sn),
   }),
-  yi = t.pipe(
-    ln,
+  _i = t.pipe(
+    pn,
     t.transform(({ blocks: e, metadata: r, source: o }) => ({
       version: 1,
-      source: o ?? an(),
-      metadata: r ?? cn(),
-      blocks: e.flatMap((d) => (d === null ? [] : [zt(d)])),
+      source: o ?? cn(),
+      metadata: r ?? ln(),
+      blocks: e.flatMap((d) => (d === null ? [] : [$t(d)])),
     })),
   );
-var U = i.strictObject({
+var j = i.strictObject({
     decisionId: i.string(),
     caseNumber: i.string(),
-    caseNumberType: i.picklist(D),
+    caseNumberType: i.picklist(k),
     courtAbbreviation: i.nullable(i.string()),
-    courtTier: i.picklist(O),
+    courtTier: i.picklist(C),
     language: i.string(),
     court: i.string(),
     country: i.string(),
@@ -1029,32 +1044,32 @@ var U = i.strictObject({
     code: i.literal("source_licence"),
     message: i.string(),
   }),
-  pn = i.strictObject({
+  un = i.strictObject({
     anchorId: i.string(),
     title: i.string(),
     level: i.number(),
   }),
-  un = i.strictObject({
+  dn = i.strictObject({
     anchorId: i.string(),
     number: i.nullable(i.number()),
     text: i.string(),
   }),
-  dn = i.variant("status", [
+  vn = i.variant("status", [
     i.strictObject({
       status: i.literal("available"),
-      metadata: U,
-      outline: i.array(pn),
-      window: i.array(un),
+      metadata: j,
+      outline: i.array(un),
+      window: i.array(dn),
       truncated: i.boolean(),
     }),
     i.strictObject({
       status: i.literal("withheld"),
-      metadata: U,
+      metadata: j,
       withheldReason: Je,
     }),
-    i.strictObject({ status: i.literal("unavailable"), metadata: U }),
+    i.strictObject({ status: i.literal("unavailable"), metadata: j }),
   ]),
-  vn = i.strictObject({
+  En = i.strictObject({
     pieceId: i.string(),
     start: i.number(),
     end: i.number(),
@@ -1062,37 +1077,37 @@ var U = i.strictObject({
     decisionId: i.string(),
     appUrl: i.nullable(i.string()),
   }),
-  En = i.strictObject({
+  hn = i.strictObject({
     appUrl: i.nullable(i.string()),
     pieceId: i.string(),
     start: i.number(),
     end: i.number(),
     provision: i.strictObject({
       document_id: i.pipe(i.string(), i.uuid()),
-      anchor: i.pipe(i.string(), i.minLength(J), i.maxLength(q)),
+      anchor: i.pipe(i.string(), i.minLength(q), i.maxLength(Z)),
       cited_anchor: i.optional(
-        i.pipe(i.string(), i.minLength(J), i.maxLength(q)),
+        i.pipe(i.string(), i.minLength(q), i.maxLength(Z)),
       ),
     }),
   }),
-  hn = i.strictObject({
+  yn = i.strictObject({
     blockId: i.string(),
     offset: i.number(),
     totalChars: i.number(),
     json: i.string(),
   }),
-  yn = i.strictObject({
-    metadata: U,
+  gn = i.strictObject({
+    metadata: j,
     content: i.variant("status", [
       i.strictObject({
         status: i.literal("available"),
         phase: i.picklist(["blocks", "citations", "provisions"]),
-        items: i.array(ie),
-        blockFragments: i.array(hn),
-        citationAnchors: i.array(vn),
-        provisionAnchors: i.array(En),
+        items: i.array(se),
+        blockFragments: i.array(yn),
+        citationAnchors: i.array(En),
+        provisionAnchors: i.array(hn),
         nextCursor: i.nullable(i.string()),
-        limit: i.literal(Pe),
+        limit: i.literal(Le),
       }),
       i.strictObject({ status: i.literal("withheld"), withheldReason: Je }),
       i.strictObject({ status: i.literal("unavailable") }),
@@ -1103,7 +1118,7 @@ var U = i.strictObject({
     level: i.number(),
     text: i.string(),
   }),
-  gn = i.strictObject({
+  _n = i.strictObject({
     appUrl: i.nullable(i.string()),
     documentId: i.string(),
     language: i.string(),
@@ -1120,9 +1135,9 @@ var U = i.strictObject({
     ),
   });
 import * as c from "valibot";
-var se = ["consolidation", "promulgated", "unversioned"],
+var oe = ["consolidation", "promulgated", "unversioned"],
   qe = ["effective", "never-in-force", "invalid-window", "withdrawn"],
-  P = {
+  L = {
     "never-in-force": ["publisher-flag", "replaced-same-day"],
     "invalid-window": ["zero-length-window", "reversed", "missing-start"],
     withdrawn: [
@@ -1131,9 +1146,9 @@ var se = ["consolidation", "promulgated", "unversioned"],
       "deferred-promulgated",
     ],
   },
-  Ai = [...P["never-in-force"], ...P["invalid-window"], ...P.withdrawn],
+  fi = [...L["never-in-force"], ...L["invalid-window"], ...L.withdrawn],
   Sn = { consolidation: !0, promulgated: !1, unversioned: !0 },
-  bi = se.filter((e) => Sn[e]);
+  Ci = oe.filter((e) => Sn[e]);
 var I = {
     found: "found",
     notFound: "not_found",
@@ -1142,23 +1157,23 @@ var I = {
     textWithheld: "text_withheld",
     invalid: "invalid",
   },
-  oe = [I.notFound, I.uncoveredDate, I.provisionNotFound, I.textWithheld],
-  Oi = [I.found, ...oe, I.invalid];
-var _n = {
-    expressionKind: c.picklist(se),
+  ae = [I.notFound, I.uncoveredDate, I.provisionNotFound, I.textWithheld],
+  Ri = [I.found, ...ae, I.invalid];
+var In = {
+    expressionKind: c.picklist(oe),
     windowDisposition: c.picklist(qe),
-    windowDispositionBasis: c.nullable(c.picklist(Object.values(P).flat())),
+    windowDispositionBasis: c.nullable(c.picklist(Object.values(L).flat())),
   },
-  ae = { anchor: h(), eli: c.string() },
-  Li = c.strictObject({
+  ce = { anchor: h(), eli: c.string() },
+  wi = c.strictObject({
     items: c.array(
       c.variant("status", [
         v(
           c.strictObject({
-            ...ae,
+            ...ce,
             appUrl: c.nullable(c.string()),
-            url: c.nullable(_()),
-            source_url: c.optional(_()),
+            url: c.nullable(S()),
+            source_url: c.optional(S()),
             documentId: h(),
             resourceName: h(),
             status: c.literal(I.found),
@@ -1169,13 +1184,13 @@ var _n = {
             versionValidTo: c.nullable(c.string()),
           }),
         ),
-        ...oe.map((e) =>
+        ...ae.map((e) =>
           v(
             c.strictObject({
-              ...ae,
+              ...ce,
               appUrl: c.optional(c.nullable(c.string())),
-              url: c.optional(c.nullable(_())),
-              source_url: c.optional(_()),
+              url: c.optional(c.nullable(S())),
+              source_url: c.optional(S()),
               message: c.string(),
               status: c.literal(e),
             }),
@@ -1196,16 +1211,16 @@ var _n = {
   }),
   Ze = {
     appUrl: c.nullable(c.string()),
-    url: c.nullable(_()),
-    source_url: c.optional(_()),
+    url: c.nullable(S()),
+    source_url: c.optional(S()),
     documentId: h(),
     resourceName: h(),
     versionValidFrom: c.nullable(c.string()),
     versionValidTo: c.nullable(c.string()),
-    ..._n,
+    ...In,
   },
-  In = c.strictObject({
-    ...ae,
+  mn = c.strictObject({
+    ...ce,
     items: c.array(
       c.variant("status", [
         v(
@@ -1228,8 +1243,8 @@ var _n = {
     ),
     nextCursor: c.nullable(h()),
   });
-var C = V.options[1].pipe[0],
-  mn = p.object(p.pick(V.options[0].pipe[0], ["message", "hint"]).entries),
+var O = J.options[1].pipe[0],
+  Tn = p.object(p.pick(J.options[0].pipe[0], ["message", "hint"]).entries),
   Qe = [
     "decisionId",
     "court",
@@ -1240,14 +1255,14 @@ var C = V.options[1].pipe[0],
     "appUrl",
     "source_url",
   ],
-  ki = p.union([
-    mn,
+  ji = p.union([
+    Tn,
     p.object({
-      ...p.pick(C, ["nextCursor", "nextStep", "headnotes"]).entries,
+      ...p.pick(O, ["nextCursor", "nextStep", "headnotes"]).entries,
       results: p.array(
         p.union([
           p.object(
-            p.pick(C.entries.results.item.options[0].pipe[0], [
+            p.pick(O.entries.results.item.options[0].pipe[0], [
               ...Qe,
               "snippet",
               "headnote",
@@ -1255,7 +1270,7 @@ var C = V.options[1].pipe[0],
             ]).entries,
           ),
           p.object(
-            p.pick(C.entries.results.item.options[1].pipe[0], [
+            p.pick(O.entries.results.item.options[1].pipe[0], [
               ...Qe,
               "excerpt",
               "headnote",
@@ -1269,11 +1284,11 @@ var C = V.options[1].pipe[0],
           court: p.array(
             p.object({
               tierLabel:
-                C.entries.facets.wrapped.entries.court.item.entries.tierLabel,
+                O.entries.facets.wrapped.entries.court.item.entries.tierLabel,
               courts: p.array(
                 p.object(
                   p.pick(
-                    C.entries.facets.wrapped.entries.court.item.entries.courts
+                    O.entries.facets.wrapped.entries.court.item.entries.courts
                       .item,
                     ["value"],
                   ).entries,
@@ -1287,7 +1302,7 @@ var C = V.options[1].pipe[0],
         p.object({
           warnings: p.array(
             p.object(
-              p.pick(C.entries.searches.item.entries.warnings.item, [
+              p.pick(O.entries.searches.item.entries.warnings.item, [
                 "message",
                 "hint",
               ]).entries,
@@ -1297,12 +1312,12 @@ var C = V.options[1].pipe[0],
       ),
     }),
   ]),
-  Ui = ce;
+  Bi = le;
 export {
-  yn as APP_DECISION_BLOCKS_SCHEMA,
-  dn as APP_OPEN_DECISION_SCHEMA,
-  In as APP_PROVISION_HISTORY_SCHEMA,
-  gn as APP_PROVISION_PREVIEW_SCHEMA,
-  Ui as APP_RESOLVE_SCHEMA,
-  ki as APP_SEARCH_SCHEMA,
+  gn as APP_DECISION_BLOCKS_SCHEMA,
+  vn as APP_OPEN_DECISION_SCHEMA,
+  mn as APP_PROVISION_HISTORY_SCHEMA,
+  _n as APP_PROVISION_PREVIEW_SCHEMA,
+  Bi as APP_RESOLVE_SCHEMA,
+  ji as APP_SEARCH_SCHEMA,
 };

@@ -3567,6 +3567,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: DECISION_ID,
       direction: "cited_by",
       limit: 5,
+      surface: "search",
     });
     expect(parseToolPayload(result)).toEqual({
       decisionId: DECISION_ID,
@@ -3630,6 +3631,7 @@ describe("OpenAI-compatible MCP tools", () => {
       decisionId: DECISION_ID,
       direction: "cites",
       limit: LIMITS.caseLawAgentCitationPageSizeDefault,
+      surface: "search",
     });
   });
 
@@ -5625,10 +5627,12 @@ describe("OpenAI-compatible MCP tools", () => {
       caller: "attributed",
       citationsCursor: null,
       documentHydration: STORED_ONLY_DOCUMENT_HYDRATION,
+      surface: "search",
     });
     expect(readGatedDecisionCitationDigestMock).toHaveBeenCalledWith({
       caseLawDb: caseLawPublicReadDb,
       decisionId: DECISION_ID,
+      surface: "search",
     });
     const text = "29 Cdo 123/2024\n\nThe court dismissed the appeal.";
     expect(payload).toEqual({

@@ -50,7 +50,6 @@ const PAGES_SURFACE_LITERAL = /surface: "pages"|, "pages"\)/u;
 const CONSUMERS = {
   // Decision and statute pages, and the API reads that serve them.
   "apps/api/src/handlers/case-law/public-routes.ts": "pages",
-  "apps/api/src/lib/case-law/public-subject.ts": "pages",
   "apps/api/src/lib/case-law/decision-badges.ts": "pages",
   "apps/api/src/lib/case-law/language-alternates.ts": "pages",
   "apps/api/src/handlers/case-law/decisions/citation-graph.ts": "pages",
@@ -119,6 +118,9 @@ const DEFINERS = [
   "apps/web/src/features/case-law/case-law-jurisdiction.ts",
   "apps/web/src/lib/statutes/statute-route.ts",
   "apps/api/src/lib/legal-search/legislation-redistribution.ts",
+  // The decision gate page routes and agent tools share: each caller names
+  // the surface it reads for.
+  "apps/api/src/lib/case-law/public-subject.ts",
 ] as const;
 
 /**
@@ -130,7 +132,6 @@ const SQL_HELPER_CALLERS = {
   // Page reads and the SQL behind sitemaps.
   "apps/api/src/handlers/legislation/by-slug.ts": "pages",
   "apps/api/src/handlers/legislation/provision-preview.ts": "pages",
-  "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": "pages",
   "apps/api/src/lib/legal-search/statute-sitemap-shard-sql.ts": "pages",
   // Search, listing, facets, agent and reader surfaces.
   "apps/api/src/handlers/legislation/search.ts": "search",
@@ -158,6 +159,7 @@ const SQL_HELPER_DEFINERS = [
   "apps/api/src/handlers/legislation/work-key.ts",
   "apps/api/src/handlers/legislation/provision-versions.ts",
   "apps/api/src/handlers/legislation/provision-history.ts",
+  "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts",
 ] as const;
 
 const SQL_HELPER_NAME =
@@ -184,7 +186,7 @@ const helperCalls = (source: string): string[] => {
   return calls;
 };
 
-const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
+const repoRoot = nodePath.resolve(import.meta.dir, "..");
 const readSource = async (path: string) =>
   await Bun.file(nodePath.resolve(repoRoot, path)).text();
 

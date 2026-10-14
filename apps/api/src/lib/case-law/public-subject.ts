@@ -31,9 +31,12 @@ import {
   type DecisionReadResolution,
 } from "@stll/api-contract/case-law-decision-resolution";
 import {
+  isPublicCaseLawCountry,
   isPublicCaseLawPageCountry,
+  publicCaseLawCountry,
   publicCaseLawPageCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -99,12 +102,37 @@ export type DecisionSubjectLocator =
       language: string | undefined;
     };
 
-const locatorCondition = (locator: DecisionSubjectLocator) => {
+/**
+ * Which country list a read answers to: `pages` serves decision pages and
+ * their sitemaps, `search` is search, the API search surfaces, MCP and AI.
+ * A pages-public country is readable on the first and not on the second.
+ */
+const SURFACE_COUNTRY = {
+  pages: {
+    canonical: publicCaseLawPageCountry,
+    isPublic: isPublicCaseLawPageCountry,
+  },
+  search: {
+    canonical: publicCaseLawCountry,
+    isPublic: isPublicCaseLawCountry,
+  },
+} as const satisfies Record<
+  PublicCountrySurface,
+  {
+    canonical: (country: string) => string | null;
+    isPublic: (country: string) => boolean;
+  }
+>;
+
+const locatorCondition = (
+  locator: DecisionSubjectLocator,
+  surface: PublicCountrySurface,
+) => {
   switch (locator.kind) {
     case "id":
       return eq(caseLawDecisions.id, locator.id);
     case "slug": {
-      const country = publicCaseLawPageCountry(locator.country);
+      const country = SURFACE_COUNTRY[surface].canonical(locator.country);
       const language = normalizePublicDecisionLanguage(locator.language);
       if (
         country === null ||
@@ -155,10 +183,10 @@ const selectLocatedRow = async (
 
 type LocatedRow = NonNullable<Awaited<ReturnType<typeof selectLocatedRow>>>;
 
-const isPublic = (row: LocatedRow): boolean => {
+const isPublic = (row: LocatedRow, surface: PublicCountrySurface): boolean => {
   if (
     !row.published ||
-    !isPublicCaseLawPageCountry(row.country) ||
+    !SURFACE_COUNTRY[surface].isPublic(row.country) ||
     !isRedistributable(row.descriptor)
   ) {
     return false;
@@ -177,8 +205,9 @@ const isPublic = (row: LocatedRow): boolean => {
 const resolveSubjectIn = async (
   tx: CaseLawPublicReadTransaction,
   locator: DecisionSubjectLocator,
+  surface: PublicCountrySurface,
 ): Promise<RedistributableDecisionSubject | null> => {
-  const condition = locatorCondition(locator);
+  const condition = locatorCondition(locator, surface);
   if (condition === null) {
     return null;
   }
@@ -187,7 +216,7 @@ const resolveSubjectIn = async (
     return null;
   }
   if (row.published) {
-    return isPublic(row)
+    return isPublic(row, surface)
       ? subjectOf({
           id: row.id,
           resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
@@ -203,7 +232,7 @@ const resolveSubjectIn = async (
     tx,
     eq(caseLawDecisions.id, absorption.decisionId),
   );
-  if (target === undefined || !isPublic(target)) {
+  if (target === undefined || !isPublic(target, surface)) {
     return null;
   }
   return subjectOf({
@@ -228,6 +257,7 @@ const resolveSubjectIn = async (
  */
 export const withRedistributableDecisions = async <T>(
   caseLawDb: CaseLawPublicReadDb,
+  surface: PublicCountrySurface,
   ids: readonly SafeId<"caseLawDecision">[],
   read: (subjects: readonly RedistributableDecisionSubject[]) => Promise<T>,
 ): Promise<T> =>
@@ -239,7 +269,7 @@ export const withRedistributableDecisions = async <T>(
           : await selectLocatedRows(tx, inArray(caseLawDecisions.id, [...ids]));
       return await read(
         rows
-          .filter((row) => row.published && isPublic(row))
+          .filter((row) => row.published && isPublic(row, surface))
           .map((row) =>
             subjectOf({
               id: row.id,
@@ -253,7 +283,7 @@ export const withRedistributableDecisions = async <T>(
   );
 
 /**
- * Gate a decision and read it in one transaction.
+ * Gate a decision and read it in one transaction, on the named surface.
  *
  * `read` runs with the subject inside the transaction that approved it, so
  * every row it returns belongs to the snapshot the gate judged. Returns null
@@ -266,12 +296,13 @@ export const withRedistributableDecisions = async <T>(
  */
 export const withRedistributableSubject = async <T>(
   caseLawDb: CaseLawPublicReadDb,
+  surface: PublicCountrySurface,
   locator: DecisionSubjectLocator,
   read: (subject: RedistributableDecisionSubject) => Promise<T>,
 ): Promise<T | null> =>
   await caseLawDb(
     async (tx) => {
-      const subject = await resolveSubjectIn(tx, locator);
+      const subject = await resolveSubjectIn(tx, locator, surface);
       return subject === null ? null : await read(subject);
     },
     { isolation: "repeatable-read" },

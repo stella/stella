@@ -367,8 +367,12 @@ const withSubject = async <T>(
   id: SafeId<"caseLawDecision">,
   read: (subject: RedistributableDecisionSubject) => Promise<T>,
 ): Promise<T> =>
-  (await withRedistributableSubject(caseLawDb, { kind: "id", id }, read)) ??
-  panic("expected a redistributable subject");
+  (await withRedistributableSubject(
+    caseLawDb,
+    "pages",
+    { kind: "id", id },
+    read,
+  )) ?? panic("expected a redistributable subject");
 
 const readCitationPage = async (
   direction: CitationDirection,
@@ -751,6 +755,7 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
   expect(
     await withRedistributableSubject(
       caseLawDb,
+      "pages",
       {
         kind: "id",
         id: closedRelatedId,
@@ -761,6 +766,7 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
   expect(
     await withRedistributableSubject(
       caseLawDb,
+      "pages",
       {
         kind: "id",
         id: subjectId,
@@ -789,6 +795,7 @@ test("a listing-only related decision is absent from every citation read even wi
   expect(
     await withRedistributableSubject(
       caseLawDb,
+      "pages",
       { kind: "id", id: listingOnlyRelatedId },
       async () => true,
     ),
@@ -1167,6 +1174,7 @@ test("citation digests omit withheld unresolved references", async () => {
   const digest = await readGatedDecisionCitationDigest({
     caseLawDb,
     decisionId: withheldSubjectId,
+    surface: "search",
   });
   expect(digest?.cites).toMatchObject([
     {
@@ -1184,6 +1192,7 @@ test("citation reads carry withheld text dispositions", async () => {
     decisionId: withheldSubjectId,
     direction: "cites",
     limit: 10,
+    surface: "search",
   });
   expect(read).toMatchObject({
     type: "page",

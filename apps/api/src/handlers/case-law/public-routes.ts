@@ -310,6 +310,7 @@ const projectDecisionProvisionPage = async (
     page,
     decisionDate,
     legislationDb: legislationPublicReadDb,
+    surface: "pages",
   });
   return projectResponseText(
     {

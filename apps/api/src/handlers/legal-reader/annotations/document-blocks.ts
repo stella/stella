@@ -50,6 +50,7 @@ const resolveDecision = async (
 ): Promise<AnnotationTargetAccess> => {
   const row = await withRedistributableSubject(
     caseLawPublicReadDb,
+    "search",
     { kind: "id", id: brandPersistedCaseLawDecisionId(decisionId) },
     async ({ id, tx }) =>
       await tx.query.caseLawDecisions.findFirst({

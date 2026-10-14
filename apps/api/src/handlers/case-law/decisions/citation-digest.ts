@@ -14,6 +14,7 @@ import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { DecisionTextWithheldReason } from "@stll/api-contract/case-law-text-field";
+import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import {
@@ -51,15 +52,19 @@ export type DecisionCitationDigest = {
 export type ReadDecisionCitationDigestOptions = {
   caseLawDb: CaseLawPublicReadDb;
   decisionId: SafeId<"caseLawDecision">;
+  /** The surface the read serves; its country list decides publication. */
+  surface: PublicCountrySurface;
 };
 
 /** Null is the publication gate's answer, as for the decision read itself. */
 export const readGatedDecisionCitationDigest = async ({
   caseLawDb,
   decisionId,
+  surface,
 }: ReadDecisionCitationDigestOptions): Promise<DecisionCitationDigest | null> =>
   await withRedistributableSubject(
     caseLawDb,
+    surface,
     { kind: "id", id: decisionId },
     async (subject) => {
       // One transaction, one connection: the statements run in turn.

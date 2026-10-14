@@ -45,7 +45,8 @@ export const visibleText = (html: string): string => {
   for (const pattern of BLOCK_PATTERNS) {
     stripped = stripped.replace(pattern, " ");
   }
-  return decodeEntities(stripped.replace(/<[^>]*>/gu, " "))
+  // A tag cannot contain `<`, so each match ends before the next one starts.
+  return decodeEntities(stripped.replace(/<[^<>]*>/gu, " "))
     .replace(/\s+/gu, " ")
     .trim();
 };
@@ -277,9 +278,10 @@ export const renderMarkdown = (report: Report): string => {
 
 /** `<loc>` values of a sitemap document. */
 export const parseSitemapLocs = (xml: string): string[] =>
-  [...xml.matchAll(/<loc>\s*([^<]+?)\s*<\/loc>/gu)].map((match) =>
-    decodeEntities(match[1] ?? ""),
-  );
+  [...xml.matchAll(/<loc>([^<]*)<\/loc>/gu)].flatMap((match) => {
+    const loc = (match[1] ?? "").trim();
+    return loc.length === 0 ? [] : [decodeEntities(loc)];
+  });
 
 /** Case-law shard sitemaps of a country, from the law sitemap index. */
 export const filterCountryShards = (

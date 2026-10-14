@@ -267,6 +267,8 @@ describe("sitemap helpers", () => {
   });
 
   test("shuffled keeps the same items", () => {
-    expect(shuffled([1, 2, 3, 4], () => 0.5).toSorted()).toEqual([1, 2, 3, 4]);
+    expect(shuffled([1, 2, 3, 4], () => 0.5).toSorted((a, b) => a - b)).toEqual(
+      [1, 2, 3, 4],
+    );
   });
 });

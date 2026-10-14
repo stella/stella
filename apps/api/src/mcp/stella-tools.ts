@@ -3132,6 +3132,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       // interest counts as demand.
       caller: "attributed",
       documentHydration,
+      surface: "search",
     });
 
   // The deployment's half of every document-state answer, resolved once for
@@ -3233,6 +3234,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
           await readDigest({
             caseLawDb: caseLawPublicReadDb,
             decisionId: brandPersistedCaseLawDecisionId(decisionId),
+            surface: "search",
           }),
         ] as const,
     }),
@@ -3294,6 +3296,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     decisionId: brandPersistedCaseLawDecisionId(decisionId),
     direction,
     limit,
+    surface: "search",
   });
   if (read === null) {
     return notFoundResult(

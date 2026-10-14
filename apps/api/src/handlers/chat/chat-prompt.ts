@@ -2252,6 +2252,7 @@ export const buildActiveDecisionSection = async ({
         try: async () => {
           const row = await withRedistributableSubject(
             caseLawDb,
+            "search",
             { kind: "id", id: activeDecision.decisionId },
             async ({ id, tx }) =>
               await tx.query.caseLawDecisions.findFirst({
