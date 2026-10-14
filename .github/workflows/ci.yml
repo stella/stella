@@ -3434,7 +3434,7 @@ jobs:
             git show "$base:$file" > /dev/null
           done < "$RUNNER_TEMP/external-contract-baseline-patches"
           bun --preload ./scripts/offline-network-preload.ts scripts/check-external-contracts.ts --check
-          bun test scripts/check-external-contracts.test.ts scripts/external-contract-evidence.test.ts
+          bun test scripts/check-external-contracts.test.ts scripts/external-contract-evidence.test.ts scripts/external-contract-pin-allowances.test.ts
 
       - name: Outbound transport ownership
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
