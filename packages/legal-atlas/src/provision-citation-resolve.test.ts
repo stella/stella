@@ -151,6 +151,16 @@ describe("resolveProvisionCitation", () => {
         read.candidates.map(({ workIdentifier }) => workIdentifier),
       ).toContain("89/2012 Sb.");
     }
+    // A matching title does not excuse a conflicting name beside it.
+    const mixed = resolve(
+      "§ 10 zákona č. 89/2012 Sb., občanský zákoník nebo ZP",
+    );
+    expect(mixed.status).toBe("ambiguous_act");
+    if (mixed.status === "ambiguous_act") {
+      expect(
+        mixed.candidates.map(({ workIdentifier }) => workIdentifier),
+      ).toEqual(expect.arrayContaining(["89/2012 Sb.", "262/2006 Sb."]));
+    }
     // The old civil code by number keeps its recodified title.
     expect(
       resolved("§ 420 zákona č. 40/1964 Sb., občanský zákoník"),

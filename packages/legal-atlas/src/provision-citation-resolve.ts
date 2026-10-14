@@ -290,12 +290,14 @@ const readGazetteActs = (
  * elsewhere in the text names another act and is kept, so two acts named
  * side by side (`občanského zákoníku nebo ZP`) are reported, not one picked.
  */
+type NamedActMatch = { start: number; end: number; entry: ActTitleSpec };
+
 const matchNamedActs = (
   rest: string,
   resolver: CompiledResolver,
-): ActTitleSpec[] => {
+): NamedActMatch[] => {
   const folded = foldKey(rest);
-  const accepted: { start: number; end: number; entry: ActTitleSpec }[] = [];
+  const accepted: NamedActMatch[] = [];
   for (const act of resolver.acts) {
     const found = act.caseSensitive
       ? occurs(rest, act.key)
@@ -315,7 +317,7 @@ const matchNamedActs = (
       accepted.push({ start, end, entry: act.entry });
     }
   }
-  return accepted.map(({ entry }) => entry);
+  return accepted;
 };
 
 const readNamedAct = (
@@ -323,7 +325,7 @@ const readNamedAct = (
   resolver: CompiledResolver,
   citedOn: string,
 ): ActRead => {
-  const matches = matchNamedActs(rest, resolver);
+  const matches = matchNamedActs(rest, resolver).map(({ entry }) => entry);
   if (matches.length === 0) {
     return { kind: "none" };
   }
@@ -495,13 +497,22 @@ const resolveAct = (
     // A name beside the number must be one the numbered act ever bore, in
     // any window (`č. 40/1964 Sb., občanský zákoník` is the old code by
     // number); a name of another act (`ZP č. 89/2012 Sb.`) makes it two.
+    // Each name is checked on its own: one matching title must not excuse
+    // a conflicting one beside it (`č. 89/2012 Sb., občanský zákoník nebo
+    // ZP`). Entries at one span are one spelling read by its windows.
     const named = matchNamedActs(rest, resolver);
-    if (
-      named.length > 0 &&
-      !named.some((entry) => sameWork(entry.identifier, gazette))
-    ) {
+    const spans = new Map<string, NamedActMatch[]>();
+    for (const match of named) {
+      const key = `${String(match.start)}:${String(match.end)}`;
+      spans.set(key, [...(spans.get(key) ?? []), match]);
+    }
+    const conflicting = [...spans.values()].filter(
+      (group) =>
+        !group.some(({ entry }) => sameWork(entry.identifier, gazette)),
+    );
+    if (conflicting.length > 0) {
       const candidates: WorkIdentifier[] = [gazette];
-      for (const entry of named) {
+      for (const { entry } of conflicting.flat()) {
         if (!candidates.some((work) => sameWork(work, entry.identifier))) {
           candidates.push(entry.identifier);
         }
