@@ -912,6 +912,9 @@
       "saved": "{count, plural, one {# Entscheidung} other {# Entscheidungen}} in {matter} gespeichert"
     },
     "newestDecisions": "Neueste Entscheidungen",
+    "noResults": {
+      "hint": "Versuchen Sie andere Wörter, verbessern Sie die Anfrage mit KI oder stellen Sie die Frage im Chat."
+    },
     "notesFilter": {
       "ai": "KI",
       "human": "Mensch"
@@ -984,6 +987,10 @@
         "medium": "Mittel",
         "short": "Kurz"
       }
+    },
+    "rewritten": {
+      "line": "Keine genauen Treffer für <bdi>{original}</bdi>; Ergebnisse für <bdi>{query}</bdi>",
+      "searchOriginal": "Meine ursprünglichen Wörter suchen"
     },
     "sameCaseNumber": "{count, plural, one {# Entscheidung trägt} other {# Entscheidungen tragen}} dieses Aktenzeichen. Wählen Sie das Gericht.",
     "searchLabel": "Rechtsprechung durchsuchen",
