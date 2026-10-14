@@ -1381,6 +1381,71 @@ jobs:
     ).toBeUndefined();
   });
 
+  check("unspecified Linux shell does not propagate pipeline failures", () => {
+    const workflow = Bun.YAML.parse(`jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bun test scripts/named.test.ts | cat
+  ci-result:
+    needs: [checks]
+`);
+    const topology = analyzeGatingWorkflow(workflow);
+    expect(topology.jobs.get("checks")?.at(0)?.propagation).toEqual({
+      errexit: true,
+      pipefail: false,
+    });
+    expect(
+      firstCollectionFailure({
+        file: "scripts/named.test.ts",
+        scenarios: new Map(),
+        topology: {
+          workflow: Bun.YAML.stringify(workflow),
+          gatingJobs: topology.jobs,
+          shardedPackages: new Set<string>(),
+        },
+      }),
+    ).toContain("pipeline failure propagation is disabled");
+  });
+
+  check.each([
+    ["steps.setup.outputs.run_tests == 'true'", false],
+    ["needs.setup.outputs.run_tests == 'true'", false],
+    ["true || steps.setup.outputs.run_tests == 'true'", false],
+    ["needs.ci-plan.outputs.package_checks_required == 'true'", true],
+  ])(
+    "output condition %s grants collection only for owned selection outputs",
+    (condition, credited) => {
+      const workflow = Bun.YAML.parse(`jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - id: setup
+        run: echo 'run_tests=false' >> "$GITHUB_OUTPUT"
+      - if: \${{ ${condition} }}
+        run: bun test scripts/named.test.ts
+  ci-result:
+    needs: [checks]
+`);
+      const topology = analyzeGatingWorkflow(workflow);
+      const failure = firstCollectionFailure({
+        file: "scripts/named.test.ts",
+        scenarios: new Map(),
+        topology: {
+          workflow: Bun.YAML.stringify(workflow),
+          gatingJobs: topology.jobs,
+          shardedPackages: new Set<string>(),
+        },
+      });
+      if (credited) {
+        expect(failure).toBeUndefined();
+      } else {
+        expect(failure).toBeDefined();
+        expect(topology.findings.join("\n")).toContain("unresolved context");
+      }
+    },
+  );
+
   check(
     "resolves effective workflow shells and their failure propagation",
     () => {

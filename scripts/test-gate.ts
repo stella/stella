@@ -875,7 +875,7 @@ const gatingCommandExecutionFailure = ({
     ? undefined
     : missingMessage;
 
-// Workflow steps run under `bash -eo pipefail`. Package scripts run with
+// Explicit Bash workflow steps use errexit and pipefail. Package scripts run with
 // neither errexit nor pipefail: only the last statement sets their status, and
 // a runner piped into another command cannot fail them.
 type ShellPropagation = {
@@ -2803,10 +2803,9 @@ const executableCondition = ({
   const expression = conditionExpression(condition);
   const unresolved = referencedContexts(expression).filter((reference) => {
     if (
-      /^steps\.[\w-]+\.(?:conclusion|outcome|outputs\.[\w-]+)$/u.test(
-        reference,
-      ) ||
-      /^needs\.[\w-]+\.(?:result|outputs\.[\w-]+)$/u.test(reference)
+      /^steps\.[\w-]+\.(?:conclusion|outcome)$/u.test(reference) ||
+      /^needs\.[\w-]+\.result$/u.test(reference) ||
+      /^needs\.ci-plan\.outputs\.[\w-]+$/u.test(reference)
     ) {
       return false;
     }
@@ -2870,7 +2869,7 @@ const executableCondition = ({
   const staticallyFalse = definitelyFalse(expression, context);
   return {
     executable:
-      evaluated === true || (unresolved.length === 0 && !staticallyFalse),
+      unresolved.length === 0 && (evaluated === true || !staticallyFalse),
     staticallyFalse,
     unresolved,
   };
@@ -3025,7 +3024,10 @@ const effectiveWorkflowShell = ({
     platforms = Array.isArray(runsOn) ? runsOn : [runsOn];
   }
   if (runsOn === undefined && matrixRunners.length === 0) {
-    return { type: "supported", propagation: BASH_PROPAGATION };
+    return {
+      type: "supported",
+      propagation: { errexit: true, pipefail: false },
+    };
   }
   if (
     platforms.every(
@@ -3034,7 +3036,10 @@ const effectiveWorkflowShell = ({
         /^(?:ubuntu|linux|macos)(?:-|$)/u.test(value),
     )
   ) {
-    return { type: "supported", propagation: BASH_PROPAGATION };
+    return {
+      type: "supported",
+      propagation: { errexit: true, pipefail: false },
+    };
   }
   return {
     type: "unsupported",
