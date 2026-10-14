@@ -60,6 +60,10 @@ import {
 } from "@/api/lib/files/content-delivery";
 import type { ContentDelivery } from "@/api/lib/files/content-delivery";
 import {
+  publicReadTimeoutError,
+  runPublicReadRequest,
+} from "@/api/lib/legal-search/public-read-timeout";
+import {
   causeChainAttributes,
   failureSink,
   identityFields,
@@ -118,6 +122,7 @@ import {
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import type { UsageLaneDecision } from "@/api/lib/usage/lane-routing";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 import { recordWriteContract } from "@/api/lib/write-contract";
 import type { WriteContract } from "@/api/lib/write-contract";
@@ -940,10 +945,9 @@ const runSafeHandlerInDeliveryScope = async <
 
     const error = result.error;
 
-    const handlerError = resolveHandlerError(
-      error,
-      env.ACTION_LIMIT_CONTACT_URL,
-    );
+    const handlerError =
+      publicReadTimeoutError(error) ??
+      resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       const statusCode = handlerError.status;
 
@@ -1011,10 +1015,9 @@ const runSafeHandlerInDeliveryScope = async <
     // an AI request hitting a role the org has not configured a
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
-    const handlerError = resolveHandlerError(
-      error,
-      env.ACTION_LIMIT_CONTACT_URL,
-    );
+    const handlerError =
+      publicReadTimeoutError(error) ??
+      resolveHandlerError(error, env.ACTION_LIMIT_CONTACT_URL);
     if (handlerError !== null) {
       logAndCaptureSafeError({
         request: ctx.request,
@@ -1152,6 +1155,7 @@ const runAdmittedFiniteHandler = async function* <
         const outcome = await admitModelDispatch({
           organizationId: ctx.session.activeOrganizationId,
           actionKind,
+          organizationStateDb: ctx.scopedDb,
           signal,
           run: async (modelAdmission) => {
             const admitted = Object.assign(ctx, {
@@ -1596,6 +1600,9 @@ export const resolveMeteringContext = ({
   const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
     dataClass: "customer",
     organizationId,
+    // Unit metering and the free tier never run together
+    // (`freeTierInvariantViolation`), so a metered organization is standard.
+    modelTier: MANAGED_MODEL_TIER.standard,
   });
   const isByok = modelInfo.keySource === "byok";
   const serviceTier = resolveEffectiveServiceTierForProvider({
@@ -2157,14 +2164,25 @@ export type PublicHandlerContext<
  * mounted handler is in here, which a naming convention cannot guarantee:
  * a raw function passed to `.get()` reads the same at the call site.
  */
-const safePublicHandlers = new WeakMap<object, CachePolicy>();
+type PublicHandlerRegistration = {
+  cache: CachePolicy;
+  readTimeout: "route-class" | "none";
+};
+
+const safePublicHandlers = new WeakMap<object, PublicHandlerRegistration>();
 
 export const getPublicHandlerCachePolicy = (handler: unknown) =>
-  typeof handler === "function" ? safePublicHandlers.get(handler) : undefined;
+  typeof handler === "function"
+    ? safePublicHandlers.get(handler)?.cache
+    : undefined;
 
 /** Whether a mounted route handler came out of a public handler factory. */
 export const isSafePublicHandler = (handler: unknown): boolean =>
   typeof handler === "function" && safePublicHandlers.has(handler);
+
+export const isPublicReadBudgetHandler = (handler: unknown): boolean =>
+  typeof handler === "function" &&
+  safePublicHandlers.get(handler)?.readTimeout === "route-class";
 
 type SafePublicStatusResponse<TStatusCode extends HandlerErrorStatusCode> =
   TStatusCode extends HandlerErrorStatusCode
@@ -2215,7 +2233,10 @@ export const createSafePublicHandler = <
       return response;
     },
   };
-  safePublicHandlers.set(definition.handler, config.cache);
+  safePublicHandlers.set(definition.handler, {
+    cache: config.cache,
+    readTimeout: "none",
+  });
   return recordSafeHandler(definition);
 };
 
@@ -2283,12 +2304,16 @@ export const createSafeUncheckedBoundedPublicHandler = <
   const definition = {
     config,
     handler: async (ctx: PublicHandlerContext<TConfig>) => {
-      const result = await runSafeHandlerWith({
-        ctx,
-        handler,
-        contentDelivery: config.contentDelivery,
-        toErrorStatus: toBoundedPublicErrorStatus,
-      });
+      const result = await runPublicReadRequest(
+        ctx.request,
+        async () =>
+          await runSafeHandlerWith({
+            ctx,
+            handler,
+            contentDelivery: config.contentDelivery,
+            toErrorStatus: toBoundedPublicErrorStatus,
+          }),
+      );
       const response =
         // Projection is idempotent, so factory-built statuses pass through it
         // unchanged; handler-returned statuses are bounded the same way.
@@ -2311,7 +2336,10 @@ export const createSafeUncheckedBoundedPublicHandler = <
       return response;
     },
   };
-  safePublicHandlers.set(definition.handler, config.cache);
+  safePublicHandlers.set(definition.handler, {
+    cache: config.cache,
+    readTimeout: "route-class",
+  });
   return recordSafeHandler(definition);
 };
 

@@ -1,5 +1,12 @@
 # @stll/agent-input
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [[`d532682`](https://github.com/stella/stella/commit/d5326822357958276e9fbfae7eabf009a9a3a5e3)]:
+  - @stll/text-normalize@0.2.0
+
 ## 0.1.4
 
 ### Patch Changes

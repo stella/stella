@@ -624,21 +624,19 @@ return { id: document.entityId, name: document.name };`;
       "connection-drop": async (recorder) => {
         const continued = Promise.withResolvers<undefined>();
         recorder.harness.streamLive(recorder.threadId);
-        recorder.harness.script(
-          recorder.threadId,
-          [
-            {
-              type: "step",
-              text: "Checking the register",
-              toolCalls: [plainCall("call-1")],
-              pause: {
-                at: "before-tool-end",
-                wait: async () => await continued.promise,
-              },
+        recorder.harness.script(recorder.threadId, [
+          {
+            type: "step",
+            text: "Checking the register",
+            toolCalls: [plainCall("call-1")],
+            pause: {
+              at: "before-tool-end",
+              wait: async () => await continued.promise,
             },
-          ],
-          [answers("Checked the register")],
-        );
+          },
+          // Delivery can disconnect while the same producer keeps iterating.
+          answers("Checked the register"),
+        ]);
         const messageId = Bun.randomUUIDv7();
         await step(
           recorder,
@@ -651,12 +649,22 @@ return { id: document.entityId, name: document.name };`;
             ),
           { midStream: true },
         );
+        expect(recorder.harness.modelOptionsOf(recorder.threadId)).toHaveLength(
+          1,
+        );
         await step(recorder, { type: "drop-connection" }, () => {
           recorder.harness.dropConnection(recorder.threadId);
           // Closing delivery leaves production alive; once its input is ready,
           // read-only reconnection catches up to the completed transcript.
           continued.resolve(undefined);
         });
+        await recorder.harness.expectSoundWebClient({
+          client: recorder.client,
+          threadId: recorder.threadId,
+        });
+        expect(recorder.harness.modelOptionsOf(recorder.threadId)).toHaveLength(
+          2,
+        );
       },
     },
   } as const satisfies Record<

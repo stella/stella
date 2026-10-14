@@ -11,6 +11,7 @@ import {
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { timestamptz } from "@/api/db/columns";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
@@ -32,6 +33,7 @@ import {
 } from "@/api/lib/db/transitions";
 import type { ScopedTransitionDeclaration } from "@/api/lib/db/transitions";
 import { SANCTIONS_MONITORING_TRANSITION_IDENTITIES } from "@/api/lib/lists/sanctions/monitoring-transition-identities";
+import { createTestRawExecute } from "@/api/tests/helpers/raw-execute";
 
 const states = ["queued", "running", "completed", "failed"] as const;
 
@@ -71,9 +73,18 @@ test("state-column ownership covers every scoped runtime transition", () => {
     }
     return 0;
   };
+  // Desktop batch receipts are written once, committed or cancelled, per
+  // account and idempotency key.
+  const desktopBatchReceipt = {
+    tableName: "desktopTimeEntryBatches",
+    key: "idempotencyKey",
+    scope: ["organizationId", "userId"],
+    stateColumn: "status",
+  };
   expect(registered.toSorted(order)).toEqual(
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
+      desktopBatchReceipt,
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
     ].toSorted(order),
   );
@@ -132,7 +143,9 @@ describe("conditional status transitions", () => {
     async (shape) => {
       for (const rows of [[], [{ id: "job", status: "failed" as const }]]) {
         const tx = {
-          execute: async () => (shape === "array" ? rows : { rows }),
+          execute: createTestRawExecute(async () =>
+            shape === "array" ? rows : { rows },
+          ),
           rollback,
         };
         const audits: unknown[] = [];
@@ -191,10 +204,12 @@ describe("conditional status transitions", () => {
   test("a zero-row update returns stale and binds every expected source", async () => {
     const captured: ReturnType<PgDialect["sqlToQuery"]>[] = [];
     const tx = {
-      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-        captured.push(dialect.sqlToQuery(query));
-        return [];
-      },
+      execute: createTestRawExecute(
+        async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+          captured.push(dialect.sqlToQuery(query));
+          return [];
+        },
+      ),
       rollback,
     };
     let auditCalls = 0;
@@ -228,12 +243,14 @@ describe("conditional status transitions", () => {
 
   test("a declared fence is bound into the same mutation", async () => {
     const tx = {
-      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-        const built = dialect.sqlToQuery(query);
-        expect(built.sql).toContain('"attempt" IS NOT DISTINCT FROM');
-        expect(built.params).toEqual(["running", "job", "queued", 3]);
-        return [];
-      },
+      execute: createTestRawExecute(
+        async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+          const built = dialect.sqlToQuery(query);
+          expect(built.sql).toContain('"attempt" IS NOT DISTINCT FROM');
+          expect(built.params).toEqual(["running", "job", "queued", 3]);
+          return [];
+        },
+      ),
       rollback,
     };
     expect(
@@ -248,7 +265,7 @@ describe("conditional status transitions", () => {
   });
 
   test("untyped callers cannot bypass graph, metadata or fence validation", async () => {
-    const tx = { execute: async () => [], rollback };
+    const tx = { execute: createTestRawExecute(async () => []), rollback };
     const reopen = { from: ["completed"], to: "running" } as const;
     const mixed = { from: ["queued", "failed"], to: "running" } as const;
     const empty = { from: [], to: "running" } as const;
@@ -413,26 +430,27 @@ describe("conditional status transitions", () => {
   test("database failures propagate instead of returning a stale or successful result", async () => {
     const failure = new TypeError("transition database unavailable");
     const tx = {
-      execute: async () => {
+      execute: createTestRawExecute(async () => {
         throw failure;
-      },
+      }),
       rollback,
     };
-    await assertTransitionRejected(
-      transition({
-        tx,
-        spec,
-        id: "job",
-        options: { from: ["queued"], to: "running" },
-        recordTransitionAuditEvent: noAudit,
-      }),
-      failure,
-    );
+    expect(
+      await rejectionOf(
+        transition({
+          tx,
+          spec,
+          id: "job",
+          options: { from: ["queued"], to: "running" },
+          recordTransitionAuditEvent: noAudit,
+        }),
+      ),
+    ).toHaveProperty("cause", failure);
   });
 
   test("transaction rollback and audit recording are required by the type", () => {
-    const tx = { execute: async () => [], rollback };
-    const noRollback = { execute: async () => [] };
+    const tx = { execute: createTestRawExecute(async () => []), rollback };
+    const noRollback = { execute: createTestRawExecute(async () => []) };
     const missingRollback = async () =>
       await transition({
         // @ts-expect-error a transaction must expose rollback(): never
@@ -469,10 +487,12 @@ test("a keyed batch binds every identifier and audits only changed rows once", a
   });
   const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
   const tx = {
-    execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-      queries.push(dialect.sqlToQuery(query));
-      return [{ id: "first", status: "failed" }];
-    },
+    execute: createTestRawExecute(
+      async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+        queries.push(dialect.sqlToQuery(query));
+        return [{ id: "first", status: "failed" }];
+      },
+    ),
     rollback,
   };
   let audits = 0;
@@ -511,10 +531,10 @@ test("empty and stale batches perform no audit", async () => {
   let queries = 0;
   let audits = 0;
   const tx = {
-    execute: async () => {
+    execute: createTestRawExecute(async () => {
       queries += 1;
       return [];
-    },
+    }),
     rollback,
   };
   const recordTransitionAuditEvent = async () => {
@@ -549,7 +569,9 @@ test.each(["array", "rows"] as const)(
     for (const count of [0, 2, -1, 0.5, "2", undefined]) {
       const rows = [{ count }];
       const tx = {
-        execute: async () => (shape === "array" ? rows : { rows }),
+        execute: createTestRawExecute(async () =>
+          shape === "array" ? rows : { rows },
+        ),
         rollback,
       };
       const audits: number[] = [];
@@ -603,17 +625,19 @@ test.each(["array", "rows"] as const)(
     });
     const captured: ReturnType<PgDialect["sqlToQuery"]>[] = [];
     const tx = {
-      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-        captured.push(dialect.sqlToQuery(query));
-        const rows = [
-          {
-            sourceId: "entry-1",
-            organizationId: "org-1",
-            status: "lapsed",
-          },
-        ];
-        return shape === "array" ? rows : { rows };
-      },
+      execute: createTestRawExecute(
+        async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+          captured.push(dialect.sqlToQuery(query));
+          const rows = [
+            {
+              sourceId: "entry-1",
+              organizationId: "org-1",
+              status: "lapsed",
+            },
+          ];
+          return shape === "array" ? rows : { rows };
+        },
+      ),
       rollback,
     };
     let auditCalls = 0;
@@ -676,27 +700,29 @@ test.each(["array", "rows"] as const)(
     });
     const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
     const tx = {
-      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-        const compiled = dialect.sqlToQuery(query);
-        queries.push(compiled);
-        if (compiled.sql.includes("INSERT INTO")) {
-          const rows = [
-            { organizationId: "org-1", sourceId: "new", status: "active" },
-          ];
-          return shape === "array" ? rows : { rows };
-        }
-        if (compiled.sql.includes("SELECT 1")) {
-          const rows = [{ value: 1 }, { value: 1 }];
-          return shape === "array" ? rows : { rows };
-        }
-        if (compiled.sql.includes("RETURNING")) {
-          const rows = [
-            { organizationId: "org-1", sourceId: "old", status: "active" },
-          ];
-          return shape === "array" ? rows : { rows };
-        }
-        return shape === "array" ? [] : { rows: [] };
-      },
+      execute: createTestRawExecute(
+        async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+          const compiled = dialect.sqlToQuery(query);
+          queries.push(compiled);
+          if (compiled.sql.includes("INSERT INTO")) {
+            const rows = [
+              { organizationId: "org-1", sourceId: "new", status: "active" },
+            ];
+            return shape === "array" ? rows : { rows };
+          }
+          if (compiled.sql.includes("SELECT 1")) {
+            const rows = [{ value: 1 }, { value: 1 }];
+            return shape === "array" ? rows : { rows };
+          }
+          if (compiled.sql.includes("RETURNING")) {
+            const rows = [
+              { organizationId: "org-1", sourceId: "old", status: "active" },
+            ];
+            return shape === "array" ? rows : { rows };
+          }
+          return shape === "array" ? [] : { rows: [] };
+        },
+      ),
       rollback,
     };
     let auditCalls = 0;
@@ -768,14 +794,16 @@ test.each(["array", "rows"] as const)(
       state: "active",
     } as const;
     const existingStateTx = {
-      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-        const compiled = dialect.sqlToQuery(query);
-        if (compiled.sql.includes("SELECT 1")) {
-          const rows = [{ value: 1 }];
-          return shape === "array" ? rows : { rows };
-        }
-        return shape === "array" ? [] : { rows: [] };
-      },
+      execute: createTestRawExecute(
+        async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+          const compiled = dialect.sqlToQuery(query);
+          if (compiled.sql.includes("SELECT 1")) {
+            const rows = [{ value: 1 }];
+            return shape === "array" ? rows : { rows };
+          }
+          return shape === "array" ? [] : { rows: [] };
+        },
+      ),
       rollback,
     };
     let auditCalls = 0;
@@ -855,10 +883,12 @@ describe("multi-column lifecycles", () => {
   test("one update binds every column's sources and audits the changed row", async () => {
     const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
     const tx = {
-      execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-        queries.push(dialect.sqlToQuery(query));
-        return [{ id: "job", status: "running", lease: "held" }];
-      },
+      execute: createTestRawExecute(
+        async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+          queries.push(dialect.sqlToQuery(query));
+          return [{ id: "job", status: "running", lease: "held" }];
+        },
+      ),
       rollback,
     };
     const audited: unknown[] = [];
@@ -897,10 +927,10 @@ describe("multi-column lifecycles", () => {
     let queries = 0;
     let audits = 0;
     const tx = {
-      execute: async () => {
+      execute: createTestRawExecute(async () => {
         queries += 1;
         return [];
-      },
+      }),
       rollback,
     };
     const moves = {
@@ -933,7 +963,7 @@ describe("multi-column lifecycles", () => {
   });
 
   test("every declared column must move legally and stay owned", async () => {
-    const tx = { execute: async () => [], rollback };
+    const tx = { execute: createTestRawExecute(async () => []), rollback };
     const legal = {
       status: { from: ["queued"], to: "running" },
       lease: { from: ["idle"], to: "held" },
@@ -1059,10 +1089,12 @@ test("scoped keyed batches retain their scope and advance only the declared fenc
   });
   const queries: ReturnType<PgDialect["sqlToQuery"]>[] = [];
   const tx = {
-    execute: async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
-      queries.push(dialect.sqlToQuery(query));
-      return [{ id: "feed", status: "pending" }];
-    },
+    execute: createTestRawExecute(
+      async (query: Parameters<PgDialect["sqlToQuery"]>[0]) => {
+        queries.push(dialect.sqlToQuery(query));
+        return [{ id: "feed", status: "pending" }];
+      },
+    ),
     rollback,
   };
   const changed = await transitionBatch({

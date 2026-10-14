@@ -65,6 +65,7 @@ import {
   providerDiagnosticFromThrown,
   withProviderDiagnostic,
 } from "@/lib/errors/provider-diagnostic";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { LifecycleRegistry } from "@/stores/lifecycle-registry";
@@ -77,6 +78,11 @@ import type {
   ChatThreadKey,
   ChatThreadOptionsContext,
 } from "./chat-query-contract";
+import {
+  ChatRequestError,
+  findChatRequestError,
+  normalizeChatStreamError,
+} from "./chat-request-error";
 
 type ChatToolScope = typeof SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE;
 
@@ -151,10 +157,11 @@ export type ChatRuntime = ChatActivitySession & {
   getSnapshot: () => ChatRuntimeSnapshot;
   reload: (options?: ChatSendMessageOptions) => Promise<void>;
   setMessages: (messages: PersistedChatMessage[]) => void;
+  /** Resolves once the message is appended, without waiting for its stream. */
   startRouteHandoffMessage: (
     message: ChatRouteHandoffMessage,
     options?: ChatSendMessageOptions,
-  ) => ChatRouteHandoffStart;
+  ) => Promise<ChatRouteHandoffStart>;
   /** The user's Stop: the server ends the turn as stopped. */
   stop: () => void;
   /** The page leaves the thread: it closes its own request and asks the
@@ -286,13 +293,16 @@ const requestChatTurnStop = async ({
 
 const ignoreAbandonedStreamError = (_error: unknown): void => undefined;
 
-class ChatMessageStartError extends Error {
+class ChatMessageStartError extends ChatRequestError {
   readonly messageId: SafeId<"chatMessage">;
 
-  constructor(messageId: SafeId<"chatMessage">) {
-    super(
-      `TanStack ChatClient did not append user message "${messageId}" before starting the stream.`,
-    );
+  constructor(messageId: SafeId<"chatMessage">, cause?: unknown) {
+    super({
+      kind: "not_started",
+      message:
+        "Chat client did not start the message while another request was active",
+      cause,
+    });
     this.name = "ChatMessageStartError";
     this.messageId = messageId;
   }
@@ -602,18 +612,29 @@ export const createChatRuntime = ({
         return panic("Stella chat connection received model messages");
       }
       providerDiagnostic = undefined;
+      const prepared = Result.try({
+        try: () =>
+          buildSendRequestBody({
+            context,
+            key,
+            messages: toPersistedChatMessages(messages),
+            run: runContext,
+            requestBody: normalizeChatContinuationRequestBody(data),
+          }),
+        catch: (cause) =>
+          new ChatRequestError({
+            kind: "preparation_failed",
+            message: "Chat request could not be prepared",
+            cause,
+          }),
+      });
+      const requestBody = readQueryResult(prepared);
       return observeChatProviderDiagnostic(
         keepPostedMessagesInSnapshots(
           messages,
           upstreamConnection.connect(
             messages,
-            buildSendRequestBody({
-              context,
-              key,
-              messages: toPersistedChatMessages(messages),
-              run: runContext,
-              requestBody: normalizeChatContinuationRequestBody(data),
-            }),
+            requestBody,
             abortSignal,
             runContext,
           ),
@@ -661,7 +682,10 @@ export const createChatRuntime = ({
       ) {
         activeToolResultOperation.rejection = error;
       }
-      const normalized = withProviderDiagnostic(error, providerDiagnostic);
+      const normalized = withProviderDiagnostic(
+        normalizeChatStreamError(error),
+        providerDiagnostic,
+      );
       onError(normalized);
       setSnapshot({ error: normalized });
     },
@@ -674,6 +698,8 @@ export const createChatRuntime = ({
           !actionAdmissionOutcome(error)) ||
           (chatRefusal(snapshot.error) !== null &&
             chatRefusal(error) === null) ||
+          (findChatRequestError(snapshot.error) !== undefined &&
+            findChatRequestError(error) === undefined) ||
           (providerDiagnosticFromThrown(snapshot.error) !== undefined &&
             providerDiagnosticFromThrown(error) === undefined &&
             providerDiagnostic === undefined))
@@ -857,27 +883,57 @@ export const createChatRuntime = ({
     viewerAttached.resolve(undefined);
   };
 
+  type ChatClientSendStart =
+    | ChatRouteHandoffStart
+    | {
+        status: "not_started";
+        messageId: SafeId<"chatMessage">;
+        stream: Promise<void>;
+      };
+
   const startClientSend = (
     message: ChatUserMessageInput,
     options: ChatSendMessageOptions | undefined,
-  ): ChatRouteHandoffStart => {
+  ): ChatClientSendStart => {
     attachClient();
     supersedePendingInterrupts();
+    const requestWasActive =
+      snapshot.isLoading || isChatClientRequestActive(snapshot.status);
     const stream = client.sendMessage(message, options?.body);
     if (!hasUserMessage(snapshot.messages, message.id)) {
-      detached(stream.catch(ignoreAbandonedStreamError), "chat-queries.stream");
-      throw captureRuntimeError(new ChatMessageStartError(message.id));
+      return {
+        messageId: message.id,
+        status: "not_started",
+        stream: stream.catch((error: unknown) =>
+          readQueryResult(
+            Result.err(
+              requestWasActive
+                ? new ChatMessageStartError(message.id, error)
+                : new ChatRequestError({
+                    kind: "preparation_failed",
+                    message: "Chat client failed before starting the message",
+                    cause: error,
+                  }),
+            ),
+          ),
+        ),
+      };
     }
     startTurn();
     return { messageId: message.id, status: "started", stream };
   };
 
   const sendThreadMessage: ChatThreadSendMessage = async (message, options) => {
-    const { stream } = startClientSend(message, options);
-    try {
-      await stream;
-    } catch (error) {
-      throw captureRuntimeError(error);
+    const started = startClientSend(message, options);
+    const outcome = await Result.tryPromise({
+      try: async () => await started.stream,
+      catch: (cause) => captureRuntimeError(cause),
+    });
+    readQueryResult(outcome);
+    if (started.status === "not_started") {
+      return readQueryResult(
+        Result.err(captureRuntimeError(new ChatMessageStartError(message.id))),
+      );
     }
   };
 
@@ -1108,8 +1164,20 @@ export const createChatRuntime = ({
       client.setMessagesManually(messages);
       setSnapshot({ messages });
     },
-    startRouteHandoffMessage: (message, options) => {
+    startRouteHandoffMessage: async (message, options) => {
       const started = startClientSend(message, options);
+      if (started.status === "not_started") {
+        const outcome = await Result.tryPromise({
+          try: async () => await started.stream,
+          catch: (cause) => captureRuntimeError(cause),
+        });
+        readQueryResult(outcome);
+        return readQueryResult(
+          Result.err(
+            captureRuntimeError(new ChatMessageStartError(message.id)),
+          ),
+        );
+      }
       detached(
         started.stream.catch(captureRuntimeError),
         "chat-queries.stream",

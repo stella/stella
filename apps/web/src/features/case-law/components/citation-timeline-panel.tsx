@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { PopoverClose, PopoverTitle } from "@stll/ui/popover";
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
@@ -18,6 +19,7 @@ import {
   CITATION_TREATMENT_FILL,
   CITATION_TREATMENT_LABEL,
   CITATION_TREATMENT_ORDER,
+  citationSummaryIsCapped,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import type {
@@ -46,8 +48,9 @@ import { CitationTreatmentBar } from "@/features/case-law/components/citation-tr
 import { decisionLeadingCitationsOptions } from "@/features/case-law/queries/citations";
 import type { LeadingCitation } from "@/features/case-law/queries/citations";
 import { useFormatter } from "@/i18n/formatting-context";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { detached } from "@/lib/detached";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 
 /** The panel's own width, minus its padding: the plot is drawn at this size. */
 const CHART_WIDTH = 350;
@@ -112,17 +115,17 @@ export const CitationTimelinePanel = ({
         </PopoverTitle>
         <span className="text-muted-foreground text-xs tabular-nums">
           {format.number(total)}
-          {summary.capped.incoming ? "+" : null}
+          {citationSummaryIsCapped(summary, "incoming") ? "+" : null}
         </span>
       </div>
 
-      {summary.capped.incoming && (
+      {citationSummaryIsCapped(summary, "incoming") && (
         <p className="text-muted-foreground text-xs">
           {t("caseLaw.citation.partialSummary")}
         </p>
       )}
 
-      {!summary.capped.incoming && (
+      {!citationSummaryIsCapped(summary, "incoming") && (
         <div className="flex flex-col gap-2">
           <CitationTreatmentBar
             className="h-2"
@@ -162,7 +165,7 @@ export const CitationTimelinePanel = ({
           />
         }
       >
-        {summary.capped.incoming
+        {citationSummaryIsCapped(summary, "incoming")
           ? t("common.showAll")
           : t("caseLaw.citation.showAll", { count: total })}
       </PopoverClose>
@@ -293,6 +296,10 @@ const CitingDecisionRow = ({ row }: { row: LeadingCitation }) => {
           />
         }
       >
+        <DocumentIdentityBadge
+          identity={decisionDocumentIdentity(row.decision)}
+          title={`${row.decision.caseNumber} · ${row.decision.court}`}
+        />
         <span className="flex min-w-0 flex-1 flex-col">
           <BidiText
             as="span"

@@ -460,8 +460,7 @@
                   },
                   "refEncoding": "persisted-resource-refs-v2",
                   "turnOutcome": {
-                    "type": "failed",
-                    "error": "unknown"
+                    "type": "completed"
                   },
                   "turnTiming": {
                     "status": "finished",
@@ -504,6 +503,10 @@
                     "state": "complete",
                     "toolCallId": "call-1",
                     "type": "tool-result"
+                  },
+                  {
+                    "type": "text",
+                    "content": "Checked the register"
                   }
                 ]
               }

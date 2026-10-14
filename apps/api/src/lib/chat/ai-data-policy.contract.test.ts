@@ -58,6 +58,7 @@ type ClassifiedOptions = [
   Parameters<typeof createTanStackAIAnalyticsCallbacks>[0],
   Parameters<typeof requireTanStackAIAvailableForRole>[0],
   Parameters<typeof getTanStackTextModelInfoForRole>[2],
+  Parameters<typeof getTanStackTextModelInfoById>[3],
 ];
 
 test("decision and metadata entries require a data class", () => {
@@ -67,7 +68,6 @@ test("decision and metadata entries require a data class", () => {
 type DataClassArguments = [
   Parameters<typeof resolveDecisionModel>[1],
   Parameters<typeof hasInstanceDecisionModel>[0],
-  Parameters<typeof getTanStackTextModelInfoById>[3],
 ];
 
 test("positional metadata entries require a data class", () => {

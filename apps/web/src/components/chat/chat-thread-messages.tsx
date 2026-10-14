@@ -118,6 +118,10 @@ import {
   mentionAttrsToHref,
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
+import {
+  findChatRequestError,
+  type ChatRequestError,
+} from "@/features/chat/chat-request-error";
 import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -129,7 +133,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { chatRefusal } from "@/lib/errors/api";
+import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -1006,7 +1010,15 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
 type ChatErrorTranslationKey =
   | (typeof CHAT_ERROR_TRANSLATION_KEYS)[keyof typeof CHAT_ERROR_TRANSLATION_KEYS]
   | "chat.sendErrorAnonymizationBlocked"
-  | "chat.sendError";
+  | "chat.sendError"
+  | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
+
+const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
+  preparation_failed: "chat.sendErrorPreparationFailed",
+  connection_failed: "chat.sendErrorConnectionFailed",
+  timed_out: "chat.sendErrorTimedOut",
+  not_started: "chat.sendErrorNotStarted",
+} as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
 
 const isMappedChatErrorKind = (
   message: string,
@@ -1014,6 +1026,10 @@ const isMappedChatErrorKind = (
   message in CHAT_ERROR_TRANSLATION_KEYS;
 
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
+  const requestError = findChatRequestError(error);
+  if (requestError !== undefined) {
+    return CHAT_REQUEST_ERROR_TRANSLATION_KEYS[requestError.kind];
+  }
   if (isThirdPartyBoundaryRefusalError(error)) {
     return "chat.sendErrorAnonymizationBlocked";
   }
@@ -1042,6 +1058,13 @@ export const ChatErrorMessage = ({
     isThirdPartyBoundaryRefusalError(error);
   const refusal = chatRefusal(error);
   const diagnostic = providerDiagnosticFromThrown(error);
+  const rejectedInput =
+    refusal !== null &&
+    (refusal.status === 400 || refusal.status === 422) &&
+    !isDisplayableAPIError(refusal);
+  const errorMessage = rejectedInput
+    ? t("errors.api.validation")
+    : (refusal?.message ?? t(chatErrorTranslationKey(error)));
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1069,9 +1092,7 @@ export const ChatErrorMessage = ({
         {diagnostic !== undefined ? (
           <ProviderDiagnosticMessage diagnostic={diagnostic} />
         ) : (
-          <p className="text-sm">
-            {refusal ? refusal.message : t(chatErrorTranslationKey(error))}
-          </p>
+          <p className="text-sm">{errorMessage}</p>
         )}
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (

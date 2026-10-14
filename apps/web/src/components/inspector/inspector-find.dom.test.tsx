@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -67,12 +67,15 @@ const readerText = {
 };
 
 type ReaderOptions = {
+  citationQuery?: string;
   content?: ReactNode;
   enabled?: boolean;
   initialQuery?: string;
   name: string;
 };
+const openCitedPassageLabel = "Open cited passage";
 const Reader = ({
+  citationQuery,
   content,
   enabled = true,
   initialQuery,
@@ -90,6 +93,14 @@ const Reader = ({
   return (
     <section aria-label={name} ref={panelRef}>
       <InspectorFindBar find={find} />
+      {citationQuery !== undefined && (
+        <button
+          type="button"
+          onClick={() => find.openFindAtQuery(citationQuery)}
+        >
+          {openCitedPassageLabel}
+        </button>
+      )}
       <div ref={contentRef}>
         {content === undefined ? (
           <>
@@ -296,6 +307,69 @@ test("opening without search terms keeps the bar closed until the reader receive
   await waitFor(() => expect(screen.getByRole("searchbox")).toBeTruthy());
   expect(screen.getByRole("searchbox").getAttribute("value")).toBe("");
   expect(highlights.size).toBe(0);
+});
+
+test("a cited search passage opens a closed find bar with its query and highlights", async () => {
+  const screen = renderReaders([
+    { citationQuery: "odpovědnost", name: "decision" },
+  ]);
+  expect(screen.queryByRole("searchbox")).toBeNull();
+  expect(highlights.size).toBe(0);
+  fireEvent.click(screen.getByRole("button", { name: "Open cited passage" }));
+  await waitFor(() =>
+    expect(highlightText("stella-inspector-find-decision")).toEqual([
+      "Odpovědnosti",
+      "odpovědnosti",
+    ]),
+  );
+  expect(screen.getByRole("searchbox").getAttribute("value")).toBe(
+    "odpovědnost",
+  );
+  expect(screen.getByText(matchCounter(1, 2))).toBeTruthy();
+});
+
+test("reopening the same cited query scrolls back to its first match while Find only focuses the bar", async () => {
+  const scroll = mock(() => {});
+  const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = scroll;
+  try {
+    const screen = renderReaders([
+      { citationQuery: "odpovědnost", name: "decision" },
+    ]);
+    const pane = screen.getByRole("region", { name: "decision" });
+    Object.defineProperty(pane, "offsetParent", { value: document.body });
+    const citation = screen.getByRole("button", { name: "Open cited passage" });
+    fireEvent.click(citation);
+    await waitFor(() =>
+      expect(screen.getByText(matchCounter(1, 2))).toBeTruthy(),
+    );
+    expect(scroll).toHaveBeenCalledTimes(1);
+    const first = activeRange("decision");
+    fireEvent.click(
+      screen.getByRole("button", { name: messages.common.nextMatch }),
+    );
+    expect(screen.getByText(matchCounter(2, 2))).toBeTruthy();
+    fireEvent.click(citation);
+    expect(screen.getByText(matchCounter(1, 2))).toBeTruthy();
+    expect(activeRange("decision")?.startContainer).toBe(first?.startContainer);
+
+    citation.focus();
+    pane.dispatchEvent(new Event("wheel"));
+    scroll.mockClear();
+    fireEvent.keyDown(pane, { key: "f", code: "KeyF", ctrlKey: true });
+    expect(document.activeElement).toBe(screen.getByRole("searchbox"));
+    expect(scroll).not.toHaveBeenCalled();
+    citation.focus();
+    fireEvent.click(citation);
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(activeRange("decision")?.startContainer).toBe(first?.startContainer);
+    expect(highlightText("stella-inspector-find-decision")).toEqual([
+      "Odpovědnosti",
+      "odpovědnosti",
+    ]);
+  } finally {
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  }
 });
 
 test("Escape inside one pane leaves its neighbor's find bar and highlights intact", async () => {

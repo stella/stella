@@ -27,6 +27,7 @@ import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
+import { CHAT_DECISION_PASSAGE_HREF_PREFIX } from "@stll/api-contract";
 import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
@@ -60,6 +61,11 @@ import {
   COMPACTION_SUMMARY_MESSAGE_ID,
   createCompactionSummaryMessage,
 } from "@/api/handlers/chat/compaction";
+import {
+  createDecisionPassageStamper,
+  DECISION_PASSAGE_TURN_DECISIONS_MAX,
+  knownDecisionPassageStamper,
+} from "@/api/handlers/chat/decision-passage-numbers";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
@@ -79,6 +85,7 @@ import type {
 } from "@/api/handlers/chat/types";
 import { createVisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { COURT_PARAGRAPH_NUMBER_DECISIONS_MAX } from "@/api/lib/case-law/court-paragraph-numbers";
 import type { ChatTool } from "@/api/lib/chat/chat-tool-types";
 import {
   guardModelMessages,
@@ -6762,4 +6769,347 @@ test("provider diagnostic matches the wire and persisted terminal outcome", asyn
     }),
   );
   expect(reloaded.metadata.turnOutcome).toEqual(response.metadata.turnOutcome);
+});
+
+describe("decision passage court numbers", () => {
+  const OPEN_ID = toSafeId<"caseLawDecision">(
+    "019a0000-0000-7000-8000-000000000301",
+  );
+  const EARLIER_ID = toSafeId<"caseLawDecision">(
+    "019a0000-0000-7000-8000-000000000302",
+  );
+  const passage = (decisionId: string, components: string) =>
+    `${CHAT_DECISION_PASSAGE_HREF_PREFIX}${decisionId}:${components}`;
+  // The answer arrives cut mid-href, as provider deltas often are: the marker
+  // itself, the anchor and the closing paren each land in different chunks.
+  // `p-8:3` is a number the model copied, not one it may set; EARLIER_ID is a
+  // decision cited earlier in the thread and not open this turn.
+  const DELTAS = [
+    "The appeal fails [as held](#st",
+    "ella-decision-passage=",
+    `${OPEN_ID}:p-`,
+    "8:3) and [again](",
+    `${passage(EARLIER_ID, "p-4:1")}) and [there](`,
+    `${passage(EARLIER_ID, "p-99")}) end.`,
+  ];
+  const STAMPED = `The appeal fails [as held](${passage(OPEN_ID, "p-8:6")}) and [again](${passage(EARLIER_ID, "p-4:2")}) and [there](${passage(EARLIER_ID, "p-99")}) end.`;
+
+  const runTurn = async (
+    boundary: ChatThirdPartyBoundary,
+    loads: (readonly string[])[],
+    deltas: readonly string[] = DELTAS,
+  ) => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let responseMessage: ChatMessage | null = null;
+    const finished: { message: ChatMessage | null } = { message: null };
+    const processor = new StreamProcessor({
+      events: {
+        onStreamEnd: (message) => {
+          responseMessage = toChatMessage(message);
+        },
+      },
+    });
+    const persistenceVisible = transformPersistenceVisibleStream({
+      boundary,
+      initialRestorationPlaceholders: new Set(),
+      restorationPairs: [],
+      stamper: createDecisionPassageStamper({
+        known: new Map([[OPEN_ID, new Map([["p-8", 6]])]]),
+        load: async (decisionIds) => {
+          loads.push(decisionIds);
+          return await Promise.resolve(
+            new Map([[EARLIER_ID, new Map([["p-4", 2]])]]),
+          );
+        },
+      }),
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "provider-message",
+          role: "assistant",
+        },
+        ...deltas.map(
+          (delta) =>
+            ({
+              type: EventType.TEXT_MESSAGE_CONTENT,
+              delta,
+              messageId: "provider-message",
+            }) as const,
+        ),
+        { type: EventType.TEXT_MESSAGE_END, messageId: "provider-message" },
+        ...normalizeStreamChunk({
+          type: EventType.RUN_FINISHED,
+          finishReason: "stop",
+          runId: "run-1",
+          threadId: "thread-1",
+        }),
+      ]),
+    });
+    const processed = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      deadlineSignal: new AbortController().signal,
+      flushPendingSource: persistenceVisible.flushPending,
+      getResponseMessage: () => responseMessage,
+      initialMessages: [],
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: ({ responseMessage: terminalMessage }) => {
+        finished.message = terminalMessage;
+      },
+      processor,
+      source: persistenceVisible,
+    });
+    const live = collectText(
+      await collectChunks(
+        transformClientVisibleStream({
+          source: processed,
+          storedHistory: NOTHING_REWRITTEN,
+        }),
+      ),
+    );
+    const stored: ChatMessage =
+      finished.message ?? panic("The turn must be persisted");
+    return { live, stored };
+  };
+
+  const textOf = (parts: readonly ChatMessage["parts"][number][]) =>
+    parts.map((part) => (part.type === "text" ? part.content : "")).join("");
+
+  for (const boundary of [
+    { type: "raw" } as const,
+    createBoundary([["[PERSON_1]", "Jan Novak"]]),
+  ]) {
+    test(`a ${boundary.type} turn stores, streams and reloads the court's number for open and earlier-cited decisions`, async () => {
+      const loads: (readonly string[])[] = [];
+      const { live, stored } = await runTurn(boundary, loads);
+      const reloaded = normalizePersistedChatMessageContent(
+        toPersistedChatMessageContentV3({ data: stored.parts, metadata: {} }),
+      );
+
+      expect(live).toBe(STAMPED);
+      expect(textOf(stored.parts)).toBe(STAMPED);
+      expect(textOf(reloaded.parts)).toBe(STAMPED);
+      // The open decision is never looked up; the earlier one once, though
+      // the answer cites it twice.
+      expect(loads).toEqual([[EARLIER_ID]]);
+    });
+  }
+
+  test("an anonymized placeholder beside a split href is restored and the href stamped", async () => {
+    const { live, stored } = await runTurn(
+      createBoundary([["[PERSON_1]", "Jan Novak"]]),
+      [],
+      [
+        "[as held](#stella-decision-pass",
+        `age=${OPEN_ID}:p-8)[PER`,
+        "SON_1] agreed.",
+      ],
+    );
+    const expected = `[as held](${passage(OPEN_ID, "p-8:6")})Jan Novak agreed.`;
+    expect(textOf(stored.parts)).toBe(expected);
+    expect(live).toBe(expected);
+  });
+
+  test("a href split across chunk events reaches the stamp whole", async () => {
+    const chunks = await collectChunks(
+      transformPersistenceVisibleStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        stamper: knownDecisionPassageStamper(
+          new Map([[OPEN_ID, new Map([["p-12", 7]])]]),
+        ),
+        source: streamChunks([
+          {
+            type: EventType.TEXT_MESSAGE_CHUNK,
+            messageId: "provider-message",
+            role: "assistant",
+            delta: `As [held](${passage(OPEN_ID, "p-12")}`,
+          },
+          { type: EventType.TEXT_MESSAGE_CHUNK, delta: ":3) and [it](#ste" },
+          {
+            type: EventType.TEXT_MESSAGE_CHUNK,
+            messageId: "provider-message",
+            delta: `lla-decision-passage=${OPEN_ID}:p-1`,
+          },
+          { type: EventType.TEXT_MESSAGE_CHUNK, delta: "2:9) ends." },
+          {
+            type: EventType.REASONING_MESSAGE_CHUNK,
+            messageId: "provider-reasoning",
+            delta: `[see](${passage(OPEN_ID, "p-12")}`,
+          },
+          {
+            type: EventType.REASONING_MESSAGE_CHUNK,
+            messageId: "provider-reasoning",
+            delta: ")",
+          },
+          ...normalizeStreamChunk({
+            type: EventType.RUN_FINISHED,
+            finishReason: "stop",
+            runId: "run-1",
+            threadId: "thread-1",
+          }),
+        ]),
+      }),
+    );
+    const text = chunks.flatMap((chunk) =>
+      chunk.type === EventType.TEXT_MESSAGE_CHUNK ? [chunk] : [],
+    );
+    const reasoning = chunks.flatMap((chunk) =>
+      chunk.type === EventType.REASONING_MESSAGE_CHUNK ? [chunk] : [],
+    );
+
+    expect(text.map((chunk) => chunk.delta).join("")).toBe(
+      `As [held](${passage(OPEN_ID, "p-12:7")}) and [it](${passage(OPEN_ID, "p-12:7")}) ends.`,
+    );
+    expect(text.every((chunk) => chunk.messageId === "provider-message")).toBe(
+      true,
+    );
+    // A message's held tail is released before the next message begins.
+    expect(reasoning.map((chunk) => chunk.delta).join("")).toBe(
+      `[see](${passage(OPEN_ID, "p-12:7")})`,
+    );
+    expect(
+      chunks.findIndex(
+        (chunk) => chunk.type === EventType.REASONING_MESSAGE_CHUNK,
+      ),
+    ).toBeGreaterThan(
+      chunks.findLastIndex(
+        (chunk) => chunk.type === EventType.TEXT_MESSAGE_CHUNK,
+      ),
+    );
+  });
+
+  test("a snapshot's answers are stamped, in AG-UI content and UI parts alike, and nothing else is", async () => {
+    const cited = `[as held](${passage(EARLIER_ID, "p-4:9")})`;
+    const stamped = `[as held](${passage(EARLIER_ID, "p-4:2")})`;
+    const loads: (readonly string[])[] = [];
+    // A stored answer as `presentStoredHistory` serves it: its UI parts, with
+    // the empty `content` AG-UI requires.
+    const served = {
+      id: "assistant-2",
+      role: "assistant",
+      content: "",
+      parts: [{ type: "text", content: cited }],
+    } satisfies UIMessage & { content: string };
+    const snapshot = unsafeFixture(
+      "A server snapshot carrying an engine answer and a served UI answer",
+      {
+        type: EventType.MESSAGES_SNAPSHOT,
+        messages: [
+          { id: "user-1", role: "user", content: cited },
+          { id: "assistant-1", role: "assistant", content: cited },
+          served,
+        ],
+      } satisfies StreamChunk,
+    );
+    const chunks = await collectChunks(
+      transformPersistenceVisibleStream({
+        boundary: { type: "raw" },
+        initialRestorationPlaceholders: new Set(),
+        restorationPairs: [],
+        stamper: createDecisionPassageStamper({
+          known: new Map(),
+          load: async (decisionIds) => {
+            loads.push(decisionIds);
+            return await Promise.resolve(
+              new Map([[EARLIER_ID, new Map([["p-4", 2]])]]),
+            );
+          },
+        }),
+        source: streamChunks([snapshot]),
+      }),
+    );
+    const emitted = chunks.find(
+      (chunk) => chunk.type === EventType.MESSAGES_SNAPSHOT,
+    );
+    expect(emitted).toMatchObject({
+      messages: [
+        { id: "user-1", content: cited },
+        { id: "assistant-1", content: stamped },
+        { id: "assistant-2", parts: [{ type: "text", content: stamped }] },
+      ],
+    });
+    expect(loads).toEqual([[EARLIER_ID]]);
+  });
+
+  test("a turn citing more decisions than its budget resolves the budget in bounded batches and leaves the rest bare", async () => {
+    const ids = Array.from({ length: 40 }, (_, index) =>
+      toSafeId<"caseLawDecision">(
+        `019a0000-0000-7000-8000-${String(index + 1).padStart(12, "0")}`,
+      ),
+    );
+    const loads: (readonly string[])[] = [];
+    const stamper = createDecisionPassageStamper({
+      known: new Map(),
+      load: async (decisionIds) => {
+        loads.push(decisionIds);
+        return await Promise.resolve(
+          new Map(decisionIds.map((id) => [id, new Map([["p-1", 5]])])),
+        );
+      },
+    });
+    const text = ids.map((id) => `[a](${passage(id, "p-1")})`).join(" ");
+    await stamper.prepare(text);
+    await stamper.prepare(text);
+
+    expect(loads.map((batch) => batch.length)).toEqual([
+      COURT_PARAGRAPH_NUMBER_DECISIONS_MAX,
+      DECISION_PASSAGE_TURN_DECISIONS_MAX -
+        COURT_PARAGRAPH_NUMBER_DECISIONS_MAX,
+    ]);
+    const stampedIds = new Set(loads.flat());
+    expect(stampedIds.size).toBe(DECISION_PASSAGE_TURN_DECISIONS_MAX);
+    const out = stamper.stamp(text);
+    for (const id of ids) {
+      expect(out).toContain(
+        `(${passage(id, stampedIds.has(id) ? "p-1:5" : "p-1")})`,
+      );
+    }
+  });
+
+  test("a lookup that never answers times out without holding the answer", async () => {
+    let calls = 0;
+    const stamper = createDecisionPassageStamper({
+      known: new Map(),
+      load: async () => {
+        calls += 1;
+        // The executor never settles: the lookup hangs until the stamper
+        // gives up on it.
+        return await new Promise<never>(() => {
+          // Intentionally left pending.
+        });
+      },
+      timeoutMs: 10,
+    });
+    const text = `[as held](${passage(EARLIER_ID, "p-4:2")})`;
+    await stamper.prepare(text);
+    await stamper.prepare(text);
+    expect(stamper.stamp(text)).toBe(
+      `[as held](${passage(EARLIER_ID, "p-4")})`,
+    );
+    // A failed lookup is not retried within the turn.
+    expect(calls).toBe(1);
+  });
+
+  test("a stamper that resolves nothing drops a number the model wrote", async () => {
+    const stamper = knownDecisionPassageStamper(new Map());
+    const text = `[as held](${passage(OPEN_ID, "p-8:6")})`;
+    await stamper.prepare(text);
+    expect(stamper.stamp(text)).toBe(`[as held](${passage(OPEN_ID, "p-8")})`);
+  });
+
+  test("a failed lookup costs the citation its number, not the answer", async () => {
+    const stamper = createDecisionPassageStamper({
+      known: new Map(),
+      load: async () => await Promise.reject(new Error("corpus unavailable")),
+    });
+    const text = `[as held](${passage(EARLIER_ID, "p-4:2")})`;
+    await stamper.prepare(text);
+    expect(stamper.stamp(text)).toBe(
+      `[as held](${passage(EARLIER_ID, "p-4")})`,
+    );
+  });
 });
