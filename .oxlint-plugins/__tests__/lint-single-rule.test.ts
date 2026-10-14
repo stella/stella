@@ -81,7 +81,7 @@ test("concurrent fix cases each return their isolated result", async () => {
     source: 'const view = <div className="ms-2 text-end" />;',
   };
   const results = await Promise.all(
-    Array.from({ length: 3 }, () =>
+    Array.from({ length: 3 }, async () =>
       runSingleRule("no-physical-properties", source, {
         sourcePath: "source.tsx",
         fix: true,
