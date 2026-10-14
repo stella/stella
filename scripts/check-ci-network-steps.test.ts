@@ -183,6 +183,61 @@ describe("scripts and composite actions", () => {
     ]);
   });
 
+  const tool = {
+    "scripts/install-tool.sh": "curl -fsSL https://example.com/tool -o tool\n",
+  };
+  const retryError = `${WORKFLOW}: build: Install tool: route curl (scripts/install-tool.sh) through scripts/retry.sh`;
+  const timeoutError = `${WORKFLOW}: build: Install tool: curl (scripts/install-tool.sh) needs a step timeout-minutes`;
+
+  test("a script behind a negated if is an invocation", () => {
+    const report = check({
+      ...tool,
+      [WORKFLOW]: workflow(`      - name: Install tool
+        run: if ! bash scripts/install-tool.sh; then exit 1; fi
+`),
+    });
+
+    expect(report.errors).toEqual([retryError, timeoutError]);
+  });
+
+  test("a script in a command substitution is an invocation", () => {
+    const report = check({
+      ...tool,
+      [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
+        run: X=$(bash scripts/install-tool.sh)
+`),
+    });
+
+    expect(report.errors).toEqual([retryError]);
+  });
+
+  test("a retried and a bare invocation joined by && report the bare one", () => {
+    const report = check({
+      ...tool,
+      [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
+        run: bash scripts/retry.sh bash scripts/install-tool.sh && bash scripts/install-tool.sh
+`),
+    });
+
+    expect(report.errors).toEqual([retryError]);
+  });
+
+  test("a sourced library is followed", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
+        run: source scripts/lib.sh
+`),
+      "scripts/lib.sh": "curl -fsSL https://example.com/tool -o tool\n",
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Install tool: route curl (scripts/lib.sh) through scripts/retry.sh`,
+    ]);
+  });
+
   test("a script path in a case pattern is data, not an invocation", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Scope
@@ -209,7 +264,7 @@ runs:
       run: bash "$GITHUB_ACTION_PATH/install.sh"
 `,
       ".github/actions/tool/install.sh":
-        'bash "$(dirname "$0")/../../../scripts/retry.sh" curl -fsSL https://example.com/tool\n',
+        'retry="$(dirname "$0")/../../../scripts/retry.sh"\nbash "$retry" curl -fsSL https://example.com/tool\n',
     };
     const report = check({
       ...files,

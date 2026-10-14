@@ -82,7 +82,16 @@ const FETCH_PATTERNS: readonly { kind: string; pattern: RegExp }[] = [
   { kind: "git clone", pattern: /\bgit\s+(?:-c\s+\S+\s+)*clone(?=\s|$)/u },
 ];
 
-const RETRY_WRAPPER = /(?:gh-)?retry\.sh\b|\$\{?\w*(?:retry|RETRY)\w*\}?/u;
+// Shell syntax that may precede a command without changing what it runs.
+const CONTROL_PREFIX =
+  /^(?:(?:if|while|until|time|!|\{|\(|\$\(|`|exec|command|env|[A-Za-z_]\w*=(?:\$\(|`|"[^"]*"|'[^']*'|[^\s$`(]*))(?:\s+|(?<=[(`])))+/u;
+// A command retries only when the retry helper is the command it runs.
+const RETRY_START =
+  /^(?:(?:bash|sh)\s+)?(?:["']?[^\s"']*(?:gh-)?retry\.sh["']?|"?\$\{?\w*(?:retry|RETRY)\w*\}?"?)(?:\s|$)/u;
+
+/** Whether a command segment runs through the retry helper. */
+const startsWithRetry = (segment: string): boolean =>
+  RETRY_START.test(segment.replace(CONTROL_PREFIX, ""));
 const NATIVE_CURL_RETRY = /--retry[\s=]+[1-9]/u;
 const LOOPBACK = /\b(?:localhost|127\.0\.0\.1|0\.0\.0\.0)\b|\[::1\]/u;
 const REMOTE_URL =
@@ -150,7 +159,10 @@ const segments = (line: string): string[] => {
     }
   }
   parts.push(line.slice(start));
-  return parts.map((part) => part.trim()).filter((part) => part !== "");
+  return parts
+    .flatMap((part) => part.split(/(?:^|\s)(?:then|do|else|elif)(?=\s|$)/u))
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
 };
 
 /** The fetches one shell source runs, and whether each one retries. */
@@ -172,9 +184,8 @@ export const scanShell = (source: string, label: string): NetworkFetch[] =>
         ) {
           return [];
         }
-        const before = segment.slice(0, match.index + match[0].length);
         const wrapped =
-          RETRY_WRAPPER.test(before) ||
+          startsWithRetry(segment) ||
           (kind === "curl" &&
             NATIVE_CURL_RETRY.test(segment) &&
             segment.includes("--retry-all-errors"));
@@ -185,17 +196,12 @@ export const scanShell = (source: string, label: string): NetworkFetch[] =>
 
 type ScriptReference = { file: string; wrapped: boolean };
 
+// Any mention of a repository script counts as running it: over-reporting
+// is cheaper than missing an invocation behind `if !`, `$(...)`, `source` or a
+// pipeline, and an over-report can be allowlisted with a reason.
 const SCRIPT_REFERENCE =
-  /(?:(?<action>\$\{?GITHUB_ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\})\/(?<relative>[\w./-]+\.sh)|(?<=^|[\s"'=(]|\$\{?GITHUB_WORKSPACE\}?\/|\.[\w-]+\/)(?<rooted>(?:scripts|\.github)\/[\w./-]+\.sh))/gu;
+  /(?:(?:\$\{?GITHUB_ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\}|(?<![\w./-])\.)\/(?<relative>[\w./-]+\.sh)|(?<=^|[^\w./-]|\$\{?GITHUB_WORKSPACE\}?\/|\.[\w-]+\/)(?<rooted>(?:scripts|\.github)\/[\w./-]+\.sh))/gu;
 const RETRY_SCRIPTS = new Set(["scripts/retry.sh", "scripts/gh-retry.sh"]);
-// Only a script in command position runs: optional assignments, a retry
-// wrapper, an interpreter and a path prefix may precede it. A path quoted in
-// a scope list or a message is data.
-const INVOCATION_PREFIX =
-  /^(?:[A-Za-z_]\w*=(?:\$\(|"[^"]*"|'[^']*'|\S*)\s*)*(?:(?:(?:bash|sh)\s+)?(?:\S*(?:gh-)?retry\.sh["']?\s+|"?\$\{?\w*(?:retry|RETRY)\w*\}?"?\s+))?(?:(?:bash|sh|exec|source|\.)\s+(?:-\S+\s+)*)?["']?(?:\$\{?GITHUB_WORKSPACE\}?\/|\.[\w-]+\/|\.\/)*$/u;
-
-const ACTION_PATH =
-  /["']?\$\{?\{?\s*(?:GITHUB_ACTION_PATH|github\.action_path)\s*\}?\}?$/u;
 
 const referencedFile = (
   rooted: string | undefined,
@@ -218,26 +224,22 @@ const scriptReferences = (
 ): ScriptReference[] =>
   logicalLines(source).flatMap((line) =>
     segments(line).flatMap((segment) => {
-      if (PROSE.test(segment)) {
-        return [];
-      }
+      const wrapped = startsWithRetry(segment);
       return [...segment.matchAll(SCRIPT_REFERENCE)].flatMap((match) => {
         const groups = match.groups ?? {};
-        const relative = groups["relative"];
-        const file = referencedFile(groups["rooted"], relative, actionDir);
-        const prefix = segment.slice(0, match.index);
-        const invocation =
-          relative === undefined ? prefix : prefix.replace(ACTION_PATH, "");
+        const file = referencedFile(
+          groups["rooted"],
+          groups["relative"],
+          actionDir,
+        );
         // Test scripts stub the network commands they exercise.
         if (
           file === undefined ||
           RETRY_SCRIPTS.has(file) ||
-          file.endsWith(".test.sh") ||
-          !INVOCATION_PREFIX.test(invocation)
+          file.endsWith(".test.sh")
         ) {
           return [];
         }
-        const wrapped = RETRY_WRAPPER.test(prefix);
         return [{ file, wrapped }];
       });
     }),
