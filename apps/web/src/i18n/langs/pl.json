@@ -363,6 +363,8 @@
       "chooseList": "Wybierz listę",
       "createList": "Utwórz listę",
       "evidenceList": "Fakty z listy",
+      "loadSample": "Wczytaj przykładową sprawę",
+      "loadSampleFailed": "Nie udało się wczytać przykładowej sprawy",
       "noLists": "Ta sprawa nie ma żadnych list.",
       "pickList": "Wybierz listę, względem której faktów są weryfikowane dokumenty tej sprawy."
     }

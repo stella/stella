@@ -366,6 +366,8 @@ type Messages = {
       "chooseList": "Choose a list";
       "createList": "Create a list";
       "evidenceList": "Facts from";
+      "loadSample": "Load sample case";
+      "loadSampleFailed": "Couldn't load the sample case";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
     };

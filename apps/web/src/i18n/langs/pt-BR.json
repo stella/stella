@@ -363,6 +363,8 @@
       "chooseList": "Escolher uma lista",
       "createList": "Criar uma lista",
       "evidenceList": "Fatos de",
+      "loadSample": "Carregar caso de exemplo",
+      "loadSampleFailed": "Não foi possível carregar o caso de exemplo",
       "noLists": "Este caso não tem listas.",
       "pickList": "Escolha a lista cujos fatos são usados para verificar os documentos deste caso."
     }
