@@ -22,6 +22,7 @@ import {
   projectAccountProfile,
 } from "@/api/lib/db/account-profile-projection";
 import { projectFeedbackReportForAccountExport } from "@/api/lib/db/feedback-report-projection";
+import { projectProfessionalUseAcceptanceForAccountExport } from "@/api/lib/db/professional-use-projection";
 
 /**
  * Binds each exported table to the projection its owning domain already
@@ -30,6 +31,8 @@ import { projectFeedbackReportForAccountExport } from "@/api/lib/db/feedback-rep
 export const ACCOUNT_EXPORT_PROJECTIONS = {
   user: projectAccountProfile,
   member: projectAccountMembership,
+  user_professional_use_acceptances:
+    projectProfessionalUseAcceptanceForAccountExport,
   feedback_reports: projectFeedbackReportForAccountExport,
   legal_reader_annotations: projectPrivateAnnotationForAccountExport,
   legal_reader_answers: projectPrivateReaderAnswerForAccountExport,

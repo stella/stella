@@ -412,10 +412,7 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   },
   user: { type: "exported" },
   user_files: { type: "exported" },
-  user_professional_use_acceptances: {
-    type: "exempt",
-    reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
-  },
+  user_professional_use_acceptances: { type: "exported" },
   work_obligation_events: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,

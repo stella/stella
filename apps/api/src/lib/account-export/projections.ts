@@ -14,6 +14,7 @@ import type {
   searchHistoryEntries,
   templateLookupFormatUserDefaults,
   userFiles,
+  userProfessionalUseAcceptances,
   workspaceViewTemplates,
 } from "@/api/db/schema";
 import type { ExportedAccountTableName } from "@/api/lib/account-export/registry";
@@ -34,6 +35,9 @@ type AccountExportProjectionSignatures = {
     row: NonNullable<Awaited<ReturnType<typeof readAccountProfileForExport>>>,
   ) => unknown;
   member: (row: PageItem<typeof listAccountMembershipPage>) => unknown;
+  user_professional_use_acceptances: (
+    row: typeof userProfessionalUseAcceptances.$inferSelect,
+  ) => unknown;
   feedback_reports: (
     row: PageItem<typeof readOwnFeedbackReportPage>,
   ) => unknown;

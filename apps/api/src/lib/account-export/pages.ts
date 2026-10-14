@@ -23,6 +23,7 @@ import {
   searchHistoryEntries,
   templateLookupFormatUserDefaults,
   userFiles,
+  userProfessionalUseAcceptances,
   workspaceViewTemplates,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -91,7 +92,11 @@ type ExportOrganizationPageOptions = {
   userId: SafeId<"user">;
   table: Exclude<
     ExportedAccountTableName,
-    "user" | "member" | "feedback_reports" | "user_files"
+    | "user"
+    | "member"
+    | "feedback_reports"
+    | "user_files"
+    | "user_professional_use_acceptances"
   >;
   cursor: string | null;
 };
@@ -614,6 +619,17 @@ export async function* exportAccountRows({
     const row = await readAccountProfileForExport(db, userId);
     if (row !== undefined) {
       yield projections.user(row);
+    }
+    return;
+  }
+  if (table === "user_professional_use_acceptances") {
+    const [row] = await db
+      .select()
+      .from(userProfessionalUseAcceptances)
+      .where(eq(userProfessionalUseAcceptances.userId, userId))
+      .limit(1);
+    if (row !== undefined) {
+      yield projections.user_professional_use_acceptances(row);
     }
     return;
   }
