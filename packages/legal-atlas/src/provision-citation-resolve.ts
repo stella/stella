@@ -135,6 +135,12 @@ type CompiledResolver = {
    * not one, so a number followed by `/` is left alone.
    */
   laterBareContinuation: RegExp;
+  /**
+   * After a letter path, a connector and a lettered item with its
+   * parenthesis anywhere later (`§ 52 písm. g) ZP a h) ZP`). The parenthesis
+   * is required here: a bare letter after the act may be a preposition.
+   */
+  laterLetterContinuation: RegExp;
   sectionUnits: ReadonlyMap<string, SectionUnit>;
   subdivisions: readonly {
     pattern: RegExp;
@@ -173,6 +179,10 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
     ),
     laterBareContinuation: new RegExp(
       String.raw`(?:[,;]|[-–—]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*\d{1,4}[a-z]?(?![\p{L}\p{N}])(?!\s*\/)`,
+      "iu",
+    ),
+    laterLetterContinuation: new RegExp(
+      String.raw`(?:[,;]|[-–—]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*[a-z]\)`,
       "iu",
     ),
     letterContinuation: new RegExp(
@@ -637,7 +647,8 @@ export const resolveProvisionCitation = ({
     // past an act name the continuation check cannot see across.
     resolver.section.test(after) ||
     resolver.laterSubdivision.test(after) ||
-    resolver.laterBareContinuation.test(after)
+    resolver.laterBareContinuation.test(after) ||
+    (path.letter !== null && resolver.laterLetterContinuation.test(after))
   ) {
     return { status: "multiple_provisions" };
   }

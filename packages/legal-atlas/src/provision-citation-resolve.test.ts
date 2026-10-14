@@ -130,6 +130,7 @@ describe("resolveProvisionCitation", () => {
     "§ 316 odst. 2, odst. 3 ZP",
     "§ 316 odst. 2 ZP a odst. 3 ZP",
     "§ 316 odst. 2 ZP a 3 ZP",
+    "§ 52 písm. g) ZP a h) ZP",
     "§ 316 ZP, 317 ZP",
     "§ 52 písm. g) ZP nebo písm. h) ZP",
     "§ 52 písm. g), písm. h) ZP",
