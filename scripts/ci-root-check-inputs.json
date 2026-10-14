@@ -40,7 +40,6 @@
     "Test remaining repository scripts": ["**"],
     "Test release image CI gate": ["**"],
     "Workspace hygiene": ["**"],
-    "Dependabot group guard": ["**"],
     "Lockfile workspace-version guard": ["**"],
     "Resolution range guard": ["**"],
     "Quarantine-exclude guards": ["**"],
@@ -205,6 +204,7 @@
     "Knip production dependency checks": ["**"],
     "Knip workspace dependency checks": ["**"],
     "Knip dead-export check (packages/cli)": ["**"],
-    "Knip dead-export budget (all workspaces)": ["**"]
+    "Knip dead-export budget (all workspaces)": ["**"],
+    "Dependabot group guard": ["**"]
   }
 }

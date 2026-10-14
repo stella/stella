@@ -2825,6 +2825,19 @@ jobs:
           bun test scripts/knip-exports-ratchet.test.ts
           bun run check:knip-exports
 
+      - name: Dependabot group guard
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_012
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
+        # Related framework and plugin updates must stay in one PR even when
+        # upstream moves packages between scopes. The stale-ignore checks read
+        # installed manifests (Expo's bundled module list among them), so the
+        # guard runs here, after the install, which every change to
+        # .github/dependabot.yml or a manifest requires.
+        run: bun test scripts/dependabot-grouping.test.ts
+
       - name: Record static check receipts
         id: static_receipt_record
         if: success() && github.event_name == 'merge_group' && steps.static_receipts.outputs.artifact_name != ''
@@ -3276,16 +3289,6 @@ jobs:
         # nightly-typecheck, so coverage is identical to running it in
         # each install.
         run: bun run lint:ws
-
-      - name: Dependabot group guard
-        env:
-          CI_CHECK_KIND: STATIC
-          CI_CHECK_INPUTS: tracked-tree+generated-inputs
-        id: static_check_016
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_016 != 'true') }}
-        # Related framework and plugin updates must stay in one PR even when
-        # upstream moves packages between scopes.
-        run: bun test scripts/dependabot-grouping.test.ts
 
       - name: Lockfile workspace-version guard
         id: static_check_017
