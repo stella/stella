@@ -206,7 +206,7 @@ export const witnessStatementRun = (): VerificationRun => {
           type,
           anchor: {
             type: "docx-block",
-            blockId: `w${String(block)}`,
+            blockId: `witness-${String(block)}`,
             start,
             end: start + quote.length,
           },
@@ -219,7 +219,7 @@ export const witnessStatementRun = (): VerificationRun => {
     ...makeRun(claims),
     blocks: WITNESS_STATEMENT_BLOCKS.map((text, ordinal) => ({
       ordinal,
-      blockId: `w${String(ordinal)}`,
+      blockId: `witness-${String(ordinal)}`,
       kind: "docx-block" as const,
       pageNumber: null,
       text,

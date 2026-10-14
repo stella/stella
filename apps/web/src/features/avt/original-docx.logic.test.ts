@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { createFolioAIEditSnapshot } from "@stll/folio-core/ai-edits";
@@ -16,10 +17,13 @@ import {
 } from "@/features/avt/original-docx.logic";
 import type { VerificationRun } from "@/features/avt/types";
 
+const bold =
+  schema.marks["bold"] ?? panic("Expected the Folio schema to define bold.");
+
 const doc = schema.node("doc", undefined, [
   schema.node("paragraph", { paraId: "1A2B3C4D" }, [
     schema.text("The lease was signed on "),
-    schema.text("3 March 2021", [schema.marks.bold.create()]),
+    schema.text("3 March 2021", [bold.create()]),
     schema.text(" by both parties."),
   ]),
   schema.node("paragraph", { paraId: "5E6F7A8B" }, [
