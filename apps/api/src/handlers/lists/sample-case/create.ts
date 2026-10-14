@@ -25,6 +25,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tDefaultVarchar } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import {
   documentWriteRefusal,
@@ -48,6 +49,7 @@ import {
   organizationFileUsageHandlerError,
 } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
+import { ensureFileProperty } from "@/api/lib/properties/ensure-file-property";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -77,7 +79,10 @@ const config = {
     reason: "document_processing",
     consumesServices: true,
   },
-  body: t.Object({}),
+  body: t.Object({
+    /** Name for the matter's file property if it has none yet (localized). */
+    filePropertyName: tDefaultVarchar,
+  }),
 } satisfies WorkspaceHandlerConfig;
 
 type SampleCaseResult = {
@@ -86,9 +91,12 @@ type SampleCaseResult = {
   fileFieldId: SafeId<"field">;
 };
 
+type SampleFileProperty = { name: string; recordAuditEvent: AuditRecorder };
+
 const readLockedSample = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
+  fileProperty: SampleFileProperty | undefined,
 ) => {
   // The buffer writer already holds the workspace lock. Preflight takes it
   // first too, preserving the creation owner's lock order before this fence.
@@ -112,6 +120,11 @@ const readLockedSample = async (
       .limit(1)
   ).at(0);
   if (list === undefined) {
+    // A matter without a file property gets one here, under the same lock,
+    // so the statement can be stored and concurrent loads add only one.
+    if (fileProperty !== undefined) {
+      await ensureFileProperty({ tx, workspaceId, ...fileProperty });
+    }
     return undefined;
   }
   if (list.sampleCase === null) {
@@ -123,9 +136,10 @@ const readLockedSample = async (
 const readSampleReceipt = async (
   scopedDb: ScopedDb,
   workspaceId: SafeId<"workspace">,
+  fileProperty: SampleFileProperty,
 ) => {
   const result = await safeDbFromScoped(scopedDb)(
-    async (tx) => await readLockedSample(tx, workspaceId),
+    async (tx) => await readLockedSample(tx, workspaceId, fileProperty),
   );
   return result.mapError((error) =>
     DocumentWriteRefusedError.is(error.cause)
@@ -140,6 +154,7 @@ type LoadSampleCaseOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   recordAuditEvent: AuditRecorder;
+  filePropertyName: string;
   createDocument?: typeof createEntityFromBuffer;
 };
 
@@ -149,11 +164,15 @@ export const loadSampleCase = async ({
   organizationId,
   userId,
   recordAuditEvent,
+  filePropertyName,
   createDocument = createEntityFromBuffer,
 }: LoadSampleCaseOptions) =>
   await Result.gen(async function* () {
     const existing = yield* Result.await(
-      readSampleReceipt(scopedDb, workspaceId),
+      readSampleReceipt(scopedDb, workspaceId, {
+        name: filePropertyName,
+        recordAuditEvent,
+      }),
     );
     if (existing !== undefined) {
       return Result.ok(existing);
@@ -176,7 +195,8 @@ export const loadSampleCase = async ({
           mimeType: DOCX_MIME_TYPE,
           encryption: serverBuiltFileEncryption(),
           afterCreate: async (tx, document) => {
-            const winner = await readLockedSample(tx, workspaceId);
+            // The property already exists by now; only the sample is read.
+            const winner = await readLockedSample(tx, workspaceId, undefined);
             if (winner !== undefined) {
               concurrent.receipt = winner;
               // The canonical writer reclaims the losing file and rolls back its
@@ -318,7 +338,10 @@ export const loadSampleCase = async ({
       // A competing commit can exhaust capacity before the buffer writer
       // reaches afterCreate. Its refusal must still converge on that sample.
       const winner = yield* Result.await(
-        readSampleReceipt(scopedDb, workspaceId),
+        readSampleReceipt(scopedDb, workspaceId, {
+          name: filePropertyName,
+          recordAuditEvent,
+        }),
       );
       if (winner !== undefined) {
         if (attempted.isErr()) {
@@ -379,13 +402,21 @@ const sampleDocumentError = (error: BufferError): HandlerError => {
 
 export default createSafeHandler(
   config,
-  async function* ({ scopedDb, workspaceId, session, user, recordAuditEvent }) {
+  async function* ({
+    scopedDb,
+    workspaceId,
+    session,
+    user,
+    recordAuditEvent,
+    body,
+  }) {
     const result = await loadSampleCase({
       scopedDb,
       workspaceId,
       organizationId: session.activeOrganizationId,
       userId: user.id,
       recordAuditEvent,
+      filePropertyName: body.filePropertyName,
     });
     if (result.isErr()) {
       captureError(result.error, { workspaceId });

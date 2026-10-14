@@ -32,7 +32,13 @@ export const useLoadSampleCase = ({
     mutationKey: ["avt", "sample-case", workspaceId],
     mutationFn: async () =>
       await loadSampleCaseAndOpen({
-        load: async () => unwrapEden(await listsApi["sample-case"].post({})),
+        load: async () =>
+          unwrapEden(
+            await listsApi["sample-case"].post({
+              // Used only when the matter has no file property yet.
+              filePropertyName: t("common.documents"),
+            }),
+          ),
         openList: async (listId) =>
           await updateView.mutateAsync({
             viewId: view.id,

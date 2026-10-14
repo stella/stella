@@ -143,6 +143,7 @@ const withSampleFixture = async (
           workspaceId,
           userId,
           recordAuditEvent,
+          filePropertyName: "Documents",
           createDocument: async (
             input: Parameters<typeof createEntityFromBuffer>[0],
           ) => await createEntityFromBuffer({ ...input, dependencies }),
@@ -306,6 +307,33 @@ describe.skipIf(!runPostgresTests || !databaseUrl)(
           throw replay.error;
         }
         expect(result.value).toEqual(replay.value);
+        await assertSample(fixture);
+      });
+    }, 120_000);
+
+    test("a matter without a file property gets exactly one and the sample", async () => {
+      await withSampleFixture(async (fixture) => {
+        const { workspaceId } = fixture.first;
+        await fixture.db
+          .delete(properties)
+          .where(eq(properties.workspaceId, workspaceId));
+        const [first, second] = await Promise.all([
+          loadSampleCase(fixture.first),
+          loadSampleCase(fixture.second),
+        ]);
+        if (first.isErr()) {
+          throw first.error;
+        }
+        if (second.isErr()) {
+          throw second.error;
+        }
+        expect(second.value).toEqual(first.value);
+        expect(
+          await fixture.db.$count(
+            properties,
+            eq(properties.workspaceId, workspaceId),
+          ),
+        ).toBe(1);
         await assertSample(fixture);
       });
     }, 120_000);
