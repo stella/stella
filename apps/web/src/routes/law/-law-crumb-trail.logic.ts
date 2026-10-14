@@ -12,11 +12,27 @@ export const statuteLawCrumbTrailOf = ({
   eli,
   title,
   country,
-}: Pick<PublicStatute, "eli" | "title" | "country">) => {
+  status,
+  versionValidFrom,
+  expressionKind,
+  windowDisposition,
+}: Pick<
+  PublicStatute,
+  | "eli"
+  | "title"
+  | "country"
+  | "status"
+  | "versionValidFrom"
+  | "expressionKind"
+  | "windowDisposition"
+>) => {
   const identity = statuteDocumentIdentity(eli);
   const label = statuteActLabel({ eli, title });
   return {
     kind: "statute",
+    status,
+    validFrom: versionValidFrom,
+    expression: { expressionKind, windowDisposition },
     identity,
     citation: label.number,
     shortTitle: label.name,

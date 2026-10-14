@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
-import { useFormatter } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { CourtName } from "@stll/decision-reader/court-name";
 import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-identity";
@@ -15,13 +15,29 @@ import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import { formatYear } from "@/features/case-law/citation-format";
+import { StatuteStatusDot } from "@/features/statutes/components/statute-validity-indicator";
+import { ineligibleExpressionLabelKey } from "@/features/statutes/statute-expression";
+import {
+  resolveStatuteDisplayStatus,
+  STATUTE_STATUS_LABEL_KEYS,
+} from "@/features/statutes/statute-status";
 
 import type { LawCrumbTrail } from "./-law-crumb-trail.logic";
 
 export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
   const format = useFormatter();
+  const t = useTranslations();
   switch (trail.kind) {
-    case "statute":
+    case "statute": {
+      const displayStatus = resolveStatuteDisplayStatus(trail);
+      const ineligibleLabel = ineligibleExpressionLabelKey(trail.expression);
+      const statusLabelKey =
+        ineligibleLabel ??
+        (displayStatus === null
+          ? null
+          : STATUTE_STATUS_LABEL_KEYS[displayStatus]);
+      const statusLabel =
+        statusLabelKey === null ? trail.status : t(statusLabelKey);
       return (
         <>
           {trail.yearLink !== null && (
@@ -46,6 +62,18 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
                     <span className="flex min-w-0 items-center gap-1.5" />
                   }
                 >
+                  <span
+                    className="shrink-0"
+                    role="img"
+                    aria-label={statusLabel}
+                    title={statusLabel}
+                  >
+                    <StatuteStatusDot
+                      expression={trail.expression}
+                      status={trail.status}
+                      validFrom={trail.validFrom}
+                    />
+                  </span>
                   <DocumentIdentityBadge identity={trail.identity} />
                   {trail.shortTitle !== null && (
                     <BidiText as="span" className="min-w-0 truncate">
@@ -70,6 +98,7 @@ export const LawDocumentCrumbs = ({ trail }: { trail: LawCrumbTrail }) => {
           </BreadcrumbItem>
         </>
       );
+    }
     case "decision":
       return (
         <>

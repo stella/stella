@@ -10,6 +10,10 @@ import {
 describe("statute breadcrumb identity and destinations", () => {
   test("separates a Czech citation from its short title and retains the full title", () => {
     const statute = {
+      status: "current",
+      versionValidFrom: "2012-01-01",
+      expressionKind: "consolidation",
+      windowDisposition: "effective",
       eli: "/eli/cz/sb/2012/89",
       title: "89/2012 Sb., občanský zákoník",
       country: "CZE",
@@ -17,6 +21,12 @@ describe("statute breadcrumb identity and destinations", () => {
 
     expect(statuteLawCrumbTrailOf(statute)).toEqual({
       kind: "statute",
+      status: statute.status,
+      validFrom: statute.versionValidFrom,
+      expression: {
+        expressionKind: statute.expressionKind,
+        windowDisposition: statute.windowDisposition,
+      },
       identity: { kind: "statute", number: "89", year: "2012" },
       citation: "89/2012 Sb.",
       shortTitle: "občanský zákoník",
@@ -31,6 +41,10 @@ describe("statute breadcrumb identity and destinations", () => {
 
   test("omits a short title when the title contains only the citation", () => {
     const statute = {
+      status: "current",
+      versionValidFrom: "2012-01-01",
+      expressionKind: "consolidation",
+      windowDisposition: "effective",
       eli: "/eli/cz/sm/2012/89",
       title: "89/2012 Sb. m. s.",
       country: "CZE",
@@ -50,6 +64,10 @@ describe("statute breadcrumb identity and destinations", () => {
     "uses the Slovak gazette and country route for $year",
     ({ year, number, gazette }) => {
       const statute = {
+        status: "current",
+        versionValidFrom: "2012-01-01",
+        expressionKind: "consolidation",
+        windowDisposition: "effective",
         eli: `/eli/sk/zz/${year}/${number}`,
         title: "Občiansky zákonník",
         country: "SVK",
@@ -57,6 +75,12 @@ describe("statute breadcrumb identity and destinations", () => {
 
       expect(statuteLawCrumbTrailOf(statute)).toEqual({
         kind: "statute",
+        status: statute.status,
+        validFrom: statute.versionValidFrom,
+        expression: {
+          expressionKind: statute.expressionKind,
+          windowDisposition: statute.windowDisposition,
+        },
         identity: { kind: "statute", number, year },
         citation: `${number}/${year} ${gazette}`,
         shortTitle: statute.title,
@@ -72,6 +96,10 @@ describe("statute breadcrumb identity and destinations", () => {
 
   test("omits the year destination when the ELI carries no act year", () => {
     const statute = {
+      status: "current",
+      versionValidFrom: "2012-01-01",
+      expressionKind: "consolidation",
+      windowDisposition: "effective",
       eli: "CZ/2012/89",
       title: "občanský zákoník",
       country: "CZE",
@@ -79,6 +107,12 @@ describe("statute breadcrumb identity and destinations", () => {
 
     expect(statuteLawCrumbTrailOf(statute)).toEqual({
       kind: "statute",
+      status: statute.status,
+      validFrom: statute.versionValidFrom,
+      expression: {
+        expressionKind: statute.expressionKind,
+        windowDisposition: statute.windowDisposition,
+      },
       identity: { kind: "statute", number: null, year: null },
       citation: null,
       shortTitle: statute.title,

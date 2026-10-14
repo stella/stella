@@ -27,6 +27,10 @@ afterEach(cleanup);
 afterAll(async () => await GlobalRegistrator.unregister());
 
 const statute = {
+  status: "current",
+  versionValidFrom: "2026-01-01",
+  expressionKind: "consolidation",
+  windowDisposition: "effective",
   country: "CZE",
   eli: "/eli/cz/sb/2026/178",
   title: "178/2026 Sb., o portálu kritické infrastruktury",
@@ -40,28 +44,43 @@ const decision = {
   metadata: { legalArea: "Správní právo" },
 } satisfies Parameters<typeof decisionLawCrumbTrailOf>[0];
 
-const mount = async (kind: "statute" | "decision", locale = "en") => {
+type MountOptions = {
+  kind: "statute" | "versioned-statute" | "decision";
+  locale?: string;
+  document?: Parameters<typeof statuteLawCrumbTrailOf>[0];
+};
+
+const mount = async ({
+  kind,
+  locale = "en",
+  document = statute,
+}: MountOptions) => {
   const root = createRootRoute();
   const route =
-    kind === "statute"
+    kind !== "decision"
       ? createRoute({
           getParentRoute: () => root,
-          path: "/law/$country/statutes/$slug/",
-          loader: () => ({ statute, work: statute }),
+          path:
+            kind === "versioned-statute"
+              ? "/law/$country/statutes/$slug/v/$version"
+              : "/law/$country/statutes/$slug/",
+          loader: () => ({ statute: document, work: statute }),
         })
       : createRoute({
           getParentRoute: () => root,
           path: "/law/$country/cases/$court/$slug",
           loader: () => decision,
         });
+  const statuteUrl =
+    kind === "versioned-statute"
+      ? "/law/cze/statutes/178-2026-sb/v/2026-01-01"
+      : "/law/cze/statutes/178-2026-sb";
   const router = createRouter({
     isServer: false,
     routeTree: root.addChildren([route]),
     history: createMemoryHistory({
       initialEntries: [
-        kind === "statute"
-          ? "/law/cze/statutes/178-2026-sb"
-          : "/law/cze/cases/nss/7-azs-172-2025",
+        kind !== "decision" ? statuteUrl : "/law/cze/cases/nss/7-azs-172-2025",
       ],
     }),
   });
@@ -82,7 +101,7 @@ const mount = async (kind: "statute" | "decision", locale = "en") => {
 };
 
 test("statute shell shows linked hierarchy, identity, short title and the full title tooltip", async () => {
-  const { container } = await mount("statute");
+  const { container } = await mount({ kind: "statute" });
   expect(
     screen
       .getByRole("link", { name: en.common.legalDatabase })
@@ -114,7 +133,7 @@ test("statute shell shows linked hierarchy, identity, short title and the full t
 });
 
 test("decision shell links court and decision year before the current docket and legal area", async () => {
-  const { container } = await mount("decision");
+  const { container } = await mount({ kind: "decision" });
   expect(
     screen.getByRole("link", { name: en.common.caseLaw }).getAttribute("href"),
   ).toBe("/law/cases");
@@ -140,7 +159,7 @@ test("decision shell links court and decision year before the current docket and
 });
 
 test("Arabic chrome keeps statute identity isolated and the publisher title intact", async () => {
-  const { container } = await mount("statute", "ar");
+  const { container } = await mount({ kind: "statute", locale: "ar" });
   expect(
     screen.getByRole("link", { name: ar.statutes.title }).getAttribute("href"),
   ).toBe("/law/cze/statutes");
@@ -150,4 +169,38 @@ test("Arabic chrome keeps statute identity isolated and the publisher title inta
   expect(
     screen.getByText("o portálu kritické infrastruktury").getAttribute("dir"),
   ).toBe("auto");
+});
+
+test.each([{ kind: "statute" }, { kind: "versioned-statute" }] as const)(
+  "$kind breadcrumb retains the accessible status alongside its identity",
+  async ({ kind }) => {
+    await mount({ kind });
+    const status = screen.getByRole("img", {
+      name: en.statutes.status.current,
+    });
+    expect(status.closest('[aria-current="page"]')).not.toBeNull();
+    expect(
+      status
+        .querySelector('[data-slot="review-status-dot"]')
+        ?.classList.contains("bg-success"),
+    ).toBe(true);
+  },
+);
+
+test("versioned statute breadcrumb names an expression that never entered into force", async () => {
+  await mount({
+    kind: "versioned-statute",
+    document: { ...statute, windowDisposition: "never-in-force" },
+  });
+  const status = screen.getByRole("img", {
+    name: en.statutes.status.neverInForce,
+  });
+  expect(
+    status
+      .querySelector('[data-slot="review-status-dot"]')
+      ?.classList.contains("bg-muted-foreground"),
+  ).toBe(true);
+  expect(
+    screen.queryByRole("img", { name: en.statutes.status.current }),
+  ).toBeNull();
 });
