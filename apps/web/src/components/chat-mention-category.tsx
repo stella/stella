@@ -1,12 +1,12 @@
 import { useTranslations } from "use-intl";
 
 import { LandmarkIcon } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 
 import type {
   ChatMentionOption,
   ChatReferenceCategory,
 } from "@/components/chat-mention-extension";
-import { MatterIcon } from "@/components/matter-icon";
 import { EntityIcon } from "@/components/workspaces/entity-kind-icon";
 import type { TranslationKey } from "@/i18n/types";
 

@@ -28,7 +28,7 @@ const { workspacesNavigationOptions } =
   await import("@/lib/workspaces/queries");
 const { groupedChatThreadsOptions } = await import("@/features/chat/queries");
 const { usePinnedStore } = await import("@/lib/pinned-store");
-const { resolveMatterColor } = await import("@/lib/matter-colors");
+const { resolveMatterColor } = await import("@stll/ui/matter-colors");
 const { RenderLoopGuard } = await import("@/testing/render-loop-guard");
 const { MatterCombobox } = await import("./matter-combobox");
 

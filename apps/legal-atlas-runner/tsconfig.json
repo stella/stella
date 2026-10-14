@@ -34,9 +34,5 @@
   // Imported API modules are checked through traversal; the API's own projects
   // cover the remaining sources without rooting them in this runner as well.
   "include": ["src", "../../types"],
-  "exclude": [
-    "node_modules",
-    "../api/src/mcp/apps",
-    "../api/src/handlers/visual-sandbox/browser"
-  ]
+  "exclude": ["node_modules", "../api/src/handlers/visual-sandbox/browser"]
 }

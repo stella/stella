@@ -190,7 +190,6 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Install smoke dependencies
-        timeout-minutes: 3
         run: bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""

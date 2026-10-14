@@ -13,6 +13,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
+import { createChatHarnessProfile } from "@/api/tests/helpers/chat-harness-profile";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import {
@@ -39,6 +40,7 @@ import {
 } from "@/api/tests/security/rls-fixture";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+import { withQueryLogger } from "@/api/tests/security/test-utils";
 
 // Threads stored by earlier releases, loaded into the current schema and
 // driven by the web app's chat runtime against the current send path. Each
@@ -53,28 +55,40 @@ const PAST_RELEASE = CHAT_ORACLE.persistedPastReleaseLoads;
 const WRITE_ENV = "CHAT_SAVED_STATE_WRITE";
 
 let testDb: TestDatabase;
+const profile = createChatHarnessProfile(
+  "saved-state-compat.integration.test.ts",
+);
 let ids: TestIds;
 let safeDb: SafeDb;
 let scopedDb: ScopedDb;
 const seededThreadIds: SafeId<"chatThread">[] = [];
 
-beforeAll(async () => {
-  const fixture = await getRlsFixture();
-  testDb = fixture.testDb;
-  ids = fixture.ids;
-  scopedDb = asTestRaw<ScopedDb>(
-    createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
-  );
-  safeDb = toSafeDbMock(scopedDb);
-});
+beforeAll(
+  async () =>
+    await profile.measure("fixture", async () => {
+      const fixture = await getRlsFixture();
+      testDb = withQueryLogger(fixture.testDb, profile.logger);
+      ids = fixture.ids;
+      scopedDb = asTestRaw<ScopedDb>(
+        createScopedDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+      );
+      safeDb = toSafeDbMock(scopedDb);
+    }),
+);
 
 afterAll(async () => {
-  if (seededThreadIds.length > 0) {
-    await testDb
-      .delete(chatThreads)
-      .where(inArray(chatThreads.id, seededThreadIds));
+  try {
+    await profile.measure("close", async () => {
+      if (seededThreadIds.length > 0) {
+        await testDb
+          .delete(chatThreads)
+          .where(inArray(chatThreads.id, seededThreadIds));
+      }
+      await releaseRlsFixture();
+    });
+  } finally {
+    profile.report();
   }
-  await releaseRlsFixture();
 });
 
 const FIXTURES = readSavedStateFixtures();
@@ -383,7 +397,13 @@ const continueSavedThread = async (
   });
   const threadId = toSafeId<"chatThread">(fixture.threadId);
   seededThreadIds.push(threadId);
-  const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+  const harness = createApprovalHarness({
+    ids,
+    profile,
+    safeDb,
+    scopedDb,
+    testDb,
+  });
   const violations: OracleViolation[] = [];
   let client: WebChatClient | undefined;
   try {
@@ -557,7 +577,13 @@ describe("the saved-state fixtures", () => {
   });
 
   test("cover the shape the current code stores", async () => {
-    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const harness = createApprovalHarness({
+      ids,
+      profile,
+      safeDb,
+      scopedDb,
+      testDb,
+    });
     const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
     seededThreadIds.push(threadId);
     let pendingToolCallId: string;

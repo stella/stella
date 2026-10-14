@@ -15,6 +15,12 @@ case "$*" in
     jq --argjson heavy "$TEST_HEAVY_STATUS" --argjson depth "$TEST_PR_DEPTH_STATUS" '.[0] += [$heavy, $depth]' <<< "$TEST_STATUSES" ;;
   *"/commits/${TEST_LATER:-none}/statuses?per_page=100"*) printf '%s\n' "$TEST_LATER_STATUSES" ;;
   *"/statuses?per_page=100"*) echo '[[]]' ;;
+  *"/pulls?per_page=100"*) echo '[[]]' ;;
+  *"/commits/"*)
+    commit="${!#}"
+    commit="${commit##*/}"
+    tree=$(git rev-parse "$commit^{tree}")
+    jq -nc --arg sha "$commit" --arg tree "$tree" '{sha:$sha,commit:{tree:{sha:$tree}}}' ;;
   *"/actions/runs/7"*) printf '%s\n' "$TEST_HEAVY_RUN" ;;
   *"/actions/runs/9"*) printf '%s\n' "$TEST_PR_DEPTH_RUN" ;;
   *"/compare/$TEST_CANDIDATE...main"*) printf '%s\n' "$TEST_COMPARISON" ;;
@@ -165,6 +171,8 @@ chmod +x "$fixture/bin/git"
 export RUNNER_TEMP="$fixture" RELEASE_HEALTH_TOKEN=fixture
 export GH_RETRY_SCRIPT="$script_dir/gh-retry.sh"
 cp "$script_dir/check-release-main-health.sh" "$RUNNER_TEMP/check-release-main-health.sh"
+cp "$script_dir/verify-release-tree-proof.sh" "$RUNNER_TEMP/verify-release-tree-proof.sh"
+export RELEASE_TREE_PROOF_VERIFIER="$RUNNER_TEMP/verify-release-tree-proof.sh" PROOF_SHA=""
 export TAG=v1.2.3 RELEASE_SHA="$TEST_CANDIDATE" GH_TOKEN=fixture GITHUB_REPOSITORY=stella/stella
 # The run block ends at the first line outside its indentation; later jobs are
 # YAML, not shell.
