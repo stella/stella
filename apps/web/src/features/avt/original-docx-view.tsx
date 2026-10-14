@@ -20,7 +20,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { textMarkHighlightRule } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
 
-import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
+import { OriginalDocxHostContext } from "@/features/avt/original-docx-host";
 import {
   claimUnderPoint,
   MARK_PRIORITY,
@@ -76,6 +76,7 @@ export const OriginalDocxView = ({
   onSelect,
 }: OriginalDocxViewProps) => {
   const t = useTranslations();
+  const renderFileViewer = React.useContext(OriginalDocxHostContext);
   const [doc, setDoc] = React.useState<ProseMirrorNode | null>(null);
   // Folio keeps host plugins for as long as the editor is mounted, so the
   // array is made once.
@@ -222,17 +223,17 @@ export const OriginalDocxView = ({
         }}
         ref={observePages}
       >
-        <PeekPdfViewer
-          activePropertyId=""
-          docxPlugins={plugins}
-          entityId={run.entityId}
-          fieldId={run.fileFieldId}
-          filePurpose="native-display"
-          interactionMode="preview-only"
-          scaleOffset={0}
-          viewId="all"
-          workspaceId={workspaceId}
-        />
+        {renderFileViewer({
+          activePropertyId: "",
+          docxPlugins: plugins,
+          entityId: run.entityId,
+          fieldId: run.fileFieldId,
+          filePurpose: "native-display",
+          interactionMode: "preview-only",
+          scaleOffset: 0,
+          viewId: "all",
+          workspaceId,
+        })}
       </div>
       {unlocated.length > 0 && (
         <div className="flex max-h-32 shrink-0 flex-col border-t">
