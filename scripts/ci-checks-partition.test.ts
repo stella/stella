@@ -1535,8 +1535,7 @@ test("repository backgrounds are bounded and joined before failure cancellation"
       expect(pending.has(id), id).toBe(false);
       pending.add(id);
       launched++;
-      // A third concurrent check pushed the capability merge test past its
-      // timeout on four runner CPUs; two background checks is the limit.
+      // Keep at most two background checks running concurrently.
       expect(pending.size).toBeLessThanOrEqual(2);
       expect(step["continue-on-error"]).toBeUndefined();
       continue;
