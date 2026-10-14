@@ -4,6 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { isEntityKind, resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
+import { GLOBAL_SEARCH_RESULT_LIMIT } from "@stll/api-contract/search";
 import { compareCodeUnit } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
@@ -47,7 +48,6 @@ import {
 } from "@/api/lib/search/highlight";
 import {
   compareScoredSearchHits,
-  GLOBAL_SEARCH_RESULT_LIMIT,
   globalSearchCursorSql,
   paginateScoredSearchHits,
   parseGlobalSearchCursor,

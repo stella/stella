@@ -1365,6 +1365,10 @@ export const TOOLING_ENV_KEYS = new Set([
   // Scoped install-store ownership and phase measurement.
   "BUN_INSTALL_GLOBAL_STORE",
   "CACHE_HIT",
+  "CACHE_WRITE",
+  // Native cache action state is restored only for its own post hook.
+  "STATE_key",
+  "STATE_store",
   "STORE_KEY",
   "START_MS",
   "INSTALL_LOG",
