@@ -1186,7 +1186,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       "is a stance: 'unclassified' means none was read, 'mixed' that " +
       "mentions disagreed. `doctrine` is 'distinguishes' or 'limits' only " +
       "where a reviewed reading found the court doing so in its own words; " +
-      "'not_stated' is no finding that it was followed; 'unread' means none " +
+      "'not_stated' does not mean followed; 'unread' means none " +
       "was read; null when `doctrineAvailability` is 'unavailable'. " +
       "`passage.evidenceQuote` is the verbatim evidence when text is " +
       `available. \`passage.text\` is at most ${LIMITS.caseLawCitationPassageChars} ` +

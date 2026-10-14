@@ -321,6 +321,21 @@ const applyLabels = async (input: readonly unknown[]) => {
 // Before the labels suite: its last test retires a shipped rule for the rest
 // of the file, and this one needs that rule to label the fixture citation.
 describe("independent doctrinal reviews", () => {
+  const reviewedDecisions: SafeId<"caseLawDecision">[] = [];
+  // The labels suite reads every stored review and rechecks every rule-read
+  // citation, so this one leaves neither: the decision goes, and its
+  // citations and reviews cascade with it.
+  afterAll(async () => {
+    for (const decisionId of reviewedDecisions) {
+      await db
+        .delete(caseLawCitationReviews)
+        .where(eq(caseLawCitationReviews.citingDecisionId, decisionId));
+      await db
+        .delete(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, decisionId));
+    }
+  });
+
   test("both axes commit, replay and survive refresh independently", async () => {
     const cited = "sp. zn. 29 Cdo 9821/2015";
     const options = {
@@ -329,6 +344,7 @@ describe("independent doctrinal reviews", () => {
       rawHash: "doctrine-before",
     };
     const labelled = await ingestRuleLabelled(options);
+    reviewedDecisions.push(labelled.citingDecisionId);
     const doctrine = {
       kind: "doctrine",
       citationId: labelled.id,
