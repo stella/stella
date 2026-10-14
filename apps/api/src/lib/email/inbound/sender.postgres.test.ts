@@ -87,6 +87,7 @@ if (!databaseUrl || !runPostgresTests) {
           message: {
             direction: "out",
             channel: "email",
+            dataBox: null,
             messageId: `<${Bun.randomUUIDv7()}@example.test>`,
             contentHash: "a".repeat(64),
             from: { address: sender, name: null },

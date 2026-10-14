@@ -68,6 +68,7 @@ const envelope = {
 } as const satisfies DataBoxEnvelope;
 
 const dataBoxes = (id: string) => ({
+  version: 1 as const,
   dataBoxes: [{ id, isPrimary: true }],
 });
 

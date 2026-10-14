@@ -927,21 +927,23 @@ export const correspondenceFromMessage = <
   sender,
   receivedAt,
 }: CorrespondenceFromMessageOptions<TProvenance>): TProvenance &
-  CorrespondenceContent => ({
-  ...provenance,
-  channel: "email",
-  dataBox: null,
-  direction: message.from === sender ? "out" : "in",
-  from: { address: message.from, name: null },
-  to: message.to.map((address) => ({ address, name: null })),
-  cc: message.cc.map((address) => ({ address, name: null })),
-  subject: message.subject ?? "",
-  sentAt: message.date,
-  receivedAt,
-  messageId: message.messageId,
-  contentHash: message.contentHash,
-  inReplyTo: message.inReplyTo,
-  references: message.references,
-  bodyText: message.text,
-  bodyHtml: message.html,
-});
+  CorrespondenceContent => {
+  const content: CorrespondenceContent = {
+    channel: "email",
+    dataBox: null,
+    direction: message.from === sender ? "out" : "in",
+    from: { address: message.from, name: null },
+    to: message.to.map((address) => ({ address, name: null })),
+    cc: message.cc.map((address) => ({ address, name: null })),
+    subject: message.subject ?? "",
+    sentAt: message.date,
+    receivedAt,
+    messageId: message.messageId,
+    contentHash: message.contentHash,
+    inReplyTo: message.inReplyTo,
+    references: message.references,
+    bodyText: message.text,
+    bodyHtml: message.html,
+  };
+  return { ...provenance, ...content };
+};

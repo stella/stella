@@ -38,7 +38,10 @@ export const DATA_BOX_MESSAGE_LIMITS = {
   maxFieldCharacters: 4096,
 } as const;
 
-type DataBoxMessageLimits = typeof DATA_BOX_MESSAGE_LIMITS;
+type DataBoxMessageLimits = Record<
+  keyof typeof DATA_BOX_MESSAGE_LIMITS,
+  number
+>;
 
 const DATA_BOX_PARSE_FAILURES = [
   "too_large",
