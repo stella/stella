@@ -45,6 +45,10 @@ export const IN_PROCESS_DEPENDENCIES = {
     "MCP server or UI protocol support used in-process; remote MCP client is separately inventoried.",
   "@modelcontextprotocol/server":
     "MCP server or UI protocol support used in-process; remote MCP client is separately inventoried.",
+  "@myriaddreamin/typst-ts-renderer":
+    "Local WebAssembly document rendering for Typst invoice output.",
+  "@myriaddreamin/typst-ts-web-compiler":
+    "Local WebAssembly compilation of Typst invoice templates.",
   "@neftaly/editcontext-polyfill":
     "Browser editor compatibility and document model utilities.",
   "@opentelemetry/api-logs":

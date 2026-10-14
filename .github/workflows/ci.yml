@@ -3421,13 +3421,15 @@ jobs:
             # Hydrate a partial clone before verification disables Git transport.
             git show "$base:$baseline_path" > /dev/null
           fi
-          # Pin and usage comparisons need local baseline blobs before network denial.
-          bun scripts/check-external-contracts.ts --baseline-files > "$RUNNER_TEMP/external-contract-baseline-paths"
+          # Hydrate source/config blobs for either snapshot's local import closure.
+          git ls-tree -r --name-only "$base" > "$RUNNER_TEMP/external-contract-baseline-paths"
           while IFS= read -r file; do
-            if [ -n "$(git ls-tree --name-only "$base" -- "$file")" ]; then
-              git show "$base:$file" > /dev/null
-            fi
-          done < "$RUNNER_TEMP/external-contract-baseline-paths"
+            case "$file" in
+              *.ts|*.tsx|*.js|*.jsx|*.mts|*.cts|*.mjs|*.cjs|*.json|bun.lock)
+                printf '%s:%s\n' "$base" "$file" ;;
+            esac
+          done < "$RUNNER_TEMP/external-contract-baseline-paths" > "$RUNNER_TEMP/external-contract-baseline-objects"
+          git cat-file --batch < "$RUNNER_TEMP/external-contract-baseline-objects" > /dev/null
           # A changed patch pin can also reference a patch removed from the head.
           git ls-tree -r --name-only "$base" -- patches > "$RUNNER_TEMP/external-contract-baseline-patches"
           while IFS= read -r file; do

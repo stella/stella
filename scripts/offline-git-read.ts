@@ -7,7 +7,8 @@ const spawnGit = Bun.spawnSync.bind(Bun);
 type OfflineGitReadOperation =
   | { type: "merge-base"; ref: string }
   | { type: "ls-tree"; commit: string; file: string }
-  | { type: "show"; commit: string; file: string };
+  | { type: "show"; commit: string; file: string }
+  | { type: "files"; commit: string };
 
 type OfflineGitReadOptions = {
   root: string;
@@ -63,6 +64,9 @@ export const readOfflineGit = ({
       case "show":
         validateObjectPath(operation);
         return ["show", `${operation.commit}:${operation.file}`];
+      case "files":
+        validateObjectPath({ commit: operation.commit, file: "package.json" });
+        return ["ls-tree", "-r", "--name-only", operation.commit];
       default: {
         operation satisfies never;
         return panic("Unsupported offline Git operation");
@@ -89,27 +93,32 @@ export const readOfflineGit = ({
   return result.stdout.toString();
 };
 
-type ReadGitBaselineOptions = {
-  root: string;
-  base: string;
-  file: string;
-};
+type GitBaselineReaderOptions = { root: string; base: string };
 
-export const readGitBaseline = ({
+export const createGitBaselineReader = ({
   root,
   base,
-  file,
-}: ReadGitBaselineOptions): string | undefined => {
+}: GitBaselineReaderOptions) => {
   const commit = readOfflineGit({
     root,
     operation: { type: "merge-base", ref: base },
   }).trim();
-  const tree = readOfflineGit({
-    root,
-    operation: { type: "ls-tree", commit, file },
-  });
-  if (tree.trim() === "") {
-    return undefined;
-  }
-  return readOfflineGit({ root, operation: { type: "show", commit, file } });
+  const files = new Set(
+    readOfflineGit({ root, operation: { type: "files", commit } })
+      .trim()
+      .split("\n"),
+  );
+  const contents = new Map<string, string | undefined>();
+  return (file: string) => {
+    validateObjectPath({ commit, file });
+    if (!contents.has(file)) {
+      contents.set(
+        file,
+        files.has(file)
+          ? readOfflineGit({ root, operation: { type: "show", commit, file } })
+          : undefined,
+      );
+    }
+    return contents.get(file);
+  };
 };

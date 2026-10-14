@@ -261,15 +261,24 @@ const typeOnlyExport = (node: ts.ExportDeclaration) => {
 };
 
 type RuntimeModuleReference =
-  | { type: "literal"; specifier: string }
-  | { type: "dynamic" };
+  | { readonly type: "literal"; readonly specifier: string }
+  | { readonly type: "dynamic" };
 
 type RuntimeModuleReferencesOptions = { file: string; text: string };
+
+const referenceCache = new Map<
+  string,
+  { text: string; references: readonly RuntimeModuleReference[] }[]
+>();
 
 export const runtimeModuleReferences = ({
   file,
   text,
-}: RuntimeModuleReferencesOptions) => {
+}: RuntimeModuleReferencesOptions): readonly RuntimeModuleReference[] => {
+  const cached = referenceCache.get(file)?.find((entry) => entry.text === text);
+  if (cached) {
+    return cached.references;
+  }
   const references: RuntimeModuleReference[] = [];
   const record = (expression: ts.Expression | undefined) => {
     if (expression !== undefined && ts.isStringLiteralLike(expression)) {
@@ -324,7 +333,334 @@ export const runtimeModuleReferences = ({
   };
   // parseSource selects JSX syntax from a .tsx suffix for both JS and TS sources.
   visit(parseSource({ fileName: file.replace(/\.jsx$/u, ".tsx"), text }));
+  const recent = referenceCache.get(file) ?? [];
+  recent.push({ text, references });
+  if (recent.length > 2) {
+    recent.shift();
+  }
+  referenceCache.set(file, recent);
+  if (referenceCache.size > MAX_FILES) {
+    const first = referenceCache.keys().next();
+    if (!first.done) {
+      referenceCache.delete(first.value);
+    }
+  }
   return references;
+};
+
+type LocalRuntimeSnapshotOptions = {
+  root: string;
+  read: (file: string) => string | undefined;
+};
+
+const matchesSnapshotAlias = (specifier: string, options: ts.CompilerOptions) =>
+  Object.keys(options.paths ?? {}).some((pattern) => {
+    const star = pattern.indexOf("*");
+    return star === -1
+      ? pattern === specifier
+      : specifier.startsWith(pattern.slice(0, star)) &&
+          specifier.endsWith(pattern.slice(star + 1));
+  });
+
+const SNAPSHOT_COMPILER_OPTIONS = {
+  moduleResolution: ts.ModuleResolutionKind.Bundler,
+  module: ts.ModuleKind.Preserve,
+  resolveJsonModule: true,
+  customConditions: ["bun"],
+} satisfies ts.CompilerOptions;
+
+/** Resolve only repository runtime sources against one immutable snapshot. */
+const createLocalSnapshotResolver = ({
+  root,
+  read,
+}: LocalRuntimeSnapshotOptions) => {
+  const repositoryRoot = path.resolve(root);
+  const metadataProblems: string[] = [];
+  const reads = new Map<string, string | undefined>();
+  const workspaces = new Map<string, string | undefined>();
+  const configs = new Map<string, ts.CompilerOptions>();
+  const resolutions = new Map<string, LocalImportResolution>();
+  const readRelative = (file: string) => {
+    if (!reads.has(file)) {
+      reads.set(file, read(file));
+    }
+    return reads.get(file);
+  };
+  const workspaceRoot = (identity: string) => {
+    if (workspaces.has(identity)) {
+      return workspaces.get(identity);
+    }
+    if (!identity.startsWith("@stll/")) {
+      return undefined;
+    }
+    const name = identity.slice("@stll/".length);
+    for (const container of ["packages", "apps"]) {
+      const directory = `${container}/${name}`;
+      const content = readRelative(`${directory}/package.json`);
+      if (content === undefined) {
+        continue;
+      }
+      const parsed = Result.try((): unknown => JSON.parse(content));
+      if (
+        parsed.isOk() &&
+        typeof parsed.value === "object" &&
+        parsed.value !== null &&
+        "name" in parsed.value &&
+        parsed.value.name === identity
+      ) {
+        const absolute = path.join(repositoryRoot, directory);
+        workspaces.set(identity, absolute);
+        return absolute;
+      }
+      metadataProblems.push(
+        `Cannot read workspace manifest ${directory}/package.json`,
+      );
+    }
+    workspaces.set(identity, undefined);
+    return undefined;
+  };
+  const canonical = (file: string) => {
+    const absolute = path.resolve(file);
+    if (!isPathInside(repositoryRoot, absolute)) {
+      return absolute;
+    }
+    const parts = repoRelativePath(repositoryRoot, absolute).split("/");
+    const modules = parts.lastIndexOf("node_modules");
+    if (modules === -1 || parts.at(modules + 1) !== "@stll") {
+      return absolute;
+    }
+    const name = parts.at(modules + 2);
+    const workspace =
+      name === undefined ? undefined : workspaceRoot(`@stll/${name}`);
+    return workspace === undefined
+      ? absolute
+      : path.join(workspace, ...parts.slice(modules + 3));
+  };
+  const readAbsolute = (file: string) => {
+    const absolute = canonical(file);
+    if (
+      !isPathInside(repositoryRoot, absolute) ||
+      repoRelativePath(repositoryRoot, absolute)
+        .split("/")
+        .includes("node_modules")
+    ) {
+      return undefined;
+    }
+    return readRelative(repoRelativePath(repositoryRoot, absolute));
+  };
+  const host = {
+    fileExists: (file: string) =>
+      !DECLARATION_SOURCE.test(file) && readAbsolute(file) !== undefined,
+    readFile: readAbsolute,
+    directoryExists: (directory: string) =>
+      isPathInside(repositoryRoot, canonical(directory)),
+    realpath: canonical,
+    getCurrentDirectory: () => repositoryRoot,
+    useCaseSensitiveFileNames: true,
+  };
+  const optionsAt = (file: string): ts.CompilerOptions => {
+    let directory = path.dirname(file);
+    const start = directory;
+    while (isPathInside(repositoryRoot, directory)) {
+      const cached = configs.get(directory);
+      if (cached) {
+        configs.set(start, cached);
+        return cached;
+      }
+      const configFile = path.join(directory, "tsconfig.json");
+      if (readAbsolute(configFile) !== undefined) {
+        const config = ts.getParsedCommandLineOfConfigFile(
+          configFile,
+          {},
+          {
+            ...ts.sys,
+            ...host,
+            readDirectory: () => [],
+            onUnRecoverableConfigFileDiagnostic: (diagnostic) =>
+              metadataProblems.push(
+                `Cannot read ${repoRelativePath(repositoryRoot, configFile)}: ${ts.flattenDiagnosticMessageText(diagnostic.messageText, " ")}`,
+              ),
+          },
+        );
+        if (
+          config?.errors.some(({ code }) => code !== 18_002 && code !== 18_003)
+        ) {
+          metadataProblems.push(
+            `Invalid local runtime configuration ${repoRelativePath(repositoryRoot, configFile)}`,
+          );
+        }
+        const options = {
+          ...config?.options,
+          ...SNAPSHOT_COMPILER_OPTIONS,
+        };
+        configs.set(start, options);
+        configs.set(directory, options);
+        return options;
+      }
+      const parent = path.dirname(directory);
+      if (parent === directory) {
+        break;
+      }
+      directory = parent;
+    }
+    const options = SNAPSHOT_COMPILER_OPTIONS;
+    configs.set(start, options);
+    return options;
+  };
+  type LocalImportResolution =
+    | { type: "external" }
+    | { type: "resolved"; file: string }
+    | { type: "unresolved" };
+  type LocalImportOptions = { specifier: string; importer: string };
+  const resolveImport = ({
+    specifier,
+    importer,
+  }: LocalImportOptions): LocalImportResolution => {
+    if (
+      isBuiltin(specifier) ||
+      specifier === "bun" ||
+      specifier.startsWith("bun:")
+    ) {
+      return { type: "external" };
+    }
+    const options = optionsAt(importer);
+    const identity = packageIdentity(specifier);
+    const local =
+      localSpecifier(specifier) ||
+      specifier.startsWith("#") ||
+      matchesSnapshotAlias(specifier, options) ||
+      (identity !== undefined && identity.startsWith("@stll/"));
+    if (!local) {
+      return { type: "external" };
+    }
+    const key = `${importer}\0${specifier}`;
+    const cached = resolutions.get(key);
+    if (cached) {
+      return cached;
+    }
+    const resolved = ts.resolveModuleName(
+      specifier,
+      importer,
+      options,
+      host,
+    ).resolvedModule;
+    const file =
+      resolved === undefined ? undefined : canonical(resolved.resolvedFileName);
+    const result =
+      file !== undefined &&
+      isPathInside(repositoryRoot, file) &&
+      !repoRelativePath(repositoryRoot, file)
+        .split("/")
+        .includes("node_modules")
+        ? ({ type: "resolved", file } as const)
+        : ({ type: "unresolved" } as const);
+    resolutions.set(key, result);
+    return result;
+  };
+  return {
+    repositoryRoot,
+    canonical,
+    readAbsolute,
+    resolveImport,
+    metadataProblems,
+  };
+};
+
+export const createLocalRuntimeClosureReader = (
+  options: LocalRuntimeSnapshotOptions,
+) => {
+  const {
+    repositoryRoot,
+    canonical,
+    readAbsolute,
+    resolveImport,
+    metadataProblems,
+  } = createLocalSnapshotResolver(options);
+  return (roots: readonly string[]) => {
+    const files = new Map<string, string>();
+    const references: RuntimeModuleReference[] = [];
+    const problems: string[] = [];
+    const pending = roots.map((file) => ({
+      file: path.resolve(repositoryRoot, file),
+      depth: 0,
+    }));
+    let bytes = 0;
+    for (const entry of pending) {
+      const file = canonical(entry.file);
+      if (
+        !isPathInside(repositoryRoot, file) ||
+        repoRelativePath(repositoryRoot, file)
+          .split("/")
+          .includes("node_modules")
+      ) {
+        problems.push(
+          `Local runtime closure escaped the repository: ${entry.file}`,
+        );
+        continue;
+      }
+      const relative = repoRelativePath(repositoryRoot, file);
+      if (files.has(relative)) {
+        continue;
+      }
+      const text = readAbsolute(file);
+      if (text === undefined) {
+        problems.push(`Cannot read local runtime source ${relative}`);
+        continue;
+      }
+      bytes += new TextEncoder().encode(text).byteLength;
+      if (
+        files.size >= MAX_FILES ||
+        bytes > MAX_BYTES ||
+        entry.depth > MAX_DEPTH
+      ) {
+        problems.push(
+          `Local runtime closure exceeds its traversal bound at ${relative}`,
+        );
+        break;
+      }
+      files.set(relative, text);
+      if (!RUNTIME_SOURCE.test(file)) {
+        continue;
+      }
+      for (const reference of runtimeModuleReferences({
+        file: relative,
+        text,
+      })) {
+        references.push(reference);
+        switch (reference.type) {
+          case "dynamic":
+            problems.push(
+              `Cannot resolve non-literal local runtime reference from ${relative}`,
+            );
+            break;
+          case "literal": {
+            const specifier = reference.specifier;
+            const resolution = resolveImport({ specifier, importer: file });
+            switch (resolution.type) {
+              case "external":
+                break;
+              case "unresolved":
+                problems.push(
+                  `Cannot resolve local runtime import ${JSON.stringify(specifier)} from ${relative}`,
+                );
+                break;
+              case "resolved":
+                pending.push({ file: resolution.file, depth: entry.depth + 1 });
+                break;
+              default:
+                resolution satisfies never;
+                panic("Unhandled local import resolution");
+            }
+            break;
+          }
+          default:
+            reference satisfies never;
+            panic("Unhandled runtime module reference");
+        }
+      }
+    }
+    return { files, references, problems: [...problems, ...metadataProblems] };
+  };
 };
 
 type FixtureEvidenceOptions = {

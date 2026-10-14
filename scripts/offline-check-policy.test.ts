@@ -244,8 +244,8 @@ test("the offline baseline reader uses the merge base and preserves absent files
     ]);
     const read = (file: string, ref = base) =>
       runPreloaded(
-        `import { readGitBaseline } from './scripts/offline-git-read.ts';
-       console.log(JSON.stringify({ baseline: readGitBaseline(${JSON.stringify({ root: directory, base: ref, file })}) }));`,
+        `import { createGitBaselineReader } from './scripts/offline-git-read.ts';
+       console.log(JSON.stringify({ baseline: createGitBaselineReader(${JSON.stringify({ root: directory, base: ref })})(${JSON.stringify(file)}) }));`,
         "--check",
       );
     const existing = read("baseline.txt");
@@ -276,9 +276,9 @@ test("the offline baseline reader uses the merge base and preserves absent files
     git(["config", "extensions.partialClone", "origin"]);
     const trace = path.join(directory, "git-trace.json");
     const missing = runPreloaded(
-      `import { readGitBaseline } from './scripts/offline-git-read.ts';
+      `import { createGitBaselineReader } from './scripts/offline-git-read.ts';
        process.env['GIT_TRACE2_EVENT'] = ${JSON.stringify(trace)};
-       readGitBaseline(${JSON.stringify({ root: directory, base, file: "baseline.txt" })});`,
+       createGitBaselineReader(${JSON.stringify({ root: directory, base })})("baseline.txt");`,
       "--check",
     );
     expect(missing.exitCode).not.toBe(0);

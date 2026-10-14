@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
@@ -28,6 +28,7 @@ import type {
 } from "../packages/external-contracts/src/types";
 import { parseBunLockText } from "./bun-lock-text";
 import {
+  createLocalRuntimeClosureReader,
   readFixtureEvidence,
   runtimeModuleReferences,
 } from "./external-contract-evidence";
@@ -35,7 +36,7 @@ import {
   EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
   readExternalContractPinAllowances,
 } from "./external-contract-pin-allowances";
-import { readGitBaseline } from "./offline-git-read";
+import { createGitBaselineReader } from "./offline-git-read";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
   type OutboundTransportCensusEntry,
@@ -839,6 +840,95 @@ export const hasChangedExecutableUsage = ({
   return executable(baseline) !== executable(current);
 };
 
+type ChangedLocalRuntimeClosureOptions = {
+  root: string;
+  owners: readonly string[];
+  sdks: readonly string[];
+  baseline: (file: string) => string | undefined;
+  current: (file: string) => string | undefined;
+};
+
+export const hasChangedLocalRuntimeClosure = ({
+  root,
+  owners,
+  sdks,
+  baseline,
+  current,
+}: ChangedLocalRuntimeClosureOptions): boolean => {
+  const previousClosure = createLocalRuntimeClosureReader({
+    root,
+    read: baseline,
+  });
+  const currentClosure = createLocalRuntimeClosureReader({
+    root,
+    read: current,
+  });
+  const emitted = new Map<string, string>();
+  const executable = (file: string, text: string) => {
+    if (!/\.[cm]?[jt]sx?$/u.test(file)) {
+      return text;
+    }
+    const key = `${file}\0${text}`;
+    if (!emitted.has(key)) {
+      emitted.set(
+        key,
+        ts.transpileModule(text, {
+          fileName: file,
+          compilerOptions: {
+            target: ts.ScriptTarget.ESNext,
+            module: ts.ModuleKind.Preserve,
+            verbatimModuleSyntax: true,
+            removeComments: true,
+          },
+        }).outputText,
+      );
+    }
+    return emitted.get(key);
+  };
+  for (const owner of owners) {
+    const previous = previousClosure([owner]);
+    const present = currentClosure([owner]);
+    if (previous.problems.length > 0 || present.problems.length > 0) {
+      return true;
+    }
+    const reachesPinnedSdk = [
+      ...previous.references,
+      ...present.references,
+    ].some((reference) => {
+      switch (reference.type) {
+        case "literal":
+          return sdks.some(
+            (sdk) =>
+              reference.specifier === sdk ||
+              reference.specifier.startsWith(`${sdk}/`),
+          );
+        case "dynamic":
+          return true;
+        default:
+          reference satisfies never;
+          return panic("Unhandled runtime module reference");
+      }
+    });
+    // An unresolved edge can hide SDK reachability, so check problems before scope.
+    if (!reachesPinnedSdk) {
+      continue;
+    }
+    if (previous.files.size !== present.files.size) {
+      return true;
+    }
+    for (const [file, source] of previous.files) {
+      const next = present.files.get(file);
+      if (
+        next === undefined ||
+        executable(file, source) !== executable(file, next)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
 type AdmittedPinDriftOptions = {
   current: Readonly<Record<string, string>>;
   baseline: Readonly<Record<string, string>>;
@@ -921,17 +1011,29 @@ export const checkExternalContracts = (
               baseline(file) ??
               panic(`Missing external contract baseline: ${file}`),
           );
+    const currentSources = new Map<string, string | undefined>();
+    const currentSource = (file: string) => {
+      if (!currentSources.has(file)) {
+        const absolute = path.join(root, file);
+        currentSources.set(
+          file,
+          existsSync(absolute) && statSync(absolute).isFile()
+            ? readFileSync(absolute, "utf-8")
+            : undefined,
+        );
+      }
+      return currentSources.get(file);
+    };
     const usageChanged =
       baseline !== undefined &&
       admitted !== undefined &&
-      entry.owners.some(({ path: file }) =>
-        hasChangedExecutableUsage({
-          sdks: entry.sdks,
-          file,
-          baseline: baseline(file),
-          current: readFileSync(path.join(root, file), "utf-8"),
-        }),
-      );
+      hasChangedLocalRuntimeClosure({
+        root,
+        owners: entry.owners.map(({ path: file }) => file),
+        sdks: entry.sdks,
+        baseline,
+        current: currentSource,
+      });
     const admittedPins =
       admitted === undefined
         ? {}
@@ -1007,31 +1109,12 @@ export const checkExternalContracts = (
   return problems;
 };
 
-if (import.meta.main && process.argv.includes("--baseline-files")) {
-  const manifest = v.parse(manifestSchema, json(ROOT, "package.json"));
-  const files = new Set([
-    "package.json",
-    "apps/api/package.json",
-    "bun.lock",
-    ...Object.values(EXTERNAL_CONTRACTS).flatMap((entry) => [
-      ...entry.owners.map(({ path: file }) => file),
-      ...entry.pinSources.map(({ file }) => file),
-    ]),
-    ...Object.values(manifest.patchedDependencies),
-  ]);
-  console.log([...files].join("\n"));
-} else if (import.meta.main) {
+if (import.meta.main) {
   const base = process.env["CHECK_BASE_REF"] ?? "origin/main";
-  const baselineCache = new Map<string, string | undefined>();
-  const baseline = (file: string) => {
-    if (!baselineCache.has(file)) {
-      baselineCache.set(file, readGitBaseline({ root: ROOT, base, file }));
-    }
-    return baselineCache.get(file);
-  };
+  const baseline = createGitBaselineReader({ root: ROOT, base });
   const problems = checkExternalContracts(ROOT, { baseline });
   for (const file of [REGISTRY_PATH]) {
-    const baselineSource = readGitBaseline({ root: ROOT, base, file });
+    const baselineSource = baseline(file);
     // The initial enrollment establishes the set; later changes may only shrink it.
     if (baselineSource === undefined) {
       continue;

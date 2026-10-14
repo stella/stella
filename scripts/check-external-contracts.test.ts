@@ -22,6 +22,7 @@ import type { ExternalContractEntry } from "../packages/external-contracts/src/t
 import {
   admittedPinDrift,
   hasChangedExecutableUsage,
+  hasChangedLocalRuntimeClosure,
   REMOVED_PIN,
   checkExternalContracts,
   findDependencyCatalogProblems,
@@ -656,6 +657,235 @@ test("non-literal module references invalidate even unchanged pinned owners", ()
       file: "client.ts",
       baseline: source,
       current: source,
+    }),
+  ).toBe(true);
+});
+
+test("local runtime closure changes invalidate dated debt", () => {
+  const root = "/fixture";
+  const owner = "owner.ts";
+  const helper = "helper.ts";
+  const ownerSource =
+    'import sdk from "vendor"; import { requestBuilder } from "./helper"; sdk.send(requestBuilder());';
+  const files = new Map([
+    [owner, ownerSource],
+    [helper, 'export const requestBuilder = () => ({ body: "old" });'],
+  ]);
+  const options = {
+    root,
+    owners: [owner],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === helper
+          ? 'export const requestBuilder = () => ({ body: "new" });'
+          : files.get(file),
+    }),
+  ).toBe(true);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === helper
+          ? '// revised comment\nexport const requestBuilder = (): { body: string } => ({ body: "old" });'
+          : files.get(file),
+    }),
+  ).toBe(false);
+});
+
+test("added and removed files in a local runtime closure invalidate dated debt", () => {
+  const root = "/fixture";
+  const owner = "owner.ts";
+  const helper = "helper.ts";
+  const ownerSource =
+    'import sdk from "vendor"; import "./helper"; sdk.send();';
+  const files = new Map([
+    [owner, ownerSource],
+    [helper, "export const value = true;"],
+  ]);
+  const options = {
+    root,
+    owners: [owner],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === helper ? undefined : files.get(file),
+    }),
+  ).toBe(true);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      baseline: (file: string) => {
+        if (file === owner) {
+          return 'import sdk from "vendor"; sdk.send();';
+        }
+        if (file === helper) {
+          return undefined;
+        }
+        return files.get(file);
+      },
+    }),
+  ).toBe(true);
+});
+
+test("unresolved and non-literal imports in reachable helpers invalidate dated debt", () => {
+  const root = "/fixture";
+  const owner = "owner.ts";
+  const helper = "helper.ts";
+  const ownerSource =
+    'import sdk from "vendor"; import "./helper"; sdk.send();';
+  const files = new Map([
+    [owner, ownerSource],
+    [helper, "export const value = true;"],
+  ]);
+  const options = {
+    root,
+    owners: [owner],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      baseline: (file: string) => (file === owner ? ownerSource : undefined),
+    }),
+  ).toBe(true);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === owner
+          ? 'import sdk from "vendor"; import "./missing"; sdk.send();'
+          : files.get(file),
+    }),
+  ).toBe(true);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) => {
+        if (file === owner) {
+          return ownerSource;
+        }
+        if (file === helper) {
+          return 'const moduleName = "./missing"; await import(moduleName);';
+        }
+        return undefined;
+      },
+    }),
+  ).toBe(true);
+});
+
+test("workspace package imports resolve against each snapshot's exports", () => {
+  const root = "/fixture";
+  const owner = "owner.ts";
+  const manifest = "packages/helper/package.json";
+  const files = new Map([
+    [owner, 'import sdk from "vendor"; import "@stll/helper"; sdk.send();'],
+    [
+      manifest,
+      JSON.stringify({ name: "@stll/helper", exports: "./src/index.ts" }),
+    ],
+    ["packages/helper/src/index.ts", "export const value = true;"],
+    ["packages/helper/src/next.ts", "export const value = true;"],
+  ]);
+  const options = {
+    root,
+    owners: [owner],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === manifest
+          ? JSON.stringify({ name: "@stll/helper", exports: "./src/next.ts" })
+          : files.get(file),
+    }),
+  ).toBe(true);
+});
+
+test("bookkeeping changes invalidate debt only when reachable from SDK usage", () => {
+  const owner = "owner.ts";
+  const bookkeeping = "bookkeeping.ts";
+  const files = new Map([
+    [owner, 'import sdk from "vendor"; sdk.send();'],
+    [bookkeeping, 'export const receipt = "old";'],
+  ]);
+  const options = {
+    root: "/fixture",
+    owners: [owner, bookkeeping],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) =>
+      file === bookkeeping ? 'export const receipt = "new";' : files.get(file),
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  files.set(
+    owner,
+    'import sdk from "vendor"; import { receipt } from "./bookkeeping"; sdk.send(receipt);',
+  );
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(true);
+});
+
+test("unresolved edges fail closed even in owners without known SDK reachability", () => {
+  for (const text of [
+    'import "./missing";',
+    'const name = "vendor"; await import(name);',
+  ]) {
+    expect(
+      hasChangedLocalRuntimeClosure({
+        root: "/fixture",
+        owners: ["owner.ts"],
+        sdks: ["vendor"],
+        baseline: () => text,
+        current: () => text,
+      }),
+    ).toBe(true);
+  }
+});
+
+test("SDK reachability through a local helper includes the entire owner closure", () => {
+  const files = new Map([
+    ["owner.ts", 'import { send } from "./helper"; send();'],
+    [
+      "helper.ts",
+      'import sdk from "vendor"; export const send = () => sdk.send("old");',
+    ],
+  ]);
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: (file: string) => files.get(file),
+    current: (file: string) => files.get(file),
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === "owner.ts"
+          ? 'import { send } from "./helper"; send(); send();'
+          : files.get(file),
     }),
   ).toBe(true);
 });
