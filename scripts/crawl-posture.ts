@@ -1265,7 +1265,12 @@ const runSelfTest = (): number => {
     "mixed prefix without a route",
     reportForSingleApp((root, app) => {
       layoutValidMixed(root, app);
+      // The whole /law prefix: a nested route (law/cases) would still resolve it.
       rmSync(path.join(root, app, MIXED_ROUTES_DIR, "law.tsx"));
+      rmSync(path.join(root, app, MIXED_ROUTES_DIR, "law"), {
+        recursive: true,
+        force: true,
+      });
     }),
     "mixed-prefix-no-route",
   );
