@@ -150,7 +150,7 @@ test("the agenda keeps an older open task that newer activity would push out", a
   ]) {
     expect(agendaIds).not.toContain(excluded);
   }
-  if (agendaIds.includes(undatedTaskId)) {
-    expect(agendaIds.indexOf(undatedTaskId)).toBeGreaterThan(0);
-  }
+  // Undated open tasks follow the dated ones.
+  expect(agendaIds).toContain(undatedTaskId);
+  expect(agendaIds.indexOf(undatedTaskId)).toBeGreaterThan(0);
 });

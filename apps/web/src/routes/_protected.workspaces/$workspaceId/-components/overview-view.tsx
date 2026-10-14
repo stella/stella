@@ -329,8 +329,15 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   });
 
   // The API reads the agenda on its own: open tasks due today or later,
-  // nearest first, undated last.
-  const tasks = data.upcomingAgenda;
+  // nearest first, undated last. The local date also applies here, so a
+  // cached response drops yesterday's deadlines once the day rolls over.
+  const tasks = useMemo(
+    () =>
+      data.upcomingAgenda.filter(
+        (task) => task.dueDate === null || task.dueDate >= today,
+      ),
+    [data.upcomingAgenda, today],
+  );
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
