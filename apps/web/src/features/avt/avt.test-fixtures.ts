@@ -125,3 +125,104 @@ export const recordConflict: ClaimVerdict = {
     governingStates: ["supported", "contradicted"],
   },
 };
+
+const WITNESS_STATEMENT_BLOCKS: readonly string[] = [
+  "I signed the facility agreement on 3 June 2021. The lender confirmed the terms by email the next day.",
+  "The first drawdown was requested on 5 July 2021.\nFunds arrived on 28 July 2021, three weeks late.",
+  "No payment was missed before the lender called in the loan. In my view the lender acted unfairly.",
+];
+
+type WitnessClaim = {
+  block: number;
+  quote: string;
+  verdict: ClaimVerdict;
+  type: VerificationClaim["type"];
+};
+
+/**
+ * A short witness statement as the server stores it: one DOCX block per
+ * paragraph, claims anchored by UTF-16 offsets. One claim crosses a line
+ * break, and the next overlaps it, so it keeps only the words left after it.
+ */
+const WITNESS_STATEMENT_CLAIMS: readonly WitnessClaim[] = [
+  {
+    block: 0,
+    quote: "I signed the facility agreement on 3 June 2021.",
+    verdict: supported(),
+    type: "fact",
+  },
+  {
+    block: 0,
+    quote: "The lender confirmed the terms by email the next day.",
+    verdict: { state: "tension", score: 50, recordConflict: null },
+    type: "fact",
+  },
+  {
+    block: 1,
+    quote:
+      "The first drawdown was requested on 5 July 2021.\nFunds arrived on 28 July 2021",
+    verdict: recordConflict,
+    type: "fact",
+  },
+  {
+    block: 1,
+    quote: "Funds arrived on 28 July 2021, three weeks late.",
+    verdict: contradicted(),
+    type: "fact",
+  },
+  {
+    block: 2,
+    quote: "No payment was missed before the lender called in the loan.",
+    verdict: noCover,
+    type: "fact",
+  },
+  {
+    block: 2,
+    quote: "In my view the lender acted unfairly.",
+    verdict: notVerifiable,
+    type: "opinion",
+  },
+];
+
+/** The words each witness-statement claim is marked over, in reading order. */
+export const WITNESS_STATEMENT_MARKED_TEXT: readonly string[] = [
+  "I signed the facility agreement on 3 June 2021.",
+  "The lender confirmed the terms by email the next day.",
+  "The first drawdown was requested on 5 July 2021.\nFunds arrived on 28 July 2021",
+  ", three weeks late.",
+  "No payment was missed before the lender called in the loan.",
+  "In my view the lender acted unfairly.",
+];
+
+export const witnessStatementRun = (): VerificationRun => {
+  const claims = WITNESS_STATEMENT_CLAIMS.map(
+    ({ block, quote, verdict, type }, index) => {
+      const text = WITNESS_STATEMENT_BLOCKS[block] ?? "";
+      const start = text.indexOf(quote);
+      return {
+        ...makeClaim({
+          suffix: index + 1,
+          verdict,
+          type,
+          anchor: {
+            type: "docx-block",
+            blockId: `w${String(block)}`,
+            start,
+            end: start + quote.length,
+          },
+        }),
+        text: quote,
+      };
+    },
+  );
+  return {
+    ...makeRun(claims),
+    blocks: WITNESS_STATEMENT_BLOCKS.map((text, ordinal) => ({
+      ordinal,
+      blockId: `w${String(ordinal)}`,
+      kind: "docx-block" as const,
+      pageNumber: null,
+      text,
+    })),
+  };
+};

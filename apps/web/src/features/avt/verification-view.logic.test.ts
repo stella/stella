@@ -1,17 +1,25 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { plainTextOf } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
-import { makeClaim, supported } from "@/features/avt/avt.test-fixtures";
+import {
+  makeClaim,
+  supported,
+  WITNESS_STATEMENT_MARKED_TEXT,
+  witnessStatementRun,
+} from "@/features/avt/avt.test-fixtures";
 import type { VerificationRun } from "@/features/avt/types";
 import {
+  claimSpansForBlock,
   groupClaimsIntoPassages,
   passageReadingOrder,
   proseReadingOrder,
+  readerParagraph,
   selectClaimPresentation,
   segmentProse,
-  segmentProseBlock,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
 
@@ -137,9 +145,18 @@ describe("stored statement text", () => {
           );
           expect(new Set(presentation.readingOrder).size).toBe(claims.length);
           for (const block of segmentProse(blocks, input)) {
-            expect(block.segments.map((segment) => segment.text).join("")).toBe(
-              text,
-            );
+            // The reader draws the stored text unchanged, so the claim
+            // offsets are its anchor offsets.
+            expect(block.paragraph.plainText).toBe(text);
+            expect(plainTextOf(block.paragraph.inlines)).toBe(text);
+            // Anchors of one piece are ordered, in bounds and disjoint.
+            let cursor = 0;
+            for (const span of block.claimSpans) {
+              expect(span.start).toBeGreaterThanOrEqual(cursor);
+              expect(span.end).toBeGreaterThan(span.start);
+              expect(span.end).toBeLessThanOrEqual(text.length);
+              cursor = span.end;
+            }
           }
           expect(input.map((claim) => claim.id)).toEqual(inputOrder);
           expect(blocks.map((block) => block.ordinal)).toEqual([2, 1, 0]);
@@ -162,45 +179,70 @@ describe("stored statement text", () => {
       anchor: { type: "docx-block", blockId: "p1", start, end },
     });
 
-  test("keeps every character around claims in document order", () => {
-    const segments = segmentProseBlock(block, [
+  test("marks claims in document order on the stored offsets", () => {
+    const spans = claimSpansForBlock(block, [
       claim(2, 20, 23),
       claim(1, 7, 10),
     ]);
 
-    expect(segments.map((segment) => segment.text).join("")).toBe(block.text);
-    expect(segments.map((segment) => segment.type)).toEqual([
-      "plain",
-      "claim",
-      "plain",
-      "claim",
-      "plain",
-    ]);
     expect(
-      segments
-        .filter((segment) => segment.type === "claim")
-        .map((segment) => segment.claim.id),
-    ).toEqual([claim(1, 7, 10).id, claim(2, 20, 23).id]);
+      spans.map(({ claim: { id }, start, end }) => [id, start, end]),
+    ).toEqual([
+      [claim(1, 7, 10).id, 7, 10],
+      [claim(2, 20, 23).id, 20, 23],
+    ]);
   });
 
   test("uses the earliest and then longest span when claims overlap", () => {
-    const segments = segmentProseBlock({ ...block, text: "abcdefghij" }, [
+    const text = "abcdefghij";
+    const spans = claimSpansForBlock({ ...block, text }, [
       claim(3, 2, 8),
       claim(2, 0, 5),
       claim(1, 0, 5),
       claim(4, 7, 10),
     ]);
 
-    expect(segments.map((segment) => segment.text).join("")).toBe("abcdefghij");
     expect(
-      segments
-        .filter((segment) => segment.type === "claim")
-        .map((segment) => [segment.claim.id, segment.text]),
+      spans.map((span) => [span.claim.id, text.slice(span.start, span.end)]),
     ).toEqual([
       [claim(1, 0, 5).id, "abcde"],
       [claim(3, 2, 8).id, "fgh"],
       [claim(4, 7, 10).id, "ij"],
     ]);
+  });
+
+  test("a stored block is a reader paragraph keyed by its block id", () => {
+    const paragraph = readerParagraph({ ...block, text: "one\ntwo" });
+
+    expect(paragraph).toEqual({
+      id: "p1",
+      anchorId: "p1",
+      type: "paragraph",
+      plainText: "one\ntwo",
+      inlines: [{ type: "text", text: "one\ntwo" }],
+    });
+  });
+
+  test("marks the witness statement's claims on the same words as the stored segmentation", () => {
+    const run = witnessStatementRun();
+    const presentation = selectClaimPresentation(run.blocks, run.claims);
+    if (presentation.type !== "prose") {
+      return panic("Expected the witness statement to render as prose");
+    }
+
+    expect(presentation.readingOrder).toEqual(
+      run.claims.map((item) => item.id),
+    );
+    expect(
+      presentation.blocks.flatMap((prose) =>
+        prose.claimSpans.map((span) =>
+          prose.paragraph.plainText.slice(span.start, span.end),
+        ),
+      ),
+    ).toEqual([...WITNESS_STATEMENT_MARKED_TEXT]);
+    expect(presentation.blocks.map((prose) => prose.paragraph.id)).toEqual(
+      run.blocks.map((stored) => stored.blockId),
+    );
   });
 
   test("matches PDF claims by page and retains page order", () => {
@@ -223,9 +265,8 @@ describe("stored statement text", () => {
     );
 
     expect(prose.map((item) => item.pageNumber)).toEqual([1, 2]);
-    expect(prose[0]?.segments.map((segment) => segment.text).join("")).toBe(
-      "page one",
-    );
+    expect(prose[0]?.paragraph.plainText).toBe("page one");
+    expect(prose[1]?.paragraph.id).toBe("P2");
     expect(proseReadingOrder(prose)).toEqual([onPage.id]);
   });
 
