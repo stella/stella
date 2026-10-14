@@ -14,6 +14,7 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/breadcrumb";
 import { Separator } from "@stll/ui/separator";
+import { cn } from "@stll/ui/utils";
 
 import { PublicWorkspaceShell } from "@/components/public-workspace-shell";
 import { SidebarTrigger, useSidebar } from "@/components/sidebar";
@@ -76,7 +77,9 @@ const sectionOfRoute = (routeId: string | undefined): LawSection | null => {
   return null;
 };
 
-const CRUMB_LINK_CLASS = "hover:text-foreground shrink-0";
+// A crumb that runs out of room ends in an ellipsis inside its own box; one
+// that cannot shrink overflowed into its neighbour at a narrow width.
+const CRUMB_LINK_CLASS = "hover:text-foreground block min-w-0 truncate";
 const CRUMB_ACTIVE_PROPS = { className: "text-foreground font-medium" };
 const CRUMB_ACTIVE_OPTIONS = { exact: true, includeSearch: false };
 
@@ -164,6 +167,12 @@ function PublicLawTopBar() {
     },
   });
 
+  // On a phone-width header the document names itself; the trail above it
+  // gives way so the case number keeps the room.
+  const hasDocument = documentLabel !== null;
+  const ancestorCrumbClass = cn("min-w-0", hasDocument && "max-sm:hidden");
+  const crumbSeparatorClass = cn("shrink-0", hasDocument && "max-sm:hidden");
+
   return (
     <header className="bg-sidebar flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
       {isMobile && (
@@ -177,7 +186,7 @@ function PublicLawTopBar() {
           corpus. */}
       <Breadcrumb className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
         <BreadcrumbList className="min-w-0 flex-1 flex-nowrap gap-1.5 overflow-hidden sm:gap-1.5">
-          <BreadcrumbItem>
+          <BreadcrumbItem className={ancestorCrumbClass}>
             <Link
               activeOptions={CRUMB_ACTIVE_OPTIONS}
               activeProps={CRUMB_ACTIVE_PROPS}
@@ -189,8 +198,8 @@ function PublicLawTopBar() {
           </BreadcrumbItem>
           {section === "decisions" && (
             <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
+              <BreadcrumbSeparator className={crumbSeparatorClass} />
+              <BreadcrumbItem className={ancestorCrumbClass}>
                 <Link
                   activeOptions={CRUMB_ACTIVE_OPTIONS}
                   activeProps={CRUMB_ACTIVE_PROPS}
@@ -204,8 +213,8 @@ function PublicLawTopBar() {
           )}
           {section === "statutes" && (
             <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
+              <BreadcrumbSeparator className={crumbSeparatorClass} />
+              <BreadcrumbItem className={ancestorCrumbClass}>
                 <Link
                   activeOptions={CRUMB_ACTIVE_OPTIONS}
                   activeProps={CRUMB_ACTIVE_PROPS}
@@ -220,15 +229,19 @@ function PublicLawTopBar() {
           )}
           {section === "coverage" && (
             <>
-              <BreadcrumbSeparator />
-              <BreadcrumbItem>
-                <BreadcrumbPage>{t("caseLaw.coverage.title")}</BreadcrumbPage>
+              <BreadcrumbSeparator className="shrink-0" />
+              <BreadcrumbItem className="min-w-0">
+                <BreadcrumbPage className="min-w-0">
+                  <span className="block truncate">
+                    {t("caseLaw.coverage.title")}
+                  </span>
+                </BreadcrumbPage>
               </BreadcrumbItem>
             </>
           )}
           {documentLabel !== null && (
             <>
-              <BreadcrumbSeparator />
+              <BreadcrumbSeparator className={crumbSeparatorClass} />
               <BreadcrumbItem className="min-w-0 flex-1">
                 {section === "statutes" && documentStatus !== null && (
                   <span

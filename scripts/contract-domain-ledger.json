@@ -1068,10 +1068,6 @@
     "reason": "Existing spansSchema UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/components/matter-icon.tsx::ALL_MATTERS_STACK_COLORS::domain:[\"var(--option-red)\",\"var(--option-blue)\",\"var(--option-green)\"]::1",
-    "reason": "Existing ALL_MATTERS_STACK_COLORS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/pdf/versions-sidebar.tsx::MENU_OWNED_KEYS::domain:[\"Escape\",\"ArrowDown\",\"ArrowUp\"]::1",
     "reason": "Existing MENU_OWNED_KEYS domain; contract ownership pending migration."
   },
@@ -1310,10 +1306,6 @@
   {
     "id": "apps/web/src/features/case-law/research/question-columns.logic.ts::QUESTION_COLUMN_ACTIONS::domain:[\"edit\",\"run\",\"remove\",\"delete\"]::1",
     "reason": "Existing QUESTION_COLUMN_ACTIONS domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/features/case-law/statute-version.test.ts::<module>::domain:[\"never-in-force\",\"invalid-window\",\"withdrawn\"]::1",
-    "reason": "Local test input domain or bound; retained for fixture coverage."
   },
   {
     "id": "apps/web/src/features/chat/chat-snapshot-history.test.ts::caseArb::max:2::1",
@@ -1606,10 +1598,6 @@
   {
     "id": "apps/web/src/lib/prompts/types.ts::PROMPT_SCOPES::domain:[\"team\",\"private\"]::1",
     "reason": "Existing PROMPT_SCOPES domain; contract ownership pending migration."
-  },
-  {
-    "id": "apps/web/src/lib/public-law-sitemap.ts::entries::domain:[\"/law\",\"/law/coverage\"]::1",
-    "reason": "Existing entries domain; contract ownership pending migration."
   },
   {
     "id": "apps/web/src/lib/react-query.test.ts::queryKey::domain:[\"workspaces\",\"ws_1\"]::1",

@@ -226,6 +226,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices delete` |
 | `invoices.entries.add` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-add` |
 | `invoices.entries.remove` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-remove` |
+| `invoices.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices export` |
 | `invoices.get` | read | stella:read | FEATURE_TIME_BILLING | covered by `list_invoices` |
 | `invoices.lines.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-create` |
 | `invoices.lines.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-delete` |
@@ -682,7 +683,7 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 27 |
+| auth_plumbing | 32 |
 | billing_ui | 1 |
 | chat_thread_ui | 11 |
 | compound_consent | 1 |

@@ -64,7 +64,11 @@ test("feature snapshots batch current identity across every registered feature",
               expect(compiled.sql).toContain("is null");
               return {
                 limit: async () => [
-                  { email: "member@example.test", emailVerified: true },
+                  {
+                    email: "member@example.test",
+                    emailVerified: true,
+                    enrolledFeatureIds: ["fixture-self-serve"],
+                  },
                 ],
               };
             },
@@ -83,12 +87,12 @@ test("feature snapshots batch current identity across every registered feature",
         grants,
       }),
   );
-  // Only the membership predicate delegates; the shared mock owns enrolments.
+  // Membership and enrolments are read in one statement.
   expect(queries).toBe(1);
   expect([...snapshot.decisions.keys()]).toEqual(Object.keys(registry));
   expect(snapshot.decisions.get("fixture-one")?.status).toBe("enabled");
   expect(snapshot.decisions.get("fixture-two")?.status).toBe("enabled");
-  expect(snapshot.decisions.get("fixture-self-serve")?.status).toBe("hidden");
+  expect(snapshot.decisions.get("fixture-self-serve")?.status).toBe("enabled");
 });
 
 test("missing requesters and an empty registry do not query identity or grant access", async () => {

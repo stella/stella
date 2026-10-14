@@ -19,7 +19,10 @@ import { UploadIcon } from "@stll/ui/icons";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useEntitiesCountLimit } from "@/components/workspaces/hooks/use-limits";
-import { MatterCombobox } from "@/components/workspaces/matter-combobox";
+import {
+  MatterCombobox,
+  toMatterOption,
+} from "@/components/workspaces/matter-combobox";
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -50,12 +53,7 @@ export const UploadDocumentDialog = ({
       organizationId: activeOrganizationId,
       userId,
     }),
-    select: (data) =>
-      data.workspaces.map((matter) => ({
-        clientName: matter.client?.displayName ?? null,
-        id: matter.id,
-        name: matter.name,
-      })),
+    select: (data) => data.workspaces.map(toMatterOption),
     enabled: workspaceId !== undefined,
   });
   const mattersView = useQueryView(mattersQuery);

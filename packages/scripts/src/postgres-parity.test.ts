@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -59,7 +66,101 @@ const missingWorkflowParity = (source: string): string[] => {
   return failures;
 };
 
+const missingPostgresRuntime = (
+  source: string,
+  helpers: string[],
+): string[] => {
+  const workflow: unknown = Bun.YAML.parse(source);
+  const failures: string[] = [];
+  for (const [jobName, value] of Object.entries(
+    record(record(workflow)["jobs"]),
+  )) {
+    const steps = record(value)["steps"];
+    if (!Array.isArray(steps)) {
+      continue;
+    }
+    const runtime = steps.findIndex((step: unknown) => {
+      const uses = record(step)["uses"];
+      return typeof uses === "string" && uses.includes("setup-bun");
+    });
+    const install = steps.findIndex((step: unknown) => {
+      const { run, uses } = record(step);
+      // The ci-install composite action runs scripts/ci-install.ts.
+      return (
+        (typeof uses === "string" &&
+          uses.endsWith("/.github/actions/ci-install")) ||
+        (typeof run === "string" &&
+          (run.includes("ci-install.ts") ||
+            /\bbun (?:ci|install)\b/u.test(run)))
+      );
+    });
+    for (const [index, step] of steps.entries()) {
+      const run = record(step)["run"];
+      if (
+        typeof run !== "string" ||
+        !helpers.some((helper) => run.includes(helper))
+      ) {
+        continue;
+      }
+      if (
+        runtime === -1 ||
+        install === -1 ||
+        runtime >= index ||
+        install >= index
+      ) {
+        failures.push(`${jobName}: Postgres runtime/dependency prerequisite`);
+      }
+    }
+  }
+  return failures;
+};
+
 describe("Postgres execution and owner parity", () => {
+  test("workflow Postgres helpers run after their runtime and dependency setup", async () => {
+    const helpers = ["scripts/configure-test-postgres.sh"];
+    const scripts = [];
+    for (const file of new Bun.Glob("scripts/**/*.sh").scanSync({
+      cwd: root,
+    })) {
+      scripts.push({
+        file,
+        source: await readFile(path.join(root, file), "utf-8"),
+      });
+    }
+    for (let previous = -1; previous !== helpers.length;) {
+      previous = helpers.length;
+      for (const script of scripts) {
+        if (
+          !helpers.includes(script.file) &&
+          helpers.some((helper) => script.source.includes(helper))
+        ) {
+          helpers.push(script.file);
+        }
+      }
+    }
+    let definitions = 0;
+    for (const file of new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({
+      cwd: root,
+      dot: true,
+    })) {
+      const source = await readFile(path.join(root, file), "utf-8");
+      expect(missingPostgresRuntime(source, helpers)).toEqual([]);
+      const removed = source
+        .replaceAll("setup-bun", "removed-runtime")
+        .replaceAll("ci-install.ts", "removed-install.ts")
+        .replaceAll(
+          "/.github/actions/ci-install",
+          "/.github/actions/removed-install",
+        )
+        .replaceAll("bun ci", "removed-ci");
+      const failures = missingPostgresRuntime(removed, helpers);
+      definitions += failures.length;
+      if (helpers.some((helper) => source.includes(helper))) {
+        expect(failures.length).toBeGreaterThan(0);
+      }
+    }
+    expect(definitions).toBeGreaterThan(0);
+  });
   test("every workflow database is configured before its first consumer", async () => {
     const files = [
       ...new Bun.Glob(".github/workflows/*.{yml,yaml}").scanSync({
@@ -143,9 +244,14 @@ describe("Postgres execution and owner parity", () => {
     );
   });
 
-  test.each(["t|t", "t|f", "f|t"])(
-    "demotes a reused owner (%s) once and preserves the database on replay",
-    async (posture) => {
+  test.each([
+    { posture: "t|t", mode: "resolve" },
+    { posture: "t|f", mode: "resolve" },
+    { posture: "f|t", mode: "resolve" },
+    { posture: "t|t", mode: "captured" },
+  ])(
+    "demotes a reused owner once and preserves the database on replay: %j",
+    async ({ posture, mode }) => {
       const fixture = await mkdtemp(path.join(tmpdir(), "postgres-parity-"));
       try {
         const docker = path.join(fixture, "docker");
@@ -158,6 +264,12 @@ describe("Postgres execution and owner parity", () => {
           docker,
           `#!/usr/bin/env bash
 set -euo pipefail
+if [[ "$1" == context && "$2" == inspect ]]; then
+  printf '%s\\n' '{"Name":"default","Endpoints":{"docker":{"Host":"unix:///tmp/test-docker.sock"}}}'
+  exit
+fi
+[[ "$1" == --host && "$2" == unix:///tmp/test-docker.sock ]] || exit 1
+[[ -z "\${DOCKER_HOST+x}" && -z "\${DOCKER_CONTEXT+x}" ]] || exit 1
 if [[ "$*" == *"SELECT rolsuper, rolbypassrls"* ]]; then
   cat "$PARITY_FIXTURE/posture"
   exit
@@ -173,6 +285,7 @@ fi
 `,
         );
         await chmod(docker, 0o700);
+        await symlink(process.execPath, path.join(fixture, "bun"));
         for (let replay = 0; replay < 2; replay++) {
           const child = Bun.spawn(
             [
@@ -180,12 +293,16 @@ fi
               path.join(root, "scripts/configure-test-postgres.sh"),
               "fixture-postgres",
               "postgres",
+              "stella",
+              "unix:///tmp/test-docker.sock",
+              mode,
             ],
             {
               env: {
-                ...process.env,
-                PATH: `${fixture}:${process.env["PATH"] ?? ""}`,
+                PATH: `${fixture}:/usr/bin:/bin`,
                 PARITY_FIXTURE: fixture,
+                DOCKER_HOST: "unix:///tmp/other-docker.sock",
+                DOCKER_CONTEXT: "other-context",
               },
               stdout: "pipe",
               stderr: "pipe",
@@ -236,4 +353,158 @@ fi
     }
     expect(definitions).toBeGreaterThan(0);
   });
+});
+
+test.each([
+  "unix:///tmp/socket \n",
+  "unix:///tmp/socket\r\n",
+  "unix:///tmp/socket\0\n",
+  "unix://./socket\n",
+  "unix:///tmp/first\nunix:///tmp/second\n",
+  "unix:///tmp/.colima/default/docker.sock\n",
+])(
+  "Postgres helper refuses unsafe Docker endpoint %j before mutations",
+  async (endpoint) => {
+    const fixture = await mkdtemp(path.join(tmpdir(), "postgres-endpoint-"));
+    try {
+      await writeFile(
+        path.join(fixture, "endpoint"),
+        JSON.stringify({
+          Name: "default",
+          Endpoints: { docker: { Host: endpoint.replace(/\n$/u, "") } },
+        }),
+      );
+      await symlink(process.execPath, path.join(fixture, "bun"));
+      const docker = path.join(fixture, "docker");
+      await writeFile(
+        docker,
+        `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == context && "$2" == inspect ]]; then
+  cat "$PARITY_FIXTURE/endpoint"
+  exit
+fi
+printf '%s\\n' "$@" > "$PARITY_FIXTURE/mutation"
+exit 99
+`,
+      );
+      await chmod(docker, 0o700);
+      const child = Bun.spawn(
+        [
+          "bash",
+          path.join(root, "scripts/configure-test-postgres.sh"),
+          "fixture-postgres",
+          "postgres",
+        ],
+        {
+          env: {
+            PATH: `${fixture}:/usr/bin:/bin`,
+            PARITY_FIXTURE: fixture,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const stderr = await new Response(child.stderr).text();
+      expect(await child.exited, stderr).toBe(1);
+      expect(stderr).toContain("endpoint");
+      expect(await Bun.file(path.join(fixture, "mutation")).exists()).toBe(
+        false,
+      );
+    } finally {
+      await rm(fixture, { recursive: true, force: true });
+    }
+  },
+);
+
+test("standalone Postgres configuration requires the workspace runtime", async () => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "postgres-runtime-"));
+  try {
+    const docker = path.join(fixture, "docker");
+    await writeFile(
+      docker,
+      `#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$1" == context && "$2" == inspect ]]; then
+  printf 'selected\\tunix:///tmp/selected.sock\\n'
+  exit
+fi
+printf '%s\\n' "$@" > "$PARITY_FIXTURE/mutation"
+exit 99
+`,
+    );
+    await chmod(docker, 0o700);
+    const child = Bun.spawn(
+      [
+        "bash",
+        path.join(root, "scripts/configure-test-postgres.sh"),
+        "fixture-postgres",
+        "postgres",
+      ],
+      {
+        env: { PATH: `${fixture}:/usr/bin:/bin`, PARITY_FIXTURE: fixture },
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    const stderr = await new Response(child.stderr).text();
+    expect(await child.exited, stderr).toBe(1);
+    expect(stderr).toContain("Bun and installed workspace dependencies");
+    expect(await Bun.file(path.join(fixture, "mutation")).exists()).toBe(false);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+});
+
+test("Postgres configuration validates configured keeper labels before database commands", async () => {
+  const fixture = await mkdtemp(path.join(tmpdir(), "postgres-keeper-"));
+  try {
+    await symlink(process.execPath, path.join(fixture, "bun"));
+    await writeFile(
+      path.join(fixture, "docker"),
+      `#!/usr/bin/env bash
+printf '%s\\n' "$@" > "$PARITY_FIXTURE/mutation"
+exit 99
+`,
+    );
+    await chmod(path.join(fixture, "docker"), 0o700);
+    const env = {
+      PATH: `${fixture}:/usr/bin:/bin`,
+      PARITY_FIXTURE: fixture,
+      STELLA_DOCKER_KEEPER_LABEL: "org.example.dev-docker",
+    };
+    const command = [
+      "bash",
+      path.join(root, "scripts/configure-test-postgres.sh"),
+      "fixture-postgres",
+      "postgres",
+      "stella",
+      "unix:///tmp/test-docker.sock",
+      "captured",
+    ];
+    const refused = Bun.spawn(command, { env, stdout: "pipe", stderr: "pipe" });
+    const refusal = await new Response(refused.stderr).text();
+    expect(await refused.exited, refusal).toBe(1);
+    expect(refusal).toContain("keeper resolver is required");
+    expect(await Bun.file(path.join(fixture, "mutation")).exists()).toBe(false);
+    await writeFile(
+      path.join(fixture, "docker-keeper"),
+      `#!/usr/bin/env bash
+printf '%s\\n' "$@" > "$PARITY_FIXTURE/keeper-arguments"
+exit 1
+`,
+    );
+    await chmod(path.join(fixture, "docker-keeper"), 0o700);
+    const checked = Bun.spawn(command, { env, stdout: "pipe", stderr: "pipe" });
+    const error = await new Response(checked.stderr).text();
+    expect(await checked.exited, error).toBe(1);
+    expect(
+      await readFile(path.join(fixture, "keeper-arguments"), "utf-8"),
+    ).toBe(
+      "--purpose\ndev\n--host\nunix:///tmp/test-docker.sock\n--keeper-label\norg.example.dev-docker\n",
+    );
+    expect(await Bun.file(path.join(fixture, "mutation")).exists()).toBe(false);
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
 });

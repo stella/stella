@@ -15,6 +15,7 @@ import { publicCountryUnavailable } from "@stll/api-contract/public-country-capa
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
@@ -23,13 +24,16 @@ import type { LegislationProvisionVersion } from "@/api/handlers/legislation/pro
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
   READ_PROVISION_HISTORY_PROJECTION,
-  READ_STATUTE_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
+} from "@/api/lib/chat/legislation-result-projections";
+import {
+  READ_STATUTE_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
@@ -80,6 +84,7 @@ import {
   mapValibotIssues,
   notFoundResult,
   nullAsAbsent,
+  searchIndexUnavailableResult,
   toolDataResult,
   toPlainCorpusText,
   toPlainTextSnippet,
@@ -473,6 +478,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: { ui: { resourceUri: STATUTE_TIMELINE_RESOURCE_URI } },
     name: "read_provision_history",
     scope: "stella:read",
   }),
@@ -595,6 +601,9 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     legislationPublicReadDb,
     observer,
   );
+  if (isSearchIndexUnavailable(result)) {
+    return searchIndexUnavailableResult(result);
+  }
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);
     return failure?.message === "Invalid cursor"

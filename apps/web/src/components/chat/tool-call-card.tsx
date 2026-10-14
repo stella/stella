@@ -25,11 +25,12 @@ import {
 } from "@/components/chat/tool-call-timing.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
 import {
+  BUILT_IN_SKILL_ORIGIN,
   parseSkillResourceSource,
   type SkillResourceSource,
 } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { findSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
+import { findInstalledSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
@@ -339,21 +340,34 @@ const findCatalogEntry = ({
   };
 };
 
-// The skills list is cached per user; without a signed-in user (the dev
-// playground) there is no cache to read.
-const readCachedSkillPages = ({
+// A built-in's title follows the reader's language, so only an installed
+// skill's tab stores one. The chat routes load the skills list, so its title
+// is read from the cache, which is kept per user; without a signed-in user
+// (the dev playground) or the cache, the tab shows the slug.
+const skillResourceTabSource = ({
   organizationId,
   queryClient,
+  source,
   user,
 }: {
   organizationId: string;
   queryClient: QueryClient;
+  source: SkillResourceSource;
   user: AuthenticatedUser | null;
-}) =>
-  user === null
-    ? undefined
-    : queryClient.getQueryData(skillsOptions(organizationId, user.id).queryKey)
-        ?.pages;
+}) => {
+  if (source.origin === BUILT_IN_SKILL_ORIGIN || user === null) {
+    return source;
+  }
+  const skillDisplayName = findInstalledSkillDisplayName({
+    pages: queryClient.getQueryData(
+      skillsOptions(organizationId, user.id).queryKey,
+    )?.pages,
+    skillId: source.skillId,
+  });
+  return skillDisplayName === undefined
+    ? source
+    : { ...source, skillDisplayName };
+};
 
 /** A follow-up a tool row offers once its call completed, such as opening
  *  what the call saved. */
@@ -500,21 +514,14 @@ export const ToolCallCard = ({
           )}
           onClick={() => {
             if (skillResourceOutput) {
-              // The chat routes load the skills list, so its title is read
-              // from the cache; without it the tab shows the slug.
-              const skillDisplayName = findSkillDisplayName({
-                pages: readCachedSkillPages({
+              useInspectorTabsStore.getState().openSkillResourceTab({
+                ...skillResourceTabSource({
                   organizationId: activeOrganizationId,
                   queryClient,
+                  source: skillResourceOutput.source,
                   user,
                 }),
                 skillName: skillResourceOutput.skillName,
-                source: skillResourceOutput.source,
-              });
-              useInspectorTabsStore.getState().openSkillResourceTab({
-                ...skillResourceOutput.source,
-                skillName: skillResourceOutput.skillName,
-                ...(skillDisplayName === undefined ? {} : { skillDisplayName }),
                 resourcePath: skillResourceOutput.path,
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,

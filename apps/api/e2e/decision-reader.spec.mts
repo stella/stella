@@ -7,13 +7,13 @@ import type * as v from "valibot";
 import { MCP_APP_SANDBOX_CONTENT_DIRECTIVES } from "@stll/api-contract/mcp-app-sandbox-policy";
 import { APP_SEARCH_FIXTURE } from "@stll/api-contract/mcp-app.fixtures";
 import type { Block } from "@stll/legal-ast/document-ast";
+import type { SearchResults } from "@stll/mcp-apps/shared/contracts";
 
 import type {
   blocksDecisionOutput,
   openDecisionOutput,
   provisionPreviewOutput,
 } from "../src/lib/chat/decision-reader-projections";
-import type { SearchResults } from "../src/mcp/apps/shared/contracts";
 
 type ReaderPage = v.InferInput<typeof blocksDecisionOutput>;
 type ReaderPreview = v.InferInput<typeof provisionPreviewOutput>;
@@ -273,7 +273,7 @@ const mountReader = async ({
 }: HostOptions) => {
   const bundle = await readFile(
     new URL(
-      `../src/mcp/apps/${surface === "reader" ? "decision-reader" : "case-law-results"}/generated/app.html.txt`,
+      `../../../packages/mcp-apps/src/${surface === "reader" ? "decision-reader" : "case-law-results"}/generated/app.html.txt`,
       import.meta.url,
     ),
     "utf-8",
@@ -1212,5 +1212,34 @@ for (const host of ["ChatGPT", "Claude"] as const) {
       name: "open_case_law_decision",
       arguments: { decision_id: citedDecisionId },
     });
+  });
+}
+
+for (const locale of ["cs-CZ", "en-GB", "sk-SK"]) {
+  test(`decision reader exposes named controls and localized document metadata in ${locale}`, async ({
+    page,
+  }) => {
+    const app = await mountReader({ page, host: "ChatGPT", locale });
+    await expect(app.locator("article").first()).toBeVisible();
+    await expect(app.locator("html")).toHaveAttribute("lang", locale);
+    // <title> is not rendered, so read the frame document's title directly.
+    await expect
+      .poll(
+        async () => await app.locator("html").evaluate(() => document.title),
+      )
+      .toMatch(/\S/u);
+    const controls = app
+      .locator(
+        'button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible',
+      )
+      .and(
+        app.locator(
+          ':not([aria-hidden="true"], [aria-hidden="true"] *, [inert], [inert] *)',
+        ),
+      );
+    expect(await controls.count()).toBeGreaterThan(0);
+    for (const control of await controls.all()) {
+      await expect(control).toHaveAccessibleName(/\S/u);
+    }
   });
 }

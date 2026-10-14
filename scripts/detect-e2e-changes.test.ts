@@ -14,6 +14,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { rootCheckGate } from "./ci-root-check-gate";
+import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -65,6 +67,20 @@ const marketingUpdateWorkflow = readFileSync(
   path.join(
     import.meta.dirname,
     "../.github/workflows/marketing-screenshots-update.yml",
+  ),
+  "utf-8",
+);
+const marketingCaptureWorkflow = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/workflows/marketing-screenshots-capture.yml",
+  ),
+  "utf-8",
+);
+const marketingPublishWorkflow = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/workflows/marketing-screenshots-publish.yml",
   ),
   "utf-8",
 );
@@ -384,6 +400,10 @@ describe("detect-e2e-changes", () => {
       ".github/actions/setup-production-e2e/action.yml",
       ".github/actions/build-e2e-web/action.yml",
       ".github/actions/setup-playwright/action.yml",
+      // Every E2E job installs through these files.
+      ".github/actions/ci-install/action.yml",
+      "scripts/ci-install.ts",
+      "scripts/ci-install-store.ts",
     ]) {
       expect(detects("core", [file])).toBe("true");
       expect(detects("landing", [file])).toBe("true");
@@ -842,7 +862,9 @@ describe("detect-e2e-changes", () => {
     );
 
     const driftGuard = ciChecksRestStep("Model catalog snapshot drift check");
-    const driftGuardCondition = requiredExpression(driftGuard["if"]);
+    const driftGuardCondition = requiredExpression(
+      withoutStaticReuseCondition(driftGuard)["if"],
+    );
     const driftGuardRun = requiredExpression(driftGuard["run"]);
     expect(driftGuardCondition).toContain(
       "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",
@@ -859,7 +881,42 @@ describe("detect-e2e-changes", () => {
     expect(driftGuardCondition).toMatch(
       /needs\.ci-plan\.outputs\.package_checks_required == 'true'\s*&&\s*needs\.ci-plan\.outputs\.model_catalog_drift_required == 'true'/u,
     );
-    expect(driftGuardCondition).not.toContain("||");
+    expect(driftGuardCondition).toBe(
+      githubExpression(
+        `!cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') && ${rootCheckGate({ job: "ci-checks-rest", name: "Model catalog snapshot drift check" })}`,
+      ),
+    );
+  });
+
+  test("every root-check selection clause is the owner-generated required operand", () => {
+    const gatedSteps = Object.entries(ciContract.jobs).flatMap(
+      ([job, value]) =>
+        value.steps === undefined
+          ? []
+          : workflowJobSteps(ciWorkflow, job)
+              .filter(
+                (step) =>
+                  typeof step["if"] === "string" &&
+                  step["if"].includes("needs.ci-plan.outputs.root_checks"),
+              )
+              .map((step) => ({ job, step })),
+    );
+    expect(gatedSteps.length).toBeGreaterThan(0);
+    for (const { job, step } of gatedSteps) {
+      const condition = requiredExpression(
+        withoutStaticReuseCondition(step)["if"],
+      );
+      const gate = rootCheckGate({
+        job,
+        name: requiredExpression(step["name"]),
+      });
+      const operands = condition.split(` && ${gate}`);
+      expect(operands).toHaveLength(2);
+      expect(operands.at(1)).toBe(" }}");
+      const prerequisites = requiredExpression(operands.at(0));
+      expect(prerequisites).not.toContain("needs.ci-plan.outputs.root_checks");
+      expect(prerequisites).not.toContain("||");
+    }
   });
 
   test("checks shipped product screenshots on planned releases", () => {
@@ -965,11 +1022,10 @@ describe("detect-e2e-changes", () => {
     expect(marketingUpdateWorkflow).toContain(
       `group: marketing-screenshots-update-${githubExpression("inputs.branch")}`,
     );
-    expect(marketingUpdateWorkflow).toContain(
-      `ref: ${githubExpression("inputs.branch")}`,
-    );
     expect(marketingUpdateWorkflow).not.toContain("--ref");
 
+    // The dispatch on main only validates the branch and starts the capture
+    // on that branch's own ref; it runs no branch code and holds no key.
     const update = jobOf(marketingUpdateWorkflow, "update");
     const validate = workflowStepRun(update, "Validate inputs");
     expect(validate).toContain('if [[ "$WORKFLOW_REF" != "main" ]]');
@@ -977,23 +1033,26 @@ describe("detect-e2e-changes", () => {
     expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
     expect(validate).toContain('"$BRANCH" == *".."*');
     expect(validate).toContain('"$BRANCH" == -*');
-    // The branch's code runs in the capture job, which never mints a token;
-    // the publish job mints it only after the capture verified the branch.
-    const publish = jobOf(marketingUpdateWorkflow, "publish");
-    expect(update).toContain("- name: Verify the branch exists");
-    expect(update).not.toContain("- name: Mint App token");
-    expect(publish).toContain("needs: update");
-    expect(workflowStepRun(publish, "Validate inputs")).toContain(
-      'if [[ "$WORKFLOW_REF" != "main" ]]',
+    expect(update).toContain(
+      "workflow_id: 'marketing-screenshots-capture.yml'",
     );
-    expect(publish.indexOf("- name: Validate inputs")).toBeLessThan(
+    // Workflow source text, not an env read of this process.
+    expect(update).toMatch(/ref: process\.env\.BRANCH,/u);
+    expect(marketingUpdateWorkflow).not.toContain("secrets.");
+
+    // The capture runs on the branch's ref and never on main; it holds no
+    // push credential. The publish run mints the token only after it has
+    // validated the PNGs.
+    const capture = jobOf(marketingCaptureWorkflow, "capture");
+    expect(capture).toContain("github.ref != 'refs/heads/main'");
+    expect(capture).not.toContain("Mint App token");
+    expect(capture).not.toContain("environment:");
+    const publish = jobOf(marketingPublishWorkflow, "publish");
+    expect(publish.indexOf("- name: Stage validated baselines")).toBeLessThan(
       publish.indexOf("- name: Mint App token"),
     );
-
-    // Updates capture the named branch; ordinary checks keep the event's
-    // ref. Only the validated main-heavy caller selects an explicit SHA.
-    expect(workflowStepValue(update, "Checkout")["with"]).toMatchObject({
-      ref: githubExpression("inputs.branch"),
+    expect(workflowStepValue(capture, "Checkout")["with"]).toMatchObject({
+      ref: githubExpression("github.sha"),
     });
     expect(checkoutRefs.length).toBeGreaterThan(0);
     for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
@@ -1110,7 +1169,12 @@ describe("detect-e2e-changes", () => {
     ).toContain("^[0-9a-f]{40}$");
     expect(
       validateSteps.find(({ name }) => name === "Verify main ancestry")?.run,
-    ).toContain("git merge-base --is-ancestor");
+    ).toContain(
+      'bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"',
+    );
+    expect(
+      validateSteps.find(({ name }) => name === "Fetch main history")?.run,
+    ).toContain("show origin/main:scripts/verify-release-tree-proof.sh");
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
@@ -1120,7 +1184,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(push["with"]).toMatchObject({
       mode: "append",
-      branch: githubExpression("inputs.branch"),
+      branch: githubExpression("steps.select.outputs.branch"),
     });
 
     // Nightly checks continue to use their triggering ref.
@@ -1129,23 +1193,21 @@ describe("detect-e2e-changes", () => {
 
   test("publishes regenerated baselines a fork pull request can commit itself", () => {
     const upload = workflowStepValue(
-      jobOf(marketingUpdateWorkflow, "update"),
+      jobOf(marketingCaptureWorkflow, "capture"),
       "Upload regenerated baselines",
     );
     expect(upload["uses"]).toBe(
       "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
     );
     expect(upload["with"]).toMatchObject({
-      name: `marketing-screenshots-${githubExpression("github.run_id")}`,
+      name: "marketing-screenshots",
       path: "apps/landing/public/media/products/*.png",
       "retention-days": 7,
     });
-    // Published before the push, so a run that cannot push still hands over
-    // the PNGs.
-    expect(
-      marketingUpdateWorkflow.indexOf("- name: Upload regenerated baselines"),
-    ).toBeLessThan(
-      marketingUpdateWorkflow.indexOf("- name: Push regenerated baselines"),
+    // The capture run's own artifact: a run that cannot push (a fork's
+    // change) still hands over the PNGs.
+    expect(marketingCaptureWorkflow).not.toContain(
+      "Push regenerated baselines",
     );
   });
 
@@ -1171,11 +1233,12 @@ describe("detect-e2e-changes", () => {
   test("keeps one capture body behind both screenshot directions", () => {
     // The shared body is a composite action so check and update cannot drift;
     // only the checkout differs, because update captures a named branch.
-    for (const source of [marketingWorkflow, marketingUpdateWorkflow]) {
+    for (const source of [marketingWorkflow, marketingCaptureWorkflow]) {
       expect(
         source.match(/uses: \.\/\.github\/actions\/marketing-capture/gu),
       ).toHaveLength(1);
     }
+    expect(marketingPublishWorkflow).not.toContain("marketing-capture");
     expect(marketingWorkflow).not.toContain("test:e2e:marketing");
     expect(marketingCapture).toContain("test:e2e:marketing:update");
     // Cleanup stays inside the action so a failed capture still releases the
@@ -1421,9 +1484,7 @@ describe("detect-e2e-changes", () => {
       ciBrowser,
       "Restore Bun install cache",
     );
-    expect(cachedSetup["uses"]).toMatch(
-      /^stella\/\.github\/actions\/setup-bun-cached@/u,
-    );
+    expect(cachedSetup["uses"]).toMatch(/^oven-sh\/setup-bun@[a-f0-9]{40}$/u);
     expect(contractRecord(cachedSetup["with"])["bun-version-file"]).toBe(
       "package.json",
     );
@@ -1489,10 +1550,10 @@ describe("detect-e2e-changes", () => {
     // policy is main and release tags. A job that reads it without declaring
     // the environment would be a job the policy never sees, so the census
     // below covers every workflow rather than the two edited here.
-    expect(jobOf(marketingUpdateWorkflow, "publish")).toContain(
+    expect(jobOf(marketingPublishWorkflow, "publish")).toContain(
       "environment: release-app",
     );
-    expect(jobOf(marketingUpdateWorkflow, "update")).not.toContain(
+    expect(jobOf(marketingCaptureWorkflow, "capture")).not.toContain(
       "environment:",
     );
     expect(jobOf(marketingWorkflow, "check")).not.toContain("environment:");

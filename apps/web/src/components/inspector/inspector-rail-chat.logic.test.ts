@@ -46,30 +46,15 @@ describe("what the rail's new-chat button opens", () => {
     });
   });
 
-  test("keeps naming the skill the reader picked, over the document they stand on", () => {
-    expect(
-      railChatOpenArgs({
-        activeSkill: { skillId: "skill-1", skillName: "Redline" },
-        legalDocument: decision,
-      }),
-    ).toEqual({
+  test("carries the skill without a label, so the tab names it where it is drawn", () => {
+    const skill = { skillName: "playbook-builder" };
+    const args = railChatOpenArgs({
+      activeSkill: skill,
+      legalDocument: decision,
+    });
+    expect(args).toEqual({
       activeLegalKey: "decision:decision-1",
-      activeSkill: { skillId: "skill-1", skillName: "Redline" },
-      label: "Redline",
+      activeSkill: skill,
     });
-  });
-
-  test("labels a skill chat with the skill's title, not its slug", () => {
-    const activeSkill = {
-      skillDisplayName: "Build a playbook",
-      skillName: "playbook-builder",
-    };
-    expect(railChatOpenArgs({ activeSkill })).toEqual({
-      activeSkill,
-      label: "Build a playbook",
-    });
-    expect(
-      railChatOpenArgs({ activeSkill: { skillName: "playbook-builder" } }),
-    ).toMatchObject({ label: "playbook-builder" });
   });
 });

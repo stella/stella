@@ -44,6 +44,7 @@ import {
 } from "@stll/ui/icons";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuItem,
@@ -56,6 +57,7 @@ import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import {
+  chatActivityByWorkspace,
   matterActivityIsKnownEmpty,
   matterActivityItemVisible,
   resolveEntityActivityDestination,
@@ -71,7 +73,6 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
-import { MatterIcon } from "@/components/matter-icon";
 import {
   Sidebar,
   SidebarContent,
@@ -268,12 +269,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       ? groupedThreadsView.items.pages
       : undefined,
   );
-  const chatActivityByWorkspaceId = new Map(
-    groupedChatThreads.workspaces.flatMap((workspace) => {
-      const updatedAt = workspace.threads.at(0)?.updatedAt;
-      return updatedAt ? [[workspace.workspaceId, updatedAt] as const] : [];
-    }),
-  );
+  const chatActivityByWorkspaceId = chatActivityByWorkspace(groupedChatThreads);
   const workspaces = workspacesData?.workspaces;
   const guideWorkspaceList = ((): GuideWorkspaceListState => {
     if (workspacesPending) {
