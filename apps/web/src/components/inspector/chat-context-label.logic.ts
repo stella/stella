@@ -35,24 +35,29 @@ export const boundLegalDocumentLabel = ({
 };
 
 type ChatTabHeaderLabelOptions = {
+  /** The active skill's title, translated when it is a built-in. */
+  activeSkillName: string | undefined;
   boundDocumentLabel: string | undefined;
   /** What an untitled chat is called, translated. */
   newChatLabel: string;
   tabLabel: string;
 };
 
-/** The tab header's name: the thread's title once it has one. */
+/**
+ * The tab's name: the thread's title once it has one. Until then the skill
+ * the reader picked names it, ahead of the document they happen to stand on.
+ */
 export const chatTabHeaderLabel = ({
+  activeSkillName,
   boundDocumentLabel,
   newChatLabel,
   tabLabel,
 }: ChatTabHeaderLabelOptions): string =>
   isPlaceholderThreadTitle(tabLabel)
-    ? (boundDocumentLabel ?? newChatLabel)
+    ? (activeSkillName ?? boundDocumentLabel ?? newChatLabel)
     : tabLabel;
 
 type ChatContextLabelOptions = ChatTabHeaderLabelOptions & {
-  activeSkillName: string | undefined;
   /** The matters in the tab's context, named, in the order the tab holds them. */
   matterNames: readonly string[];
 };
@@ -77,6 +82,7 @@ export const chatContextLabel = ({
   }
 
   const header = chatTabHeaderLabel({
+    activeSkillName,
     boundDocumentLabel,
     newChatLabel,
     tabLabel,

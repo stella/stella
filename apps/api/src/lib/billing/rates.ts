@@ -1,6 +1,6 @@
 import type { Err } from "better-result";
 import { panic, Result } from "better-result";
-import { and, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
+import { and, desc, gte, inArray, isNull, lte, or } from "drizzle-orm";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
@@ -16,42 +16,53 @@ type RateLookup = {
   userId: SafeId<"user">;
 };
 
-type ResolvedRate = { hourlyRate: number; currency: string };
+export type ResolvedRate = { hourlyRate: number; currency: string };
 
 export const rateLookupKey = ({ dateWorked, userId }: RateLookup) =>
   `${userId}:${dateWorked}`;
 
-/**
- * Resolve a batch of entries against one consistent rate-table snapshot.
- * Keeping this transaction-aware lets batch mutations lock their target rows,
- * resolve every effective rate, and either snapshot all rates or write none.
- */
-export const resolveRatesInTransaction = async ({
-  tx,
+type WorkspaceRateLookup = RateLookup & { workspaceId: SafeId<"workspace"> };
+
+export const workspaceRateLookupKey = ({
   workspaceId,
+  ...lookup
+}: WorkspaceRateLookup) => `${workspaceId}:${rateLookupKey(lookup)}`;
+
+/** Resolves authorized matters against one transaction's rate-table snapshot. */
+export const resolveWorkspaceRatesInTransaction = async ({
+  tx,
   lookups,
 }: {
   tx: Transaction;
-  workspaceId: SafeId<"workspace">;
-  lookups: readonly RateLookup[];
+  lookups: readonly WorkspaceRateLookup[];
 }) => {
   const resolved = new Map<string, ResolvedRate>();
   if (lookups.length === 0) {
     return resolved;
   }
-
-  const defaultTable = await tx.query.rateTables.findFirst({
-    where: { workspaceId: { eq: workspaceId }, isDefault: true },
-    columns: { id: true, currency: true, organizationId: true },
+  const workspaceIds = [
+    ...new Set(lookups.map((lookup) => lookup.workspaceId)),
+  ];
+  const defaultTables = await tx.query.rateTables.findMany({
+    where: { workspaceId: { in: workspaceIds }, isDefault: true },
+    columns: {
+      id: true,
+      workspaceId: true,
+      currency: true,
+      organizationId: true,
+    },
+    limit: workspaceIds.length,
   });
-  if (!defaultTable) {
+  if (defaultTables.length === 0) {
     return resolved;
   }
-
-  const firstLookup = lookups.at(0);
-  if (!firstLookup) {
-    return resolved;
-  }
+  const tablesByWorkspace = new Map(
+    defaultTables.map((table) => [table.workspaceId, table]),
+  );
+  const organizationIds = [
+    ...new Set(defaultTables.map((table) => table.organizationId)),
+  ];
+  const firstLookup = lookups.at(0) ?? panic("Missing rate lookup");
   const uniqueUsers = new Set<SafeId<"user">>();
   let earliestDate = firstLookup.dateWorked;
   let latestDate = firstLookup.dateWorked;
@@ -65,14 +76,19 @@ export const resolveRatesInTransaction = async ({
     }
   }
   const memberships = await tx
-    .select({ userId: member.userId, role: member.role })
+    .select({
+      organizationId: member.organizationId,
+      userId: member.userId,
+      role: member.role,
+    })
     .from(member)
     .where(
       and(
-        eq(member.organizationId, defaultTable.organizationId),
+        inArray(member.organizationId, organizationIds),
         inArray(member.userId, [...uniqueUsers]),
       ),
-    );
+    )
+    .limit(uniqueUsers.size * organizationIds.length);
   // A membership can name several roles in one comma-separated value. The
   // roles it holds are kept in canonical order, which is their precedence for
   // a role rate; a name outside the model selects no role rate, and the
@@ -83,13 +99,14 @@ export const resolveRatesInTransaction = async ({
         membership.role.split(",").map((role) => role.trim()),
       );
       return [
-        membership.userId,
+        `${membership.organizationId}:${membership.userId}`,
         ORGANIZATION_ROLE_NAMES.filter((role) => held.has(role)),
       ] as const;
     }),
   );
   const entries = await tx
     .select({
+      rateTableId: rateEntries.rateTableId,
       effectiveFrom: rateEntries.effectiveFrom,
       effectiveTo: rateEntries.effectiveTo,
       hourlyRate: rateEntries.hourlyRate,
@@ -99,7 +116,11 @@ export const resolveRatesInTransaction = async ({
     .from(rateEntries)
     .where(
       and(
-        eq(rateEntries.rateTableId, defaultTable.id),
+        inArray(rateEntries.workspaceId, workspaceIds),
+        inArray(
+          rateEntries.rateTableId,
+          defaultTables.map(({ id }) => id),
+        ),
         lte(rateEntries.effectiveFrom, latestDate),
         or(
           isNull(rateEntries.effectiveTo),
@@ -112,21 +133,27 @@ export const resolveRatesInTransaction = async ({
       ),
     )
     .orderBy(desc(rateEntries.effectiveFrom), desc(rateEntries.id))
-    .limit(LIMITS.rateEntriesPerTable);
+    .limit(LIMITS.rateEntriesPerTable * defaultTables.length);
 
   const entriesByUser = new Map<string, typeof entries>();
   const entriesByRole = new Map<string, typeof entries>();
-  const defaultEntries: typeof entries = [];
+  const defaultEntries = new Map<string, typeof entries>();
   for (const entry of entries) {
     if (entry.userId === null && entry.role === null) {
-      defaultEntries.push(entry);
+      const bucket = defaultEntries.get(entry.rateTableId);
+      if (bucket) {
+        bucket.push(entry);
+      } else {
+        defaultEntries.set(entry.rateTableId, [entry]);
+      }
       continue;
     }
     const buckets = entry.userId === null ? entriesByRole : entriesByUser;
-    const key = entry.userId ?? entry.role;
-    if (key === null) {
+    const selector = entry.userId ?? entry.role;
+    if (selector === null) {
       panic("Rate entry has no selector");
     }
+    const key = `${entry.rateTableId}:${selector}`;
     const bucket = buckets.get(key);
     if (bucket) {
       bucket.push(entry);
@@ -136,12 +163,18 @@ export const resolveRatesInTransaction = async ({
   }
 
   for (const lookup of lookups) {
-    const roles = rolesByUser.get(lookup.userId);
+    const defaultTable = tablesByWorkspace.get(lookup.workspaceId);
+    if (!defaultTable) {
+      continue;
+    }
+    const roles = rolesByUser.get(
+      `${defaultTable.organizationId}:${lookup.userId}`,
+    );
     if (roles === undefined) {
       continue;
     }
     const userEntry = entriesByUser
-      .get(lookup.userId)
+      .get(`${defaultTable.id}:${lookup.userId}`)
       ?.find(
         (entry) =>
           entry.effectiveFrom <= lookup.dateWorked &&
@@ -151,7 +184,7 @@ export const resolveRatesInTransaction = async ({
     const roleEntry = roles
       .map((role) =>
         entriesByRole
-          .get(role)
+          .get(`${defaultTable.id}:${role}`)
           ?.find(
             (entry) =>
               entry.effectiveFrom <= lookup.dateWorked &&
@@ -160,20 +193,47 @@ export const resolveRatesInTransaction = async ({
           ),
       )
       .find((entry) => entry !== undefined);
-    const defaultEntry = defaultEntries.find(
-      (entry) =>
-        entry.effectiveFrom <= lookup.dateWorked &&
-        (entry.effectiveTo === null || entry.effectiveTo >= lookup.dateWorked),
-    );
+    const defaultEntry = defaultEntries
+      .get(defaultTable.id)
+      ?.find(
+        (entry) =>
+          entry.effectiveFrom <= lookup.dateWorked &&
+          (entry.effectiveTo === null ||
+            entry.effectiveTo >= lookup.dateWorked),
+      );
     const entry = userEntry ?? roleEntry ?? defaultEntry;
     if (entry) {
-      resolved.set(rateLookupKey(lookup), {
+      resolved.set(workspaceRateLookupKey(lookup), {
         hourlyRate: entry.hourlyRate,
         currency: defaultTable.currency,
       });
     }
   }
 
+  return resolved;
+};
+
+/** Single-matter callers share the bulk resolver and retain their lookup keys. */
+export const resolveRatesInTransaction = async ({
+  tx,
+  workspaceId,
+  lookups,
+}: {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  lookups: readonly RateLookup[];
+}) => {
+  const rates = await resolveWorkspaceRatesInTransaction({
+    tx,
+    lookups: lookups.map((lookup) => ({ ...lookup, workspaceId })),
+  });
+  const resolved = new Map<string, ResolvedRate>();
+  for (const lookup of lookups) {
+    const rate = rates.get(workspaceRateLookupKey({ ...lookup, workspaceId }));
+    if (rate) {
+      resolved.set(rateLookupKey(lookup), rate);
+    }
+  }
   return resolved;
 };
 

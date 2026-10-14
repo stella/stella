@@ -10,13 +10,14 @@ use crate::{
   clipboard::{
     ClipboardAppState, ClipboardCaptureStatus, ClipboardCopyFormat, ClipboardGroup,
     ClipboardGroupColor, ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention,
-    ClipboardSnapshot, ClipboardSourceAppVisual,
+    ClipboardSnapshot,
   },
   clipboard_screen_capture::ClipboardScreenCapture,
   clipboard_window::{self, ClipboardStartupTrace},
   desktop_telemetry::{
     DesktopTelemetry, DesktopTelemetrySpan, DesktopTelemetryWindow, DesktopTimingReport,
   },
+  foreground_app_visual::ClipboardSourceAppVisual,
   local_window::ClipboardCaller,
 };
 

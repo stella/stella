@@ -1,4 +1,5 @@
 import {
+  CancelledError,
   queryOptions,
   useMutation,
   useQuery,
@@ -227,7 +228,11 @@ const coordinateHistoryWrite = async ({
   // Aborting a request does not guarantee that its server write was aborted.
   if (pendingImport !== undefined) {
     const imported = await Result.tryPromise(async () => pendingImport);
-    if (Result.isError(imported)) {
+    // Leaving the page cancels the import; it retries with the next read.
+    if (
+      Result.isError(imported) &&
+      !(imported.error.cause instanceof CancelledError)
+    ) {
       onError(imported.error);
     }
   }

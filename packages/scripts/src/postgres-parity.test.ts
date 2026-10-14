@@ -84,10 +84,14 @@ const missingPostgresRuntime = (
       return typeof uses === "string" && uses.includes("setup-bun");
     });
     const install = steps.findIndex((step: unknown) => {
-      const run = record(step)["run"];
+      const { run, uses } = record(step);
+      // The ci-install composite action runs scripts/ci-install.ts.
       return (
-        typeof run === "string" &&
-        (run.includes("ci-install.ts") || /\bbun (?:ci|install)\b/u.test(run))
+        (typeof uses === "string" &&
+          uses.endsWith("/.github/actions/ci-install")) ||
+        (typeof run === "string" &&
+          (run.includes("ci-install.ts") ||
+            /\bbun (?:ci|install)\b/u.test(run)))
       );
     });
     for (const [index, step] of steps.entries()) {
@@ -144,6 +148,10 @@ describe("Postgres execution and owner parity", () => {
       const removed = source
         .replaceAll("setup-bun", "removed-runtime")
         .replaceAll("ci-install.ts", "removed-install.ts")
+        .replaceAll(
+          "/.github/actions/ci-install",
+          "/.github/actions/removed-install",
+        )
         .replaceAll("bun ci", "removed-ci");
       const failures = missingPostgresRuntime(removed, helpers);
       definitions += failures.length;

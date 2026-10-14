@@ -114,6 +114,7 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
       "generated-files.ts",
       "prepare-cli-runtime.ts",
       "prepared-generated-sources.ts",
+      "generated-input-identity.ts",
       "child-exit-status.ts",
     ]) {
       write(
@@ -322,6 +323,7 @@ test("API runtime generation works with only packaged sources and rejects a root
       "apps/api/scripts/generate-capability-runtime.ts",
       "packages/cli/src/capability-catalog-data.ts",
       "packages/scripts/src/prepared-generated-sources.ts",
+      "packages/scripts/src/generated-input-identity.ts",
       "packages/scripts/src/generated-files.ts",
     ]) {
       write(

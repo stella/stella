@@ -6,7 +6,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { createAuthRefusalLogPlugin } from "@/api/lib/auth/auth-refusal-plugin";
+import { createAuthRefusalLogPlugin } from "@/api/lib/auth/auth-request-observability";
 import {
   describeOAuthTokenRefusal,
   OAUTH_PROTOCOL_REFUSAL_REASONS,

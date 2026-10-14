@@ -53,17 +53,18 @@ const forbidden = () =>
  * lacks the operation's permission keeps it (403). The desktop account acts
  * with the person's own live role.
  */
-export const desktopMemberDenial = (
+export const authorizeDesktopMember = (
   member: { role: string } | null,
   permission: PermissionInput,
-): HandlerError<401 | 403> | null => {
+): Result<ReturnType<typeof sessionMemberRole>, HandlerError<401 | 403>> => {
   if (!member || !isMemberRole(member.role)) {
-    return rejected();
+    return Result.err(rejected());
   }
-  if (!hasMemberPermission(sessionMemberRole(member.role), permission)) {
-    return forbidden();
+  const memberRole = sessionMemberRole(member.role);
+  if (!hasMemberPermission(memberRole, permission)) {
+    return Result.err(forbidden());
   }
-  return null;
+  return Result.ok(memberRole);
 };
 
 // Authentication owns the RLS bootstrap; registry handlers receive only the
@@ -74,6 +75,7 @@ type DesktopRegistryAuthorization = {
   keyId: string;
   consumedProof: ConsumedDesktopDeviceProof;
   scopedDb: ScopedDb;
+  memberRole: ReturnType<typeof sessionMemberRole>;
 };
 
 const authorizeDesktopCredential = async (
@@ -185,13 +187,14 @@ const authorizeDesktopCredential = async (
   if (member.isErr()) {
     return Result.err(member.error);
   }
-  const denied = desktopMemberDenial(member.value, permission);
-  if (denied) {
-    return Result.err(denied);
+  const memberRole = authorizeDesktopMember(member.value, permission);
+  if (memberRole.isErr()) {
+    return Result.err(memberRole.error);
   }
   return Result.ok({
     ...identity,
     keyId: key.id,
+    memberRole: memberRole.value,
     consumedProof: consumed.value,
     scopedDb: createMembershipScopedDb(rlsDb, {
       ...identity,

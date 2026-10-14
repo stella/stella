@@ -33,6 +33,8 @@ const DESKTOP_WINDOWS_BUILD_CACHE_USE =
   "baptiste0928/cargo-install caches installed Rust binaries";
 const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
   "./.github/actions/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
+  "./.github/actions/ci-install":
+    "exact scoped store restore; save only after a successful frozen install on main",
   // release-desktop restores the same action from the workflow revision
   // because the pinned release checkout replaces the workspace.
   "./.release-tooling/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
@@ -47,8 +49,9 @@ const cacheSave = (step: Record<string, unknown>): string | null => {
   if (uses === "") {
     return null;
   }
-  if (uses.startsWith("./")) {
-    return uses in REVIEWED_LOCAL_ACTIONS
+  const localUses = uses.startsWith("$/") ? `./${uses.slice(2)}` : uses;
+  if (localUses.startsWith("./")) {
+    return localUses in REVIEWED_LOCAL_ACTIONS
       ? null
       : `local action ${uses} is not reviewed for cache use`;
   }
@@ -234,12 +237,28 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
           ];
     }
     const steps = flattenWorkflowSteps(job["steps"] ?? []);
+    const scopedInstall = steps.some(
+      (step) =>
+        step["uses"] === "$/.github/actions/ci-install" ||
+        step["uses"] === "./.github/actions/ci-install",
+    );
     return steps.flatMap((step: unknown) => {
       if (!isRecord(step)) {
         return [];
       }
       const uses = typeof step["uses"] === "string" ? step["uses"] : "";
       const inputs = isRecord(step["with"]) ? step["with"] : {};
+      if (
+        [
+          "$/.github/actions/ci-install",
+          "./.github/actions/ci-install",
+        ].includes(uses) &&
+        policy !== "install-cache"
+      ) {
+        return [
+          `job '${name}': scoped install cache is forbidden by ${policy} policy`,
+        ];
+      }
       if (
         uses.startsWith("stella/.github/actions/setup-bun-cached@") &&
         inputs["save"] !== MAIN_ONLY_BUN_CACHE_SAVE
@@ -275,7 +294,7 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
         return [`job '${name}': Bun install cache saves must be main-only`];
       }
       if (policy === "install-cache") {
-        return uses.startsWith("oven-sh/setup-bun@")
+        return uses.startsWith("oven-sh/setup-bun@") && !scopedInstall
           ? [
               `job '${name}': raw Bun setup needs the shared install-cache action`,
             ]

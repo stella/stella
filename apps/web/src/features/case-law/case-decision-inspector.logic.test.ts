@@ -71,6 +71,27 @@ describe("case decision inspector", () => {
     ).toBe(false);
   });
 
+  test("reopening a passage scrolls again while retaining the same decision chip", () => {
+    const target = {
+      caseNumber: "100 A 1/2026",
+      country: "CZ",
+      court: "Synthetic Court",
+      decisionId: "synthetic-decision",
+      language: null,
+      languageAlternates: null,
+      slug: "synthetic-decision",
+      anchorId: "p-12",
+    };
+    const first = createCaseDecisionViewTab(target);
+    const reopened = createCaseDecisionViewTab(target);
+    expect(reopened.id).toBe(first.id);
+    expect(reopened.payload.anchorId).toBe(first.payload.anchorId);
+    expect(first.payload.findSessionId).toBeDefined();
+    expect(reopened.payload.findSessionId).not.toBe(
+      first.payload.findSessionId,
+    );
+  });
+
   test("validates synchronized payloads", () => {
     const payload = createCaseDecisionViewTab({
       caseNumber: "4 As 3/2008",
