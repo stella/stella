@@ -1448,7 +1448,7 @@ export const resolveTanStackTextModel = async (
           dataClass: policy.dataClass,
           modelTier,
         })
-      : getTanStackTextModelInfoForTask(role, orgAIConfig, {
+      : getTanStackTextModelInfoForTask(task, orgAIConfig, {
           organizationId,
           modelTier,
           ...policy,
