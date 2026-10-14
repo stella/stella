@@ -3242,8 +3242,21 @@ jobs:
           bun scripts/generated-files-guard.ts --guard-a
           bun scripts/generated-files-guard.ts --guard-b
 
-      # The third long check: it reads only tracked workflow and planner
-      # sources, so it overlaps the foreground steps below.
+      - name: Test oxlint plugins
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_012
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test oxlint plugins')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
+        run: |
+          bun test scripts/oxlint-plugin-test-coverage.test.ts
+
+      # The capability check usually finishes during the plugin tests; its slot
+      # then takes the release image gate, so no more than two background
+      # checks contend with the foreground step at once.
+      - name: Wait for capability shard checks
+        wait: [capability_parity]
+
       - name: Test release image CI gate
         env:
           CI_CHECK_KIND: STATIC
@@ -3253,15 +3266,6 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_014 != 'true') }}
         # Worst pilot test 18.56 s; 50 s allows about 2.5x contention headroom.
         run: bun test --timeout 50000 scripts/ci-plan.test.ts
-
-      - name: Test oxlint plugins
-        env:
-          CI_CHECK_KIND: STATIC
-          CI_CHECK_INPUTS: tracked-tree+generated-inputs
-        id: static_check_012
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test oxlint plugins')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
-        run: |
-          bun test scripts/oxlint-plugin-test-coverage.test.ts
 
       - name: Workspace hygiene
         id: static_check_015
@@ -3918,9 +3922,9 @@ jobs:
           bun run --cwd packages/scripts test ../../scripts/transfer-read-guard.test.ts
           bun scripts/transfer-read-guard.ts
 
-      # Join the three long checks before reusing their background slots.
+      # Join the long checks before reusing their background slots.
       - name: Wait for capability and repository checks
-        wait: [capability_parity, generated_manifest, static_check_014]
+        wait: [generated_manifest, static_check_014]
 
       # The api test runner only globs `src/**`, so the tests beside the api
       # scripts (seed guards, AI provider canary, MCP coverage) need an
