@@ -76,6 +76,7 @@ type VersionDriftOptions = {
   readonly fixture: string;
   readonly current: Readonly<Record<string, string>>;
   readonly characterisedAt: Readonly<Record<string, string>>;
+  readonly driftReasons?: Readonly<Record<string, string>>;
 };
 
 export const findVersionDrift = ({
@@ -83,6 +84,7 @@ export const findVersionDrift = ({
   fixture,
   current,
   characterisedAt,
+  driftReasons,
 }: VersionDriftOptions): string[] => {
   const problems: string[] = [];
   for (const [source, version] of Object.entries(current)) {
@@ -90,7 +92,7 @@ export const findVersionDrift = ({
       continue;
     }
     problems.push(
-      `${fixture}: re-characterise ${system} at ${version} (${source}; fixture pin ${characterisedAt[source] ?? "missing"}).`,
+      `${fixture}: re-characterise ${system} at ${version} (${source}; fixture pin ${characterisedAt[source] ?? "missing"}).${driftReasons === undefined ? "" : ` Allowance not applied: ${driftReasons[source] ?? "pin has no dated allowance"}.`}`,
     );
   }
   for (const source of Object.keys(characterisedAt)) {

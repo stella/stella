@@ -62,14 +62,14 @@ const plantedOwner = {
 test("the real outbound census and SDK manifests have total offline coverage", () => {
   expect(checkExternalContracts(ROOT, { baseline: realBaseline })).toEqual([]);
   expect(
-    checkExternalContracts(ROOT, {
-      baseline: realBaseline,
+    findDependencyCatalogProblems({
+      dependencies: directDependencies,
       census: [...OUTBOUND_TRANSPORT_CENSUS, plantedOwner],
     }).join("\n"),
   ).toContain(`owner ${plantedOwner.path} maps to 0`);
   expect(
-    checkExternalContracts(ROOT, {
-      baseline: realBaseline,
+    findDependencyCatalogProblems({
+      dependencies: directDependencies,
       sdks: [...readExternalSdks(ROOT), "@example/sdk"],
     }).join("\n"),
   ).toContain("SDK @example/sdk maps to 0");
@@ -566,6 +566,33 @@ test("dated drift admits only unchanged pins before its exact deadline", () => {
   expect(
     admittedPinDrift({ ...options, now: new Date(pinDebt.expiresAt) }),
   ).toEqual({});
+  for (const [changed, reason] of [
+    [
+      { ...options, usageChanged: true },
+      "runtime closure changed or could not be resolved",
+    ],
+    [
+      { ...options, now: new Date(pinDebt.expiresAt) },
+      `dated allowance ${pinDebt.id} expired`,
+    ],
+    [
+      { ...options, current: { sdk: "3" } },
+      "current pin differs from the exact dated allowance",
+    ],
+    [
+      { ...options, baseline: { sdk: "1" } },
+      "merge-base pin differs from the exact dated allowance",
+    ],
+  ] as const) {
+    const reasons = new Map<string, string>();
+    admittedPinDrift({
+      ...changed,
+      onRejected: (key, rejected) => {
+        reasons.set(key, rejected);
+      },
+    });
+    expect(reasons.get("sdk")).toBe(reason);
+  }
 });
 
 test("executable changes in SDK importers invalidate dated debt while comments do not", () => {
@@ -1132,6 +1159,47 @@ test("literal text assets remain in the SDK runtime closure", () => {
         file === "request.html.txt" ? undefined : files.get(file),
     }),
   ).toBe(true);
+});
+
+test("literal binary assets resolve through relative and snapshot path aliases", () => {
+  const files = new Map([
+    [
+      "tsconfig.json",
+      JSON.stringify({
+        compilerOptions: { paths: { "@assets/*": ["assets/*"] } },
+      }),
+    ],
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import "@assets/font.ttf" with { type: "file" }; import "./assets/template.docx" with { type: "file" }; sdk.send();',
+    ],
+    ["assets/font.ttf", "font bytes"],
+    ["assets/template.docx", "template bytes"],
+  ]);
+  const read = (file: string) => files.get(file);
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: read,
+    current: read,
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  for (const asset of ["assets/font.ttf", "assets/template.docx"]) {
+    expect(
+      hasChangedLocalRuntimeClosure({
+        ...options,
+        current: (file: string) =>
+          file === asset ? "changed bytes" : read(file),
+      }),
+    ).toBe(true);
+    expect(
+      hasChangedLocalRuntimeClosure({
+        ...options,
+        current: (file: string) => (file === asset ? undefined : read(file)),
+      }),
+    ).toBe(true);
+  }
 });
 
 test("published packages with workspace-like names stop the local closure", () => {

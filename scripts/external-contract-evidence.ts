@@ -24,6 +24,8 @@ import { parseSource } from "./parse-memo";
 
 // Runtime assets and registered generator inputs can include Markdown anywhere in the tracked tree.
 export const CI_MARKDOWN_READER_INPUTS = ["**/*.md"];
+export const CI_MARKDOWN_READER_COMMAND =
+  "bun scripts/external-contract-evidence.ts --check";
 
 const MAX_FILES = 8192;
 const MAX_DEPTH = 64;
@@ -748,6 +750,59 @@ const createSnapshotFileReader = ({
   };
 };
 
+type LiteralAssetOptions = {
+  specifier: string;
+  importer: string;
+  options: ts.CompilerOptions;
+  repositoryRoot: string;
+  readAbsolute: (file: string) => string | undefined;
+};
+const resolveLiteralAsset = ({
+  specifier,
+  importer,
+  options,
+  repositoryRoot,
+  readAbsolute,
+}: LiteralAssetOptions) => {
+  const assets = specifier.startsWith(".")
+    ? [path.resolve(path.dirname(importer), specifier)]
+    : [];
+  const pathsBase =
+    options.baseUrl ??
+    (typeof options["pathsBasePath"] === "string"
+      ? options["pathsBasePath"]
+      : repositoryRoot);
+  for (const [pattern, replacements] of Object.entries(options.paths ?? {})) {
+    const star = pattern.indexOf("*");
+    const matches =
+      star === -1
+        ? pattern === specifier
+        : specifier.startsWith(pattern.slice(0, star)) &&
+          specifier.endsWith(pattern.slice(star + 1));
+    if (!matches) {
+      continue;
+    }
+    const segment =
+      star === -1
+        ? ""
+        : specifier.slice(star, specifier.length - (pattern.length - star - 1));
+    for (const replacement of replacements) {
+      assets.push(
+        path.resolve(
+          pathsBase,
+          replacement.replace("*", () => segment),
+        ),
+      );
+    }
+  }
+  return assets.find(
+    (candidate) =>
+      !RUNTIME_SOURCE.test(candidate) &&
+      !DECLARATION_SOURCE.test(candidate) &&
+      readAbsolute(candidate) !== undefined,
+  );
+};
+
 /** Resolve only repository runtime sources against one immutable snapshot. */
 const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
   const {
@@ -875,14 +930,14 @@ const createLocalSnapshotResolver = (snapshot: LocalRuntimeSnapshotOptions) => {
     if (cached) {
       return cached;
     }
-    const asset = specifier.startsWith(".")
-      ? path.resolve(path.dirname(importer), specifier)
-      : undefined;
-    if (
-      asset !== undefined &&
-      /\.(?:css|html|txt|svg|typ|md|graphql)$/u.test(asset) &&
-      readAbsolute(asset) !== undefined
-    ) {
+    const asset = resolveLiteralAsset({
+      specifier,
+      importer,
+      options,
+      repositoryRoot,
+      readAbsolute,
+    });
+    if (asset !== undefined) {
       const result = {
         type: "resolved",
         file: canonical(asset),
@@ -1328,3 +1383,9 @@ export const readFixtureEvidence = ({
   }
   return { owners, sdks, problems };
 };
+
+if (import.meta.main) {
+  const { runExternalContractCheck } =
+    await import("./check-external-contracts");
+  runExternalContractCheck();
+}

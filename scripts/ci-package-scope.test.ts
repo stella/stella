@@ -20,6 +20,23 @@ import {
 import { importProblems } from "./install-free-ci";
 import { maskSourceNonCode } from "./test-input-readers";
 
+test("the external contract Markdown reader has an isolated owner check", () => {
+  const root = path.resolve(import.meta.dir, "..");
+  const reader = markdownReaders(root).find(
+    ({ file }) => file === "scripts/external-contract-evidence.ts",
+  );
+  expect(reader?.kind).toBe("check");
+  expect(reader?.command).toEqual([
+    "bun",
+    "scripts/external-contract-evidence.ts",
+    "--check",
+  ]);
+  expect(markdownChecks({ root, changed: ["README.md"] })).toContainEqual(
+    reader?.command,
+  );
+  expect(requiresPackageChecks({ root, changed: ["README.md"] })).toBe(false);
+});
+
 const repository = (
   run: (root: string, write: (file: string, text: string) => void) => void,
 ) => {

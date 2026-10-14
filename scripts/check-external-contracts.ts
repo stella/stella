@@ -388,6 +388,7 @@ type FixtureCheckOptions = {
   fixture: FixtureSet;
   current: Readonly<Record<string, string>>;
   admittedPins: Readonly<Record<string, string>>;
+  driftReasons: Readonly<Record<string, string>>;
   owners: readonly string[];
   sdks: readonly string[];
 };
@@ -397,6 +398,7 @@ const checkFixture = ({
   fixture,
   current,
   admittedPins,
+  driftReasons,
   owners,
   sdks,
 }: FixtureCheckOptions) => {
@@ -479,6 +481,7 @@ const checkFixture = ({
     }
     problems.push(
       ...findVersionDrift({
+        driftReasons,
         system,
         fixture: fixture.path,
         current,
@@ -517,6 +520,7 @@ const checkFixture = ({
         recordReceipt({ file, receipt: provenance });
         problems.push(
           ...findVersionDrift({
+            driftReasons,
             system,
             fixture: file,
             current,
@@ -1036,6 +1040,7 @@ type AdmittedPinDriftOptions = {
   allowance: ReturnType<typeof readExternalContractPinAllowances>[number];
   now: Date;
   usageChanged: boolean;
+  onRejected?: (key: string, reason: string) => void;
 };
 
 /** Dated debt never admits changed pins or changed executable usage. */
@@ -1045,18 +1050,29 @@ export const admittedPinDrift = ({
   allowance,
   now,
   usageChanged,
+  onRejected,
 }: AdmittedPinDriftOptions): Record<string, string> => {
-  if (usageChanged || Date.parse(allowance.expiresAt) <= now.getTime()) {
-    return {};
+  const pins: [string, string][] = [];
+  for (const [key, value] of Object.entries(allowance.pins)) {
+    let reason: string | undefined;
+    if (usageChanged) {
+      reason = "runtime closure changed or could not be resolved";
+    } else if (Date.parse(allowance.expiresAt) <= now.getTime()) {
+      reason = `dated allowance ${allowance.id} expired`;
+    } else if (Object.hasOwn(current, key) && !Object.hasOwn(baseline, key)) {
+      reason = "new pin source absent from merge-base";
+    } else if ((current[key] ?? REMOVED_PIN) !== value) {
+      reason = "current pin differs from the exact dated allowance";
+    } else if ((baseline[key] ?? REMOVED_PIN) !== value) {
+      reason = "merge-base pin differs from the exact dated allowance";
+    }
+    if (reason !== undefined) {
+      onRejected?.(key, reason);
+      continue;
+    }
+    pins.push([key, value]);
   }
-  return Object.fromEntries(
-    Object.entries(allowance.pins).filter(
-      ([key, value]) =>
-        (!Object.hasOwn(current, key) || Object.hasOwn(baseline, key)) &&
-        (current[key] ?? REMOVED_PIN) === value &&
-        (baseline[key] ?? REMOVED_PIN) === value,
-    ),
-  );
+  return Object.fromEntries(pins);
 };
 
 type ContractEntryCheckOptions = {
@@ -1136,10 +1152,11 @@ export const checkContractEntry = ({
       owners: entry.owners.map(({ path: file }) => file),
       sdks: entry.sdks,
       baseline,
-      onInvalidation: (reason) =>
+      onInvalidation: (reason) => {
         problems.push(
           `${system}: ExternalContractAllowanceInvalidated: ${reason}.`,
-        ),
+        );
+      },
       current: Object.assign(currentSource, {
         files:
           baseline.files === undefined ? undefined : readGitTrackedFiles(root),
@@ -1149,6 +1166,15 @@ export const checkContractEntry = ({
         },
       }),
     });
+  let defaultDriftReason = "pin has no dated allowance";
+  if (baselineProblems.length > 0) {
+    defaultDriftReason = "merge-base snapshot unavailable";
+  } else if (admitted === undefined) {
+    defaultDriftReason = "system has no dated allowance";
+  }
+  const driftReasons = new Map(
+    Object.keys(current).map((key) => [key, defaultDriftReason]),
+  );
   const admittedPins =
     admitted === undefined ||
     baseline === undefined ||
@@ -1160,6 +1186,9 @@ export const checkContractEntry = ({
           allowance: admitted,
           now,
           usageChanged,
+          onRejected: (key, reason) => {
+            driftReasons.set(key, reason);
+          },
         });
   if (entry.status === "uncharacterised") {
     return problems;
@@ -1173,6 +1202,7 @@ export const checkContractEntry = ({
       fixture,
       current,
       admittedPins,
+      driftReasons: Object.fromEntries(driftReasons),
       owners: entry.owners.map(({ path: ownerPath }) => ownerPath),
       sdks: entry.sdks,
     });
@@ -1275,7 +1305,7 @@ export const checkExternalContracts = (
   return problems;
 };
 
-if (import.meta.main) {
+export const runExternalContractCheck = (): void => {
   const base = process.env["CHECK_BASE_REF"] ?? "origin/main";
   const baseline = createGitBaselineReader({ root: ROOT, base });
   const problems = checkExternalContracts(ROOT, { baseline });
@@ -1308,4 +1338,8 @@ if (import.meta.main) {
       "External service contract totality and version drift: OK (offline).",
     );
   }
+};
+
+if (import.meta.main) {
+  runExternalContractCheck();
 }

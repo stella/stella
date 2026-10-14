@@ -54,6 +54,25 @@ test("duplicate owner and SDK assignments fail instead of choosing a default", (
   ).toHaveLength(2);
 });
 
+test("drift diagnostics retain the reason a dated pin allowance was not applied", () => {
+  for (const reason of [
+    "pin has no dated allowance",
+    "dated allowance expired",
+    "merge-base pin differs from the exact dated allowance",
+    "runtime closure changed or could not be resolved",
+  ]) {
+    expect(
+      findVersionDrift({
+        system: "example",
+        fixture: "receipt.json",
+        current: { "bun.lock#sdk": "sdk@2" },
+        characterisedAt: { "bun.lock#sdk": "sdk@1" },
+        driftReasons: { "bun.lock#sdk": reason },
+      }).join("\n"),
+    ).toContain(`Allowance not applied: ${reason}.`);
+  }
+});
+
 test("every changed or missing fixture pin requires re-characterisation", () => {
   for (const [pin, version] of Object.entries({
     catalog: "2.0.0",

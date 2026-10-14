@@ -3767,7 +3767,7 @@ jobs:
           git ls-tree -r --name-only "$base" > "$RUNNER_TEMP/external-contract-baseline-paths"
           while IFS= read -r file; do
             case "$file" in
-              *.ts|*.tsx|*.js|*.jsx|*.mts|*.cts|*.mjs|*.cjs|*.json|*.css|*.html|*.txt|*.svg|*.typ|*.md|*.graphql|bun.lock)
+              *.ts|*.tsx|*.js|*.jsx|*.mts|*.cts|*.mjs|*.cjs|*.json|*.css|*.html|*.txt|*.svg|*.typ|*.md|*.graphql|*.ttf|*.docx|bun.lock)
                 printf '%s:%s\n' "$base" "$file" ;;
             esac
           done < "$RUNNER_TEMP/external-contract-baseline-paths" > "$RUNNER_TEMP/external-contract-baseline-objects"
