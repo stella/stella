@@ -131,6 +131,31 @@ backoff, and only an exhausted job or a failed hand-off is captured.
 - Each file has at most one record, keyed by the file. A delivered message and
   an uploaded file of it remain separate records, as do two copies of a file.
 
+## Uploaded data-box messages
+
+A `.zfo` file, a Czech data-box (ISDS) message exported as a CMS SignedData
+over the message XML, takes the same path and files a `data_box` record.
+
+- `parseDataBoxMessage` (`src/lib/data-box/zfo.ts`) reads the envelope and the
+  base64 files without network access. The file is bounded by the document
+  upload limit and its files by the correspondence attachment limit; a
+  document type declaration is refused, so no entity is expanded or fetched.
+  The system's seal is recorded as found (signer, issuer, serial number,
+  signing time) and stays unverified; the `.zfo` file keeps its bytes.
+- The record's addresses are box IDs and its subject is the annotation; the
+  envelope (reference numbers and file marks of both parties, delivery and
+  acceptance times, status, delivery flags) is `dataBox`. The file does not
+  say which box was the firm's, so the record is incoming.
+- Each file of the message is scanned before anything is written, then stored
+  as a document in the `.zfo` file's folder and linked as an attachment. A
+  rejected file refuses the whole message; a replay resumes missing ordinals.
+- The message ID keys the record in the matter: another file of the same
+  message, in a batch or later, adds its uploader as a filer and stores no
+  second set of documents. Deleting the record's own `.zfo` file deletes the
+  record; another copy does not file it again.
+- The detail read lists the organization's contacts whose data boxes include
+  the sender or recipient box ID. Matching only reads contacts.
+
 ## Local development
 
 With the development database, object storage and processing services configured:

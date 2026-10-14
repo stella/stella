@@ -103,12 +103,32 @@ const hasAdmissibleProvenance = (parsed: ParsedCorrespondence) => {
   }
 };
 
+// A data-box message is only ever read from an uploaded file, and its record
+// keeps the envelope's message ID.
+const hasConsistentChannel = (parsed: ParsedCorrespondence) => {
+  switch (parsed.channel) {
+    case "email":
+      return true;
+    case "data_box":
+      return (
+        parsed.source === "upload" &&
+        parsed.messageId === parsed.dataBox.messageId
+      );
+    default:
+      parsed satisfies never;
+      return panic("Unhandled correspondence channel");
+  }
+};
+
 const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
   if (
     !/^[0-9a-f]{64}$/u.test(parsed.contentHash) ||
     !hasAdmissibleProvenance(parsed)
   ) {
     return { type: "invalid_authentication" as const };
+  }
+  if (!hasConsistentChannel(parsed)) {
+    return { type: "invalid_content" as const };
   }
   if (
     attachments.length > CORRESPONDENCE_MAX_ATTACHMENTS ||
@@ -125,10 +145,18 @@ const validateContent = ({ parsed, attachments }: ValidateContentOptions) => {
   return null;
 };
 
-// The source is part of the key: a delivered message and an uploaded file of
-// the same message stay separate records. Each email file is its own record,
-// so deleting one copy never removes another file's record.
+// The system issues a data-box message ID once, so every file of one message
+// converges on one record in the matter.
+//
+// For email, the source is part of the key: a delivered message and an
+// uploaded file of the same message stay separate records. Each email file is
+// its own record, so deleting one copy never removes another file's record.
 const correspondenceDedupKey = (parsed: ParsedCorrespondence) => {
+  if (parsed.channel === "data_box") {
+    return hashSha256Hex(
+      JSON.stringify([parsed.channel, parsed.dataBox.messageId]),
+    );
+  }
   switch (parsed.source) {
     case "delivery":
       return hashSha256Hex(
@@ -216,6 +244,7 @@ export const createCorrespondence = async ({
         channel: parsed.channel,
         ...provenanceColumns(parsed),
         messageId: parsed.messageId,
+        dataBox: parsed.dataBox,
         contentHash: parsed.contentHash,
         dedupKey,
         from: parsed.from,

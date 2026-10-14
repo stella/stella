@@ -21,6 +21,7 @@ import { toMarkdownBytes } from "@firecrawl/anydoc";
 import { Result } from "better-result";
 import { load } from "cheerio";
 
+import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
@@ -29,6 +30,10 @@ import {
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 
+import {
+  dataBoxMessageText,
+  parseDataBoxMessage,
+} from "@/api/lib/data-box/zfo";
 import {
   parseEmail,
   parsedEmailToText,
@@ -95,6 +100,7 @@ const ATTACHMENT_EXTENSION_MIME_TYPES: Record<string, string> = {
   xls: XLS_MIME_TYPE,
   xlsb: XLSB_MIME_TYPE,
   xlsx: XLSX_MIME_TYPE,
+  zfo: DATA_BOX_MESSAGE_MIME_TYPE,
 };
 
 /**
@@ -302,6 +308,12 @@ const extract = async (
       mimeType: normalizedMimeType,
       nestingDepth,
     });
+  } else if (normalizedMimeType === DATA_BOX_MESSAGE_MIME_TYPE) {
+    // The message's files are stored as documents of their own, so only the
+    // envelope is this file's text. An unreadable file has none; filing it
+    // as correspondence records why it was skipped.
+    const message = parseDataBoxMessage(fileBytes);
+    text = message.isOk() ? dataBoxMessageText(message.value) : null;
   }
 
   if (!text || text.trim().length === 0) {

@@ -13,6 +13,7 @@ import {
   type CorrespondenceActorDisplay,
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
+import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
 
 import {
   entityFeatureGateChecks,
@@ -103,7 +104,10 @@ export const correspondence = p.pgTable.withRLS(
     authenticatedSenderAddress: p.text("authenticated_sender_address"),
     originalSignature:
       jsonb("original_signature").$type<CorrespondenceOriginalSignature>(),
+    // The data-box message ID on the data-box channel.
     messageId: p.text("message_id"),
+    // A data-box message's envelope as stated in its file; null for email.
+    dataBox: jsonb("data_box_envelope").$type<DataBoxEnvelope>(),
     contentHash: p.varchar("content_hash", { length: 64 }).notNull(),
     dedupKey: p.varchar("dedup_key", { length: 64 }).notNull(),
     from: jsonb("sender").$type<CorrespondenceAddress>().notNull(),
@@ -187,6 +191,10 @@ export const correspondence = p.pgTable.withRLS(
     p.check(
       "correspondence_channel_check",
       sql`${table.channel} in (${valuesSql(CORRESPONDENCE_CHANNELS)})`,
+    ),
+    p.check(
+      "correspondence_data_box_check",
+      sql`((${table.channel} = 'data_box') = (${table.dataBox} is not null) and (${table.channel} <> 'data_box' or (${table.source} = 'upload' and ${table.messageId} is not null and jsonb_typeof(${table.dataBox}) = 'object' and ${table.dataBox}->>'messageId' = ${table.messageId}))) is true`,
     ),
     p.check(
       "correspondence_handling_check",

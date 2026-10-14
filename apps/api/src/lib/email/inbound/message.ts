@@ -8,8 +8,8 @@ import PostalMime, {
 } from "postal-mime";
 
 import type {
+  CorrespondenceMessageContent,
   CorrespondenceProvenance,
-  ParsedCorrespondence,
 } from "@stll/api-contract/correspondence";
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -903,10 +903,10 @@ export const parseEmailFile = async ({
   }
 };
 
-type CorrespondenceContent = Omit<
-  ParsedCorrespondence,
-  keyof CorrespondenceProvenance
->;
+type CorrespondenceContent = CorrespondenceMessageContent & {
+  channel: "email";
+  dataBox: null;
+};
 
 type CorrespondenceFromMessageOptions<
   TProvenance extends CorrespondenceProvenance,
@@ -930,6 +930,7 @@ export const correspondenceFromMessage = <
   CorrespondenceContent => ({
   ...provenance,
   channel: "email",
+  dataBox: null,
   direction: message.from === sender ? "out" : "in",
   from: { address: message.from, name: null },
   to: message.to.map((address) => ({ address, name: null })),
