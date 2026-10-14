@@ -29,7 +29,12 @@ export const toSafeDbMock =
   };
 
 type FeatureAccessMockOptions = {
-  identity: Pick<typeof user.$inferSelect, "email" | "emailVerified"> | null;
+  /** With `userId`, only that member's enrolments join the identity row. */
+  identity:
+    | (Pick<typeof user.$inferSelect, "email" | "emailVerified"> & {
+        userId?: string;
+      })
+    | null;
   enrolments?: Pick<
     typeof featureEnrolments.$inferSelect,
     "featureId" | "organizationId" | "userId"
@@ -138,10 +143,15 @@ const fixtureSelect =
           ? []
           : [
               {
-                ...identity,
-                enrolledFeatureIds: enrolments.map(
-                  ({ featureId }) => featureId,
-                ),
+                email: identity.email,
+                emailVerified: identity.emailVerified,
+                enrolledFeatureIds: enrolments
+                  .filter(
+                    (enrolment) =>
+                      identity.userId === undefined ||
+                      enrolment.userId === identity.userId,
+                  )
+                  .map(({ featureId }) => featureId),
               },
             ],
       );

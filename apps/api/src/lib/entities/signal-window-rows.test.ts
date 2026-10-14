@@ -61,7 +61,11 @@ describe("signal window source admission", () => {
         {},
         {
           featureAccess: {
-            identity: { email: "member@example.test", emailVerified: true },
+            identity: {
+              email: "member@example.test",
+              emailVerified: true,
+              userId,
+            },
             enrolments: [
               {
                 featureId: "signals",
