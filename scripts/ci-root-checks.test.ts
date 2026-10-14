@@ -5,9 +5,9 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { readSelectionGraph } from "./ci-affected-selection";
+import { rootCheckGate } from "./ci-root-check-gate";
 import {
   ROOT_CHECK_INPUTS,
-  rootCheckGate,
   rootCheckInputs,
   selectRootChecks,
   validateRootCheckCensus,

@@ -9,6 +9,7 @@ import {
   requiresFullSelection,
   type SelectionGraph,
 } from "./ci-affected-selection";
+import { rootCheckGate } from "./ci-root-check-gate";
 import declaredInputs from "./ci-root-check-inputs.json" with { type: "json" };
 
 const root = path.resolve(import.meta.dir, "..");
@@ -129,10 +130,6 @@ export const selectRootChecks = ({
     )
     .map(([check]) => check);
 };
-
-type RootCheckGateOptions = { job: string; name: string };
-export const rootCheckGate = ({ job, name }: RootCheckGateOptions) =>
-  `(needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), '${job}/${name}'))`;
 
 if (import.meta.main) {
   validateRootCheckCensus(

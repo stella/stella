@@ -14,7 +14,7 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
-import { rootCheckGate } from "./ci-root-checks";
+import { rootCheckGate } from "./ci-root-check-gate";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");

@@ -11,7 +11,8 @@ import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
-import { ROOT_CHECK_INPUTS, rootCheckGate } from "./ci-root-checks";
+import { rootCheckGate } from "./ci-root-check-gate";
+import { ROOT_CHECK_INPUTS } from "./ci-root-checks";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
