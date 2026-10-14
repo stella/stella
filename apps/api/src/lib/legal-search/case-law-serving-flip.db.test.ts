@@ -472,6 +472,43 @@ test("a dry run proves the gates and writes nothing", async () => {
   expect((await read("CZE")).route.indexId).toBe("case_law_v8_cs_sk");
 });
 
+test("the flipping transaction holds the attestations it checked until the pointer commits", async () => {
+  const engine = await buildV9();
+  await applyDesired(
+    "case_law_v8",
+    CZE_DECISION_ID,
+    toSafeId<"corpusIndexProjectionIntent">(
+      "0198e331-e578-7000-8000-0000000005f1",
+    ),
+  );
+  const writes: string[] = [];
+  const loggingDb = drizzle({
+    client,
+    logger: { logQuery: (query) => writes.push(query) },
+  });
+  const flipped = await flipCaseLawJurisdictionServing(
+    {
+      ...flipContext(engine),
+      writeTransaction: async (run) =>
+        await loggingDb.transaction(
+          async (tx) => await run(asTestRaw<Transaction>(tx)),
+        ),
+    },
+    { jurisdiction: "CZE", generation: V9.generation, mode: "apply" },
+  );
+  expect(flipped.isOk() ? flipped.value.type : flipped.error._tag).toBe(
+    "flipped",
+  );
+  // A withdrawal of an attestation the flip checked waits for its commit.
+  expect(
+    writes.some(
+      (query) =>
+        query.includes("corpus_index_group_enrollments") &&
+        /for share/iu.test(query),
+    ),
+  ).toBe(true);
+});
+
 test("the flip moves Czech readers and the acceptance to v9, and only the flip does", async () => {
   const engine = await buildV9();
   await applyDesired(

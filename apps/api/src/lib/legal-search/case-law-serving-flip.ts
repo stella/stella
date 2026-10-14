@@ -168,7 +168,16 @@ const readFlipRegistryTx = async (
   {
     manifest,
     jurisdiction,
-  }: { manifest: CorpusIndexManifest; jurisdiction: string },
+    lock,
+  }: {
+    manifest: CorpusIndexManifest;
+    jurisdiction: string;
+    /**
+     * `share` in the flipping transaction: a withdrawal of an attestation the
+     * flip checked waits until the pointer it was checked for commits.
+     */
+    lock?: "share";
+  },
 ): Promise<FlipRegistry> => {
   const serving = await readServingCorpusIndexGenerationTx(tx, "case_law");
   if (serving.isErr()) {
@@ -224,7 +233,11 @@ const readFlipRegistryTx = async (
       }),
     };
   }
-  const unattested = await unattestedCorpusIndexIdsTx(tx, manifest);
+  const unattested = await unattestedCorpusIndexIdsTx(
+    tx,
+    manifest,
+    lock === undefined ? {} : { lock },
+  );
   if (unattested.length > 0) {
     return {
       type: "refused",
@@ -457,7 +470,11 @@ export const flipCaseLawJurisdictionServing = async (
       }
       // The registry may have moved since the proof: decide again under the
       // fences, and apply what this decision says.
-      const locked = await readFlipRegistryTx(tx, { manifest, jurisdiction });
+      const locked = await readFlipRegistryTx(tx, {
+        manifest,
+        jurisdiction,
+        lock: "share",
+      });
       if (locked.type === "refused") {
         return Result.err(locked.refusal);
       }
