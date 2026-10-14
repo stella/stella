@@ -363,10 +363,18 @@ const recordDataFlow = (
       preceding = span.literal.text;
     }
   }
-  if (ts.isVariableDeclaration(node) && node.initializer !== undefined) {
+  // Names are tracked file-wide, so a parameter (whose value comes from a
+  // caller) poisons every binding of the same name: a same-named binding in
+  // another function can never borrow an owner-derived value.
+  if (ts.isParameter(node)) {
+    derivations.push({ names: boundNames(node.name), from: null });
+  }
+  // A declaration without an initializer (`for (const ids of other)`,
+  // `let ids;`, a catch binding) takes its value from elsewhere: not derived.
+  if (ts.isVariableDeclaration(node)) {
     derivations.push({
       names: boundNames(node.name),
-      from: node.initializer,
+      from: node.initializer ?? null,
     });
   }
   if (
