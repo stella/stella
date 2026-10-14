@@ -13,6 +13,8 @@ import {
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 
+import { withTimeout } from "@stll/concurrency/with-timeout";
+
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import { assertMigrationHistory } from "../lib/db/migration-history";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
@@ -709,7 +711,10 @@ if (!runPostgresTests || databaseUrl === undefined) {
                     "Expected the migrator session to be terminable",
                   );
                 }
-                await terminate();
+                await withTimeout(async () => await terminate(), {
+                  label: "migration session termination",
+                  timeoutMs: 2000,
+                });
                 throw onlineError;
               },
             });
