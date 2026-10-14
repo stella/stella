@@ -984,7 +984,7 @@ jobs:
             # inputs, the files the Dockerfile and the smoke read from the
             # context, and how CI and the release build it.
             case "$file" in
-              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/*.sql|docker/postgres/*.conf|scripts/configure-test-postgres.sh|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/smoke-api-image.sh|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
+              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/*.sql|docker/postgres/*.conf|scripts/configure-test-postgres.sh|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/ci-install*|scripts/smoke-api-image.sh|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
                 api_image_smoke_required=true
                 ;;
             esac
@@ -8455,6 +8455,13 @@ jobs:
               annotate "API image smoke" "Failed after: ${last_pass:-no check passed}"
             fi
           elif [[ -f "$build_log" ]]; then
+            # Docker prefixes nested workflow commands with BuildKit progress.
+            # Promote the install owner's fixed diagnostic to a runner annotation.
+            stall=$(grep -oE 'kind=infra class=install-stall .*' "$build_log" | head -n 1 || true)
+            if [[ -n "$stall" ]]; then
+              printf '::error title=infra-stall::%s\n' "$stall"
+              exit 0
+            fi
             # BuildKit prefixes each line with its step number; keep the
             # output of the step that failed. Bun prints an uncaught error's
             # headline under a caret line; without one, fall back to error
