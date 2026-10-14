@@ -345,9 +345,9 @@ shipping — flipping `documentElement.dir` is not enough on its own.
 
 Lint and tests prove nothing banned was written; they say nothing
 about whether the screen is good. Before calling UI done, capture it
-with `bun run agent:drive` (see the `dev` skill): `snap <route>` for
-desktop, a `run` flow that calls `page.setViewportSize` for phone
-width and switches to `ar`. Judge the screenshots,
+with `bun run agent:drive` (see the `dev` skill): `snap <route>` at
+the default desktop size and again with `--viewport 390x844`, then a
+`run` flow that switches to `ar`. Judge the screenshots,
 not the code: you wrote the code, so you read your intentions into it.
 A problem visible in a screenshot is real whatever the code says.
 
