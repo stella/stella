@@ -3145,12 +3145,7 @@ const config = defineConfig({
         "apps/web/src/components/ai-suggestions/file-chat-overlay*.tsx",
         "apps/web/src/components/ai-suggestions/file-viewer-with-ai*.tsx",
         "packages/chat/src/**/*.tsx",
-        "apps/desktop/src/**/*chat*.tsx",
-        "apps/desktop/src/**/chat/**/*.tsx",
-        "apps/desktop/src/**/*Chat*.tsx",
-        "apps/api/src/mcp/apps/**/*chat*.tsx",
         "apps/api/src/mcp/apps/**/*message*.tsx",
-        "apps/api/src/mcp/apps/**/chat/**/*.tsx",
         ".oxlint-plugins/__fixtures__/no-ad-hoc-chat-link.fixture.tsx",
       ],
       excludeFiles: [
