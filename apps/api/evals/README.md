@@ -1,6 +1,6 @@
 # Evals
 
-Model-in-the-loop checks of Stella's AI surfaces. An eval hands a model the
+Model-in-the-loop checks of stella's AI surfaces. An eval hands a model the
 production tool definitions and prompts, then scores what comes back with
 deterministic code, so a prompt or tool-contract change can be judged on
 what models actually do rather than on intuition.
