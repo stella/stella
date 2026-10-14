@@ -55,21 +55,24 @@ export const caseLawCorpusAppliedRevision = (generation: string) =>
   )`;
 
 /**
- * The served projection state of the decision at `generation`: applied equals
- * desired on every field that can change what is served, and the applied
- * revision sits in the index that generation routes the decision's current
- * country to.
+ * The served projection state of the decision at `resolvedGeneration`, the
+ * generation the jurisdiction-serving pointer resolved for the decision's
+ * country (never a bare generation): applied equals desired on every field
+ * that can change what is served, and the applied revision sits in the index
+ * that generation routes the decision's current country to.
  */
-const acceptedCaseLawProjectionStateAt = (generation: SQLWrapper): SQL => sql`
+const acceptedCaseLawProjectionStateAt = (
+  resolvedGeneration: SQLWrapper,
+): SQL => sql`
         ${corpusIndexProjectionStates.family} = ${CASE_LAW_FAMILY}
-        AND ${corpusIndexProjectionStates.generation} = ${generation}
+        AND ${corpusIndexProjectionStates.generation} = ${resolvedGeneration}
         AND ${corpusIndexProjectionStates.entityId} = ${caseLawDecisions.id}
         AND ${corpusIndexProjectionStates.desiredAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedEpoch} = ${corpusIndexProjectionStates.desiredEpoch}
         AND ${corpusIndexProjectionStates.appliedFingerprint} = ${corpusIndexProjectionStates.desiredFingerprint}
         AND ${corpusIndexProjectionStates.appliedIndexId} = ${corpusIndexProjectionStates.desiredIndexId}
-        AND ${corpusIndexProjectionStates.appliedIndexId} = (${caseLawIndexIdSql(generation, caseLawDecisions.country)})`;
+        AND ${corpusIndexProjectionStates.appliedIndexId} = (${caseLawIndexIdSql(resolvedGeneration, caseLawDecisions.country)})`;
 
 /** The jurisdiction-serving pointer row of the decision's country. */
 const caseLawDecisionPointer = sql`

@@ -116,6 +116,15 @@ test("the SQL acceptance of an indexed hit resolves its generation through the p
   // bare generation is never compared to a state's generation column.
   expect(acceptance).not.toMatch(/generation = \$\{generation\}/u);
   expect(acceptance).not.toMatch(/\.generation\} = \$\{generation\}/u);
+  // The one helper that compares a state's generation takes the resolved
+  // expression, and every call hands it the pointer's COALESCE.
+  const callArguments = [
+    ...acceptance.matchAll(/acceptedCaseLawProjectionStateAt\(([^\n]*)/gu),
+  ].map((match) => match[1] ?? "");
+  expect(callArguments.length).toBeGreaterThan(0);
+  for (const argument of callArguments) {
+    expect(argument).toContain("COALESCE(pointer.");
+  }
   // And the callers hand it the serving generation, never a route of their own.
   expect(modulesMatching(/\bcurrentCaseLawCorpusProjection\(/u)).toEqual([
     "handlers/case-law/decisions/search.ts",
