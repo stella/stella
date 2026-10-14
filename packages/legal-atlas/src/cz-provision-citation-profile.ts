@@ -191,6 +191,13 @@ const actTitleForms = (subject: string): readonly string[] => [
 export const CZ_PROFILE = {
   jurisdiction: "CZE",
   language: "cs",
+  citationTerms: {
+    section: "§",
+    article: "čl.",
+    subsection: "odst.",
+    letter: "písm.",
+    point: "bod",
+  },
   versionGrammar: {
     dateStatements: [
       { prefix: "ve znění účinném do", relation: "until" },

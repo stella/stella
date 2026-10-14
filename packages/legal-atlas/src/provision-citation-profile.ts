@@ -212,11 +212,25 @@ export type VersionGrammar = {
   monthNames: Readonly<Record<string, number>>;
 };
 
+/**
+ * The designators a canonical citation is written with, one per unit and
+ * level: the profile's term lists carry every spelling in no order, so the
+ * canonical one is named here rather than picked from them.
+ */
+export type CitationTerms = {
+  readonly section: string;
+  readonly article: string;
+  readonly subsection: string;
+  readonly letter: string;
+  readonly point: string;
+};
+
 export type JurisdictionProfile = {
   versionGrammar: VersionGrammar;
   jurisdiction: ProvisionCitationJurisdiction;
   /** BCP-47 primary subtag of the language the profile's vocabulary is in. */
   language: string;
+  citationTerms: CitationTerms;
   sectionTerms: readonly SectionTermSpec[];
   subdivisionTerms: readonly SubdivisionTermSpec[];
   /** `,` and `;` are always connectors; these are the word-shaped ones. */

@@ -6,6 +6,7 @@ import {
   formatWorkIdentifier,
 } from "./provision-citation-profile";
 import { resolveProvisionCitation } from "./provision-citation-resolve";
+import { SK_PROFILE } from "./sk-provision-citation-profile";
 
 const TODAY = "2026-10-14";
 
@@ -328,5 +329,34 @@ describe("every act spelling in the profile resolves", () => {
       section: 5,
       subsection: "1",
     });
+  });
+});
+
+describe("letters and canonical wording", () => {
+  test("Czech `ch` is one letter, not `c` followed by more text", () => {
+    expect(resolved("§ 10 písm. ch) ZP")).toMatchObject({
+      section: 10,
+      letter: "ch",
+      citation: "§ 10 písm. ch) 262/2006 Sb.",
+    });
+    expect(resolved("§ 10 písm. ch) ZP").anchor).toEndWith("pism_ch");
+    expect(resolve("§ 10 písm. h) a ch) ZP").status).toBe(
+      "multiple_provisions",
+    );
+  });
+
+  test("the canonical citation uses the jurisdiction's own designators", () => {
+    const slovak = resolveProvisionCitation({
+      text: "§ 2 ods. 1 zákona č. 311/2001 Z. z.",
+      profile: SK_PROFILE,
+      citedOn: TODAY,
+    });
+    expect(slovak).toMatchObject({
+      status: "resolved",
+      citation: "§ 2 ods. 1 311/2001 Z. z.",
+    });
+    expect(resolved("§ 2 odst. 1 zákona č. 262/2006 Sb.").citation).toBe(
+      "§ 2 odst. 1 262/2006 Sb.",
+    );
   });
 });

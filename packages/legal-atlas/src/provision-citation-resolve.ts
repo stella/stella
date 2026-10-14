@@ -64,10 +64,12 @@ type ResolveOptions = {
 const SPACES = /[\s   ]+/gu;
 // A suffix is written on the number (`§ 1a`); `§ 316 a § 317` is two sections.
 const SECTION_VALUE = String.raw`(?<number>\d{1,5})(?<suffix>[a-z])?(?![\p{L}\p{N}])`;
+/** A lettered item's letter: Czech orders `ch` after `h` as one letter. */
+const LETTER = String.raw`(?:ch|[a-z])`;
 /** What each level's value looks like; a sentence is read only to be skipped. */
 const SUBDIVISION_VALUES = {
   subsection: String.raw`(?<value>\d{1,4}[a-z]?)`,
-  letter: String.raw`(?<value>[a-z])\)?`,
+  letter: String.raw`(?<value>${LETTER})\)?`,
   point: String.raw`(?<value>\d{1,4})`,
   sentence: String.raw`(?<value>\d{1,2}|\p{L}+)`,
 } as const;
@@ -172,7 +174,7 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
       "iu",
     ),
     continuation: new RegExp(
-      String.raw`^\s*(?:(?:${alternation(profile.andFollowingMarkers)})|(?:[,;]|[-–—]|(?:${connectorSource(profile)})(?=\s))\s*(?:${alternation(profile.sectionTerms.map(({ text }) => text))}|${alternation(profile.subdivisionTerms.map(({ text }) => text))}|\d|[a-z]\)))`,
+      String.raw`^\s*(?:(?:${alternation(profile.andFollowingMarkers)})|(?:[,;]|[-–—]|(?:${connectorSource(profile)})(?=\s))\s*(?:${alternation(profile.sectionTerms.map(({ text }) => text))}|${alternation(profile.subdivisionTerms.map(({ text }) => text))}|\d|${LETTER}\)))`,
       "iu",
     ),
     laterSubdivision: new RegExp(
@@ -201,11 +203,11 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
       "giu",
     ),
     laterLetterContinuation: new RegExp(
-      String.raw`(?:[,;]|[-–—]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*[a-z]\)`,
+      String.raw`(?:[,;]|[-–—]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*${LETTER}\)`,
       "iu",
     ),
     letterContinuation: new RegExp(
-      String.raw`^\s*(?:[,;]|[-–—]|(?:${connectorSource(profile)})(?=\s))\s*[a-z](?![\p{L}\p{N}])`,
+      String.raw`^\s*(?:[,;]|[-–—]|(?:${connectorSource(profile)})(?=\s))\s*${LETTER}(?![\p{L}\p{N}])`,
       "iu",
     ),
     sectionUnits: new Map(
@@ -421,19 +423,21 @@ const readNamedAct = (
 };
 
 const renderCitation = (
+  profile: JurisdictionProfile,
   resolved: Omit<ResolvedProvisionCitation, "status" | "anchor" | "citation">,
 ) => {
+  const terms = profile.citationTerms;
   const parts = [
-    `${resolved.unit === "article" ? "čl." : "§"} ${String(resolved.section)}${resolved.sectionSuffix ?? ""}`,
+    `${resolved.unit === "article" ? terms.article : terms.section} ${String(resolved.section)}${resolved.sectionSuffix ?? ""}`,
   ];
   if (resolved.subsection !== null) {
-    parts.push(`odst. ${resolved.subsection}`);
+    parts.push(`${terms.subsection} ${resolved.subsection}`);
   }
   if (resolved.letter !== null) {
-    parts.push(`písm. ${resolved.letter})`);
+    parts.push(`${terms.letter} ${resolved.letter})`);
   }
   if (resolved.point !== null) {
-    parts.push(`bod ${resolved.point}`);
+    parts.push(`${terms.point} ${resolved.point}`);
   }
   return `${parts.join(" ")} ${resolved.workIdentifier}`;
 };
@@ -465,7 +469,10 @@ const renderAnchor = (
 
 const DATE_PATTERN = /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/gu;
 const YEAR_PATTERN = /(?<!\d)(?:1[89]|20)\d{2}(?!\d)/gu;
-const LETTERED_ITEM = /(?<![\p{L}\p{N}])[a-z]\)/iu;
+const LETTERED_ITEM = new RegExp(
+  String.raw`(?<![\p{L}\p{N}])${LETTER}\)`,
+  "iu",
+);
 
 /**
  * Whether the text after the first provision still names another one once
@@ -731,6 +738,6 @@ export const resolveProvisionCitation = ({
     status: "resolved",
     ...resolved,
     anchor: renderAnchor(profile, resolved),
-    citation: renderCitation(resolved),
+    citation: renderCitation(profile, resolved),
   };
 };
