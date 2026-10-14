@@ -36,7 +36,7 @@ in every owner closure, including those without known SDK reachability.
 Pins absent from the merge base are additions: they cannot receive a dated
 allowance, and their current receipts must cover them. Derived generated modules are closure leaves represented by their tracked
 generator inputs from `scripts/generated-files.ts`; checks never run generators
-on the merge-base tree. Code inputs use the executable comparison, and data
+on the merge-base tree. Code inputs and their runtime import closures use the executable comparison, and data
 inputs compare their original-byte digests. Unknown generated modules or
 generators without declared inputs fail closed. Comments and type-only
 changes keep the allowance. New unregistered SDK

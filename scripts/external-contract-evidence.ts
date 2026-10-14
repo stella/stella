@@ -981,7 +981,7 @@ export const createLocalRuntimeClosureReader = (
           pending.push({
             file: path.resolve(repositoryRoot, input),
             depth: entry.depth + 1,
-            mode: "input",
+            mode: RUNTIME_SOURCE.test(input) ? "runtime" : "input",
           });
         }
         continue;

@@ -1237,6 +1237,56 @@ test("generated SDK closure leaves compare declared tracked inputs without runni
   ).toBe(true);
 });
 
+test("generator code inputs include imported helper changes while erasing comments and types", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import "./generated/adapter"; sdk.send();',
+    ],
+    [
+      "generator.ts",
+      'import { payload } from "./helper"; export const generate = () => payload;',
+    ],
+    ["helper.ts", 'export const payload = "old";'],
+  ]);
+  const read = Object.assign((file: string) => files.get(file), {
+    files: [...files.keys()],
+  });
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: read,
+    current: read,
+    generators: [
+      {
+        id: "adapter",
+        outputKind: "derived",
+        outputs: ["generated/adapter.ts"],
+        inputs: ["generator.ts"],
+        write: ["bun", "generator.ts"],
+      },
+    ] as const,
+    registryFiles: [],
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  for (const [helper, expected] of [
+    ['export const payload = "new";', true],
+    ['// updated comment\nexport const payload: string = "old";', false],
+    ['const load = require; export const payload = load("./hidden");', true],
+  ] as const) {
+    expect(
+      hasChangedLocalRuntimeClosure({
+        ...options,
+        current: Object.assign(
+          (file: string) => (file === "helper.ts" ? helper : files.get(file)),
+          { files: read.files },
+        ),
+      }),
+    ).toBe(expected);
+  }
+});
+
 test("generated imports without a registered generator or declared inputs fail closed with a named reason", () => {
   const files = new Map([
     ["owner.ts", 'import "./generated/unregistered";'],
