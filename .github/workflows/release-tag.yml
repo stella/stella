@@ -47,6 +47,7 @@ jobs:
       sha: ${{ steps.candidate.outputs.sha }}
       value: ${{ steps.candidate.outputs.value }}
       tag: ${{ steps.candidate.outputs.tag }}
+      proof-sha: ${{ steps.candidate.outputs.proof-sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -155,7 +156,7 @@ jobs:
       - name: Push tag
         env:
           RELEASE_TREE_PROOF_VERIFIER: ${{ runner.temp }}/verify-release-tree-proof.sh
-          PROOF_SHA: ${{ steps.candidate.outputs.proof-sha }}
+          PROOF_SHA: ${{ needs.candidate.outputs.proof-sha }}
           RELEASE_HEALTH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.candidate.outputs.tag }}
           RELEASE_SHA: ${{ needs.candidate.outputs.sha }}

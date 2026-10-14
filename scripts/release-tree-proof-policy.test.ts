@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
+import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const read = (path: string) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf-8");
@@ -132,6 +135,125 @@ const sources = {
   prepare: read("scripts/prepare-release-tag.sh"),
   health: read("scripts/check-release-main-health.sh"),
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+const releaseJobs = (source: string) => {
+  const workflow: unknown = Bun.YAML.parse(source);
+  const jobs = field(workflow, "jobs");
+  assert.ok(isRecord(jobs), "Release workflow must declare jobs");
+  return Object.fromEntries(
+    Object.entries(jobs).map(([id, job]) => {
+      assert.ok(isRecord(job), `Release job ${id} must be an object`);
+      return [id, job] as const;
+    }),
+  );
+};
+
+const stepReferenceCensus = (source: string) =>
+  Object.entries(releaseJobs(source)).flatMap(([jobId, job]) => {
+    const ids = new Set(
+      job["steps"] === undefined
+        ? []
+        : workflowJobSteps({ jobs: { [jobId]: job } }, jobId).map(
+            (step) => step["id"],
+          ),
+    );
+    const references: { jobId: string; stepId: string; local: boolean }[] = [];
+    const visit = (value: unknown) => {
+      if (typeof value === "string") {
+        for (const match of value.matchAll(
+          /\bsteps(?:\.([\w-]+)|\[\s*'([^']+)'\s*\])/gu,
+        )) {
+          const stepId = match[1] ?? match[2];
+          if (stepId !== undefined) {
+            references.push({ jobId, stepId, local: ids.has(stepId) });
+          }
+        }
+        return;
+      }
+      if (typeof value === "object" && value !== null) {
+        for (const child of Object.values(value)) {
+          visit(child);
+        }
+      }
+    };
+    visit(job);
+    return references;
+  });
+
+test("every release step reference belongs to its own job", () => {
+  const references = stepReferenceCensus(sources.release);
+  expect(references.length).toBeGreaterThan(0);
+  for (const reference of references) {
+    expect(reference).toEqual({ ...reference, local: true });
+  }
+});
+
+test("the release reference census rejects every missing local step", () => {
+  for (const { jobId, stepId } of stepReferenceCensus(sources.release)) {
+    const jobs = releaseJobs(sources.release);
+    const steps = workflowJobSteps({ jobs }, jobId);
+    const step = steps.find((candidate) => candidate["id"] === stepId);
+    assert.ok(step !== undefined, `Missing local step ${jobId}.${stepId}`);
+    delete step["id"];
+    expect(stepReferenceCensus(Bun.YAML.stringify({ jobs }))).toContainEqual({
+      jobId,
+      stepId,
+      local: false,
+    });
+  }
+});
+
+const resolveReleaseExpression = (expression: unknown, context: unknown) => {
+  assert.ok(
+    typeof expression === "string",
+    "Release expression must be a string",
+  );
+  const path = expression.match(/^\$\{\{\s*([\w.-]+)\s*\}\}$/u)?.[1];
+  assert.ok(path !== undefined, "Expected a release output reference");
+  let value = context;
+  for (const key of path.split(".")) {
+    value = field(value, key);
+  }
+  assert.ok(typeof value === "string", `Unresolved release reference: ${path}`);
+  return value;
+};
+
+test("a nonempty dispatched proof reaches the final tag health guard through candidate job outputs", () => {
+  const workflow: unknown = Bun.YAML.parse(sources.release);
+  const jobs = releaseJobs(sources.release);
+  const select = workflowStepByName(
+    workflowJobSteps(workflow, "candidate"),
+    "Select and validate the release commit",
+  );
+  const proof = "a".repeat(40);
+  const selectedProof = resolveReleaseExpression(
+    field(select["env"], "PROOF_SHA"),
+    { inputs: { proof_sha: proof } },
+  );
+  expect(select["run"]).toContain('--proof-sha "$PROOF_SHA"');
+  const candidateProof = resolveReleaseExpression(
+    field(jobs["candidate"]?.["outputs"], "proof-sha"),
+    { steps: { candidate: { outputs: { "proof-sha": selectedProof } } } },
+  );
+  const push = workflowStepByName(
+    workflowJobSteps(workflow, "tag"),
+    "Push tag",
+  );
+  expect(jobs["tag"]?.["needs"]).toContain("candidate");
+  const tagProof = resolveReleaseExpression(field(push["env"], "PROOF_SHA"), {
+    needs: { candidate: { outputs: { "proof-sha": candidateProof } } },
+  });
+  const run = push["run"];
+  assert.ok(typeof run === "string", "Push tag must declare a shell command");
+  const result = Bun.spawnSync(
+    ["bash", "-c", `bash() { printf '%s\\n' "$4"; }; git() { :; }; ${run}`],
+    { env: { PROOF_SHA: tagProof } },
+  );
+  expect(result.exitCode).toBe(0);
+  expect(result.stdout.toString().trim()).toBe(proof);
+});
 
 test("every release gate uses the shared tree proof verifier", () => {
   expect(policyProblems(sources)).toEqual([]);
