@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import * as v from "valibot";
 
+import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
 import { CACHE_SAVE_REVISION } from "./ci-store-save";
 import { storeSaverCensus } from "./ci-store-save-policy";
 import { mainHeavyJobs } from "./main-heavy-plan";
@@ -492,4 +494,36 @@ test("scoped store saves are non-fatal post hooks, and containers cannot restore
   );
   expect(cleanup.runs.main).toBe("index.mjs");
   expect(cleanup.runs.post).toBe(cleanup.runs.main);
+  const project = ts.getParsedCommandLineOfConfigFile(
+    fileURLToPath(new URL("../tsconfig.scripts.json", import.meta.url)),
+    {},
+    {
+      ...ts.sys,
+      onUnRecoverableConfigFileDiagnostic: (diagnostic) => {
+        expect.unreachable(
+          ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+        );
+      },
+    },
+  );
+  if (project === undefined) {
+    expect.unreachable("Missing CI scripts typecheck project");
+  }
+  expect(
+    withoutTsgoOnlyOptionDiagnostics(project.errors).map((diagnostic) =>
+      ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"),
+    ),
+  ).toEqual([]);
+  expect(project.options.allowJs).toBe(true);
+  expect(project.options.checkJs).toBe(true);
+  for (const entrypoint of [cleanup.runs.main, cleanup.runs.post]) {
+    expect(project.fileNames).toContain(
+      fileURLToPath(
+        new URL(
+          `../.github/actions/ci-store-save/${entrypoint}`,
+          import.meta.url,
+        ),
+      ),
+    );
+  }
 });
