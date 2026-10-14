@@ -84,8 +84,15 @@ class DevQuickStartError extends TaggedError("DevQuickStartError")<{
 
 // A developer tool: name the server's refusal instead of a generic failure,
 // so a new gate in front of a step is visible at once.
-const withServerReason = (message: string, error: ToAPIErrorProps) =>
-  `${message} (${String(error.status)}: ${toAPIError(error).message})`;
+const refusedStep = (
+  code: DevQuickStartErrorCode,
+  error: ToAPIErrorProps,
+): never => {
+  throw new DevQuickStartError({
+    code,
+    message: `${ERROR_MESSAGES[code]} (${String(error.status)}: ${toAPIError(error).message})`,
+  });
+};
 
 const AUTHENTICATION_OUTCOME = {
   authenticated: "authenticated",
@@ -124,13 +131,7 @@ const authenticate = async ({ email }: DevQuickStartIdentity) => {
     statementVersion: PROFESSIONAL_USE_STATEMENT_VERSION,
   });
   if (accepted.error) {
-    throw new DevQuickStartError({
-      code: DEV_QUICK_START_ERROR.professionalUse,
-      message: withServerReason(
-        ERROR_MESSAGES[DEV_QUICK_START_ERROR.professionalUse],
-        accepted.error,
-      ),
-    });
+    refusedStep(DEV_QUICK_START_ERROR.professionalUse, accepted.error);
   }
 
   return AUTHENTICATION_OUTCOME.authenticated;
@@ -187,10 +188,7 @@ const startMatterImport = async (
       response.error.status === 409
         ? DEV_QUICK_START_ERROR.matterImportRunning
         : DEV_QUICK_START_ERROR.matterImport;
-    throw new DevQuickStartError({
-      code,
-      message: withServerReason(ERROR_MESSAGES[code], response.error),
-    });
+    refusedStep(code, response.error);
   }
 
   if (response.data instanceof Response) {
