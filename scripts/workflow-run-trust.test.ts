@@ -458,6 +458,7 @@ describe("workflow_run trust", () => {
         ...WORKFLOW_RUN_WORKFLOWS,
         "network-baseline-request.yml",
         "pr-lint.yml",
+        "release-proof.yml",
       ].toSorted(),
     );
     const problems = workflows.flatMap(({ file, workflow }) =>

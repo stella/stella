@@ -19,7 +19,15 @@
     "Tauri counterpart autofix tests": ["@stll/desktop"],
     "Lockfile release-age guard": ["**"],
     "Restore generated sources": ["**"],
-    "Test oxlint plugins": [],
+    "Test oxlint plugins": [
+      ".oxlint-plugins/**",
+      "oxlint*.ts",
+      "scripts/**",
+      "apps/api/scripts/test-path-filters.ts",
+      "packages/scripts/src/child-exit-status.ts",
+      "@stll/api",
+      "@stll/oxlint-config"
+    ],
     "Route network manifest coverage": ["**"],
     "Restore route network baseline": ["**"],
     "Prepare environment": ["**"],

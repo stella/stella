@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { checkRuleCoverage } from "./check-oxlint-rule-coverage";
-import { customLintTestCommand } from "./run-custom-lint-tests";
+import { customLintTestCommands } from "./run-custom-lint-tests";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
@@ -45,7 +45,20 @@ describe("oxlint plugin test collection", () => {
     let executed = false;
     const status = await checkRuleCoverage((command) => {
       executed = true;
-      expect(command).toEqual(customLintTestCommand());
+      expect(command).toEqual([
+        process.execPath,
+        "scripts/run-custom-lint-tests.ts",
+      ]);
+      const fixtures = [
+        ...new Bun.Glob("**/*.test.ts").scanSync(
+          path.join(REPO_ROOT, TEST_DIRECTORY),
+        ),
+      ].map((file) => `./${TEST_DIRECTORY}/${file}`);
+      expect(fixtures.length).toBeGreaterThan(0);
+      const batches = customLintTestCommands(command.slice(2), fixtures);
+      expect(batches.flatMap((batch) => batch.slice(4)).toSorted()).toEqual(
+        fixtures.toSorted(),
+      );
       return Bun.spawnSync([process.execPath, "-e", "process.exit(1)"]);
     });
     expect(executed).toBe(true);
