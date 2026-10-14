@@ -117,7 +117,15 @@ jobs:
           key: cargo-advisory-db-${{ github.run_id }}
           restore-keys: cargo-advisory-db-
 
-      - name: Fetch advisory database
+      # Offline metadata needs every dependency's manifest; the crate archives
+      # change only with the lockfile.
+      - name: Cache dependency crates
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry/cache
+          key: cargo-desktop-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+
+      - name: Fetch dependencies and advisory database
         env:
           CARGO_NET_RETRY: "5"
         run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml

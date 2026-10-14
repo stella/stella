@@ -16,14 +16,22 @@ const script = path.join(
   "../.github/actions/cargo-deny/fetch.sh",
 );
 
-// Fake cargo: records each call and fails until the configured attempt.
+// Fake cargo: records each call; the advisory fetch fails until the configured
+// attempt, and the crate fetch fails when told to.
 const cargo = `#!/usr/bin/env bash
 printf '%s\\n' "$*" >> "$FETCH_TEST_CALLS"
-calls="$(wc -l < "$FETCH_TEST_CALLS")"
-[[ "$calls" -ge "$FETCH_TEST_SUCCEED_ON" ]]
+if [[ "$1" == "fetch" ]]; then
+  [[ "$FETCH_TEST_CRATES" == "ok" ]]
+  exit
+fi
+attempts="$(grep -c "^deny" "$FETCH_TEST_CALLS")"
+[[ "$attempts" -ge "$FETCH_TEST_SUCCEED_ON" ]]
 `;
 
-const runFetch = (succeedOn: number) => {
+const CRATES = "fetch --locked --manifest-path app/Cargo.toml";
+const ADVISORIES = "deny --manifest-path app/Cargo.toml fetch db index";
+
+const runFetch = (succeedOn: number, crates: "ok" | "down" = "ok") => {
   const directory = mkdtempSync(path.join(tmpdir(), "cargo-deny-fetch-"));
   const commands = path.join(directory, "commands");
   const calls = path.join(directory, "calls");
@@ -40,6 +48,7 @@ const runFetch = (succeedOn: number) => {
         CARGO_DENY_FETCH_DELAY: "0",
         FETCH_TEST_CALLS: calls,
         FETCH_TEST_SUCCEED_ON: String(succeedOn),
+        FETCH_TEST_CRATES: crates,
       },
     });
     if (result.error) {
@@ -55,20 +64,30 @@ const runFetch = (succeedOn: number) => {
   }
 };
 
+test("dependency crates are fetched before the advisory database", () => {
+  const result = runFetch(1);
+  expect(result.status).toBe(0);
+  expect(result.calls).toEqual([CRATES, ADVISORIES]);
+});
+
 test("a transient fetch failure is retried until the download succeeds", () => {
   const result = runFetch(3);
   expect(result.status).toBe(0);
   expect(result.calls).toEqual(
-    Array.from(
-      { length: 3 },
-      () => "deny --manifest-path app/Cargo.toml fetch db index",
-    ),
+    Array.from({ length: 3 }, () => [CRATES, ADVISORIES]).flat(),
   );
 });
 
-test("a fetch that keeps failing stops after the bounded attempts", () => {
+test("a crate download that keeps failing stops after the bounded attempts", () => {
+  const result = runFetch(1, "down");
+  expect(result.status).toBe(1);
+  expect(result.calls).toEqual([CRATES, CRATES, CRATES]);
+  expect(result.output).toContain("after 3 attempts");
+});
+
+test("an advisory fetch that keeps failing stops after the bounded attempts", () => {
   const result = runFetch(99);
   expect(result.status).toBe(1);
-  expect(result.calls).toHaveLength(3);
+  expect(result.calls.filter((call) => call === ADVISORIES)).toHaveLength(3);
   expect(result.output).toContain("after 3 attempts");
 });
