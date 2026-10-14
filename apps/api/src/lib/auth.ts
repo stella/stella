@@ -89,7 +89,7 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
-import { authRefusalLogPlugin } from "@/api/lib/auth/auth-refusal-plugin";
+import { createAuthRefusalLogPlugin } from "@/api/lib/auth/auth-refusal-plugin";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
@@ -2156,7 +2156,7 @@ export const createAuth = (
       oauthUiFragmentBridgePlugin,
       createSocialLinkHintPlugin(getOAuthState),
       // Last, so it records the answer every other hook has settled on.
-      authRefusalLogPlugin,
+      createAuthRefusalLogPlugin(createAuthMiddleware),
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {

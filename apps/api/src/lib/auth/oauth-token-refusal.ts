@@ -91,14 +91,14 @@ export const describeOAuthTokenRefusal = ({
   const familyId = observed?.["familyId"];
   const attributes = {
     "oauth.refusal_reason": reason,
-    "oauth.client_id": typeof clientId === "string" ? clientId : null,
+    "oauth.client_id": typeof clientId === "string" ? clientId : "none",
     // The provider stores a high-entropy authorization-code identifier and
     // carries it into every rotated refresh row. Hash that identifier with a
     // domain separator; never hash a refresh row id or a submitted credential.
     "oauth.grant_family":
       typeof familyId === "string"
         ? sha256Hex(`stella:oauth:grant-family:v1:${familyId}`)
-        : null,
+        : "none",
   };
   switch (reason) {
     case "expired":

@@ -441,7 +441,8 @@ records the provider decision, alongside `oauth.client_id`, `oauth.grant_type`,
 `stella:oauth:grant-family:v1:` followed by the stored authorization-code
 identifier (also carried into each rotated refresh row). It correlates a
 family across rotations without exposing credentials or database identifiers.
-It is null when the refresh row or its authorization-code identifier is absent.
+It is `"none"` when the refresh row or its authorization-code identifier is absent.
+An unavailable public client id is also recorded as `"none"`.
 
 `unknown_token` includes refresh rows deleted by consent revocation or member
 removal; those actions have separate audit records. `code_invalid` combines

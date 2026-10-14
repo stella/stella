@@ -1,11 +1,12 @@
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
+import { createAuthMiddleware } from "better-auth/api";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import { authRefusalLogPlugin } from "@/api/lib/auth/auth-refusal-plugin";
+import { createAuthRefusalLogPlugin } from "@/api/lib/auth/auth-refusal-plugin";
 import {
   describeOAuthTokenRefusal,
   OAUTH_PROTOCOL_REFUSAL_REASONS,
@@ -60,7 +61,7 @@ const fixture = async () => {
         storeTokens: { hash: async (value) => sha256Hex(value) },
         refreshTokenReuseInterval: 30,
       }),
-      authRefusalLogPlugin,
+      createAuthRefusalLogPlugin(createAuthMiddleware),
     ],
   });
   const context = await auth.$context;
@@ -273,7 +274,7 @@ describe("OAuth token refusal observations", () => {
       await refuse({ grant_type: "refresh_token", client_id: CLIENT_ID }),
     ).toMatchObject({
       "oauth.refusal_reason": "request_invalid",
-      "oauth.grant_family": null,
+      "oauth.grant_family": "none",
     });
   });
 
@@ -321,14 +322,14 @@ describe("OAuth token refusal observations", () => {
     });
   });
 
-  test("represents a missing family identifier as null", () => {
+  test("represents a missing family identifier as none", () => {
     expect(
       describeOAuthTokenRefusal({
         observation: { reason: "expired", clientId: CLIENT_ID, familyId: null },
         body: refreshBody,
         errorCode: "invalid_grant",
       }),
-    ).toMatchObject({ "oauth.grant_family": null });
+    ).toMatchObject({ "oauth.grant_family": "none" });
   });
 
   test("surfaces an unclassified provider observation explicitly", () => {
@@ -419,9 +420,11 @@ test("the pinned provider assigns every direct grant refusal and shared protocol
       for (const match of providerFunction(file, name).matchAll(
         /error: "([a-z_]+)"/gu,
       )) {
-        expect(Object.keys(OAUTH_PROTOCOL_REFUSAL_REASONS)).toContain(
-          match.at(1),
-        );
+        expect(
+          Object.keys(OAUTH_PROTOCOL_REFUSAL_REASONS).some(
+            (reason) => reason === match.at(1),
+          ),
+        ).toBe(true);
       }
     }
   }

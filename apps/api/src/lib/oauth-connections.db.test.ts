@@ -297,7 +297,7 @@ describe("disconnecting a connected app", () => {
     expect(refusals.at(0)?.attributes).toMatchObject({
       "oauth.refusal_reason": "unknown_token",
       "oauth.client_id": disconnectedClient.clientId,
-      "oauth.grant_family": null,
+      "oauth.grant_family": "none",
     });
     expect(JSON.stringify(refusals)).not.toContain(
       disconnectedGrant.refreshToken,

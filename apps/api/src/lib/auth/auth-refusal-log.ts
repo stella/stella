@@ -18,8 +18,8 @@ export type AuthRefusal = {
   "auth.error_code": string;
   "oauth.grant_type"?: string;
   "oauth.refusal_reason"?: OAuthTokenRefusalReason;
-  "oauth.client_id"?: string | null;
-  "oauth.grant_family"?: string | null;
+  "oauth.client_id"?: string;
+  "oauth.grant_family"?: string;
   "oauth.refusal_unclassified"?: boolean;
   "request.id"?: string;
 };

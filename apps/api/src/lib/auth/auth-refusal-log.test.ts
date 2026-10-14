@@ -29,7 +29,7 @@ describe("auth refusal log", () => {
         "oauth.grant_type": "refresh_token",
         "oauth.refusal_reason": "scope_mismatch",
         "oauth.client_id": "client",
-        "oauth.grant_family": null,
+        "oauth.grant_family": "none",
       },
     });
   });
