@@ -321,7 +321,7 @@ are omitted here. Input union keys are required unless marked `?`.
 - `stella matter list`
   - optional: --matter-id, --status (active|all)
 - `stella matter save`
-  - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived)
+  - optional: --matter-id, --name, --client-id, --reference, --billing-reference, --status (active|archived), --visibility (all_members|admins_and_assigned|assigned_only)
 - `stella organization add-member`
   - `--matter-id` — Matter ID for add_member and remove_member. (string)
   - `--user-id` — User id to add or remove for the member actions (string)

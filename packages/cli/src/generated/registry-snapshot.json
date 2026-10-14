@@ -2927,6 +2927,11 @@
           "enum": ["active", "archived"],
           "type": "string",
           "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
+        },
+        "visibility": {
+          "enum": ["all_members", "admins_and_assigned", "assigned_only"],
+          "type": "string",
+          "description": "Who can see the matter, independent of its client: 'all_members' (every internal member of the organization without being assigned; never external users), 'admins_and_assigned' (owners, admins and assigned members; the default on create) or 'assigned_only' (assigned members only). On update only the matter lead or an organization owner or admin may change it."
         }
       }
     },
