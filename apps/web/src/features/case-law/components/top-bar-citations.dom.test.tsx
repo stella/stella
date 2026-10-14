@@ -64,7 +64,7 @@ const summary = (positive: number) =>
       mixed: 0,
       unclassified: 0,
     },
-    capped: { incoming: false, outgoing: false },
+    precision: { status: "exact" },
     incomingByYear: [],
   }) satisfies DecisionCitationSummary;
 const defaultLocaleOptions = { locale: "en", messages };

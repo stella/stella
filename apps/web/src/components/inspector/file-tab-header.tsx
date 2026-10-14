@@ -11,6 +11,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon, Minimize2Icon } from "@stll/ui/icons";
 
+import { fileExtensionSuffix } from "@/components/file-extension-suffix";
 import { DesktopOpenButton } from "@/components/inspector/desktop-open-button";
 import { DownloadSplitButton } from "@/components/inspector/download-rendition-menu";
 import { downloadTabFile } from "@/components/inspector/file-download-service";
@@ -29,21 +30,13 @@ import type { DesktopOpenTarget } from "@/components/inspector/use-desktop-file-
 import Tooltip from "@/components/tooltip";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { splitFileName } from "@/lib/files/file-name-edit";
 
 export type MatterOrigin = {
   color: string | null;
   id: string;
   name: string;
   onClick: () => void;
-};
-
-/** Strip the file extension (e.g. ".pdf", ".docx") from a filename. */
-const stripExtension = (name: string): string => {
-  const dotIndex = name.lastIndexOf(".");
-  if (dotIndex <= 0) {
-    return name;
-  }
-  return name.slice(0, dotIndex);
 };
 
 type GetFileTabHeaderPropsOptions = {
@@ -76,7 +69,7 @@ export const getFileTabHeaderProps = ({
   tab,
 }: GetFileTabHeaderPropsOptions) =>
   ({
-    label: stripExtension(tab.label),
+    label: splitFileName(tab.label).baseName,
     matter: matterOrigin ? (
       <MatterOriginLink
         color={matterOrigin.color}
@@ -94,6 +87,7 @@ export const getFileTabHeaderProps = ({
       onChange: setEditValue,
       onCommit: () => commitRename(tab),
       onCancel: () => setEditingTabId(null),
+      suffix: fileExtensionSuffix(tab.label),
     },
   }) satisfies Omit<ComponentProps<typeof InspectorTabHeader>, "actions">;
 

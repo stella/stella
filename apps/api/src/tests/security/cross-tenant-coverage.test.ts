@@ -207,6 +207,7 @@ const apiSrcDir = path.resolve(import.meta.dir, "../..");
  * otherwise mark the whole domain covered and hide a new route beside it.
  */
 const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
+  "desktop-time-entries": {},
   chat: {
     // The model catalog for the caller's own organization: no record id in,
     // nothing another tenant owns out.
@@ -244,11 +245,21 @@ const domainHandlerImports = (source: string, domain: string): string[] =>
     .map((match) => match[1])
     .filter((modulePath): modulePath is string => modulePath !== undefined);
 
-const mountedHandlers = (domain: string): string[] =>
-  domainHandlerImports(
-    readFileSync(path.join(handlersDir, domain, "routes.ts"), "utf-8"),
-    domain,
-  ).toSorted();
+const mountedHandlers = (domain: string): string[] => {
+  const source = readFileSync(
+    path.join(handlersDir, domain, "routes.ts"),
+    "utf-8",
+  );
+  const relativeImports = [
+    ...source.matchAll(/import \w+ from "\.\/([^"]+)"/gu),
+  ]
+    .map((match) => match[1])
+    .filter((modulePath): modulePath is string => modulePath !== undefined);
+  return [
+    ...domainHandlerImports(source, domain),
+    ...relativeImports,
+  ].toSorted();
+};
 
 describe("cross-tenant matrix coverage guard", () => {
   test("every handler domain is in the cross-tenant matrix or explicitly waived", () => {

@@ -17,6 +17,8 @@ const PERSONAL_CHAT_ROLE_POLICY = {
   user: "export",
   assistant: "exclude",
   system: "exclude",
+  // Generated progress records, never authored by the account.
+  activity: "exclude",
 } as const satisfies Record<ChatMessageRole, "export" | "exclude">;
 
 // Generated titles and matter references can contain data belonging to others.
@@ -33,6 +35,7 @@ const personalTextParts = (part: ChatPart) => {
   switch (part.type) {
     case "text":
       return [{ type: part.type, content: part.content }];
+    case "activity":
     case "audio":
     case "document":
     case "image":
@@ -112,6 +115,9 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   "titleSource",
   // Per-thread runtime settings: how the assistant ran, not authored content.
   "webSearchEnabled",
+  // Skill selected at thread start: runtime setting that can reference an
+  // organization skill, not authored content.
+  "activeSkill",
   "chatModel",
   "chatReasoningEffort",
   // Internal processing flag recording that anonymization ran on a turn.

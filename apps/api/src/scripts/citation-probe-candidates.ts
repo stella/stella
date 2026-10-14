@@ -37,6 +37,7 @@ const BENIGN: readonly RegExp[] = [
   // (protocol number in a tax proceeding), "č.j. 11273/09-1200-700346"
   // (Finanční ředitelství, trailing dash-joined department blocks), "č.j.
   // 65050/08/305921704713" (dodatečný platební výměr, 12-digit final
+  // segment), "č. j. 1234567890/1234-12345-123456" (ten-digit first
   // segment). A real court docket always carries a letter registry between
   // the chamber digit and the docket number (CASE_NUMBER_BODY in the
   // extractor); an all-numeric reference is never a court citation, whatever
@@ -44,7 +45,7 @@ const BENIGN: readonly RegExp[] = [
   // letter, digit, or slash so a longer or mixed-format reference
   // ("123/45/678/ABC", a 7-segment chain, or a final segment beyond the
   // digit cap) is never silently truncated to a benign-looking prefix.
-  /[čc]\.\s{0,3}j\.:?\s{0,3}\d{1,8}(?:[/-]\d{1,14}){1,5}(?![\p{L}\d/])/u,
+  /[čc]\.\s{0,3}j\.:?\s{0,3}\d{1,10}(?:[/-]\d{1,14}){1,5}(?![\p{L}\d/])/u,
   // The letter-segment form of the same administrative reference, where a
   // department code sits in one of the slash-joined segments: "č. j.
   // KK/547/DS/19-3" (regional authority), "č. j. 2194/OD/19-4/Rsz" (city
@@ -82,11 +83,20 @@ const BENIGN: readonly RegExp[] = [
   // "KU", which no court registry does, and the reference is not a court
   // docket the corpus can hold.
   /^[čc]\.\s{0,3}j\.:?\s{0,3}KU\p{Lu}{2,4}\s{1,3}\d{1,7}\/\d{4}(?![\p{L}\d/-])/u,
+  // Slovak enforcement-officer ("sp. zn. EX 1234/23") and arbitration-court
+  // ("sp. zn. SR 01234/08") file numbers: the registry code opens the
+  // reference with no chamber number, which every court docket carries, and
+  // neither file is a decision the corpus can hold.
+  /^sp\.\s{0,3}zn\.\s{0,3}(?:EX|SR)\s{1,3}\d{1,6}\/\d{2,4}(?![\p{L}\d/-])/u,
   // A purely numeric "number/two-digit-year" after a case-number prefix
   // ("sygn. akt 12345/01", "sp. zn. 12345/01"): the application-number
   // form of the international human-rights court, outside the corpus.
   // Every domestic docket carries a letter registry before the number.
   /^(?:sp\.\s{0,3}zn\.|sygn\.(?:\s{1,3}akt)?)\s{0,3}\d{3,5}\/\d{2}(?![\p{L}\d/-])/u,
+  // Slovak court-administration file ("sp. zn. Spr 1234/2014", optionally
+  // led by a chamber number or written "Spr."): the agenda of the court's
+  // president, not a decision docket the corpus can hold.
+  /^sp\.\s{0,3}zn\.\s{0,3}(?:\d{1,3}\s{0,2})?Spr\.?\s{1,3}\d{1,6}\/\d{2,4}(?![\p{L}\d/-])/u,
 ];
 
 export const isBenign = (candidate: string): boolean =>

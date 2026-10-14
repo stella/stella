@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The web SSR renderer directly imports isbot to wait for allReady for crawlers while streaming the shell to browsers. Declaring the existing React Router dependency explicitly preserves the framework's bot detection behavior without relying on transitive package resolution or duplicating its detection rules."
+}

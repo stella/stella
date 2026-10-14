@@ -7,11 +7,14 @@ import type {
   chatMessages,
   chatThreads,
   legalReaderAnnotations,
+  legalReaderAnswerMessages,
+  legalReaderAnswers,
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
   templateLookupFormatUserDefaults,
   userFiles,
+  userProfessionalUseAcceptances,
   workspaceViewTemplates,
 } from "@/api/db/schema";
 import type { ExportedAccountTableName } from "@/api/lib/account-export/registry";
@@ -32,6 +35,9 @@ type AccountExportProjectionSignatures = {
     row: NonNullable<Awaited<ReturnType<typeof readAccountProfileForExport>>>,
   ) => unknown;
   member: (row: PageItem<typeof listAccountMembershipPage>) => unknown;
+  user_professional_use_acceptances: (
+    row: typeof userProfessionalUseAcceptances.$inferSelect,
+  ) => unknown;
   feedback_reports: (
     row: PageItem<typeof readOwnFeedbackReportPage>,
   ) => unknown;
@@ -56,6 +62,10 @@ type AccountExportProjectionSignatures = {
   ) => Promise<unknown>;
   legal_reader_annotations: (
     row: typeof legalReaderAnnotations.$inferSelect,
+  ) => unknown;
+  legal_reader_answers: (
+    row: typeof legalReaderAnswers.$inferSelect,
+    messages: (typeof legalReaderAnswerMessages.$inferSelect)[],
   ) => unknown;
   saved_time_narratives: (
     row: typeof savedTimeNarratives.$inferSelect,

@@ -2,6 +2,8 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
+import { READER_ANSWER_MAX_MESSAGES } from "@stll/api-contract/reader-answers";
+
 import { member } from "@/api/db/auth-schema";
 import type { rootDb, rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -14,11 +16,14 @@ import {
   chatMessages,
   chatThreads,
   legalReaderAnnotations,
+  legalReaderAnswerMessages,
+  legalReaderAnswers,
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
   templateLookupFormatUserDefaults,
   userFiles,
+  userProfessionalUseAcceptances,
   workspaceViewTemplates,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -87,7 +92,11 @@ type ExportOrganizationPageOptions = {
   userId: SafeId<"user">;
   table: Exclude<
     ExportedAccountTableName,
-    "user" | "member" | "feedback_reports" | "user_files"
+    | "user"
+    | "member"
+    | "feedback_reports"
+    | "user_files"
+    | "user_professional_use_acceptances"
   >;
   cursor: string | null;
 };
@@ -392,6 +401,63 @@ const readLegalReaderAnnotationsPage = async ({
     return projectRows(rows, projections.legal_reader_annotations);
   });
 
+const readLegalReaderAnswersPage = async ({
+  projections,
+  scopedDb,
+  organizationId,
+  userId,
+  cursor,
+}: OrganizationPageQueryOptions) =>
+  await scopedDb(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(legalReaderAnswers)
+      .where(
+        and(
+          eq(legalReaderAnswers.organizationId, organizationId),
+          eq(legalReaderAnswers.userId, userId),
+          eq(legalReaderAnswers.visibility, "private"),
+          isNull(legalReaderAnswers.deletedAt),
+          stillMember(organizationId, userId),
+          after(legalReaderAnswers.id, cursor),
+        ),
+      )
+      .orderBy(asc(legalReaderAnswers.id))
+      .limit(ACCOUNT_EXPORT_PAGE_SIZE);
+    if (rows.length === 0) {
+      return [];
+    }
+    const maximumMessages =
+      ACCOUNT_EXPORT_PAGE_SIZE * READER_ANSWER_MAX_MESSAGES;
+    const messages = await tx
+      .select()
+      .from(legalReaderAnswerMessages)
+      .where(
+        and(
+          eq(legalReaderAnswerMessages.role, "user"),
+          inArray(
+            legalReaderAnswerMessages.answerId,
+            rows.map(({ id }) => id),
+          ),
+        ),
+      )
+      .orderBy(
+        asc(legalReaderAnswerMessages.answerId),
+        asc(legalReaderAnswerMessages.sequence),
+      )
+      .limit(maximumMessages + 1);
+    if (messages.length > maximumMessages) {
+      panic("Reader answer messages exceed their owning limit");
+    }
+    return rows.map((row) => ({
+      id: row.id,
+      value: projections.legal_reader_answers(
+        row,
+        messages.filter(({ answerId }) => answerId === row.id),
+      ),
+    }));
+  });
+
 const readSavedTimeNarrativesPage = async ({
   projections,
   scopedDb,
@@ -492,6 +558,8 @@ const readOrganizationPage = async ({
       return await readSearchHistoryPage(options);
     case "legal_reader_annotations":
       return await readLegalReaderAnnotationsPage(options);
+    case "legal_reader_answers":
+      return await readLegalReaderAnswersPage(options);
     case "saved_time_narratives":
       return await readSavedTimeNarrativesPage(options);
     case "template_lookup_format_user_defaults":
@@ -551,6 +619,17 @@ export async function* exportAccountRows({
     const row = await readAccountProfileForExport(db, userId);
     if (row !== undefined) {
       yield projections.user(row);
+    }
+    return;
+  }
+  if (table === "user_professional_use_acceptances") {
+    const [row] = await db
+      .select()
+      .from(userProfessionalUseAcceptances)
+      .where(eq(userProfessionalUseAcceptances.userId, userId))
+      .limit(1);
+    if (row !== undefined) {
+      yield projections.user_professional_use_acceptances(row);
     }
     return;
   }

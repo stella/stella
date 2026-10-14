@@ -14,18 +14,20 @@ import { Button } from "@stll/ui/button";
 import { BookTextIcon, SparklesIcon, UserRoundIcon } from "@stll/ui/icons";
 import { InspectorRailIconButton } from "@stll/ui/inspector";
 import { Loader } from "@stll/ui/loader";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { OutlineRail } from "@stll/ui/outline-rail";
 import type { OutlineItem } from "@stll/ui/outline-rail";
 import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import { activeLegalFromReaderTarget } from "@/components/ai-suggestions/active-legal-document";
+import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { AnnotationToolbar } from "@/components/legal-reader/annotations/annotation-toolbar";
 import { GuestAnnotationPrompt } from "@/components/legal-reader/annotations/guest-annotation-prompt";
 import type { ReaderAnnotationTarget } from "@/components/legal-reader/annotations/reader-annotation-target";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
+import { useWebReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import { WebDecisionReader as DecisionText } from "@/components/legal-reader/web-decision-reader";
-import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import {
   AiHeadnotes,
@@ -97,6 +99,8 @@ type DecisionWorkspaceBaseProps = {
   decisionId: SafeId<"caseLawDecision">;
   /** The block the URL names, which the reader arrived at from a result row. */
   initialAnchorId?: string | undefined;
+  /** A repeated citation is a fresh landing on the same passage. */
+  landingSessionId?: string | undefined;
 };
 
 /**
@@ -143,7 +147,7 @@ const NotesFilterAllIcon = ({ className }: { className?: string }) => (
 );
 
 export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
-  const { decision, decisionId, initialAnchorId } = props;
+  const { decision, decisionId, initialAnchorId, landingSessionId } = props;
   const t = useTranslations();
   const provisions = useReaderProvisionMode();
   const ast = parseDocumentAst(decision.documentAst);
@@ -180,6 +184,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
 
   const [panelWidth, setPanelWidth] = useState(220);
+  // The same per-browser size the inspector's readers step, so a size chosen
+  // in either place holds in both.
+  const textScale = useWebReaderTextScale();
   const isDragging = useRef(false);
   // The text links every cited decision the first outgoing page resolves;
   // the panel below pages further, the links stop at what is already read.
@@ -248,7 +255,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   // goes. A new decision starts the question over, and so does a new fragment
   // on the same one: stepping back to `#p-1` from `#p-2` keeps this component
   // mounted, so the decision alone cannot tell the two landings apart.
-  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}`;
+  const landingRoute = `${decisionId}#${initialAnchorId ?? ""}#${landingSessionId ?? ""}`;
   const paragraphLanding = decisionParagraphLanding(ast, initialAnchorId);
   const resolvedLandingAnchorId =
     paragraphLanding.type === "anchor" ? paragraphLanding.anchorId : undefined;
@@ -265,6 +272,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
     containerRef: mainRef,
     documentAst: decision.documentAst,
     fragment: initialAnchorId,
+    sessionId: landingSessionId,
   });
 
   const jumpToAnchor = (anchorId: string) => {
@@ -409,6 +417,13 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <ChromeHeaderActions>
+        <ZoomControls
+          atMax={textScale.atMax}
+          atMin={textScale.atMin}
+          level={textScale.level}
+          onReset={textScale.reset}
+          onZoom={textScale.zoom}
+        />
         <Button
           aria-label={t("caseLaw.reader.expandProvisions")}
           aria-pressed={provisions.expandProvisions}
@@ -559,7 +574,9 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
               )}
               <div
                 className="grid max-lg:!grid-cols-[1fr]"
+                {...textScale.rootProps}
                 style={{
+                  ...textScale.rootProps.style,
                   gridTemplateColumns: `${panelWidth}px minmax(0, 1fr)`,
                 }}
               >
@@ -667,6 +684,17 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                   className="reader-paper min-w-0 py-8"
                   data-slot="reader-document-column"
                 >
+                  {/* Below lg the analysis column, and the offer in it, is
+                      not drawn; a visitor still has to learn the layer
+                      exists and that signing in opens it. */}
+                  {showAiNotes &&
+                    props.aiMode === "gated" &&
+                    props.onRequestAnalysis !== undefined &&
+                    analysisState.status === "idle" && (
+                      <NarrowGatedAnalysisInvitation
+                        onRequest={props.onRequestAnalysis}
+                      />
+                    )}
                   <DecisionText
                     surface="full-reader"
                     aiHeadnotes={aiHeadnotes}
@@ -676,6 +704,7 @@ export const DecisionWorkspace = (props: DecisionWorkspaceProps) => {
                     decisionId={decisionId}
                     expandProvisions={provisions.expandProvisions}
                     landingAnchorId={landingAnchorId}
+                    landingSessionId={landingSessionId}
                     onAnnotationActivate={annotations.setActiveAnnotationId}
                     provisionAnchors={provisionAnchors}
                     sectionMap={showAiNotes ? sectionMap : undefined}
@@ -734,6 +763,37 @@ const AnalysisLoader = () => {
           )}
         </div>
       ))}
+    </div>
+  );
+};
+
+/**
+ * The analysis column's offer, above the text where that column is not drawn.
+ */
+const NarrowGatedAnalysisInvitation = ({
+  onRequest,
+}: {
+  onRequest: () => void;
+}) => {
+  const t = useTranslations();
+
+  return (
+    <div
+      aria-label={t("caseLaw.notesFilter.ai")}
+      className="reader-chrome mx-auto mb-6 flex max-w-(--reader-measure) flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5 lg:hidden"
+      data-slot="gated-analysis-invitation-narrow"
+      role="region"
+    >
+      <SparklesIcon
+        aria-hidden="true"
+        className="text-muted-foreground size-4 shrink-0"
+      />
+      <p className="text-foreground-strong-muted min-w-0 flex-1 text-sm leading-snug">
+        {t("caseLaw.analysis.invitation")}
+      </p>
+      <Button onClick={onRequest} size="sm" variant="muted">
+        {t("auth.signIn")}
+      </Button>
     </div>
   );
 };

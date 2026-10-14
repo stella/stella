@@ -42,6 +42,7 @@ import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { desktopFeatureAccessRoute } from "@/api/handlers/desktop-feature-access/routes";
 import { desktopPresenceRoute } from "@/api/handlers/desktop-presence/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
+import { desktopTimeEntriesRoute } from "@/api/handlers/desktop-time-entries/routes";
 import { documentReviewPassagesRoute } from "@/api/handlers/document-reviews/passages-routes";
 import { documentReviewsRoute } from "@/api/handlers/document-reviews/routes";
 import { documentTranslationsRoute } from "@/api/handlers/document-translations/routes";
@@ -613,7 +614,8 @@ const api = new Elysia()
     new Elysia()
       .use(pdfSigningSessionsRoute)
       .use(desktopPresenceRoute)
-      .use(desktopFeatureAccessRoute),
+      .use(desktopFeatureAccessRoute)
+      .use(desktopTimeEntriesRoute),
   );
 
 export default api;
@@ -736,6 +738,7 @@ const startServer = async (): Promise<void> => {
   const clientAddressWarning = clientAddressConfigurationWarning({
     edgeHeader: env.STELLA_CLIENT_ADDRESS_HEADER,
     originVerifySecret: env.STELLA_ORIGIN_VERIFY_SECRET,
+    originVerifySecretPrevious: env.STELLA_ORIGIN_VERIFY_SECRET_PREVIOUS,
   });
   if (clientAddressWarning !== null) {
     logger.warn(clientAddressWarning, {
@@ -784,7 +787,9 @@ const startServer = async (): Promise<void> => {
   await initBuiltinReportTemplates();
 
   const closeManagedProviderChecks = await startManagedProviderChecks();
-  const backgroundWorkers = initApiBackgroundWorkers(env.SCHEDULED_JOBS_MODE);
+  const backgroundWorkers = await initApiBackgroundWorkers(
+    env.SCHEDULED_JOBS_MODE,
+  );
 
   // Every process outside local development starts it. Same URL as the pools
   // in `db/root.ts`.

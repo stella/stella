@@ -28,7 +28,7 @@ import {
   type Page,
 } from "@/api/lib/pagination";
 import { admitAccountExportRequest } from "@/api/lib/rate-limit/account-action-budget";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 
 export type AccountExportRow = typeof accountExports.$inferSelect;
 export type AccountExportDb = Pick<typeof rootDb, "transaction">;
@@ -109,9 +109,6 @@ const lockAccountExport = async (
     mode: "no key update",
     select: (lockedTx) => lockedTx.select().from(accountExports),
   });
-  if (locked.status === "busy") {
-    panic("Blocking account export lock was busy");
-  }
   const row = locked.rows.at(0);
   if (row === undefined) {
     return null;
@@ -538,9 +535,6 @@ export const recordAccountExportDownload = async ({
       select: (lockedTx) => lockedTx.select().from(accountExports),
       where: sql`${eq(accountExports.status, "ready")} AND ${gt(accountExports.expiresAt, sql`clock_timestamp()`)}`,
     });
-    if (result.status === "busy") {
-      panic("Blocking account export lock was busy");
-    }
     const row = result.rows.at(0);
     if (row === undefined) {
       return null;

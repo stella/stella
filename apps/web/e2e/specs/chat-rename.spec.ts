@@ -6,7 +6,7 @@ import { expect, test } from "../helpers/test";
 // suggestion text is not asserted literally (the background titling on
 // thread creation draws from the same mock, so the two can coincide); the
 // deterministic assertion is the committed title's propagation.
-test("breadcrumb rename with suggestion propagates to the threads sheet", async ({
+test("breadcrumb rename with suggestion propagates to the chat history", async ({
   page,
 }) => {
   // A route is ready when its UI is ready, not when every cold Vite resource
@@ -79,11 +79,13 @@ test("breadcrumb rename with suggestion propagates to the threads sheet", async 
     breadcrumb.getByRole("button", { name: committedTitle }),
   ).toBeVisible({ timeout: 30_000 });
 
-  // The threads sheet lists this exact thread under the new title. Persistent
-  // test data may contain duplicate titles, so target the current route href.
-  await page.getByRole("button", { name: "History" }).click();
-  const sheet = page.getByRole("dialog");
-  const currentThreadLink = sheet.locator(`a[href="${threadPath}"]`);
+  // The history page lists this exact thread under the new title. Persistent
+  // test data may contain duplicate titles, so target the thread's href.
+  await page.getByRole("link", { name: "History", exact: true }).click();
+  await expect(page).toHaveURL(/\/chat\/history$/u, { timeout: 30_000 });
+  const currentThreadLink = page.locator(
+    `[data-slot="list"] a[href="${threadPath}"]`,
+  );
   await expect(currentThreadLink).toContainText(committedTitle, {
     timeout: 30_000,
   });

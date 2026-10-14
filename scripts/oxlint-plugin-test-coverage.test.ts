@@ -2,14 +2,15 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { checkRuleCoverage } from "./check-oxlint-rule-coverage";
+import { customLintTestCommands } from "./run-custom-lint-tests";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const WORKFLOW_FILE = ".github/workflows/ci.yml";
 const TEST_DIRECTORY = ".oxlint-plugins/__tests__";
-const TEST_STEP = "Test oxlint plugins";
-const TEST_COMMAND =
-  "find ./.oxlint-plugins/__tests__ -maxdepth 1 -name '*.test.ts' -print0 | sort -z | xargs -0 bun test";
+const TEST_STEP = "Custom lint rule coverage";
+const TEST_COMMAND = "bun scripts/check-oxlint-rule-coverage.ts";
 
 const workflow = Bun.YAML.parse(
   readFileSync(path.join(REPO_ROOT, WORKFLOW_FILE), "utf-8"),
@@ -26,7 +27,7 @@ const assertDerivedTestCollection = (run: unknown): void => {
 describe("oxlint plugin test collection", () => {
   test("the gating step derives every plugin test from its directory", () => {
     const step = workflowStepByName(
-      workflowJobSteps(workflow, "ci-checks-rest"),
+      workflowJobSteps(workflow, "ci-checks-policy"),
       TEST_STEP,
     );
 
@@ -38,6 +39,30 @@ describe("oxlint plugin test collection", () => {
         ),
       ].length,
     ).toBeGreaterThan(0);
+  });
+
+  test("coverage executes the complete shared fixture command and propagates failure", async () => {
+    let executed = false;
+    const status = await checkRuleCoverage((command) => {
+      executed = true;
+      expect(command).toEqual([
+        process.execPath,
+        "scripts/run-custom-lint-tests.ts",
+      ]);
+      const fixtures = [
+        ...new Bun.Glob("**/*.test.ts").scanSync(
+          path.join(REPO_ROOT, TEST_DIRECTORY),
+        ),
+      ].map((file) => `./${TEST_DIRECTORY}/${file}`);
+      expect(fixtures.length).toBeGreaterThan(0);
+      const batches = customLintTestCommands(command.slice(2), fixtures);
+      expect(batches.flatMap((batch) => batch.slice(4)).toSorted()).toEqual(
+        fixtures.toSorted(),
+      );
+      return Bun.spawnSync([process.execPath, "-e", "process.exit(1)"]);
+    });
+    expect(executed).toBe(true);
+    expect(status).toBe(1);
   });
 
   test("a step with an explicit test list is rejected", () => {

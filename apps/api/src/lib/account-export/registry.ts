@@ -128,6 +128,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
   },
+  desktop_time_entry_batches: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
+  },
   document_processing_runs: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.derived,
@@ -242,6 +246,7 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
   legal_reader_annotations: { type: "exported" },
+  legal_reader_answers: { type: "exported" },
   matter_inbound_addresses: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
@@ -274,6 +279,10 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   oauth_refresh_token: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.security,
+  },
+  organization_professional_use_acceptances: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
   pdf_signing_sessions: {
     type: "exempt",
@@ -403,6 +412,7 @@ export const ACCOUNT_EXPORT_REGISTRY = {
   },
   user: { type: "exported" },
   user_files: { type: "exported" },
+  user_professional_use_acceptances: { type: "exported" },
   work_obligation_events: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
