@@ -18,8 +18,10 @@ import {
 
 import { createSanctionsMatcherPool } from "./matcher-pool";
 import {
+  SANCTIONS_WORK_PRESSURE,
   SanctionsScreeningFailure,
   reportSanctionsScreeningFailure,
+  reportSanctionsScreeningWork,
 } from "./screening-failure";
 import type { SanctionsScreeningFailureCause } from "./screening-failure";
 
@@ -218,5 +220,44 @@ test("a successful null lease has no diagnostic or capture", async () => {
     await pool.close();
     logs.restore();
     analytics.restore();
+  }
+});
+
+test("every completed screening reports its budget share and warns above the pressure line", () => {
+  const logs = installRecordingLogger();
+  const metrics: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    metrics.push(line);
+  });
+  try {
+    const limit = 2_000_000;
+    reportSanctionsScreeningWork({ source: "eu", spent: limit / 2, limit });
+    expect(logs.records).toHaveLength(0);
+    reportSanctionsScreeningWork({
+      source: "uk",
+      spent: Math.ceil(limit * SANCTIONS_WORK_PRESSURE) + 1,
+      limit,
+    });
+    expect(logs.at("WARN")).toHaveLength(1);
+    expect(logs.records.at(0)).toMatchObject({
+      severityText: "WARN",
+      message: "sanctions.screening_work_pressure",
+      attributes: { source: "uk", limit },
+    });
+    const parsed = metrics.map(
+      (line) => JSON.parse(line) as Record<string, unknown>,
+    );
+    expect(
+      parsed.map((line) => [
+        line["source"],
+        line["SanctionsScreeningWorkUsage"],
+      ]),
+    ).toEqual([
+      ["eu", 50],
+      ["uk", ((Math.ceil(limit * SANCTIONS_WORK_PRESSURE) + 1) / limit) * 100],
+    ]);
+  } finally {
+    logs.restore();
+    resetMetricLineSinkForTesting();
   }
 });
