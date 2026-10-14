@@ -52,6 +52,96 @@
     "type": "non-gating"
   },
   {
+    "file": "apps/desktop/tests/browser/activity-interactions.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/desktop-browser-tests.outputs.required",
+      "producerSha256": "2ec76cb990dbcd81ea8e5f713185040932f076775a65112b08096309f9f58d28"
+    }
+  },
+  {
+    "file": "apps/desktop/tests/browser/clipboard-keyboard.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/desktop-browser-tests.outputs.required",
+      "producerSha256": "2ec76cb990dbcd81ea8e5f713185040932f076775a65112b08096309f9f58d28"
+    }
+  },
+  {
+    "file": "apps/desktop/tests/browser/handoff-recovery.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/desktop-browser-tests.outputs.required",
+      "producerSha256": "2ec76cb990dbcd81ea8e5f713185040932f076775a65112b08096309f9f58d28"
+    }
+  },
+  {
+    "file": "apps/desktop/tests/browser/registry-interactions.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/desktop-browser-tests.outputs.required",
+      "producerSha256": "2ec76cb990dbcd81ea8e5f713185040932f076775a65112b08096309f9f58d28"
+    }
+  },
+  {
+    "file": "apps/desktop/tests/browser/static-dialog-fit.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/desktop-browser-tests.outputs.required",
+      "producerSha256": "2ec76cb990dbcd81ea8e5f713185040932f076775a65112b08096309f9f58d28"
+    }
+  },
+  {
+    "file": "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/desktop-browser-tests.outputs.required",
+      "producerSha256": "2ec76cb990dbcd81ea8e5f713185040932f076775a65112b08096309f9f58d28"
+    }
+  },
+  {
+    "file": "apps/extension/e2e/bridge.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/extension-browser-tests.outputs.required",
+      "producerSha256": "5206615065e01c3d82ae23de29011b673512cc5a7f3ac53f0ae08e4f62e48679"
+    }
+  },
+  {
+    "file": "apps/extension/e2e/containment.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/extension-browser-tests.outputs.required",
+      "producerSha256": "5206615065e01c3d82ae23de29011b673512cc5a7f3ac53f0ae08e4f62e48679"
+    }
+  },
+  {
+    "file": "apps/extension/e2e/protocol.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/extension-browser-tests.outputs.required",
+      "producerSha256": "5206615065e01c3d82ae23de29011b673512cc5a7f3ac53f0ae08e4f62e48679"
+    }
+  },
+  {
     "file": "apps/visual-preview/browser/render.test.ts",
     "owningWorkflow": ".github/workflows/visual-preview.yml",
     "reason": "separate workflow; fold decision pending",
@@ -62,6 +152,26 @@
     "owningWorkflow": ".github/workflows/visual-preview.yml",
     "reason": "separate workflow; fold decision pending",
     "type": "non-gating"
+  },
+  {
+    "file": "apps/web/e2e/anonymized-export/anonymized-export.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    }
+  },
+  {
+    "file": "apps/web/e2e/collab/folio-collaboration.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    }
   },
   {
     "file": "apps/web/e2e/marketing/product-screenshots.spec.ts",
@@ -77,295 +187,501 @@
   },
   {
     "file": "apps/web/e2e/specs/agent-skills.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/app-shell-readiness.unit.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-anonymized-composer.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-bottom-fade.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-clipboard.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-composer-during-stream.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-composer-menu-shortcut.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-long-paste-chip.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-reattach.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-rename.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-stream-commit-budget.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-stream-error.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chrome-divider.unit.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/decision-narrow-reader.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/decision-paragraph-range.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/dev-autocomplete.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/docked-chat-geometry.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/evidence-references.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/filesystem-rename.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/generated-visual-polish.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/generated-visual.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/guides.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/heap-growth-canary.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/i18n-bootstrap.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/kanban-card-drag.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/law-authenticated-sidebar.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/law-cases-ssr.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/lists-granted.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/matter-color-picker.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/mcp-case-law-results.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/navigation-policy.unit.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/oauth-consent.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/oauth-ui-redirect.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/organization-login.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/provision-inspector-layout.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/public-tools.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/reader-chat-first-send.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/reader-chat-first-turn.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/route-pending-shell.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/search-actions.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/selection-toolbar-geometry.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/smoke.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/table-search.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/table-view-state-reconcile.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/template-studio.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/upload-docx.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/verification-review.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
+    "file": "apps/web/e2e/specs/vite-dependency-canary.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    }
+  },
+  {
     "file": "apps/web/e2e/specs/workspace-file-drop.spec.ts",
-    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "reason": {
+      "blocker": "stack-status-gate",
+      "producer": "setup-e2e-stack status",
+      "producerSha256": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc"
+    },
     "type": "non-gating",
     "owningWorkflow": ".github/workflows/ci.yml"
   },
@@ -380,6 +696,226 @@
     "owningWorkflow": ".github/workflows/staging-smoke.yml",
     "reason": "deployed-environment scenario cannot gate merges",
     "type": "non-gating"
+  },
+  {
+    "file": "apps/web/e2e/ui-playground/control-sizes.visual.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "apps/web/e2e/ui-playground/inspector.geometry.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "apps/web/e2e/ui-playground/page-crop.geometry.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "apps/web/e2e/ui-playground/registry.geometry.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "apps/web/e2e/ui-playground/workspace-table.geometry.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/anchored-popup.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/color-picker.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/date-picker.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/date-range-filter.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/dialog.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/document-identity-badge.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/form-controls.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/inline-rename.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/list-items.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/outline-rail.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/popover-resize.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/split-button.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/components/toast.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/kanban/board-chrome.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/kanban/card-sticky-header.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/kanban/sticky-lane-controls.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
+  },
+  {
+    "file": "packages/ui/src/workspace/workspace-view-switcher.playwright.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "type": "non-gating",
+    "reason": {
+      "blocker": "unproven-selection-producer",
+      "producer": ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      "producerSha256": "473ed1dec4361ee0e165ea1136058dc41cd268e3cc5a661a9452095d52d4707c"
+    }
   },
   {
     "file": "scripts/browser/visual-preview-composition.spec.ts",

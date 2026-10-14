@@ -1,6 +1,7 @@
 import { describe as context, expect, test as check } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { sha256Hex } from "../packages/sha256/src/bun";
 import {
   analyzeGatingWorkflow,
   firstCollectionFailure,
@@ -13,9 +14,10 @@ import {
   parseTestRegistrations,
   rootCommandExecutionFailure,
   scenarioLedgerGrowth,
+  scenarioBlockerFailure,
   validateTrustedOutputProducers,
 } from "./test-gate";
-import type { TestScenario } from "./test-gate";
+import type { ScenarioBlocker, TestScenario } from "./test-gate";
 import { TRUSTED_OUTPUT_PRODUCERS } from "./test-gate-output-producers";
 import type { TrustedOutputProducer } from "./test-gate-output-producers";
 
@@ -1382,6 +1384,66 @@ jobs:
         shardedPackages: new Set<string>(),
       }),
     ).toBeUndefined();
+  });
+
+  check("structured blockers expire with their named producer", () => {
+    const workflow = `jobs:
+  ci-browser:
+    steps:
+      - id: ui-browser-tests
+        run: echo 'required=true' >> "$GITHUB_OUTPUT"
+`;
+    const step = {
+      id: "ui-browser-tests",
+      run: "echo 'required=true' >> \"$GITHUB_OUTPUT\"",
+    };
+    const selection = {
+      blocker: "unproven-selection-producer",
+      producer:
+        ".github/workflows/ci.yml/ci-browser/ui-browser-tests.outputs.required",
+      producerSha256: sha256Hex(JSON.stringify(step)),
+    } as const satisfies ScenarioBlocker;
+    const action =
+      "outputs:\n  status:\n    value: ready\nruns:\n  using: composite\n  steps: []\n";
+    const stack = {
+      blocker: "stack-status-gate",
+      producer: "setup-e2e-stack status",
+      producerSha256: sha256Hex(action),
+    } as const satisfies ScenarioBlocker;
+    expect(scenarioBlockerFailure(selection, () => workflow)).toBeUndefined();
+    expect(scenarioBlockerFailure(stack, () => action)).toBeUndefined();
+    for (const mutated of [
+      workflow.replace("id: ui-browser-tests", "id: renamed"),
+      workflow.replace("required=true", "renamed=true"),
+      workflow.replace("true", "false"),
+    ]) {
+      expect(scenarioBlockerFailure(selection, () => mutated)).toContain(
+        "scenario blocker:",
+      );
+    }
+    expect(scenarioBlockerFailure(selection, () => undefined)).toContain(
+      "producer is missing",
+    );
+    expect(
+      scenarioBlockerFailure(stack, () =>
+        action.replace("status:", "renamed:"),
+      ),
+    ).toContain("output is missing");
+    expect(
+      scenarioBlockerFailure(stack, () => `${action}# changed\n`),
+    ).toContain("producer changed");
+    const scenario = {
+      type: "non-gating",
+      file: "scripts/named.test.ts",
+      owningWorkflow: ".github/workflows/ci.yml",
+      reason: selection,
+    };
+    expect(parseScenarioLedger([scenario])).toEqual([scenario]);
+    expect(() =>
+      parseScenarioLedger([
+        { ...scenario, reason: { ...selection, blocker: "unreviewed" } },
+      ]),
+    ).toThrow("invalid structured blocker");
   });
 
   check("trusted output producers keep their named producer and proof", () => {

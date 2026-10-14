@@ -9,6 +9,7 @@ import ts from "typescript";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { compareCodeUnit } from "../packages/collation/src/collation";
+import { sha256Hex } from "../packages/sha256/src/bun";
 import { classifiedChecks, staticReuseOutputName } from "./ci-static-checks";
 import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
 import {
@@ -80,12 +81,18 @@ type DisabledLedger = {
   readonly identities: readonly string[];
 };
 
+export type ScenarioBlocker = {
+  readonly blocker: "unproven-selection-producer" | "stack-status-gate";
+  readonly producer: string;
+  readonly producerSha256: string;
+};
+
 export type TestScenario =
   | {
       readonly type: "non-gating";
       readonly file: string;
       readonly owningWorkflow: string;
-      readonly reason: string;
+      readonly reason: string | ScenarioBlocker;
     }
   | {
       readonly type: "executed";
@@ -165,15 +172,36 @@ export const parseScenarioLedger = (
     panic(`${NON_GATING_LEDGER} must be an array`);
   }
   return value.map((entry) => {
-    if (
-      !isRecord(entry) ||
-      typeof entry["file"] !== "string" ||
-      typeof entry["reason"] !== "string" ||
-      entry["reason"].trim() === ""
-    ) {
+    if (!isRecord(entry) || typeof entry["file"] !== "string") {
       panic(`${NON_GATING_LEDGER} contains an invalid entry`);
     }
-    const common = { file: entry["file"], reason: entry["reason"] };
+    const rawReason = entry["reason"];
+    if (entry["type"] === "non-gating" && isRecord(rawReason)) {
+      if (
+        typeof entry["owningWorkflow"] !== "string" ||
+        (rawReason["blocker"] !== "unproven-selection-producer" &&
+          rawReason["blocker"] !== "stack-status-gate") ||
+        typeof rawReason["producer"] !== "string" ||
+        typeof rawReason["producerSha256"] !== "string" ||
+        !/^[a-f0-9]{64}$/u.test(rawReason["producerSha256"])
+      ) {
+        panic(`${NON_GATING_LEDGER} contains an invalid structured blocker`);
+      }
+      return {
+        type: "non-gating",
+        file: entry["file"],
+        owningWorkflow: entry["owningWorkflow"],
+        reason: {
+          blocker: rawReason["blocker"],
+          producer: rawReason["producer"],
+          producerSha256: rawReason["producerSha256"],
+        },
+      } as const satisfies TestScenario;
+    }
+    if (typeof rawReason !== "string" || rawReason.trim() === "") {
+      panic(`${NON_GATING_LEDGER} contains an invalid reason`);
+    }
+    const common = { file: entry["file"], reason: rawReason };
     if (
       entry["type"] === "non-gating" &&
       typeof entry["owningWorkflow"] === "string"
@@ -269,26 +297,11 @@ const scenarioLedgerBaseline = (): readonly ScenarioBaseline[] => {
     ["ls-tree", "--name-only", mergeBase, "--", NON_GATING_LEDGER],
     options,
   ).trim();
-  const reference =
-    inBase === NON_GATING_LEDGER
-      ? mergeBase
-      : execFileSync(
-          "git",
-          [
-            "log",
-            "--diff-filter=A",
-            "-n",
-            "1",
-            "--format=%H",
-            "origin/main..HEAD",
-            "--",
-            NON_GATING_LEDGER,
-          ],
-          options,
-        ).trim();
-  if (reference === "") {
-    return [];
+  if (inBase !== NON_GATING_LEDGER) {
+    // The initial inventory becomes the merge-base ledger when this guard lands.
+    return readNonGatingLedger().map(({ file, type }) => ({ file, type }));
   }
+  const reference = mergeBase;
   const value: unknown = JSON.parse(
     execFileSync("git", ["show", `${reference}:${NON_GATING_LEDGER}`], options),
   );
@@ -299,7 +312,7 @@ const scenarioLedgerBaseline = (): readonly ScenarioBaseline[] => {
     if (!isRecord(entry) || typeof entry["file"] !== "string") {
       panic(`${NON_GATING_LEDGER} baseline contains an invalid file`);
     }
-    // The introduction inventory granted no execution proof; only its keys seed growth checks.
+    // Existing ledger kinds remain part of the shrink-only boundary.
     const type = "type" in entry ? entry["type"] : "non-gating";
     if (
       type !== "non-gating" &&
@@ -3528,7 +3541,8 @@ const isPlaywrightDefineConfig = (
       !ts.isImportDeclaration(statement) ||
       !ts.isStringLiteral(statement.moduleSpecifier) ||
       statement.moduleSpecifier.text !== "@playwright/test" ||
-      statement.importClause?.isTypeOnly !== false
+      statement.importClause === undefined ||
+      statement.importClause.phaseModifier !== undefined
     ) {
       continue;
     }
@@ -4379,6 +4393,124 @@ const pinnedScenarioFailure = ({
     : `pinned collector: ${collection.type === "unresolved" ? collection.finding : `${file} is outside the pinned runner config`}`;
 };
 
+export const scenarioBlockerFailure = (
+  blocker: ScenarioBlocker,
+  readProducer = (file: string): string | undefined =>
+    existsSync(path.join(ROOT, file))
+      ? readFileSync(path.join(ROOT, file), "utf-8")
+      : undefined,
+): string | undefined => {
+  switch (blocker.blocker) {
+    case "stack-status-gate": {
+      if (blocker.producer !== "setup-e2e-stack status") {
+        return "scenario blocker: unknown stack status producer";
+      }
+      const source = readProducer(".github/actions/setup-e2e-stack/action.yml");
+      if (source === undefined) {
+        return "scenario blocker: stack status producer is missing";
+      }
+      const action = workflowRecord(Bun.YAML.parse(source));
+      const outputs = workflowRecord(action?.["outputs"]);
+      if (!isRecord(outputs?.["status"])) {
+        return "scenario blocker: stack status output is missing";
+      }
+      return sha256Hex(source) === blocker.producerSha256
+        ? undefined
+        : "scenario blocker: stack status producer changed; remove or revalidate the entry";
+    }
+    case "unproven-selection-producer": {
+      const match =
+        /^(?<workflow>.+\.ya?ml)\/(?<job>[^/]+)\/(?<step>[\w-]+)\.outputs\.(?<output>[\w-]+)$/u.exec(
+          blocker.producer,
+        )?.groups;
+      if (
+        match === undefined ||
+        match["workflow"] !== ".github/workflows/ci.yml"
+      ) {
+        return "scenario blocker: selection producer reference is invalid";
+      }
+      const jobName = match["job"];
+      const stepId = match["step"];
+      const output = match["output"];
+      const source = readProducer(match["workflow"]);
+      if (
+        source === undefined ||
+        jobName === undefined ||
+        stepId === undefined ||
+        output === undefined
+      ) {
+        return "scenario blocker: selection producer is missing";
+      }
+      const workflow: unknown = Bun.YAML.parse(source);
+      const job = workflowRecord(
+        workflowRecord(workflowRecord(workflow)?.["jobs"])?.[jobName],
+      );
+      const steps = Array.isArray(job?.["steps"])
+        ? flattenWorkflowSteps(job["steps"])
+        : [];
+      const matches = steps.filter((step) => step["id"] === stepId);
+      const step = matches.at(0);
+      if (
+        matches.length !== 1 ||
+        step === undefined ||
+        typeof step["run"] !== "string"
+      ) {
+        return "scenario blocker: selection producer step is missing or duplicated";
+      }
+      if (!declaredSelectionOutputs(step["run"], [output]).has(output)) {
+        return "scenario blocker: selection output is missing or renamed";
+      }
+      if (sha256Hex(JSON.stringify(step)) !== blocker.producerSha256) {
+        return "scenario blocker: selection producer changed; remove or revalidate the entry";
+      }
+      const registered = validateTrustedOutputProducers({
+        workflow,
+        registry: TRUSTED_OUTPUT_PRODUCERS,
+        scope: "present-jobs",
+      });
+      if (
+        registered.references
+          .get(jobName)
+          ?.has(`steps.${stepId}.outputs.${output}`)
+      ) {
+        return "scenario blocker: selection producer now has proof; remove the entry";
+      }
+      return undefined;
+    }
+    default:
+      return panic(
+        `Unrecognized scenario blocker: ${String(blocker.blocker satisfies never)}`,
+      );
+  }
+};
+
+type ScenarioCollectionFailureOptions = {
+  readonly file: string;
+  readonly scenario: TestScenario;
+  readonly topology: RepositoryTestExecutionTopology;
+};
+
+const scenarioCollectionFailure = ({
+  file,
+  scenario,
+  topology,
+}: ScenarioCollectionFailureOptions) => {
+  switch (scenario.type) {
+    case "non-gating":
+      return typeof scenario.reason === "string"
+        ? undefined
+        : scenarioBlockerFailure(scenario.reason);
+    case "executed":
+      return executedScenarioFailure({ file, scenario, topology });
+    case "pinned-collector":
+      return pinnedScenarioFailure({ file, scenario, topology });
+    default:
+      return panic(
+        `Unrecognized scenario: ${String(scenario satisfies never)}`,
+      );
+  }
+};
+
 export const firstCollectionFailure = ({
   file,
   scenarios,
@@ -4386,18 +4518,7 @@ export const firstCollectionFailure = ({
 }: FirstCollectionOptions): string | undefined => {
   const scenario = scenarios.get(file);
   if (scenario !== undefined) {
-    switch (scenario.type) {
-      case "non-gating":
-        return undefined;
-      case "executed":
-        return executedScenarioFailure({ file, scenario, topology });
-      case "pinned-collector":
-        return pinnedScenarioFailure({ file, scenario, topology });
-      default:
-        return panic(
-          `Unrecognized scenario: ${String(scenario satisfies never)}`,
-        );
-    }
+    return scenarioCollectionFailure({ file, scenario, topology });
   }
   if (file.startsWith("scripts/") || file.startsWith(".oxlint-plugins/")) {
     const isUnlistedScript =
