@@ -46,7 +46,7 @@ const textAtBoundary = fc
 const compression = fc.constantFrom("STORE" as const, "DEFLATE" as const);
 
 const roundTrip = async (
-  write: (zip: JSZip, text: string) => void,
+  write: (zip: JSZip, text: string) => JSZip,
   text: string,
   method: "STORE" | "DEFLATE",
 ) => {
