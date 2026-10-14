@@ -1503,6 +1503,86 @@ jobs:
     expect(analysis.jobs.size).toBe(0);
   });
 
+  check("reports unsupported shells only for test collector commands", () => {
+    const analyze = (
+      run: string,
+      shell = "pwsh {0}",
+      runner = "ubuntu-latest",
+    ) =>
+      analyzeGatingWorkflow(
+        Bun.YAML.parse(`
+jobs:
+  checks:
+    runs-on: ${runner}
+    steps:
+      - run: ${run}
+        shell: ${shell}
+  ci-result:
+    needs: [checks]
+`),
+      );
+
+    for (const analysis of [
+      analyze("bun scripts/check-windows-script-standards.ts"),
+      analyze(
+        "bun scripts/check-windows-script-standards.ts",
+        "pwsh {0}",
+        "windows-latest",
+      ),
+    ]) {
+      expect(analysis.findings).toEqual([]);
+      expect(analysis.jobs.size).toBe(0);
+    }
+
+    for (const command of [
+      "bun test x.test.ts",
+      "bun --filter @stll/extension test",
+      "bun run test",
+      "playwright test",
+    ]) {
+      const analysis = analyze(command);
+      expect(analysis.findings, command).toContain(
+        "job condition: checks/step-1 uses unsupported shell pwsh {0}",
+      );
+      expect(analysis.jobs.size, command).toBe(0);
+    }
+
+    const echoed = analyze('echo "bun test x.test.ts"');
+    expect(echoed.findings).toEqual([]);
+    expect(echoed.jobs.size).toBe(0);
+
+    const alternativeWorkflow = `jobs:
+  windows-tests:
+    runs-on: windows-latest
+    steps:
+      - run: bun test scripts/test-gate.test.ts
+        shell: pwsh {0}
+  linux-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - run: bun test scripts/test-gate.test.ts
+  ci-result:
+    needs: [windows-tests, linux-tests]
+`;
+    const alternativeAnalysis = analyzeGatingWorkflow(
+      Bun.YAML.parse(alternativeWorkflow),
+    );
+    expect(alternativeAnalysis.findings).toContain(
+      "job condition: windows-tests/step-1 uses unsupported shell pwsh {0}",
+    );
+    expect(
+      firstCollectionFailure({
+        file: "scripts/test-gate.test.ts",
+        scenarios: new Map(),
+        topology: {
+          gatingJobs: alternativeAnalysis.jobs,
+          shardedPackages: new Set<string>(),
+          workflow: alternativeWorkflow,
+        },
+      }),
+    ).toBeUndefined();
+  });
+
   check(
     "rejects failure-only step outcomes on the successful runtime path",
     () => {
@@ -2043,11 +2123,14 @@ context("root test runner coverage", () => {
         },
       ],
     ]);
-    const topologyFor = (source: string) => ({
-      ...analyzeGatingWorkflow(Bun.YAML.parse(source)),
-      shardedPackages: new Set<string>(),
-      workflow: source,
-    });
+    const topologyFor = (source: string) => {
+      const parsed = Bun.YAML.parse(source);
+      return {
+        gatingJobs: gatingWorkflowJobs(parsed),
+        shardedPackages: new Set<string>(),
+        workflow: source,
+      };
+    };
     const jobRange = (source: string, jobName: string) => {
       const start = source.indexOf(`  ${jobName}:\n`);
       expect(start, `missing ${jobName} fixture`).toBeGreaterThanOrEqual(0);
@@ -2462,6 +2545,32 @@ context("Playwright failure propagation", () => {
         },
       }),
     ).toEqual({ type: "not-collected" });
+  });
+});
+
+context("extension browser spec collection", () => {
+  check("collects extension bridge specs through the actual config", () => {
+    const file = "apps/extension/e2e/bridge.spec.ts";
+    const workflow = `jobs:
+  extension-e2e:
+    steps:
+      - run: bun --filter @stll/extension test:e2e
+  ci-result:
+    needs: [extension-e2e]
+`;
+    expect(
+      firstCollectionFailure({
+        file,
+        scenarios: new Map(),
+        topology: {
+          gatingJobs: bashJobs([
+            ["extension-e2e", ["bun --filter @stll/extension test:e2e"]],
+          ]),
+          shardedPackages: new Set<string>(),
+          workflow,
+        },
+      }),
+    ).toBeUndefined();
   });
 });
 
