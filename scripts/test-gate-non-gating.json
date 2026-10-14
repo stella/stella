@@ -52,18 +52,6 @@
     "type": "non-gating"
   },
   {
-    "file": "apps/landing/e2e/landing-anonymize-demo.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "collection through the shared Playwright configuration factory is not statically proven; no execution credit",
-    "type": "non-gating"
-  },
-  {
-    "file": "apps/landing/e2e/landing-navigation.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "collection through the shared Playwright configuration factory is not statically proven; no execution credit",
-    "type": "non-gating"
-  },
-  {
     "file": "apps/visual-preview/browser/render.test.ts",
     "owningWorkflow": ".github/workflows/visual-preview.yml",
     "reason": "separate workflow; fold decision pending",
@@ -78,7 +66,7 @@
   {
     "file": "apps/web/e2e/marketing/product-screenshots.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "collection through the shared Playwright configuration factory is not statically proven; no execution credit",
+    "reason": "required local reusable workflow/composite collector is not statically proven; no execution credit",
     "type": "non-gating"
   },
   {

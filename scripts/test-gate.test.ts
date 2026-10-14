@@ -2753,7 +2753,81 @@ context("extension browser spec collection", () => {
   });
 });
 
+context("real marketing Playwright factory composition", () => {
+  check.each([
+    "apps/landing/e2e/landing-anonymize-demo.spec.ts",
+    "apps/landing/e2e/landing-navigation.spec.ts",
+  ])("collects %s through the real CI topology", (file) => {
+    expect(
+      firstCollectionFailure({ file, scenarios: new Map() }),
+    ).toBeUndefined();
+  });
+
+  check(
+    "collects the real marketing screenshot spec through its package manifest",
+    () => {
+      const packageFile = "apps/web/package.json";
+      const packageManifest = Bun.YAML.parse(
+        readFileSync(packageFile, "utf-8"),
+      );
+      if (
+        typeof packageManifest !== "object" ||
+        packageManifest === null ||
+        !("scripts" in packageManifest) ||
+        typeof packageManifest.scripts !== "object" ||
+        packageManifest.scripts === null ||
+        !("test:e2e:marketing" in packageManifest.scripts) ||
+        typeof packageManifest.scripts["test:e2e:marketing"] !== "string"
+      ) {
+        throw new Error("web marketing Playwright script is missing");
+      }
+      const scripts = {
+        "test:e2e:marketing": packageManifest.scripts["test:e2e:marketing"],
+      };
+      const invocation = "bun --filter @stll/web test:e2e:marketing";
+      const workflow = `jobs:
+  marketing:
+    steps:
+      - run: ${invocation}
+  ci-result:
+    needs: [marketing]
+`;
+
+      expect(
+        gatingPlaywrightCollection({
+          file: "apps/web/e2e/marketing/product-screenshots.spec.ts",
+          packageFile,
+          scripts,
+          topology: {
+            gatingJobs: bashJobs([["marketing", [invocation]]]),
+            shardedPackages: new Set<string>(),
+            workflow,
+          },
+        }),
+      ).toEqual({ type: "collected" });
+    },
+  );
+});
+
 context("Playwright configuration filters", () => {
+  const collectsFrom = (
+    source: string,
+    name = "theme-prepaint.playwright.spec.ts",
+  ) =>
+    gatingPlaywrightCollection({
+      file: `apps/desktop/tests/browser/${name}`,
+      packageFile: "apps/desktop/package.json",
+      scripts: { "test:browser": "playwright test" },
+      topology: {
+        gatingJobs: bashJobs([
+          ["browser-tests", ["bun --filter @stll/desktop test:browser"]],
+        ]),
+        shardedPackages: new Set<string>(),
+        workflow: "",
+      },
+      readConfig: () => source,
+    });
+
   const collects = (
     filter: string,
     name = "theme-prepaint.playwright.spec.ts",
@@ -2770,12 +2844,59 @@ context("Playwright configuration filters", () => {
         workflow: "",
       },
       readConfig: () =>
-        `export default defineConfig({ testDir: "./tests/browser", ${filter} });`,
+        `import { defineConfig } from "@playwright/test";\nexport default defineConfig({ testDir: "./tests/browser", ${filter} });`,
     });
   check("an array testIgnore excludes a file", () => {
     expect(
       collects('testIgnore: ["**/theme-prepaint.playwright.spec.ts"]'),
     ).toEqual({ type: "not-collected" });
+  });
+  check("proves config factories from their Playwright import", () => {
+    const objectConfig = `export default { testDir: "./tests/browser" };`;
+    const namedAlias = `import { defineConfig as configure } from "@playwright/test";\nexport default configure({ testDir: "./tests/browser" });`;
+    const namespace = `import * as playwright from "@playwright/test";\nexport default playwright.defineConfig({ testDir: "./tests/browser" });`;
+    expect(collectsFrom(objectConfig)).toEqual({ type: "collected" });
+    expect(collectsFrom(namedAlias)).toEqual({ type: "collected" });
+    expect(collectsFrom(namespace)).toEqual({ type: "collected" });
+  });
+
+  check("an unknown factory cannot hide testIgnore", () => {
+    expect(
+      collectsFrom(
+        `export default withDefaults({ testDir: "./tests/browser", testIgnore: ["**/*.spec.ts"] });`,
+      ),
+    ).toEqual({
+      type: "unresolved",
+      finding:
+        "runner config: apps/desktop/playwright.config.ts has unresolved exported factory (expected an immutable @playwright/test defineConfig import)",
+    });
+  });
+
+  check.each([
+    [
+      "factory imported from another module",
+      `import { defineConfig } from "@stll/config-tools";\nexport default defineConfig({ testDir: "./tests/browser" });`,
+    ],
+    [
+      "reassigned named import",
+      `import { defineConfig } from "@playwright/test";\ndefineConfig = unknownFactory;\nexport default defineConfig({ testDir: "./tests/browser" });`,
+    ],
+    [
+      "reassigned namespace import",
+      `import * as playwright from "@playwright/test";\nplaywright = unknownFactory;\nexport default playwright.defineConfig({ testDir: "./tests/browser" });`,
+    ],
+  ])("does not prove untrusted config construction: %s", (_name, source) => {
+    expect(collectsFrom(source)).toMatchObject({ type: "unresolved" });
+  });
+  check("does not expand a nonliteral config spread", () => {
+    expect(
+      collectsFrom(
+        `const inherited = readConfig();\nexport default { ...inherited, testDir: "./tests/browser" };`,
+      ),
+    ).toMatchObject({
+      type: "unresolved",
+      finding: expect.stringContaining("config"),
+    });
   });
   check("an array testMatch includes only matching files", () => {
     const filter = 'testMatch: ["**/theme-prepaint.playwright.spec.ts"]';
@@ -2877,8 +2998,8 @@ context("Playwright CLI selection", () => {
             shardedPackages: new Set<string>(),
             workflow: invocation,
           },
-          readConfig:
-            () => `export default defineConfig({ testDir: "./tests/browser", projects: [
+          readConfig: () => `import { defineConfig } from "@playwright/test";
+export default defineConfig({ testDir: "./tests/browser", projects: [
         { name: "selected", testMatch: ["**/one.spec.ts"] },
         { name: "other", testMatch: ["**/two.spec.ts"] },
       ] });`,
@@ -2905,7 +3026,8 @@ context("Playwright selector contracts", () => {
         shardedPackages: new Set<string>(),
         workflow: invocation,
       },
-      readConfig: () => `export default defineConfig({
+      readConfig: () => `import { defineConfig } from "@playwright/test";
+      export default defineConfig({
         testDir: "./tests/browser",
         projects: [
           { name: "chromium-desktop", testMatch: "**/one.spec.ts" },
@@ -2980,7 +3102,7 @@ ${steps}
         workflow,
       },
       readConfig: () =>
-        'export default defineConfig({ testDir: "./tests/browser" });',
+        'import { defineConfig } from "@playwright/test"; export default defineConfig({ testDir: "./tests/browser" });',
     });
   };
   const first = "bun --filter @stll/desktop test:browser -- --shard=1/2";

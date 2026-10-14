@@ -3283,14 +3283,139 @@ const playwrightObjectFields = (
   return fields;
 };
 
+const unwrapConfigExpression = (expression: ts.Expression): ts.Expression => {
+  let node = expression;
+  while (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isSatisfiesExpression(node)
+  ) {
+    node = node.expression;
+  }
+  return node;
+};
+
+const writesConfigBinding = (source: ts.SourceFile, name: string): boolean => {
+  let written = false;
+  const mentions = (node: ts.Node): boolean => {
+    if (ts.isIdentifier(node)) {
+      return node.text === name;
+    }
+    if (
+      ts.isPropertyAccessExpression(node) ||
+      ts.isElementAccessExpression(node)
+    ) {
+      return mentions(node.expression);
+    }
+    return ts.forEachChild(node, mentions) === true;
+  };
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment &&
+      mentions(node.left)
+    ) {
+      written = true;
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      [ts.SyntaxKind.PlusPlusToken, ts.SyntaxKind.MinusMinusToken].includes(
+        node.operator,
+      ) &&
+      mentions(node.operand)
+    ) {
+      written = true;
+    }
+    if (ts.isDeleteExpression(node) && mentions(node.expression)) {
+      written = true;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return written;
+};
+
+const isPlaywrightDefineConfig = (
+  source: ts.SourceFile,
+  callee: ts.Expression,
+): boolean => {
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.moduleSpecifier.text !== "@playwright/test" ||
+      statement.importClause?.isTypeOnly !== false
+    ) {
+      continue;
+    }
+    const bindings = statement.importClause.namedBindings;
+    if (bindings === undefined) {
+      continue;
+    }
+    if (
+      ts.isNamedImports(bindings) &&
+      ts.isIdentifier(callee) &&
+      bindings.elements.some(
+        (binding) =>
+          !binding.isTypeOnly &&
+          (binding.propertyName?.text ?? binding.name.text) ===
+            "defineConfig" &&
+          binding.name.text === callee.text &&
+          !writesConfigBinding(source, binding.name.text),
+      )
+    ) {
+      return true;
+    }
+    if (
+      !ts.isNamespaceImport(bindings) ||
+      (!ts.isPropertyAccessExpression(callee) &&
+        !ts.isElementAccessExpression(callee))
+    ) {
+      continue;
+    }
+    const property = ts.isPropertyAccessExpression(callee)
+      ? callee.name.text
+      : literalTitle(callee.argumentExpression);
+    if (
+      ts.isIdentifier(callee.expression) &&
+      callee.expression.text === bindings.name.text &&
+      property === "defineConfig" &&
+      !writesConfigBinding(source, bindings.name.text)
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const importedConfigFile = (
+  specifier: string,
+  configFile: string,
+): string | undefined => {
+  const resolved = ts.resolveModuleName(
+    specifier,
+    path.join(ROOT, configFile),
+    { moduleResolution: ts.ModuleResolutionKind.Bundler },
+    ts.sys,
+  ).resolvedModule;
+  return resolved === undefined
+    ? undefined
+    : repoRelativePath(ROOT, resolved.resolvedFileName);
+};
+
+type PlaywrightConfigFields =
+  | { readonly type: "resolved"; readonly fields: Map<string, ts.Expression> }
+  | { readonly type: "unresolved"; readonly field: string };
+
 const playwrightConfigFields = ({
   configFile,
   source,
   readConfig,
   visited: visitedConfigs = new Set(),
-}: PlaywrightConfigSource): Map<string, ts.Expression> | undefined => {
+}: PlaywrightConfigSource): PlaywrightConfigFields => {
   if (visitedConfigs.has(configFile)) {
-    return undefined;
+    return { type: "unresolved", field: "cyclic configuration import" };
   }
   const ast = parseTypeScript(configFile, source);
   const readConstants = () => {
@@ -3368,14 +3493,31 @@ const playwrightConfigFields = ({
   };
   const exported = ast.statements.find(ts.isExportAssignment);
   if (exported === undefined) {
-    return undefined;
+    return { type: "unresolved", field: "configuration object" };
   }
-  const exportedExpression = resolve(exported.expression);
+  const exportedExpression = unwrapConfigExpression(exported.expression);
+  if (
+    ts.isCallExpression(exportedExpression) &&
+    !isPlaywrightDefineConfig(
+      ast,
+      unwrapConfigExpression(exportedExpression.expression),
+    )
+  ) {
+    return {
+      type: "unresolved",
+      field:
+        "exported factory (expected an immutable @playwright/test defineConfig import)",
+    };
+  }
   const layers = ts.isCallExpression(exportedExpression)
     ? exportedExpression.arguments
     : [exportedExpression];
   const root = new Map<string, ts.Expression>();
   for (const layer of layers) {
+    const binding = unwrapConfigExpression(layer);
+    if (ts.isIdentifier(binding) && writesConfigBinding(ast, binding.text)) {
+      return { type: "unresolved", field: "reassigned configuration layer" };
+    }
     let fields = playwrightObjectFields(expand(layer));
     const node = resolve(layer);
     if (fields === undefined && ts.isIdentifier(node)) {
@@ -3388,47 +3530,50 @@ const playwrightConfigFields = ({
         imported !== undefined &&
         ts.isImportDeclaration(imported) &&
         ts.isStringLiteral(imported.moduleSpecifier) &&
-        imported.moduleSpecifier.text.startsWith(".")
+        (imported.moduleSpecifier.text.startsWith(".") ||
+          imported.moduleSpecifier.text.startsWith("@stll/"))
       ) {
-        const modulePath = path.posix.join(
-          path.posix.dirname(configFile),
+        const importedFile = importedConfigFile(
           imported.moduleSpecifier.text,
-        );
-        const importedFile = [modulePath, `${modulePath}.ts`].find((file) =>
-          existsSync(path.join(ROOT, file)),
+          configFile,
         );
         if (importedFile !== undefined) {
-          fields = playwrightConfigFields({
+          const importedFields = playwrightConfigFields({
             configFile: importedFile,
             source: readConfig(path.join(ROOT, importedFile)),
             readConfig,
             visited: new Set([...visitedConfigs, configFile]),
           });
+          if (importedFields.type === "unresolved") {
+            return importedFields;
+          }
+          fields = importedFields.fields;
         }
       }
     }
     if (fields === undefined) {
-      return undefined;
+      return { type: "unresolved", field: "configuration object" };
     }
     for (const [name, value] of fields) {
       root.set(name, value);
     }
   }
-  return root;
+  return { type: "resolved", fields: root };
 };
 
 const playwrightConfigCollection = (
   options: PlaywrightConfigOptions,
 ): PlaywrightCollection => {
   const { file, configFile, projects: selectedProjects } = options;
-  const root = playwrightConfigFields(options);
+  const configuration = playwrightConfigFields(options);
   const unresolved = (field: string): PlaywrightCollection => ({
     type: "unresolved",
     finding: `runner config: ${configFile} has unresolved ${field}`,
   });
-  if (root === undefined) {
-    return unresolved("configuration object");
+  if (configuration.type === "unresolved") {
+    return unresolved(configuration.field);
   }
+  const root = configuration.fields;
   const projects = root.get("projects");
   const scopes: Map<string, ts.Expression>[] = [];
   if (projects === undefined) {
