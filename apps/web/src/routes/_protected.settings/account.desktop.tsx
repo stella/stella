@@ -12,6 +12,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { DesktopDownloadButtons } from "@/components/desktop-download-buttons";
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { env } from "@/env";
 import { DesktopConnectionStatus } from "@/features/desktop/desktop-connection-status";
 import { useDesktopAccountConnection } from "@/features/desktop/use-desktop-account-connection";
@@ -20,7 +21,6 @@ import { useHydrationSafeDesktopPlatform } from "@/hooks/use-hydration-safe-desk
 import { captureDesktopAccountLink } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/settings/account/desktop")({
   component: DesktopPage,

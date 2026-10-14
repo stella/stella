@@ -3,7 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/frame";
 
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/admin/")({
   component: AdminOverview,

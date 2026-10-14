@@ -19,13 +19,13 @@ import {
   hasUsableOpenAIKey,
 } from "@/components/ai-config-role-models.logic";
 import { CopyActionButton } from "@/components/copy-action-button";
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { env } from "@/env";
 import { detached } from "@/lib/detached";
 import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 import { aiConfigOptions } from "@/lib/organization/ai-config-queries";
-import { AIProviderRows } from "@/routes/_protected.settings/-components/organization/ai-provider-rows";
+import { AIProviderRows } from "@/routes/_protected.admin/-components/organization/ai-provider-rows";
 
-import { SettingsPageHeader } from "../settings-page-header";
 import { AIConfigAdvanced } from "./ai-config-advanced";
 import { hasCustomAIModels } from "./ai-config-form.logic";
 import type { AIConfigFeedback } from "./ai-config-form.logic";

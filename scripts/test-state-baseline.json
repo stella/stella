@@ -699,7 +699,7 @@
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."
   },
-  "apps/web/src/routes/_protected.settings/-components/organization/time-policy-card.test.tsx": {
+  "apps/web/src/routes/_protected.admin/-components/organization/time-policy-card.test.tsx": {
     "count": 1,
     "owner": "web",
     "reason": "Existing environment setup and restoration; migrate through createTestState."

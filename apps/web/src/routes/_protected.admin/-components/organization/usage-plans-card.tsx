@@ -16,8 +16,8 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { usagePoliciesOptions } from "@/routes/_protected.settings/-queries/usage-policies";
-import type { UsagePolicyEntry } from "@/routes/_protected.settings/-queries/usage-policies";
+import { usagePoliciesOptions } from "@/routes/_protected.admin/-queries/usage-policies";
+import type { UsagePolicyEntry } from "@/routes/_protected.admin/-queries/usage-policies";
 
 /**
  * Catalog of subscription plans and one-time packs with hosted checkout.

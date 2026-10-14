@@ -32,7 +32,7 @@ const ar = (await import("@/i18n/langs/ar.json")).default;
 const { authClient } = await import("@/lib/auth-client");
 const { roleOptions, sessionOptions } = await import("@/lib/auth-queries");
 const { supportedLanguages } = await import("@/i18n/i18n-store");
-const { AdminAppFrame } = await import("./admin-frame");
+const { AdminAppFrame } = await import("./-admin-app-frame");
 
 const user = {
   activeOrganizationId: "org-a",

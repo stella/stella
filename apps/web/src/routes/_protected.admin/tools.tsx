@@ -1,10 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { NativeToolsList } from "@/routes/_protected.admin/-components/native-tools-list";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 
 export const Route = createFileRoute("/_protected/admin/tools")({
   loader: async ({ context }) => {

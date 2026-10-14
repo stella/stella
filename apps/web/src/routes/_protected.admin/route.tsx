@@ -44,7 +44,7 @@ export const Route = createFileRoute("/_protected/admin")({
     const role = await rolePromise;
 
     if (!hasOrganizationManagementAccess(role)) {
-      throw redirect({ to: "/settings/account/profile", replace: true });
+      redirect({ to: "/settings/account/profile", replace: true, throw: true });
     }
 
     if ((await timeBillingPromise) === false) {

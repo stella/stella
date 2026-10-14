@@ -10,6 +10,7 @@ import { Frame, FramePanel } from "@stll/ui/frame";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { env } from "@/env";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
@@ -22,9 +23,8 @@ import { prefetchRouteQuery } from "@/lib/react-query";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import type { UsageEntitlement } from "@/lib/usage-queries";
 import { useQueryView } from "@/lib/use-query-view";
-import { UsagePlansCard } from "@/routes/_protected.settings/-components/organization/usage-plans-card";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-import { usagePoliciesOptions } from "@/routes/_protected.settings/-queries/usage-policies";
+import { UsagePlansCard } from "@/routes/_protected.admin/-components/organization/usage-plans-card";
+import { usagePoliciesOptions } from "@/routes/_protected.admin/-queries/usage-policies";
 
 export const Route = createFileRoute("/_protected/admin/usage")({
   component: UsageSettingsPage,

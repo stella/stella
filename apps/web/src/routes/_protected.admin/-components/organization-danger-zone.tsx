@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
+import type { DestructiveConfirmOutcome } from "@stll/ui/destructive-confirm-dialog";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -20,6 +21,8 @@ type OrganizationDangerZoneProps = {
 };
 
 const SUBSCRIPTION_RENEWS_CODE = "organization_subscription_renews";
+const ONLY_OWNER_LEAVE_CODE =
+  "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER";
 
 export const OrganizationDangerZone = ({
   organizationId,
@@ -32,7 +35,7 @@ export const OrganizationDangerZone = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [outcome, setOutcome] = useState<
     | { status: "active" }
-    | { status: "refused"; message: string; code: string | undefined }
+    | { status: "refused"; code: string | undefined }
     | { status: "completed"; action: "leave" | "delete" }
   >({ status: "active" });
   const mutation = useMutation({
@@ -43,26 +46,39 @@ export const OrganizationDangerZone = ({
           ? await authClient.organization.delete({ organizationId })
           : await authClient.organization.leave({ organizationId });
       if (result.error) {
-        const error = toAuthClientError(result.error);
-        setOutcome({
-          status: "refused",
-          message:
-            result.error.status < 500
-              ? (result.error.message ?? t("errors.actionFailed"))
-              : t("errors.actionFailed"),
-          code: result.error.code,
-        });
-        throw error;
+        // A refusal is an outcome the section shows, not a thrown failure.
+        analytics.captureError(toAuthClientError(result.error));
+        setOutcome({ status: "refused", code: result.error.code });
+        return "refused" as const;
       }
       setOutcome({ status: "completed", action });
       setDeleteOpen(false);
       await onSuccess();
+      return "completed" as const;
     },
     onError: (error) => {
       analytics.captureError(error);
       notifyUserError(error, t("errors.actionFailed"));
     },
   });
+  // The dialog awaits this and keeps itself open on a refusal it shows.
+  const confirmDelete = async (): Promise<
+    DestructiveConfirmOutcome | undefined
+  > => {
+    const result = await mutation.mutateAsync("delete");
+    return result === "refused" ? "keep-open" : undefined;
+  };
+  const refusalCode = outcome.status === "refused" ? outcome.code : undefined;
+  const refusalMessage = (() => {
+    switch (refusalCode) {
+      case SUBSCRIPTION_RENEWS_CODE:
+        return t("admin.deleteRefusedSubscription");
+      case ONLY_OWNER_LEAVE_CODE:
+        return t("admin.leaveRefusedOnlyOwner");
+      default:
+        return t("errors.actionFailed");
+    }
+  })();
 
   return (
     <>
@@ -113,7 +129,7 @@ export const OrganizationDangerZone = ({
               )}
               {outcome.status === "refused" && (
                 <div role="alert" className="flex flex-col gap-2 text-sm">
-                  <p>{outcome.message}</p>
+                  <p>{refusalMessage}</p>
                   {outcome.code === SUBSCRIPTION_RENEWS_CODE && (
                     <a className="underline" href="/admin/usage">
                       {t("admin.planAndUsage")}
@@ -135,7 +151,7 @@ export const OrganizationDangerZone = ({
               {t("admin.deleteDescription")}
               {outcome.status === "refused" && (
                 <span className="mt-2 block" role="alert">
-                  {outcome.message}
+                  {refusalMessage}
                   {outcome.code === SUBSCRIPTION_RENEWS_CODE && (
                     <a className="ms-2 underline" href="/admin/usage">
                       {t("admin.planAndUsage")}
@@ -149,9 +165,7 @@ export const OrganizationDangerZone = ({
             name: organizationName,
           })}
           loading={mutation.isPending}
-          onConfirm={async () => {
-            await mutation.mutateAsync("delete");
-          }}
+          onConfirm={confirmDelete}
           onOpenChange={setDeleteOpen}
           open={deleteOpen}
           title={t("admin.deleteOrganization")}

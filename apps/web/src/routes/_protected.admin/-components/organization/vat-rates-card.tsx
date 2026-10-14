@@ -45,9 +45,9 @@ import {
   VatRateDate,
   vatRateStatus,
   VatRateRefusal,
-} from "@/routes/_protected.settings/-components/organization/vat-rate-display";
-import { VatRateForm } from "@/routes/_protected.settings/-components/organization/vat-rate-form";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+} from "@/routes/_protected.admin/-components/organization/vat-rate-display";
+import { VatRateForm } from "@/routes/_protected.admin/-components/organization/vat-rate-form";
+import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 type RateDialog =
   | { type: "closed" }

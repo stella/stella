@@ -11,7 +11,7 @@ import {
   VatRatePercentage,
   VatRateRefusal,
   vatRateStatus,
-} from "@/routes/_protected.settings/-components/organization/vat-rate-display";
+} from "@/routes/_protected.admin/-components/organization/vat-rate-display";
 
 const LOCALES = [
   { locale: "en", messages: en },

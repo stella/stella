@@ -7,6 +7,7 @@ import * as v from "valibot";
 
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
+import type { DestructiveConfirmOutcome } from "@stll/ui/destructive-confirm-dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Frame, FramePanel } from "@stll/ui/frame";
@@ -67,7 +68,8 @@ export const OrganizationProfileCard = () => {
         toAuthClientError(result.error),
         t("errors.actionFailed"),
       );
-      throw toAuthClientError(result.error);
+      // Keep the confirm dialog open so the rename can be retried.
+      return "keep-open" satisfies DestructiveConfirmOutcome;
     }
 
     await queryClient.invalidateQueries({ queryKey: organizationKeys.root });

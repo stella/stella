@@ -41,6 +41,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
+import { matchesConnectionQuery } from "@/lib/account/connections.logic";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -56,8 +57,6 @@ import {
   connectedAppsKeys,
   connectedAppsOptions,
 } from "@/routes/_protected.settings/-queries/connections";
-
-import { matchesConnectionQuery } from "./connections.logic";
 
 /** Apps the user let into their account (OAuth consents: Claude, Cursor, the
  * CLI). Access is summarised as a count; the full list opens on demand, so a

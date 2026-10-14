@@ -1,8 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { DocumentTypesCard } from "@/routes/_protected.settings/-components/organization/document-types-card";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { SettingsPageHeader } from "@/components/settings-page-header";
+import { DocumentTypesCard } from "@/routes/_protected.admin/-components/organization/document-types-card";
 
 export const Route = createFileRoute("/_protected/admin/document-types")({
   component: OrganizationDocumentTypesPage,

@@ -1,17 +1,17 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { isTimeBillingPreviewEnabled } from "@/hooks/use-time-billing-preview";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { roleOptions } from "@/lib/auth-queries";
+import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings.logic";
 import { vatRatesOptions } from "@/lib/organization/vat-rates";
 import {
   ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
 } from "@/lib/react-query";
-import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
-import { VatRatesCard } from "@/routes/_protected.settings/-components/organization/vat-rates-card";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { VatRatesCard } from "@/routes/_protected.admin/-components/organization/vat-rates-card";
 
 export const Route = createFileRoute("/_protected/admin/vat-rates")({
   staticData: { organizationSettingsAdmission: "time-billing" },

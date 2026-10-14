@@ -65,7 +65,7 @@ const refuse = (code: string, message: string) => {
   return requests;
 };
 
-test("the last-owner leave refusal preserves the API explanation and membership", async () => {
+test("the last-owner leave refusal explains the refusal and keeps membership", async () => {
   const explanation = "You cannot leave the organization as the last owner.";
   const requests = refuse(
     "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER",
@@ -76,7 +76,9 @@ test("the last-owner leave refusal preserves the API explanation and membership"
     screen.getByRole("button", { name: messages.admin.leaveOrganization }),
   );
   await waitFor(() =>
-    expect(screen.getByRole("alert").textContent).toContain(explanation),
+    expect(screen.getByRole("alert").textContent).toContain(
+      messages.admin.leaveRefusedOnlyOwner,
+    ),
   );
   expect(requests).toEqual([
     {
@@ -107,7 +109,7 @@ test("renewing-subscription deletion stays open and offers plan and usage recove
   fireEvent.click(confirm);
   await waitFor(() =>
     expect(within(dialog).getByRole("alert").textContent).toContain(
-      explanation,
+      messages.admin.deleteRefusedSubscription,
     ),
   );
   expect(

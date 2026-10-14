@@ -20,10 +20,10 @@ import { MatterOptionLabel } from "@/components/matter-option-label";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { MemoryCreateForm } from "@/routes/_protected.settings/-components/organization/memory/memory-create-form";
-import { canManageMatterMemory } from "@/routes/_protected.settings/-components/organization/memory/memory-panel.logic";
-import { MemoryRow } from "@/routes/_protected.settings/-components/organization/memory/memory-row";
-import { SuggestionsQueue } from "@/routes/_protected.settings/-components/organization/memory/suggestions-queue";
+import { MemoryCreateForm } from "@/routes/_protected.settings/-components/account/memory/memory-create-form";
+import { canManageMatterMemory } from "@/routes/_protected.settings/-components/account/memory/memory-panel.logic";
+import { MemoryRow } from "@/routes/_protected.settings/-components/account/memory/memory-row";
+import { SuggestionsQueue } from "@/routes/_protected.settings/-components/account/memory/suggestions-queue";
 import { memoriesOptions } from "@/routes/_protected.settings/-queries/memories";
 import type {
   MemoryListItem,

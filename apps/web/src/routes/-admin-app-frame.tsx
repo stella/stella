@@ -43,10 +43,10 @@ import {
   useAuthenticatedUser,
 } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings.logic";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
-import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
 
 const ADMIN_SECTIONS = [
   {
@@ -133,10 +133,10 @@ export const AdminAppFrame = ({
 const AdminTopBar = () => {
   const t = useTranslations();
   return (
-    <div className="flex items-center gap-2 px-3">
-      <SidebarTrigger />
+    <header className="border-sidebar-border flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b px-4">
+      <SidebarTrigger className="-ms-1" />
       <span className="text-sm font-medium">{t("admin.title")}</span>
-    </div>
+    </header>
   );
 };
 

@@ -5,16 +5,16 @@ import { useTranslations } from "use-intl";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
 import { CopyActionButton } from "@/components/copy-action-button";
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { usePermissions } from "@/hooks/use-permissions";
 import { refreshAuthQueries } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { organizationOptions } from "@/lib/organization/queries";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { OrganizationDangerZone } from "@/routes/_protected.admin/-components/organization-danger-zone";
-import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/-components/organization/jurisdictions-card";
-import { OrganizationProfileCard } from "@/routes/_protected.settings/-components/organization/profile-card";
-import { OrganizationTimeZoneCard } from "@/routes/_protected.settings/-components/organization/time-zone-card";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { OrganizationJurisdictionsCard } from "@/routes/_protected.admin/-components/organization/jurisdictions-card";
+import { OrganizationProfileCard } from "@/routes/_protected.admin/-components/organization/profile-card";
+import { OrganizationTimeZoneCard } from "@/routes/_protected.admin/-components/organization/time-zone-card";
 
 export const Route = createFileRoute("/_protected/admin/general")({
   loader: async ({ context }) => {
@@ -34,6 +34,12 @@ function OrganizationGeneralPage() {
     organizationOptions(activeOrganizationId),
   );
   const isOwner = usePermissions({ organization: ["delete"] });
+  // The danger zone awaits this inside its mutation, so a failure reaches the
+  // mutation's error handling rather than floating.
+  const leaveOrganization = async () => {
+    await refreshAuthQueries(router.options.context.queryClient);
+    await router.navigate({ to: "/" });
+  };
 
   return (
     <>
@@ -70,10 +76,7 @@ function OrganizationGeneralPage() {
         organizationId={organization.id}
         organizationName={organization.name}
         isOwner={isOwner}
-        onSuccess={async () => {
-          await refreshAuthQueries(router.options.context.queryClient);
-          await router.navigate({ to: "/" });
-        }}
+        onSuccess={leaveOrganization}
       />
     </>
   );

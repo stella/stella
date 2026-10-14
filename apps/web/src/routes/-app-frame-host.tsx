@@ -35,8 +35,7 @@ const LazyKnowledgePublicFrame = lazy(async () => {
 });
 
 const LazyAdminAppFrame = lazy(async () => {
-  const module =
-    await import("@/routes/_protected.admin/-components/admin-frame");
+  const module = await import("@/routes/-admin-app-frame");
   return { default: module.AdminAppFrame };
 });
 

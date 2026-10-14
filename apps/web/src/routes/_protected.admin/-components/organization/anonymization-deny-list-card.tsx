@@ -3,6 +3,7 @@ import { useFormStatus } from "react-dom";
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_CHAT_ANON_ENTITY_LABELS } from "@stll/anonymize-chat";
@@ -30,11 +31,11 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useQueryView } from "@/lib/use-query-view";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 import {
   organizationAnonymizationBlacklistKeys,
   organizationAnonymizationBlacklistOptions,
-} from "@/routes/_protected.settings/-queries/anonymization-blacklist";
+} from "@/routes/_protected.admin/-queries/anonymization-blacklist";
 
 type OrgAnonymizationBlacklistEntry = {
   canonical: string;
@@ -168,22 +169,18 @@ const parseJson = (
   trimmed: string,
   defaultLabel: LabelOption,
 ): OrgAnonymizationBlacklistEntry[] | null => {
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-    if (!Array.isArray(parsed)) {
-      return null;
-    }
-    const rows: OrgAnonymizationBlacklistEntry[] = [];
-    for (const item of parsed) {
-      const entry = parseJsonItem(item, defaultLabel);
-      if (entry) {
-        rows.push(entry);
-      }
-    }
-    return rows.length > 0 ? rows : null;
-  } catch {
+  const parsed = Result.try((): unknown => JSON.parse(trimmed));
+  if (Result.isError(parsed) || !Array.isArray(parsed.value)) {
     return null;
   }
+  const rows: OrgAnonymizationBlacklistEntry[] = [];
+  for (const item of parsed.value) {
+    const entry = parseJsonItem(item, defaultLabel);
+    if (entry) {
+      rows.push(entry);
+    }
+  }
+  return rows.length > 0 ? rows : null;
 };
 
 const parseCsvLine = (
@@ -332,20 +329,23 @@ export const AnonymizationDenyListCard = () => {
       })),
       { canonical, label: pendingLabel },
     ]);
-    try {
-      await updateMutation.mutateAsync({ entries: next });
-      setPendingCanonical("");
-      setPendingLabel(DEFAULT_LABEL);
-      stellaToast.add({
-        title: t("settings.organization.anonymization.termAddedToast", {
-          value: canonical,
-        }),
-        type: "success",
-      });
-    } catch (error) {
-      getAnalytics().captureError(error);
-      notifyUserError(error, t("errors.actionFailed"));
+    const saved = await Result.tryPromise({
+      try: () => updateMutation.mutateAsync({ entries: next }),
+      catch: (error) => error,
+    });
+    if (Result.isError(saved)) {
+      getAnalytics().captureError(saved.error);
+      notifyUserError(saved.error, t("errors.actionFailed"));
+      return;
     }
+    setPendingCanonical("");
+    setPendingLabel(DEFAULT_LABEL);
+    stellaToast.add({
+      title: t("settings.organization.anonymization.termAddedToast", {
+        value: canonical,
+      }),
+      type: "success",
+    });
   };
 
   const removeEntry = (canonical: string) => {

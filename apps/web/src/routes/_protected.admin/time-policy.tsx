@@ -1,11 +1,11 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { isTimeBillingRouteEnabled } from "@/hooks/use-time-billing-preview";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { organizationSettingsOptions } from "@/queries/organization-settings";
-import { TimePolicyCard } from "@/routes/_protected.settings/-components/organization/time-policy-card";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
+import { TimePolicyCard } from "@/routes/_protected.admin/-components/organization/time-policy-card";
 
 export const Route = createFileRoute("/_protected/admin/time-policy")({
   beforeLoad: async ({ context }) => {

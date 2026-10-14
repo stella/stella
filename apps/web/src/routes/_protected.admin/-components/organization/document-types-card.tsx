@@ -37,7 +37,7 @@ import { documentTypesOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
 import { useQueryView } from "@/lib/use-query-view";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 const DOCUMENT_TYPE_DRAG_TYPE = "stella/document-type";
 

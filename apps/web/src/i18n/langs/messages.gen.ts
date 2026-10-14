@@ -22,11 +22,13 @@ type Messages = {
     "billingProfiles": "Billing profiles";
     "deleteDescription": "Permanently delete this organization and its data. This cannot be undone.";
     "deleteOrganization": "Delete organization";
+    "deleteRefusedSubscription": "This organization has a subscription that renews. Cancel it in Plan and usage first, then delete the organization.";
     "deleteTypeToConfirm": "Type {name} to confirm.";
     "firmSetup": "Firm setup";
     "general": "General";
     "leaveDescription": "You will lose access to this organization's matters and data.";
     "leaveOrganization": "Leave organization";
+    "leaveRefusedOnlyOwner": "You are the only owner. Make another member an owner before you leave.";
     "modelsAndProviders": "Models and providers";
     "noPlan": "No active plan";
     "organizationDeleted": "The organization has been deleted.";

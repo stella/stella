@@ -20,14 +20,14 @@ import { Switch } from "@stll/ui/switch";
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
+import { matchesConnectionQuery } from "@/lib/account/connections.logic";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
 import { useQueryView } from "@/lib/use-query-view";
-import { matchesConnectionQuery } from "@/routes/_protected.settings/-components/account/connections/connections.logic";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 export const NativeToolsList = () => {
   const t = useTranslations();

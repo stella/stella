@@ -1,6 +1,7 @@
 import { useOptimistic, useRef, useState, useTransition } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Frame, FramePanel } from "@stll/ui/frame";
@@ -16,7 +17,7 @@ import {
   organizationSettingsOptions,
 } from "@/lib/organization/settings-queries";
 import { useQueryView } from "@/lib/use-query-view";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+import { useSettingsMutation } from "@/routes/_protected.admin/-hooks/use-settings-mutation";
 
 export const OrganizationJurisdictionsCard = () => {
   const t = useTranslations();
@@ -78,17 +79,15 @@ export const OrganizationJurisdictionsCard = () => {
               setImmediateSelected(next);
               startSelectionTransition(async () => {
                 applyOptimisticSelection(next);
-                try {
-                  await updateMutation.mutateAsync(next);
-                } catch {
-                  // The error toast is surfaced via the mutation's
-                  // `onError`. Swallow here so the transition resolves
-                  // and React reverts `optimisticSelected` to the
-                  // server value automatically.
-                } finally {
-                  if (selectionGenerationRef.current === generation) {
-                    setImmediateSelected(null);
-                  }
+                // The error toast is surfaced via the mutation's `onError`.
+                // Settling as a Result lets the transition resolve, and React
+                // reverts `optimisticSelected` to the server value.
+                await Result.tryPromise({
+                  try: () => updateMutation.mutateAsync(next),
+                  catch: (error) => error,
+                });
+                if (selectionGenerationRef.current === generation) {
+                  setImmediateSelected(null);
                 }
               });
             }}

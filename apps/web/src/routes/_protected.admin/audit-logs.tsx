@@ -25,6 +25,7 @@ import {
 } from "@stll/ui/table";
 
 import { DateRangeFilter } from "@/components/date-range-filter";
+import { SettingsPageHeader } from "@/components/settings-page-header";
 import { useFormatter } from "@/i18n/formatting-context";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -34,14 +35,13 @@ import { APIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { prefetchRouteQuery } from "@/lib/react-query";
 import { downloadFile } from "@/lib/utils";
-import { AuditChangeDetails } from "@/routes/_protected.settings/-components/audit-change-details";
-import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-import { toAuditLogDateRange } from "@/routes/_protected.settings/-queries/audit-log-date-range";
+import { AuditChangeDetails } from "@/routes/_protected.admin/-components/audit-change-details";
+import { toAuditLogDateRange } from "@/routes/_protected.admin/-queries/audit-log-date-range";
 import {
   auditLogOptions,
   type fetchAuditLogs,
   type AuditLogsPageKey,
-} from "@/routes/_protected.settings/-queries/audit-logs";
+} from "@/routes/_protected.admin/-queries/audit-logs";
 
 export const Route = createFileRoute("/_protected/admin/audit-logs")({
   loader: async ({ context }) => {

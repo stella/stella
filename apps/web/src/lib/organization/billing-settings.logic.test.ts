@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import type { Role } from "@/lib/auth-client";
-import { isBillingSettingsAccessible } from "@/routes/_protected.settings/-components/organization/billing-settings.logic";
+import { isBillingSettingsAccessible } from "@/lib/organization/billing-settings.logic";
 
 const ROLE_ACCESS = {
   owner: true,
