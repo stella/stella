@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -22,6 +23,7 @@ import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   caseLawCitationReviews,
+  caseLawCitationDoctrineReviews,
   caseLawCitations,
   caseLawDecisions,
   caseLawPolarityRules,
@@ -62,6 +64,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { DOCTRINE_LABEL_DOMAIN } from "@/api/scripts/apply-reviewed-citation-labels-doctrine";
 import {
   REVIEWED_LABEL_APPLY_FAILURE,
   REVIEWED_LABEL_INVALID_REASON,
@@ -295,12 +298,13 @@ afterAll(async () => {
 
 const reviewedTransact: Parameters<
   typeof planReviewedCitationLabels
->[0] = async (run) => await db.transaction(async (tx) => await run(tx));
+>[0]["transact"] = async (run) =>
+  await db.transaction(async (tx) => await run(tx));
 
 const resultsPath = (): string => path.join(resultsDir, "results.jsonl");
 
 const planLabels = async (input: readonly unknown[]) =>
-  await planReviewedCitationLabels(reviewedTransact, input);
+  await planReviewedCitationLabels({ transact: reviewedTransact, input });
 
 const applyLabels = async (input: readonly unknown[]) => {
   const applied = await applyReviewedCitationLabels({
@@ -1081,5 +1085,93 @@ describe("reviewed citation labels", () => {
       polarity: POLARITY.NEUTRAL,
       polarityRuleId: null,
     });
+  });
+});
+
+describe("independent doctrinal reviews", () => {
+  test("both axes commit, replay and survive refresh independently", async () => {
+    const cited = "sp. zn. 29 Cdo 9821/2015";
+    const options = {
+      caseNumber: "30 Cdo 9821/2026",
+      cited,
+      rawHash: "doctrine-before",
+    };
+    const labelled = await ingestRuleLabelled(options);
+    const doctrine = {
+      kind: "doctrine",
+      citationId: labelled.id,
+      doctrinalTreatment: "distinguishes",
+      evidenceQuote: "does not apply",
+      passage: "The earlier ruling does not apply to these facts.",
+      reviewRef: "doctrine-independent",
+      origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
+    };
+    const entries = [labelFor(labelled, POLARITY.POSITIVE), doctrine];
+    const apply = async (input: readonly unknown[]) => {
+      const outcome = await applyReviewedCitationLabels({
+        transact: reviewedTransact,
+        input,
+        resultsPath: resultsPath(),
+        domain: DOCTRINE_LABEL_DOMAIN,
+      });
+      if (outcome.isErr()) {
+        throw outcome.error;
+      }
+      return outcome.value;
+    };
+    expect(await apply(entries)).toMatchObject({
+      summary: { applied: 2, invalid: 0 },
+      relabelled: 2,
+    });
+    expect(await apply(entries)).toMatchObject({
+      summary: { unchanged: 2 },
+      relabelled: 0,
+    });
+    const review = await db
+      .select()
+      .from(caseLawCitationDoctrineReviews)
+      .where(
+        eq(
+          caseLawCitationDoctrineReviews.citingDecisionId,
+          labelled.citingDecisionId,
+        ),
+      );
+    expect(review).toHaveLength(1);
+    expect(review.at(0)).toMatchObject({
+      doctrinalTreatment: "distinguishes",
+      evidenceQuote: doctrine.evidenceQuote,
+    });
+    const header = await tupleHeader(labelled.id);
+    await ingest({ ...options, rawHash: "doctrine-after" });
+    const [refreshed] = await db
+      .select()
+      .from(caseLawCitations)
+      .where(eq(caseLawCitations.id, labelled.id));
+    expect(refreshed).toMatchObject({
+      polarity: POLARITY.POSITIVE,
+      doctrinalTreatment: "distinguishes",
+    });
+    expect(await tupleHeader(labelled.id)).toEqual(header);
+    const lowerOrigin = {
+      ...doctrine,
+      ...provenanceFor(CITATION_REVIEW_ORIGIN.AI_ADJUDICATED, "doctrine-lower"),
+      evidenceSha256: sha256Hex(doctrine.passage),
+      doctrinalTreatment: "limits",
+    };
+    expect(await apply([lowerOrigin])).toMatchObject({
+      summary: { "refused-precedence": 1 },
+      relabelled: 0,
+    });
+    expect(
+      await db
+        .select()
+        .from(caseLawCitationDoctrineReviews)
+        .where(
+          eq(
+            caseLawCitationDoctrineReviews.citingDecisionId,
+            labelled.citingDecisionId,
+          ),
+        ),
+    ).toEqual(review);
   });
 });

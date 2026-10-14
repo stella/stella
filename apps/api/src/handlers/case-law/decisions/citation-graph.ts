@@ -15,6 +15,7 @@ import { Temporal } from "@stll/time";
 
 import {
   caseLawCitations,
+  caseLawCitationDoctrineReviews,
   caseLawDecisionCitationStats,
   caseLawDecisionCitationStatsState,
   caseLawDecisions,
@@ -33,6 +34,8 @@ import type {
   CitationTreatment,
 } from "@/api/lib/case-law/citation-vocabulary";
 import { decisionCourtAbbreviation } from "@/api/lib/case-law/court-presentation";
+import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
+import type { DoctrineTreatment } from "@/api/lib/case-law/doctrine";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -48,7 +51,10 @@ import {
   isUuidPaginationCursorPart,
   type Page,
 } from "@/api/lib/pagination";
-import { PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relations";
+import {
+  DOCTRINE_COLUMN_GRANTS_BY_RELATION,
+  PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
+} from "@/api/lib/public-law-relations";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
@@ -64,6 +70,37 @@ export const treatmentOf = (polarity: string | null): CitationTreatment => {
   }
   return polarity === POLARITY.UNKNOWN ? "unclassified" : polarity;
 };
+
+/** Expand release permits these columns; a following release grants them. */
+const canReadCitationDoctrine = async (tx: CaseLawPublicReadTransaction) => {
+  const predicates = Object.entries(DOCTRINE_COLUMN_GRANTS_BY_RELATION).flatMap(
+    ([relation, columns]) =>
+      Object.keys(columns).map(
+        (column) =>
+          sql`has_column_privilege(current_user, ${`public.${relation}`}, ${column}, 'SELECT')`,
+      ),
+  );
+  const rows = await tx
+    .select({ available: sql<boolean>`${sql.join(predicates, sql` AND `)}` })
+    .from(sql`(SELECT 1) AS citation_doctrine_permission_probe`);
+  return (
+    rows.at(0) ?? panic("Citation doctrine permission probe returned no result")
+  ).available;
+};
+
+const doctrineOf = (
+  doctrine: DoctrineTreatment | "unavailable" | null,
+): DoctrineTreatment | "unread" | null =>
+  doctrine === "unavailable" ? null : (doctrine ?? "unread");
+
+type DoctrineCounts = Record<DoctrineTreatment | "unread", number>;
+
+const emptyDoctrineCounts = (): DoctrineCounts => ({
+  distinguishes: 0,
+  limits: 0,
+  not_stated: 0,
+  unread: 0,
+});
 
 export const listDecisionCitationsQuerySchema = t.Object({
   direction: t.UnionEnum(CITATION_DIRECTIONS),
@@ -139,6 +176,8 @@ export type DecisionCitationRow = {
   citationText: string;
   sectionIndex: number | null;
   treatment: CitationTreatment;
+  doctrine: DoctrineTreatment | "unread" | null;
+  evidenceQuote: string | null;
   /**
    * Null only for an outgoing citation the corpus could not resolve to a
    * held decision; such a row is text and nothing more. An incoming citation
@@ -172,6 +211,8 @@ type ScannedRow = {
   citationText: string;
   sectionIndex: number | null;
   polarity: string | null;
+  doctrinalTreatment: DoctrineTreatment | "unavailable" | null;
+  evidenceQuote: string | null;
   visible: boolean;
   decision: RankedRelatedDecisionRow | null;
 };
@@ -203,6 +244,8 @@ const createScannedPage = ({
       citationText: row.citationText,
       sectionIndex: row.sectionIndex,
       treatment: treatmentOf(row.polarity),
+      doctrine: doctrineOf(row.doctrinalTreatment),
+      evidenceQuote: row.evidenceQuote,
       decision: row.decision === null ? null : toRelatedDecision(row.decision),
     });
   }
@@ -326,7 +369,9 @@ export const listDecisionCitationsHandler = async ({
   const pageSize = normalizeTenantPageLimit(
     Math.min(limit, LIMITS.caseLawDecisionCitationPageSize),
   );
+  const doctrineAvailable = await canReadCitationDoctrine(tx);
   const rows = await decisionCitationPageQuery({
+    doctrineAvailable,
     cursorId,
     decisionId,
     direction: query.direction,
@@ -338,10 +383,16 @@ export const listDecisionCitationsHandler = async ({
     rows.map((row) => (row.visible ? row.decision : null)),
   );
 
-  return createScannedPage({ rows, limit: pageSize, toRelatedDecision });
+  return {
+    ...createScannedPage({ rows, limit: pageSize, toRelatedDecision }),
+    doctrineAvailability: doctrineAvailable
+      ? ("available" as const)
+      : ("unavailable" as const),
+  };
 };
 
 type DecisionCitationPageQueryOptions = {
+  doctrineAvailable?: boolean;
   cursorId: SafeId<"caseLawCitation"> | undefined;
   decisionId: SafeId<"caseLawDecision">;
   direction: CitationDirection;
@@ -349,7 +400,8 @@ type DecisionCitationPageQueryOptions = {
   tx: CaseLawPublicReadTransaction;
 };
 
-export const decisionCitationPageQuery = ({
+export const decisionCitationPageQuery = async ({
+  doctrineAvailable: available,
   cursorId,
   decisionId,
   direction,
@@ -357,16 +409,44 @@ export const decisionCitationPageQuery = ({
   tx,
 }: DecisionCitationPageQueryOptions) => {
   const spec = DIRECTION_SPECS[direction];
+  const doctrineAvailable = available ?? (await canReadCitationDoctrine(tx));
 
-  const candidates = tx
+  let candidateQuery = tx
     .select({
       id: caseLawCitations.id,
       citationText: caseLawCitations.citationText,
       relatedId: spec.related,
       sectionIndex: caseLawCitations.sectionIndex,
       polarity: caseLawCitations.polarity,
+      doctrinalTreatment: doctrineAvailable
+        ? caseLawCitations.doctrinalTreatment
+        : sql<"unavailable">`'unavailable'`.as("doctrinal_treatment"),
+      evidenceQuote: doctrineAvailable
+        ? caseLawCitationDoctrineReviews.evidenceQuote
+        : sql<null>`NULL::text`.as("evidence_quote"),
     })
     .from(caseLawCitations)
+    .$dynamic();
+  if (doctrineAvailable) {
+    candidateQuery = candidateQuery.leftJoin(
+      caseLawCitationDoctrineReviews,
+      and(
+        eq(
+          caseLawCitationDoctrineReviews.citingDecisionId,
+          caseLawCitations.citingDecisionId,
+        ),
+        eq(
+          caseLawCitationDoctrineReviews.citationKey,
+          caseLawCitations.citationKey,
+        ),
+        eq(
+          caseLawCitationDoctrineReviews.doctrinalTreatment,
+          caseLawCitations.doctrinalTreatment,
+        ),
+      ),
+    );
+  }
+  const candidates = candidateQuery
     .where(
       and(
         sql`${spec.anchor} = ${decisionId}`,
@@ -383,6 +463,8 @@ export const decisionCitationPageQuery = ({
       citationText: candidates.citationText,
       sectionIndex: candidates.sectionIndex,
       polarity: candidates.polarity,
+      doctrinalTreatment: candidates.doctrinalTreatment,
+      evidenceQuote: candidates.evidenceQuote,
       visible: visibleFor({
         farEnd: "decision",
         keepsUnresolved: spec.keepsUnresolved,
@@ -459,6 +541,7 @@ type DecisionCitationSummaryQueryOptions = {
   currentYear: number;
   decisionId: SafeId<"caseLawDecision">;
   tx: CaseLawPublicReadTransaction;
+  doctrineAvailable?: boolean;
 };
 
 export const decisionCitationStatsStateQuery = ({
@@ -637,6 +720,7 @@ export type DecisionCitationSummary = Awaited<
  * non-precedent and hidden edges still occupy places in this window.
  */
 export const decisionCitationSummaryQuery = ({
+  doctrineAvailable = false,
   currentYear,
   decisionId,
   tx,
@@ -648,6 +732,9 @@ export const decisionCitationSummaryQuery = ({
         id: caseLawCitations.id,
         relatedId: spec.related,
         polarity: caseLawCitations.polarity,
+        doctrinalTreatment: doctrineAvailable
+          ? caseLawCitations.doctrinalTreatment
+          : sql<null>`NULL::text`.as("doctrinal_treatment"),
         kind: caseLawCitations.kind,
       })
       .from(caseLawCitations)
@@ -659,6 +746,7 @@ export const decisionCitationSummaryQuery = ({
       .select({
         relatedId: candidates.relatedId,
         polarity: candidates.polarity,
+        doctrinalTreatment: candidates.doctrinalTreatment,
         kind: candidates.kind,
         ordinal: sql<number>`row_number() OVER (ORDER BY ${candidates.id})`.as(
           "ordinal",
@@ -686,6 +774,7 @@ export const decisionCitationSummaryQuery = ({
       direction: sql<CitationDirection>`'incoming'`.as("direction"),
       year: citingYearInSpan.as("year"),
       polarity: incomingCandidates.polarity,
+      doctrinalTreatment: incomingCandidates.doctrinalTreatment,
       count:
         sql<number>`count(*) FILTER (WHERE ${incomingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(incomingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${incomingVisible})::int`.as(
           "count",
@@ -703,7 +792,11 @@ export const decisionCitationSummaryQuery = ({
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
     // By ordinal: the year expression binds its bounds as parameters, and
     // a second rendering would bind fresh ones the planner cannot match.
-    .groupBy(sql`2`, incomingCandidates.polarity);
+    .groupBy(
+      sql`2`,
+      incomingCandidates.polarity,
+      incomingCandidates.doctrinalTreatment,
+    );
 
   const outgoingCandidates = candidatesFor("outgoing");
   const outgoingVisible = visibleFor({
@@ -717,6 +810,7 @@ export const decisionCitationSummaryQuery = ({
       direction: sql<CitationDirection>`'outgoing'`.as("direction"),
       year: sql<number | null>`NULL::int`.as("year"),
       polarity: outgoingCandidates.polarity,
+      doctrinalTreatment: outgoingCandidates.doctrinalTreatment,
       count:
         sql<number>`count(*) FILTER (WHERE ${outgoingCandidates.ordinal} <= ${CITATION_SUMMARY_SCAN_LIMIT} AND ${eq(outgoingCandidates.kind, CITATION_KIND.PRECEDENT)} AND ${outgoingVisible})::int`.as(
           "count",
@@ -732,7 +826,10 @@ export const decisionCitationSummaryQuery = ({
       eq(relatedDecision.id, outgoingCandidates.relatedId),
     )
     .leftJoin(relatedSource, eq(relatedSource.id, relatedDecision.sourceId))
-    .groupBy(outgoingCandidates.polarity);
+    .groupBy(
+      outgoingCandidates.polarity,
+      outgoingCandidates.doctrinalTreatment,
+    );
 
   /**
    * The few decisions citing this one a reader should see first, one row per
@@ -792,7 +889,9 @@ export const decisionCitationSummaryQuery = ({
     // One row per (direction, year-or-null, stored polarity): the span and
     // the polarity check constraint already cap it, this states the cap.
     summary: unionAll(incoming, outgoing).limit(
-      (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
+      (CITATION_TIMELINE_MAX_YEARS + 2) *
+        (POLARITIES.length + 1) *
+        (DOCTRINAL_TREATMENTS.length + 1),
     ),
     topCiting,
     incomingWindowOverflow: tx
@@ -800,6 +899,35 @@ export const decisionCitationSummaryQuery = ({
       .from(incomingCandidates)
       .where(gt(incomingCandidates.ordinal, CITATION_SUMMARY_SCAN_LIMIT))
       .limit(1),
+  };
+};
+
+export const summarizeDecisionDoctrineHandler = async ({
+  subject: { id: decisionId, tx },
+}: SummarizeDecisionCitationsOptions) => {
+  if (!(await canReadCitationDoctrine(tx))) {
+    return { status: "unavailable" as const };
+  }
+  const rows = await decisionCitationSummaryQuery({
+    currentYear: 0,
+    decisionId,
+    tx,
+    doctrineAvailable: true,
+  }).summary;
+  const counts = {
+    incoming: emptyDoctrineCounts(),
+    outgoing: emptyDoctrineCounts(),
+  };
+  const capped = { incoming: false, outgoing: false };
+  for (const row of rows) {
+    counts[row.direction][row.doctrinalTreatment ?? "unread"] += row.count;
+    capped[row.direction] ||= row.capped;
+  }
+  return {
+    status: "available" as const,
+    counts,
+    capped,
+    candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
   };
 };
 

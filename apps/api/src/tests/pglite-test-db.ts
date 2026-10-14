@@ -343,7 +343,8 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_ingestion_events",
       "case_law_ingestion_failures",
       "case_law_index_jobs",
-      "case_law_citation_reviews"
+      "case_law_citation_reviews",
+      "case_law_citation_doctrine_reviews"
     TO stella_ingestion
   `,
   `

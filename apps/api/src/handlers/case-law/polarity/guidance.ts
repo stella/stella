@@ -24,7 +24,7 @@ export const POLARITY_GUIDANCE = {
   rejecting it, most often as part of the procedural record. Phrases like
   "proti rozsudku", "vedené u", "veden pod". This is also the answer when
   the excerpt does not settle the question.`,
-  negative: `The court distinguishes, overrules, departs from, or
-  criticizes the cited decision. Phrases like "na rozdíl od",
-  "překonán", "zrušen", "odlišuje se", "overruled", "distinguished".`,
+  negative: `The court overrules, departs from, or
+  criticizes the cited decision. Phrases like
+  "překonán", "zrušen", "overruled".`,
 } as const satisfies Record<ClassifiablePolarity, string>;

@@ -1695,6 +1695,7 @@ const CONTRACT_CORPUS = {
           unclassified: 0,
         };
         readGatedDecisionCitationDigestMock.mockResolvedValue({
+          doctrineSummary: { status: "unavailable" },
           summary: {
             incoming: { ...noCitations, positive: 1, unclassified: 49 },
             outgoing: { ...noCitations, neutral: 2 },
@@ -1714,6 +1715,7 @@ const CONTRACT_CORPUS = {
               citationText: "21 Cdo 500/2019",
               textWithheldReason: null,
               sectionIndex: 0,
+              doctrine: "unread",
               treatment: "neutral",
               decision: relatedDecision(56, "21 Cdo 500/2019"),
             },
@@ -1722,6 +1724,7 @@ const CONTRACT_CORPUS = {
               citationText: "sp. zn. 20 Cdo 1/2001",
               textWithheldReason: null,
               sectionIndex: 1,
+              doctrine: "unread",
               treatment: "neutral",
               decision: null,
             },
@@ -1742,12 +1745,14 @@ const CONTRACT_CORPUS = {
         readGatedDecisionCitationsMock.mockResolvedValue({
           type: "page",
           page: {
+            doctrineAvailability: "available",
             items: [
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
                 textWithheldReason: null,
                 sectionIndex: 1,
+                doctrine: "unread",
                 treatment: "positive",
                 decision: {
                   id: toSafeId<"caseLawDecision">(uid(58)),
@@ -2465,6 +2470,7 @@ describe("decision text in chat projection", () => {
       unclassified: 0,
     };
     readGatedDecisionCitationDigestMock.mockResolvedValue({
+      doctrineSummary: { status: "unavailable" },
       summary: {
         incoming: noCitations,
         outgoing: noCitations,

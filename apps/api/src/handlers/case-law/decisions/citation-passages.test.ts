@@ -103,6 +103,38 @@ describe("the excerpt a citation travels with", () => {
     expect(passage?.mention).toBe("latest_of_several");
   });
 
+  test("keeps the review quote verbatim beside the canonical citation excerpt", () => {
+    const evidenceQuote = "The earlier decision concerns different facts.";
+    const classified = "The court cites 21 Cdo 500/2019.";
+    const passage = citationPassageIn({
+      ast: astOf([
+        { anchorId: "p1", text: classified },
+        { anchorId: "p2", text: `21 Cdo 500/2019: ${evidenceQuote}` },
+      ]),
+      citationText: "21 Cdo 500/2019",
+      sectionText: classified,
+      evidenceQuote,
+    });
+    expect(passage).toEqual({
+      anchorId: "p1",
+      text: classified,
+      mention: "classified_section",
+      truncated: false,
+      evidenceQuote,
+      evidenceAnchorId: "p2",
+    });
+  });
+
+  test("does not publish a quote absent from a citation paragraph", () => {
+    const passage = citationPassageIn({
+      ast: astOf([{ anchorId: "p1", text: "21 Cdo 500/2019 is cited." }]),
+      citationText: "21 Cdo 500/2019",
+      sectionText: undefined,
+      evidenceQuote: "Different facts.",
+    });
+    expect(passage).not.toHaveProperty("evidenceQuote");
+  });
+
   test("is absent when no paragraph carries the citation", () => {
     expect(
       citationPassageIn({

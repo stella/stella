@@ -68,10 +68,7 @@ import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/work
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import {
-  CITATION_READ_DIRECTIONS,
-  CITATION_TREATMENTS,
-} from "@/api/lib/case-law/citation-vocabulary";
+import { CITATION_READ_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import {
@@ -1184,19 +1181,10 @@ export const STELLA_TOOL_DEFINITIONS = [
     // polarity vocabulary and the two readings a model would otherwise guess
     // at, the passage's bounds, and the next call spelled out.
     description:
-      "Read how citing decisions stood to one, or what it cited. One page, " +
-      "each citation with a polarity and an excerpt of its paragraph. " +
-      "`cited_by` returns the decisions that cite this one, `cites` the ones " +
-      "it cites; neither means agreement. " +
-      `\`polarity\` is one of ${CITATION_TREATMENTS.join(", ")}: a stance, ` +
-      "not a doctrinal act, so it never says followed, distinguished or " +
-      "overruled. 'unclassified' means none was read, 'mixed' that mentions " +
-      "disagreed. `passage.text` is at most " +
-      `${LIMITS.caseLawCitationPassageChars} characters centred on the citation, cut when ` +
-      "`passage.truncated`; `passage.mention` is 'sole', " +
-      "'classified_section' (the mention the polarity came from), or " +
-      "'latest_of_several' (it may not be). Pass nextCursor back as cursor. " +
-      "Use `url` for the reader and `source_url` for the publisher.",
+      "Read one page of citations and citing passages. `cited_by` reads decisions citing this one; `cites` reads what it cites. " +
+      "Polarity is a stance; doctrine is distinguishes or limits only where a reviewed reading found the court doing so in its own words; not_stated is not a finding that it was followed; unread means none was read. Null doctrine means doctrineAvailability is unavailable. " +
+      "`passage.evidenceQuote` gives verbatim evidence when text is available. 'unclassified' polarity means none was read; 'mixed' means mentions disagreed. " +
+      `Passage text is at most ${LIMITS.caseLawCitationPassageChars} characters; truncated marks a cut. Mention: sole, classified_section or latest_of_several (polarity may belong elsewhere). Pass nextCursor as cursor. Use url for the reader and source_url for the publisher.`,
     inputSchema: readCaseLawCitationsArgsSchema,
     access: "read",
     readClass: "public",
@@ -3310,6 +3298,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
 
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_CITATIONS_PROJECTION, {
+      doctrineAvailability: read.page.doctrineAvailability,
       decisionId,
       direction,
       nextCursor: read.page.nextCursor,
@@ -3318,6 +3307,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
         citationText: item.citationText,
         textWithheldReason: item.textWithheldReason,
         polarity: item.treatment,
+        doctrine: item.doctrine,
         decision:
           item.decision === null
             ? null
