@@ -287,6 +287,7 @@ import {
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
+import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
@@ -3020,11 +3021,15 @@ const resolveValidateAuth = async ({
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
     accessibleWorkspacesPromise ??= scopedDb(
       async (tx) =>
-        await tx
-          .select({ id: workspaces.id, status: workspaces.status })
-          .from(workspaces)
-          .where(eq(workspaces.organizationId, activeOrganizationId)),
-    ).then((items) => {
+        await readAuthorizedWorkspaces(tx, {
+          organizationId: activeOrganizationId,
+        }),
+    ).then((outcome) => {
+      if (outcome.isErr()) {
+        const { error } = outcome;
+        throw error;
+      }
+      const items = outcome.value.workspaces;
       for (const workspace of items) {
         validatedWorkspaceIdSet.add(workspace.id);
       }
