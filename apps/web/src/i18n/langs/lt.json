@@ -4529,6 +4529,8 @@
   },
   "search": {
     "aiRefine": "Patobulinti užklausą su DI",
+    "caseLawMatchingDecisions": "{count, plural, one {# atitinkantis sprendimas} few {# atitinkantys sprendimai} many {# atitinkančio sprendimo} other {# atitinkančių sprendimų}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ atitinkantis sprendimas} few {#+ atitinkantys sprendimai} many {#+ atitinkančio sprendimo} other {#+ atitinkančių sprendimų}}",
     "continueInChat": "Tęsti pokalbyje",
     "dateFrom": "Nuo",
     "dateTo": "Iki",

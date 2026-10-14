@@ -4529,6 +4529,8 @@
   },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
+    "caseLawMatchingDecisions": "{count, plural, one {# passende Entscheidung} other {# passende Entscheidungen}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ passende Entscheidung} other {#+ passende Entscheidungen}}",
     "continueInChat": "Im Chat fortsetzen",
     "dateFrom": "Von",
     "dateTo": "Bis",
