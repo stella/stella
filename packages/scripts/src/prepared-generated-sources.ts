@@ -46,10 +46,30 @@ export const generatedInputIdentity = (root: string) => {
       ),
     ),
   );
+  return {
+    sourceSha: git(root, ["rev-parse", "HEAD"]).trim(),
+    inputHash: trackedInputHash(root, {
+      excluded: generated,
+      context: { bun: Bun.version, compiler: compiler.version },
+    }),
+    bunVersion: Bun.version,
+    compilerVersion: compiler.version,
+  };
+};
+
+type TrackedInputHashOptions = {
+  excluded: ReadonlySet<string>;
+  context: unknown;
+};
+
+export const trackedInputHash = (
+  root: string,
+  { excluded, context }: TrackedInputHashOptions,
+) => {
   const hash = createSha256();
-  hash.update(JSON.stringify({ bun: Bun.version, compiler: compiler.version }));
-  // The full tracked input tree is conservative: generated outputs never hash
-  // themselves, and a new generator input is covered without another glob.
+  hash.update(JSON.stringify(context));
+  // A full tracked inventory covers new workspace inputs without another glob.
+  // Producers exclude only the canonical outputs that they regenerate.
   for (const entry of git(root, ["ls-files", "--stage", "-z"]).split("\0")) {
     if (entry === "") {
       continue;
@@ -59,7 +79,7 @@ export const generatedInputIdentity = (root: string) => {
       panic("Generated source input inventory has no path");
     }
     const file = entry.slice(separator + 1);
-    if (generated.has(file)) {
+    if (excluded.has(file)) {
       continue;
     }
     const absolute = path.join(root, file);
@@ -75,12 +95,30 @@ export const generatedInputIdentity = (root: string) => {
       JSON.stringify([entry.slice(0, 6), file, generatedFileHash(bytes)]),
     );
   }
-  return {
-    sourceSha: git(root, ["rev-parse", "HEAD"]).trim(),
-    inputHash: hash.digest("hex"),
-    bunVersion: Bun.version,
-    compilerVersion: compiler.version,
-  };
+  return hash.digest("hex");
+};
+
+const resultManifestSchema = v.strictObject({
+  inputHash: hashSchema,
+  runId: v.pipe(v.string(), v.regex(/^[1-9][0-9]*$/u)),
+  event: v.literal("merge_group"),
+  conclusion: v.literal("success"),
+});
+
+// Result receipts use the same content-addressed artifact manifests as prepared
+// sources, but have no generated outputs to restore.
+export const reusableResultRun = (
+  raw: unknown,
+  inputHash: string,
+  event: string,
+) => {
+  if (event === "merge_group") {
+    return undefined;
+  }
+  const parsed = v.safeParse(resultManifestSchema, raw);
+  return parsed.success && parsed.output.inputHash === inputHash
+    ? parsed.output.runId
+    : undefined;
 };
 
 export const requireUnchangedGeneratedInputs = (

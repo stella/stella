@@ -388,6 +388,22 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .map(noLlmsTxt)
   .concat(
     {
+      checkedAt: "2026-10-13T00:00:00.000Z",
+      dependency: "@myriaddreamin/typst-ts-renderer",
+      explanation:
+        "https://myriad-dreamin.github.io/typst.ts/llms.txt and https://typst.app/llms.txt return 404. Use the typst.ts guide at https://myriad-dreamin.github.io/typst.ts/cookery/ and the Typst reference at https://typst.app/docs/ directly.",
+      expiresAt: "2026-11-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-13T00:00:00.000Z",
+      dependency: "@myriaddreamin/typst-ts-web-compiler",
+      explanation:
+        "https://myriad-dreamin.github.io/typst.ts/llms.txt and https://typst.app/llms.txt return 404. Use the typst.ts guide at https://myriad-dreamin.github.io/typst.ts/cookery/ and the Typst reference at https://typst.app/docs/ directly.",
+      expiresAt: "2026-11-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-10-11T00:00:00.000Z",
       dependency: "shell-quote",
       explanation:

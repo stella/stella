@@ -1078,13 +1078,6 @@
     "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
   },
   {
-    "file": "apps/api/src/lib/billing/rates.ts",
-    "function": "module/resolveRatesInTransaction",
-    "kind": "constant-limit",
-    "count": 1,
-    "reason": "Existing fixed read budget; migrate unbounded decisions and exports to readBounded or document the pagination/table-cap contract."
-  },
-  {
     "file": "apps/api/src/lib/billing/time-entry-running.ts",
     "function": "module/guardRunningTimeEntries",
     "kind": "constant-limit",

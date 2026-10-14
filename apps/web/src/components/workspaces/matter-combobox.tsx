@@ -17,12 +17,12 @@ import {
   useComboboxFilter,
 } from "@stll/ui/combobox";
 import { SearchIcon } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 
 import {
   chatActivityByWorkspace,
   selectPinnedThenRecentWorkspaces,
 } from "@/components/app-sidebar.logic";
-import { MatterIcon } from "@/components/matter-icon";
 import { MatterOptionLabel } from "@/components/matter-option-label";
 import {
   groupMatterOptions,

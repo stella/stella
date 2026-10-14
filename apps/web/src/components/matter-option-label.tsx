@@ -1,6 +1,5 @@
 import { BidiText } from "@stll/ui/bidi-text";
-
-import { MatterIcon } from "@/components/matter-icon";
+import { MatterIcon } from "@stll/ui/matter-icon";
 
 export type MatterOptionLabelMatter = {
   clientName?: string | null | undefined;
