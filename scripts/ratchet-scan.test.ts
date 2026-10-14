@@ -11,6 +11,8 @@ import {
   type RatchetMetric,
   scanTree,
   selectMetricFiles,
+  UNFORCED_ROW_SECURITY_BASELINE,
+  unforcedRowSecurityTables,
 } from "./ratchet";
 
 const ROOT = path.resolve(import.meta.dir, "..");
@@ -355,4 +357,50 @@ test("outbound transport identities only shrink within each owner", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("tables can only leave the unforced row-security baseline", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "ratchet-unforced-rls-"));
+  const metrics = RATCHET_METRICS.filter(
+    ({ id }) => id === "unforced-row-security-tables",
+  );
+  try {
+    const file = path.join(root, UNFORCED_ROW_SECURITY_BASELINE);
+    mkdirSync(path.dirname(file), { recursive: true });
+    const measure = (tables: string[]) => {
+      writeFileSync(
+        file,
+        `export const TABLE_POLICY_SETTINGS_BASELINE: readonly string[] = [\n${tables
+          .map((table) => `  "${table}",`)
+          .join("\n")}\n];\n`,
+      );
+      return scanTree({ tree: openSourceTree(root), metrics }).snapshot;
+    };
+    const baseline = measure(["contacts", "search_documents"]);
+    const allowed = (tables: string[]) =>
+      assessMeasurements({ current: measure(tables), baseline, metrics })
+        .allowed;
+    expect(allowed(["contacts", "search_documents"])).toBe(true);
+    expect(allowed(["contacts"])).toBe(true);
+    expect(allowed(["contacts", "search_documents", "new_tenant_table"])).toBe(
+      false,
+    );
+    // A swap keeps the count but still adds a table.
+    expect(allowed(["contacts", "new_tenant_table"])).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the unforced baseline accepts only one table literal per entry", () => {
+  expect(
+    unforcedRowSecurityTables(
+      'export const TABLE_POLICY_SETTINGS_BASELINE = [\n  "a_table",\n  "b",\n];\n',
+    ),
+  ).toEqual(["a_table", "b"]);
+  expect(() =>
+    unforcedRowSecurityTables(
+      "export const TABLE_POLICY_SETTINGS_BASELINE = [\n  ...others,\n];\n",
+    ),
+  ).toThrow("entry is not a table literal");
 });

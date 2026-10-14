@@ -1648,6 +1648,36 @@ const countSliceOwnedWebComponents: RepoCounter = (context) => {
 
 // --- Metric table -----------------------------------------------------------
 
+export const UNFORCED_ROW_SECURITY_BASELINE =
+  "apps/api/src/tests/security/table-policy-settings-baseline.ts";
+
+// Table names in the not-forced catalog baseline. The list must stay one
+// string literal per entry; anything else in the array panics, so a computed
+// entry cannot slip past the shrink-only check.
+export const unforcedRowSecurityTables = (content: string): string[] => {
+  const start = content.indexOf("TABLE_POLICY_SETTINGS_BASELINE");
+  const open = content.indexOf("[", start);
+  const close = content.indexOf("];", open);
+  if (start === -1 || open === -1 || close === -1) {
+    return panic("Unforced row-security baseline must be one array literal");
+  }
+  const tables: string[] = [];
+  for (const line of content.slice(open + 1, close).split("\n")) {
+    const entry = line.trim();
+    if (entry === "") {
+      continue;
+    }
+    const match = /^"([a-z0-9_]+)",$/u.exec(entry);
+    if (match?.[1] === undefined) {
+      return panic(
+        `Unforced row-security baseline entry is not a table literal: ${entry}`,
+      );
+    }
+    tables.push(match[1]);
+  }
+  return tables;
+};
+
 // A capability whose input schema exceeded the exporter's byte cap
 // (`MAX_CAPABILITY_SCHEMA_BYTES` in apps/api/scripts/lib/capability-catalog.ts).
 // A capability whose schema was dropped for size degraded to an opaque
@@ -3011,6 +3041,23 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       return {
         count: keys.length,
         files: Object.fromEntries(keys.map((key) => [key, 1])),
+      };
+    },
+  },
+  {
+    scope: "repo",
+    id: "unforced-row-security-tables",
+    description:
+      "Tables with row-level security enabled but not forced (apps/api/src/tests/security/table-policy-settings-baseline.ts); their owner is not held to their policies, so a table can only leave this list, never join it",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const tables = unforcedRowSecurityTables(
+        readSource(context, UNFORCED_ROW_SECURITY_BASELINE),
+      );
+      return {
+        count: tables.length,
+        files: Object.fromEntries(tables.map((table) => [`table:${table}`, 1])),
       };
     },
   },
