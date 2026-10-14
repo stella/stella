@@ -2394,7 +2394,7 @@ jobs:
         # so a broken guard cannot pass silently.
         run: |
           bun scripts/typecheck-baseline.ts --self-test
-          bun test scripts/typecheck-baseline.test.ts
+          bun test scripts/typecheck-baseline.test.ts scripts/pre-push-policy.test.ts
           bun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"
 
       - name: Cancel merge group after failure in this job
