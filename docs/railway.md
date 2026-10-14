@@ -382,16 +382,24 @@ be demoted in place. Back up the database and stop the API during this cutover.
    Keep `POSTGRES_USER=postgres` until the command below finishes, and redeploy
    Postgres. Its entrypoint leaves an existing cluster intact.
 2. Run the bundled initialization script once against the application database.
-   It creates a demoted login, retains the password, transfers application
-   ownership, and configures the `stella` role. The final command names the
-   application login `stella_owner`:
+   It creates a demoted login, transfers application ownership, and configures
+   the `stella` role. Before running it, confirm the Postgres service secret
+   `POSTGRES_PASSWORD` contains the password from the API's existing
+   `DATABASE_URL` (decoded if URL-encoded). If they differ, update that secret
+   to the existing login password without printing it or putting it in a
+   command argument. The cutover names the login `stella_owner` and immediately
+   resets its password with `password_encryption = 'scram-sha-256'`, using the
+   secret through the process environment with statement logging disabled.
+   This keeps the same password even when the stored verifier is MD5: renaming
+   a role clears an MD5 verifier because it includes the role name. Any other
+   renamed login needs the same SCRAM password reset.
 
    ```sh
    railway ssh --service Postgres -- sh -ec '
-     psql -h /var/run/postgresql -U postgres -d "$POSTGRES_DB" \
+     test -n "$POSTGRES_PASSWORD"
+     psql -X -h /var/run/postgresql -U postgres -d "$POSTGRES_DB" \
        -v ON_ERROR_STOP=1 -v owner=postgres \
-       -f /docker-entrypoint-initdb.d/init.sql \
-       -c "ALTER ROLE postgres RENAME TO stella_owner"
+       -f /usr/local/share/stella/upgrade-owner.sql
    '
    ```
 

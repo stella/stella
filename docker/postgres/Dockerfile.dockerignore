@@ -5,5 +5,6 @@ docker/*
 docker/postgres/*
 !docker/postgres/Dockerfile
 !docker/postgres/init.sql
+!docker/postgres/upgrade-owner.sql
 !docker/postgres/prod-parity.conf
 !docker/postgres/server.conf

@@ -125,6 +125,24 @@ api_env=(
   --env SMTP_HOST=127.0.0.1 --env SMTP_PORT=1025
   --env TRANSACTIONAL_EMAIL_FROM=noreply@example.invalid --env USE_MOCK_AI=false
 )
+# Force host password authentication ahead of initdb's loopback trust entries.
+docker exec -i "$postgres" sh -se <<'SH'
+hba="$PGDATA/pg_hba.conf"
+{ printf 'host all all 0.0.0.0/0 md5\nhost all all ::/0 md5\n'; cat "$hba"; } > "$hba.password-smoke"
+mv "$hba.password-smoke" "$hba"
+SH
+psql_smoke <<'SQL'
+SELECT pg_reload_conf();
+SET password_encryption = 'md5';
+ALTER ROLE postgres PASSWORD 'smoke-only';
+SQL
+[[ "$(psql_smoke -tAc "SELECT starts_with(rolpassword, 'md5') FROM pg_authid WHERE rolname = current_user")" == t ]]
+# A wrong password must fail; otherwise a trust entry would make the regression vacuous.
+if docker exec --env PGPASSWORD=wrong-smoke-password "$postgres" \
+  psql -X -h 127.0.0.1 -U postgres -d stella -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null 2>&1; then
+  echo 'FAIL: database host connection did not require a password' >&2
+  exit 1
+fi
 # Apply the deployed migration bundle to the stock database before the owner cutover.
 migrate
 privileged_exit=0
@@ -140,10 +158,18 @@ fi
 echo 'PASS: privileged database login refuses API startup'
 # The Railway guide uses this bundled SQL on an existing database, then switches its URL.
 docker cp "$repo/docker/postgres/init.sql" "$postgres:/docker-entrypoint-initdb.d/init.sql"
-docker exec "$postgres" psql -h /var/run/postgresql -U postgres -d stella \
-  -v ON_ERROR_STOP=1 -v owner=postgres -f /docker-entrypoint-initdb.d/init.sql \
-  -c 'ALTER ROLE postgres RENAME TO stella_owner'
+docker exec "$postgres" mkdir -p /usr/local/share/stella
+docker cp "$repo/docker/postgres/upgrade-owner.sql" "$postgres:/usr/local/share/stella/upgrade-owner.sql"
+docker exec "$postgres" psql -X -h /var/run/postgresql -U postgres -d stella \
+  -v ON_ERROR_STOP=1 -v owner=postgres -f /usr/local/share/stella/upgrade-owner.sql
 database_owner=stella_owner
+[[ "$(docker exec --env PGPASSWORD=smoke-only "$postgres" \
+  psql -X -h 127.0.0.1 -U "$database_owner" -d stella -v ON_ERROR_STOP=1 \
+  -tAc 'SELECT current_user')" == "$database_owner" ]]
+[[ "$(docker exec --user postgres "$postgres" \
+  psql -X -U stella_maintenance -d stella -v ON_ERROR_STOP=1 -qtAc \
+  "SET ROLE stella_bootstrap; SELECT starts_with(rolpassword, 'SCRAM-SHA-256$') FROM pg_authid WHERE rolname = 'stella_owner'")" == t ]]
+echo 'PASS: MD5 owner cutover retains password-authenticated access'
 [[ "$(psql_smoke -tAc 'SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')" == 'f|f' ]]
 [[ "$(psql_smoke -tAc "SELECT pg_has_role(current_user, 'stella_public_sanctions_reader', 'SET')")" == t ]]
 migrate
