@@ -403,6 +403,17 @@ const createRecordedServer = (recording: RecordedConversation) => {
         });
       }
     }
+    // The app shell has read the organization's settings before a thread
+    // opens; a finished answer reads its practice jurisdictions from them
+    // to link its legal citations. None are set here, and the English UI
+    // names no jurisdiction, so no answer asks for links.
+    if (
+      url.origin === API_ORIGIN &&
+      method === "GET" &&
+      url.pathname === "/v1/organization-settings"
+    ) {
+      return Response.json({ practiceJurisdictions: [] });
+    }
     unexpected.push(`${method} ${url.pathname}`);
     return Response.json({ message: "Not recorded" }, { status: 404 });
   };

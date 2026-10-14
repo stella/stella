@@ -7,6 +7,7 @@ import { cjk } from "@streamdown/cjk";
 import { math } from "@streamdown/math";
 import { mermaid } from "@streamdown/mermaid";
 import { defaultRehypePlugins, Streamdown } from "streamdown";
+import type { PluggableList } from "unified";
 
 import { cn } from "@stll/ui/utils";
 
@@ -15,6 +16,12 @@ import { rehypeMarkdownSourceOffsets } from "@/components/chat/rehype-markdown-s
 
 export type MessageResponseProps = ComponentProps<typeof Streamdown> & {
   sourceOffsets?: boolean;
+  /**
+   * Plugins that run last, after source offsets are stamped. They may wrap
+   * text in elements but never change it, so a selection still maps to the
+   * source.
+   */
+  trailingRehypePlugins?: PluggableList | undefined;
 };
 
 const streamdownPlugins = { cjk, math, mermaid };
@@ -33,18 +40,19 @@ export const MessageResponseImpl = memo(
     components,
     rehypePlugins,
     sourceOffsets = false,
+    trailingRehypePlugins,
     ...props
   }: MessageResponseProps) => {
-    const effectiveRehypePlugins = useMemo(
-      () =>
-        sourceOffsets
-          ? [
-              ...(rehypePlugins ?? Object.values(defaultRehypePlugins)),
-              rehypeMarkdownSourceOffsets,
-            ]
-          : rehypePlugins,
-      [rehypePlugins, sourceOffsets],
-    );
+    const effectiveRehypePlugins = useMemo(() => {
+      const trailing = trailingRehypePlugins ?? [];
+      return sourceOffsets || trailing.length > 0
+        ? [
+            ...(rehypePlugins ?? Object.values(defaultRehypePlugins)),
+            ...(sourceOffsets ? [rehypeMarkdownSourceOffsets] : []),
+            ...trailing,
+          ]
+        : rehypePlugins;
+    }, [rehypePlugins, sourceOffsets, trailingRehypePlugins]);
     return (
       // Streamdown's internal memo doesn't compare `rehypePlugins`, so
       // a re-render with a new plugin set is silently skipped and the
@@ -99,6 +107,7 @@ export const MessageResponseImpl = memo(
   (prev, next) =>
     prev.children === next.children &&
     prev.rehypePlugins === next.rehypePlugins &&
+    prev.trailingRehypePlugins === next.trailingRehypePlugins &&
     prev.components === next.components &&
     prev.allowedTags === next.allowedTags &&
     prev.sourceOffsets === next.sourceOffsets &&

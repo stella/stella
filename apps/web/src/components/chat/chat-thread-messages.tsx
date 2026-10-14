@@ -48,6 +48,7 @@ import { useChatApproval } from "@/components/chat/chat-approval-context";
 import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
 import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
+import { useChatLegalCitationLinks } from "@/components/chat/chat-legal-citation-links";
 import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
   ChatRichMessagePart,
@@ -99,6 +100,8 @@ import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
+import { rehypeLegalCitationLinks } from "@/components/chat/rehype-legal-citation-links";
+import type { LegalCitationLinkPair } from "@/components/chat/rehype-legal-citation-links";
 import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
@@ -1811,6 +1814,10 @@ const AssistantMessageParts = ({
   const hasAnswerContent = hasAssistantAnswerContent(message.parts);
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
+  const citationLinks = useChatLegalCitationLinks({
+    finished: !isTurnActive,
+    message,
+  });
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
   // Start open while this message is actively streaming its reasoning (no
   // answer text yet), but always render the same disclosure so the user can
@@ -1862,6 +1869,7 @@ const AssistantMessageParts = ({
             assistantTextDensity === "compact" &&
               "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
           )}
+          citationLinks={citationLinks}
           components={streamdownComponents}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
@@ -2258,7 +2266,10 @@ const AssistantThinkingBody = ({
   </div>
 );
 
+const NO_CITATION_LINKS: readonly LegalCitationLinkPair[] = [];
+
 const AssistantTextPart = ({
+  citationLinks = NO_CITATION_LINKS,
   className,
   components,
   restorationPairs,
@@ -2266,6 +2277,8 @@ const AssistantTextPart = ({
   sourceOffsets = false,
   text,
 }: {
+  /** Statute and decision citations the server resolved for the answer. */
+  citationLinks?: readonly LegalCitationLinkPair[];
   className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
   restorationPairs: readonly ChatAnonRestoration[];
@@ -2283,6 +2296,15 @@ const AssistantTextPart = ({
         : undefined,
     [restorationPairs],
   );
+  // After source offsets are stamped, so a citation link never costs the
+  // paragraph its selection mapping.
+  const trailingRehypePlugins = useMemo<PluggableList | undefined>(
+    () =>
+      citationLinks.length > 0
+        ? [[rehypeLegalCitationLinks, citationLinks]]
+        : undefined,
+    [citationLinks],
+  );
   const classNamePatch =
     className === undefined ? {} : { className: cn(className) };
   if (rehypePlugins === undefined) {
@@ -2291,6 +2313,7 @@ const AssistantTextPart = ({
         components={components}
         data-text-part-index={partIndex}
         sourceOffsets={sourceOffsets}
+        trailingRehypePlugins={trailingRehypePlugins}
         fallbackChildren={assistantMessageFallbackText(text)}
         {...classNamePatch}
       >
@@ -2303,6 +2326,7 @@ const AssistantTextPart = ({
       components={components}
       data-text-part-index={partIndex}
       sourceOffsets={sourceOffsets}
+      trailingRehypePlugins={trailingRehypePlugins}
       fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}
       {...classNamePatch}
