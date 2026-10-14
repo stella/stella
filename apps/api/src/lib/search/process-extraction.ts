@@ -92,6 +92,20 @@ export const requiresDurableNativeExtraction = (
   if (fileField.encrypted) {
     return false;
   }
+
+  // A parser reads the original bytes (`pickExtractionSource`). The PDF
+  // preview is a wait only when that rendering is the sole text layer
+  // (images, and other formats with no parser). Holding a .txt file for
+  // the preview keeps its body out of search, and a failed conversion
+  // never comes back to extract it.
+  const extractionMimeType = resolveExtractionMimeType({
+    fileName: fileField.fileName,
+    mimeType: fileField.mimeType,
+  });
+  if (canExtractMimeType(extractionMimeType)) {
+    return true;
+  }
+
   if (
     fileField.pdfFileId === null &&
     shouldGeneratePdfDerivative({
