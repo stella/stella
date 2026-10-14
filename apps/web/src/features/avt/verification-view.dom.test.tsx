@@ -534,3 +534,40 @@ test("a rejected review restores the claim and attention queue and surfaces the 
       .hasAttribute("disabled"),
   ).toBe(false);
 });
+
+test("a DOCX verification offers its original beside the reading view; a PDF one does not", async () => {
+  await mount();
+  const views = messages.avt.verification.documentView;
+  expect(
+    screen
+      .getByRole("tablist", { name: views.label })
+      .textContent?.includes(views.original),
+  ).toBe(true);
+  expect(
+    screen
+      .getByRole("tab", { name: views.reading })
+      .getAttribute("aria-selected"),
+  ).toBe("true");
+  cleanup();
+
+  const docx = seededRun();
+  await mount({
+    ...docx,
+    claims: docx.claims.map((claim) => ({
+      ...claim,
+      anchor: {
+        type: "pdf-page" as const,
+        pageNumber: claim.position,
+        start: claim.anchor.start,
+        end: claim.anchor.end,
+      },
+    })),
+    blocks: docx.blocks.map((block) => ({
+      ...block,
+      kind: "pdf-page" as const,
+      pageNumber: block.ordinal,
+    })),
+  });
+  expect(screen.queryByRole("tablist", { name: views.label })).toBeNull();
+  expect(claimButton(1).getAttribute("aria-pressed")).toBe("true");
+});

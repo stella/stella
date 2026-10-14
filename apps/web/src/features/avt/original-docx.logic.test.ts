@@ -11,7 +11,6 @@ import {
 import {
   claimAtPoint,
   claimHighlightName,
-  claimMark,
   locateClaimsInDocument,
   paintedSegments,
 } from "@/features/avt/original-docx.logic";
@@ -178,23 +177,6 @@ describe("claimAtPoint", () => {
 
   test("is null off every mark", () => {
     expect(claimAtPoint(boxes, { x: 10, y: 40 })).toBeNull();
-  });
-});
-
-describe("claimMark", () => {
-  test("selection wins, a filtered-out claim is not drawn", () => {
-    expect(claimMark({ selected: true, dim: true, highlight: false })).toBe(
-      "active",
-    );
-    expect(claimMark({ selected: false, dim: true, highlight: false })).toBe(
-      null,
-    );
-    expect(claimMark({ selected: false, dim: false, highlight: true })).toBe(
-      "matched",
-    );
-    expect(claimMark({ selected: false, dim: false, highlight: false })).toBe(
-      "rest",
-    );
   });
 });
 

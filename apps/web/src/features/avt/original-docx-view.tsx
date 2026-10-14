@@ -42,8 +42,6 @@ import type {
 } from "@/features/avt/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
-import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 
 /** Each mark's highlight priority: the selected claim paints over the rest. */
 const MARK_PRIORITY = {
@@ -314,22 +312,6 @@ export const OriginalDocxView = ({
         </div>
       )}
     </div>
-  );
-};
-
-/** Bring the original to a claim's block; the viewer retries while the
- *  document is still loading. */
-export const scrollOriginalToClaim = (
-  run: VerificationRun,
-  claim: VerificationClaim,
-): void => {
-  if (claim.anchor.type !== "docx-block") {
-    return;
-  }
-  window.dispatchEvent(
-    new CustomEvent<FolioScrollEventDetail>(FOLIO_SCROLL_EVENT, {
-      detail: { blockId: claim.anchor.blockId, fieldId: run.fileFieldId },
-    }),
   );
 };
 

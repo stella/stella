@@ -20,18 +20,14 @@ import {
   FlagIcon,
 } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { Skeleton } from "@stll/ui/skeleton";
 import { Tabs, TabsList, TabsTab } from "@stll/ui/tabs";
 import { textMarkClass } from "@stll/ui/text-mark";
 import type { TextMarkState } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
-import {
-  OriginalDocxView,
-  scrollOriginalToClaim,
-} from "@/features/avt/original-docx-view";
 import type { OriginalClaimMark } from "@/features/avt/original-docx-view";
-import { claimMark } from "@/features/avt/original-docx.logic";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -60,12 +56,21 @@ import {
   routineUnsettledClaimIds,
 } from "@/features/avt/verdict";
 import {
+  claimMark,
   selectClaimPresentation,
   spanPresentation,
 } from "@/features/avt/verification-view.logic";
 import type { ClaimPresentation } from "@/features/avt/verification-view.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
+import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
+
+// Folio and the file viewer load only when someone opens the original.
+const OriginalDocxView = React.lazy(async () => {
+  const m = await import("@/features/avt/original-docx-view");
+  return { default: m.OriginalDocxView };
+});
 
 /** The reader's text of the stored blocks, or the file as Folio lays it out. */
 type DocumentView = "reading" | "original";
@@ -338,14 +343,16 @@ export const VerificationView = ({
           )}
           {view === "original" ? (
             <div className="min-h-0 flex-1">
-              <OriginalDocxView
-                claims={claims}
-                markOf={originalMark}
-                onSelect={setSelected}
-                run={run}
-                selected={selected}
-                workspaceId={workspaceId}
-              />
+              <React.Suspense fallback={<Skeleton className="h-full w-full" />}>
+                <OriginalDocxView
+                  claims={claims}
+                  markOf={originalMark}
+                  onSelect={setSelected}
+                  run={run}
+                  selected={selected}
+                  workspaceId={workspaceId}
+                />
+              </React.Suspense>
             </div>
           ) : (
             <ReadingDocument
@@ -405,6 +412,22 @@ const READER_STYLE = {
 } as const;
 
 const claimDomId = (claimId: string): string => `avt-claim-${claimId}`;
+
+/** Bring the original to a claim's block; the viewer retries while the
+ *  document is still loading. */
+const scrollOriginalToClaim = (
+  run: VerificationRun,
+  claim: VerificationClaim,
+): void => {
+  if (claim.anchor.type !== "docx-block") {
+    return;
+  }
+  window.dispatchEvent(
+    new CustomEvent<FolioScrollEventDetail>(FOLIO_SCROLL_EVENT, {
+      detail: { blockId: claim.anchor.blockId, fieldId: run.fileFieldId },
+    }),
+  );
+};
 
 type ReadingDocumentProps = {
   presentation: ClaimPresentation;

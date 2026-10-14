@@ -167,30 +167,6 @@ export const claimAtPoint = (
   return best?.id ?? null;
 };
 
-/**
- * How one claim is marked over the original: the selected claim is active, a
- * claim the active filter matches is picked out, and a claim the filter
- * leaves out is not drawn (a highlight cannot fade its words the way the
- * reading view dims them).
- */
-export const claimMark = ({
-  selected,
-  dim,
-  highlight,
-}: {
-  selected: boolean;
-  dim: boolean;
-  highlight: boolean;
-}): TextMarkState | null => {
-  if (selected) {
-    return "active";
-  }
-  if (dim) {
-    return null;
-  }
-  return highlight ? "matched" : "rest";
-};
-
 /** The registered highlight a claim of this verdict and mark paints into. */
 export const claimHighlightName = (
   scope: string,
