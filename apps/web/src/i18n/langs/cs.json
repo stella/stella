@@ -2551,6 +2551,10 @@
       "providerRateLimited": "Byl dosažen limit požadavků poskytovatele. Zkuste to brzy znovu.",
       "thirdPartyBoundaryRefusal": "Požadavek se pokusil použít obsah mimo povolený kontext pracovního prostoru.",
       "usageLimitExceeded": "Byl dosažen limit využití.",
+      "validationInvalid": "Pole obsahuje hodnotu, kterou nelze uložit.",
+      "validationRequired": "Povinné pole je prázdné.",
+      "validationTooLong": "Příliš dlouhé: použijte nejvýše {limit, number} znaků.",
+      "validationTooShort": "Příliš krátké: použijte alespoň {limit, number} znaků.",
       "verificationActiveLimitReached": "Vaše organizace dosáhla limitu současně probíhajících ověření. Počkejte na dokončení některého ověření a zkuste to znovu.",
       "verificationDailyLimitReached": "Vaše organizace dosáhla denního limitu ověření. Zkuste to znovu po půlnoci (Europe/Prague).",
       "versionConflict": "Někdo jiný to během vaší úpravy změnil. Načtěte znovu aktuální verzi."

@@ -7,6 +7,13 @@
  * string.
  */
 
+import { ValidationError } from "elysia";
+
+import type {
+  ApiValidationConstraint,
+  ApiValidationIssue,
+} from "@stll/api-contract";
+
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import type { FrameworkFailure } from "@/api/lib/observability/failure";
 
@@ -19,6 +26,72 @@ const ELYSIA_ERROR_CODE = {
 type ElysiaErrorAnswer = {
   status: number;
   message: string;
+  /** Which request fields failed and why; never the rejected values. */
+  issues?: readonly ApiValidationIssue[] | undefined;
+};
+
+// One rejected request answers with a bounded list; Elysia itself stops at 64.
+const MAX_VALIDATION_ISSUES = 20;
+
+const lengthBound = (schema: unknown, key: "maxLength" | "minLength") => {
+  if (typeof schema !== "object" || schema === null || !(key in schema)) {
+    return undefined;
+  }
+  const bound: unknown = Reflect.get(schema, key);
+  return typeof bound === "number" ? bound : undefined;
+};
+
+const issueFor = (
+  path: string,
+  schema: unknown,
+  value: unknown,
+): ApiValidationIssue => {
+  const field = path.replace(/^\//u, "").replaceAll("/", ".");
+  const constraint = ((): {
+    constraint: ApiValidationConstraint;
+    limit?: number;
+  } => {
+    if (value === undefined) {
+      return { constraint: "required" };
+    }
+    if (typeof value === "string") {
+      const max = lengthBound(schema, "maxLength");
+      if (max !== undefined && value.length > max) {
+        return { constraint: "maxLength", limit: max };
+      }
+      const min = lengthBound(schema, "minLength");
+      if (min !== undefined && value.length < min) {
+        return { constraint: "minLength", limit: min };
+      }
+    }
+    return { constraint: "invalid" };
+  })();
+  return { field, ...constraint };
+};
+
+/**
+ * The failing fields of a rejected request, deduplicated, without the values
+ * that failed: those may carry document content or credentials.
+ */
+const requestValidationIssues = (error: unknown): ApiValidationIssue[] => {
+  if (!(error instanceof ValidationError)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const issues: ApiValidationIssue[] = [];
+  for (const { path, schema, value } of error.all) {
+    const issue = issueFor(path, schema, value);
+    const key = `${issue.field}:${issue.constraint}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    issues.push(issue);
+    if (issues.length === MAX_VALIDATION_ISSUES) {
+      break;
+    }
+  }
+  return issues;
 };
 
 const INTERNAL_ANSWER = {
@@ -58,7 +131,7 @@ export const elysiaErrorAnswer = (
     case ELYSIA_ERROR_CODE.validation:
       return isResponseValidationError(error)
         ? INTERNAL_ANSWER
-        : INVALID_REQUEST_ANSWER;
+        : { ...INVALID_REQUEST_ANSWER, issues: requestValidationIssues(error) };
     case ELYSIA_ERROR_CODE.notFound:
       return NOT_FOUND_ANSWER;
     case ELYSIA_ERROR_CODE.parse:

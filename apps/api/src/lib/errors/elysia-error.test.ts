@@ -20,6 +20,9 @@ const app = new Elysia()
   .post("/typed-body", () => "ok", {
     body: t.Object({ name: t.String() }),
   })
+  .post("/bounded-body", () => "ok", {
+    body: t.Object({ name: t.String({ minLength: 1, maxLength: 8 }) }),
+  })
   .get("/typed-response", () => driftedBody(), {
     response: t.Object({ ok: t.String() }),
   })
@@ -44,7 +47,38 @@ describe("answering a framework-raised error", () => {
     const response = await post("/typed-body", JSON.stringify({ name: 42 }));
 
     expect(response.status).toBe(422);
-    expect(await response.json()).toEqual({ message: "Invalid request" });
+    expect(await response.json()).toEqual({
+      message: "Invalid request",
+      code: "validation",
+      issues: [{ field: "name", constraint: "invalid" }],
+    });
+  });
+
+  test("names the field and the length bound it broke, never the value", async () => {
+    const tooLong = "x".repeat(40);
+    const response = await post(
+      "/bounded-body",
+      JSON.stringify({ name: tooLong }),
+    );
+
+    expect(response.status).toBe(422);
+    const body = await response.text();
+    expect(JSON.parse(body)).toEqual({
+      message: "Invalid request",
+      code: "validation",
+      issues: [{ field: "name", constraint: "maxLength", limit: 8 }],
+    });
+    expect(body).not.toContain(tooLong);
+  });
+
+  test("names a missing field as required", async () => {
+    const response = await post("/bounded-body", JSON.stringify({}));
+
+    expect(response.status).toBe(422);
+    expect(await response.json()).toMatchObject({
+      code: "validation",
+      issues: [{ field: "name", constraint: "required" }],
+    });
   });
 
   test("a handler output that does not match its response schema is a server fault", async () => {

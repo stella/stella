@@ -2554,6 +2554,10 @@ type Messages = {
       "providerRateLimited": "The provider rate limit was reached. Try again shortly.";
       "thirdPartyBoundaryRefusal": "The request tried to use content outside the allowed workspace context.";
       "usageLimitExceeded": "Usage limit reached.";
+      "validationInvalid": "A field has a value that cannot be saved.";
+      "validationRequired": "A required field is empty.";
+      "validationTooLong": "Too long: use at most {limit, number} characters.";
+      "validationTooShort": "Too short: use at least {limit, number} characters.";
       "verificationActiveLimitReached": "Your organization has reached its active verification limit. Wait for a verification to finish, then try again.";
       "verificationDailyLimitReached": "Your organization has reached its daily verification limit. Try again after midnight (Europe/Prague).";
       "versionConflict": "Someone else changed this while you were editing. Reload to get the current version.";

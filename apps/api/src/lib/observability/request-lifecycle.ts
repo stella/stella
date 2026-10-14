@@ -9,6 +9,7 @@ import type { Context } from "elysia";
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { API_VALIDATION_ERROR_CODE } from "@stll/api-contract";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
@@ -138,10 +139,11 @@ export const answerRequestError = ({
 
   const path = getRequestPath(request);
   const reqCtx = getRequestContext(request);
-  const { status: statusCode, message: errorMessage } = elysiaErrorAnswer(
-    code,
-    error,
-  );
+  const {
+    status: statusCode,
+    message: errorMessage,
+    issues,
+  } = elysiaErrorAnswer(code, error);
   const logged = shouldLogRequest(path);
   const captured = statusCode >= 500;
   const loggedSeverity = captured ? "ERROR" : "WARN";
@@ -222,7 +224,9 @@ export const answerRequestError = ({
   // Elysia's default would serialize error.message, which
   // may contain DB internals, file names, or document content.
   set.status = statusCode;
-  return httpError(errorMessage);
+  return issues !== undefined && issues.length > 0
+    ? { ...httpError(errorMessage, API_VALIDATION_ERROR_CODE), issues }
+    : httpError(errorMessage);
 };
 
 type RequestCompletionContext = {

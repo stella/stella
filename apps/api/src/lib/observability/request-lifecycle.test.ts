@@ -249,7 +249,7 @@ const CASES: readonly LifecycleCase[] = [
     name: "a rejected body is the caller's",
     request: post("/typed-body", JSON.stringify({ name: 42 })),
     status: 422,
-    body: '{"message":"Invalid request"}',
+    body: '{"message":"Invalid request","code":"validation","issues":[{"field":"name","constraint":"invalid"}]}',
     records: [
       ["request.failed", "WARN", shadow("client", "request_validation")],
     ],
