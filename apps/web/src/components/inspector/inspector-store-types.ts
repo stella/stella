@@ -4,6 +4,7 @@ import type { Draft } from "immer";
 import type { TaskStatus } from "@stll/api-contract";
 
 import type { ComposerSource } from "@/components/chat-editor-source";
+import type { CaseDecisionPlacement } from "@/components/inspector/case-decision-view";
 import type { FileTab } from "@/components/inspector/file-tab";
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
@@ -362,6 +363,8 @@ type InspectorTabsActions = {
     label: string;
     payload: StructuredCloneable<P>;
     ownerRouteId?: InspectorOwnerRouteId;
+    /** Explicit docking may move the current main decision into the inspector. */
+    decisionPlacement?: CaseDecisionPlacement;
     pane?: InspectorPaneIntent;
   }) => void;
   updateView: <P>(args: {
