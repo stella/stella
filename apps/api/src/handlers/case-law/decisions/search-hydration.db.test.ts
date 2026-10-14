@@ -861,17 +861,105 @@ test("a provision-only list is the complete citing set with an exact total and i
   });
 });
 
-test("a provision-only list refuses a cursor issued for another request", async () => {
-  const refused = await listCaseLawProvisionDecisions({
+test("a provision-only list reads its page and excerpts in one snapshot", async () => {
+  const before = reads;
+  await listCaseLawProvisionDecisions({
     body: {
       ...SEARCH_BODY,
-      cursor: "not-a-list-cursor",
       provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
     },
     caseLawDb,
     dependencies: { servingGeneration: GENERATION },
   });
-  expect("hits" in refused).toBe(false);
+  // One read for ids, total, citing sentences and rows (one repeatable-read
+  // transaction), one for the language alternates.
+  expect(reads - before).toBe(2);
+});
+
+test("a provision-only list cursor resumes only the request it was issued for", async () => {
+  const db = drizzle({ client });
+  // A second decision citing § 316 of the labour code, so the first page of
+  // one has a continuation.
+  const [extra] = await db
+    .insert(caseLawProvisionCitations)
+    .values({
+      anchor: "par_316-odst_1",
+      confidence: 0.9,
+      decisionDate: "2024-01-01",
+      decisionId: slovakId,
+      jurisdiction: "CZE",
+      section: 316,
+      subsection: "1",
+      sentenceText: "sentence par_316-odst_1",
+      spanEnd: 60,
+      spanStart: 50,
+      unit: "section",
+      workCollection: "Sb.",
+      workIdentifier: "262/2006 Sb.",
+      workNumber: 262,
+      workYear: 2006,
+    })
+    .returning({ id: caseLawProvisionCitations.id });
+  try {
+    const request = {
+      ...SEARCH_BODY,
+      provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      limit: 1,
+    } as const;
+    const list = async (
+      body: Parameters<typeof listCaseLawProvisionDecisions>[0]["body"],
+    ) =>
+      await listCaseLawProvisionDecisions({
+        body,
+        caseLawDb,
+        dependencies: { servingGeneration: GENERATION },
+      });
+    const first = await list(request);
+    if (!("hits" in first) || first.nextCursor === null) {
+      throw new Error("expected a first page with a continuation");
+    }
+    expect(first.total).toEqual({ type: "exact", value: 2 });
+    const cursor = first.nextCursor;
+
+    // The same request continues, to the other decision and the end.
+    const second = await list({ ...request, cursor });
+    if (!("hits" in second)) {
+      throw new Error("expected the second page");
+    }
+    expect(second.nextCursor).toBeNull();
+    expect(
+      [...first.hits, ...second.hits]
+        .map(({ decisionId }) => String(decisionId))
+        .toSorted(),
+    ).toEqual([String(czechId), String(slovakId)].toSorted());
+
+    // Every changed filter, and a foreign string, is refused.
+    for (const change of [
+      { category: "B" },
+      { hasLegalSentence: false },
+      { court: "Nejvyšší správní soud" },
+      { language: "sk" },
+      { sort: "newest" as const },
+      {
+        provision: {
+          work: "262/2006 Sb.",
+          unit: "section" as const,
+          section: 317,
+        },
+      },
+      { cursor: "not-a-list-cursor" },
+    ]) {
+      expect("hits" in (await list({ ...request, cursor, ...change }))).toBe(
+        false,
+      );
+    }
+  } finally {
+    if (extra !== undefined) {
+      await db
+        .delete(caseLawProvisionCitations)
+        .where(eq(caseLawProvisionCitations.id, extra.id));
+    }
+  }
 });
 
 test("the provision filter probes links by decision id, not by scanning them", async () => {

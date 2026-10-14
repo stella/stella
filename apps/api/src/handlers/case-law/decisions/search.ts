@@ -2905,19 +2905,22 @@ export const listCaseLawProvisionDecisions = async ({
   );
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
   const scope = { jurisdiction: body.country, provision: body.provision };
-  const context = sha256Hex(
-    JSON.stringify([
-      scope,
-      body.court ?? null,
-      body.courts ?? null,
-      body.dateFrom ?? null,
-      body.dateTo ?? null,
-      body.decisionType ?? null,
-      body.language ?? null,
-      body.sourceId ?? null,
-      sort,
-    ]),
-  );
+  // Total over the row filters the page applies, so a filter added there
+  // cannot be left out of what a cursor is bound to.
+  const filtersBound = {
+    country: body.country,
+    court: body.court ?? null,
+    courts: body.courts ?? null,
+    category: body.category ?? null,
+    hasLegalSentence: body.hasLegalSentence ?? null,
+    provision: body.provision,
+    dateFrom: body.dateFrom ?? null,
+    dateTo: body.dateTo ?? null,
+    decisionType: body.decisionType ?? null,
+    sourceId: body.sourceId ?? null,
+    language: body.language ?? null,
+  } satisfies Record<keyof CaseLawSearchRowFilterBody, unknown>;
+  const context = sha256Hex(JSON.stringify([filtersBound, sort]));
   const cursor =
     body.cursor === undefined
       ? null
@@ -2943,7 +2946,10 @@ export const listCaseLawProvisionDecisions = async ({
     sort === "newest"
       ? caseLawDecisions.decisionDate
       : caseLawDecisions.citationAuthority;
-  const { rows, total, sentences } = await caseLawDb(async (tx) => {
+  // One transaction is one snapshot (public reads are repeatable read): the
+  // ids, the total, the citing sentences and the page rows all describe the
+  // same state, so an excerpt cannot be paired with a later revision.
+  const { rows, total, sentences, byId } = await caseLawDb(async (tx) => {
     const filters = and(
       inArray(caseLawDecisions.id, citingDecisionIdsSubquery(tx, scope)),
       ...caseLawSearchRowFilters(body, generation),
@@ -2980,14 +2986,17 @@ export const listCaseLawProvisionDecisions = async ({
         eq(caseLawSources.id, caseLawDecisions.sourceId),
       )
       .where(filters);
+    const pageIds = page.slice(0, limit).map(({ id }) => id);
+    const hydrated = await pageDecisionRowsQuery(tx, {
+      body,
+      generation,
+      ids: pageIds,
+    });
     return {
       rows: page,
       total: counted?.total ?? panic("A count query returned no row"),
-      sentences: await readProvisionCitingSentences(
-        tx,
-        scope,
-        page.slice(0, limit).map(({ id }) => id),
-      ),
+      sentences: await readProvisionCitingSentences(tx, scope, pageIds),
+      byId: new Map(hydrated.rows.map((row) => [String(row.id), row])),
     };
   });
   const emitted = rows.slice(0, limit);
@@ -3002,12 +3011,6 @@ export const listCaseLawProvisionDecisions = async ({
     lexicalScore: 0,
     citationAuthority: row.citationAuthority,
   }));
-  const byId = await readCaseLawPageDecisionRows({
-    body,
-    caseLawDb,
-    generation,
-    ids: pageRanked.map((hit) => hit.id),
-  });
   const alternates = await readPublicDecisionLanguageAlternatesByGroup({
     caseLawDb,
     languageGroupKeys: languageGroupKeysOf(pageRanked, byId),
@@ -3023,8 +3026,8 @@ export const listCaseLawProvisionDecisions = async ({
     pageRanked,
     passageCountById: new Map(),
     snippetById: sentences,
-    // The sentences are read with the page, so they belong to the revision
-    // the page rows were read at.
+    // The sentences and the rows share one snapshot, so each excerpt belongs
+    // to the revision its row was read at.
     snippetRevisionById: new Map(
       [...byId.values()].map((row) => [String(row.id), row.appliedRevision]),
     ),
