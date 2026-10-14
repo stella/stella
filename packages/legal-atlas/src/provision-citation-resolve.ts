@@ -141,6 +141,8 @@ type CompiledResolver = {
    * is required here: a bare letter after the act may be a preposition.
    */
   laterLetterContinuation: RegExp;
+  /** An and-following marker anywhere (`a násl.`): an open range. */
+  andFollowing: RegExp;
   sectionUnits: ReadonlyMap<string, SectionUnit>;
   subdivisions: readonly {
     pattern: RegExp;
@@ -179,6 +181,10 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
     ),
     laterBareContinuation: new RegExp(
       String.raw`(?:[,;]|[-–—]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*\d{1,4}[a-z]?(?![\p{L}\p{N}])(?!\s*\/)`,
+      "iu",
+    ),
+    andFollowing: new RegExp(
+      String.raw`(?<![\p{L}\p{N}])(?:${alternation(profile.andFollowingMarkers)})`,
       "iu",
     ),
     laterLetterContinuation: new RegExp(
@@ -444,6 +450,42 @@ const renderAnchor = (
   return segments.join(join);
 };
 
+const DATE_PATTERN = /\d{1,2}\.\s*\d{1,2}\.\s*\d{4}/gu;
+const YEAR_PATTERN = /(?<!\d)(?:1[89]|20)\d{2}(?!\d)/gu;
+const LETTERED_ITEM = /(?<![\p{L}\p{N}])[a-z]\)/iu;
+
+/**
+ * Whether the text after the first provision still names another one once
+ * everything a single citation may carry there is set aside: act names,
+ * gazette numbers, and the dates and years of a version. Any number, lettered
+ * item or and-following marker left over belongs to a further provision,
+ * however it is joined (`§ 316 odst. 2 ZP a 3 ZP`, `§ 2910 OZ a násl.`), so
+ * the filter is refused rather than narrowed to the first. Structural, not a
+ * list of joining forms.
+ */
+const namesFurtherProvision = (
+  after: string,
+  resolver: CompiledResolver,
+): boolean => {
+  const blank = (text: string, start: number, end: number) =>
+    `${text.slice(0, start)}${" ".repeat(end - start)}${text.slice(end)}`;
+  let residual = after.replace(
+    new RegExp(resolver.gazette.source, "giu"),
+    (match) => " ".repeat(match.length),
+  );
+  for (const { start, end } of matchNamedActs(residual, resolver)) {
+    residual = blank(residual, start, end);
+  }
+  residual = residual
+    .replace(DATE_PATTERN, (match) => " ".repeat(match.length))
+    .replace(YEAR_PATTERN, (match) => " ".repeat(match.length));
+  return (
+    /\d/u.test(residual) ||
+    LETTERED_ITEM.test(residual) ||
+    resolver.andFollowing.test(residual)
+  );
+};
+
 type SubdivisionPath = {
   subsection: string | null;
   letter: string | null;
@@ -648,7 +690,8 @@ export const resolveProvisionCitation = ({
     resolver.section.test(after) ||
     resolver.laterSubdivision.test(after) ||
     resolver.laterBareContinuation.test(after) ||
-    (path.letter !== null && resolver.laterLetterContinuation.test(after))
+    (path.letter !== null && resolver.laterLetterContinuation.test(after)) ||
+    namesFurtherProvision(after, resolver)
   ) {
     return { status: "multiple_provisions" };
   }
