@@ -14,9 +14,7 @@ export type PreparedAnonymizationText = {
   folded: FoldedSearchText;
 };
 
-export const normalizeWhitespaceWithOffsets = (
-  text: string,
-): NormalizedText => {
+const normalizeWhitespaceWithOffsets = (text: string): NormalizedText => {
   const normalized: string[] = [];
   const originalBoundaries = [0];
   let index = 0;
