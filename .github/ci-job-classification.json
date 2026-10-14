@@ -425,14 +425,27 @@
         "type": "checkout"
       },
       "path": ".github/actions/ci-install/action.yml",
-      "digest": "d3ac580b2a20d70841de986c683500f12994783f2f2d212b6c09d9a21f069a12",
+      "digest": "830566a3f4d84e4ba1448aa3190d5328fbdb09bb8fc6cf22a15208c5baa6ceee",
       "references": ["$/.github/actions/ci-install"],
       "jobs": [],
       "edges": {
         "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0116",
-        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9": "n0118",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128"
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
+        "$/.github/actions/ci-store-save": "n0138"
       }
+    },
+    {
+      "type": "metadata",
+      "id": "n0138",
+      "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
+      "path": ".github/actions/ci-store-save/action.yml",
+      "digest": "2d8bfe7aabfabd11cee016d3394a5ba0308f4c68dbf3fe6ab9adc05fc850739d",
+      "references": ["$/.github/actions/ci-store-save"],
+      "jobs": [],
+      "edges": {}
     },
     {
       "type": "metadata",
@@ -938,20 +951,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "842cbeba00b2b3808dc5dd1cf81d4b01176ad5e1efb5a91763765f2cb9193bf6",
+      "digest": "ad6de4fa5e0a9b7136839d668635ed629373636953380d4714788a93630cb0d2",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "fe6868b6d40dcc5b46378ef09a9a3c1362682bf0694212dd7ea186b3624f5507"
+          "digest": "7955977019e84c97948a1fe84e3a487523fec372e2c3c337bb41efe75e13737b"
         },
         {
           "id": "docker-checks",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "4e5ac798882c2e0f8a87e8ecbdd4be84932ffac3ad6c9ba851fbdac0178276e3"
+          "digest": "4a9ef012e31e4593daea96609dc68ab0ac53a562b0717ff9eb71fb7f2af90359"
         },
         {
           "id": "parser-version-guard",
@@ -981,13 +994,13 @@
           "id": "ci-checks-policy",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "9e8d8d40e5a2bb73533320c23b54297124a0d1da94e9083ad49079323d1ca6b6"
+          "digest": "b5e2cc98dabdb092e16938bf1f813ac094325af656344d278b1025d984f5fb6f"
         },
         {
           "id": "ci-checks-rest",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "be6a4e4e9960df931617ae767cf1fc84b423fb60e1610188ee4beb57a6f733d3"
+          "digest": "1046db123eb56e4dd6b72152f0355595ef94b28c4064ceaddd0eb1b7f7bb3388"
         },
         {
           "id": "ci-tests",
@@ -999,7 +1012,7 @@
           "id": "api-test-durations",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "f727a045ff15b7deffa2b33c6baadb7bfaeb565e58cba29392885a27b470717e"
+          "digest": "93a78bcf677ebc07544b6d27ee1c18db9984b3852e02a633bba059ad120e253e"
         },
         {
           "id": "ci-browser",
@@ -1035,7 +1048,7 @@
           "id": "service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "2d07a26f718330fce31fba7ec3bc7f7473726d6feee177b481af2424b76fa474"
+          "digest": "dc6cb8f8c8ab489257014acad165eb5ef2f8ac98b8113892b21ee1054a01b136"
         },
         {
           "id": "migration-upgrade-rehearsal",
@@ -1077,7 +1090,7 @@
           "id": "landing-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "be8f1a78b721b52ffe443a5fca6d7b8ae1c19263787fe886810cac31ea7bbfdd"
+          "digest": "d1d0a89669ddd1a7f2693e61e5de0bcd5fa85f488f5a8378d4ac2f790856232f"
         },
         {
           "id": "heavy-web-build",
@@ -1131,13 +1144,13 @@
           "id": "e2e-report",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "4859eb4d59b9ad31f29ea78e41bedb53d744a14fa88d16a03d2bce5345033408"
+          "digest": "5059d729f8c93dfb7eeff22b258984f396842b5f53068ef004c4af0d9ca1baa2"
         },
         {
           "id": "api-image-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "ec36e37f3a15b2b78179e9101bd14b962ab2a4a36c17ac29691bc73b2acb9508"
+          "digest": "f84b9024427f2a86fc71d04ef4954edd0eab23c453f7e1b1c9a90e0849159667"
         },
         {
           "id": "legal-atlas-image",
@@ -1149,25 +1162,25 @@
           "id": "desktop-windows-dry-run",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "fb0fbe6be6ce98a4815fbb1f0e5b72e36a243e8c63b5c30a7b70620504c8edb9"
+          "digest": "c67a6fbda4f6375aa3d13734e4b9243c1e0ad473ec3962675fc09f1c45c9e389"
         },
         {
           "id": "windows-scripts",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "0a9e27f8f74cfe2802a9fed49c6328411ec9ed2924d97f9c4a40e0ee31eb10a5"
+          "digest": "d487ec5177feec52e9afae65a7b1b3083eb2986470293d1922f762e72b0a0d8c"
         },
         {
           "id": "scan-engine-wasm-drift",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "670a0f57b5037c20ac6a48b6fa849b6c9eff42ec88bd1fd0af6ff233915292fb"
+          "digest": "dc265a9553b02e144224899938f3a4539663e101a5e8feae1c37ca66bd528f30"
         },
         {
           "id": "desktop-rust-tests",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "cc08fe9546b76c39eb304e1ac953f957ec128d827487ba19209e452d51f44d48"
+          "digest": "779f7c49e12ebb0f304702d31892a1d8f016400afad0917f8490525798cd1dc3"
         },
         {
           "id": "desktop-rust-lint",
@@ -1796,26 +1809,26 @@
         "type": "checkout"
       },
       "path": ".github/workflows/manual-checks.yml",
-      "digest": "d36d1dac7dfff73094c138bdb89fb4b89b5ff2ebb7b31b80e79f168d3a8c59bd",
+      "digest": "3138da8c6ccd06134a5fc02b6a421295c1a2d1dc3daf370924ff44cf51b41afa",
       "references": [],
       "jobs": [
         {
           "id": "check",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "e7d3ee97da2e4bc1093af1333311070f013e379e197c5745390c1d0e23d49057"
+          "digest": "fe000ad9aec3190a97c2e17664e86eeb596d821ea88e33b1dd7cb2d8174ee4f2"
         },
         {
           "id": "install-cache-windows",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "5f9b4d2a0de7c0d1cfc17f64e3a6375160db0f88376e93f3e760bcfb9944a762"
+          "digest": "c820f7768ff397656425fd8359a8216de034a8c96d81fb6b5ff0b403eb68825a"
         },
         {
           "id": "install-cache-linux",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "28ba38ce102f32eafea4831b961897db9fd4de10855a6cae0ef19ef5392d97af"
+          "digest": "8d07a8dfbd0f7fbfd0ee0b2041e4cb8acee86a3404343599f680d072607f1369"
         }
       ],
       "edges": {
@@ -1824,7 +1837,8 @@
         "rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7": "n0103",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a": "n0128",
         "oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6": "n0104",
-        "$/.github/actions/ci-install": "n0007"
+        "$/.github/actions/ci-install": "n0007",
+        "$/.github/actions/ci-store-save": "n0138"
       }
     },
     {

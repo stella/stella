@@ -91,7 +91,8 @@ test("committed classifications cover the repository and its pinned metadata cal
   }
   expect(result.value.workflowCount).toBe(manifest.workflows.length);
   expect(result.value.classifications.priority).toBeGreaterThan(0);
-});
+  // Parses every reachable workflow and action document in a child process.
+}, 60_000);
 
 test("the policy check invokes classification after a successful install", () => {
   const workflow: unknown = Bun.YAML.parse(
@@ -125,12 +126,12 @@ test("the policy check invokes classification after a successful install", () =>
   const check = policy.findIndex(
     (step) =>
       step.run ===
-      "bun .ci-job-classification/scripts/check-ci-job-classification.ts .ci-job-classification",
+      "trap 'rm -rf .workflow-tooling' EXIT\nbun .workflow-tooling/scripts/check-ci-job-classification.ts .workflow-tooling\n",
   );
   expect(install).toBeGreaterThanOrEqual(0);
   expect(check).toBeGreaterThan(install);
   const checkout = policy.findIndex(
-    (step) => step.with?.["path"] === ".ci-job-classification",
+    (step) => step.with?.["path"] === ".workflow-tooling",
   );
   expect(checkout).toBeGreaterThan(install);
   expect(check).toBeGreaterThan(checkout);
@@ -144,7 +145,9 @@ test("the policy check invokes classification after a successful install", () =>
   for (const index of [checkout, check]) {
     const step = policy.at(index);
     expect(step?.if).toBe(
-      githubExpression("!cancelled() && steps.install.outcome == 'success'"),
+      githubExpression(
+        "!cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true')",
+      ),
     );
     expect(step?.env?.["CI_CHECK_KIND"]).toBe("CONTEXTUAL");
     expect(step?.if).not.toContain("static_receipts");
@@ -644,7 +647,16 @@ test("candidate reader always observes HEAD even when config names an older revi
         "core.hooksPath=/dev/null",
         ...args,
       ],
-      { stdout: "pipe", stderr: "pipe" },
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        // Inherited hook variables such as GIT_DIR would redirect `-C root`.
+        env: Object.fromEntries(
+          Object.entries(process.env).filter(
+            ([name]) => !name.startsWith("GIT_"),
+          ),
+        ),
+      },
     );
     if (result.exitCode !== 0) {
       throw new AdmissionError({ message: "fixture Git failed" });

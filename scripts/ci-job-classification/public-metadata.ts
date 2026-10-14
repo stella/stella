@@ -59,7 +59,8 @@ export type MetadataReader = {
   workflows: () => string[];
   read: (repository: string, path: string) => string;
 };
-const reject = (message: string): never => {
+// An explicit type annotation lets control-flow analysis narrow after calls.
+const reject: (message: string) => never = (message) => {
   throw new AdmissionError({ message });
 };
 const unique = (items: string[], name: string) => {

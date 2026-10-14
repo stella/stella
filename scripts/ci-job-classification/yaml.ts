@@ -18,7 +18,6 @@ const DOCUMENT = v.strictObject({
   jobs: v.record(v.string(), JOB),
   steps: v.array(STEP),
 });
-export type ParsedDocument = v.InferOutput<typeof DOCUMENT>;
 
 // Validate duplicate keys and the bounded alias DAG before safe_load; raw
 // source digests separately retain scalar spellings and anchor declarations.
