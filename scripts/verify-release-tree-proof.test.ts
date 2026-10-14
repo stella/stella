@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Script } from "node:vm";
+import * as v from "valibot";
 
 const verifier = path.join(import.meta.dir, "verify-release-tree-proof.sh");
 const healthGate = path.join(import.meta.dir, "check-release-main-health.sh");
@@ -952,9 +953,11 @@ describe("merge-group receipt in place of the heavy statuses", () => {
         fixture.responses,
         `${fixture.proof}-statuses`,
       );
-      const [statuses] = JSON.parse(readFileSync(statusesPath, "utf-8")) as [
-        { context: string }[],
-      ];
+      // Loose objects keep every other status field for the rewrite below.
+      const [statuses] = v.parse(
+        v.tuple([v.array(v.looseObject({ context: v.string() }))]),
+        JSON.parse(readFileSync(statusesPath, "utf-8")),
+      );
       writeFileSync(
         statusesPath,
         JSON.stringify([
