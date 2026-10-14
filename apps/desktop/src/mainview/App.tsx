@@ -8,7 +8,6 @@ import { useFormatter, useLocale, useTranslations } from "use-intl";
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
 import { Avatar, AvatarFallback } from "@stll/ui/avatar";
-import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import {
@@ -384,11 +383,6 @@ const GeneralPane = ({
                 linkedAccount?.email ||
                 t("stellaDesktop")}
             </p>
-            {linkedAccount?.name?.trim() ? (
-              <p className="text-muted-foreground truncate text-xs">
-                <UserText direction="ltr">{linkedAccount.email}</UserText>
-              </p>
-            ) : null}
           </div>
           <span
             className={cn(
@@ -405,6 +399,14 @@ const GeneralPane = ({
             {t(presentation.statusKey)}
           </span>
         </div>
+        <p className="text-muted-foreground px-4 pb-4 text-sm leading-relaxed wrap-break-word">
+          {linkedAccount?.email ??
+            (presentation.descriptionKey
+              ? t(presentation.descriptionKey, {
+                  host: presentation.host ?? "",
+                })
+              : t("desktopBenefit"))}
+        </p>
         {presentation.host ? (
           <>
             <Separator />
@@ -435,14 +437,7 @@ const GeneralPane = ({
           </>
         ) : null}
         <Separator />
-        <div className="flex items-center justify-between gap-4 px-4 py-3">
-          <p className="text-muted-foreground min-w-0 flex-1 text-sm leading-relaxed">
-            {presentation.descriptionKey
-              ? t(presentation.descriptionKey, {
-                  host: presentation.host ?? "",
-                })
-              : null}
-          </p>
+        <div className="flex items-center justify-end gap-4 px-4 py-3">
           <Button
             disabled={presentation.status === "loading"}
             onClick={onAccountAction}
