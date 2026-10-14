@@ -78,6 +78,38 @@ describe("chat link detection", () => {
     ).toEqual([]);
   });
 
+  test("relative destinations are never interpreted as bare domains", () => {
+    for (const input of [
+      "/github.com/stella",
+      "//github.com/stella",
+      "./github.com/stella",
+      "../github.com/stella",
+      ".github.com/stella",
+      "\\github.com/stella",
+      "github.com\\stella",
+      "ftp://github.com/stella",
+      "https:github.com/stella",
+    ]) {
+      expect(normalizeChatLink(input)).toBeNull();
+    }
+  });
+
+  test("root-relative and dot-relative destinations never become external origins", () => {
+    assertProperty(
+      "root-relative and dot-relative destinations never become external origins",
+      fc.property(
+        fc.constantFrom("/", "//", "/./", "/../", ".", "..", "./", "../"),
+        fc.oneof(
+          fc.string(),
+          domain.map((host) => `${host}/stella`),
+        ),
+        (prefix, suffix) => {
+          expect(normalizeChatLink(`${prefix}${suffix}`)).toBeNull();
+        },
+      ),
+    );
+  });
+
   test("chat link spans preserve text and remain ordered, safe and stable", () => {
     assertProperty(
       "chat link spans preserve text and remain ordered, safe and stable",

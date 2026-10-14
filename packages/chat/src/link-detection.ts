@@ -10,6 +10,7 @@ export type ChatLinkSpan = {
 };
 
 const HTTP_SCHEME = /^https?:\/\//iu;
+const BARE_HOST_LABEL_START = /^[\p{L}\p{N}]/u;
 const UNSAFE_CHARACTERS = /[\s\p{Cc}\p{Cf}\\]/u;
 const SPECIAL_USE_SUFFIX =
   /(?:^|\.)(?:localhost|local|internal|invalid|test|example|onion)$/iu;
@@ -35,7 +36,7 @@ export const normalizeChatLink = (input: string) => {
   if (!explicit && /^[\w+.-]+:/u.test(input)) {
     return null;
   }
-  if (input.startsWith("//")) {
+  if (!explicit && !BARE_HOST_LABEL_START.test(input)) {
     return null;
   }
   const candidate = explicit ? input : `https://${input}`;

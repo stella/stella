@@ -126,3 +126,15 @@ test("explicit mail and same-document destinations stay clickable while executab
     cleanup();
   }
 });
+
+test("a root-relative path containing a public hostname retains the current origin", () => {
+  const label = "Relative destination";
+  const href = "/github.com/stella";
+  const view = render(<ChatLink href={href}>{label}</ChatLink>);
+  const link = view.getByRole("link", { name: label });
+  expect(link.getAttribute("href")).toBe(href);
+  expect(
+    new URL(link.getAttribute("href") ?? "", window.location.href).origin,
+  ).toBe(window.location.origin);
+  expect(link.querySelector("svg")).toBeNull();
+});
