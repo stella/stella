@@ -30,16 +30,13 @@ const inspect = (config: unknown, coverage = complete) =>
     coverage,
   });
 
-test("coverage runs subprocess cases with an explicit timeout", async () => {
+test("coverage uses the bounded shared runner and propagates failure", async () => {
   let spawned = false;
   const status = await checkRuleCoverage((command) => {
     spawned = true;
     expect(command).toEqual([
       process.execPath,
-      "test",
-      "--timeout",
-      "30000",
-      "./.oxlint-plugins/__tests__",
+      "scripts/run-custom-lint-tests.ts",
     ]);
     return Bun.spawnSync([process.execPath, "-e", "process.exit(1)"]);
   });

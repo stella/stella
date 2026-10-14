@@ -1,10 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
-import {
-  GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS,
-  withGatedTestClients,
-} from "@/api/tests/gated-test-database";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -79,7 +76,7 @@ if (!databaseUrl || !runPostgresTests) {
               }
             }
           },
-          { closeTimeout: GATED_TEST_FORCE_CLOSE_TIMEOUT_SECONDS },
+          { closeMode: "force" },
         );
       } finally {
         await heldTransactionSettled;

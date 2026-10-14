@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 
-import { useInfiniteQuery } from "@tanstack/react-query";
 import type { AnyExtension } from "@tiptap/core";
 import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
@@ -39,7 +38,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
-import { skillsOptions } from "@/lib/knowledge/queries";
+import { useSkillsPages } from "@/lib/knowledge/built-in-skills";
 import { useChatUnavailableSkillIds } from "@/lib/prompts/use-chat-unavailable-skills";
 import { useQueryView } from "@/lib/use-query-view";
 
@@ -114,9 +113,10 @@ export const AIPromptInput = ({
   className,
 }: AIPromptInputProps) => {
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const skillsQuery = useInfiniteQuery(
-    skillsOptions(activeOrganizationId, userId),
-  );
+  const skillsQuery = useSkillsPages({
+    organizationId: activeOrganizationId,
+    userId,
+  });
   const skillsView = useQueryView(skillsQuery, {
     isEmpty: (data) =>
       data.pages.every(

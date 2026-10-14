@@ -414,7 +414,6 @@ export const writeApiTestPartition = (root: string) => {
       repoRelativePath(path.dirname(source), path.resolve(api, file));
     writeApiTypecheckArtifact(source, {
       exclude: [
-        "src/mcp/apps",
         "src/handlers/visual-sandbox/browser",
         ...partition.independent,
       ].map(relative),
@@ -427,9 +426,7 @@ export const writeApiTestPartition = (root: string) => {
           path.join(root, "types/**/*.d.ts"),
         ),
       ],
-      exclude: ["src/mcp/apps", "src/handlers/visual-sandbox/browser"].map(
-        relative,
-      ),
+      exclude: ["src/handlers/visual-sandbox/browser"].map(relative),
     });
     return partition;
   }
@@ -437,7 +434,6 @@ export const writeApiTestPartition = (root: string) => {
   const testsFile = path.join(api, "tsconfig.tests.json");
   const source = JSON.parse(readFileSync(sourceFile, "utf-8"));
   source.exclude = [
-    "src/mcp/apps",
     "src/handlers/visual-sandbox/browser",
     ...partition.independent,
   ];
@@ -446,7 +442,7 @@ export const writeApiTestPartition = (root: string) => {
   tests.extends = "./tsconfig.json";
   tests.files = partition.independent;
   tests.include = ["../../types/**/*.d.ts"];
-  tests.exclude = ["src/mcp/apps", "src/handlers/visual-sandbox/browser"];
+  tests.exclude = ["src/handlers/visual-sandbox/browser"];
   writeFileSync(testsFile, `${JSON.stringify(tests, null, 2)}\n`);
   return partition;
 };

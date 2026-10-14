@@ -2,17 +2,9 @@
 
 export const MCP_CHAT_TOOL_POLICY_KINDS = {
   "set_practice_jurisdictions": "mutation",
-  "fill_template": "mutation",
-  "save_filled_template": "mutation",
   "create_template": "mutation",
   "configure_template_fields": "mutation",
   "save_document": "mutation",
-  "upload_document_version": "mutation",
-  "open_document_version_upload": "mutation",
-  "compare_documents": "mutation",
-  "prepare_file_comparison": "mutation",
-  "prepare_file_comparison_from_links": "mutation",
-  "open_file_comparison": "mutation",
   "delete_document": "mutation",
   "set_field_value": "mutation",
   "save_matter": "mutation",
@@ -31,24 +23,14 @@ export const MCP_CHAT_TOOL_POLICY_KINDS = {
   "delete_reader_annotation": "mutation",
   "save_time_entry": "mutation",
   "delete_time_entry": "mutation",
-  "manage_organization": "mutation",
-  "submit_feedback": "mutation",
-  "write_capability": "mutation"
+  "manage_organization": "mutation"
 } as const;
 
 export const MCP_CHAT_TOOL_GRANT_POLICIES = {
   "set_practice_jurisdictions": "approve-once",
-  "fill_template": "grantable",
-  "save_filled_template": "approve-once",
   "create_template": "approve-once",
   "configure_template_fields": "approve-once",
   "save_document": "approve-once",
-  "upload_document_version": "approve-once",
-  "open_document_version_upload": "grantable",
-  "compare_documents": "grantable",
-  "prepare_file_comparison": "grantable",
-  "prepare_file_comparison_from_links": "grantable",
-  "open_file_comparison": "grantable",
   "delete_document": "approve-once",
   "set_field_value": "approve-once",
   "save_matter": "approve-once",
@@ -67,7 +49,5 @@ export const MCP_CHAT_TOOL_GRANT_POLICIES = {
   "delete_reader_annotation": "approve-once",
   "save_time_entry": "approve-once",
   "delete_time_entry": "approve-once",
-  "manage_organization": "approve-once",
-  "submit_feedback": "approve-once",
-  "write_capability": "approve-once"
+  "manage_organization": "approve-once"
 } as const;

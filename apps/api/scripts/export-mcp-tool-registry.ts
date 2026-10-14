@@ -25,6 +25,7 @@ import {
 } from "@stll/api-contract/mcp-tool-name";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
+import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import {
   dynamicToolNamespacePrefix,
   isDynamicToolNamespace,
@@ -147,7 +148,10 @@ const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
   {};
 for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
-  if (tool.access !== "write") {
+  if (
+    tool.access !== "write" ||
+    !WRITE_TOOL_REF_FIELD_MAP[tool.name].chatProjectable
+  ) {
     continue;
   }
 

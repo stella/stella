@@ -5,6 +5,8 @@ import { parseSkillFile } from "./frontmatter";
 import type { ParsedSkillFile, SkillMetadata } from "./frontmatter";
 import { GENERATED_SKILLS } from "./skills.gen";
 
+export type { BuiltInSkillId } from "./skills.gen";
+
 export type SkillResource = {
   path: string;
 };

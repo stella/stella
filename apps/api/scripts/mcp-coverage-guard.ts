@@ -497,7 +497,7 @@ const runCheck = async (): Promise<number> => {
 
   const [{ MCP_STATIC_TOOL_NAMES }, { MCP_APPS }] = await Promise.all([
     import("../src/mcp/static-tool-definitions"),
-    import("../src/mcp/apps/manifest"),
+    import("@stll/mcp-apps/manifest"),
   ]);
 
   const issues = classifyCoverage({

@@ -14,6 +14,8 @@ import {
 import { MCP_WEB_HANDOFF_TOOL_NAME } from "@stll/api-contract/mcp-web-handoff";
 import type { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
 
+test.use({ storageState: { cookies: [], origins: [] } });
+
 type AppFixtureHost = {
   appCalls: unknown[];
   appLinks: string[];
@@ -68,7 +70,7 @@ const mountApp = async ({
       ? countryFixtureBundle()
       : await readFile(
           new URL(
-            "../../../api/src/mcp/apps/case-law-results/generated/app.html.txt",
+            "../../../../packages/mcp-apps/src/case-law-results/generated/app.html.txt",
             import.meta.url,
           ),
           "utf-8",
@@ -184,7 +186,11 @@ const mountApp = async ({
               arguments: data.params.arguments,
             });
             if (data.params.name === handoffTool) {
-              const handoffUrl = v.parse(v.string(), data.params.arguments.url);
+              // The host script runs in the page, so module imports are absent.
+              const handoffUrl: unknown = data.params.arguments.url;
+              if (typeof handoffUrl !== "string") {
+                throw new TypeError("Handoff call is missing its URL");
+              }
               reply({
                 jsonrpc: "2.0",
                 id: data.id,
@@ -1035,4 +1041,38 @@ for (const theme of ["light", "dark"] as const) {
       );
     });
   }
+}
+
+for (const locale of ["cs-CZ", "en-GB", "sk-SK"]) {
+  test(`case-law app exposes named controls and localized document metadata in ${locale}`, async ({
+    page,
+  }) => {
+    const app = await mountApp({
+      page,
+      locale,
+      tool: "search_case_law",
+      payload: APP_SEARCH_FIXTURE,
+    });
+    await expect(app.getByRole("heading").first()).toBeVisible();
+    await expect(app.locator("html")).toHaveAttribute("lang", locale);
+    // <title> is not rendered, so read the frame document's title directly.
+    await expect
+      .poll(
+        async () => await app.locator("html").evaluate(() => document.title),
+      )
+      .toMatch(/\S/u);
+    const controls = app
+      .locator(
+        'button:visible, input:not([type="hidden"]):visible, select:visible, textarea:visible, [role="button"]:visible, [role="combobox"]:visible',
+      )
+      .and(
+        app.locator(
+          ':not([aria-hidden="true"], [aria-hidden="true"] *, [inert], [inert] *)',
+        ),
+      );
+    expect(await controls.count()).toBeGreaterThan(0);
+    for (const control of await controls.all()) {
+      await expect(control).toHaveAccessibleName(/\S/u);
+    }
+  });
 }

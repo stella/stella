@@ -1,0 +1,55 @@
+/* One calm sequence per mount. The unanimated state is the complete sample. */
+[data-activity-preview-duration-before] {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-activity-preview-duration-before] {
+    display: inline;
+    animation: activity-preview-duration-out 200ms ease-out 1.8s both;
+  }
+  [data-activity-preview-duration-after] {
+    animation: activity-preview-duration-in 200ms ease-out 1.8s both;
+  }
+  [data-activity-preview] [data-activity-segment] {
+    animation: activity-preview-appear 200ms ease-out both;
+  }
+  [data-activity-preview-totals] li {
+    animation: activity-preview-appear 200ms ease-out 1s both;
+  }
+  [data-activity-preview-totals] li:nth-child(2) {
+    animation-delay: 1.2s;
+  }
+  [data-activity-preview-totals] li:nth-child(3) {
+    animation-delay: 1.4s;
+  }
+  [data-activity-preview-matter] {
+    animation: activity-preview-appear 200ms ease-out 2.4s both;
+  }
+}
+@keyframes activity-preview-appear {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes activity-preview-duration-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes activity-preview-duration-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
