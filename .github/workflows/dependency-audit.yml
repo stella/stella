@@ -88,6 +88,27 @@ jobs:
         if: github.event_name != 'pull_request' && steps.full-audit.outcome == 'failure'
         run: exit 1
 
+  cargo-advisories:
+    name: cargo deny advisories (desktop)
+    # A newly published advisory is not caused by the change under review, so
+    # merges never wait on the advisory database; main and the schedule check it.
+    if: github.event_name != 'pull_request'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cargo-deny
+        uses: ./.github/actions/cargo-deny
+
+      - name: Desktop advisories
+        run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph advisories
+
   remediate:
     name: Open dependency audit remediation
     needs: audit
