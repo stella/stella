@@ -36,6 +36,33 @@ const bashJobs = (entries: readonly (readonly [string, readonly string[]])[]) =>
   );
 
 context("test registration census", () => {
+  check("mutable registration aliases cannot grant registration credit", () => {
+    for (const source of [
+      'let selected = test; selected = test.only; selected("focused", () => {});',
+      'var selected = test; selected("focused", () => {});',
+      'const selected = test; selected = test.only; selected("focused", () => {});',
+      "let selected = test;",
+      'let selected; selected = test.only; selected("focused", () => {});',
+    ]) {
+      const findings = parseTestRegistrations("fixture.test.ts", source);
+      expect(
+        findings.some(
+          (finding) =>
+            finding.type === "unresolved" &&
+            /(?:mutable|assigned) registration alias selected/u.test(
+              finding.reason,
+            ),
+        ),
+      ).toBe(true);
+    }
+    expect(
+      parseTestRegistrations(
+        "fixture.test.ts",
+        'const t = test; t("regular", () => {});',
+      ),
+    ).toEqual([]);
+  });
+
   check(
     "resolves aliases and conditional registrations to stable titles",
     () => {
@@ -1529,6 +1556,7 @@ jobs:
     if: needs.ci-plan.outputs.selected == 'true'
     steps:
       - run: bun test scripts/named.test.ts
+      - run: bun test scripts/ci-plan.test.ts
   ci-result:
     needs: [ci-plan, checks]
 `;
@@ -1539,6 +1567,26 @@ jobs:
     expect(analyzeGatingWorkflow(intact, registry).jobs.has("checks")).toBe(
       true,
     );
+    expect(
+      validateTrustedOutputProducers({
+        workflow: Bun.YAML.parse(
+          source.replace(
+            "if: needs.ci-plan.outputs.selected == 'true'",
+            "if: true",
+          ),
+        ),
+        registry,
+      }).findings.join("\n"),
+    ).toContain("output has no collector condition reader");
+    const withoutProof = Bun.YAML.parse(
+      source.replace("      - run: bun test scripts/ci-plan.test.ts\n", ""),
+    );
+    expect(
+      analyzeGatingWorkflow(withoutProof, registry).findings.join("\n"),
+    ).toContain("proof test has no gating collector");
+    expect(
+      analyzeGatingWorkflow(withoutProof, registry).jobs.has("checks"),
+    ).toBe(false);
     for (const [mutation, reason] of [
       [source.replace("id: selection", "id: removed"), "step is missing"],
       [
@@ -1623,6 +1671,7 @@ jobs:
     steps:
       - id: selection
         run: echo 'required=true' >> "$GITHUB_OUTPUT"
+      - run: bun test scripts/ci-plan.test.ts
   checks:
     runs-on: ubuntu-latest
     steps:
@@ -1631,7 +1680,7 @@ jobs:
       - if: \${{ ${condition} }}
         run: bun test scripts/named.test.ts
   ci-result:
-    needs: [checks]
+    needs: [ci-plan, checks]
 `);
       const topology = analyzeGatingWorkflow(workflow, [
         {

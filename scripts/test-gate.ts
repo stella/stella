@@ -652,10 +652,26 @@ const isConditionallyRegistered = (node: ts.CallExpression): boolean => {
   }
   return false;
 };
-const registrationAliases = (
-  source: ts.SourceFile,
-): ReadonlyMap<string, RegistrationName> => {
+const assignedRegistrationAlias = (
+  node: ts.Node,
+  aliases: ReadonlyMap<string, RegistrationName>,
+) => {
+  if (
+    !ts.isBinaryExpression(node) ||
+    !ts.isIdentifier(node.left) ||
+    node.operatorToken.kind < ts.SyntaxKind.FirstAssignment ||
+    node.operatorToken.kind > ts.SyntaxKind.LastAssignment ||
+    registrationName(node.right, aliases) === undefined
+  ) {
+    return undefined;
+  }
+  return node.left.text;
+};
+
+const registrationAliases = (source: ts.SourceFile) => {
   const aliases = new Map<string, RegistrationName>();
+  const declarations = new Map<string, ts.VariableDeclaration>();
+  const invalidBindings: { name: string; reason: string }[] = [];
   for (const registration of TEST_REGISTRATIONS) {
     aliases.set(registration, {
       type: "resolved",
@@ -664,6 +680,13 @@ const registrationAliases = (
   }
 
   const discoverAliases = (node: ts.Node): void => {
+    const assigned = assignedRegistrationAlias(node, aliases);
+    if (assigned !== undefined) {
+      aliases.set(assigned, {
+        type: "unresolved",
+        reason: `assigned registration alias ${assigned}`,
+      });
+    }
     if (
       ts.isImportDeclaration(node) &&
       node.importClause?.namedBindings !== undefined
@@ -696,11 +719,13 @@ const registrationAliases = (
       const direct = registrationName(node.initializer, aliases);
       if (direct !== undefined) {
         aliases.set(node.name.text, direct);
+        declarations.set(node.name.text, node);
       }
       if (ts.isConditionalExpression(node.initializer)) {
         const whenTrue = registrationName(node.initializer.whenTrue, aliases);
         const whenFalse = registrationName(node.initializer.whenFalse, aliases);
         if (whenTrue !== undefined && whenFalse !== undefined) {
+          declarations.set(node.name.text, node);
           if (whenTrue.type === "unresolved") {
             aliases.set(node.name.text, whenTrue);
           } else if (whenFalse.type === "unresolved") {
@@ -717,7 +742,25 @@ const registrationAliases = (
     ts.forEachChild(node, discoverAliases);
   };
   discoverAliases(source);
-  return aliases;
+  for (const [name] of aliases) {
+    const declaration = declarations.get(name);
+    const mutable =
+      declaration !== undefined &&
+      ts.isVariableDeclarationList(declaration.parent) &&
+      declaration.parent.getFirstToken(source)?.kind !==
+        ts.SyntaxKind.ConstKeyword;
+    let reason: string | undefined;
+    if (mutable) {
+      reason = `mutable registration alias ${name}`;
+    } else if (writesConfigBinding(source, name)) {
+      reason = `assigned registration alias ${name}`;
+    }
+    if (reason !== undefined) {
+      aliases.set(name, { type: "unresolved", reason });
+      invalidBindings.push({ name, reason });
+    }
+  }
+  return { aliases, invalidBindings };
 };
 
 const literalWindowsSkip = (expression: ts.Expression): boolean => {
@@ -766,7 +809,7 @@ export const parseTestRegistrations = (
   sourceText: string,
 ): RegistrationFinding[] => {
   const source = parseTypeScript(file, sourceText);
-  const aliases = registrationAliases(source);
+  const { aliases, invalidBindings } = registrationAliases(source);
 
   const constantTitles = constantStringBindings(source);
 
@@ -782,7 +825,13 @@ export const parseTestRegistrations = (
     ]),
   );
 
-  const findings: RegistrationFinding[] = [];
+  const findings: RegistrationFinding[] = invalidBindings.map(
+    ({ name, reason }) => ({
+      type: "unresolved",
+      identity: `${file}::<registration alias ${name}>`,
+      reason,
+    }),
+  );
   const suites: string[] = [];
   const enclosingServiceGate = (
     node: ts.CallExpression,
@@ -3219,6 +3268,69 @@ const registeredJobOutputs = (
   return jobReferences;
 };
 
+export const referencedCollectorOutputs = (
+  workflow: unknown,
+): ReadonlySet<string> => {
+  const jobs = workflowRecord(workflowRecord(workflow)?.["jobs"]) ?? {};
+  const needed = new Set<string>();
+  const collect = (jobName: string, expression: unknown): void => {
+    if (typeof expression !== "string") {
+      return;
+    }
+    for (const reference of referencedContexts(expression)) {
+      const step = /^steps\.([\w-]+)\.outputs\.([\w-]+)$/u.exec(reference);
+      const stepId = step?.at(1);
+      const stepOutput = step?.at(2);
+      if (stepId !== undefined && stepOutput !== undefined) {
+        needed.add(`${jobName}/${stepId}.outputs.${stepOutput}`);
+      }
+      const jobOutput = /^needs\.([\w-]+)\.outputs\.([\w-]+)$/u.exec(reference);
+      const producerJob = jobOutput?.at(1);
+      const output = jobOutput?.at(2);
+      if (producerJob !== undefined && output !== undefined) {
+        const exports = workflowRecord(
+          workflowRecord(jobs[producerJob])?.["outputs"],
+        );
+        const value = exports?.[output];
+        if (typeof value === "string") {
+          for (const dependency of referencedContexts(value)) {
+            const match = /^steps\.([\w-]+)\.outputs\.([\w-]+)$/u.exec(
+              dependency,
+            );
+            const id = match?.at(1);
+            const name = match?.at(2);
+            if (id !== undefined && name !== undefined) {
+              needed.add(`${producerJob}/${id}.outputs.${name}`);
+            }
+          }
+        }
+      }
+    }
+  };
+  for (const [name, rawJob] of Object.entries(jobs)) {
+    const job = workflowRecord(rawJob);
+    if (!Array.isArray(job?.["steps"])) {
+      continue;
+    }
+    for (const step of flattenWorkflowSteps(job["steps"])) {
+      const command = step["run"];
+      if (
+        typeof command !== "string" ||
+        !(
+          hasTestCollector(command) ||
+          command.includes("run-in-image.sh") ||
+          command.includes("scripts/run-unlisted-script-tests.ts")
+        )
+      ) {
+        continue;
+      }
+      collect(name, job["if"]);
+      collect(name, step["if"]);
+    }
+  }
+  return needed;
+};
+
 type ValidateTrustedOutputProducersOptions = {
   readonly workflow: unknown;
   readonly registry: readonly TrustedOutputProducer[];
@@ -3237,6 +3349,7 @@ export const validateTrustedOutputProducers = ({
     Array.isArray(resultNeeds) ? resultNeeds : [resultNeeds],
   );
   const findings: string[] = [];
+  const used = referencedCollectorOutputs(workflow);
   const stepReferences = new Map<string, Set<string>>();
   for (const producer of registry) {
     const label = `trusted output producer: ${producer.job}/${producer.stepId}`;
@@ -3309,6 +3422,12 @@ export const validateTrustedOutputProducers = ({
     }
     const references = stepReferences.get(producer.job) ?? new Set<string>();
     for (const output of producer.outputNames) {
+      if (!used.has(`${producer.job}/${producer.stepId}.outputs.${output}`)) {
+        findings.push(
+          `${label} output has no collector condition reader: ${output}`,
+        );
+        continue;
+      }
       if (!available.has(output)) {
         findings.push(`${label} output is missing or renamed: ${output}`);
         continue;
@@ -3335,7 +3454,7 @@ export type GatingWorkflowAnalysis = {
   readonly jobs: ReadonlyMap<string, readonly GatingCommand[]>;
 };
 
-export const analyzeGatingWorkflow = (
+const analyzeWorkflowWithProducerDeclarations = (
   workflow: unknown,
   registry: readonly TrustedOutputProducer[] = TRUSTED_OUTPUT_PRODUCERS,
 ): GatingWorkflowAnalysis => {
@@ -3481,6 +3600,64 @@ export const analyzeGatingWorkflow = (
   };
 };
 
+export const analyzeGatingWorkflow = (
+  workflow: unknown,
+  registry: readonly TrustedOutputProducer[] = TRUSTED_OUTPUT_PRODUCERS,
+): GatingWorkflowAnalysis => {
+  const workflowText = JSON.stringify(workflow);
+  const jobs = workflowRecord(workflowRecord(workflow)?.["jobs"]) ?? {};
+  let creditedRegistry = registry;
+  const rejectedProofs = new Set<string>();
+  while (true) {
+    const analysis = analyzeWorkflowWithProducerDeclarations(
+      workflow,
+      creditedRegistry,
+    );
+    const declarations = validateTrustedOutputProducers({
+      workflow,
+      registry: creditedRegistry,
+      scope: "present-jobs",
+    });
+    const remaining = creditedRegistry.filter((producer) => {
+      if (
+        !(producer.job in jobs) ||
+        !producer.outputNames.some((output) =>
+          declarations.references
+            .get(producer.job)
+            ?.has(`steps.${producer.stepId}.outputs.${output}`),
+        )
+      ) {
+        return true;
+      }
+      const failure = firstCollectionFailure({
+        file: producer.proofTest,
+        scenarios: new Map(),
+        topology: {
+          workflow: workflowText,
+          gatingJobs: analysis.jobs,
+          shardedPackages: new Set<string>(),
+        },
+      });
+      if (failure === undefined) {
+        return true;
+      }
+      rejectedProofs.add(
+        `trusted output producer: ${producer.job}/${producer.stepId} proof test has no gating collector: ${producer.proofTest}; ${failure}`,
+      );
+      return false;
+    });
+    if (remaining.length === creditedRegistry.length) {
+      return {
+        jobs: analysis.jobs,
+        findings: [
+          ...new Set([...analysis.findings, ...rejectedProofs]),
+        ].toSorted(compareCodeUnit),
+      };
+    }
+    creditedRegistry = remaining;
+  }
+};
+
 export const gatingWorkflowJobs = (
   workflow: unknown,
 ): ReadonlyMap<string, readonly GatingCommand[]> =>
@@ -3509,11 +3686,18 @@ const repositoryTestExecutionTopology = (): RepositoryTestExecutionTopology => {
     .map(({ name }) => name);
   const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
   const gatingJobs = analysis.jobs;
-  const planJob =
-    gatingJobs
-      .get("ci-plan")
-      ?.map(({ command }) => command)
-      .join("\n") ?? "";
+  const plannedJob = workflowRecord(
+    workflowRecord(workflowRecord(Bun.YAML.parse(workflow))?.["jobs"])?.[
+      "ci-plan"
+    ],
+  );
+  const planJob = Array.isArray(plannedJob?.["steps"])
+    ? flattenWorkflowSteps(plannedJob["steps"])
+        .flatMap((step) =>
+          typeof step["run"] === "string" ? [step["run"]] : [],
+        )
+        .join("\n")
+    : "";
   cachedRepositoryTestExecutionTopology = {
     workflow,
     gatingJobs,
@@ -4854,6 +5038,11 @@ const validateExecutionTopology = (errors: string[]): void => {
   );
   const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
   const gatingJobs = analysis.jobs;
+  errors.push(
+    ...analysis.findings.filter((finding) =>
+      finding.startsWith("trusted output producer:"),
+    ),
+  );
   // Unsupported steps collect nothing; another gating job may own their files.
   if (analysis.findings.length > 0) {
     console.log(analysis.findings.join("\n"));

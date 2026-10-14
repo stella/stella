@@ -58,6 +58,7 @@ import {
   thinJobs,
 } from "./main-heavy-plan";
 import { unlistedTests } from "./run-unlisted-script-tests";
+import { TRUSTED_OUTPUT_PRODUCERS } from "./test-gate-output-producers";
 import { TEST_JOB_SHARDS, type TestShardId } from "./test-shards";
 import { flattenWorkflowSteps } from "./workflow-steps";
 
@@ -4013,6 +4014,7 @@ type RunChangedFilesOptions = {
   suiteDepth?: SuiteDepth;
   baseRef?: string;
   changedPath?: "bun.lock" | "package.json" | "e2e-spec" | "documentation";
+  changedFiles?: readonly string[];
   gitShim?: string;
 };
 
@@ -4020,6 +4022,7 @@ const runChangedFilesStep = ({
   suiteDepth = "fast",
   baseRef = "main",
   changedPath,
+  changedFiles,
   gitShim,
 }: RunChangedFilesOptions) => {
   const step = jobSteps(ciJobs["ci-plan"]).find(
@@ -4071,7 +4074,8 @@ const runChangedFilesStep = ({
     git(["switch", "--quiet", "-c", "feature"]);
     const unusualDirectory = 'quote"back\\slash\ttab\nnewline';
     const paths =
-      changedPath === undefined
+      changedFiles ??
+      (changedPath === undefined
         ? []
         : [
             changedPath === "e2e-spec"
@@ -4082,7 +4086,7 @@ const runChangedFilesStep = ({
                   `${unusualDirectory}.spec.ts`,
                 )
               : nodePath.join("fixtures", unusualDirectory, changedPath),
-          ];
+          ]);
     for (const [index, file] of paths.entries()) {
       const absolute = nodePath.join(repository, file);
       mkdirSync(nodePath.dirname(absolute), { recursive: true });
@@ -4138,6 +4142,27 @@ for (const changedPath of ["bun.lock", "package.json", "e2e-spec"] as const) {
     expect(outputs.get(scope)).toBe("true");
   });
 }
+
+test("registered changed-file outputs select covered changes at fast and full depth", () => {
+  const outputs = TRUSTED_OUTPUT_PRODUCERS.filter(
+    (producer) =>
+      producer.job === "ci-plan" && producer.stepId === "changed-files",
+  ).flatMap((producer) => producer.outputNames);
+  for (const suiteDepth of ["fast", "full"] as const) {
+    const emitted = runChangedFilesStep({
+      suiteDepth,
+      changedFiles: [
+        ".github/workflows/ci.yml",
+        "bun.lock",
+        "apps/api/src/db/schema.ts",
+        "apps/collab/src/server.ts",
+      ],
+    });
+    for (const output of outputs) {
+      expect(emitted.get(output), `${suiteDepth}/${output}`).toBe("true");
+    }
+  }
+});
 
 test("the production changed-file step skips scans for unrelated or empty diffs", () => {
   for (const options of [{}, { changedPath: "documentation" }] as const) {
