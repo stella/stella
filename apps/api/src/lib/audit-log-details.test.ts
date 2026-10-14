@@ -27,6 +27,9 @@ import {
 } from "@/api/lib/feature-access/registry";
 import { LIST_VERIFICATION_ITEM_OPERATION } from "@/api/lib/lists/item-operations";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { createTestState } from "@/api/tests/helpers/test-state";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 const PRINCIPAL = { organizationId: "org_test", userId: "user_test" };
 const CHANGES = { amount: { old: 100, new: 200 } };
@@ -153,23 +156,21 @@ describe("audit detail policy census", () => {
           return;
         }
         case "deployment-feature": {
-          const previous = env[policy.feature];
           const restoreMode = setRuntimeModeForTesting({
             mode: RUNTIME_MODE.strict,
           });
           try {
-            env[policy.feature] = false;
+            testState.setConfig(policy.feature, false);
             expect(projectAuditReadChanges(input)).toEqual({
               changesStatus: "feature_unavailable",
               changes: null,
             });
-            env[policy.feature] = true;
+            testState.setConfig(policy.feature, true);
             expect(projectAuditReadChanges(input)).toEqual({
               changesStatus: "visible",
               changes: CHANGES,
             });
           } finally {
-            env[policy.feature] = previous;
             restoreMode();
           }
           return;

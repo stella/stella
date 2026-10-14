@@ -47,6 +47,7 @@
     "dated-waiver-healing.yml/heal": "main",
     "release-pr.yml/gate": "main",
     "release-pr.yml/version": "main",
+    "release-proof.yml/dispatch": "pr-fast",
     "main-heavy.yml/validate": "main",
     "main-heavy.yml/suites": "main",
     "main-heavy.yml/status": "main",
@@ -164,8 +165,12 @@
     "main-pr-depth.yml/status": "main",
     "ci.yml/query-perf": "pr-fast",
     "query-perf.yml/query-perf": "pr-fast",
-    "manual-checks.yml/check": "main",
-    "bundle-size-nightly.yml/report": "main"
+    "manual-checks.yml/check": "dispatch-only",
+    "bundle-size-nightly.yml/report": "main",
+    "manual-checks.yml/install-cache-windows": "main",
+    "manual-checks.yml/install-cache-linux": "main",
+    "type-cost-measurement.yml/prepare": "main",
+    "type-cost-measurement.yml/measure": "main"
   },
   "pushMain": {
     "audit-image.yml": {

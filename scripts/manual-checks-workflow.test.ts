@@ -13,7 +13,10 @@ import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { MANUAL_CHECKS, validateManualCheckInput } from "./manual-check-input";
+import {
+  MANUAL_WORKFLOW_CHECKS,
+  validateManualCheckInput,
+} from "./manual-check-input";
 import { groupTestFiles } from "./run-manual-test-files";
 
 const workflowFile = new URL(
@@ -21,6 +24,21 @@ const workflowFile = new URL(
   import.meta.url,
 );
 const workflowText = readFileSync(workflowFile, "utf-8");
+
+test("manual dispatch exposes parity and seeded command proofs with no target", () => {
+  for (const check of ["typecheck-parity", "typecheck-probe"]) {
+    expect(validateManualCheckInput(check, "")).toEqual([]);
+    expect(validateManualCheckInput(check, "@stll/sha256")).toEqual([
+      `target must be empty for ${check}`,
+    ]);
+  }
+  expect(workflowText).toContain(
+    "typecheck-parity) bun run check:typecheck-parity ;;",
+  );
+  expect(workflowText).toContain(
+    "typecheck-probe) bash scripts/typecheck-command-probe.sh ;;",
+  );
+});
 const stepSchema = v.looseObject({
   name: v.optional(v.string()),
   if: v.optional(v.string()),
@@ -55,7 +73,7 @@ const workflowProblems = (text: string): string[] => {
     }),
     workflow.on["workflow_dispatch"],
   ).inputs.check.options;
-  if (JSON.stringify(options) !== JSON.stringify(MANUAL_CHECKS)) {
+  if (JSON.stringify(options) !== JSON.stringify(MANUAL_WORKFLOW_CHECKS)) {
     problems.push("enum");
   }
   if (

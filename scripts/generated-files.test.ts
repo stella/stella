@@ -148,7 +148,7 @@ test("MCP app parser schema imports are registered generation inputs", () => {
   const repoRoot = nodePath.resolve(import.meta.dir, "..");
   const transpiler = new Bun.Transpiler({ loader: "ts" });
   const pending = [
-    ...new Bun.Glob("apps/api/src/mcp/apps/*/parse.ts").scanSync(repoRoot),
+    ...new Bun.Glob("packages/mcp-apps/src/*/parse.ts").scanSync(repoRoot),
   ];
   const visited = new Set<string>();
   while (pending.length > 0) {
@@ -855,7 +855,9 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))
       .toSorted(),
   );
-  const bundle = ciGeneratedStepRun("MCP App bundle and shared assets guard");
+  const bundle = ciGeneratedStepRun(
+    "MCP app package bundles and shared assets guard",
+  );
   const bundleOutputs = generator("mcp-app-bundles")
     .outputs.map((glob) => `"${glob}"`)
     .join(" ");

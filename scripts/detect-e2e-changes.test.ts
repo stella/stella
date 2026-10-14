@@ -1126,7 +1126,12 @@ describe("detect-e2e-changes", () => {
     ).toContain("^[0-9a-f]{40}$");
     expect(
       validateSteps.find(({ name }) => name === "Verify main ancestry")?.run,
-    ).toContain("git merge-base --is-ancestor");
+    ).toContain(
+      'bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"',
+    );
+    expect(
+      validateSteps.find(({ name }) => name === "Fetch main history")?.run,
+    ).toContain("show origin/main:scripts/verify-release-tree-proof.sh");
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
@@ -1436,9 +1441,7 @@ describe("detect-e2e-changes", () => {
       ciBrowser,
       "Restore Bun install cache",
     );
-    expect(cachedSetup["uses"]).toMatch(
-      /^stella\/\.github\/actions\/setup-bun-cached@/u,
-    );
+    expect(cachedSetup["uses"]).toMatch(/^oven-sh\/setup-bun@[a-f0-9]{40}$/u);
     expect(contractRecord(cachedSetup["with"])["bun-version-file"]).toBe(
       "package.json",
     );
