@@ -52,56 +52,6 @@ const abortUpload = async (
   }
 };
 
-/** Hash, stage, and finalize the version bytes; the page holds them until this settles. */
-const putEntityVersion = async ({
-  workspaceId,
-  entityId,
-  file: fileToUpload,
-  signal,
-}: UploadEntityVersionOptions): Promise<EntityVersionUploadResult> => {
-  signal?.throwIfAborted();
-  const sha256Hex = await hashSha256Hex(fileToUpload);
-  signal?.throwIfAborted();
-
-  const wsClient = api.uploads({
-    workspaceId: toSafeId<"workspace">(workspaceId),
-  });
-  const presign = await wsClient.presign.post(
-    {
-      purpose: "entity_version",
-      entityId: toSafeId<"entity">(entityId),
-      name: fileToUpload.name,
-      mimeType: fileToUpload.type || "application/octet-stream",
-      size: fileToUpload.size,
-      sha256Hex,
-    },
-    signal ? { fetch: { signal } } : undefined,
-  );
-  const { uploadId, url, headers } = unwrapEden(presign);
-
-  await completeEntityVersionUpload({
-    abort: async () => await abortUpload(workspaceId, uploadId),
-    finalize: async () => {
-      const response = await wsClient({ uploadId }).finalize.post(
-        undefined,
-        signal ? { fetch: { signal } } : undefined,
-      );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
-    put: async () =>
-      await fetchWithTimeout(url, {
-        method: "PUT",
-        headers,
-        body: fileToUpload,
-        signal,
-        timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
-      }),
-  });
-  return { type: ENTITY_VERSION_UPLOAD_RESULT.uploaded };
-};
-
 /** Upload transformed bytes as a new version through the canonical file path. */
 export const uploadEntityVersion = async ({
   workspaceId,
@@ -125,13 +75,48 @@ export const uploadEntityVersion = async ({
       );
   }
 
-  return await withActiveUpload(
-    async () =>
-      await putEntityVersion({
-        entityId,
-        file: fileToUpload,
-        signal,
-        workspaceId,
-      }),
-  );
+  // The page holds the bytes until this settles, so a reload must prompt.
+  return await withActiveUpload(async () => {
+    signal?.throwIfAborted();
+    const sha256Hex = await hashSha256Hex(fileToUpload);
+    signal?.throwIfAborted();
+
+    const wsClient = api.uploads({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    });
+    const presign = await wsClient.presign.post(
+      {
+        purpose: "entity_version",
+        entityId: toSafeId<"entity">(entityId),
+        name: fileToUpload.name,
+        mimeType: fileToUpload.type || "application/octet-stream",
+        size: fileToUpload.size,
+        sha256Hex,
+      },
+      signal ? { fetch: { signal } } : undefined,
+    );
+    const { uploadId, url, headers } = unwrapEden(presign);
+
+    await completeEntityVersionUpload({
+      abort: async () => await abortUpload(workspaceId, uploadId),
+      finalize: async () => {
+        const response = await wsClient({ uploadId }).finalize.post(
+          undefined,
+          signal ? { fetch: { signal } } : undefined,
+        );
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+      },
+      put: async () =>
+        await fetchWithTimeout(url, {
+          method: "PUT",
+          headers,
+          body: fileToUpload,
+          signal,
+          timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
+        }),
+    });
+    return { type: ENTITY_VERSION_UPLOAD_RESULT.uploaded };
+  });
 };
