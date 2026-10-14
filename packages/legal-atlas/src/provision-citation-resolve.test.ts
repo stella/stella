@@ -143,6 +143,23 @@ describe("resolveProvisionCitation", () => {
     },
   );
 
+  test("a name of another act beside a number is ambiguous; a name the act once bore is not", () => {
+    const read = resolve("§ 10 ZP č. 89/2012 Sb.");
+    expect(read.status).toBe("ambiguous_act");
+    if (read.status === "ambiguous_act") {
+      expect(
+        read.candidates.map(({ workIdentifier }) => workIdentifier),
+      ).toContain("89/2012 Sb.");
+    }
+    // The old civil code by number keeps its recodified title.
+    expect(
+      resolved("§ 420 zákona č. 40/1964 Sb., občanský zákoník"),
+    ).toMatchObject({ workIdentifier: "40/1964 Sb." });
+    expect(
+      resolved("§ 316 zákona č. 262/2006 Sb., zákoník práce"),
+    ).toMatchObject({ workIdentifier: "262/2006 Sb." });
+  });
+
   test("two acts named by number are ambiguous, never the first", () => {
     const read = resolve("§ 10 zákona č. 89/2012 Sb. nebo č. 262/2006 Sb.");
     expect(read.status).toBe("ambiguous_act");

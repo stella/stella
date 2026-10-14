@@ -283,16 +283,18 @@ const readGazetteActs = (
   return works;
 };
 
-const readNamedAct = (
+/**
+ * Every act entry a spelling in the text names, whatever its window.
+ * Longest spellings first: a shorter one inside a longer match is the same
+ * words (`zákoník` inside `zákoník práce`) and is dropped, but a spelling
+ * elsewhere in the text names another act and is kept, so two acts named
+ * side by side (`občanského zákoníku nebo ZP`) are reported, not one picked.
+ */
+const matchNamedActs = (
   rest: string,
   resolver: CompiledResolver,
-  citedOn: string,
-): ActRead => {
+): ActTitleSpec[] => {
   const folded = foldKey(rest);
-  // Longest spellings first: a shorter one inside a longer match is the same
-  // words (`zákoník` inside `zákoník práce`) and is dropped, but a spelling
-  // elsewhere in the text names another act and is kept, so two acts named
-  // side by side (`občanského zákoníku nebo ZP`) are reported, not one picked.
   const accepted: { start: number; end: number; entry: ActTitleSpec }[] = [];
   for (const act of resolver.acts) {
     const found = act.caseSensitive
@@ -313,7 +315,15 @@ const readNamedAct = (
       accepted.push({ start, end, entry: act.entry });
     }
   }
-  const matches = accepted.map(({ entry }) => entry);
+  return accepted.map(({ entry }) => entry);
+};
+
+const readNamedAct = (
+  rest: string,
+  resolver: CompiledResolver,
+  citedOn: string,
+): ActRead => {
+  const matches = matchNamedActs(rest, resolver);
   if (matches.length === 0) {
     return { kind: "none" };
   }
@@ -482,6 +492,31 @@ const resolveAct = (
   }
   const [gazette] = numbered;
   if (gazette !== undefined) {
+    // A name beside the number must be one the numbered act ever bore, in
+    // any window (`č. 40/1964 Sb., občanský zákoník` is the old code by
+    // number); a name of another act (`ZP č. 89/2012 Sb.`) makes it two.
+    const named = matchNamedActs(rest, resolver);
+    if (
+      named.length > 0 &&
+      !named.some((entry) => sameWork(entry.identifier, gazette))
+    ) {
+      const candidates: WorkIdentifier[] = [gazette];
+      for (const entry of named) {
+        if (!candidates.some((work) => sameWork(work, entry.identifier))) {
+          candidates.push(entry.identifier);
+        }
+      }
+      return {
+        kind: "refused",
+        resolution: {
+          status: "ambiguous_act",
+          candidates: candidates.map((work) => ({
+            work,
+            workIdentifier: formatWorkIdentifier(work),
+          })),
+        },
+      };
+    }
     // A number the profile knows carries that act's unit (`§ 10 zákona
     // č. 2/1993 Sb.` names the Charter, which has articles); an act the
     // profile does not list is taken as numbered.
