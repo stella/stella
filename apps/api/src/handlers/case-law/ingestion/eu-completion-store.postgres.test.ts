@@ -1165,12 +1165,16 @@ if (!databaseUrl || !enabled) {
       expect(await state.store.getReceipt(newer.id)).not.toBeNull();
       expect(await state.store.compact({ limit: 100 })).toBe(0);
     });
-    test("finished 100000-row source bounds dry-run selection before receipt filtering", async () => {
+    // The page reads 100 candidates by (source_id, id). The plan shape and the
+    // block bound depend on the page size, not on the source size, so 10000
+    // rows (100x the page) prove the bound with a setup and cleanup that stay
+    // far inside the hook timeouts under CI load.
+    test("finished 10000-row source bounds dry-run selection before receipt filtering", async () => {
       const state = await fixture();
       await db.execute(sql`
         INSERT INTO case_law_decisions (id, source_id, case_number, country, court, language, parser_version, source_hash)
         SELECT md5(${state.sourceId}::text || '-' || n::text)::uuid, ${state.sourceId}::uuid, 'completion-scale-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
-        FROM generate_series(1, 100000) AS n
+        FROM generate_series(1, 10000) AS n
       `);
       await db.execute(sql`
         INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
