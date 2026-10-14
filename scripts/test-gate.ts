@@ -699,627 +699,363 @@ const directTestRunner = ({ words, index }: ShellInvocation) =>
       ].some((script) => words[index + 1]?.endsWith(script)))) ||
   (words[index] === "playwright" && words[index + 1] === "test");
 
-type ShellExecution = "runs" | "skipped" | "unresolved";
-type ShellStatus = "success" | "failure" | "unresolved";
-type ShellControlFrame =
-  | {
-      type: "if";
-      parent: ShellExecution;
-      remaining: ShellExecution;
-      condition: ShellStatus;
-      conditionStart: number;
-      phase: "condition" | "body";
-    }
-  | { type: "opaque"; parent: ShellExecution; terminator: string };
-
-type ShellExecutablePositionsOptions = {
-  readonly tokens: readonly ShellToken[];
-  readonly initialErrexit: boolean;
-  readonly knownRunner: (invocation: ShellInvocation) => boolean;
-};
-
-const SHELL_CONTROL_TERMINATORS = new Map<string, string>([
+const SHELL_COMPOUND_ENDS = new Map([
+  ["if", "fi"],
   ["case", "esac"],
-  ["(", ")"],
-  ["{", "}"],
   ["while", "done"],
   ["until", "done"],
   ["for", "done"],
   ["select", "done"],
+  ["(", ")"],
+  ["{", "}"],
 ]);
 
-const bothShellExecutions = (
-  left: ShellExecution,
-  right: ShellExecution,
-): ShellExecution => {
-  if (left === "skipped" || right === "skipped") {
-    return "skipped";
+const SHELL_CONTEXT_MUTATORS = new Set([
+  "shopt",
+  "trap",
+  "eval",
+  "source",
+  ".",
+  "exec",
+  "return",
+  "command",
+  "builtin",
+  "enable",
+]);
+
+const unsafeFallbackToken = ({ role, value }: ShellToken): boolean =>
+  (role === "operator" && ![";", "\n", "}"].includes(value)) ||
+  (role === "command" && SHELL_CONTEXT_MUTATORS.has(value));
+
+const simpleCommandPosition = (
+  tokens: readonly ShellToken[],
+  index: number,
+): boolean => {
+  const scopes: string[] = [];
+  for (const token of tokens.slice(0, index)) {
+    if (token.role !== "operator") {
+      continue;
+    }
+    const end = SHELL_COMPOUND_ENDS.get(token.value);
+    if (end !== undefined) {
+      scopes.push(end);
+    } else if (token.value === scopes.at(-1)) {
+      scopes.pop();
+    }
   }
-  if (left === "unresolved" || right === "unresolved") {
-    return "unresolved";
-  }
-  return "runs";
+  return scopes.length === 0;
 };
 
-const shellBranchExecution = (
-  outcome: ShellStatus,
-  expected: ShellStatus,
-): ShellExecution => {
-  if (outcome === "unresolved") {
-    return "unresolved";
+const shellSafetyMutation = (
+  tokens: readonly ShellToken[],
+  index: number,
+): string | undefined => {
+  for (let cursor = 0; cursor < index; cursor += 1) {
+    const token = tokens[cursor];
+    if (token?.role !== "command") {
+      continue;
+    }
+    if (SHELL_CONTEXT_MUTATORS.has(token.value)) {
+      return `shell condition: unsupported shell mutation ${token.value}`;
+    }
+    if (
+      token.value === "function" ||
+      (tokens[cursor + 1]?.value === "(" && tokens[cursor + 2]?.value === ")")
+    ) {
+      return "shell condition: function definitions are unsupported";
+    }
+    if (token.value === "false") {
+      return "shell condition: preceding false command does not establish execution";
+    }
+    const args = shellCommandSpan(tokens, cursor + 1).words;
+    if (
+      ["exit", "return"].includes(token.value) &&
+      !literalFailureStatus(args.at(0))
+    ) {
+      return "shell condition: preceding exit or return can skip the runner";
+    }
+    if (token.value !== "set") {
+      continue;
+    }
+    if (args.some((arg) => !literalShellWord(arg))) {
+      return "shell condition: unresolved shell settings";
+    }
+    if (
+      args.some(
+        (arg, offset) =>
+          (arg.startsWith("+") &&
+            arg.includes("e") &&
+            /^[a-z]+$/u.test(arg.slice(1))) ||
+          (/^\+[a-z]*o$/u.test(arg) &&
+            ["errexit", "pipefail"].includes(args[offset + 1] ?? "")),
+      )
+    ) {
+      return "shell condition: shell failure propagation was disabled before the runner";
+    }
   }
-  return outcome === expected ? "runs" : "skipped";
+  return undefined;
 };
 
-class ShellExecutablePositionState {
-  readonly positions = new Set<number>();
-  readonly findings = new Map<number, string>();
-  private readonly options: ShellExecutablePositionsOptions;
-  private readonly words: readonly string[];
-  private readonly frames: ShellControlFrame[] = [];
-  private execution: ShellExecution = "runs";
-  private terminated: ShellExecution = "runs";
-  private status: ShellStatus = "success";
-  private statement: "simple" | "short-circuit" = "simple";
-  private pipelineStatus: ShellStatus | undefined;
-  private assignmentStatus: ShellStatus | undefined;
-  private errexit: boolean;
-  private reason = "shell condition: execution is unresolved";
+// Shell exit statuses wrap modulo 256; accept canonical nonzero bytes.
+const literalFailureStatus = (status: string | undefined): boolean =>
+  status !== undefined && /^[1-9]\d*$/u.test(status) && Number(status) <= 255;
 
-  constructor(options: ShellExecutablePositionsOptions) {
-    this.options = options;
-    this.words = options.tokens.map(({ value }) => value);
-    this.errexit = options.initialErrexit;
-  }
+const separatorToken = (token: ShellToken | undefined): boolean =>
+  token?.role === "operator" && [";", "\n"].includes(token.value);
 
-  scan() {
-    for (let index = 0; index < this.options.tokens.length; index += 1) {
-      const token = this.options.tokens[index];
-      if (token !== undefined) {
-        this.processToken(index, token);
-      }
-    }
-    return {
-      positions: this.frames.length === 0 ? this.positions : new Set<number>(),
-      findings: this.findings,
-    };
-  }
-
-  private processToken(index: number, token: ShellToken) {
-    if (token.role === "operator") {
-      this.processOperator(index, token.value);
-      return;
-    }
-    if (token.role === "assignment") {
-      this.processAssignment(token.value);
-      return;
-    }
-    if (token.role === "command") {
-      this.processCommand(index, token.value);
-    }
-  }
-
-  private processOperator(index: number, value: string) {
-    if (value === "if") {
-      this.beginIf(index);
-      return;
-    }
-    const terminator = SHELL_CONTROL_TERMINATORS.get(value);
-    if (terminator !== undefined) {
-      this.beginOpaque(value, terminator);
-      return;
-    }
-    const frame = this.frames.at(-1);
-    if (frame?.type === "if" && value === "then") {
-      this.enterIfBody(frame, index);
-      return;
-    }
-    if (frame?.type === "if" && (value === "else" || value === "elif")) {
-      this.enterAlternativeBranch(frame, value, index);
-      return;
-    }
-    if (this.endsFrame(frame, value)) {
-      this.endFrame(frame);
-      return;
-    }
-    if (value === "&&" || value === "||") {
-      this.processShortCircuit(value);
-      return;
-    }
-    if (value === "|") {
-      this.pipelineStatus = "unresolved";
-      return;
-    }
-    if (value === ";" || value === "\n") {
-      this.processSeparator(index, value);
-    }
-  }
-
-  private beginIf(index: number) {
-    this.frames.push({
-      type: "if",
-      parent: this.execution,
-      remaining: this.execution,
-      condition: "unresolved",
-      conditionStart: index + 1,
-      phase: "condition",
-    });
-    this.status = "success";
-    this.statement = "simple";
-    this.reason = "shell condition: if condition is not literally true";
-  }
-
-  private beginOpaque(value: string, terminator: string) {
-    this.frames.push({
-      type: "opaque",
-      parent: this.execution,
-      terminator,
-    });
-    this.execution = bothShellExecutions(this.execution, "unresolved");
-    this.reason = `shell condition: ${value} body is unresolved`;
-  }
-
-  private enterIfBody(
-    frame: Extract<ShellControlFrame, { type: "if" }>,
-    index: number,
-  ) {
-    const condition = this.options.tokens
-      .slice(frame.conditionStart, index)
-      .filter(
-        (item) =>
-          !(item.role === "operator" && [";", "\n"].includes(item.value)),
-      );
-    const literal = condition.length === 1 ? condition.at(0) : undefined;
-    if (literal?.role === "command" && literal.value === "true") {
-      frame.condition = "success";
-    } else if (literal?.role === "command" && literal.value === "false") {
-      frame.condition = "failure";
-    } else {
-      frame.condition = "unresolved";
-    }
-    frame.phase = "body";
-    this.execution = bothShellExecutions(
-      this.terminated,
-      this.scopeExecution(),
-    );
-    this.reason = "shell condition: if condition is not literally true";
-    this.status = "success";
-    this.statement = "simple";
-  }
-
-  private enterAlternativeBranch(
-    frame: Extract<ShellControlFrame, { type: "if" }>,
-    value: "else" | "elif",
-    index: number,
-  ) {
-    frame.remaining = bothShellExecutions(
-      frame.remaining,
-      shellBranchExecution(frame.condition, "failure"),
-    );
-    frame.condition = value === "else" ? "success" : "unresolved";
-    frame.phase = value === "else" ? "body" : "condition";
-    frame.conditionStart = index + 1;
-    this.execution = bothShellExecutions(
-      this.terminated,
-      this.scopeExecution(),
-    );
-    this.status = "success";
-    this.statement = "simple";
-  }
-
-  private endsFrame(frame: ShellControlFrame | undefined, value: string) {
-    if (frame?.type === "if") {
-      return value === "fi";
-    }
-    if (frame?.type === "opaque") {
-      return value === frame.terminator;
-    }
+const simplePrefixIsSafe = (
+  tokens: readonly ShellToken[],
+  knownRunner: (invocation: ShellInvocation) => boolean,
+): boolean => {
+  if (tokens.some((token) => token.role === "operator")) {
     return false;
   }
-
-  private endFrame(frame: ShellControlFrame | undefined) {
-    if (frame === undefined) {
-      return;
-    }
-    this.frames.pop();
-    this.execution = bothShellExecutions(this.terminated, frame.parent);
-    this.status = "unresolved";
-    this.statement = "simple";
-  }
-
-  private processShortCircuit(value: "&&" | "||") {
-    this.assignmentStatus = undefined;
-    if (this.pipelineStatus !== undefined) {
-      this.status = this.pipelineStatus;
-    }
-    this.pipelineStatus = undefined;
-    let expected: ShellStatus = "success";
-    if (value === "||") {
-      expected = "failure";
-    }
-    this.execution = bothShellExecutions(
-      bothShellExecutions(this.terminated, this.scopeExecution()),
-      shellBranchExecution(this.status, expected),
-    );
-    this.statement = "short-circuit";
-    this.reason = `shell condition: ${this.status} prefix before ${value} does not guarantee execution`;
-  }
-
-  private processSeparator(index: number, value: ";" | "\n") {
-    const preceding = this.options.tokens[index - 1];
-    const continuesList =
-      value === "\n" &&
-      preceding?.role === "operator" &&
-      ["&&", "||", "|"].includes(preceding.value);
-    if (continuesList) {
-      return;
-    }
-    if (this.pipelineStatus !== undefined) {
-      this.status = this.pipelineStatus;
-    }
-    this.pipelineStatus = undefined;
-    this.assignmentStatus = undefined;
-    if (this.shouldStopAfterFailure()) {
-      this.terminated = "skipped";
-    }
-    this.execution = bothShellExecutions(
-      this.terminated,
-      this.scopeExecution(),
-    );
-    this.statement = "simple";
-  }
-
-  private shouldStopAfterFailure() {
-    const inCondition = this.frames.some(
-      (frame) => frame.type === "if" && frame.phase === "condition",
-    );
+  const commands = tokens.flatMap((token, index) =>
+    token.role === "command" ? [index] : [],
+  );
+  if (commands.length === 0) {
     return (
-      this.execution === "runs" &&
-      this.status === "failure" &&
-      this.statement === "simple" &&
-      this.errexit &&
-      !inCondition
-    );
-  }
-
-  private processAssignment(value: string) {
-    if (this.execution !== "runs") {
-      return;
-    }
-    if (this.assignmentStatus === "unresolved" || !literalShellWord(value)) {
-      this.assignmentStatus = "unresolved";
-    } else {
-      this.assignmentStatus = "success";
-    }
-    this.status = this.assignmentStatus;
-  }
-
-  private processCommand(index: number, value: string) {
-    if (this.isNonExecutable()) {
-      this.findings.set(index, this.reason);
-    }
-    if (this.execution === "runs") {
-      this.recordPosition(index);
-      this.updateErrexit(value, index);
-      this.status = this.commandStatus(index, value);
-      this.updateConditionStatus(index, value);
-      if (value === "exit" || value === "return") {
-        this.terminated = "skipped";
-      }
-      return;
-    }
-    if (this.execution === "unresolved") {
-      this.status = "unresolved";
-      this.updateUnresolvedTermination(index, value);
-    }
-  }
-
-  private isNonExecutable() {
-    return (
-      this.execution !== "runs" ||
-      this.frames.some(
-        (frame) => frame.type === "opaque" || frame.phase === "condition",
+      tokens.length > 0 &&
+      tokens.every(
+        (token) => token.role === "assignment" && literalShellWord(token.value),
       )
     );
   }
-
-  private recordPosition(index: number) {
-    if (!this.isInsideOpaqueControl()) {
-      this.positions.add(index);
-    }
+  if (
+    tokens.some(
+      (token) => token.role === "assignment" && !literalShellWord(token.value),
+    )
+  ) {
+    return false;
   }
-
-  private isInsideOpaqueControl() {
-    return this.frames.some(
-      (frame) => frame.type === "opaque" || frame.phase === "condition",
+  const words = tokens.map(({ value }) => value);
+  return commands.some((index) => {
+    const value = tokens[index]?.value;
+    return (
+      value !== undefined &&
+      (SHELL_SAFE_PREFIXES.get(value)?.(
+        shellCommandSpan(tokens, index + 1).words,
+      ) === true ||
+        knownRunner({ tokens, words, index }))
     );
-  }
-
-  private updateErrexit(value: string, index: number) {
-    const next = this.options.tokens[index + 1]?.value;
-    if (value === "set" && next === "+e") {
-      this.errexit = false;
-    }
-    if (value === "set" && next === "-e") {
-      this.errexit = true;
-    }
-  }
-
-  private commandStatus(index: number, value: string): ShellStatus {
-    const hasArguments = this.options.tokens[index + 1]?.role === "argument";
-    const args = shellCommandSpan(this.options.tokens, index + 1).words;
-    const safePrefix = SHELL_SAFE_PREFIXES.get(value)?.(args) === true;
-    const knownRunner = this.options.knownRunner({
-      words: this.words,
-      tokens: this.options.tokens,
-      index,
-    });
-    if (this.assignmentStatus !== "unresolved" && (safePrefix || knownRunner)) {
-      return "success";
-    }
-    if (!hasArguments && value === "false") {
-      return "failure";
-    }
-    return "unresolved";
-  }
-
-  private updateConditionStatus(index: number, value: string) {
-    const inCondition = this.frames.some(
-      (frame) => frame.type === "if" && frame.phase === "condition",
-    );
-    if (!inCondition) {
-      return;
-    }
-    const hasArguments = this.options.tokens[index + 1]?.role === "argument";
-    if (!hasArguments && value === "true") {
-      this.status = "success";
-      return;
-    }
-    if (!hasArguments && value === "false") {
-      this.status = "failure";
-      return;
-    }
-    this.status = "unresolved";
-  }
-
-  private updateUnresolvedTermination(index: number, value: string) {
-    const status = this.options.tokens[index + 1]?.value ?? "";
-    if (
-      (value === "exit" || value === "return") &&
-      !/^[1-9]\d*$/u.test(status)
-    ) {
-      this.terminated = "unresolved";
-    }
-  }
-
-  private scopeExecution(): ShellExecution {
-    const frame = this.frames.at(-1);
-    if (frame === undefined) {
-      return "runs";
-    }
-    if (frame.type === "opaque") {
-      return bothShellExecutions(frame.parent, "unresolved");
-    }
-    if (frame.phase === "condition") {
-      return frame.remaining;
-    }
-    return bothShellExecutions(
-      frame.remaining,
-      shellBranchExecution(frame.condition, "success"),
-    );
-  }
-}
-
-const shellExecutablePositions = (options: ShellExecutablePositionsOptions) =>
-  new ShellExecutablePositionState(options).scan();
-
-type CapturedFailureStatusOptions = {
-  readonly tokens: readonly ShellToken[];
-  readonly start: number;
-  readonly cursor: number;
+  });
 };
 
-const exitsWithCapturedFailure = ({
-  tokens,
-  start,
-  cursor,
-}: CapturedFailureStatusOptions): boolean => {
-  const before = tokens.slice(start, cursor);
-  const first = before.find(
-    (token) =>
-      !(token.role === "operator" && [";", "\n"].includes(token.value)),
-  );
-  const name =
-    first?.role === "assignment"
-      ? /^([A-Za-z_][A-Za-z0-9_]*)=\$\?$/u.exec(first.value)?.[1]
+const shellPrefixFailure = (
+  tokens: readonly ShellToken[],
+  index: number,
+  knownRunner: (invocation: ShellInvocation) => boolean,
+): string | undefined => {
+  let start = 0;
+  for (let cursor = 0; cursor < index; cursor += 1) {
+    const token = tokens[cursor];
+    if (separatorToken(token)) {
+      const previous = tokens[cursor - 1];
+      if (
+        token?.value === "\n" &&
+        previous?.role === "operator" &&
+        ["&&", "||", "|"].includes(previous.value)
+      ) {
+        continue;
+      }
+      start = cursor + 1;
+    }
+  }
+  let segmentStart = start;
+  for (let cursor = start; cursor < index; cursor += 1) {
+    const token = tokens[cursor];
+    if (token?.role !== "operator") {
+      continue;
+    }
+    if (token.value === "||") {
+      return "shell condition: runner is reached through an unsupported fallback";
+    }
+    if (token.value !== "&&") {
+      continue;
+    }
+    if (!simplePrefixIsSafe(tokens.slice(segmentStart, cursor), knownRunner)) {
+      return "shell condition: unresolved prefix before && does not guarantee execution";
+    }
+    segmentStart = cursor + 1;
+  }
+  return undefined;
+};
+
+const approvedFailureFallbackEnd = (
+  tokens: readonly ShellToken[],
+  start: number,
+): number | undefined => {
+  let cursor = start;
+  while (
+    tokens[cursor]?.role === "operator" &&
+    tokens[cursor]?.value === "\n"
+  ) {
+    cursor += 1;
+  }
+  const grouped =
+    tokens[cursor]?.role === "operator" && tokens[cursor]?.value === "{";
+  if (grouped) {
+    cursor += 1;
+  }
+  const bodyStart = cursor;
+  for (; cursor < tokens.length; cursor += 1) {
+    const token = tokens[cursor];
+    if (token === undefined) {
+      return undefined;
+    }
+    if (unsafeFallbackToken(token)) {
+      return undefined;
+    }
+    if (token.role !== "command" || token.value !== "exit") {
+      if (
+        token.role === "operator" &&
+        (token.value === "}" || (!grouped && separatorToken(token)))
+      ) {
+        return undefined;
+      }
+      continue;
+    }
+    if (!literalFailureStatus(tokens[cursor + 1]?.value)) {
+      return undefined;
+    }
+    if (!grouped && cursor !== bodyStart) {
+      return undefined;
+    }
+    let end = cursor + 2;
+    if (grouped) {
+      while (separatorToken(tokens[end])) {
+        end += 1;
+      }
+      return tokens[end]?.role === "operator" && tokens[end]?.value === "}"
+        ? end + 1
+        : undefined;
+    }
+    return end === tokens.length || separatorToken(tokens[end])
+      ? end
       : undefined;
-  if (name === undefined) {
-    return false;
   }
-  if (
-    before.some(
-      (token) =>
-        token.role === "operator" && ![";", "\n", "||"].includes(token.value),
-    )
-  ) {
-    return false;
+  return undefined;
+};
+
+type ApprovedInvocationOptions = {
+  readonly tokens: readonly ShellToken[];
+  readonly index: number;
+  readonly propagation: ShellPropagation;
+  readonly knownRunner: (invocation: ShellInvocation) => boolean;
+};
+
+const approvedInvocationFailure = ({
+  tokens,
+  index,
+  propagation,
+  knownRunner,
+}: ApprovedInvocationOptions): string | undefined => {
+  if (!simpleCommandPosition(tokens, index)) {
+    return "shell condition: compound command bodies are unsupported";
   }
-  if (
-    before.some(
-      (token) =>
-        token !== first &&
-        token.role === "assignment" &&
-        token.value.startsWith(`${name}=`),
-    )
-  ) {
-    return false;
+  const mutation = shellSafetyMutation(tokens, index);
+  if (mutation !== undefined) {
+    return mutation;
   }
-  if (
-    before.some(
-      (token) =>
-        token.role === "command" &&
-        ["eval", "source", ".", "read", "unset", "export"].includes(
-          token.value,
-        ),
-    )
-  ) {
-    return false;
+  const prefix = shellPrefixFailure(tokens, index, knownRunner);
+  if (prefix !== undefined) {
+    return prefix;
   }
-  const separator = tokens[cursor - 1];
-  const argument = tokens[cursor + 1];
-  return (
-    separator?.role === "operator" &&
-    [";", "\n"].includes(separator.value) &&
-    argument?.role === "argument" &&
-    [`$${name}`, `\${${name}}`].includes(argument.value)
-  );
+  let chained = false;
+  let hasFallback = false;
+  for (let cursor = index + 1; cursor < tokens.length; cursor += 1) {
+    const token = tokens[cursor];
+    if (token?.role !== "operator") {
+      continue;
+    }
+    if (token.value === "&") {
+      return "shell condition: background execution cannot gate";
+    }
+    if (token.value === "|") {
+      if (!propagation.pipefail) {
+        return "shell condition: pipeline failure propagation is disabled";
+      }
+      continue;
+    }
+    if (token.value === "&&") {
+      chained = true;
+      continue;
+    }
+    if (token.value === "||") {
+      if (chained) {
+        return "shell condition: mixed short-circuit fallbacks are unsupported";
+      }
+      const end = approvedFailureFallbackEnd(tokens, cursor + 1);
+      if (end === undefined) {
+        return "shell condition: fallback must exit unconditionally with a literal failure status";
+      }
+      cursor = end - 1;
+      hasFallback = true;
+      continue;
+    }
+    if (separatorToken(token)) {
+      const previous = tokens[cursor - 1];
+      if (
+        token.value === "\n" &&
+        previous?.role === "operator" &&
+        ["&&", "||", "|"].includes(previous.value)
+      ) {
+        continue;
+      }
+      const trailing = tokens
+        .slice(cursor + 1)
+        .some((item) => !separatorToken(item));
+      const nextCommand = tokens
+        .slice(cursor + 1)
+        .find((item) => item.role === "command");
+      if (
+        trailing &&
+        !hasFallback &&
+        nextCommand !== undefined &&
+        ["true", ":", "exit"].includes(nextCommand.value)
+      ) {
+        return "shell condition: later success statements can conceal the runner failure";
+      }
+      if (trailing && !hasFallback && (!propagation.errexit || chained)) {
+        return "shell condition: later statements can conceal the runner failure";
+      }
+      return undefined;
+    }
+    return "shell condition: unsupported command shape after the runner";
+  }
+  return undefined;
 };
 
 const shellInvocationGates = ({
   command,
   matches,
-  propagation,
+  propagation = { errexit: true, pipefail: true },
   knownRunner,
   onUnresolved,
 }: ShellInvocationGatesOptions): boolean => {
-  const pipefail = propagation?.pipefail ?? true;
-  const scriptErrexit = propagation?.errexit ?? true;
   const tokens = shellTokens(command.replaceAll(/\\\r?\n/gu, " "));
   const words = tokens.map(({ value }) => value);
-  const { positions: executablePositions, findings } = shellExecutablePositions(
-    {
+  const recognizedRunner = (invocation: ShellInvocation) =>
+    directTestRunner(invocation) ||
+    matches(invocation) ||
+    knownRunner?.(invocation) === true;
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (
+      tokens[index]?.role !== "command" ||
+      !matches({ tokens, words, index })
+    ) {
+      continue;
+    }
+    const failure = approvedInvocationFailure({
       tokens,
-      initialErrexit: scriptErrexit,
-      knownRunner: (invocation) =>
-        directTestRunner(invocation) ||
-        matches(invocation) ||
-        knownRunner?.(invocation) === true,
-    },
-  );
-  let errexit = true;
-  for (let index = 0; index < words.length; index += 1) {
-    if (tokens[index]?.role !== "command") {
-      continue;
-    }
-    if (!executablePositions.has(index)) {
-      if (matches({ words, tokens, index })) {
-        onUnresolved?.(
-          findings.get(index) ??
-            "shell condition: malformed or unresolved compound command",
-        );
-      }
-      continue;
-    }
-    if (words[index] === "set" && words[index + 1] === "+e") {
-      errexit = false;
-    }
-    if (words[index] === "set" && words[index + 1] === "-e") {
-      errexit = true;
-    }
-    if (!errexit || !matches({ words, tokens, index })) {
-      continue;
-    }
-    const suffix = words.slice(index + 1);
-    const suffixTokens = tokens.slice(index + 1);
-    const succeeds = (offset: number): boolean => {
-      const next = suffix.at(offset);
-      return (
-        suffixTokens[offset]?.role === "command" &&
-        (next === "true" ||
-          next === ":" ||
-          (next === "exit" && suffix.at(offset + 1) === "0"))
-      );
-    };
-    // A `||` fallback swallows the runner's failure unless the fallback itself
-    // fails: `false`, or an `exit` with a non-zero literal status.
-    const fallbackFails = (offset: number): boolean => {
-      const grouped =
-        suffixTokens[offset]?.role === "operator" && suffix.at(offset) === "{";
-      const start = grouped ? offset + 1 : offset;
-      for (let cursor = start; cursor < suffix.length; cursor += 1) {
-        const word = suffix[cursor];
-        if (
-          word === undefined ||
-          (suffixTokens[cursor]?.role === "operator" &&
-            (grouped ? word === "}" : true))
-        ) {
-          return false;
-        }
-        if (
-          suffixTokens[cursor]?.role === "command" &&
-          word === "false" &&
-          (cursor === start || suffix[cursor - 1] === ";")
-        ) {
-          return true;
-        }
-        const status = suffix.at(cursor + 1);
-        if (
-          suffixTokens[cursor]?.role === "command" &&
-          word === "exit" &&
-          status !== undefined &&
-          (/^[1-9]\d*$/u.test(status) ||
-            (grouped &&
-              exitsWithCapturedFailure({
-                tokens: suffixTokens,
-                start,
-                cursor,
-              })))
-        ) {
-          return true;
-        }
-      }
-      return false;
-    };
-    // A newline right after `&&`, `||` or `|` continues the list.
-    const end = suffix.findIndex(
-      (word, offset) =>
-        suffixTokens[offset]?.role === "operator" &&
-        (word === ";" ||
-          (word === "\n" &&
-            !["&&", "||", "|"].includes(
-              offset === 0 ? (words[index] ?? "") : (suffix[offset - 1] ?? ""),
-            ))),
-    );
-    const list = end === -1 ? suffix : suffix.slice(0, end);
-    const pipelineEnd = list.findIndex(
-      (word, offset) =>
-        suffixTokens[offset]?.role === "operator" &&
-        (word === "&&" || word === "||"),
-    );
-    const pipeline = pipelineEnd === -1 ? list : list.slice(0, pipelineEnd);
-    // A background job's status never reaches errexit; a piped runner's status
-    // reaches it only under pipefail.
-    if (
-      pipeline.some(
-        (word, offset) =>
-          suffixTokens[offset]?.role === "operator" &&
-          (word === "&" || (!pipefail && word === "|")),
-      )
-    ) {
-      continue;
-    }
-    const trailing =
-      end !== -1 &&
-      suffix.slice(end + 1).some((word) => word !== ";" && word !== "\n");
-    // errexit ignores a failure on the left of `&&`, so a later statement then
-    // decides the status; without errexit any later statement does.
-    if (
-      trailing &&
-      (!scriptErrexit || (pipelineEnd !== -1 && list[pipelineEnd] === "&&"))
-    ) {
-      continue;
-    }
-    const suppressed =
-      list.some(
-        (word, offset) =>
-          suffixTokens[offset]?.role === "operator" &&
-          word === "||" &&
-          !fallbackFails(offset + 1),
-      ) ||
-      (end !== -1 && succeeds(end + 1));
-    if (!suppressed) {
+      index,
+      propagation,
+      knownRunner: recognizedRunner,
+    });
+    if (failure === undefined) {
       return true;
     }
+    onUnresolved?.(failure);
   }
   return false;
 };
@@ -2382,11 +2118,15 @@ export const packageTestCollectionFailure = ({
     }
     firstFailure ??= failure;
   }
-  return (
-    firstFailure ??
-    conditions.at(0) ??
-    "runner command: test script does not invoke a gating test runner"
-  );
+  if (firstFailure !== undefined) {
+    return firstFailure;
+  }
+  return [
+    "runner command: test script does not invoke a gating test runner",
+    conditions.at(0),
+  ]
+    .filter((reason) => reason !== undefined)
+    .join("; ");
 };
 
 const isTypeScriptTest = (file: string): boolean =>

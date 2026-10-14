@@ -408,7 +408,7 @@ context("test registration census", () => {
             scripts: { test },
           }),
           test,
-        ).toBe(
+        ).toContain(
           "runner command: test script does not invoke a gating test runner",
         );
       }
@@ -500,10 +500,10 @@ context("test registration census", () => {
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       });
-    expect(failure("bun --filter @stll/orphan test; echo done")).toBe(
+    expect(failure("bun --filter @stll/orphan test; echo done")).toContain(
       "job condition: no gating job executes @stll/orphan test",
     );
-    expect(failure("bun --filter @stll/orphan test | cat")).toBe(
+    expect(failure("bun --filter @stll/orphan test | cat")).toContain(
       "job condition: no gating job executes @stll/orphan test",
     );
     expect(
@@ -527,7 +527,7 @@ context("test registration census", () => {
             packageName: "@stll/fixture",
             shardedPackages: new Set<string>(),
           }),
-        ).toBe("job condition: no gating job executes @stll/fixture test");
+        ).toContain("job condition: no gating job executes @stll/fixture test");
       }
       expect(
         packageTestExecutionFailure({
@@ -585,7 +585,7 @@ context("test registration census", () => {
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+    ).toContain("job condition: no gating job executes @stll/orphan test");
   });
 
   check.each([
@@ -782,14 +782,18 @@ context("test registration census", () => {
   });
 
   check.each([
-    ['bun test x.test.ts || { status=$?; echo failed; exit "$status"; }', true],
+    [
+      'bun test x.test.ts || { status=$?; echo failed; exit "$status"; }',
+      false,
+    ],
     ['bun test x.test.ts || { status=$?; status=0; exit "$status"; }', false],
     [
       'bun test x.test.ts || { status=$?; if false; then exit "$status"; fi; }',
       false,
     ],
+    ['bun test x.test.ts || { status=$?; exit "$status"; }', false],
   ])(
-    "captured failure status must propagate unconditionally: %s",
+    "fails closed on captured failure status fallbacks: %s",
     (command, gates) => {
       expect(
         rootCommandExecutionFailure({
@@ -850,7 +854,7 @@ context("test registration census", () => {
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+    ).toContain("job condition: no gating job executes @stll/orphan test");
   });
 
   check.each([
@@ -864,30 +868,37 @@ context("test registration census", () => {
     "RUNNER\nexit 0",
     "set +e\nRUNNER",
     "set +e; RUNNER; set -e",
+    "set +o pipefail; RUNNER | cat",
+    "helper() { true; }; RUNNER",
+    "RUNNER || { exec true; exit 1; }",
+    "RUNNER || exit 256",
   ])("failure-suppressed runners do not gate: %s", (shape) => {
     const packageCommand = shape.replace(
       "RUNNER",
       "bun --filter @stll/orphan test",
     );
     const serviceCommand = "bun run test:postgres";
-    expect([
-      packageTestExecutionFailure({
-        gatingJobs: bashJobs([["package-check", [packageCommand]]]),
-        packageDirectory: "packages/orphan",
-        packageName: "@stll/orphan",
-        shardedPackages: new Set<string>(),
-      }),
-      managedServiceRunnerFailure({
-        command: serviceCommand,
-        gate: "STELLA_RUN_POSTGRES_TESTS",
-        gatingJobs: bashJobs([
-          ["service-suites", [shape.replace("RUNNER", () => serviceCommand)]],
-        ]),
-      }),
-    ]).toEqual([
+    const packageFailure = packageTestExecutionFailure({
+      gatingJobs: bashJobs([["package-check", [packageCommand]]]),
+      packageDirectory: "packages/orphan",
+      packageName: "@stll/orphan",
+      shardedPackages: new Set<string>(),
+    });
+    const serviceFailure = managedServiceRunnerFailure({
+      command: serviceCommand,
+      gate: "STELLA_RUN_POSTGRES_TESTS",
+      gatingJobs: bashJobs([
+        ["service-suites", [shape.replace("RUNNER", () => serviceCommand)]],
+      ]),
+    });
+    expect(packageFailure).toContain(
       "job condition: no gating job executes @stll/orphan test",
+    );
+    expect(packageFailure).toContain("shell condition:");
+    expect(serviceFailure).toContain(
       "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
-    ]);
+    );
+    expect(serviceFailure).toContain("shell condition:");
   });
 
   check.each([
@@ -919,13 +930,15 @@ context("test registration census", () => {
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+    ).toContain("job condition: no gating job executes @stll/orphan test");
     expect(
       rootCommandExecutionFailure({
         command: "bun scripts/test-gate.ts",
         gatingJobs: gatingJobs("bun scripts/test-gate.ts"),
       }),
-    ).toBe("job condition: no gating job executes bun scripts/test-gate.ts");
+    ).toContain(
+      "job condition: no gating job executes bun scripts/test-gate.ts",
+    );
     expect(
       managedServiceRunnerFailure({
         command: "bun run test:postgres",
@@ -995,48 +1008,62 @@ context("test registration census", () => {
     "for item in; do RUNNER; done",
     "false\nRUNNER",
     "false; RUNNER",
-  ])("does not credit a runner in a skipped shell branch: %s", (shape) => {
+    "set +o pipefail; RUNNER | cat",
+    "set +e; set -e; RUNNER",
+    "set +o errexit; RUNNER",
+    "shopt -s inherit_errexit; RUNNER",
+    "trap 'exit 0' ERR; RUNNER",
+    "eval 'true'; RUNNER",
+    ". ./setup.sh; RUNNER",
+    "source ./setup.sh; RUNNER",
+    "if true; then RUNNER; fi",
+    "case ready in ready) RUNNER;; esac",
+    "while true; do RUNNER; done",
+    "until false; do RUNNER; done",
+    "for item in one; do RUNNER; done",
+    "(RUNNER)",
+    "run_runner() { RUNNER; }; run_runner",
+    "RUNNER || { if false; then exit 1; fi; }",
+    "RUNNER || { if true; then exit 1; fi; }",
+    'RUNNER || { status=$?; exit "$status"; }',
+    "RUNNER || false",
+    "RUNNER || { false; }",
+  ])("fails closed on shell control flow: %s", (shape) => {
     const gatingJobs = (runner: string) =>
       bashJobs([["checks", [shape.replace("RUNNER", () => runner)]]]);
-    expect(
-      packageTestExecutionFailure({
-        gatingJobs: gatingJobs("bun --filter @stll/orphan test"),
-        packageDirectory: "packages/orphan",
-        packageName: "@stll/orphan",
-        shardedPackages: new Set<string>(),
-      }),
-    ).toContain("job condition: no gating job executes @stll/orphan test");
-    expect(
-      rootCommandExecutionFailure({
-        command: "bun scripts/test-gate.ts",
-        gatingJobs: gatingJobs("bun scripts/test-gate.ts"),
-      }),
-    ).toContain(
+    const packageFailure = packageTestExecutionFailure({
+      gatingJobs: gatingJobs("bun --filter @stll/orphan test"),
+      packageDirectory: "packages/orphan",
+      packageName: "@stll/orphan",
+      shardedPackages: new Set<string>(),
+    });
+    expect(packageFailure).toContain(
+      "job condition: no gating job executes @stll/orphan test",
+    );
+    expect(packageFailure).toContain("shell condition:");
+    const rootFailure = rootCommandExecutionFailure({
+      command: "bun scripts/test-gate.ts",
+      gatingJobs: gatingJobs("bun scripts/test-gate.ts"),
+    });
+    expect(rootFailure).toContain(
       "job condition: no gating job executes bun scripts/test-gate.ts",
     );
-    expect(
-      managedServiceRunnerFailure({
-        command: "bun run test:postgres",
-        gate: "STELLA_RUN_POSTGRES_TESTS",
-        gatingJobs: gatingJobs("bun run test:postgres"),
-      }),
-    ).toContain(
+    expect(rootFailure).toContain("shell condition:");
+    const serviceFailure = managedServiceRunnerFailure({
+      command: "bun run test:postgres",
+      gate: "STELLA_RUN_POSTGRES_TESTS",
+      gatingJobs: gatingJobs("bun run test:postgres"),
+    });
+    expect(serviceFailure).toContain(
       "job condition: no gating job executes the STELLA_RUN_POSTGRES_TESTS runner",
     );
+    expect(serviceFailure).toContain("shell condition:");
   });
 
   check.each([
-    "set +e; set -e; RUNNER",
     "echo set +e; RUNNER",
-    "FIXTURE_MODE=on RUNNER",
-    "timeout --kill-after=5s 30s RUNNER",
-    "timeout -s TERM -k 5s 30s RUNNER",
-    'bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" RUNNER',
-    "bash .github/actions/setup-playwright/run-in-image.sh --offline RUNNER",
-    "if true; then RUNNER; fi",
-    "cat <<'EOF'\ndata\nEOF\nRUNNER",
-    "RUNNER || exit 1",
-    "RUNNER; cleanup || true",
+    "RUNNER || { exit 1; }",
+    "RUNNER || { true; exit 1; }",
   ])("preserves failure-propagating runners: %s", (shape) => {
     const serviceCommand = "bun run test:postgres";
     expect([
@@ -1078,7 +1105,7 @@ jobs:
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+    ).toContain("job condition: no gating job executes @stll/orphan test");
   });
 
   check("expands matrix legs before evaluating gating events", () => {
@@ -1103,7 +1130,7 @@ jobs:
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+    ).toContain("job condition: no gating job executes @stll/orphan test");
   });
 
   check("an include entry adds back a leg that exclude removed", () => {
@@ -1151,14 +1178,14 @@ jobs:
   ci-result:
     needs: [checks]
 `);
-        expect(
-          rootCommandExecutionFailure({
-            command: "bun scripts/test-gate.ts",
-            gatingJobs: gatingWorkflowJobs(workflow),
-          }),
-        ).toBe(
+        const failure = rootCommandExecutionFailure({
+          command: "bun scripts/test-gate.ts",
+          gatingJobs: gatingWorkflowJobs(workflow),
+        });
+        expect(failure).toContain(
           "job condition: no gating job executes bun scripts/test-gate.ts",
         );
+        expect(failure).toContain("shell condition:");
       }
       const gating = Bun.YAML.parse(`
 jobs:
@@ -1298,7 +1325,7 @@ jobs:
           packageName: "@stll/orphan",
           shardedPackages: new Set<string>(),
         }),
-      ).toBe("job condition: no gating job executes @stll/orphan test");
+      ).toContain("job condition: no gating job executes @stll/orphan test");
 
       const literalBash = Bun.YAML.parse(`
 jobs:
@@ -1394,7 +1421,7 @@ jobs:
             shardedPackages: new Set<string>(),
           }),
           shell,
-        ).toBe("job condition: no gating job executes @stll/orphan test");
+        ).toContain("job condition: no gating job executes @stll/orphan test");
       }
       expect(
         packageTestExecutionFailure({
@@ -1408,7 +1435,7 @@ jobs:
           packageName: "@stll/orphan",
           shardedPackages: new Set<string>(),
         }),
-      ).toBe("job condition: no gating job executes @stll/orphan test");
+      ).toContain("job condition: no gating job executes @stll/orphan test");
       expect(
         analyzeGatingWorkflow(shellWorkflow("bash notpipefail {0}")).findings,
       ).toEqual([
@@ -1454,7 +1481,7 @@ jobs:
           packageName: "@stll/orphan",
           shardedPackages: new Set<string>(),
         }),
-      ).toBe("job condition: no gating job executes @stll/orphan test");
+      ).toContain("job condition: no gating job executes @stll/orphan test");
     },
   );
 
@@ -1481,7 +1508,7 @@ jobs:
           shardedPackages: new Set<string>(),
         }),
         value,
-      ).toBe("job condition: no gating job executes @stll/orphan test");
+      ).toContain("job condition: no gating job executes @stll/orphan test");
     }
   });
 
@@ -1539,7 +1566,7 @@ jobs:
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+    ).toContain("job condition: no gating job executes @stll/orphan test");
   });
 
   check("ignores package commands in steps that continue on error", () => {
@@ -1559,16 +1586,18 @@ jobs:
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+    ).toContain("job condition: no gating job executes @stll/orphan test");
   });
 
-  check("a fallback that fails keeps the runner gating", () => {
-    for (const run of [
-      "bun scripts/test-gate.ts || { echo failed; exit 1; }",
-      "bun scripts/test-gate.ts || false",
-      "bun scripts/test-gate.ts &&\n  bun scripts/network-baseline-scope.ts validate",
-    ]) {
-      const workflow = Bun.YAML.parse(`
+  check(
+    "a fallback with an unconditional literal exit keeps the runner gating",
+    () => {
+      for (const run of [
+        "bun scripts/test-gate.ts || { exit 1; }",
+        "bun scripts/test-gate.ts || { true; exit 1; }",
+        "bun scripts/test-gate.ts &&\n  bun scripts/network-baseline-scope.ts validate",
+      ]) {
+        const workflow = Bun.YAML.parse(`
 jobs:
   checks:
     steps:
@@ -1576,15 +1605,16 @@ jobs:
   ci-result:
     needs: [checks]
 `);
-      expect(
-        rootCommandExecutionFailure({
-          command: "bun scripts/test-gate.ts",
-          gatingJobs: gatingWorkflowJobs(workflow),
-        }),
-        run,
-      ).toBeUndefined();
-    }
-  });
+        expect(
+          rootCommandExecutionFailure({
+            command: "bun scripts/test-gate.ts",
+            gatingJobs: gatingWorkflowJobs(workflow),
+          }),
+          run,
+        ).toBeUndefined();
+      }
+    },
+  );
 
   check("ignores package commands that may continue on error", () => {
     const placements: readonly (readonly [string, string])[] = [
@@ -1609,7 +1639,7 @@ jobs:
           packageName: "@stll/orphan",
           shardedPackages: new Set<string>(),
         }),
-      ).toBe("job condition: no gating job executes @stll/orphan test");
+      ).toContain("job condition: no gating job executes @stll/orphan test");
     }
   });
 
@@ -1630,7 +1660,7 @@ jobs:
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+    ).toContain("job condition: no gating job executes @stll/orphan test");
   });
 
   check("ignores package commands in YAML comments", () => {
@@ -1651,7 +1681,7 @@ jobs:
         packageName: "@stll/orphan",
         shardedPackages: new Set<string>(),
       }),
-    ).toBe("job condition: no gating job executes @stll/orphan test");
+    ).toContain("job condition: no gating job executes @stll/orphan test");
   });
 
   const managedRunnerFailure = (workflow: string) =>
@@ -1741,7 +1771,7 @@ context("root test runner coverage", () => {
         };
         expect(
           firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
-        ).toBe(`job condition: no gating job collects ${file}`);
+        ).toContain(`job condition: no gating job collects ${file}`);
       });
     }
   }
@@ -1773,7 +1803,7 @@ context("root test runner coverage", () => {
     const file = ".oxlint-plugins/other/orphan.test.ts";
     expect(
       firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
-    ).toBe(`job condition: no gating job collects ${file}`);
+    ).toContain(`job condition: no gating job collects ${file}`);
   });
 
   check("custom lint runner selections bound collection", () => {
@@ -1806,7 +1836,7 @@ context("root test runner coverage", () => {
           nonGatingFiles: new Set(),
           topology,
         }),
-      ).toBe(`job condition: no gating job collects ${other}`);
+      ).toContain(`job condition: no gating job collects ${other}`);
     }
   });
 
@@ -1832,7 +1862,9 @@ context("root test runner coverage", () => {
             workflow,
           },
         }),
-      ).toBe("job condition: no gating job collects scripts/named.test.ts");
+      ).toContain(
+        "job condition: no gating job collects scripts/named.test.ts",
+      );
     },
   );
 });
@@ -1921,7 +1953,9 @@ context("suppressed collection", () => {
                 workflow,
               },
             }),
-          ).toBe("job condition: no gating job collects scripts/named.test.ts");
+          ).toContain(
+            "job condition: no gating job collects scripts/named.test.ts",
+          );
         },
       );
     }
@@ -1953,7 +1987,7 @@ context("suppressed collection", () => {
             packageDirectory: "packages/orphan",
             scripts,
           }),
-        ).toBe(
+        ).toContain(
           "runner command: test script does not invoke a gating test runner",
         );
       }

@@ -4242,9 +4242,8 @@ jobs:
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
-            status=$?
-            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
-            exit "$status"
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output"
+            exit 1
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
@@ -4281,9 +4280,8 @@ jobs:
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
           bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
-            status=$?
-            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
-            exit "$status"
+            timeout 60 bun scripts/ci-failure-digest.ts tail "$output"
+            exit 1
           }
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
