@@ -182,7 +182,7 @@ export const readProvisionCitingSentences = async (
       decisionId: link.decisionId,
       // The earliest citing sentence in text order; the public read
       // transaction exposes only `select`, so DISTINCT ON is a grouped read.
-      sentence: sql<string>`(array_agg(${link.sentenceText} ORDER BY ${link.spanStart}, ${link.id}))[1]`,
+      sentence: sql<string>`(array_agg(${link.sentenceText} ORDER BY ${link.spanStart}, ${link.anchor}))[1]`,
     })
     .from(link)
     .where(

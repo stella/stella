@@ -194,6 +194,7 @@ import type {
   McpToolDefinition,
   McpToolHandler,
   TypedMcpToolHandler,
+  TypedMcpToolResponse,
 } from "@/api/mcp/tool-types";
 import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import {
@@ -2511,7 +2512,9 @@ const listSearchCaseLawProvision = async ({
   context,
   country,
   provision,
-}: ListSearchCaseLawProvisionOptions) => {
+}: ListSearchCaseLawProvisionOptions): Promise<
+  TypedMcpToolResponse<v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>>
+> => {
   if (provision === undefined) {
     const message = "Pass queries, a provision, or both";
     return structuredErrorResult({

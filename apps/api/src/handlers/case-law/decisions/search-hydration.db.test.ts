@@ -844,7 +844,7 @@ test("a provision-only list is the complete citing set with an exact total and i
   }
   // § 316 of the labour code: the Czech decision cites odst. 2; the Slovak
   // one cites § 31 of it and § 316 of another act, so it is not listed.
-  expect(listed.hits.map(({ decisionId }) => String(decisionId))).toEqual([
+  expect(listed.hits.map(({ decisionId }) => decisionId)).toEqual([
     String(czechId),
   ]);
   expect(listed.total).toEqual({ type: "exact", count: 1 });
@@ -998,7 +998,7 @@ test("a provision-only list cursor resumes only the request it was issued for", 
     expect(second.nextCursor).toBeNull();
     expect(
       [...first.hits, ...second.hits]
-        .map(({ decisionId }) => String(decisionId))
+        .map(({ decisionId }) => decisionId)
         .toSorted(),
     ).toEqual([String(czechId), String(slovakId)].toSorted());
 

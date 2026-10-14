@@ -2903,7 +2903,7 @@ const readProvisionListCursor = (
   sort: SearchSort,
 ): ProvisionListCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  if (parts === null || parts.length !== 3) {
+  if (parts?.length !== 3) {
     return null;
   }
   const [cursorContext, key, id] = parts;
