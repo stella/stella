@@ -217,7 +217,7 @@ const RateTablesView = ({
       {showForm && (
         <CreateRateTableForm
           onCancel={() => setShowForm(false)}
-          onSubmit={async (values) =>
+          onSubmit={(values) =>
             createTable.mutateAsync({ workspaceId, ...values }).then(
               () => {
                 setShowForm(false);
