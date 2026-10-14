@@ -337,8 +337,13 @@ test("every scoped install key has exactly one declared saver across all workflo
   if (browserStore === undefined) {
     expect.unreachable("Missing browser store callers");
   }
-  const saver = browserStore.savers.at(0)?.replace("ci.yml/", "");
-  expect(mainHeavyJobs(workflows["ci.yml"])).toContain(saver);
+  const saver = browserStore.savers.at(0);
+  if (saver === undefined) {
+    expect.unreachable("Missing browser store saver");
+  }
+  expect(mainHeavyJobs(workflows["ci.yml"])).toContain(
+    saver.replace("ci.yml/", ""),
+  );
 });
 
 test("the census catches duplicate writers, missing writers and per-row mode drift", () => {

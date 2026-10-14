@@ -3383,7 +3383,11 @@ jobs:
 
       - name: Workflow cache policy
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        run: bun test scripts/workflow-cache-policy.test.ts scripts/ci-store-save.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
+        run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
+
+      - name: Store cache save supervisor
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: bun test scripts/ci-store-save.test.ts
 
       - name: Workflow lint
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}

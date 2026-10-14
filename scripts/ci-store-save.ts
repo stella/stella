@@ -85,7 +85,7 @@ type RunCacheSaveOptions = {
   stallMs?: number;
   pollMs?: number;
 };
-export const runCacheSave = ({
+export const runCacheSave = async ({
   entry,
   directory,
   env,
@@ -152,7 +152,13 @@ export const runCacheSave = ({
       } catch (error) {
         clearInterval(timer);
         killTree(child);
-        reject(error);
+        reject(
+          error instanceof Error
+            ? error
+            : new StoreSaveError("Cache save monitoring failed", {
+                cause: error,
+              }),
+        );
       }
     }, pollMs);
     child.on("error", (error) => {
