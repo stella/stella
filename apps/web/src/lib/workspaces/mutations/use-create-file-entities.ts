@@ -29,6 +29,7 @@ import { resolveDocumentReferenceMatches } from "@/lib/files/document-reference-
 import { useDocumentReferenceUploadStore } from "@/lib/files/document-reference-upload-store";
 import { toSafeId } from "@/lib/safe-id";
 import { UploadQueue } from "@/lib/upload-queue";
+import { retainActiveUpload } from "@/lib/uploads/active-uploads";
 import {
   buildDroppedFolderUploadPlan,
   type DroppedFolderUploadPlan,
@@ -447,23 +448,30 @@ type BatchUploadOptions = {
 export const uploadFileEntitiesBatched = async (
   options: BatchUploadOptions,
 ): Promise<UploadResult[]> => {
-  const {
-    files,
-    workspaceId,
-    propertyId,
-    parentId,
-    parentIdForFile,
-    preparedUploadForFile,
-    onPreparedUploadFailed,
-    labels,
-    onError,
-  } = options;
-
-  if (files.length === 0) {
+  if (options.files.length === 0) {
     return [];
   }
 
-  return await new Promise<UploadResult[]>((resolve) => {
+  const releaseActiveUpload = retainActiveUpload();
+  try {
+    return await runUploadBatch(options);
+  } finally {
+    releaseActiveUpload();
+  }
+};
+
+const runUploadBatch = async ({
+  files,
+  workspaceId,
+  propertyId,
+  parentId,
+  parentIdForFile,
+  preparedUploadForFile,
+  onPreparedUploadFailed,
+  labels,
+  onError,
+}: BatchUploadOptions): Promise<UploadResult[]> =>
+  await new Promise<UploadResult[]>((resolve) => {
     const completedFiles = new Set<File>();
     const queue = new UploadQueue<UploadResult>(async (file, signal) => {
       const preparedUpload = preparedUploadForFile?.(file);
@@ -624,7 +632,6 @@ export const uploadFileEntitiesBatched = async (
 
     queue.enqueue(files);
   });
-};
 
 /**
  * Whether these files still owe the user the question "is this a new version
