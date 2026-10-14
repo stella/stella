@@ -10,7 +10,6 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
@@ -93,6 +92,7 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 
+import { selectUpcomingAgenda } from "./overview-agenda.logic";
 import { OverviewTimeRead, OverviewTimeTrend } from "./overview-time-read";
 
 type OverviewViewProps = {
@@ -306,12 +306,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
   const hasActivity = recentEntities.length > 0;
 
-  // Tasks from recent entities (kind === "task")
-  const tasks = useMemo(
-    () => data.recentEntities.filter((e) => e.kind === "task"),
-    [data.recentEntities],
-  );
-
   // Re-compute the current date when the user returns to the
   // tab so the heatmap refreshes across day/week boundaries.
   const [today, setToday] = useState(() =>
@@ -334,6 +328,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   });
+
+  const tasks = useMemo(
+    () => selectUpcomingAgenda(data.recentEntities, today),
+    [data.recentEntities, today],
+  );
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
@@ -432,17 +431,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
-  // Tasks with due dates, sorted by nearest deadline first
+  // The agenda is already ordered by nearest deadline.
   const tasksWithDue = useMemo(
-    () =>
-      tasks
-        .filter(
-          (task) =>
-            task.dueDate !== null &&
-            task.status !== "done" &&
-            task.status !== "cancelled",
-        )
-        .toSorted((a, b) => compareCodeUnit(a.dueDate ?? "", b.dueDate ?? "")),
+    () => tasks.filter((task) => task.dueDate !== null),
     [tasks],
   );
 
@@ -622,16 +613,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           status={task.status}
                         />
                         <div className="min-w-0 flex-1">
-                          <p
-                            className={cn(
-                              "truncate text-sm",
-                              (task.status === "done" ||
-                                task.status === "cancelled") &&
-                                "text-muted-foreground line-through",
-                            )}
-                          >
-                            {task.name}
-                          </p>
+                          <p className="truncate text-sm">{task.name}</p>
                           <span className="text-muted-foreground flex items-center gap-1 text-xs">
                             {task.assignedTo !== null && (
                               <PersonMentionLabel
