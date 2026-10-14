@@ -15,12 +15,6 @@ import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { useTranslations } from "use-intl";
 
-import { findBodyPmSpans } from "@stll/folio-core/layout-bridge/dom/findBodyPmSpans";
-import {
-  createTextStreamRange,
-  descendantTextNodes,
-  totalTextLength,
-} from "@stll/folio-core/layout-bridge/dom/textStreamDom";
 import { Button } from "@stll/ui/button";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { textMarkHighlightRule } from "@stll/ui/text-mark";
@@ -28,12 +22,15 @@ import type { TextMarkState } from "@stll/ui/text-mark";
 
 import { PeekPdfViewer } from "@/components/pdf/peek/peek-pdf-viewer";
 import {
-  claimAtPoint,
+  claimUnderPoint,
+  MARK_PRIORITY,
+  paintClaimRanges,
+  resolveHighlightApi,
+} from "@/features/avt/original-docx-paint";
+import {
   claimHighlightName,
   locateClaimsInDocument,
-  paintedSegments,
 } from "@/features/avt/original-docx.logic";
-import type { Box } from "@/features/avt/original-docx.logic";
 import { STATE_COLOR, StateSwatch } from "@/features/avt/state-chip";
 import type {
   ClaimState,
@@ -42,13 +39,6 @@ import type {
 } from "@/features/avt/types";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
-
-/** Each mark's highlight priority: the selected claim paints over the rest. */
-const MARK_PRIORITY = {
-  rest: 0,
-  matched: 1,
-  active: 2,
-} as const satisfies Record<TextMarkState, number>;
 
 const MARK_STATES = Object.keys(MARK_PRIORITY).filter(
   (mark): mark is TextMarkState => mark in MARK_PRIORITY,
@@ -126,10 +116,13 @@ export const OriginalDocxView = ({
     MARK_STATES.map((mark) => claimHighlightName(run.id, state, mark)),
   );
 
+  // Null where the browser lacks the Custom Highlight API: nothing is
+  // painted, and the ranges still answer clicks.
+  const highlightApi = resolveHighlightApi(globalThis);
+
   const clearHighlights = useLatestCallback(() => {
     for (const name of highlightNames) {
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.delete(name);
+      highlightApi?.delete(name);
     }
   });
 
@@ -143,49 +136,12 @@ export const OriginalDocxView = ({
     if (root === null) {
       return;
     }
-    const spanElements = findBodyPmSpans(root);
-    const spans = spanElements.map((element) => ({
-      pmStart: Number(element.dataset["pmStart"]),
-      pmEnd: Number(element.dataset["pmEnd"]),
-    }));
-    const byName = new Map<string, { ranges: Range[]; priority: number }>();
-    const ranges = new Map<VerificationClaim["id"], Range[]>();
-    for (const { location, state, mark } of marks) {
-      const claimRanges: Range[] = [];
-      for (const segment of paintedSegments(spans, location)) {
-        const element = spanElements.at(segment.spanIndex);
-        if (element === undefined) {
-          continue;
-        }
-        const length = totalTextLength(descendantTextNodes(element));
-        const range = createTextStreamRange(
-          element,
-          segment.start,
-          Math.min(segment.end, length),
-        );
-        if (range !== null) {
-          claimRanges.push(range);
-        }
-      }
-      ranges.set(location.claimId, claimRanges);
-      if (mark === null || claimRanges.length === 0) {
-        continue;
-      }
-      const name = claimHighlightName(run.id, state, mark);
-      const entry = byName.get(name) ?? {
-        ranges: [],
-        priority: MARK_PRIORITY[mark],
-      };
-      entry.ranges.push(...claimRanges);
-      byName.set(name, entry);
-    }
-    rangesRef.current = ranges;
-    for (const [name, entry] of byName) {
-      const highlight = new Highlight(...entry.ranges);
-      highlight.priority = entry.priority;
-      // oxlint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
-      CSS.highlights?.set(name, highlight);
-    }
+    rangesRef.current = paintClaimRanges({
+      root,
+      marks,
+      scope: run.id,
+      api: highlightApi,
+    });
   });
 
   const schedulePaint = useLatestCallback(() => {
@@ -228,16 +184,8 @@ export const OriginalDocxView = ({
     schedulePaint();
   }, [marksKey, schedulePaint]);
 
-  const claimUnder = (event: React.MouseEvent) => {
-    const boxes = new Map<VerificationClaim["id"], Box[]>();
-    for (const [id, ranges] of rangesRef.current) {
-      boxes.set(
-        id,
-        ranges.flatMap((range) => [...range.getClientRects()]),
-      );
-    }
-    return claimAtPoint(boxes, { x: event.clientX, y: event.clientY });
-  };
+  const claimUnder = (event: React.MouseEvent) =>
+    claimUnderPoint(rangesRef.current, { x: event.clientX, y: event.clientY });
 
   return (
     <div className="flex h-full min-h-0 flex-col">
