@@ -1,17 +1,62 @@
 {
-  "apps/api/src/db/entity-feature-gate-metadata.ts::reads-authorization-view": "Row policy definition: part of the gate itself, not a consumer of it.",
-  "apps/api/src/db/entity-feature-policies.ts::reads-authorization-view": "Row policy definition: part of the gate itself, not a consumer of it.",
-  "apps/api/src/db/rls.ts::reads-authorization-view": "Declares the view and the workspace row policies that consult it.",
-  "apps/api/src/handlers/entities/join-folio-collab-room.ts::derives-matter-access": "Rechecks the joining member's matter membership inside a transaction that pins the matter, where the view would admit the pinned id; moves to the owner module once it offers a membership-only check.",
-  "apps/api/src/lib/auth.ts::derives-matter-access": "Route authorization and realtime audience resolution run on the owner connection before a scoped transaction exists; the proved id is pinned and every later read passes the row policies. Moves to the owner module once it offers a per-member check.",
-  "apps/api/src/lib/db/member-access-hold.ts::derives-matter-access": "Share-locks the membership rows an operation depends on and reports which requested matters stay reachable, so a concurrent removal serializes with the operation; reads the rows directly so pinned matters do not count. Moves to the owner module once it offers a membership-only check.",
-  "apps/api/src/lib/delete-account.ts::owner-connection-workspace-set": "Account deletion reassigns work among the remaining members of the departing user's matters; a system operation, not a reader's allowlist.",
-  "apps/api/src/lib/desktop-edit-handoffs.ts::derives-matter-access": "Re-evaluates a desktop handoff credential against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
-  "apps/api/src/lib/desktop-edit-sessions.ts::derives-matter-access": "Re-evaluates a desktop edit session credential against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
-  "apps/api/src/lib/files/pdf-signing/sessions.ts::derives-matter-access": "Re-evaluates a signing session credential against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
-  "apps/api/src/lib/folio-collab-rooms.ts::derives-matter-access": "Re-evaluates a collaboration room token against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
-  "apps/api/src/lib/lists/verification/access-context.ts::derives-matter-access": "Background list verification rechecks the requesting member before pinning its one matter; moves to the owner module once it offers a per-member check.",
-  "apps/api/src/lib/search/index-global.ts::owner-connection-workspace-set": "The owner connection only maintains search projections; reads take the caller's scoped transaction and filter by the ids the request resolved through the owner module.",
-  "apps/api/src/lib/time-entry-timer-access.ts::derives-matter-access": "Rechecks the timer owner's matter access under a matter lock when a timer starts, changes or finalizes; moves to the owner module once it offers a membership-only check.",
-  "apps/api/src/lib/workspace-deletion.ts::derives-matter-access": "Authorizes matter deletion for the acting member inside a transaction that pins the matter; moves to the owner module once it offers a membership-only check."
+  "apps/api/src/db/entity-feature-gate-metadata.ts::reads-authorization-view": {
+    "reason": "Row policy definition: part of the gate itself, not a consumer of it.",
+    "sites": 1
+  },
+  "apps/api/src/db/entity-feature-policies.ts::reads-authorization-view": {
+    "reason": "Row policy definition: part of the gate itself, not a consumer of it.",
+    "sites": 1
+  },
+  "apps/api/src/db/rls.ts::reads-authorization-view": {
+    "reason": "Declares the view and the workspace row policies that consult it.",
+    "sites": 7
+  },
+  "apps/api/src/handlers/entities/join-folio-collab-room.ts::derives-matter-access": {
+    "reason": "Rechecks the joining member's matter membership inside a transaction that pins the matter, where the view would admit the pinned id; moves to the owner module once it offers a membership-only check.",
+    "sites": 4
+  },
+  "apps/api/src/lib/auth.ts::derives-matter-access": {
+    "reason": "Route authorization and realtime audience resolution run on the owner connection before a scoped transaction exists; the proved id is pinned and every later read passes the row policies. Moves to the owner module once it offers a per-member check.",
+    "sites": 4
+  },
+  "apps/api/src/lib/db/member-access-hold.ts::derives-matter-access": {
+    "reason": "Share-locks the membership rows an operation depends on and reports which requested matters stay reachable, so a concurrent removal serializes with the operation; reads the rows directly so pinned matters do not count. Moves to the owner module once it offers a membership-only check.",
+    "sites": 6
+  },
+  "apps/api/src/lib/delete-account.ts::owner-connection-workspace-set": {
+    "reason": "Account deletion reassigns work among the remaining members of the departing user's matters; a system operation, not a reader's allowlist.",
+    "sites": 1
+  },
+  "apps/api/src/lib/desktop-edit-handoffs.ts::derives-matter-access": {
+    "reason": "Re-evaluates a desktop handoff credential against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
+    "sites": 4
+  },
+  "apps/api/src/lib/desktop-edit-sessions.ts::derives-matter-access": {
+    "reason": "Re-evaluates a desktop edit session credential against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
+    "sites": 8
+  },
+  "apps/api/src/lib/files/pdf-signing/sessions.ts::derives-matter-access": {
+    "reason": "Re-evaluates a signing session credential against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
+    "sites": 8
+  },
+  "apps/api/src/lib/folio-collab-rooms.ts::derives-matter-access": {
+    "reason": "Re-evaluates a collaboration room token against live membership before pinning its one matter; moves to the owner module once it offers a per-member check.",
+    "sites": 4
+  },
+  "apps/api/src/lib/lists/verification/access-context.ts::derives-matter-access": {
+    "reason": "Background list verification rechecks the requesting member before pinning its one matter; moves to the owner module once it offers a per-member check.",
+    "sites": 4
+  },
+  "apps/api/src/lib/search/index-global.ts::owner-connection-workspace-set": {
+    "reason": "The owner connection only maintains search projections; reads take the caller's scoped transaction and filter by the ids the request resolved through the owner module.",
+    "sites": 18
+  },
+  "apps/api/src/lib/time-entry-timer-access.ts::derives-matter-access": {
+    "reason": "Rechecks the timer owner's matter access under a matter lock when a timer starts, changes or finalizes; moves to the owner module once it offers a membership-only check.",
+    "sites": 1
+  },
+  "apps/api/src/lib/workspace-deletion.ts::derives-matter-access": {
+    "reason": "Authorizes matter deletion for the acting member inside a transaction that pins the matter; moves to the owner module once it offers a membership-only check.",
+    "sites": 4
+  }
 }

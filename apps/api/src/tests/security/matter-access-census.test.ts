@@ -53,11 +53,13 @@ describe("matter access census", () => {
   });
 
   test("the census reaches the owner module and finds it screened", () => {
-    expect(findings).toContainEqual({
-      file: AUTHORIZED_WORKSPACE_OWNER_FILE,
-      signal: "reads-authorization-view",
-      screened: true,
-    });
+    expect(findings).toContainEqual(
+      expect.objectContaining({
+        file: AUTHORIZED_WORKSPACE_OWNER_FILE,
+        signal: "reads-authorization-view",
+        screened: true,
+      }),
+    );
   });
 
   test("request and MCP workspace sets come from the owner module", () => {
@@ -69,8 +71,9 @@ describe("matter access census", () => {
   });
 
   test("every allowlist entry states a reason", () => {
-    for (const reason of Object.values(allowlist)) {
+    for (const { reason, sites } of Object.values(allowlist)) {
       expect(reason.trim().length).toBeGreaterThan(20);
+      expect(Number.isInteger(sites) && sites > 0).toBe(true);
     }
   });
 
@@ -97,12 +100,27 @@ describe("matter access census", () => {
     expect(prior.exitCode).toBe(0);
     const parsed: unknown = JSON.parse(new TextDecoder().decode(prior.stdout));
     expect(typeof parsed === "object" && parsed !== null).toBe(true);
-    const existing = new Set(
-      typeof parsed === "object" && parsed !== null ? Object.keys(parsed) : [],
-    );
-    expect(Object.keys(allowlist).filter((key) => !existing.has(key))).toEqual(
-      [],
-    );
+    const priorEntries: Record<string, unknown> =
+      typeof parsed === "object" && parsed !== null ? { ...parsed } : {};
+    expect(
+      Object.keys(allowlist).filter((key) => !(key in priorEntries)),
+    ).toEqual([]);
+    // An entry's pinned site count may only fall, never rise.
+    const priorSites = (key: string) => {
+      const entry = priorEntries[key];
+      return typeof entry === "object" &&
+        entry !== null &&
+        "sites" in entry &&
+        typeof entry.sites === "number"
+        ? entry.sites
+        : undefined;
+    };
+    expect(
+      Object.entries(allowlist).filter(([key, { sites }]) => {
+        const before = priorSites(key);
+        return before !== undefined && sites > before;
+      }),
+    ).toEqual([]);
   });
 });
 
@@ -128,10 +146,30 @@ describe("matter access census self-test", () => {
         file: "apps/api/src/lib/example-reader.ts",
         signal: "owner-connection-workspace-set",
         screened: false,
+        sites: 1,
       },
     ]);
     expect(evaluateMatterAccessCensus(findings, {}).violations).toEqual([
       "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set",
+    ]);
+  });
+
+  test("an exempted module that gains an access site fails the census", () => {
+    const findings = classifyMatterAccessModule(
+      "apps/api/src/lib/example-reader.ts",
+      `${unscreenedReader}
+      export const readMore = async (otherIds: string[]) =>
+        await rootDb.select().from(entities).where(inArray(entities.workspaceId, otherIds));`,
+    );
+    expect(
+      evaluateMatterAccessCensus(findings, {
+        "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set": {
+          reason: "One reviewed projection reader.",
+          sites: 1,
+        },
+      }).violations,
+    ).toEqual([
+      "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set has 2 sites, allowed 1",
     ]);
   });
 
@@ -200,6 +238,7 @@ describe("matter access census self-test", () => {
         file: "apps/api/src/lib/example-rule.ts",
         signal: "derives-matter-access",
         screened: false,
+        sites: 1,
       },
     ]);
   });
@@ -207,8 +246,10 @@ describe("matter access census self-test", () => {
   test("an allowlist entry whose finding is gone is reported as stale", () => {
     expect(
       evaluateMatterAccessCensus([], {
-        "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set":
-          "reason",
+        "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set": {
+          reason: "reason",
+          sites: 1,
+        },
       }).stale,
     ).toEqual([
       "apps/api/src/lib/example-reader.ts::owner-connection-workspace-set",

@@ -49,6 +49,12 @@ export type MatterAccessFinding = {
   signal: MatterAccessSignal;
   /** Whether the module meets the rule for this signal on its own. */
   screened: boolean;
+  /**
+   * How many sites in the module show the signal. An allowlist entry pins
+   * this count, so a new site in an exempted module fails instead of
+   * inheriting the exemption.
+   */
+  sites: number;
 };
 
 const VIEW_IDENTIFIERS = new Set([
@@ -88,6 +94,31 @@ const MUTATING_METHODS = new Set([
   "set",
 ]);
 
+/**
+ * A column that holds a matter id: any `<table>.workspaceId`, or the
+ * matters table's own `workspaces.id`.
+ */
+const isMatterIdColumn = (column: ts.Expression): boolean =>
+  ts.isPropertyAccessExpression(column) &&
+  (column.name.text === "workspaceId" ||
+    (column.name.text === "id" &&
+      ts.isIdentifier(column.expression) &&
+      column.expression.text === "workspaces"));
+
+/** The binding at the bottom of a member chain (`a` for `a.b[0].c`). */
+const rootBinding = (expression: ts.Expression): string | undefined => {
+  let current = expression;
+  while (
+    ts.isPropertyAccessExpression(current) ||
+    ts.isElementAccessExpression(current) ||
+    ts.isParenthesizedExpression(current) ||
+    ts.isNonNullExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return ts.isIdentifier(current) ? current.text : undefined;
+};
+
 /** Every identifier a declaration binds, through destructuring. */
 const boundNames = (name: ts.BindingName): string[] => {
   if (ts.isIdentifier(name)) {
@@ -108,12 +139,15 @@ type Facts = {
    */
   filtersDeriveFromOwner: boolean;
   importsRootDbValue: boolean;
-  namesView: boolean;
-  namesMembership: boolean;
+  /** Sites in the module that show this signal. */
+  namesView: number;
+  /** Sites in the module that show this signal. */
+  namesMembership: number;
   namesRoleRule: boolean;
   namesMemberRole: boolean;
   namesClientId: boolean;
-  filtersWorkspaceSet: boolean;
+  /** Sites in the module that show this signal. */
+  filtersWorkspaceSet: number;
 };
 
 const literalText = (node: ts.Node): string | undefined => {
@@ -350,15 +384,18 @@ const recordDataFlow = (
         : null,
     });
   }
-  // In-place mutation (`ids.push(other)`, `set.add(other)`, `ids[i] = …`)
-  // can mix in any value, so the mutated binding never derives.
+  // In-place mutation (`ids.push(other)`, `result.value.ids.push(other)`,
+  // `set.add(other)`) can mix in any value, so the binding at the root of the
+  // receiver never derives.
   if (
     ts.isCallExpression(node) &&
     ts.isPropertyAccessExpression(node.expression) &&
-    ts.isIdentifier(node.expression.expression) &&
     MUTATING_METHODS.has(node.expression.name.text)
   ) {
-    mutatedNames.add(node.expression.expression.text);
+    const receiverRoot = rootBinding(node.expression.expression);
+    if (receiverRoot !== undefined) {
+      mutatedNames.add(receiverRoot);
+    }
   }
   // A write to any member of a binding (`ids[0] = …`, `result.value = …`,
   // `result.value.ids = …`, `delete result.value`) replaces part of what it
@@ -403,12 +440,12 @@ const readFacts = (file: string, source: string): Facts => {
     callsOwner: false,
     filtersDeriveFromOwner: true,
     importsRootDbValue: false,
-    namesView: false,
-    namesMembership: false,
+    namesView: 0,
+    namesMembership: 0,
     namesRoleRule: false,
     namesMemberRole: false,
     namesClientId: false,
-    filtersWorkspaceSet: false,
+    filtersWorkspaceSet: 0,
   };
   const ownerBindings = new Set<string>();
   const ownerNamespaces = new Set<string>();
@@ -418,6 +455,16 @@ const readFacts = (file: string, source: string): Facts => {
   const derivations: { names: string[]; from: ts.Node | null }[] = [];
   const mutatedNames = new Set<string>();
   const flow: DataFlow = { filterArguments, derivations, mutatedNames };
+  const inArrayNames = new Set<string>();
+  const drizzleNamespaces = new Set<string>();
+  const isInArrayCall = (node: ts.Node): node is ts.CallExpression =>
+    ts.isCallExpression(node) &&
+    ((ts.isIdentifier(node.expression) &&
+      inArrayNames.has(node.expression.text)) ||
+      (ts.isPropertyAccessExpression(node.expression) &&
+        ts.isIdentifier(node.expression.expression) &&
+        drizzleNamespaces.has(node.expression.expression.text) &&
+        node.expression.name.text === "inArray"));
   const visit = (node: ts.Node): void => {
     if (
       ts.isImportDeclaration(node) &&
@@ -442,6 +489,25 @@ const readFacts = (file: string, source: string): Facts => {
           }
         }
       }
+      // `inArray` under any local name, or through a namespace import.
+      if (
+        specifier === "drizzle-orm" &&
+        node.importClause?.isTypeOnly !== true &&
+        bindings !== undefined
+      ) {
+        if (ts.isNamespaceImport(bindings)) {
+          drizzleNamespaces.add(bindings.name.text);
+        } else {
+          for (const element of bindings.elements) {
+            if (
+              !element.isTypeOnly &&
+              (element.propertyName ?? element.name).text === "inArray"
+            ) {
+              inArrayNames.add(element.name.text);
+            }
+          }
+        }
+      }
       if (
         specifier === "@/api/db/root" &&
         node.importClause?.isTypeOnly !== true &&
@@ -461,10 +527,10 @@ const readFacts = (file: string, source: string): Facts => {
     if (ts.isIdentifier(node)) {
       const name = node.text;
       if (VIEW_IDENTIFIERS.has(name)) {
-        facts.namesView = true;
+        facts.namesView += 1;
       }
       if (name === "workspaceMembers") {
-        facts.namesMembership = true;
+        facts.namesMembership += 1;
       }
       if (ROLE_RULE_IDENTIFIERS.has(name)) {
         facts.namesRoleRule = true;
@@ -473,7 +539,7 @@ const readFacts = (file: string, source: string): Facts => {
         facts.namesClientId = true;
       }
       if (WORKSPACE_SET_IDENTIFIERS.has(name)) {
-        facts.filtersWorkspaceSet = true;
+        facts.filtersWorkspaceSet += 1;
       }
     }
     if (
@@ -484,19 +550,10 @@ const readFacts = (file: string, source: string): Facts => {
     ) {
       facts.namesMemberRole = true;
     }
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      node.expression.text === "inArray"
-    ) {
-      const [column] = node.arguments;
-      const [, set] = node.arguments;
-      if (
-        column !== undefined &&
-        ts.isPropertyAccessExpression(column) &&
-        column.name.text === "workspaceId"
-      ) {
-        facts.filtersWorkspaceSet = true;
+    if (isInArrayCall(node)) {
+      const [column, set] = node.arguments;
+      if (column !== undefined && isMatterIdColumn(column)) {
+        facts.filtersWorkspaceSet += 1;
         if (set !== undefined) {
           filterArguments.push(set);
         }
@@ -506,10 +563,10 @@ const readFacts = (file: string, source: string): Facts => {
     const text = literalText(node);
     if (text !== undefined) {
       if (text.includes(VIEW_SQL_NAME)) {
-        facts.namesView = true;
+        facts.namesView += 1;
       }
       if (SQL_MEMBERSHIP.test(text)) {
-        facts.namesMembership = true;
+        facts.namesMembership += 1;
       }
       if (SQL_MEMBER_ROLE.test(text)) {
         facts.namesMemberRole = true;
@@ -518,7 +575,7 @@ const readFacts = (file: string, source: string): Facts => {
         facts.namesClientId = true;
       }
       if (SQL_WORKSPACE_SET.test(text)) {
-        facts.filtersWorkspaceSet = true;
+        facts.filtersWorkspaceSet += 1;
       }
     }
     ts.forEachChild(node, visit);
@@ -554,26 +611,33 @@ export const classifyMatterAccessModule = (
   }
   const facts = readFacts(file, source);
   const findings: MatterAccessFinding[] = [];
-  if (facts.namesView) {
+  if (facts.namesView > 0) {
     findings.push({
       file,
       signal: "reads-authorization-view",
       screened: file === AUTHORIZED_WORKSPACE_OWNER_FILE,
+      sites: facts.namesView,
     });
   }
   if (
-    facts.namesMembership &&
+    facts.namesMembership > 0 &&
     (facts.namesRoleRule || (facts.namesMemberRole && facts.namesClientId))
   ) {
-    findings.push({ file, signal: "derives-matter-access", screened: false });
+    findings.push({
+      file,
+      signal: "derives-matter-access",
+      screened: false,
+      sites: facts.namesMembership,
+    });
   }
-  if (facts.importsRootDbValue && facts.filtersWorkspaceSet) {
+  if (facts.importsRootDbValue && facts.filtersWorkspaceSet > 0) {
     findings.push({
       file,
       signal: "owner-connection-workspace-set",
       // An import alone proves nothing: the owner must be called, and every
       // concrete filter must take a value derived from that call.
       screened: facts.callsOwner && facts.filtersDeriveFromOwner,
+      sites: facts.filtersWorkspaceSet,
     });
   }
   return findings;
@@ -589,19 +653,39 @@ export const allowlistKey = ({
  * that no longer match an unscreened finding (stale entries fail too, so the
  * allowlist shrinks as paths move onto the owner module).
  */
+export type MatterAccessAllowlistEntry = { reason: string; sites: number };
+
 export const evaluateMatterAccessCensus = (
   findings: readonly MatterAccessFinding[],
-  allowlist: Readonly<Record<string, string>>,
+  allowlist: Readonly<Record<string, MatterAccessAllowlistEntry>>,
 ) => {
-  const unscreened = new Set(
+  const unscreened = new Map(
     findings
       .filter((finding) => !finding.screened)
-      .map((finding) => allowlistKey(finding)),
+      .map((finding) => [allowlistKey(finding), finding.sites] as const),
   );
-  return {
-    violations: [...unscreened].filter((key) => !(key in allowlist)).toSorted(),
-    stale: Object.keys(allowlist)
-      .filter((key) => !unscreened.has(key))
-      .toSorted(),
-  };
+  // Both directions name the measured count so the entry can be corrected.
+  const violations: string[] = [];
+  for (const [key, sites] of unscreened) {
+    const allowed = allowlist[key]?.sites;
+    if (allowed === undefined) {
+      violations.push(key);
+    } else if (sites > allowed) {
+      violations.push(
+        `${key} has ${String(sites)} sites, allowed ${String(allowed)}`,
+      );
+    }
+  }
+  const stale: string[] = [];
+  for (const [key, entry] of Object.entries(allowlist)) {
+    const sites = unscreened.get(key);
+    if (sites === undefined) {
+      stale.push(key);
+    } else if (sites < entry.sites) {
+      stale.push(
+        `${key} has ${String(sites)} sites, allowed ${String(entry.sites)}`,
+      );
+    }
+  }
+  return { violations: violations.toSorted(), stale: stale.toSorted() };
 };
