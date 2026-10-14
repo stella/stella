@@ -7132,15 +7132,6 @@ jobs:
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Require production browser stack
-        env:
-          STACK_STATUS: ${{ steps.e2e-stack.outputs.status }}
-        run: |
-          if [[ "$STACK_STATUS" != "ready" ]]; then
-            echo "::error::Route smoke requires a ready production browser stack."
-            exit 1
-          fi
-
       - name: Prepare merge-base network budget
         uses: ./.github/actions/prepare-network-baseline
         with:
@@ -7180,7 +7171,7 @@ jobs:
           retention-days: 7
 
       - name: Upload server logs
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: server-logs-route-smoke
@@ -7349,7 +7340,7 @@ jobs:
       - name: Check route network baseline
         timeout-minutes: 4
         if: >-
-          steps.e2e-stack.outputs.status == 'ready'
+          steps.e2e-stack.outcome == 'success'
           && matrix.shard == 'network-baseline'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/check-route-network-baseline.json
@@ -7363,7 +7354,7 @@ jobs:
         timeout-minutes: 1
         if: >-
           always()
-          && steps.e2e-stack.outputs.status == 'ready'
+          && steps.e2e-stack.outcome == 'success'
           && matrix.shard == 'network-baseline'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -7374,7 +7365,7 @@ jobs:
       - name: Run Playwright shard
         timeout-minutes: ${{ fromJSON(steps.e2e-budget.outputs.minutes) }}
         if: >-
-          steps.e2e-stack.outputs.status == 'ready'
+          steps.e2e-stack.outcome == 'success'
           && matrix.shard != 'network-baseline'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-playwright-shard.json
@@ -7429,7 +7420,7 @@ jobs:
         timeout-minutes: 3
         if: >-
           !cancelled()
-          && steps.e2e-stack.outputs.status == 'ready'
+          && steps.e2e-stack.outcome == 'success'
           && matrix.shard == 1
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-api-browser-checks.json
@@ -7440,7 +7431,7 @@ jobs:
         if: >-
           always()
           && !cancelled()
-          && steps.e2e-stack.outputs.status == 'ready'
+          && steps.e2e-stack.outcome == 'success'
           && matrix.shard != 'network-baseline'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-route-smoke-playwright-shard.json
@@ -7457,7 +7448,7 @@ jobs:
         timeout-minutes: 1
         if: >-
           always()
-          && steps.e2e-stack.outputs.status == 'ready'
+          && steps.e2e-stack.outcome == 'success'
           && matrix.shard != 'network-baseline'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -7469,7 +7460,7 @@ jobs:
         timeout-minutes: 1
         if: >-
           always()
-          && steps.e2e-stack.outputs.status == 'ready'
+          && steps.e2e-stack.outcome == 'success'
           && matrix.shard != 'network-baseline'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -7479,7 +7470,7 @@ jobs:
 
       - name: Upload server logs
         timeout-minutes: 1
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: server-logs-production-${{ matrix.shard }}
@@ -7725,7 +7716,7 @@ jobs:
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Start web dev server
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         run: |
           NODE_ENV=development \
           STELLA_LOCAL_DEV=1 \
@@ -7742,7 +7733,7 @@ jobs:
           echo $! > /tmp/web.pid
 
       - name: Wait for web dev server
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         run: |
           for i in {1..60}; do
             if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
@@ -7756,7 +7747,7 @@ jobs:
           exit 1
 
       - name: Wait for collaboration server
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         run: |
           for i in {1..60}; do
             if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3002/readyz > /dev/null 2>&1; then
@@ -7780,11 +7771,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Playwright browsers
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/setup-playwright
 
       - name: Run Vite dependency canary
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-vite-dependency-canary.json
           E2E_EXPECT_DEV_ROUTES: "true"
@@ -7795,7 +7786,7 @@ jobs:
           --project chromium
 
       - name: Test anonymized PDF export
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-anonymized-pdf-export.json
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:anonymized-export
@@ -7805,7 +7796,7 @@ jobs:
       # blob (testDir e2e/collab) breaks the merged specs report. Its failures
       # are uploaded separately with their traces and videos.
       - name: Run lockless collaboration browser suite
-        if: steps.e2e-stack.outputs.status == 'ready'
+        if: steps.e2e-stack.outcome == 'success'
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/run-lockless-collaboration-browser-suite.json
           E2E_EXPECT_DEV_ROUTES: "true"
@@ -7813,13 +7804,13 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:collab -- --project chromium
 
       - name: Show API errors after a Vite canary failure
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome == 'success'
         run: tail -200 /tmp/api.log
 
       # These imports load only through cold lazy routes; a mid-test optimizer
       # restart would make the apparent canary result nondeterministic.
       - name: Guard against mid-test Vite re-optimize
-        if: always() && steps.e2e-stack.outputs.status == 'ready'
+        if: always() && steps.e2e-stack.outcome == 'success'
         run: |
           if grep -q "optimized dependencies changed. reloading" /tmp/web.log; then
             echo "::error::Vite re-optimized dependencies mid-session and forced a reload. Add the lazy/runtime dependency named below to optimizeDeps.include in apps/web/vite.config.ts."
@@ -7829,7 +7820,7 @@ jobs:
           echo "No mid-session dep re-optimize detected."
 
       - name: Stop web dev server
-        if: always() && steps.e2e-stack.outputs.status == 'ready'
+        if: always() && steps.e2e-stack.outcome == 'success'
         run: |
           if [[ -f /tmp/web.pid ]]; then
             kill "$(cat /tmp/web.pid)" || true
@@ -7841,7 +7832,7 @@ jobs:
           fi
 
       - name: Upload Playwright blob report
-        if: always() && steps.e2e-stack.outputs.status == 'ready'
+        if: always() && steps.e2e-stack.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-blob-vite-canary
@@ -7849,7 +7840,7 @@ jobs:
           retention-days: 7
 
       - name: Upload collaboration failure artifacts
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: playwright-collab-vite-canary
@@ -7857,7 +7848,7 @@ jobs:
           retention-days: 7
 
       - name: Upload server logs
-        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        if: failure() && steps.e2e-stack.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: server-logs-vite-canary

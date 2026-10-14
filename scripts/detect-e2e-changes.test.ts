@@ -640,17 +640,18 @@ describe("detect-e2e-changes", () => {
     expect(marketingCapture).toContain("extra-services: gotenberg");
   });
 
-  test("skips browser execution only for an explicit Docker Hub pull rate limit", () => {
-    expect(e2eStackSetup).toContain(
-      `value: ${githubExpression("steps.stack.outputs.status")}`,
+  test("a Docker Hub pull rate limit fails the job with a typed infrastructure reason", () => {
+    const rateLimit = e2eStackSetup.slice(
+      e2eStackSetup.indexOf("grep -Eqi 'toomanyrequests:.*pull rate limit'"),
     );
-    expect(e2eStackSetup).toContain(
-      "grep -Eqi 'toomanyrequests:.*pull rate limit'",
-    );
-    expect(e2eStackSetup).toContain(
-      'echo "status=rate-limited" >> "$GITHUB_OUTPUT"',
-    );
-    expect(e2eStackSetup).toContain('echo "status=ready" >> "$GITHUB_OUTPUT"');
+    expect(rateLimit).not.toBe(e2eStackSetup);
+    const branch = rateLimit.slice(0, rateLimit.indexOf("\n          fi"));
+    expect(branch).toContain("kind=infra class=e2e-stack-rate-limited");
+    expect(branch.trimEnd()).toEndWith("exit 1");
+    // No readiness output: a stack that is not ready fails the setup step.
+    expect(e2eStackSetup).not.toContain("outputs.status");
+    expect(e2eStackSetup).not.toContain("status=");
+    expect(productionE2eSetup).not.toContain("outputs.status");
     const action: unknown = Bun.YAML.parse(e2eStackSetup);
     if (
       !isRecord(action) ||
@@ -697,9 +698,7 @@ describe("detect-e2e-changes", () => {
     expect(afterStack.length).toBeGreaterThan(0);
     const assertReady = (steps: typeof afterStack) => {
       for (const step of steps) {
-        expect(step.if, step.name).toBe(
-          "steps.stack.outputs.status == 'ready'",
-        );
+        expect(step.if, step.name).toBe("steps.stack.outcome == 'success'");
       }
     };
     assertReady(afterStack);
@@ -708,7 +707,7 @@ describe("detect-e2e-changes", () => {
         position === index ? { ...entry, if: "always()" } : entry,
       );
       expect(mutation.at(index)?.if).not.toBe(step.if);
-      expect(() => assertReady(mutation)).toThrow("steps.stack.outputs.status");
+      expect(() => assertReady(mutation)).toThrow("steps.stack.outcome");
     }
 
     for (const stepName of [
@@ -719,7 +718,7 @@ describe("detect-e2e-changes", () => {
       "Wait for production web server",
     ]) {
       expect(actionStep(productionE2eSetup, stepName)).toContain(
-        "steps.stack.outputs.status == 'ready'",
+        "steps.stack.outcome == 'success'",
       );
     }
     expect(
@@ -736,7 +735,7 @@ describe("detect-e2e-changes", () => {
     ]) {
       expect(
         requiredExpression(workflowStepValue(productionJob, stepName)["if"]),
-      ).toContain("steps.e2e-stack.outputs.status == 'ready'");
+      ).toContain("steps.e2e-stack.outcome == 'success'");
     }
     const canary = workflowJob("e2e-vite-canary");
     expect(
@@ -754,7 +753,7 @@ describe("detect-e2e-changes", () => {
     ]) {
       expect(
         requiredExpression(workflowStepValue(canary, stepName)["if"]),
-      ).toContain("steps.e2e-stack.outputs.status == 'ready'");
+      ).toContain("steps.e2e-stack.outcome == 'success'");
     }
   });
 
@@ -1171,22 +1170,156 @@ describe("detect-e2e-changes", () => {
     );
   });
 
+  // A setup action that reports "not ready" through an output and exits 0
+  // lets every test gated on that output skip while the job stays green.
+  // Setup actions fail instead, so no step may gate on their outputs.
+  const setupReadinessViolations = (
+    files: readonly { path: string; source: string }[],
+  ) =>
+    files.flatMap(({ path: file, source }) => {
+      const document: unknown = Bun.YAML.parse(source);
+      if (!isRecord(document)) {
+        return [`${file}: not a YAML mapping`];
+      }
+      const problems: string[] = [];
+      if (
+        /^\.github\/actions\/setup-[^/]+\/action\.ya?ml$/u.test(file) &&
+        document["outputs"] !== undefined
+      ) {
+        problems.push(`${file}: setup action declares outputs`);
+      }
+      const jobs = isRecord(document["jobs"])
+        ? Object.values(document["jobs"])
+        : [document["runs"]];
+      for (const job of jobs) {
+        if (!isRecord(job) || !Array.isArray(job["steps"])) {
+          continue;
+        }
+        const steps = job["steps"].filter(isRecord);
+        const setupIds = new Set(
+          steps
+            .filter(
+              (step) =>
+                typeof step["uses"] === "string" &&
+                step["uses"].startsWith("./.github/actions/setup-") &&
+                typeof step["id"] === "string",
+            )
+            .map((step) => String(step["id"])),
+        );
+        for (const step of steps) {
+          const condition = step["if"];
+          if (typeof condition !== "string") {
+            continue;
+          }
+          for (const id of setupIds) {
+            if (condition.includes(`steps.${id}.outputs.`)) {
+              problems.push(
+                `${file}: ${String(step["name"])} is gated on setup output steps.${id}.outputs`,
+              );
+            }
+          }
+        }
+      }
+      return problems;
+    });
+
+  test("no step is gated on a setup action's readiness output", () => {
+    const root = path.join(import.meta.dirname, "..");
+    const files = [
+      ...new Bun.Glob(
+        ".github/{workflows/*.yml,actions/*/action.yml}",
+      ).scanSync(root),
+    ].map((file) => ({
+      path: file,
+      source: readFileSync(path.join(root, file), "utf-8"),
+    }));
+    expect(files.length).toBeGreaterThan(10);
+    expect(setupReadinessViolations(files)).toEqual([]);
+  });
+
+  test("the setup readiness guard rejects a status-gated test step", () => {
+    const gatedWorkflow = [
+      "jobs:",
+      "  e2e:",
+      "    steps:",
+      "      - id: stack",
+      "        uses: ./.github/actions/setup-e2e-stack",
+      "      - name: Run browser tests",
+      "        if: steps.stack.outputs.status == 'ready'",
+      "        run: bun test:e2e",
+    ].join("\n");
+    const action = [
+      "outputs:",
+      "  status:",
+      "    value: ready",
+      "runs:",
+      "  using: composite",
+      "  steps: []",
+    ].join("\n");
+    expect(
+      setupReadinessViolations([
+        { path: ".github/workflows/ci.yml", source: gatedWorkflow },
+        { path: ".github/actions/setup-example/action.yml", source: action },
+      ]),
+    ).toEqual([
+      ".github/workflows/ci.yml: Run browser tests is gated on setup output steps.stack.outputs",
+      ".github/actions/setup-example/action.yml: setup action declares outputs",
+    ]);
+  });
+
+  test("the landing browser specs run in a gating collector", () => {
+    const job = workflowJob("e2e-landing");
+    const collector = workflowStepValue(job, "Check landing islands");
+    // Default success() gating, no pipe that could hide the exit status.
+    expect(collector["if"]).toBeUndefined();
+    const run = requiredExpression(collector["run"]);
+    expect(run).toEndWith("bun --filter @stll/landing test:e2e");
+    expect(run).not.toContain("|");
+    const landingPackage: unknown = JSON.parse(
+      readFileSync(
+        path.join(import.meta.dirname, "../apps/landing/package.json"),
+        "utf-8",
+      ),
+    );
+    const scripts = isRecord(landingPackage) ? landingPackage["scripts"] : {};
+    const command = isRecord(scripts) ? scripts["test:e2e"] : undefined;
+    // Playwright fails when no test matches unless told otherwise.
+    expect(command).toBe(
+      "playwright test --config e2e/playwright.config.ts --project landing",
+    );
+    const config = readFileSync(
+      path.join(
+        import.meta.dirname,
+        "../apps/landing/e2e/playwright.config.ts",
+      ),
+      "utf-8",
+    );
+    expect(config).toContain('testDir: "."');
+    for (const spec of [
+      "landing-anonymize-demo.spec.ts",
+      "landing-navigation.spec.ts",
+    ]) {
+      expect(
+        existsSync(path.join(import.meta.dirname, "../apps/landing/e2e", spec)),
+        spec,
+      ).toBe(true);
+    }
+    const result = contractRecord(
+      contractRecord(Bun.YAML.parse(`job:\n${workflowJob("ci-result")}`))[
+        "job"
+      ],
+    );
+    expect(result["needs"]).toContain("e2e-landing");
+  });
+
   test("never passes the screenshot check without comparing a PNG", () => {
-    // setup-e2e-stack exits 0 with `status=rate-limited`, which the e2e suites
-    // treat as a skip. Here it would report success on assets nothing looked
-    // at, so the stack is mandatory.
-    const requireStack = actionStep(marketingCapture, "Require the stack");
-    expect(requireStack).toContain("steps.e2e-stack.outputs.status != 'ready'");
-    expect(requireStack).toContain("::error::");
-    expect(requireStack).toContain("exit 1");
-    expect(marketingCapture.indexOf("- name: Require the stack")).toBeLessThan(
-      marketingCapture.indexOf("- name: Start production web server"),
+    // The shared stack setup fails the job when the stack is not ready, so
+    // the capture needs no readiness gate of its own and no step may carry
+    // one that turns a missing stack into a skip.
+    expect(marketingCapture).toContain(
+      "uses: ./.github/actions/setup-e2e-stack",
     );
-    // No capture, upload, or push step may still carry the skip that step
-    // makes fatal; only `always()` cleanup and `failure()` diagnostics test it.
-    expect(marketingCapture).not.toContain(
-      "if: steps.e2e-stack.outputs.status == 'ready'",
-    );
+    expect(marketingCapture).not.toContain("outputs.status");
     expect(marketingWorkflow).not.toContain("steps.e2e-stack");
   });
 
