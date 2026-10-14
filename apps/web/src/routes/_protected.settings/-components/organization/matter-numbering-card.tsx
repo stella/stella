@@ -6,7 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import { Field, FieldLabel } from "@stll/ui/field";
+import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
 import {
@@ -145,24 +145,27 @@ const MatterNumberingCardBody = ({
     <Frame>
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
-          <Field className="flex-row items-center gap-2">
-            <Checkbox
-              checked={settings.matterNumberingEnabled}
-              disabled={numberingToggle.isPending}
-              onCheckedChange={(checked) => {
-                if (typeof checked !== "boolean") {
-                  return;
-                }
-                numberingToggle.mutate(checked);
-              }}
-            />
-            <FieldLabel>
-              {t("organization.matterNumber.showInTitle")}
-            </FieldLabel>
+          {/* Inside the field so the checkbox is described by it. */}
+          <Field className="gap-1">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={settings.matterNumberingEnabled}
+                disabled={numberingToggle.isPending}
+                onCheckedChange={(checked) => {
+                  if (typeof checked !== "boolean") {
+                    return;
+                  }
+                  numberingToggle.mutate(checked);
+                }}
+              />
+              <FieldLabel>
+                {t("organization.matterNumber.showInTitle")}
+              </FieldLabel>
+            </div>
+            <FieldDescription>
+              {t("organization.matterNumber.showInTitleDescription")}
+            </FieldDescription>
           </Field>
-          <p className="text-muted-foreground text-xs text-pretty">
-            {t("organization.matterNumber.showInTitleDescription")}
-          </p>
           <Field>
             <FieldLabel>{t("organization.matterNumber.pattern")}</FieldLabel>
             <Select

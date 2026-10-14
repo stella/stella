@@ -220,13 +220,39 @@ const settingChange = <V>(requested: V | undefined, current: V) =>
     ? { old: current, new: requested }
     : undefined;
 
-const SETTING_CHANGE_KEYS = [
-  "matterNumberingEnabled",
-  "managedAIResidency",
-  "promptCachingEnabled",
-  "documentProcessingMode",
-  "memoryExtractionEnabled",
-] as const;
+/** The general settings this request changes, each as `{ old, new }`. */
+const generalSettingAuditChanges = (
+  body: NormalizedUpdateBody,
+  existing: ExistingGeneralSettings | undefined,
+) => {
+  const matterNumberingEnabled = settingChange(
+    body.matterNumberingEnabled,
+    existing?.matterNumberingEnabled ?? false,
+  );
+  const managedAIResidency = settingChange(
+    body.managedAIResidency,
+    existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
+  );
+  const promptCachingEnabled = settingChange(
+    body.promptCachingEnabled,
+    existing?.promptCachingEnabled ?? true,
+  );
+  const documentProcessingMode = settingChange(
+    body.documentProcessingMode,
+    existing?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
+  );
+  const memoryExtractionEnabled = settingChange(
+    body.memoryExtractionEnabled,
+    existing?.memoryExtractionEnabled ?? false,
+  );
+  return {
+    ...(matterNumberingEnabled ? { matterNumberingEnabled } : {}),
+    ...(managedAIResidency ? { managedAIResidency } : {}),
+    ...(promptCachingEnabled ? { promptCachingEnabled } : {}),
+    ...(documentProcessingMode ? { documentProcessingMode } : {}),
+    ...(memoryExtractionEnabled ? { memoryExtractionEnabled } : {}),
+  };
+};
 
 const organizationSettingsAuditChanges = (
   body: NormalizedUpdateBody,
@@ -245,31 +271,7 @@ const organizationSettingsAuditChanges = (
         },
       }
     : {}),
-  ...pickDefined(
-    {
-      matterNumberingEnabled: settingChange(
-        body.matterNumberingEnabled,
-        existing?.matterNumberingEnabled ?? false,
-      ),
-      managedAIResidency: settingChange(
-        body.managedAIResidency,
-        existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
-      ),
-      promptCachingEnabled: settingChange(
-        body.promptCachingEnabled,
-        existing?.promptCachingEnabled ?? true,
-      ),
-      documentProcessingMode: settingChange(
-        body.documentProcessingMode,
-        existing?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
-      ),
-      memoryExtractionEnabled: settingChange(
-        body.memoryExtractionEnabled,
-        existing?.memoryExtractionEnabled ?? false,
-      ),
-    },
-    SETTING_CHANGE_KEYS,
-  ),
+  ...generalSettingAuditChanges(body, existing),
   ...timePolicyAuditChanges(body, existing),
   ...timeZoneAuditChanges(body, existing),
 });

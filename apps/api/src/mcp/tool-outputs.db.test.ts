@@ -215,6 +215,14 @@ const STEPS: readonly Step[] = [
       seeded.matterId = idAt(payload, "matterId");
     },
   },
+  // A personal matter takes a client on update.
+  {
+    tool: "save_matter",
+    args: (s) => ({
+      matter_id: required(s.matterId, "matter"),
+      client_id: required(s.contactId, "contact"),
+    }),
+  },
   { tool: "list_matters", args: () => ({}) },
   {
     tool: "read_contact",

@@ -744,6 +744,14 @@ const manageOrganizationArgsSchema = nullAsAbsent(
           ),
         ),
       ),
+      matter_numbering_enabled: v.optional(
+        v.pipe(
+          v.boolean(),
+          v.description(
+            "Show the matter number beside the matter name in titles (update_org_settings)",
+          ),
+        ),
+      ),
       prompt_caching_enabled: v.optional(
         v.pipe(
           v.boolean(),
@@ -855,6 +863,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["action"],
         ["matter_number_pattern"],
         ["matter_number_padding"],
+        ["matter_numbering_enabled"],
         ["prompt_caching_enabled"],
         ["document_processing_mode"],
         ["time_minimum_unit_minutes"],
@@ -867,6 +876,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         i.action === "update_org_settings" ||
         (i.matter_number_pattern === undefined &&
           i.matter_number_padding === undefined &&
+          i.matter_numbering_enabled === undefined &&
           i.prompt_caching_enabled === undefined &&
           i.document_processing_mode === undefined &&
           i.time_minimum_unit_minutes === undefined &&
@@ -890,6 +900,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         ["action"],
         ["matter_number_pattern"],
         ["matter_number_padding"],
+        ["matter_numbering_enabled"],
         ["prompt_caching_enabled"],
         ["document_processing_mode"],
         ["time_minimum_unit_minutes"],
@@ -902,6 +913,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
         i.action !== "update_org_settings" ||
         i.matter_number_pattern !== undefined ||
         i.matter_number_padding !== undefined ||
+        i.matter_numbering_enabled !== undefined ||
         i.prompt_caching_enabled !== undefined ||
         i.document_processing_mode !== undefined ||
         i.time_minimum_unit_minutes !== undefined ||
@@ -1103,6 +1115,9 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
         ...(input.matter_number_padding === undefined
           ? {}
           : { matterNumberPadding: input.matter_number_padding }),
+        ...(input.matter_numbering_enabled === undefined
+          ? {}
+          : { matterNumberingEnabled: input.matter_numbering_enabled }),
         ...(input.prompt_caching_enabled === undefined
           ? {}
           : { promptCachingEnabled: input.prompt_caching_enabled }),
