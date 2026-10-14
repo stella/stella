@@ -26,6 +26,15 @@ export const PUBLIC_CRAWL_ROUTES = [
     permission: "law",
     format: "html",
   },
+  // The case-law hub lists the admitted jurisdictions' decisions; its
+  // search URLs stay behind Disallow: / as everything else does.
+  {
+    path: "/law/cases",
+    route: "/law/cases",
+    scope: "exact",
+    permission: "law",
+    format: "html",
+  },
   {
     path: "/sitemap.xml",
     route: "/sitemap.xml",

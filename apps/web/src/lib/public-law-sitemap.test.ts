@@ -720,6 +720,7 @@ describe("public law sitemap", () => {
         const path = `/law/${toCaseLawCountryParam(country)}`;
         return [`Allow: ${path}/`, `Allow: ${path}$`];
       }),
+      "Allow: /law/cases$",
       "Allow: /sitemap.xml$",
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",

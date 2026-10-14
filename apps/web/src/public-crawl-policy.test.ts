@@ -52,10 +52,11 @@ describe("public crawl policy", () => {
             scope: "subtree",
           }) as const,
       ),
+      { path: "/law/cases", scope: "exact" },
     ]);
     // The admitted corpus today, and what stays closed beside it.
     expect(isPublicCrawlPath("/law/cze/cases/nejvyssi-soud/x", options)).toBe(
-      PUBLIC_CASE_LAW_COUNTRIES.includes("CZE"),
+      PUBLIC_CASE_LAW_COUNTRIES.some((country) => country === "CZE"),
     );
     for (const country of ["svk", "usa", "gbr", "eu", "pol", "hun", "aut"]) {
       if (
@@ -69,8 +70,9 @@ describe("public crawl policy", () => {
         isPublicCrawlPath(`/law/${country}/cases/court/slug`, options),
       ).toBe(false);
     }
-    // Cross-country pages are not a jurisdiction's own.
-    expect(isPublicCrawlPath("/law/cases", options)).toBe(false);
+    // The case-law hub is open exactly; other cross-country pages are not.
+    expect(isPublicCrawlPath("/law/cases", options)).toBe(true);
+    expect(isPublicCrawlPath("/law/cases/research", options)).toBe(false);
     expect(isPublicCrawlPath("/law/coverage", options)).toBe(false);
   });
 

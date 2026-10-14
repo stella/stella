@@ -854,7 +854,7 @@ const MIXED_LIB_VALID = libFixture([
   "  // commented-out example: Allow: /admin$",
   "  const allowed = createPublicCrawlRules();",
   '  const url = "https://example.com/sitemap.xml"; const deny = "Disallow: /";',
-  '  const lines = ["User-agent: *", "Allow: /law/", "Allow: /law$", "Allow: /sitemap.xml$", deny, ...allowed];',
+  '  const lines = ["User-agent: *", "Allow: /law$", "Allow: /sitemap.xml$", deny, ...allowed];',
   "  return { lines, url };",
   "};",
 ]);
