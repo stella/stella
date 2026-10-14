@@ -2400,6 +2400,7 @@ const caseLawSearchResult = ({
     ...(hit.textWithheldReason === null
       ? {
           snippet: toPlainTextSnippet(hit.headline),
+          anchorId: hit.anchorId,
           keywords: hit.keywords,
           headnote:
             hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
@@ -3004,6 +3005,9 @@ const decisionTextPart = ({
           headingPath: paragraph.headingPath,
           text: paragraph.text,
           ...(paragraph.hit ? { hit: true as const } : {}),
+          ...(paragraph.anchorId === null
+            ? {}
+            : { anchorId: paragraph.anchorId }),
           ...decisionBlockDeepLink({ appUrl, ...paragraph }),
         })),
         ...(found.truncated ? { truncated: true as const } : {}),

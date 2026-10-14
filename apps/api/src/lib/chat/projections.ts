@@ -1672,6 +1672,14 @@ const caseLawDecisionProjection = v.strictObject({
           ),
           text: v.string(),
           hit: v.optional(v.literal(true)),
+          anchorId: v.optional(
+            v.pipe(
+              v.string(),
+              v.description(
+                "The block's anchor, absent when the text has no parsed blocks. Cite the paragraph as the decision passage link with this anchor.",
+              ),
+            ),
+          ),
           url: v.optional(v.string()),
         }),
       ),

@@ -526,6 +526,7 @@ describe("empty-result onboarding next step", () => {
           decisionType: "judgment",
           ecli: null,
           headline: "hit",
+          anchorId: null,
           language: "cs",
           textWithheldReason: null,
           headnote: { type: "absent", reason: "not_published" },

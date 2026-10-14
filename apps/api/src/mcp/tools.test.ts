@@ -2475,6 +2475,7 @@ describe("OpenAI-compatible MCP tools", () => {
           // The handler builds the headline for the web UI; the MCP snippet
           // must come back as plain text.
           headline: "Relevant <mark>holding</mark> on &quot;smlouva&quot;",
+          anchorId: "p-3",
           textWithheldReason: null,
           language: "cs",
           headnote: {
@@ -2610,6 +2611,7 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           keywords: null,
           matchingPassages: 4,
+          anchorId: "p-3",
           snippet: 'Relevant holding on "smlouva"',
           sourceUrl: "https://example.test/decision",
         },
@@ -2671,6 +2673,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       ],
       headline: "Licensed <mark>passage</mark> text",
+      anchorId: null,
       language: "cs",
       headnote: {
         type: "present",
@@ -2864,6 +2867,7 @@ describe("OpenAI-compatible MCP tools", () => {
             },
           ],
           headline: "Relevant <mark>holding</mark>",
+          anchorId: null,
           textWithheldReason: null,
           language: "cs",
           headnote: { type: "absent", reason: "not_published" },
@@ -2927,6 +2931,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headnote: null,
           keywords: null,
           matchingPassages: 1,
+          anchorId: null,
           snippet: "Relevant holding",
           sourceUrl: "https://example.test/decision",
         },
@@ -2980,6 +2985,7 @@ describe("OpenAI-compatible MCP tools", () => {
     decisionType: "judgment",
     ecli: null,
     headline,
+    anchorId: null,
     textWithheldReason: null,
     identifiers: [
       {
@@ -3472,6 +3478,7 @@ describe("OpenAI-compatible MCP tools", () => {
               decisionType: "judgment",
               ecli: null,
               headline: null,
+              anchorId: null,
               textWithheldReason: null,
               identifiers: [
                 {
@@ -6633,6 +6640,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headingPath: [],
           label: null,
           text: "Úvod.",
+          anchorId: "p-1",
           url: `${DECISION_APP_URL}#p-1`,
         },
         {
@@ -6641,6 +6649,7 @@ describe("OpenAI-compatible MCP tools", () => {
           label: null,
           text: "Nájemce zaplatil nájemné včas.",
           hit: true,
+          anchorId: "p-2",
           url: `${DECISION_APP_URL}#p-2`,
         },
         {
@@ -6648,6 +6657,7 @@ describe("OpenAI-compatible MCP tools", () => {
           headingPath: [],
           label: null,
           text: "Mezitím.",
+          anchorId: "p-3",
           url: `${DECISION_APP_URL}#p-3`,
         },
       ],

@@ -1601,6 +1601,20 @@ describe("system prompt tool-reference guard", () => {
     }
   });
 
+  // Search hits and matched paragraphs carry the anchor of the passage they
+  // came from; a bare decision link there would drop the pinpoint the reader
+  // opens at.
+  test("every assembled prompt cites a returned passage anchor as a passage link", () => {
+    for (const prompt of buildAssembledPrompts(FULL_TOOL_AVAILABILITY)) {
+      expect(prompt).toContain(
+        `(${CHAT_DECISION_PASSAGE_HREF_PREFIX}<decisionId>:<anchorId>)`,
+      );
+      expect(prompt).toContain(
+        "use the bare decision link only when no anchor was returned",
+      );
+    }
+  });
+
   // Tools return people (task assignees, matter members, person fields) with
   // a userId; without a rule for people the model printed a bare handle where
   // it links every other reference.

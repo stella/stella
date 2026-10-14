@@ -184,6 +184,10 @@ export const SEARCH_CASE_LAW_PROJECTION = v.union([
             v.strictObject({
               ...caseLawSearchIdentityFields,
               snippet: v.nullable(v.string()),
+              // The anchor of the passage the snippet came from, null when the
+              // search scored the decision whole. A chat answer cites it as
+              // the passage link `<decisionId>:<anchorId>`.
+              anchorId: v.nullable(v.string()),
               // Classifications are not headnotes; when included, null means none was stated.
               keywords: v.nullable(
                 v.strictObject({

@@ -745,6 +745,9 @@
             "snippet": {
               "type": ["string", "null"]
             },
+            "anchorId": {
+              "type": ["string", "null"]
+            },
             "keywords": {
               "anyOf": [
                 {
