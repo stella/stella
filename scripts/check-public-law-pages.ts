@@ -70,15 +70,8 @@ const withoutTrailingSlashes = (
 
 const parseExpectedRobots = (
   value: string | undefined,
-): ExpectedRobots | null => {
-  switch (value) {
-    case "indexable":
-    case "noindex":
-      return value;
-    default:
-      return null;
-  }
-};
+): ExpectedRobots | null =>
+  value === "indexable" || value === "noindex" ? value : null;
 
 const parseCliArgs = () => {
   const { values } = parseArgs({
@@ -111,7 +104,7 @@ const parseCliArgs = () => {
     country,
     sample,
     expectedRobots,
-    outDir: values["out-dir"] ?? ".",
+    outDir: values["out-dir"],
   };
 };
 
