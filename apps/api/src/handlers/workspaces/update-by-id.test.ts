@@ -139,7 +139,7 @@ describe("updateWorkspace", () => {
       select: () => ({
         from: () => ({
           where: () => ({
-            for: () =>
+            for: async () =>
               Object.assign(Promise.resolve([workspaceRow]), {
                 limit: async () => [],
               }),
