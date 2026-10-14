@@ -1,4 +1,4 @@
-const NUMBERED_COPY = /^(.*) \((\d+)\)$/u;
+const NUMBERED_COPY = /^(.*) \((\d+)\)$/su;
 
 // Case-insensitive like the ILIKE prefix query that supplies the names;
 // accents stay distinct, as they do there.

@@ -32,6 +32,12 @@ describe("nextAvailableMatterName", () => {
     ).toBe("Acme (9007199254740993)");
   });
 
+  test("counts copies of a name that spans lines", () => {
+    expect(
+      nextAvailableMatterName("Acme\nLtd", ["Acme\nLtd", "Acme\nLtd (2)"]),
+    ).toBe("Acme\nLtd (3)");
+  });
+
   test("keeps the name when only numbered copies exist", () => {
     expect(nextAvailableMatterName("Acme", ["Acme (2)"])).toBe("Acme");
   });
