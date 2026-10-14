@@ -181,19 +181,23 @@ through Folio gains one it does not have.
 - **Every control answers every state:** hover, pressed, focus-visible,
   disabled and, where it loads, pending. A press with no visible
   response reads as a missed click.
-- **Show where people are.** The current item in navigation, tabs and
-  breadcrumbs is styled as current and carries `aria-current`.
+- **Show where people are.** The current item in navigation and
+  breadcrumbs is styled as current and carries `aria-current`. A tab
+  shows its selected state through `aria-selected`, which
+  `@stll/ui/tabs` supplies; never add `aria-current` to it.
 - **No native `alert`, `confirm` or `prompt`.** Confirm a destructive
   action with `@stll/ui/destructive-confirm-dialog`, report an outcome
   with `@stll/ui/toast`, and put a field error next to the field.
 - **A dialog only when the work has to stop.** A small edit happens
   inline; a side task that needs the page behind it opens in a
   `@stll/ui/sheet`.
-- **Hidden means out of reach.** Content that is collapsed or visually
-  hidden leaves the tab order (`inert`, `hidden`, or unmounted);
-  `aria-hidden` alone still lets focus land inside. The control that
-  reveals it stays reachable, keeps an accessible name, and reports
-  `aria-expanded`.
+- **Hidden means out of reach.** Content hidden from everyone
+  (a collapsed panel, an inactive rail) leaves the tab order (`inert`,
+  `hidden`, or unmounted); `aria-hidden` alone still lets focus land
+  inside. The control that reveals it stays reachable, keeps an
+  accessible name, and reports `aria-expanded`. A control that is
+  visually hidden until focus reveals it (a skip link, the data
+  table's keyboard row action) stays in the tab order by design.
 
 ## Lists, Settings Pages & Search
 
@@ -415,8 +419,9 @@ ornament.
 - **No generic copy shapes.** No "not just X, it's Y"; no "Get
   started" or "Learn more" labels (name what the button does); no
   exclamation marks in success messages; no "Oops!" errors (say what
-  failed and what to do next); sentence case, not Title Case, for
-  headings and labels.
+  failed and what to do next); English headings and labels use
+  sentence case, not Title Case, and each translation follows its
+  own locale's capitalization.
 - **No decorative scroll indicators** (bouncing chevrons,
   "Scroll to explore" text). If content scrolls, the scrollbar
   is sufficient affordance.
