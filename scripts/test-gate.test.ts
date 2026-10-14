@@ -3911,6 +3911,25 @@ context("real marketing Playwright factory composition", () => {
     ).toBeUndefined();
   });
 
+  check("retains the real collaboration config layer composition", () => {
+    const command = "bun --filter @stll/web test:browser";
+    expect(
+      gatingPlaywrightCollection({
+        file: "apps/web/e2e/collab/folio-collaboration.spec.ts",
+        packageFile: "apps/web/package.json",
+        scripts: {
+          "test:browser":
+            "playwright test --config e2e/playwright.collab.config.ts",
+        },
+        topology: {
+          gatingJobs: bashJobs([["browser", [command]]]),
+          workflow: command,
+          shardedPackages: new Set<string>(),
+        },
+      }),
+    ).toEqual({ type: "collected" });
+  });
+
   check(
     "collects the real marketing screenshot spec through its package manifest",
     () => {
@@ -3994,6 +4013,155 @@ context("Playwright configuration filters", () => {
       readConfig: () =>
         `import { defineConfig } from "@playwright/test";\nexport default defineConfig({ testDir: "./tests/browser", ${filter} });`,
     });
+  check.each([
+    'ignored.push("**/*.spec.ts")',
+    'ignored[0] = "**/*.spec.ts"',
+    "mutate(ignored)",
+    "const escaped = [...ignored]",
+    "export { ignored }",
+  ])("rejects mutable or escaping literal configuration values: %s", (use) => {
+    expect(
+      collectsFrom(`import { defineConfig } from "@playwright/test";
+const ignored = [];
+${use};
+export default defineConfig({ testDir: "./tests/browser", testIgnore: ignored });`),
+    ).toMatchObject({
+      type: "unresolved",
+      finding: expect.stringContaining(
+        "mutable or escaping configuration value ignored",
+      ),
+    });
+  });
+
+  check("clean literal constants are direct config reads", () => {
+    expect(
+      collectsFrom(`import { defineConfig } from "@playwright/test";
+const ignored = [];
+const pattern = /theme-prepaint\\.playwright\\.spec\\.ts$/u;
+export default defineConfig({ testDir: "./tests/browser", testIgnore: ignored, testMatch: [pattern] });`),
+    ).toEqual({ type: "collected" });
+  });
+
+  const collectsImported = ({
+    importer,
+    exporter,
+  }: {
+    importer: string;
+    exporter: string;
+  }) =>
+    gatingPlaywrightCollection({
+      file: "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
+      packageFile: "apps/desktop/package.json",
+      scripts: { "test:browser": "playwright test" },
+      topology: {
+        gatingJobs: bashJobs([
+          ["browser-tests", ["bun --filter @stll/desktop test:browser"]],
+        ]),
+        shardedPackages: new Set<string>(),
+        workflow: "",
+      },
+      readConfig: (file) =>
+        file.endsWith("apps/web/e2e/playwright.config.ts")
+          ? exporter
+          : importer,
+    });
+  const importedLayer = `import { defineConfig } from "@playwright/test";
+import base from "../web/e2e/playwright.config";
+export default defineConfig(base, {});`;
+  const exportedLayer = `export const ignored = [];
+export default { testDir: "./tests/browser", testIgnore: ignored };`;
+
+  check("recursively credits an immutable exported layer", () => {
+    expect(
+      collectsImported({ importer: importedLayer, exporter: exportedLayer }),
+    ).toEqual({ type: "collected" });
+  });
+  check("a mutated imported array cannot grant collection credit", () => {
+    expect(
+      collectsImported({
+        importer: importedLayer,
+        exporter: exportedLayer.replace(
+          "export default",
+          'ignored.push("**/*.spec.ts"); export default',
+        ),
+      }),
+    ).toMatchObject({
+      type: "unresolved",
+      finding: expect.stringContaining(
+        "mutable or escaping configuration value ignored",
+      ),
+    });
+  });
+  check.each(['base.testIgnore.push("**/*.spec.ts")', "mutate(base)"])(
+    "rejects an imported layer escape: %s",
+    (use) => {
+      expect(
+        collectsImported({
+          importer: importedLayer.replace(
+            "export default",
+            () => `${use}; export default`,
+          ),
+          exporter: exportedLayer,
+        }),
+      ).toMatchObject({
+        type: "unresolved",
+        finding: expect.stringContaining("mutable or escaping imported layer"),
+      });
+    },
+  );
+  check("a sibling import cannot mutate a resolved layer value", () => {
+    expect(
+      collectsImported({
+        importer: importedLayer
+          .replace("import base from", "import base, { ignored } from")
+          .replace(
+            "export default",
+            'ignored.push("**/*.spec.ts"); export default',
+          ),
+        exporter: exportedLayer,
+      }),
+    ).toMatchObject({
+      type: "unresolved",
+      finding: expect.stringContaining("mutable or escaping exports"),
+    });
+  });
+  check("named const exports are immutable layers", () => {
+    expect(
+      collectsImported({
+        importer: importedLayer.replace(
+          "import base from",
+          "import { base } from",
+        ),
+        exporter:
+          'export const base = { testDir: "./tests/browser", testIgnore: [] };',
+      }),
+    ).toEqual({ type: "collected" });
+  });
+
+  check("later filter arrays replace previous values", () => {
+    expect(
+      collectsFrom(`import { defineConfig } from "@playwright/test";
+export default defineConfig({ testDir: "./tests/browser", testIgnore: ["**/*.spec.ts"] }, { testIgnore: [] });`),
+    ).toEqual({ type: "collected" });
+  });
+  check(
+    "project layers retain other names and override matching fields",
+    () => {
+      expect(
+        collectsFrom(`import { defineConfig } from "@playwright/test";
+export default defineConfig({ testDir: "./tests/browser", projects: [{ name: "main", testMatch: ["**/theme-prepaint.playwright.spec.ts"] }] }, { projects: [{ name: "extra", testIgnore: ["**/*.spec.ts"] }] });`),
+      ).toEqual({ type: "collected" });
+      expect(
+        collectsFrom(`import { defineConfig } from "@playwright/test";
+export default defineConfig({ testDir: "./tests/browser", projects: [{ name: "main", testIgnore: ["**/*.spec.ts"] }] }, { projects: [{ name: "main", testIgnore: [] }] });`),
+      ).toEqual({ type: "collected" });
+      expect(
+        collectsFrom(`import { defineConfig } from "@playwright/test";
+export default defineConfig({ testDir: "./tests/browser", projects: [{ name: "main", testIgnore: ["**/*.spec.ts"] }] }, { projects: [{ name: "main" }] });`),
+      ).toEqual({ type: "not-collected" });
+    },
+  );
+
   check("an array testIgnore excludes a file", () => {
     expect(
       collects('testIgnore: ["**/theme-prepaint.playwright.spec.ts"]'),

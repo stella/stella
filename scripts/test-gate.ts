@@ -3861,15 +3861,13 @@ export type GatingWorkflowAnalysis = {
 
 type CollectorOutputConditionOptions = {
   readonly conditions: readonly unknown[];
-  readonly outputs: ReadonlySet<string>;
   readonly producers: ReadonlyMap<string, string>;
   readonly substitutions: ReturnType<typeof compileOutputAliases>;
-  readonly context?: ReturnType<typeof gatingEventContext>;
+  readonly context: ReturnType<typeof gatingEventContext>;
 };
 
 const collectorOutputConditionFailure = ({
   conditions,
-  outputs,
   producers,
   substitutions,
   context,
@@ -3880,16 +3878,6 @@ const collectorOutputConditionFailure = ({
     }
     return condition === false ? ["false"] : [];
   });
-  if (
-    context === undefined &&
-    !expressions.some((expression) =>
-      referencedContexts(expression).some((reference) =>
-        outputs.has(reference),
-      ),
-    )
-  ) {
-    return undefined;
-  }
   const result = conjunctiveOutputConditions({
     conditions: expressions,
     outputs: producers,
@@ -3903,7 +3891,6 @@ type EarlierStepResultsOptions = {
   readonly steps: readonly Record<string, unknown>[];
   readonly conditions: readonly unknown[];
   readonly contextOptions: GatingContextOptions;
-  readonly trustedOutputs: ReadonlySet<string>;
   readonly producers: ReadonlyMap<string, string>;
   readonly substitutions: ReturnType<typeof compileOutputAliases>;
 };
@@ -3912,7 +3899,6 @@ const earlierStepResults = ({
   steps,
   conditions,
   contextOptions,
-  trustedOutputs,
   producers,
   substitutions,
 }: EarlierStepResultsOptions) => {
@@ -3942,7 +3928,6 @@ const earlierStepResults = ({
     const conditionPath = [...conditions, step["if"]];
     const failed = collectorOutputConditionFailure({
       conditions: conditionPath,
-      outputs: trustedOutputs,
       producers,
       substitutions,
       context: gatingEventContext(
@@ -3973,7 +3958,6 @@ type ExecutingCollectorLegsOptions = {
   readonly legs: readonly MatrixLeg[];
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly variables: Readonly<Record<string, string | boolean>>;
-  readonly trustedOutputs: ReadonlySet<string>;
   readonly producers: ReadonlyMap<string, string>;
   readonly substitutions: ReturnType<typeof compileOutputAliases>;
   readonly priorResults: Map<string, ReturnType<typeof earlierStepResults>>;
@@ -3988,7 +3972,6 @@ const executingCollectorLegs = ({
   legs,
   inputs,
   variables,
-  trustedOutputs,
   producers,
   substitutions,
   priorResults,
@@ -4005,7 +3988,6 @@ const executingCollectorLegs = ({
           steps,
           conditions: [root?.["if"], job["if"]],
           contextOptions: { eventName, inputs, matrix, variables },
-          trustedOutputs,
           producers,
           substitutions,
         });
@@ -4022,7 +4004,6 @@ const executingCollectorLegs = ({
       };
       const outputFailure = collectorOutputConditionFailure({
         conditions: [root?.["if"], job["if"], step["if"]],
-        outputs: trustedOutputs,
         producers,
         substitutions,
         context: gatingEventContext(
@@ -4134,8 +4115,6 @@ const analyzeWorkflowWithProducerDeclarations = (
       if (typeof command !== "string") {
         return [];
       }
-      const trustedOutputs =
-        registered.references.get(name) ?? new Set<string>();
       for (const reference of [root?.["if"], job["if"], step["if"]].flatMap(
         (condition) =>
           typeof condition === "string" ? referencedContexts(condition) : [],
@@ -4157,7 +4136,6 @@ const analyzeWorkflowWithProducerDeclarations = (
           legs,
           inputs,
           variables,
-          trustedOutputs,
           producers: registered.producers.get(name) ?? new Map(),
           substitutions: registered.substitutions,
           priorResults,
@@ -4343,6 +4321,7 @@ type PlaywrightConfigSource = {
   readonly source: string;
   readonly readConfig: (configFile: string) => string;
   readonly visited?: ReadonlySet<string>;
+  readonly exportName?: string;
 };
 
 type PlaywrightConfigOptions = PlaywrightConfigSource & {
@@ -4484,38 +4463,429 @@ type PlaywrightConfigFields =
   | { readonly type: "resolved"; readonly fields: Map<string, ts.Expression> }
   | { readonly type: "unresolved"; readonly field: string };
 
+const COLLECTION_CONFIG_FIELDS = new Set([
+  "testDir",
+  "testMatch",
+  "testIgnore",
+  "projects",
+  "name",
+  "grep",
+  "grepInvert",
+]);
+
+type ConfigConstant = {
+  readonly declaration: ts.VariableDeclaration;
+  readonly statement: ts.VariableStatement;
+  readonly initializer: ts.Expression;
+};
+
+const configConstants = (source: ts.SourceFile) => {
+  const constants = new Map<string, ConfigConstant>();
+  for (const statement of source.statements) {
+    if (
+      !ts.isVariableStatement(statement) ||
+      statement.declarationList.getFirstToken(source)?.kind !==
+        ts.SyntaxKind.ConstKeyword
+    ) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.initializer !== undefined
+      ) {
+        constants.set(declaration.name.text, {
+          declaration,
+          statement,
+          initializer: declaration.initializer,
+        });
+      }
+    }
+  }
+  return constants;
+};
+
+const literalConfigValue = (input: ts.Expression): boolean => {
+  const node = unwrapTransparentExpression(input);
+  if (
+    ts.isLiteralExpression(node) ||
+    node.kind === ts.SyntaxKind.TrueKeyword ||
+    node.kind === ts.SyntaxKind.FalseKeyword ||
+    node.kind === ts.SyntaxKind.NullKeyword
+  ) {
+    return true;
+  }
+  if (ts.isArrayLiteralExpression(node)) {
+    return node.elements.every(literalConfigValue);
+  }
+  if (ts.isObjectLiteralExpression(node)) {
+    return node.properties.every(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        (ts.isIdentifier(property.name) || ts.isStringLiteral(property.name)) &&
+        literalConfigValue(property.initializer),
+    );
+  }
+  return false;
+};
+
+const wrappedConfigReference = (input: ts.Identifier): ts.Expression => {
+  let node: ts.Expression = input;
+  while (
+    ts.isExpression(node.parent) &&
+    unwrapTransparentExpression(node.parent) === node
+  ) {
+    node = node.parent;
+  }
+  return node;
+};
+
+const configFieldRead = (
+  identifier: ts.Identifier,
+  roots: ReadonlySet<ts.Expression>,
+): boolean => {
+  const node = wrappedConfigReference(identifier);
+  const parent = node.parent;
+  if (
+    !(
+      (ts.isPropertyAssignment(parent) && parent.initializer === node) ||
+      (ts.isArrayLiteralExpression(parent) &&
+        parent.elements.some((element) => element === node))
+    )
+  ) {
+    return false;
+  }
+  let current: ts.Node = parent;
+  while (!ts.isSourceFile(current)) {
+    if (ts.isExpression(current) && roots.has(current)) {
+      return true;
+    }
+    if (
+      ts.isCallExpression(current) ||
+      ts.isVariableDeclaration(current) ||
+      ts.isSpreadElement(current) ||
+      ts.isSpreadAssignment(current)
+    ) {
+      return false;
+    }
+    current = current.parent;
+  }
+  return false;
+};
+
+type ConfigBindingReferencesOptions = {
+  readonly source: ts.SourceFile;
+  readonly binding: ts.Identifier;
+  readonly roots: ReadonlySet<ts.Expression>;
+  readonly mode: "field" | "imported-layer" | "exported-layer";
+  readonly allowExport: boolean;
+};
+
+const readonlyConfigBinding = ({
+  source,
+  binding,
+  roots,
+  mode,
+  allowExport,
+}: ConfigBindingReferencesOptions): boolean => {
+  let safe = true;
+  const visit = (node: ts.Node): void => {
+    if (!safe) {
+      return;
+    }
+    if (
+      ts.isIdentifier(node) &&
+      node.text === binding.text &&
+      node !== binding
+    ) {
+      const parent = node.parent;
+      if (
+        (ts.isPropertyAssignment(parent) ||
+          ts.isPropertyAccessExpression(parent) ||
+          ts.isPropertyDeclaration(parent)) &&
+        parent.name === node
+      ) {
+        return;
+      }
+      const wrapped = wrappedConfigReference(node);
+      const use = wrapped.parent;
+      const exported =
+        (ts.isExportAssignment(use) && use.expression === wrapped) ||
+        ts.isExportSpecifier(parent);
+      if (exported && allowExport) {
+        return;
+      }
+      const layerRead =
+        mode === "imported-layer" &&
+        ts.isCallExpression(use) &&
+        use.arguments.some((argument) => argument === wrapped) &&
+        isPlaywrightDefineConfig(source, use.expression);
+      if (!layerRead && !(mode === "field" && configFieldRead(node, roots))) {
+        safe = false;
+        return;
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return safe;
+};
+
+const configExportExpression = (
+  source: ts.SourceFile,
+  exportName: string | undefined,
+  constants: ReadonlyMap<string, ConfigConstant>,
+): ts.Expression | undefined => {
+  if (exportName === undefined || exportName === "default") {
+    return source.statements.find(ts.isExportAssignment)?.expression;
+  }
+  const constant = constants.get(exportName);
+  return constant !== undefined &&
+    ts.isIdentifier(constant.declaration.name) &&
+    ts
+      .getModifiers(constant.statement)
+      ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+    ? constant.declaration.name
+    : undefined;
+};
+
+const configImportBinding = (source: ts.SourceFile, name: string) => {
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      statement.importClause === undefined ||
+      statement.importClause.phaseModifier !== undefined ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
+    ) {
+      continue;
+    }
+    if (statement.importClause.name?.text === name) {
+      return {
+        statement,
+        binding: statement.importClause.name,
+        exportName: "default",
+      };
+    }
+    const bindings = statement.importClause.namedBindings;
+    if (bindings === undefined || !ts.isNamedImports(bindings)) {
+      continue;
+    }
+    const binding = bindings.elements.find(
+      (element) => element.name.text === name && !element.isTypeOnly,
+    );
+    if (binding !== undefined) {
+      return {
+        statement,
+        binding: binding.name,
+        exportName: binding.propertyName?.text ?? binding.name.text,
+      };
+    }
+  }
+  return undefined;
+};
+
+type ResolvedConfigImportsOptions = {
+  readonly source: ts.SourceFile;
+  readonly configFile: string;
+  readonly importedFile: string;
+  readonly roots: ReadonlySet<ts.Expression>;
+};
+
+const readonlyResolvedConfigImports = ({
+  source,
+  configFile,
+  importedFile,
+  roots,
+}: ResolvedConfigImportsOptions): boolean => {
+  for (const statement of source.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.importClause === undefined ||
+      statement.importClause.phaseModifier !== undefined ||
+      importedConfigFile(statement.moduleSpecifier.text, configFile) !==
+        importedFile
+    ) {
+      continue;
+    }
+    const names: ts.Identifier[] = [];
+    if (statement.importClause.name !== undefined) {
+      names.push(statement.importClause.name);
+    }
+    const bindings = statement.importClause.namedBindings;
+    if (bindings !== undefined && ts.isNamedImports(bindings)) {
+      names.push(
+        ...bindings.elements
+          .filter((binding) => !binding.isTypeOnly)
+          .map((binding) => binding.name),
+      );
+    }
+    if (bindings !== undefined && ts.isNamespaceImport(bindings)) {
+      names.push(bindings.name);
+    }
+    for (const binding of names) {
+      if (
+        !readonlyConfigBinding({
+          source,
+          binding,
+          roots,
+          mode: "imported-layer",
+          allowExport: false,
+        }) &&
+        !readonlyConfigBinding({
+          source,
+          binding,
+          roots,
+          mode: "field",
+          allowExport: false,
+        })
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+};
+
+const mergeConfigProjects = (
+  previous: ts.Expression | undefined,
+  incoming: ts.Expression,
+): ts.Expression | undefined => {
+  if (previous === undefined) {
+    return incoming;
+  }
+  if (
+    !ts.isArrayLiteralExpression(previous) ||
+    !ts.isArrayLiteralExpression(incoming)
+  ) {
+    return undefined;
+  }
+  const overrides = new Map<string | undefined, Map<string, ts.Expression>>();
+  const projectFields = (input: ts.Expression) => {
+    const fields = playwrightObjectFields(input);
+    const name = fields?.get("name");
+    return fields !== undefined &&
+      (name === undefined || ts.isStringLiteral(name))
+      ? { fields, name: name?.text }
+      : undefined;
+  };
+  for (const project of incoming.elements) {
+    const parsed = projectFields(project);
+    if (parsed === undefined) {
+      return undefined;
+    }
+    overrides.set(parsed.name, parsed.fields);
+  }
+  const merged: Map<string, ts.Expression>[] = [];
+  for (const project of previous.elements) {
+    const parsed = projectFields(project);
+    if (parsed === undefined) {
+      return undefined;
+    }
+    const override = overrides.get(parsed.name);
+    merged.push(
+      override === undefined
+        ? parsed.fields
+        : new Map([...parsed.fields, ...override]),
+    );
+    overrides.delete(parsed.name);
+  }
+  merged.push(...overrides.values());
+  return ts.factory.createArrayLiteralExpression(
+    merged.map((fields) =>
+      ts.factory.createObjectLiteralExpression(
+        [...fields].map(([name, value]) =>
+          ts.factory.createPropertyAssignment(name, value),
+        ),
+      ),
+    ),
+  );
+};
+
+type PreparedConfigLayers =
+  | {
+      readonly type: "resolved";
+      readonly layers: readonly ts.Expression[];
+    }
+  | { readonly type: "unresolved"; readonly field: string };
+
+type PrepareConfigLayersOptions = {
+  readonly source: ts.SourceFile;
+  readonly exportName: string | undefined;
+  readonly constants: ReadonlyMap<string, ConfigConstant>;
+};
+
+const prepareConfigLayers = ({
+  source,
+  exportName,
+  constants,
+}: PrepareConfigLayersOptions): PreparedConfigLayers => {
+  const exported = configExportExpression(source, exportName, constants);
+  if (exported === undefined) {
+    return { type: "unresolved", field: "configuration object" };
+  }
+  let exportedExpression = unwrapTransparentExpression(exported);
+  if (ts.isIdentifier(exportedExpression)) {
+    const constant = constants.get(exportedExpression.text);
+    if (constant !== undefined) {
+      if (
+        !ts.isIdentifier(constant.declaration.name) ||
+        !readonlyConfigBinding({
+          source,
+          binding: constant.declaration.name,
+          roots: new Set(),
+          mode: "exported-layer",
+          allowExport: true,
+        })
+      ) {
+        return {
+          type: "unresolved",
+          field: `mutable or escaping exported layer ${exportedExpression.text}`,
+        };
+      }
+      exportedExpression = unwrapTransparentExpression(constant.initializer);
+    }
+  }
+  if (
+    ts.isCallExpression(exportedExpression) &&
+    !isPlaywrightDefineConfig(
+      source,
+      unwrapTransparentExpression(exportedExpression.expression),
+    )
+  ) {
+    return {
+      type: "unresolved",
+      field:
+        "exported factory (expected an immutable @playwright/test defineConfig import)",
+    };
+  }
+  return {
+    type: "resolved",
+    layers: ts.isCallExpression(exportedExpression)
+      ? exportedExpression.arguments
+      : [exportedExpression],
+  };
+};
+
 const playwrightConfigFields = ({
   configFile,
   source,
   readConfig,
   visited: visitedConfigs = new Set(),
+  exportName,
 }: PlaywrightConfigSource): PlaywrightConfigFields => {
   if (visitedConfigs.has(configFile)) {
     return { type: "unresolved", field: "cyclic configuration import" };
   }
   const ast = parseTypeScript(configFile, source);
-  const readConstants = () => {
-    const entries = new Map<string, ts.Expression>();
-    for (const statement of ast.statements) {
-      if (
-        !ts.isVariableStatement(statement) ||
-        statement.declarationList.getFirstToken(ast)?.kind !==
-          ts.SyntaxKind.ConstKeyword
-      ) {
-        continue;
-      }
-      for (const declaration of statement.declarationList.declarations) {
-        if (
-          ts.isIdentifier(declaration.name) &&
-          declaration.initializer !== undefined
-        ) {
-          entries.set(declaration.name.text, declaration.initializer);
-        }
-      }
-    }
-    return entries;
-  };
-  const constants = readConstants();
+  const constants = configConstants(ast);
+  const prepared = prepareConfigLayers({ source: ast, exportName, constants });
+  if (prepared.type === "unresolved") {
+    return prepared;
+  }
+  const layers = prepared.layers;
+  const roots = new Set(layers.map(unwrapTransparentExpression));
+  let unsafeBinding: string | undefined;
   const resolve = (expression: ts.Expression): ts.Expression => {
     let node = expression;
     const visited = new Set<string>();
@@ -4525,11 +4895,32 @@ const playwrightConfigFields = ({
         return node;
       }
       visited.add(node.text);
-      const initializer = constants.get(node.text);
-      if (initializer === undefined) {
+      const constant = constants.get(node.text);
+      if (constant === undefined) {
         return node;
       }
-      node = initializer;
+      const exportedConstant =
+        ts
+          .getModifiers(constant.statement)
+          ?.some(
+            (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+          ) === true;
+      if (
+        !ts.isIdentifier(constant.declaration.name) ||
+        !literalConfigValue(constant.initializer) ||
+        (exportedConstant && visitedConfigs.size === 0) ||
+        !readonlyConfigBinding({
+          source: ast,
+          binding: constant.declaration.name,
+          roots,
+          mode: "field",
+          allowExport: visitedConfigs.size > 0,
+        })
+      ) {
+        unsafeBinding = node.text;
+        return node;
+      }
+      node = constant.initializer;
     }
   };
   const expand = (
@@ -4552,7 +4943,11 @@ const playwrightConfigFields = ({
           ts.isPropertyAssignment(property)
             ? ts.factory.createPropertyAssignment(
                 property.name,
-                expand(property.initializer, next),
+                (ts.isIdentifier(property.name) ||
+                  ts.isStringLiteral(property.name)) &&
+                  COLLECTION_CONFIG_FIELDS.has(property.name.text)
+                  ? expand(property.initializer, next)
+                  : property.initializer,
               )
             : property,
         ),
@@ -4560,27 +4955,6 @@ const playwrightConfigFields = ({
     }
     return node;
   };
-  const exported = ast.statements.find(ts.isExportAssignment);
-  if (exported === undefined) {
-    return { type: "unresolved", field: "configuration object" };
-  }
-  const exportedExpression = unwrapTransparentExpression(exported.expression);
-  if (
-    ts.isCallExpression(exportedExpression) &&
-    !isPlaywrightDefineConfig(
-      ast,
-      unwrapTransparentExpression(exportedExpression.expression),
-    )
-  ) {
-    return {
-      type: "unresolved",
-      field:
-        "exported factory (expected an immutable @playwright/test defineConfig import)",
-    };
-  }
-  const layers = ts.isCallExpression(exportedExpression)
-    ? exportedExpression.arguments
-    : [exportedExpression];
   const root = new Map<string, ts.Expression>();
   for (const layer of layers) {
     const binding = unwrapTransparentExpression(layer);
@@ -4590,11 +4964,8 @@ const playwrightConfigFields = ({
     let fields = playwrightObjectFields(expand(layer));
     const node = resolve(layer);
     if (fields === undefined && ts.isIdentifier(node)) {
-      const imported = ast.statements.find(
-        (statement) =>
-          ts.isImportDeclaration(statement) &&
-          statement.importClause?.name?.text === node.text,
-      );
+      const importedLayer = configImportBinding(ast, node.text);
+      const imported = importedLayer?.statement;
       if (
         imported !== undefined &&
         ts.isImportDeclaration(imported) &&
@@ -4602,16 +4973,45 @@ const playwrightConfigFields = ({
         (imported.moduleSpecifier.text.startsWith(".") ||
           imported.moduleSpecifier.text.startsWith("@stll/"))
       ) {
+        if (
+          importedLayer === undefined ||
+          !readonlyConfigBinding({
+            source: ast,
+            binding: importedLayer.binding,
+            roots,
+            mode: "imported-layer",
+            allowExport: false,
+          })
+        ) {
+          return {
+            type: "unresolved",
+            field: `mutable or escaping imported layer ${node.text}`,
+          };
+        }
         const importedFile = importedConfigFile(
           imported.moduleSpecifier.text,
           configFile,
         );
         if (importedFile !== undefined) {
+          if (
+            !readonlyResolvedConfigImports({
+              source: ast,
+              configFile,
+              importedFile,
+              roots,
+            })
+          ) {
+            return {
+              type: "unresolved",
+              field: `mutable or escaping exports from ${importedFile}`,
+            };
+          }
           const importedFields = playwrightConfigFields({
             configFile: importedFile,
             source: readConfig(path.join(ROOT, importedFile)),
             readConfig,
             visited: new Set([...visitedConfigs, configFile]),
+            exportName: importedLayer.exportName,
           });
           if (importedFields.type === "unresolved") {
             return importedFields;
@@ -4620,11 +5020,25 @@ const playwrightConfigFields = ({
         }
       }
     }
+    if (unsafeBinding !== undefined) {
+      return {
+        type: "unresolved",
+        field: `mutable or escaping configuration value ${unsafeBinding}`,
+      };
+    }
     if (fields === undefined) {
       return { type: "unresolved", field: "configuration object" };
     }
     for (const [name, value] of fields) {
-      root.set(name, value);
+      if (name === "projects") {
+        const merged = mergeConfigProjects(root.get(name), value);
+        if (merged === undefined) {
+          return { type: "unresolved", field: "project layer merge" };
+        }
+        root.set(name, merged);
+      } else {
+        root.set(name, value);
+      }
     }
   }
   return { type: "resolved", fields: root };
@@ -4704,21 +5118,20 @@ const playwrightConfigCollection = (
   };
   let collected = false;
   for (const scope of scopes) {
-    if (selectedProjects.length > 0) {
-      const name = scope.get("name");
-      if (name !== undefined && !ts.isStringLiteral(name)) {
-        return unresolved("project name");
-      }
-      if (
-        !selectedProjects.some((project) =>
-          new RegExp(
-            `^${project.replaceAll(/[.+?^${}()|[\]\\]/gu, "\\$&").replaceAll("*", ".*")}$`,
-            "u",
-          ).test(name?.text ?? ""),
-        )
-      ) {
-        continue;
-      }
+    const name = scope.get("name");
+    if (name !== undefined && !ts.isStringLiteral(name)) {
+      return unresolved("project name");
+    }
+    if (
+      selectedProjects.length > 0 &&
+      !selectedProjects.some((project) =>
+        new RegExp(
+          `^${project.replaceAll(/[.+?^${}()|[\]\\]/gu, "\\$&").replaceAll("*", ".*")}$`,
+          "u",
+        ).test(name?.text ?? ""),
+      )
+    ) {
+      continue;
     }
     // Title filters select tests inside files; file-level collection cannot
     // prove that a matched file still runs any of them.
