@@ -1143,6 +1143,13 @@ describe("parallel code-quality legs", () => {
     expect(codeCheckConcurrency(12 * 1024 ** 3)).toBe(3);
   });
 
+  test("a requested concurrency lowers the task count; invalid requests keep the memory default", () => {
+    expect(codeCheckConcurrency(12 * 1024 ** 3, "1")).toBe(1);
+    for (const requested of ["0", "-1", "1.5", "many", ""]) {
+      expect(codeCheckConcurrency(12 * 1024 ** 3, requested)).toBe(3);
+    }
+  });
+
   test("runs result consumption with the same plan scope and owner in every leg", () => {
     const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
     const jobs = new Map<string, string>();
