@@ -20,6 +20,7 @@ import {
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
   publicCountryUnavailable,
+  publicCountryUnavailableIn,
   publicCountryUnavailableSchema,
 } from "./public-country-capability";
 
@@ -100,5 +101,28 @@ describe("public country availability contract", () => {
     const capability = "pages_public";
     expect(PUBLIC_COUNTRY_SURFACE_OPEN.pages[capability]).toBe(true);
     expect(PUBLIC_COUNTRY_SURFACE_OPEN.search[capability]).toBe(false);
+  });
+
+  test("a concrete pages_public country is open on pages and refused on search", () => {
+    const capabilities = {
+      ...PUBLIC_COUNTRY_CAPABILITIES,
+      SVK: "pages_public",
+    } as const;
+    expect(publicCountryUnavailableIn(capabilities, "svk", "pages")).toBeNull();
+    const refusal = publicCountryUnavailableIn(capabilities, "SVK", "search");
+    expect(v.parse(publicCountryUnavailableSchema, refusal)).toMatchObject({
+      status: "unavailable",
+      country: "SVK",
+      reason: "pages_public",
+    });
+    expect(refusal?.hint).toContain("CZE");
+    expect(refusal?.hint).not.toContain("SVK");
+    expect(
+      publicCountryUnavailableIn(
+        { ...capabilities, SVK: "pending_public" },
+        "SVK",
+        "pages",
+      ),
+    ).toMatchObject({ reason: "pending_public" });
   });
 });

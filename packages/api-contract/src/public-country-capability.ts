@@ -1,4 +1,5 @@
 // parser-output-unchanged: public admission metadata does not change parsed decision records.
+import { panic } from "better-result";
 import * as v from "valibot";
 
 /**
@@ -111,8 +112,39 @@ export type PublicCountryUnavailable = v.InferOutput<
   typeof publicCountryUnavailableSchema
 >;
 
-/** Unknown countries remain input errors; advertised countries explain admission on the named surface. */
-export const publicCountryUnavailable = (
+type ClosedCapability = Exclude<PublicCountryCapability, "admitted">;
+
+/**
+ * Why a capability is closed on a surface, or null when it is open. The table
+ * decides; the switch narrows, and an admitted country closed on any surface
+ * is a broken table.
+ */
+const closedReason = (
+  surface: PublicCountrySurface,
+  capability: PublicCountryCapability,
+): ClosedCapability | null => {
+  if (PUBLIC_COUNTRY_SURFACE_OPEN[surface][capability]) {
+    return null;
+  }
+  switch (capability) {
+    case "admitted":
+      return panic("An admitted country must be open on every surface.");
+    case "pages_public":
+    case "pending_public":
+    case "withdrawn":
+      return capability;
+    default:
+      capability satisfies never;
+      return panic("Unhandled public country capability.");
+  }
+};
+
+/**
+ * The same answer over an explicit capability map. The default map is the
+ * contract; tests inject one to exercise a state no country holds today.
+ */
+export const publicCountryUnavailableIn = (
+  capabilities: Readonly<Record<PublicCountry, PublicCountryCapability>>,
   input: string,
   surface: PublicCountrySurface,
 ): PublicCountryUnavailable | null => {
@@ -120,16 +152,27 @@ export const publicCountryUnavailable = (
   if (!isPublicCountry(country)) {
     return null;
   }
-  const capability = PUBLIC_COUNTRY_CAPABILITIES[country];
-  if (PUBLIC_COUNTRY_SURFACE_OPEN[surface][capability]) {
+  const reason = closedReason(surface, capabilities[country]);
+  if (reason === null) {
     return null;
   }
+  const available = PUBLIC_COUNTRIES.filter(
+    (candidate) =>
+      PUBLIC_COUNTRY_SURFACE_OPEN[surface][capabilities[candidate]],
+  );
   return {
     code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
     status: "unavailable",
     country,
-    reason: capability,
+    reason,
     message: "Public law for this country is not available.",
-    hint: `Choose an available country: ${(surface === "pages" ? PAGES_PUBLIC_COUNTRIES : ADMITTED_PUBLIC_COUNTRIES).join(", ")}.`,
+    hint: `Choose an available country: ${available.join(", ")}.`,
   };
 };
+
+/** Unknown countries remain input errors; advertised countries explain admission on the named surface. */
+export const publicCountryUnavailable = (
+  input: string,
+  surface: PublicCountrySurface,
+): PublicCountryUnavailable | null =>
+  publicCountryUnavailableIn(PUBLIC_COUNTRY_CAPABILITIES, input, surface);
