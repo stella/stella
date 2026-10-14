@@ -4,6 +4,8 @@ import {
   buildReport,
   checkPage,
   filterCountryShards,
+  headerAllowsIndexing,
+  isUndatedShardUrl,
   parseSitemapLocs,
   readDecisionMetadata,
   readRobotsMeta,
@@ -35,10 +37,16 @@ const page = (
     options.h1 === false ? "" : "<h1>Decision</h1>"
   }<main>${options.body ?? BODY}</main></body></html>`;
 
-const observe = (html: string, status = 200) => ({
+const observe = (
+  html: string,
+  status = 200,
+  extra: { xRobotsTag?: string | null; dateRequired?: boolean } = {},
+) => ({
   url: "https://example.test/law/svk/cases/c/s",
   status,
   contentType: "text/html; charset=utf-8",
+  xRobotsTag: extra.xRobotsTag ?? null,
+  dateRequired: extra.dateRequired ?? true,
   html,
 });
 
@@ -146,6 +154,41 @@ describe("checkPage", () => {
     expect(
       checkPage(observe(page({ body: "A".repeat(400) })), "noindex").failed,
     ).toEqual(expect.arrayContaining(["decision-text"]));
+  });
+
+  test("indexable needs both the meta tag and the header to allow indexing", () => {
+    const html = page({ robots: "index,follow" });
+    expect(
+      checkPage(observe(html, 200, { xRobotsTag: "noindex" }), "indexable")
+        .failed,
+    ).toContain("robots");
+    expect(
+      checkPage(observe(html, 200, { xRobotsTag: "noindex" }), "noindex")
+        .failed,
+    ).toEqual([]);
+    expect(
+      checkPage(observe(html, 200, { xRobotsTag: null }), "noindex").failed,
+    ).toContain("robots");
+    expect(headerAllowsIndexing(null)).toBe(true);
+    expect(headerAllowsIndexing("NOINDEX, nofollow")).toBe(false);
+  });
+
+  test("does not require a date on a page of the undated shard", () => {
+    const undated = page({
+      robots: "noindex",
+      ld: jsonLd({ datePublished: undefined }),
+    });
+    expect(
+      checkPage(observe(undated, 200, { dateRequired: false }), "noindex")
+        .failed,
+    ).toEqual([]);
+    expect(checkPage(observe(undated), "noindex").failed).toContain("metadata");
+    expect(isUndatedShardUrl("/sitemaps/law-cases/svk/undated/00.xml")).toBe(
+      true,
+    );
+    expect(isUndatedShardUrl("/sitemaps/law-cases/svk/2024/01.xml")).toBe(
+      false,
+    );
   });
 
   test("flags missing metadata", () => {

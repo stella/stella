@@ -21,7 +21,7 @@ import { createTtlResultCache } from "@/api/lib/legal-search/browse-facets-cache
 import { LEGISLATION_FACET_REFRESH_INTERVAL_MS } from "@/api/lib/legal-search/legislation-facet-refresh-interval";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";
 import {
-  publishedLegislationDocument,
+  publishedLegislationDocumentFor,
   publishedLegislationProjectionFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
@@ -82,7 +82,10 @@ export const legislationFacetSnapshotQuery = (
     )
     .where(
       and(
-        publishedLegislationProjectionFor(legislationFacetCounts.country),
+        publishedLegislationProjectionFor(
+          legislationFacetCounts.country,
+          "search",
+        ),
         eq(legislationFacetCounts.country, country),
       ),
     )
@@ -217,7 +220,7 @@ export const buildLegislationFacetsQuery = (
     )
     .where(
       and(
-        publishedLegislationDocument,
+        publishedLegislationDocumentFor("search"),
         eq(legislationDocuments.country, country),
         isLatestOpenedVersionOfWorkAt(sql`CURRENT_DATE`),
         sql`${legislationDocuments.documentType} <> ''`,

@@ -1125,6 +1125,7 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
         [
           String(version.id),
           await readBlocks({
+            surface: "search",
             row: version,
             legislationDb: legislationPublicReadDb,
             step: PROVISION_READ_STEP,

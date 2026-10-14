@@ -89,7 +89,7 @@ import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-curre
 import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
 import {
   redistributableLegislationSource,
-  publishedLegislationDocument,
+  publishedLegislationDocumentFor,
   publishedLegislationCountryFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import {
@@ -257,7 +257,7 @@ type RehydrateLegislationCandidatesOptions = {
 /** The request filters a stored version must satisfy to stand for a hit. */
 const legislationRequestFilters = (body: SearchLegislationBody): SQL[] => {
   const filters: SQL[] = [
-    publishedLegislationDocument,
+    publishedLegislationDocumentFor("search"),
     // A withdrawn version stays openable by id, never found by a search,
     // including while its index entry still waits to be erased.
     notWithdrawn(legislationVersionRef(legislationDocuments)),
@@ -759,7 +759,7 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
         ON legislation_sources.id = d.source_id
        AND ${redistributableLegislationSource}
       WHERE ${ftsSearch.predicate}
-        AND ${publishedLegislationCountryFor(sql`d.country`)}
+        AND ${publishedLegislationCountryFor(sql`d.country`, "search")}
         AND sd.retry_after IS NULL
         AND ${notWithdrawn(legislationVersionRefAt("d"))}
         ${filters}

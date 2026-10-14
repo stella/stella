@@ -99,6 +99,12 @@ const CONSUMERS = {
   "apps/web/src/routes/law/$country/statutes/index.tsx": "search",
   "apps/web/src/routes/law/-law-home/jurisdictions.ts": "search",
   "apps/web/src/features/case-law/components/top-bar-country.tsx": "search",
+  // Tests and query-plan fixtures that mirror a surface's country filter.
+  "apps/api/src/tests/query-plans/old-sitemap-refresh-fixture.ts": "sitemap",
+  "apps/api/src/tests/query-plans/registry.ts": "search",
+  "apps/api/src/tests/security/public-law-search-census.ts": "search",
+  // Facet snapshots feed search facets.
+  "apps/api/src/lib/legal-search/legislation-facet-refresh.ts": "search",
   // Agent surfaces.
   "apps/api/src/mcp/stella-tools.ts": "mcp",
   "apps/api/src/mcp/legislation-tools.ts": "mcp",
@@ -112,7 +118,57 @@ const CONSUMERS = {
 const DEFINERS = [
   "apps/web/src/features/case-law/case-law-jurisdiction.ts",
   "apps/web/src/lib/statutes/statute-route.ts",
+  "apps/api/src/lib/legal-search/legislation-redistribution.ts",
 ] as const;
+
+/**
+ * Callers of the SQL helpers that embed a country list, with the surface each
+ * must pass. A helper takes the surface as an argument, so a caller cannot
+ * read a list without naming it.
+ */
+const SQL_HELPER_CALLERS = {
+  // Page reads and the SQL behind sitemaps.
+  "apps/api/src/handlers/legislation/by-slug.ts": "pages",
+  "apps/api/src/handlers/legislation/by-eli.ts": "pages",
+  "apps/api/src/handlers/legislation/get.ts": "pages",
+  "apps/api/src/handlers/legislation/work-key.ts": "pages",
+  "apps/api/src/handlers/legislation/provision-versions.ts": "pages",
+  "apps/api/src/handlers/legislation/provision-history.ts": "pages",
+  "apps/api/src/handlers/legislation/provision-preview.ts": "pages",
+  "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": "pages",
+  "apps/api/src/lib/legal-search/statute-sitemap-shard-sql.ts": "pages",
+  // Search, listing, facets, agent and reader surfaces.
+  "apps/api/src/handlers/legislation/search.ts": "search",
+  "apps/api/src/handlers/legislation/list.ts": "search",
+  "apps/api/src/handlers/legislation/shelf.ts": "search",
+  "apps/api/src/handlers/legislation/facets.ts": "search",
+  "apps/api/src/handlers/chat/chat-prompt.ts": "search",
+  "apps/api/src/handlers/legal-reader/annotations/document-blocks.ts": "search",
+  "apps/api/src/lib/legal-search/legislation-works-at-date.ts": "search",
+  "apps/api/src/lib/legal-search/legislation-work-names.ts": "search",
+  "apps/api/src/lib/legal-search/legislation-facet-refresh.ts": "search",
+  "apps/api/src/mcp/legislation-tools.ts": "search",
+} as const satisfies Record<string, "pages" | "search">;
+
+/** Files that define the helpers; they take the surface as a parameter. */
+const SQL_HELPER_DEFINERS = [
+  "apps/api/src/lib/legal-search/legislation-redistribution.ts",
+  "apps/api/src/lib/legal-search/legislation-version-blocks.ts",
+] as const;
+
+const SQL_HELPER_CALL =
+  /(?:(?:published|redistributable)Legislation\w*For|read(?:VersionBlocks|VersionText|VersionAst|Blocks|StoredVersionAst))\(([\s\S]*?)\)/gu;
+
+/** The surface literals a file passes to the helpers it calls. */
+const helperSurfaces = (source: string): Set<string> => {
+  const surfaces = new Set<string>();
+  for (const call of source.matchAll(SQL_HELPER_CALL)) {
+    for (const literal of (call[1] ?? "").matchAll(/"(pages|search)"/gu)) {
+      surfaces.add(literal[1] ?? "");
+    }
+  }
+  return surfaces;
+};
 
 const repoRoot = nodePath.resolve(import.meta.dir, "../../../../..");
 const readSource = async (path: string) =>
@@ -144,6 +200,37 @@ describe("public law surface consumers", () => {
     const source = await readSource(path);
     expect(mentionsAny(source, SEARCH_LIST_TOKENS)).toBe(true);
     expect(mentionsAny(source, PAGES_LIST_TOKENS)).toBe(true);
+  });
+
+  test.each(Object.entries(SQL_HELPER_CALLERS))(
+    "%s calls the country-list SQL helpers with only its surface (%s)",
+    async (path, surface) => {
+      const surfaces = helperSurfaces(await readSource(path));
+      expect([...surfaces]).toEqual([surface]);
+    },
+  );
+
+  test("no unregistered source file calls a country-list SQL helper", async () => {
+    const registered = new Set<string>([
+      ...Object.keys(SQL_HELPER_CALLERS),
+      ...SQL_HELPER_DEFINERS,
+    ]);
+    const glob = new Bun.Glob("apps/*/src/**/*.{ts,tsx}");
+    const unregistered: string[] = [];
+    for await (const path of glob.scan({ cwd: repoRoot })) {
+      if (
+        path.includes("node_modules") ||
+        /\.(test|spec|fixtures?|gen|d)\.tsx?$/u.test(path) ||
+        registered.has(path)
+      ) {
+        continue;
+      }
+      const source = await readSource(path);
+      if (helperSurfaces(source).size > 0) {
+        unregistered.push(path);
+      }
+    }
+    expect(unregistered).toEqual([]);
   });
 
   test("no unregistered source file reads either list", async () => {

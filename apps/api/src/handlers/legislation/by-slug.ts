@@ -16,7 +16,7 @@ import {
   selectDefaultVersionId,
   workKeyConditions,
 } from "@/api/handlers/legislation/work-key";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   inForceOn,
   legislationVersionRef,
@@ -105,7 +105,7 @@ export const readStatuteBySlugHandler = async ({
         and(
           eq(legislationDocuments.country, country),
           eq(legislationDocuments.slug, slug),
-          publishedLegislationDocument,
+          publishedLegislationDocumentFor("pages"),
         ),
       )
       .orderBy(asc(legislationDocuments.eli), asc(legislationDocuments.id))

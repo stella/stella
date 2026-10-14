@@ -11,7 +11,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { legislationExpressionLabelColumns } from "@/api/lib/legal-search/legislation-expression-label";
 import {
   derivedAiLegislationSource,
-  publishedLegislationDocument,
+  publishedLegislationDocumentFor,
 } from "@/api/lib/legal-search/legislation-redistribution";
 import { versionAstColumns } from "@/api/lib/legal-search/legislation-version-blocks";
 import type { LegislationReadDb } from "@/api/lib/legislation-public-read-db";
@@ -83,7 +83,7 @@ export const readLegislationProvisionVersions = async ({
         .where(
           and(
             inArray(legislationDocuments.id, [...documentIds]),
-            publishedLegislationDocument,
+            publishedLegislationDocumentFor("pages"),
           ),
         ),
   );

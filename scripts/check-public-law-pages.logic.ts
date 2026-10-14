@@ -142,8 +142,23 @@ export type PageObservation = {
   url: string;
   status: number;
   contentType: string | null;
+  /** The `X-Robots-Tag` response header, which the web server sets by cache class. */
+  xRobotsTag: string | null;
+  /**
+   * False for a page listed in the undated shard: its decision has no date,
+   * so the page's JSON-LD rightly omits `datePublished`.
+   */
+  dateRequired: boolean;
   html: string;
 };
+
+/** Indexable means both the meta tag and the header allow indexing. */
+export const headerAllowsIndexing = (xRobotsTag: string | null): boolean =>
+  xRobotsTag === null || !/\b(?:noindex|none)\b/iu.test(xRobotsTag);
+
+/** Pages of the undated shard (`/undated/00`) carry no decision date. */
+export const isUndatedShardUrl = (shardUrl: string): boolean =>
+  /\/undated\/[^/]+\.xml$/u.test(shardUrl) || /\/undated\/00\//u.test(shardUrl);
 
 export type PageResult = {
   url: string;
@@ -174,12 +189,12 @@ export const checkPage = (
     if (
       metadata.caseNumber === null ||
       metadata.court === null ||
-      metadata.date === null
+      (page.dateRequired && metadata.date === null)
     ) {
       failed.push("metadata");
     }
     const robots = readRobotsMeta(page.html);
-    const indexable = !robots.noindex;
+    const indexable = !robots.noindex && headerAllowsIndexing(page.xRobotsTag);
     if (expectedRobots === "indexable" ? !indexable : indexable) {
       failed.push("robots");
     }

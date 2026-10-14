@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 /**
  * Checks a random sample of a country's public decision pages on a deployment.
  *
@@ -12,6 +11,7 @@ import { panic } from "better-result";
  * Requests are sequential, at most one per second, and unauthenticated. The
  * report holds counts and URLs only, never page text.
  */
+import { panic } from "better-result";
 import nodePath from "node:path";
 import { parseArgs } from "node:util";
 
@@ -19,6 +19,7 @@ import {
   buildReport,
   checkPage,
   filterCountryShards,
+  isUndatedShardUrl,
   parseSitemapLocs,
   renderMarkdown,
   shuffled,
@@ -93,7 +94,7 @@ const collectDecisionUrls = async (
   baseUrl: string,
   country: string,
   wanted: number,
-): Promise<string[]> => {
+): Promise<Map<string, boolean>> => {
   const index = parseSitemapLocs(
     await fetchText(`${baseUrl}/sitemaps/law.xml`),
   );
@@ -101,24 +102,25 @@ const collectDecisionUrls = async (
   if (shards.length === 0) {
     return panic(`No ${country} case-law shards in the law sitemap.`);
   }
-  const urls = new Set<string>();
+  // Decision URL -> whether its page must carry a decision date.
+  const urls = new Map<string, boolean>();
   for (const shard of shards.slice(0, MAX_SHARDS)) {
     // The index may carry absolute URLs of another origin; fetch via ours.
     const path = new URL(shard).pathname;
     for (const loc of parseSitemapLocs(await fetchText(`${baseUrl}${path}`))) {
-      urls.add(loc);
+      urls.set(loc, !isUndatedShardUrl(path));
     }
     if (urls.size >= wanted * POOL_FACTOR) {
       break;
     }
   }
-  return [...urls];
+  return urls;
 };
 
 const main = async () => {
   const { baseUrl, country, expectedRobots, outDir, sample } = parseCliArgs();
   const pool = await collectDecisionUrls(baseUrl, country, sample);
-  const picked = shuffled(pool).slice(0, sample);
+  const picked = shuffled([...pool.keys()]).slice(0, sample);
   const results: PageResult[] = [];
   const fetchErrors: string[] = [];
   for (const url of picked) {
@@ -132,6 +134,8 @@ const main = async () => {
             url: target,
             status: response.status,
             contentType: response.headers.get("content-type"),
+            xRobotsTag: response.headers.get("x-robots-tag"),
+            dateRequired: pool.get(url) ?? true,
             html: await response.text(),
           },
           expectedRobots,

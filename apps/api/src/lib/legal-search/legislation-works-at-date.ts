@@ -6,7 +6,7 @@ import * as v from "valibot";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
-import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
+import { publishedLegislationDocumentFor } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   eligibleExpression,
   inForceOn,
@@ -127,7 +127,7 @@ export const resolveWorksAtDate = async (
          AND ${openedBy(documentRef, sql`w.as_of`)}
         JOIN ${legislationSources}
           ON ${legislationSources.id} = ${legislationDocuments.sourceId}
-       WHERE ${publishedLegislationDocument}
+       WHERE ${publishedLegislationDocumentFor("search")}
          AND (${inForceAtRequest}
               OR NOT EXISTS (
                 SELECT 1
@@ -167,7 +167,7 @@ export const resolveWorksAtDate = async (
            AND ${isInconsistentWindowGapOn(sql`w.as_of`)}
           JOIN ${legislationSources}
             ON ${legislationSources.id} = ${legislationDocuments.sourceId}
-         WHERE ${publishedLegislationDocument}
+         WHERE ${publishedLegislationDocumentFor("search")}
       `),
     ).map((row) => v.parse(inconsistentWorkSchema, row));
 
