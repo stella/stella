@@ -144,7 +144,7 @@ type SharedRequest = {
  * is anything but a clean, fully attributed run of every file; each case then
  * reruns alone so its own report decides the outcome.
  */
-const sharedLines = (
+export const sharedLines = (
   { stdout, stderr, exitCode }: OxlintRun,
   sourceFiles: readonly string[],
   code: string,
@@ -174,8 +174,9 @@ const sharedLines = (
     }
     lines.push(line);
   }
-  // An error-level rule fails the run exactly when it reports something.
-  if ((exitCode === 1) !== report.value.diagnostics.length > 0) {
+  // An error-level rule exits 1 exactly when it reports something and 0 when
+  // it reports nothing; any other exit is a failed run, never clean coverage.
+  if (exitCode !== (report.value.diagnostics.length > 0 ? 1 : 0)) {
     return null;
   }
   return sourceFiles.map((sourceFile) =>

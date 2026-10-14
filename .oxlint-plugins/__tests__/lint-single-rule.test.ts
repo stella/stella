@@ -5,7 +5,51 @@ import {
   lintSingleRule,
   lintsAlone,
   runSingleRule,
+  sharedLines,
 } from "./lint-single-rule.ts";
+
+const CODE = "plugin(rule)";
+const FILES = ["/scratch/a/source.ts", "/scratch/b/source.ts"];
+
+const sharedReport = (lines: readonly [string, number][]) =>
+  JSON.stringify({
+    diagnostics: lines.map(([filename, line]) => ({
+      code: CODE,
+      filename,
+      labels: [{ span: { line } }],
+    })),
+    number_of_files: FILES.length,
+    number_of_rules: 1,
+  });
+
+test("a shared run without reports is clean only when oxlint exits 0", () => {
+  const stdout = sharedReport([]);
+  expect(sharedLines({ stdout, stderr: "", exitCode: 2 }, FILES, CODE)).toBe(
+    null,
+  );
+  expect(sharedLines({ stdout, stderr: "", exitCode: 1 }, FILES, CODE)).toBe(
+    null,
+  );
+  expect(sharedLines({ stdout, stderr: "", exitCode: 0 }, FILES, CODE)).toEqual(
+    [[], []],
+  );
+});
+
+test("a shared run with reports is accepted only when oxlint exits 1", () => {
+  const stdout = sharedReport([
+    ["/scratch/b/source.ts", 3],
+    ["/scratch/b/source.ts", 1],
+  ]);
+  expect(sharedLines({ stdout, stderr: "", exitCode: 1 }, FILES, CODE)).toEqual(
+    [[], [1, 3]],
+  );
+  expect(sharedLines({ stdout, stderr: "", exitCode: 0 }, FILES, CODE)).toBe(
+    null,
+  );
+  expect(sharedLines({ stdout, stderr: "", exitCode: 2 }, FILES, CODE)).toBe(
+    null,
+  );
+});
 
 test("parser failures cannot supply clean rule coverage", async () => {
   const result = await Result.tryPromise(
