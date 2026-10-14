@@ -18,7 +18,7 @@
       "variables": {
         "DATABASE_PUBLIC_URL": "postgresql://${{PGUSER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}/${{PGDATABASE}}",
         "DATABASE_URL": "postgresql://${{PGUSER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:5432/${{PGDATABASE}}",
-        "PGDATA": "/var/lib/postgresql/data/pgdata",
+        "PGDATA": "/var/lib/postgresql/18/docker",
         "PGDATABASE": "${{POSTGRES_DB}}",
         "PGHOST": "${{RAILWAY_PRIVATE_DOMAIN}}",
         "PGPASSWORD": "${{POSTGRES_PASSWORD}}",
@@ -27,9 +27,15 @@
         "POSTGRES_DB": "railway",
         "POSTGRES_PASSWORD": "${{secret(32, \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\")}}",
         "POSTGRES_USER": "postgres",
-        "RAILWAY_DEPLOYMENT_DRAINING_SECONDS": "60",
-        "SSL_CERT_DAYS": "820"
-      }
+        "RAILWAY_DEPLOYMENT_DRAINING_SECONDS": "60"
+      },
+      "configFile": "/railway/postgres.railway.json",
+      "build": {
+        "builder": "DOCKERFILE",
+        "dockerfilePath": "docker/postgres/Dockerfile"
+      },
+      "publicNetworking": false,
+      "volumeMountPath": "/var/lib/postgresql"
     },
     "Redis": {
       "variables": {

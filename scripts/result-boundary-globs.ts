@@ -45,6 +45,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/desktop-feature-access/**/*.ts",
   "apps/api/src/handlers/desktop-presence/**/*.ts",
   "apps/api/src/handlers/desktop-registry/**/*.ts",
+  "apps/api/src/handlers/desktop-time-entries/**/*.ts",
   "apps/api/src/handlers/dev/**/*.ts",
   "apps/api/src/handlers/document-translations/**/*.ts",
   "apps/api/src/handlers/document-types/**/*.ts",
@@ -120,6 +121,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/lib/user-files/**/*.ts",
   "apps/api/src/lib/views/**/*.ts",
   "apps/api/src/lib/work-obligations/**/*.ts",
+  "apps/api/src/lib/workspaces/**/*.ts",
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
@@ -199,11 +201,16 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Process startup consumes login refusals through Promise rejection before accepting work.
+  "apps/api/src/lib/db/assert-database-login-posture.ts",
   // Elysia consumes prevalidation feature denials through its error pipeline.
   "apps/api/src/lib/auth/feature-access/route.ts",
   // TanStack Query consumes read failures through queryFn Promise rejection;
   // this adapter translates typed Result errors at that framework boundary.
   "apps/web/src/lib/errors/query-result.ts",
+  // TanStack Start's SSR callback consumes Response/rejection, not Result.
+  // This server entry translates renderer errors into framework failures.
+  "apps/web/src/server.ts",
   // Better Auth invokes these hooks and consumes rejected APIError values.
   "apps/api/src/lib/auth/demo-account-hooks.ts",
   "apps/api/src/lib/auth/review-account-plugin.ts",
