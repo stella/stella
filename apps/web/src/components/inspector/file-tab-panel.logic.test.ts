@@ -92,6 +92,13 @@ describe("file tab native preview kind", () => {
         mimeType: "application/octet-stream",
       }),
     ).toBe("text");
+    // Markdown sent as text/plain keeps its editor.
+    expect(
+      getFileTabNativePreviewKind({
+        fileName: "notes.md",
+        mimeType: "text/plain",
+      }),
+    ).toBe("markdown");
   });
 
   test("shows plain text without measuring a PDF page", () => {
