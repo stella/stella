@@ -203,9 +203,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_RETRY_SCRIPT: ${{ runner.temp }}/gh-retry.sh
         run: |
-          bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA" >> "$GITHUB_OUTPUT"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
-          echo "task_cache_producer=validated-main" >> "$GITHUB_OUTPUT"
+          {
+            bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"
+            echo "sha=$SHA"
+            echo "task_cache_producer=validated-main"
+          } >> "$GITHUB_OUTPUT"
 
   suites:
     if: needs.validate.result == 'success' && needs.validate.outputs.run == 'true'
