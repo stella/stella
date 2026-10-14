@@ -78,6 +78,18 @@ const selectManualFixtureRows = (projection: Record<string, unknown>) => {
   return { from: resolveRows };
 };
 
+// Organization-scoped writes open a savepoint on the caller transaction; the
+// fixture runs it on the same fake so its rows and counters stay shared.
+const withSavepoints = <T extends object>(tx: T) => {
+  const fake: T & {
+    transaction: <R>(run: (savepoint: T) => Promise<R>) => Promise<R>;
+  } = Object.assign(tx, {
+    transaction: async <R>(run: (savepoint: T) => Promise<R>) =>
+      await run(fake),
+  });
+  return fake;
+};
+
 const definition = {
   id: definitionId,
   name: "Review document",
@@ -191,23 +203,25 @@ describe("flow kickoff acceptance", () => {
     const safeDb = safeDbFromScoped(
       async (run) =>
         await run(
-          asTestRaw({
-            execute: executeManualFixtureQuery,
-            select: selectManualFixtureRows,
-            query: {
-              flowDefinitions: {
-                findFirst: async () =>
-                  definitionReads++ === 0
-                    ? loadedDefinition
-                    : persistedDefinition,
+          asTestRaw(
+            withSavepoints({
+              execute: executeManualFixtureQuery,
+              select: selectManualFixtureRows,
+              query: {
+                flowDefinitions: {
+                  findFirst: async () =>
+                    definitionReads++ === 0
+                      ? loadedDefinition
+                      : persistedDefinition,
+                },
               },
-            },
-            insert: () => ({
-              values: async (rows: unknown) => {
-                written.push(rows);
-              },
+              insert: () => ({
+                values: async (rows: unknown) => {
+                  written.push(rows);
+                },
+              }),
             }),
-          }),
+          ),
         ),
     );
     const originalInput = createSafeId<"entity">();
@@ -268,16 +282,18 @@ describe("flow kickoff acceptance", () => {
       const queuedRunIds: string[] = [];
       const safeDb = safeDbFromScoped(async (run) => {
         const result = await run(
-          asTestRaw({
-            execute: executeManualFixtureQuery,
-            select: selectManualFixtureRows,
-            query: { flowDefinitions: { findFirst: async () => definition } },
-            insert: () => ({
-              values: async () => {
-                insertedRows += 1;
-              },
+          asTestRaw(
+            withSavepoints({
+              execute: executeManualFixtureQuery,
+              select: selectManualFixtureRows,
+              query: { flowDefinitions: { findFirst: async () => definition } },
+              insert: () => ({
+                values: async () => {
+                  insertedRows += 1;
+                },
+              }),
             }),
-          }),
+          ),
         );
         if (insertedRows > 0) {
           lease.abort(
@@ -335,16 +351,18 @@ describe("flow kickoff acceptance", () => {
         const safeDb = safeDbFromScoped(
           async (run) =>
             await run(
-              asTestRaw({
-                query: {
-                  flowDefinitions: { findFirst: async () => definition },
-                },
-                insert: () => ({
-                  values: async () => {
-                    inserted = true;
+              asTestRaw(
+                withSavepoints({
+                  query: {
+                    flowDefinitions: { findFirst: async () => definition },
                   },
+                  insert: () => ({
+                    values: async () => {
+                      inserted = true;
+                    },
+                  }),
                 }),
-              }),
+              ),
             ),
         );
         const result = await startFlowRun({
@@ -387,14 +405,18 @@ describe("flow kickoff acceptance", () => {
       const safeDb = safeDbFromScoped(
         async (run) =>
           await run(
-            asTestRaw({
-              query: { flowDefinitions: { findFirst: async () => definition } },
-              insert: () => ({
-                values: async () => {
-                  inserted = true;
+            asTestRaw(
+              withSavepoints({
+                query: {
+                  flowDefinitions: { findFirst: async () => definition },
                 },
+                insert: () => ({
+                  values: async () => {
+                    inserted = true;
+                  },
+                }),
               }),
-            }),
+            ),
           ),
       );
       const result = await startFlowRun({
