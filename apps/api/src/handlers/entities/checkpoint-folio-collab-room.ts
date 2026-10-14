@@ -267,7 +267,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
     });
     const snapshotScopedDb: ScopedDb = async (operation) => {
       const result = await safeDb(operation);
-      return result.unwrap();
+      return result.unwrap("Folio collaboration snapshot read failed");
     };
     const [sourceDocx, snapshotResult] = await Promise.all([
       readStoredFile({
