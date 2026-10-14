@@ -136,7 +136,7 @@ const mountTimeline = async ({
   await page.setViewportSize({ width, height: 820 });
   const bundle = await readFile(
     new URL(
-      "../src/mcp/apps/statute-timeline/generated/app.html.txt",
+      "../../../packages/mcp-apps/src/statute-timeline/generated/app.html.txt",
       import.meta.url,
     ),
     "utf-8",
