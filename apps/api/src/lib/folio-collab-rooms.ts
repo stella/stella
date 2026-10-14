@@ -659,6 +659,7 @@ const recoverRefusedFolioSnapshot = async (
           sourceVersionId: snapshotPointer.baseVersionId,
           yjsSnapshotFileId: createSafeId<"userFile">(),
           yjsSnapshotSizeBytes: null,
+          snapshotRecoveredAt: new Date(),
           yjsSnapshotRevision: 0,
           yjsSnapshotUpdatedAt: null,
         },
@@ -1119,6 +1120,7 @@ export const storeFolioCollabSnapshot = async ({
                   lastActivityAt: storedAt,
                   seededAt: storedAt,
                   seedState: "seeded",
+                  snapshotRecoveredAt: null,
                   yjsSnapshotFileId: nextSnapshotFileId,
                   yjsSnapshotRevision: room.yjsSnapshotRevision + 1,
                   yjsSnapshotSizeBytes: snapshotBytes.byteLength,
@@ -1127,6 +1129,7 @@ export const storeFolioCollabSnapshot = async ({
               : {
                   lastActivityAt: storedAt,
                   seedState: "seeded",
+                  snapshotRecoveredAt: null,
                   yjsSnapshotFileId: nextSnapshotFileId,
                   yjsSnapshotRevision: room.yjsSnapshotRevision + 1,
                   yjsSnapshotSizeBytes: snapshotBytes.byteLength,

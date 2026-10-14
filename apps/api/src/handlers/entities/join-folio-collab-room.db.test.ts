@@ -34,6 +34,7 @@ import type {
 
 import {
   decideFolioCollabSeedClaim,
+  decideFolioCollabSnapshotRecovery,
   folioCollabSeedClaimPredicate,
 } from "./join-folio-collab-room";
 
@@ -393,12 +394,23 @@ describe("folio collaboration room seed generation CAS", () => {
         snapshotFileId: folioCollabRooms.yjsSnapshotFileId,
         snapshotRevision: folioCollabRooms.yjsSnapshotRevision,
         snapshotSizeBytes: folioCollabRooms.yjsSnapshotSizeBytes,
+        snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
         snapshotUpdatedAt: folioCollabRooms.yjsSnapshotUpdatedAt,
       })
       .from(folioCollabRooms)
       .where(eq(folioCollabRooms.id, roomId))
       .limit(1);
     const reset = resetRows.at(0);
+    expect(reset?.snapshotRecoveredAt).toBeInstanceOf(Date);
+    // The reset revision is 0, so only the recovery marker can tell the
+    // client that seeds the room next that unsaved changes were discarded.
+    expect(
+      decideFolioCollabSnapshotRecovery({
+        shouldSeed: true,
+        snapshotRecovered: reset?.snapshotRecoveredAt instanceof Date,
+        yjsSnapshotRevision: reset?.snapshotRevision ?? -1,
+      }),
+    ).toBe("unsaved-changes-discarded");
     expect(reset).toMatchObject({
       baseVersionId: before.baseVersionId,
       generation: 5,
@@ -423,6 +435,29 @@ describe("folio collaboration room seed generation CAS", () => {
       snapshotRevision: 0,
     });
     expect(readCount).toBe(1);
+  });
+});
+
+describe("folio collaboration snapshot recovery notice", () => {
+  test("only a seeding join after discarded state reports the loss", () => {
+    const cases = [
+      { shouldSeed: true, snapshotRecovered: true, yjsSnapshotRevision: 0 },
+      { shouldSeed: true, snapshotRecovered: false, yjsSnapshotRevision: 3 },
+      { shouldSeed: true, snapshotRecovered: true, yjsSnapshotRevision: 3 },
+      { shouldSeed: true, snapshotRecovered: false, yjsSnapshotRevision: 0 },
+      { shouldSeed: false, snapshotRecovered: true, yjsSnapshotRevision: 0 },
+      { shouldSeed: false, snapshotRecovered: false, yjsSnapshotRevision: 3 },
+    ] as const;
+    expect(
+      cases.map((input) => decideFolioCollabSnapshotRecovery(input)),
+    ).toEqual([
+      "unsaved-changes-discarded",
+      "unsaved-changes-discarded",
+      "unsaved-changes-discarded",
+      "none",
+      "none",
+      "none",
+    ]);
   });
 });
 
