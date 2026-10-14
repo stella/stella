@@ -19,16 +19,25 @@ export const nextAvailableMatterName = (
   existingNames: readonly string[],
 ): string => {
   let taken = false;
-  let highestCopy = 1;
+  // Exact integers: a typed copy number past 2^53 must still be passed, not
+  // rounded back onto a number already in use.
+  let highestCopy = 1n;
   for (const existing of existingNames) {
     if (sameName(existing, name)) {
       taken = true;
       continue;
     }
     const copy = NUMBERED_COPY.exec(existing);
-    if (copy?.[1] !== undefined && sameName(copy[1], name)) {
-      highestCopy = Math.max(highestCopy, Number(copy[2]));
+    if (
+      copy?.[1] !== undefined &&
+      copy[2] !== undefined &&
+      sameName(copy[1], name)
+    ) {
+      const number = BigInt(copy[2]);
+      if (number > highestCopy) {
+        highestCopy = number;
+      }
     }
   }
-  return taken ? `${name} (${highestCopy + 1})` : name;
+  return taken ? `${name} (${highestCopy + 1n})` : name;
 };

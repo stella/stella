@@ -26,6 +26,12 @@ describe("nextAvailableMatterName", () => {
     );
   });
 
+  test("passes a copy number beyond the safe integer range exactly", () => {
+    expect(
+      nextAvailableMatterName("Acme", ["Acme", "Acme (9007199254740992)"]),
+    ).toBe("Acme (9007199254740993)");
+  });
+
   test("keeps the name when only numbered copies exist", () => {
     expect(nextAvailableMatterName("Acme", ["Acme (2)"])).toBe("Acme");
   });
