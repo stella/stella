@@ -4,6 +4,7 @@ import {
   UNKNOWN,
   contextFromNested,
   conjunctiveOutputConditions,
+  compileOutputAliases,
   contextWithPlanOutputs,
   definitelyFalse,
   evaluate,
@@ -33,19 +34,32 @@ describe("bounded output condition conjunctions", () => {
     ],
     [[`!(${output} == 'false')`], "consistent"],
     [[`${output} == 'true'`, `!(${output} == 'true')`], "contradictory"],
-    [[`contains(${output}, 'true')`], "consistent"],
-    [[`${output} == needs.plan.outputs.other`], "consistent"],
+    [[`contains(${output}, 'true')`], "unresolved"],
+    [[`${output} == needs.plan.outputs.other`], "unresolved"],
     [["false"], "contradictory"],
     [[`${output} == 'true' &&`], "unresolved"],
     [[`(${output} == 'true') && (success() || failure())`], "consistent"],
   ] as const)("bounds %j as %s", (conditions, type) => {
-    expect(conjunctiveOutputConditions({ conditions, outputs }).type).toBe(
-      type,
-    );
+    expect(
+      conjunctiveOutputConditions({
+        conditions,
+        outputs,
+        context: contextFromNested({
+          cancelled: () => false,
+          success: () => true,
+          failure: () => false,
+        }),
+      }).type,
+    ).toBe(type);
     expect(
       conjunctiveOutputConditions({
         conditions: [...conditions].toReversed(),
         outputs,
+        context: contextFromNested({
+          cancelled: () => false,
+          success: () => true,
+          failure: () => false,
+        }),
       }).type,
     ).toBe(type);
   });
@@ -72,14 +86,79 @@ describe("bounded output condition conjunctions", () => {
     ).toEqual({ type: "consistent" });
   });
 
+  test("follows composite aliases without losing producer constraints", () => {
+    const first = "needs.plan.outputs.first";
+    const second = "needs.plan.outputs.second";
+    const substitutions = compileOutputAliases({
+      aliases: new Map([
+        [first, { expression: `${output} == 'true'`, outputs }],
+        [second, { expression: `${first} == 'true'`, outputs }],
+      ]),
+      boundReferences: new Set(),
+    });
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [`${second} == 'true'`, `${output} == 'false'`],
+        outputs,
+        substitutions,
+      }).type,
+    ).toBe("contradictory");
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [`${second} == 'true'`, `${output} == 'true'`],
+        outputs,
+        substitutions,
+      }).type,
+    ).toBe("consistent");
+  });
+
+  test("applies the DNF cap after substituting a composite alias", () => {
+    const producers = new Map(
+      Array.from(
+        { length: 7 },
+        (_, index) =>
+          [`steps.scope.outputs.field${index}`, `scope/field${index}`] as const,
+      ),
+    );
+    const expression = [...producers.keys()]
+      .map((reference) => `(${reference} == 'a' || ${reference} == 'b')`)
+      .join(" && ");
+    const substitutions = compileOutputAliases({
+      aliases: new Map([
+        ["needs.scope.outputs.composite", { expression, outputs: producers }],
+      ]),
+      boundReferences: new Set(),
+    });
+    expect(
+      conjunctiveOutputConditions({
+        conditions: ["needs.scope.outputs.composite == 'true'"],
+        outputs: producers,
+        substitutions,
+      }),
+    ).toEqual({
+      type: "unresolved",
+      reason: "output condition DNF exceeds 64 disjuncts",
+    });
+  });
+
   test("caps DNF expansion before granting output consistency", () => {
+    const registered = new Map(
+      Array.from(
+        { length: 7 },
+        (_, index) =>
+          [`needs.plan.outputs.field${index}`, `field${index}`] as const,
+      ),
+    );
     const condition = Array.from(
       { length: 7 },
       (_, index) =>
-        `(github.field${index} == 'a' || github.field${index} == 'b')`,
+        `(needs.plan.outputs.field${index} == 'a' || needs.plan.outputs.field${index} == 'b')`,
     ).join(" && ");
     expect(
-      conjunctiveOutputConditions({ conditions: [condition], outputs }),
+      conjunctiveOutputConditions({
+        conditions: [condition],
+        outputs: registered,
+      }),
     ).toEqual({
       type: "unresolved",
       reason: "output condition DNF exceeds 64 disjuncts",
@@ -88,11 +167,11 @@ describe("bounded output condition conjunctions", () => {
       conjunctiveOutputConditions({
         conditions: [
           condition.replace(
-            "github.field6 == 'a' || github.field6 == 'b'",
+            "needs.plan.outputs.field6 == 'a' || needs.plan.outputs.field6 == 'b'",
             "true",
           ),
         ],
-        outputs,
+        outputs: registered,
       }).type,
     ).toBe("consistent");
   });

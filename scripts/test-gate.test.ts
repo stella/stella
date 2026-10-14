@@ -1413,6 +1413,101 @@ jobs:
     ).toContain("job condition: no gating job executes @stll/orphan test");
   });
 
+  check(
+    "later includes overwrite added fields without creating another axis leg",
+    () => {
+      const analysis = analyzeGatingWorkflow(
+        {
+          jobs: {
+            checks: {
+              "runs-on": "ubuntu-latest",
+              strategy: {
+                matrix: {
+                  os: ["ubuntu-latest"],
+                  include: [{ color: "green" }, { color: "pink" }],
+                },
+              },
+              steps: [
+                {
+                  if: "matrix.color == 'green'",
+                  run: "bun test scripts/green.test.ts",
+                },
+                {
+                  if: "matrix.color == 'pink'",
+                  run: "bun test scripts/pink.test.ts",
+                  env: { COLOR: `\${{ matrix.color }}` },
+                },
+              ],
+            },
+            "ci-result": { needs: ["checks"] },
+          },
+        },
+        [],
+      );
+      const commands = analysis.jobs.get("checks") ?? [];
+      expect(commands.map(({ command }) => command)).toEqual([
+        "bun test scripts/pink.test.ts",
+      ]);
+      expect(commands.at(0)?.environment["COLOR"]).toBe("pink");
+    },
+  );
+
+  check(
+    "matrix includes follow original combinations in the documented fruit example",
+    () => {
+      const analysis = analyzeGatingWorkflow(
+        {
+          jobs: {
+            checks: {
+              "runs-on": "ubuntu-latest",
+              strategy: {
+                matrix: {
+                  fruit: ["apple", "pear"],
+                  animal: ["cat", "dog"],
+                  include: [
+                    { color: "green" },
+                    { color: "pink", animal: "cat" },
+                    { fruit: "apple", shape: "circle" },
+                    { fruit: "banana" },
+                    { fruit: "banana", animal: "cat" },
+                  ],
+                },
+              },
+              steps: [
+                {
+                  run: "bun test scripts/named.test.ts",
+                  env: {
+                    fruit: `\${{ matrix.fruit }}`,
+                    animal: `\${{ matrix.animal }}`,
+                    color: `\${{ matrix.color }}`,
+                    shape: `\${{ matrix.shape }}`,
+                  },
+                },
+              ],
+            },
+            "ci-result": { needs: ["checks"] },
+          },
+        },
+        [],
+      );
+      const legs = (analysis.jobs.get("checks") ?? []).map(({ environment }) =>
+        Object.fromEntries(
+          Object.entries(environment).filter(
+            ([, value]) => typeof value === "string",
+          ),
+        ),
+      );
+      expect(legs).toEqual([
+        { fruit: "apple", animal: "cat", color: "pink", shape: "circle" },
+        { fruit: "apple", animal: "dog", color: "green", shape: "circle" },
+        { fruit: "pear", animal: "cat", color: "pink" },
+        { fruit: "pear", animal: "dog", color: "green" },
+        { fruit: "banana" },
+        { fruit: "banana", animal: "cat" },
+      ]);
+    },
+  );
+
   check("an include entry adds back a leg that exclude removed", () => {
     const workflow = Bun.YAML.parse(`
 jobs:
@@ -1728,15 +1823,18 @@ jobs:
       const producers = declarations.producers.get("checks");
       if (value === "composite") {
         expect(producers?.has("needs.ci-plan.outputs.selected_b")).toBe(false);
+        expect(
+          declarations.substitutions.has("needs.ci-plan.outputs.selected_b"),
+        ).toBe(true);
         expect(analysis.findings.join("\n")).toContain(
-          "uses opaque output needs.ci-plan.outputs.selected_b: job output is not a single plain producer reference",
+          "contradictory trusted output constraints",
         );
       } else {
         expect(producers?.get("needs.ci-plan.outputs.selected_a")).toBe(
           producers?.get("needs.ci-plan.outputs.selected_b"),
         );
       }
-      expect(analysis.jobs.has("checks")).toBe(value !== "false");
+      expect(analysis.jobs.has("checks")).toBe(value === "true");
       const failure = firstCollectionFailure({
         file: "scripts/named.test.ts",
         scenarios: new Map(),
@@ -1746,10 +1844,115 @@ jobs:
           shardedPackages: new Set<string>(),
         },
       });
-      if (value === "false") {
+      if (value !== "true") {
         expect(failure).toBeDefined();
       } else {
         expect(failure).toBeUndefined();
+      }
+    },
+  );
+
+  check.each([
+    {
+      name: "satisfiable composite",
+      expression: "steps.selection.outputs.required == 'true'",
+      extra: "",
+      credited: true,
+      reason: undefined,
+      events: undefined,
+    },
+    {
+      name: "function call",
+      expression: "contains(steps.selection.outputs.required, 'true')",
+      extra: "",
+      credited: false,
+      reason: "unsupported atom",
+      events: undefined,
+    },
+    {
+      name: "alias cycle",
+      expression: "needs.ci-plan.outputs.loop",
+      extra: `loop: \${{ needs.ci-plan.outputs.selected_b }}`,
+      credited: false,
+      reason: "alias cycle",
+      events: undefined,
+    },
+    {
+      name: "bound variable",
+      expression:
+        "vars.QUEUE_BROWSER_SUITES != 'off' && steps.selection.outputs.required == 'true'",
+      extra: "",
+      credited: true,
+      reason: undefined,
+      events: undefined,
+    },
+    {
+      name: "unbound variable",
+      expression:
+        "vars.UNBOUND_SELECTION == 'on' && steps.selection.outputs.required == 'true'",
+      extra: "",
+      credited: false,
+      reason: "unsupported atom",
+      events: undefined,
+    },
+    {
+      name: "merge-group alternative to an unknown variable",
+      expression:
+        "github.event_name == 'merge_group' || vars.UNBOUND_SELECTION == 'on' && steps.selection.outputs.required == 'true'",
+      extra: "",
+      credited: true,
+      reason: undefined,
+      events: ["merge_group"],
+    },
+    {
+      name: "merge-group alternative to a negated unknown variable",
+      expression:
+        "github.event_name == 'merge_group' || !(vars.UNBOUND_SELECTION == 'on') && steps.selection.outputs.required == 'true'",
+      extra: "",
+      credited: true,
+      reason: undefined,
+      events: ["merge_group"],
+    },
+  ])(
+    "substituted job output: $name",
+    ({ expression, extra, credited, reason, events }) => {
+      const registry = [
+        {
+          workflow: ".github/workflows/ci.yml",
+          job: "ci-plan",
+          stepId: "selection",
+          outputNames: ["required"],
+          semantics: "selection",
+          proofTest: "scripts/ci-plan.test.ts",
+        },
+      ] as const satisfies readonly TrustedOutputProducer[];
+      const workflow = Bun.YAML.parse(`jobs:
+  ci-plan:
+    outputs:
+      selected_a: \${{ steps.selection.outputs.required }}
+      selected_b: \${{ ${expression} }}
+      ${extra}
+    steps:
+      - id: selection
+        run: echo 'required=true' >> "$GITHUB_OUTPUT"
+  checks:
+    if: needs.ci-plan.outputs.selected_a == 'true'
+    steps:
+      - if: needs.ci-plan.outputs.selected_b == 'true'
+        run: bun test scripts/named.test.ts
+  proof:
+    steps:
+      - run: bun test scripts/ci-plan.test.ts
+  ci-result:
+    needs: [ci-plan, checks, proof]
+`);
+      const analysis = analyzeGatingWorkflow(workflow, registry);
+      expect(analysis.jobs.has("checks")).toBe(credited);
+      if (events !== undefined) {
+        expect(analysis.jobs.get("checks")?.at(0)?.events).toEqual(events);
+      }
+      if (reason !== undefined) {
+        expect(analysis.findings.join("\n")).toContain(reason);
       }
     },
   );

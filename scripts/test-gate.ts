@@ -20,7 +20,8 @@ import { allE2eShards } from "./e2e-spec-shards-core";
 import {
   contextFromNested,
   conjunctiveOutputConditions,
-  definitelyFalse,
+  compileOutputAliases,
+  type OutputAliasDefinition,
   evaluate,
 } from "./github-expression";
 import { customLintTestCommand } from "./run-custom-lint-tests";
@@ -1081,6 +1082,7 @@ type ShellPropagation = {
 
 type GatingCommand = {
   readonly workingDirectory?: string;
+  readonly events?: readonly (typeof GATING_EVENTS)[number][];
   readonly command: string;
   readonly environment: Readonly<Record<string, unknown>>;
   readonly propagation: ShellPropagation;
@@ -3105,30 +3107,37 @@ const matrixLegs = (job: Record<string, unknown>): readonly MatrixLeg[] => {
   ) {
     return [{}];
   }
-  const originals = cartesianMatrix(axes);
+  const originals = axes.length === 0 ? [] : cartesianMatrix(axes);
   const excludes = matrixEntries(matrix["exclude"], "matrix.exclude");
   const included =
     conditionalInclude ?? matrixEntries(matrix["include"], "matrix.include");
-  let legs = originals.filter(
-    (leg) => !excludes.some((entry) => matrixEntryMatches(leg, entry)),
-  );
+  const combinations = originals
+    .filter(
+      (original) =>
+        !excludes.some((entry) => matrixEntryMatches(original, entry)),
+    )
+    .map((original) => ({ original, leg: original }));
+  const additions: MatrixLeg[] = [];
   for (const entry of included) {
-    const compatible = legs.filter((leg) =>
-      Object.entries(entry).every(
-        ([key, value]) => !(key in leg) || leg[key] === value,
-      ),
-    );
-    if (compatible.length === 0) {
-      // GitHub applies exclude before include, so include can add back an excluded leg.
-      legs.push(entry);
-      continue;
+    let matched = false;
+    for (const combination of combinations) {
+      if (
+        !Object.entries(entry).every(
+          ([key, value]) =>
+            !(key in combination.original) ||
+            combination.original[key] === value,
+        )
+      ) {
+        continue;
+      }
+      combination.leg = { ...combination.leg, ...entry };
+      matched = true;
     }
-    const compatibleSet = new Set(compatible);
-    legs = legs.map((leg) =>
-      compatibleSet.has(leg) ? { ...leg, ...entry } : leg,
-    );
+    if (!matched) {
+      additions.push(entry);
+    }
   }
-  return legs;
+  return [...combinations.map(({ leg }) => leg), ...additions];
 };
 
 type ExecutableMatrixLegsOptions = {
@@ -3281,6 +3290,14 @@ export const validateGatingEventFacts = (
   );
 };
 
+const gatingVariables = () =>
+  Object.fromEntries(
+    readDefaultOnContexts().map((entry) => [
+      entry.context.slice("vars.".length),
+      entry.value,
+    ]),
+  );
+
 type GatingContextOptions = {
   readonly eventName: (typeof GATING_EVENTS)[number];
   readonly inputs: Readonly<Record<string, unknown>>;
@@ -3299,6 +3316,7 @@ const gatingEventContext = (
     matrix,
     variables,
     stepResults = {},
+    unresolvedSteps = new Set(),
   }: GatingContextOptions,
   expression = "",
 ) => {
@@ -3326,11 +3344,18 @@ const gatingEventContext = (
       ...GITHUB_EVENT_SHAPE[eventName],
       ...GATING_EVENT_FACTS[eventName],
     },
-    fallback: (reference: string) =>
-      context.fallback?.(reference) ??
-      (/^steps\.[\w-]+\.(?:outcome|conclusion)$/u.test(reference)
-        ? "skipped"
-        : undefined),
+    fallback: (reference: string) => {
+      const id = /^steps\.([\w-]+)\.(?:outcome|conclusion)$/u
+        .exec(reference)
+        ?.at(1);
+      if (id !== undefined && unresolvedSteps.has(id)) {
+        return undefined;
+      }
+      return (
+        context.fallback?.(reference) ??
+        (id === undefined ? undefined : "skipped")
+      );
+    },
   };
 };
 
@@ -3338,110 +3363,6 @@ const referencedContexts = (expression: string): readonly string[] =>
   [...expression.matchAll(/\b[A-Za-z_][\w-]*(?:\.[\w-]+)+/gu)]
     .map((match) => match[0])
     .toSorted(compareCodeUnit);
-
-type ExecutableConditionOptions = GatingContextOptions & {
-  readonly condition: unknown;
-  readonly declaredInputs: ReadonlySet<string>;
-  readonly dynamicMatrix: boolean;
-  readonly trustedOutputs: ReadonlySet<string>;
-};
-
-const executableCondition = ({
-  condition,
-  declaredInputs,
-  dynamicMatrix,
-  trustedOutputs,
-  ...contextOptions
-}: ExecutableConditionOptions): {
-  readonly executable: boolean;
-  readonly staticallyFalse: boolean;
-  readonly unresolved: readonly string[];
-} => {
-  if (condition === undefined || condition === true) {
-    return { executable: true, staticallyFalse: false, unresolved: [] };
-  }
-  if (condition === false || typeof condition !== "string") {
-    return { executable: false, staticallyFalse: true, unresolved: [] };
-  }
-  const expression = conditionExpression(condition);
-  const unresolved = referencedContexts(expression).filter((reference) => {
-    if (
-      /^needs\.[\w-]+\.result$/u.test(reference) ||
-      trustedOutputs.has(reference)
-    ) {
-      return false;
-    }
-    if (/^steps\.[\w-]+\.(?:conclusion|outcome)$/u.test(reference)) {
-      const id = reference.split(".").at(1);
-      return (
-        id === undefined || contextOptions.unresolvedSteps?.has(id) === true
-      );
-    }
-    if (reference.startsWith("github.")) {
-      return !GATING_EVENT_FIELDS.has(reference);
-    }
-    const [root, name] = reference.split(".");
-    if (root === "vars") {
-      if (name === undefined || name in contextOptions.variables) {
-        return false;
-      }
-      // Literals the expression compares against are the values that can
-      // change its outcome; registered defaults are handled above.
-      const samples = new Set([
-        "",
-        "off",
-        "on",
-        ...(quotedLiterals(expression) ?? []).map(({ text }) => text),
-      ]);
-      const results = [...samples].map((value) =>
-        evaluate(
-          expression,
-          gatingEventContext(
-            {
-              ...contextOptions,
-              variables: { ...contextOptions.variables, [name]: value },
-            },
-            expression,
-          ),
-        ),
-      );
-      return results.some((result) => result !== results.at(0));
-    }
-    if (root === "inputs") {
-      if (name === undefined || declaredInputs.has(name)) {
-        return false;
-      }
-      const results = [false, true, ""].map((value) =>
-        evaluate(
-          expression,
-          gatingEventContext(
-            {
-              ...contextOptions,
-              inputs: { ...contextOptions.inputs, [name]: value },
-            },
-            expression,
-          ),
-        ),
-      );
-      return results.some((result) => result !== results.at(0));
-    }
-    if (root === "matrix") {
-      return (
-        !dynamicMatrix && !(name !== undefined && name in contextOptions.matrix)
-      );
-    }
-    return true;
-  });
-  const context = gatingEventContext(contextOptions, expression);
-  const evaluated = evaluate(expression, context);
-  const staticallyFalse = definitelyFalse(expression, context);
-  return {
-    executable:
-      unresolved.length === 0 && (evaluated === true || !staticallyFalse),
-    staticallyFalse,
-    unresolved,
-  };
-};
 
 const ignoresFailure = (
   continueOnError: unknown,
@@ -3662,6 +3583,7 @@ const registeredJobOutputs = (
   const references = new Set<string>();
   const producers = new Map<string, string>();
   const opaque = new Map<string, string>();
+  const definitions = new Map<string, { job: string; source: string }>();
   for (const [job, value] of Object.entries(jobs)) {
     const outputs = workflowRecord(workflowRecord(value)?.["outputs"]) ?? {};
     for (const [output, expression] of Object.entries(outputs)) {
@@ -3674,21 +3596,15 @@ const registeredJobOutputs = (
         continue;
       }
       const source = conditionExpression(expression);
-      const dependencies = referencedContexts(expression).filter((dependency) =>
-        dependency.includes(".outputs."),
-      );
-      if (
-        dependencies.length > 0 &&
-        dependencies.every((dependency) =>
-          stepReferences.get(job)?.has(dependency),
-        )
-      ) {
-        references.add(reference);
+      if (!/^steps\.[\w-]+\.outputs\.[\w-]+$/u.test(source)) {
+        definitions.set(reference, { job, source });
       }
       if (
         /^steps\.[\w-]+\.outputs\.[\w-]+$/u.test(source) &&
         stepReferences.get(job)?.has(source)
       ) {
+        definitions.delete(reference);
+        references.add(reference);
         producers.set(reference, `${job}/${source}`);
       } else if (!/^steps\.[\w-]+\.outputs\.[\w-]+$/u.test(source)) {
         opaque.set(
@@ -3698,7 +3614,36 @@ const registeredJobOutputs = (
       }
     }
   }
-  return { references, producers, opaque };
+  const aliases = new Map<string, OutputAliasDefinition>(
+    [...definitions].map(([reference, { job, source }]) => [
+      reference,
+      {
+        expression: source,
+        outputs: new Map([
+          ...producers,
+          ...[...(stepReferences.get(job) ?? [])].map(
+            (step) => [step, `${job}/${step}`] as const,
+          ),
+        ]),
+      },
+    ]),
+  );
+  const substitutions = compileOutputAliases({
+    aliases,
+    boundReferences: new Set([
+      ...GATING_EVENT_FIELDS,
+      ...Object.keys(gatingVariables()).map((name) => `vars.${name}`),
+    ]),
+  });
+  for (const [reference, node] of substitutions) {
+    if (node.type === "unresolved") {
+      opaque.set(reference, node.reason);
+    } else {
+      references.add(reference);
+      opaque.delete(reference);
+    }
+  }
+  return { references, producers, opaque, substitutions };
 };
 
 export const referencedCollectorOutputs = (
@@ -3707,6 +3652,7 @@ export const referencedCollectorOutputs = (
   const root = workflowRecord(workflow);
   const jobs = workflowRecord(root?.["jobs"]) ?? {};
   const needed = new Set<string>();
+  const visited = new Set<string>();
   const collect = (jobName: string, expression: unknown): void => {
     if (typeof expression !== "string") {
       return;
@@ -3726,17 +3672,9 @@ export const referencedCollectorOutputs = (
           workflowRecord(jobs[producerJob])?.["outputs"],
         );
         const value = exports?.[output];
-        if (typeof value === "string") {
-          for (const dependency of referencedContexts(value)) {
-            const match = /^steps\.([\w-]+)\.outputs\.([\w-]+)$/u.exec(
-              dependency,
-            );
-            const id = match?.at(1);
-            const name = match?.at(2);
-            if (id !== undefined && name !== undefined) {
-              needed.add(`${producerJob}/${id}.outputs.${name}`);
-            }
-          }
+        if (typeof value === "string" && !visited.has(reference)) {
+          visited.add(reference);
+          collect(producerJob, value);
         }
       }
     }
@@ -3907,7 +3845,13 @@ export const validateTrustedOutputProducers = ({
         ] as const,
     ),
   );
-  return { references, producers, opaque: jobReferences.opaque, findings };
+  return {
+    references,
+    producers,
+    opaque: jobReferences.opaque,
+    substitutions: jobReferences.substitutions,
+    findings,
+  };
 };
 
 export type GatingWorkflowAnalysis = {
@@ -3919,6 +3863,7 @@ type CollectorOutputConditionOptions = {
   readonly conditions: readonly unknown[];
   readonly outputs: ReadonlySet<string>;
   readonly producers: ReadonlyMap<string, string>;
+  readonly substitutions: ReturnType<typeof compileOutputAliases>;
   readonly context?: ReturnType<typeof gatingEventContext>;
 };
 
@@ -3926,6 +3871,7 @@ const collectorOutputConditionFailure = ({
   conditions,
   outputs,
   producers,
+  substitutions,
   context,
 }: CollectorOutputConditionOptions): string | undefined => {
   const expressions = conditions.flatMap((condition) => {
@@ -3947,6 +3893,7 @@ const collectorOutputConditionFailure = ({
   const result = conjunctiveOutputConditions({
     conditions: expressions,
     outputs: producers,
+    substitutions,
     context,
   });
   return result.type === "consistent" ? undefined : result.reason;
@@ -3956,18 +3903,18 @@ type EarlierStepResultsOptions = {
   readonly steps: readonly Record<string, unknown>[];
   readonly conditions: readonly unknown[];
   readonly contextOptions: GatingContextOptions;
-  readonly declaredInputs: ReadonlySet<string>;
   readonly trustedOutputs: ReadonlySet<string>;
   readonly producers: ReadonlyMap<string, string>;
+  readonly substitutions: ReturnType<typeof compileOutputAliases>;
 };
 
 const earlierStepResults = ({
   steps,
   conditions,
   contextOptions,
-  declaredInputs,
   trustedOutputs,
   producers,
+  substitutions,
 }: EarlierStepResultsOptions) => {
   const stepResults = new Map<
     string,
@@ -3997,20 +3944,15 @@ const earlierStepResults = ({
       conditions: conditionPath,
       outputs: trustedOutputs,
       producers,
-      context: gatingEventContext(options),
+      substitutions,
+      context: gatingEventContext(
+        options,
+        conditionPath
+          .filter((condition) => typeof condition === "string")
+          .join(" && "),
+      ),
     });
-    const executable =
-      failed === undefined &&
-      conditionPath.every(
-        (condition) =>
-          executableCondition({
-            ...options,
-            condition,
-            declaredInputs,
-            dynamicMatrix: false,
-            trustedOutputs,
-          }).executable,
-      );
+    const executable = failed === undefined;
     if (ignoresFailure(step["continue-on-error"], options)) {
       unresolvedSteps.add(id);
     }
@@ -4031,9 +3973,9 @@ type ExecutingCollectorLegsOptions = {
   readonly legs: readonly MatrixLeg[];
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly variables: Readonly<Record<string, string | boolean>>;
-  readonly declaredInputs: ReadonlySet<string>;
   readonly trustedOutputs: ReadonlySet<string>;
   readonly producers: ReadonlyMap<string, string>;
+  readonly substitutions: ReturnType<typeof compileOutputAliases>;
   readonly priorResults: Map<string, ReturnType<typeof earlierStepResults>>;
 };
 
@@ -4046,13 +3988,13 @@ const executingCollectorLegs = ({
   legs,
   inputs,
   variables,
-  declaredInputs,
   trustedOutputs,
   producers,
+  substitutions,
   priorResults,
 }: ExecutingCollectorLegsOptions) => {
-  const dynamicMatrix = false;
   const executingLegs = new Map<string, MatrixLeg>();
+  const eventsByLeg = new Map<string, Set<(typeof GATING_EVENTS)[number]>>();
   const unresolvedContexts = new Set<string>();
   for (const eventName of GATING_EVENTS) {
     for (const matrix of legs) {
@@ -4063,9 +4005,9 @@ const executingCollectorLegs = ({
           steps,
           conditions: [root?.["if"], job["if"]],
           contextOptions: { eventName, inputs, matrix, variables },
-          declaredInputs,
           trustedOutputs,
           producers,
+          substitutions,
         });
         priorResults.set(key, snapshots);
       }
@@ -4082,7 +4024,13 @@ const executingCollectorLegs = ({
         conditions: [root?.["if"], job["if"], step["if"]],
         outputs: trustedOutputs,
         producers,
-        context: gatingEventContext(contextOptions),
+        substitutions,
+        context: gatingEventContext(
+          contextOptions,
+          [root?.["if"], job["if"], step["if"]]
+            .filter((condition) => typeof condition === "string")
+            .join(" && "),
+        ),
       });
       if (outputFailure !== undefined) {
         const outcomeReferences = [root?.["if"], job["if"], step["if"]].flatMap(
@@ -4101,33 +4049,20 @@ const executingCollectorLegs = ({
         unresolvedContexts.add(outputFailure);
         continue;
       }
-      const conditions = [root?.["if"], job["if"], step["if"]].map(
-        (condition) =>
-          executableCondition({
-            ...contextOptions,
-            condition,
-            declaredInputs,
-            dynamicMatrix,
-            trustedOutputs,
-          }),
-      );
-      if (conditions.every((condition) => !condition.staticallyFalse)) {
-        for (const context of conditions.flatMap(
-          (condition) => condition.unresolved,
-        )) {
-          unresolvedContexts.add(context);
-        }
-      }
       if (
-        conditions.every((condition) => condition.executable) &&
         !ignoresFailure(job["continue-on-error"], contextOptions) &&
         !ignoresFailure(step["continue-on-error"], contextOptions)
       ) {
-        executingLegs.set(JSON.stringify(matrix), matrix);
+        const legKey = JSON.stringify(matrix);
+        executingLegs.set(legKey, matrix);
+        const events =
+          eventsByLeg.get(legKey) ?? new Set<(typeof GATING_EVENTS)[number]>();
+        events.add(eventName);
+        eventsByLeg.set(legKey, events);
       }
     }
   }
-  return { executingLegs, unresolvedContexts };
+  return { executingLegs, unresolvedContexts, eventsByLeg };
 };
 
 const analyzeWorkflowWithProducerDeclarations = (
@@ -4163,13 +4098,7 @@ const analyzeWorkflowWithProducerDeclarations = (
     },
   );
   const inputs = Object.fromEntries(defaultedInputs);
-  const declaredInputs = new Set(Object.keys(inputs));
-  const variables = Object.fromEntries(
-    readDefaultOnContexts().map((entry) => [
-      entry.context.slice("vars.".length),
-      entry.value,
-    ]),
-  );
+  const variables = gatingVariables();
   const registered = validateTrustedOutputProducers({
     workflow,
     registry,
@@ -4218,20 +4147,21 @@ const analyzeWorkflowWithProducerDeclarations = (
           );
         }
       }
-      const { executingLegs, unresolvedContexts } = executingCollectorLegs({
-        root,
-        job,
-        step,
-        stepIndex,
-        steps,
-        legs,
-        inputs,
-        variables,
-        declaredInputs,
-        trustedOutputs,
-        producers: registered.producers.get(name) ?? new Map(),
-        priorResults,
-      });
+      const { executingLegs, unresolvedContexts, eventsByLeg } =
+        executingCollectorLegs({
+          root,
+          job,
+          step,
+          stepIndex,
+          steps,
+          legs,
+          inputs,
+          variables,
+          trustedOutputs,
+          producers: registered.producers.get(name) ?? new Map(),
+          substitutions: registered.substitutions,
+          priorResults,
+        });
       if (executingLegs.size === 0) {
         for (const context of unresolvedContexts) {
           findings.add(
@@ -4269,6 +4199,7 @@ const analyzeWorkflowWithProducerDeclarations = (
         ...workflowRecord(step["env"]),
       };
       return [...executingLegs.values()].map((leg) => ({
+        events: [...(eventsByLeg.get(JSON.stringify(leg)) ?? [])],
         command: executableShell(command),
         workingDirectory,
         environment: Object.fromEntries(

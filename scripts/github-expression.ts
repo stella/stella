@@ -114,7 +114,12 @@ type OutputCondition =
       readonly type: "constraint";
       readonly constraint: LiteralOutputConstraint;
     }
-  | { readonly type: "opaque"; readonly polarity: "positive" | "negative" }
+  | {
+      readonly type: "bound";
+      readonly source: string;
+      readonly negated: boolean;
+    }
+  | { readonly type: "unresolved"; readonly reason: string }
   | {
       readonly type: "and" | "or";
       readonly left: OutputCondition;
@@ -179,11 +184,10 @@ const negateOutputCondition = (node: OutputCondition): OutputCondition => {
           value: node.constraint.value,
         },
       };
-    case "opaque":
-      return {
-        type: "opaque",
-        polarity: node.polarity === "positive" ? "negative" : "positive",
-      };
+    case "unresolved":
+      return node;
+    case "bound":
+      return { ...node, negated: !node.negated };
     case "and":
     case "or":
       return {
@@ -196,15 +200,44 @@ const negateOutputCondition = (node: OutputCondition): OutputCondition => {
   }
 };
 
-const outputAtom = (
+export type OutputAliasDefinition = {
+  readonly expression: string;
+  readonly outputs: ReadonlyMap<string, string>;
+};
+
+type OutputParserOptions = {
+  readonly outputs: ReadonlyMap<string, string>;
+  readonly context: Context;
+  readonly substitutions: ReadonlyMap<string, OutputCondition>;
+  readonly resolveAlias?: (reference: string) => OutputCondition | undefined;
+  readonly boundReferences?: ReadonlySet<string>;
+};
+
+const tokenSource = (tokens: readonly Token[]) =>
+  tokens
+    .map((token) =>
+      token.kind === "string"
+        ? `'${token.value.replaceAll("'", "''")}'`
+        : String(token.value),
+    )
+    .join(" ");
+
+const substitutedOutput = (reference: string, options: OutputParserOptions) =>
+  options.substitutions.get(reference) ?? options.resolveAlias?.(reference);
+
+const simpleOutputAtom = (
   tokens: readonly Token[],
-  outputs: ReadonlyMap<string, string>,
-  context: Context,
-): OutputCondition => {
+  options: OutputParserOptions,
+): OutputCondition | undefined => {
+  const { outputs } = options;
   const first = tokens.at(0);
   if (tokens.length === 1 && first?.kind === "word") {
     if (first.value === "true" || first.value === "false") {
       return { type: "literal", value: first.value === "true" };
+    }
+    const substituted = substitutedOutput(first.value, options);
+    if (substituted !== undefined) {
+      return substituted;
     }
     if (outputs.has(first.value)) {
       return {
@@ -219,6 +252,15 @@ const outputAtom = (
       };
     }
   }
+  return undefined;
+};
+
+const comparisonOutputAtom = (
+  tokens: readonly Token[],
+  options: OutputParserOptions,
+): OutputCondition | undefined => {
+  const { outputs } = options;
+  const first = tokens.at(0);
   const operator = tokens.at(1);
   const last = tokens.at(2);
   if (
@@ -228,6 +270,23 @@ const outputAtom = (
   ) {
     const reference = first?.kind === "word" ? first : last;
     const literal = first?.kind === "string" ? first : last;
+    if (reference?.kind === "word" && literal?.kind === "string") {
+      const substituted = substitutedOutput(reference.value, options);
+      if (substituted !== undefined) {
+        if (substituted.type === "unresolved") {
+          return substituted;
+        }
+        const value = literal.value.toLowerCase();
+        let equal: OutputCondition = { type: "literal", value: false };
+        if (value === "true") {
+          equal = substituted;
+        }
+        if (value === "false") {
+          equal = negateOutputCondition(substituted);
+        }
+        return operator.value === "==" ? equal : negateOutputCondition(equal);
+      }
+    }
     if (
       reference?.kind === "word" &&
       outputs.has(reference.value) &&
@@ -245,23 +304,56 @@ const outputAtom = (
       };
     }
   }
-  const source = tokens
-    .map((token) =>
-      token.kind === "string"
-        ? `'${token.value.replaceAll("'", "''")}'`
-        : String(token.value),
-    )
-    .join(" ");
+  return undefined;
+};
+
+const contextualOutputAtom = (
+  tokens: readonly Token[],
+  options: OutputParserOptions,
+): OutputCondition => {
+  const { context } = options;
+  const first = tokens.at(0);
+  const operator = tokens.at(1);
+  const last = tokens.at(2);
+  const source = tokenSource(tokens);
+  if (options.boundReferences !== undefined) {
+    const reference = first?.kind === "word" ? first : last;
+    const literal = first?.kind === "word" ? last : first;
+    const bound =
+      reference?.kind === "word" &&
+      options.boundReferences.has(reference.value);
+    const comparison =
+      tokens.length === 3 &&
+      operator?.kind === "op" &&
+      (operator.value === "==" || operator.value === "!=") &&
+      (literal?.kind === "string" ||
+        (literal?.kind === "word" &&
+          ["true", "false", "null"].includes(literal.value)));
+    if (bound && (tokens.length === 1 || comparison)) {
+      return { type: "bound", source, negated: false };
+    }
+    return {
+      type: "unresolved",
+      reason: `composite output contains unsupported atom: ${source}`,
+    };
+  }
   const value = isTruthy(evaluate(source, context));
   return value === UNKNOWN
-    ? { type: "opaque", polarity: "positive" }
+    ? { type: "unresolved", reason: `unresolved condition atom: ${source}` }
     : { type: "literal", value };
 };
 
+const outputAtom = (
+  tokens: readonly Token[],
+  options: OutputParserOptions,
+): OutputCondition =>
+  simpleOutputAtom(tokens, options) ??
+  comparisonOutputAtom(tokens, options) ??
+  contextualOutputAtom(tokens, options);
+
 const parseOutputCondition = (
   input: readonly Token[],
-  outputs: ReadonlyMap<string, string>,
-  context: Context,
+  options: OutputParserOptions,
 ): OutputCondition => {
   const tokens = ungroupTokens(input);
   if (tokens.length === 0) {
@@ -275,8 +367,8 @@ const parseOutputCondition = (
     if (index !== -1) {
       return {
         type,
-        left: parseOutputCondition(tokens.slice(0, index), outputs, context),
-        right: parseOutputCondition(tokens.slice(index + 1), outputs, context),
+        left: parseOutputCondition(tokens.slice(0, index), options),
+        right: parseOutputCondition(tokens.slice(index + 1), options),
       };
     }
   }
@@ -286,34 +378,123 @@ const parseOutputCondition = (
     topLevelOperator(tokens, COMPARISONS) === -1
   ) {
     return negateOutputCondition(
-      parseOutputCondition(tokens.slice(1), outputs, context),
+      parseOutputCondition(tokens.slice(1), options),
     );
   }
-  return outputAtom(tokens, outputs, context);
+  return outputAtom(tokens, options);
+};
+
+type CompileOutputAliasesOptions = {
+  readonly aliases: ReadonlyMap<string, OutputAliasDefinition>;
+  readonly boundReferences: ReadonlySet<string>;
+};
+
+export const compileOutputAliases = ({
+  aliases,
+  boundReferences,
+}: CompileOutputAliasesOptions) => {
+  const compiled = new Map<string, OutputCondition>();
+  const visiting = new Set<string>();
+  const resolveAlias = (reference: string): OutputCondition | undefined => {
+    const cached = compiled.get(reference);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const definition = aliases.get(reference);
+    if (definition === undefined) {
+      return undefined;
+    }
+    if (visiting.has(reference)) {
+      return {
+        type: "unresolved",
+        reason: `composite output alias cycle: ${reference}`,
+      };
+    }
+    visiting.add(reference);
+    const parsed = OperationResult.try(() =>
+      parseOutputCondition(tokenize(definition.expression), {
+        outputs: definition.outputs,
+        context: { values: {} },
+        substitutions: new Map(),
+        resolveAlias,
+        boundReferences,
+      }),
+    );
+    const node: OutputCondition = parsed.isOk()
+      ? parsed.value
+      : {
+          type: "unresolved",
+          reason: `composite output parse failure: ${reference}`,
+        };
+    visiting.delete(reference);
+    compiled.set(reference, node);
+    return node;
+  };
+  for (const reference of aliases.keys()) {
+    resolveAlias(reference);
+  }
+  return compiled;
 };
 
 type OutputDisjunction =
   | {
       readonly type: "expanded";
-      readonly terms: readonly (readonly LiteralOutputConstraint[])[];
+      readonly terms: readonly {
+        readonly constraints: readonly LiteralOutputConstraint[];
+        readonly blockers: readonly string[];
+      }[];
     }
   | { readonly type: "unresolved"; readonly reason: string };
 
-const expandOutputCondition = (node: OutputCondition): OutputDisjunction => {
+const expandOutputCondition = (
+  node: OutputCondition,
+  context: Context,
+): OutputDisjunction => {
   switch (node.type) {
+    case "unresolved":
+      return {
+        type: "expanded",
+        terms: [{ constraints: [], blockers: [node.reason] }],
+      };
+    case "bound": {
+      const value = isTruthy(evaluate(node.source, context));
+      if (value === UNKNOWN) {
+        return {
+          type: "expanded",
+          terms: [
+            {
+              constraints: [],
+              blockers: [
+                `composite output has unresolved bound atom: ${node.source}`,
+              ],
+            },
+          ],
+        };
+      }
+      return {
+        type: "expanded",
+        terms: (node.negated ? !value : value)
+          ? [{ constraints: [], blockers: [] }]
+          : [],
+      };
+    }
     case "literal":
-      return { type: "expanded", terms: node.value ? [[]] : [] };
-    case "opaque":
-      return { type: "expanded", terms: [[]] };
+      return {
+        type: "expanded",
+        terms: node.value ? [{ constraints: [], blockers: [] }] : [],
+      };
     case "constraint":
-      return { type: "expanded", terms: [[node.constraint]] };
+      return {
+        type: "expanded",
+        terms: [{ constraints: [node.constraint], blockers: [] }],
+      };
     case "and":
     case "or": {
-      const left = expandOutputCondition(node.left);
+      const left = expandOutputCondition(node.left, context);
       if (left.type === "unresolved") {
         return left;
       }
-      const right = expandOutputCondition(node.right);
+      const right = expandOutputCondition(node.right, context);
       if (right.type === "unresolved") {
         return right;
       }
@@ -333,7 +514,10 @@ const expandOutputCondition = (node: OutputCondition): OutputDisjunction => {
           node.type === "or"
             ? [...left.terms, ...right.terms]
             : left.terms.flatMap((term) =>
-                right.terms.map((other) => [...term, ...other]),
+                right.terms.map((other) => ({
+                  constraints: [...term.constraints, ...other.constraints],
+                  blockers: [...term.blockers, ...other.blockers],
+                })),
               ),
       };
     }
@@ -375,6 +559,7 @@ type ConjunctiveOutputConditionsOptions = {
   readonly conditions: readonly string[];
   readonly outputs: ReadonlyMap<string, string>;
   readonly context?: Context;
+  readonly substitutions?: ReturnType<typeof compileOutputAliases>;
 };
 
 type ConjunctiveOutputConditionsResult =
@@ -387,6 +572,7 @@ export const conjunctiveOutputConditions = ({
   conditions,
   outputs,
   context = { values: {} },
+  substitutions = new Map(),
 }: ConjunctiveOutputConditionsOptions): ConjunctiveOutputConditionsResult => {
   const parsed = OperationResult.try(() => {
     let path: OutputCondition = { type: "literal", value: true };
@@ -395,7 +581,11 @@ export const conjunctiveOutputConditions = ({
       path = {
         type: "and",
         left: path,
-        right: parseOutputCondition(tokenize(condition), outputs, context),
+        right: parseOutputCondition(tokenize(condition), {
+          outputs,
+          context,
+          substitutions,
+        }),
       };
     }
     return path;
@@ -403,17 +593,30 @@ export const conjunctiveOutputConditions = ({
   if (parsed.isErr()) {
     return { type: "unresolved", reason: "output condition parse failure" };
   }
-  const disjunction = expandOutputCondition(parsed.value);
+  const disjunction = expandOutputCondition(parsed.value, context);
   if (disjunction.type === "unresolved") {
     return disjunction;
   }
   let conflict: string | undefined;
+  const blockers = new Set<string>();
   for (const term of disjunction.terms) {
-    const output = outputConstraintConflict(term);
+    if (term.blockers.length > 0) {
+      for (const blocker of term.blockers) {
+        blockers.add(blocker);
+      }
+      continue;
+    }
+    const output = outputConstraintConflict(term.constraints);
     if (output === undefined) {
       return { type: "consistent" };
     }
     conflict ??= output;
+  }
+  if (blockers.size > 0) {
+    return {
+      type: "unresolved",
+      reason: `unresolved condition disjuncts: ${[...blockers].join("; ")}`,
+    };
   }
   return {
     type: "contradictory",
