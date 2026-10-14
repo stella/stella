@@ -50,6 +50,7 @@ import {
 } from "../telemetry/desktop-telemetry";
 import { accountPresentation } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
+import { commandErrorMessage } from "./command-error";
 import stellaFavicon from "./stella-favicon.svg";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
@@ -691,11 +692,7 @@ const App = () => {
           return;
         }
 
-        setError(
-          fetchError instanceof Error
-            ? fetchError.message
-            : t("errorReadState"),
-        );
+        setError(commandErrorMessage(fetchError, t("errorReadState")));
       }
     };
 
@@ -805,11 +802,7 @@ const App = () => {
               }
             : currentState,
         );
-        setError(
-          updateError instanceof Error
-            ? updateError.message
-            : t("errorUpdatePreferences"),
-        );
+        setError(commandErrorMessage(updateError, t("errorUpdatePreferences")));
       });
     }
   };
@@ -819,11 +812,7 @@ const App = () => {
       await invoke<boolean>("copy_diagnostics");
       setError(null);
     } catch (copyError) {
-      setError(
-        copyError instanceof Error
-          ? copyError.message
-          : t("errorCopyDiagnostics"),
-      );
+      setError(commandErrorMessage(copyError, t("errorCopyDiagnostics")));
     }
   };
 
@@ -832,11 +821,7 @@ const App = () => {
       await invoke<boolean>("email_support");
       setError(null);
     } catch (emailError) {
-      setError(
-        emailError instanceof Error
-          ? emailError.message
-          : t("errorEmailSupport"),
-      );
+      setError(commandErrorMessage(emailError, t("errorEmailSupport")));
     }
   };
 
@@ -845,11 +830,7 @@ const App = () => {
       await invoke<boolean>("reveal_support_root");
       setError(null);
     } catch (revealError) {
-      setError(
-        revealError instanceof Error
-          ? revealError.message
-          : t("errorRevealAppData"),
-      );
+      setError(commandErrorMessage(revealError, t("errorRevealAppData")));
     }
   };
 
@@ -858,11 +839,7 @@ const App = () => {
       await setPreferredLanguage(language);
       setError(null);
     } catch (languageError) {
-      setError(
-        languageError instanceof Error
-          ? languageError.message
-          : t("errorUpdateLanguage"),
-      );
+      setError(commandErrorMessage(languageError, t("errorUpdateLanguage")));
     }
   };
 
@@ -878,11 +855,7 @@ const App = () => {
       await invoke("open_stella_account");
       setError(null);
     } catch (openError) {
-      setError(
-        openError instanceof Error
-          ? openError.message
-          : t("errorOpenStellaWeb"),
-      );
+      setError(commandErrorMessage(openError, t("errorOpenStellaWeb")));
     }
   };
 
@@ -958,9 +931,10 @@ const App = () => {
                           })
                           .catch((disconnectError: unknown) => {
                             setError(
-                              disconnectError instanceof Error
-                                ? disconnectError.message
-                                : t("errorDisconnectAccount"),
+                              commandErrorMessage(
+                                disconnectError,
+                                t("errorDisconnectAccount"),
+                              ),
                             );
                           });
                         return;
