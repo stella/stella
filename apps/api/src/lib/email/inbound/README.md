@@ -144,8 +144,14 @@ over the message XML, takes the same path and files a `data_box` record.
   signing time) and stays unverified; the `.zfo` file keeps its bytes.
 - The record's addresses are box IDs and its subject is the annotation; the
   envelope (reference numbers and file marks of both parties, delivery and
-  acceptance times, status, delivery flags) is `dataBox`. The file does not
-  say which box was the firm's, so the record is incoming.
+  acceptance times, status, delivery flags) is `dataBox`.
+- The organization's own boxes (`organization_settings.data_box_ids`, edited
+  through `organization-settings/correspondence/data-boxes`) decide the
+  direction: sent from one is outgoing, sent to one incoming; neither or both
+  leaves it incoming with `directionBasis` `unknown`. Each add or remove
+  re-derives the direction of filed records from their stored envelopes in
+  the matters the administrator can reach, writing only rows whose basis
+  changes, so a repeat converges.
 - Each file of the message is scanned before anything is written, then stored
   as a document in the `.zfo` file's folder and linked as an attachment. A
   rejected file refuses the whole message; a replay resumes missing ordinals.

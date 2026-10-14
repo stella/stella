@@ -10,6 +10,7 @@ import {
   correspondenceAttachments,
   correspondenceFilers,
   entities,
+  organizationSettings,
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
@@ -330,6 +331,7 @@ if (!databaseUrl || !runPostgresTests) {
         dataBox: {
           messageId: FIXTURE_MESSAGE.messageId,
           status: "accepted_by_login",
+          directionBasis: "unknown",
           sender: { boxId: "abc2def", fileMark: "12 C 345/2026" },
         },
       });
@@ -351,6 +353,48 @@ if (!databaseUrl || !runPostgresTests) {
           parentId: folderId,
         },
       ]);
+    });
+
+    test("the organization's own boxes decide the direction", async () => {
+      const cases = [
+        { boxIds: ["abc2def"], direction: "out", basis: "organization_sender" },
+        {
+          boxIds: ["xyz9876"],
+          direction: "in",
+          basis: "organization_recipient",
+        },
+        { boxIds: ["abc2def", "xyz9876"], direction: "in", basis: "unknown" },
+      ] as const;
+      for (const [index, { boxIds, direction, basis }] of cases.entries()) {
+        // db-await-in-loop: one filing per organization box setting, in order
+        await db
+          .insert(organizationSettings)
+          .values({
+            id: createSafeId<"organizationSettings">(),
+            organizationId,
+            dataBoxIds: [...boxIds],
+          })
+          .onConflictDoUpdate({
+            target: organizationSettings.organizationId,
+            set: { dataBoxIds: [...boxIds] },
+          });
+        const messageId = `98765432${index}`;
+        const outcome = await processUpload({
+          entityId: await storeZfoFile({ createdBy: uploaderId }),
+          bytes: await zfoFile({ messageId }),
+        });
+        expect(outcome.isOk() && outcome.value.status).toBe("filed");
+        const record = (await records()).find(
+          (candidate) => candidate.messageId === messageId,
+        );
+        expect([record?.direction, record?.dataBox?.directionBasis]).toEqual([
+          direction,
+          basis,
+        ]);
+      }
+      await db
+        .delete(organizationSettings)
+        .where(eq(organizationSettings.organizationId, organizationId));
     });
 
     test("a batch with copies of one message converges per matter", async () => {

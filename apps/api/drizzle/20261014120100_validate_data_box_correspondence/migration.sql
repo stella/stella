@@ -13,7 +13,9 @@ SET lock_timeout = 0;
 -- squawk-ignore prefer-robust-stmts -- Validation runs outside the DDL transaction so scans do not retain DDL locks.
 ALTER TABLE "correspondence" VALIDATE CONSTRAINT "correspondence_channel_check";--> statement-breakpoint
 -- squawk-ignore prefer-robust-stmts -- Validation runs outside the DDL transaction so scans do not retain DDL locks.
-ALTER TABLE "correspondence" VALIDATE CONSTRAINT "correspondence_data_box_check";
+ALTER TABLE "correspondence" VALIDATE CONSTRAINT "correspondence_data_box_check";--> statement-breakpoint
+-- squawk-ignore prefer-robust-stmts -- Validation runs outside the DDL transaction so scans do not retain DDL locks.
+ALTER TABLE "organization_settings" VALIDATE CONSTRAINT "organization_settings_data_box_ids_check";
 --> statement-breakpoint
 SET statement_timeout = '5s';
 --> statement-breakpoint

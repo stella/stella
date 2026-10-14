@@ -20,12 +20,17 @@ import {
   correspondence,
   correspondenceAttachments,
   entities,
+  organizationSettings,
 } from "@/api/db/schema";
 import {
   createBackgroundAuditRecorder,
   type AuditRecorder,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  deriveDataBoxDirectionBasis,
+  DIRECTION_BY_BASIS,
+} from "@/api/lib/data-box/direction";
 import {
   parseDataBoxMessage,
   type DataBoxMessageParseError,
@@ -261,38 +266,59 @@ type DataBoxCorrespondenceOptions = {
   bytes: ArrayBuffer;
   sourceEntityId: SafeId<"entity">;
   uploadedAt: string;
+  organizationBoxIds: readonly string[];
 };
 
 /**
  * The one field mapping from a data-box message to a correspondence record.
- * The file does not say which box was the firm's, so the record is incoming;
- * its addresses are box IDs and its subject is the annotation.
+ * The organization's own boxes decide its direction; its addresses are box
+ * IDs and its subject is the annotation.
  */
 const dataBoxCorrespondence = ({
   message: { annotation, envelope },
   bytes,
   sourceEntityId,
   uploadedAt,
-}: DataBoxCorrespondenceOptions): ParsedCorrespondence => ({
-  source: "upload",
-  sourceEntityId,
-  originalSignature: UNVERIFIED_SIGNATURE,
-  channel: "data_box",
-  dataBox: envelope,
-  direction: "in",
-  messageId: envelope.messageId,
-  contentHash: hashSha256Hex(new Uint8Array(bytes)),
-  from: { address: envelope.sender.boxId, name: envelope.sender.name },
-  to: [{ address: envelope.recipient.boxId, name: envelope.recipient.name }],
-  cc: [],
-  subject: annotation,
-  sentAt: null,
-  receivedAt: envelope.deliveredAt ?? uploadedAt,
-  inReplyTo: null,
-  references: [],
-  bodyText: "",
-  bodyHtml: null,
-});
+  organizationBoxIds,
+}: DataBoxCorrespondenceOptions): ParsedCorrespondence => {
+  const directionBasis = deriveDataBoxDirectionBasis({
+    senderBoxId: envelope.sender.boxId,
+    recipientBoxId: envelope.recipient.boxId,
+    organizationBoxIds,
+  });
+  return {
+    source: "upload",
+    sourceEntityId,
+    originalSignature: UNVERIFIED_SIGNATURE,
+    channel: "data_box",
+    dataBox: { ...envelope, directionBasis },
+    direction: DIRECTION_BY_BASIS[directionBasis],
+    messageId: envelope.messageId,
+    contentHash: hashSha256Hex(new Uint8Array(bytes)),
+    from: { address: envelope.sender.boxId, name: envelope.sender.name },
+    to: [{ address: envelope.recipient.boxId, name: envelope.recipient.name }],
+    cc: [],
+    subject: annotation,
+    sentAt: null,
+    receivedAt: envelope.deliveredAt ?? uploadedAt,
+    inReplyTo: null,
+    references: [],
+    bodyText: "",
+    bodyHtml: null,
+  };
+};
+
+// The organization's own boxes, read when the message is filed; a change to
+// them re-derives the direction of records already filed.
+const readOrganizationBoxIds = async ({ scopedDb, scope }: UploadedFiling) =>
+  await scopedDb(async (tx) => {
+    const [settings] = await tx
+      .select({ dataBoxIds: organizationSettings.dataBoxIds })
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, scope.organizationId))
+      .limit(1);
+    return settings?.dataBoxIds ?? [];
+  });
 
 // The message's files are stored in the `.zfo` file's folder.
 const readSourceFolder = async ({ scopedDb, scope }: UploadedFiling) =>
@@ -370,6 +396,13 @@ const fileUploadedDataBoxMessage = async ({
     }
     scannedFiles.push(scanned.value);
   }
+  const organizationBoxIds = await Result.tryPromise({
+    try: async () => await readOrganizationBoxIds(filing),
+    catch: unavailable,
+  });
+  if (organizationBoxIds.isErr()) {
+    return organizationBoxIds;
+  }
   const created = await createCorrespondence({
     safeDb: safeDbFromScoped(scopedDb),
     organizationId: scope.organizationId,
@@ -380,6 +413,7 @@ const fileUploadedDataBoxMessage = async ({
       bytes,
       sourceEntityId: scope.entityId,
       uploadedAt: filing.receivedAt,
+      organizationBoxIds: organizationBoxIds.value,
     }),
     attachments: [],
     recordAuditEvent,

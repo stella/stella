@@ -13,6 +13,22 @@ const DATA_BOX_MESSAGE_EXTENSION = "zfo";
 /** A box ID: seven characters, stored lowercase like contact data boxes. */
 export const DATA_BOX_ID_PATTERN = /^[a-z0-9]{7}$/u;
 
+/** At most this many of the organization's own boxes are recorded. */
+export const ORGANIZATION_DATA_BOX_LIMIT = 20;
+
+/**
+ * How a message's direction was derived from the organization's own boxes:
+ * sent from one is outgoing, sent to one is incoming. A message neither (or
+ * both) of whose boxes is the organization's is filed incoming with an
+ * unknown basis.
+ */
+export const DATA_BOX_DIRECTION_BASES = [
+  "organization_sender",
+  "organization_recipient",
+  "unknown",
+] as const;
+export type DataBoxDirectionBasis = (typeof DATA_BOX_DIRECTION_BASES)[number];
+
 /** A message ID (dmID): the system's decimal identifier. */
 export const DATA_BOX_MESSAGE_ID_PATTERN = /^[0-9]{1,20}$/u;
 
@@ -57,8 +73,16 @@ export type DataBoxSeal = {
   signedAt: string | null;
 };
 
-/** The message envelope as stated in the exported file. */
-export type DataBoxEnvelope = {
+/**
+ * The message envelope as stated in the exported file, with the basis its
+ * record's direction was derived on.
+ */
+export type DataBoxEnvelope = DataBoxStatedEnvelope & {
+  directionBasis: DataBoxDirectionBasis;
+};
+
+/** The envelope exactly as the exported file states it. */
+export type DataBoxStatedEnvelope = {
   messageId: string;
   /** `dmType`: a one-letter message kind (V public, K postal, ...). */
   messageType: string | null;
@@ -74,6 +98,17 @@ export type DataBoxEnvelope = {
   status: DataBoxMessageStatus | null;
   seal: DataBoxSeal;
 };
+
+/** The organization's own data boxes, lowercase. */
+export type OrganizationDataBoxesResponse = {
+  boxIds: string[];
+};
+
+/** `recomputed` counts the records whose direction changed. */
+export type UpdateOrganizationDataBoxesResponse =
+  OrganizationDataBoxesResponse & {
+    recomputed: number;
+  };
 
 export const isDataBoxMessageMimeType = (
   mimeType: string | null | undefined,

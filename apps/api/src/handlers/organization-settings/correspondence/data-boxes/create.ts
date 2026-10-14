@@ -1,0 +1,71 @@
+import { panic, Result } from "better-result";
+import { t } from "elysia";
+
+import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
+
+import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  dataBoxIdSchema,
+  saveOrganizationDataBoxes,
+} from "@/api/lib/data-box/organization-boxes";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+
+const concurrentChange = () =>
+  new HandlerError({
+    status: 409,
+    message:
+      "The organization's data boxes changed concurrently; read them again and retry",
+  });
+
+const config = {
+  contract: "patch",
+  description:
+    `Add one of the organization's own data-box IDs (at most ${ORGANIZATION_DATA_BOX_LIMIT}; stored lowercase) and re-derive the direction of the data-box messages filed in the matters the caller can reach: sent from one of the organization's boxes is outgoing, sent to one incoming, otherwise incoming with directionBasis unknown. ` +
+    "Adding an ID already listed changes nothing but re-derives; recomputed counts the records whose direction changed.",
+  permissions: { organizationSettings: ["update"] },
+  accountAccess: ACCOUNT_ACCESS.standard,
+  mcp: {
+    type: "capability",
+    reason: "correspondence",
+    consumesServices: false,
+  },
+  body: t.Object({ boxId: dataBoxIdSchema }),
+} satisfies HandlerConfig;
+
+const addOrganizationDataBox = createSafeRootHandler(
+  config,
+  async function* ({ body, safeDb, session, recordAuditEvent }) {
+    const boxId = body.boxId.toLowerCase();
+    const saved = yield* Result.await(
+      safeDb(
+        async (tx) =>
+          await saveOrganizationDataBoxes({
+            tx,
+            organizationId: session.activeOrganizationId,
+            recordAuditEvent,
+            change: (current) =>
+              current.includes(boxId) ? [...current] : [...current, boxId],
+          }),
+      ),
+    );
+    switch (saved.type) {
+      case "saved":
+        return Result.ok(saved.value);
+      case "limit_reached":
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: `An organization lists at most ${ORGANIZATION_DATA_BOX_LIMIT} data boxes; remove one first`,
+          }),
+        );
+      case "conflict":
+        return Result.err(concurrentChange());
+      default:
+        saved satisfies never;
+        return panic("Unhandled data box change");
+    }
+  },
+);
+
+export default addOrganizationDataBox;

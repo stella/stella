@@ -13,7 +13,10 @@ import {
   type CorrespondenceActorDisplay,
   type CorrespondenceOriginalSignature,
 } from "@stll/api-contract/correspondence";
-import type { DataBoxEnvelope } from "@stll/api-contract/data-box";
+import {
+  DATA_BOX_DIRECTION_BASES,
+  type DataBoxEnvelope,
+} from "@stll/api-contract/data-box";
 
 import {
   entityFeatureGateChecks,
@@ -194,7 +197,7 @@ export const correspondence = p.pgTable.withRLS(
     ),
     p.check(
       "correspondence_data_box_check",
-      sql`((${table.channel} = 'data_box') = (${table.dataBox} is not null) and (${table.channel} <> 'data_box' or (${table.source} = 'upload' and ${table.messageId} is not null and jsonb_typeof(${table.dataBox}) = 'object' and ${table.dataBox}->>'messageId' = ${table.messageId}))) is true`,
+      sql`((${table.channel} = 'data_box') = (${table.dataBox} is not null) and (${table.channel} <> 'data_box' or (${table.source} = 'upload' and ${table.messageId} is not null and jsonb_typeof(${table.dataBox}) = 'object' and ${table.dataBox}->>'messageId' = ${table.messageId} and ${table.dataBox}->>'directionBasis' in (${valuesSql(DATA_BOX_DIRECTION_BASES)}) and (${table.direction} = 'out') = (${table.dataBox}->>'directionBasis' = 'organization_sender')))) is true`,
     ),
     p.check(
       "correspondence_handling_check",

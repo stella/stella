@@ -1,4 +1,5 @@
 import { BUSINESS_REGISTRY_CREDENTIAL_SLUGS } from "@stll/api-contract";
+import { ORGANIZATION_DATA_BOX_LIMIT } from "@stll/api-contract/data-box";
 import type { TimeZoneId } from "@stll/time";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -237,6 +238,9 @@ export const organizationSettings = p.pgTable(
       .$type<PracticeJurisdiction[]>()
       .notNull()
       .default([]),
+    // The organization's own data-box IDs (lowercase); they decide whether a
+    // filed data-box message is outgoing or incoming.
+    dataBoxIds: jsonb("data_box_ids").$type<string[]>().notNull().default([]),
     /**
      * Per-slug overrides for built-in native tools (e.g. ARES). The
      * effective state of a tool is `overrides[slug] ?? jurisdictionDefault`,
@@ -341,6 +345,10 @@ export const organizationSettings = p.pgTable(
         MANAGED_AI_RESIDENCIES.map((region) => sql.raw(`'${region}'`)),
         sql`, `,
       )})`,
+    ),
+    p.check(
+      "organization_settings_data_box_ids_check",
+      sql`jsonb_typeof(${table.dataBoxIds}) = 'array' AND jsonb_array_length(${table.dataBoxIds}) <= ${sql.raw(String(ORGANIZATION_DATA_BOX_LIMIT))}`,
     ),
     p.check(
       "organization_settings_time_minimum_unit_check",

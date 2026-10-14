@@ -57,6 +57,7 @@ const envelope = {
   deliveredAt: "2026-10-14T07:12:33.120Z",
   acceptedAt: null,
   status: "delivered",
+  directionBasis: "organization_recipient",
   seal: {
     status: "unverified",
     signerName: null,
@@ -90,9 +91,16 @@ const runInRollback = async (work: RollbackWork) => {
 };
 
 const INVALID_DATA_BOX_ROWS = [
-  { dataBox: null, messageId: envelope.messageId },
-  { dataBox: envelope, messageId: null },
-  { dataBox: envelope, messageId: "999" },
+  { dataBox: null, messageId: envelope.messageId, direction: "in" },
+  { dataBox: envelope, messageId: null, direction: "in" },
+  { dataBox: envelope, messageId: "999", direction: "in" },
+  // Outgoing only when sent from one of the organization's boxes.
+  { dataBox: envelope, messageId: envelope.messageId, direction: "out" },
+  {
+    dataBox: { ...envelope, directionBasis: "organization_sender" },
+    messageId: envelope.messageId,
+    direction: "in",
+  },
 ] as const;
 
 const causeChainText = (error: unknown): string => {
@@ -118,7 +126,6 @@ const insertDataBoxRow = async (row: (typeof INVALID_DATA_BOX_ROWS)[number]) =>
       organizationId: ids.orgA,
       workspaceId: ids.wsA2,
       channel: "data_box",
-      direction: "in",
       source: "upload",
       sourceEntityId,
       originalSignature: { status: "unverified" },

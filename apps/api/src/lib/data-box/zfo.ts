@@ -16,9 +16,9 @@ import {
   DATA_BOX_ID_PATTERN,
   DATA_BOX_MESSAGE_ID_PATTERN,
   DATA_BOX_MESSAGE_STATUSES,
-  type DataBoxEnvelope,
   type DataBoxParty,
   type DataBoxSeal,
+  type DataBoxStatedEnvelope,
 } from "@stll/api-contract/data-box";
 
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -69,7 +69,7 @@ type DataBoxFile = {
 
 export type ParsedDataBoxMessage = {
   annotation: string;
-  envelope: DataBoxEnvelope;
+  envelope: DataBoxStatedEnvelope;
   files: DataBoxFile[];
 };
 
