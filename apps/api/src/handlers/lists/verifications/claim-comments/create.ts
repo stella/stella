@@ -20,7 +20,7 @@ import {
 } from "@/api/handlers/lists/verifications/claim-comments/claim";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
-import { tSafeId } from "@/api/lib/custom-schema";
+import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
 
@@ -50,6 +50,7 @@ const config = {
     reason: "document_processing",
     consumesServices: false,
   },
+  params: workspaceParams({}),
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

@@ -46,6 +46,7 @@ export const createListVerificationRoutes = (
     })
     .post("/claim-comments", createClaimComment.handler, {
       body: createClaimComment.config.body,
+      params: createClaimComment.config.params,
       permissions: createClaimComment.config.permissions,
     })
     .patch("/claim-comments/:annotationId", updateClaimComment.handler, {

@@ -324,8 +324,11 @@ export const ClaimDetailPanel = ({
             />
           </section>
 
+          {/* Keyed by the claim, so a comment being written on one claim is
+              discarded rather than saved onto the next one selected. */}
           <ClaimComments
             claim={claim}
+            key={`${runId}:${claim.id}`}
             runId={runId}
             workspaceId={workspaceId}
           />

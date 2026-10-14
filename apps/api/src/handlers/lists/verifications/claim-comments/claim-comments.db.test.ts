@@ -17,9 +17,12 @@ import {
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
+import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import type { McpRequestContext } from "@/api/mcp/context";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { organizationFeatureGrants } from "@/api/tests/helpers/feature-grants";
@@ -275,7 +278,90 @@ const withTenants = async (
   });
 };
 
+/** An agent's session in the tenant's matter, as the capability path sees it. */
+const capabilityContext = async (
+  db: GatedTestDb,
+  tenant: Tenant,
+): Promise<McpRequestContext> => {
+  const scopedDb = scopedFor(db, tenant);
+  const safeDb = createSafeDb(
+    markRlsDatabase(db),
+    [tenant.workspaceId],
+    tenant.organizationId,
+    tenant.author,
+  );
+  const featureAccessSnapshot = await scopedDb(
+    async (tx) =>
+      await resolveFeatureAccessSnapshot({
+        tx,
+        organizationId: tenant.organizationId,
+        userId: tenant.author,
+      }),
+  );
+  return {
+    organizationId: tenant.organizationId,
+    userId: tenant.author,
+    userEmail: `${tenant.author}@example.test`,
+    memberRole: "owner",
+    accessibleWorkspaceIds: [tenant.workspaceId],
+    accessibleWorkspaceIdSet: new Set([tenant.workspaceId]),
+    accessibleWorkspaceStatusById: new Map([[tenant.workspaceId, "active"]]),
+    accessibleWorkspaces: [{ id: tenant.workspaceId, status: "active" }],
+    safeDb,
+    scopedDb,
+    recordAuditEvent: contextFor(db, tenant).audit,
+    featureAccessSnapshot,
+    request: new Request("https://example.test/mcp"),
+    grantedScopes: ["stella:read", "stella:matters_write"],
+    createOperationDatabaseScope: () => ({
+      safeDb,
+      scopedDb,
+      pinServerValidatedWorkspaceId: (id) => id === tenant.workspaceId,
+    }),
+    testDependencies: {
+      isCapabilityFeatureEnabled: () => true,
+      consumeInvokeCapabilityRateLimit: async () =>
+        await Promise.resolve({ ok: true, retryAfterSeconds: 60 }),
+      loadOrgSettingsForAuth: async () =>
+        await Promise.resolve({
+          orgAIConfig: null,
+          orgAIConfigStatus: "ok",
+          promptCachingEnabled: false,
+          managedAIResidency: "eu",
+        }),
+    },
+  };
+};
+
 describe.skipIf(!enabled)("comments on verification claims", () => {
+  test("the create capability writes a comment in the matter it names", async () =>
+    await withTenants(async ({ db, tenant }) => {
+      const result = await handleMcpToolCall({
+        mode: "advanced",
+        context: await capabilityContext(db, tenant),
+        toolName: "write_capability",
+        args: {
+          capability: "lists.verifications.claim-comments.create",
+          input: {
+            params: { matterId: tenant.workspaceId },
+            body: {
+              runId: tenant.runId,
+              claimId: tenant.claimId,
+              body: COMMENT,
+            },
+          },
+        },
+      });
+      expect(result.isError).not.toBe(true);
+      const [stored] = await storedComments(db, tenant);
+      expect(stored).toMatchObject({
+        workspaceId: tenant.workspaceId,
+        verificationClaimId: tenant.claimId,
+        userId: tenant.author,
+        body: COMMENT,
+      });
+    }));
+
   test("an author creates, lists, edits, shares and deletes a claim comment, each audited", async () =>
     await withTenants(async ({ db, tenant }) => {
       const id = createdId(await create(db, tenant));

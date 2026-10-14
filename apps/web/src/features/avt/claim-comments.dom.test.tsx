@@ -44,6 +44,10 @@ const { IntlProvider } = await import("use-intl");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { ClaimComments } = await import("./claim-comments");
+const { ClaimDetailPanel } = await import("./claim-detail-panel");
+const { useState } = await import("react");
+const { roleOptions } = await import("@/lib/auth-queries");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { claimCommentsOptions } = await import("./claim-comments-query");
 const { makeClaim, noCover } = await import("./avt.test-fixtures");
 const messages = (await import("@/i18n/langs/en.json")).default;
@@ -146,6 +150,8 @@ const mount = (seeded: ReturnType<typeof comment>[]) => {
   );
 };
 
+// The test harness switch, not product copy.
+const NEXT_CLAIM = "next claim";
 const commentsPath = `/v1/lists/${workspaceId}/claim-comments`;
 
 test("a colleague's shared comment reads without controls; the reviewer's own can be edited and deleted", () => {
@@ -233,4 +239,71 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
   await waitFor(() =>
     expect(screen.getByText(messages.folio.comments.noComments)).toBeTruthy(),
   );
+});
+
+test("a comment being written on one claim is discarded when another claim is selected", () => {
+  const next = makeClaim({ suffix: 2, verdict: noCover });
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  });
+  clients.push(client);
+  client.setQueryData(roleOptions.queryKey, "owner");
+  for (const seeded of [claim, next]) {
+    client.setQueryData(
+      claimCommentsOptions({
+        claimId: seeded.id,
+        runId,
+        viewer: { organizationId, userId: me.id },
+        workspaceId,
+      }).queryKey,
+      [],
+    );
+  }
+  const Panel = () => {
+    const [selected, setSelected] = useState(claim);
+    return (
+      <>
+        <button
+          aria-label={NEXT_CLAIM}
+          onClick={() => setSelected(next)}
+          type="button"
+        />
+        <ClaimDetailPanel
+          claim={selected}
+          contested={new Set()}
+          factsById={new Map()}
+          onReviewEvent={() => undefined}
+          runId={runId}
+          stepper={{ current: null, total: 0, onPrev: null, onNext: null }}
+          workspaceId={workspaceId}
+        />
+      </>
+    );
+  };
+  render(
+    <IntlProvider locale="en" messages={messages}>
+      <QueryClientProvider client={client}>
+        <FormattingProvider locale="en" timeZone="UTC">
+          <AuthenticatedUserProvider user={me}>
+            <Panel />
+          </AuthenticatedUserProvider>
+        </FormattingProvider>
+      </QueryClientProvider>
+    </IntlProvider>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: messages.folio.comment }));
+  fireEvent.change(
+    screen.getByRole("textbox", { name: messages.folio.comment }),
+    { target: { value: "Draft on the first claim." } },
+  );
+  fireEvent.click(screen.getByRole("button", { name: NEXT_CLAIM }));
+  expect(
+    screen.queryByRole("textbox", { name: messages.folio.comment }),
+  ).toBeNull();
+  expect(screen.queryByDisplayValue("Draft on the first claim.")).toBeNull();
+  expect(screen.getByText(messages.folio.comments.noComments)).toBeTruthy();
+  expect(requests).toEqual([]);
 });
