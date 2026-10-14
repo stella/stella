@@ -23,6 +23,7 @@ export const changedLineNumbers = (diff: string): ReadonlySet<number> => {
 };
 
 const ROOT = path.resolve(import.meta.dirname, "..");
+const FIXTURE_ROOT = path.join(ROOT, ".oxlint-plugins", "__fixtures__");
 const lineCache = new Map<string, ReadonlySet<number>>();
 let mergeBase: string | undefined;
 const changedLinesFor = (file: string): ReadonlySet<number> => {
@@ -85,6 +86,10 @@ export const guardEnforcesLine = ({
     return panic(`Invalid guard rollout deadline: ${guard}`);
   }
   if (now.getTime() >= deadline) {
+    return true;
+  }
+  // Expected-violation directives must remain used even in unchanged fixtures.
+  if (isPathInside(FIXTURE_ROOT, path.resolve(ROOT, file))) {
     return true;
   }
   // Files outside the checkout have no merge-base history (isolated lint fixtures).
