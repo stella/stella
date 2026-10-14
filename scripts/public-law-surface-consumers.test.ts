@@ -139,7 +139,7 @@ const SQL_HELPER_CALLERS = {
   "apps/api/src/handlers/legislation/facets.ts": "search",
   "apps/api/src/handlers/chat/chat-prompt.ts": "search",
   "apps/api/src/handlers/legal-reader/annotations/document-blocks.ts": "search",
-  "apps/api/src/lib/legal-search/legislation-works-at-date.ts": "search",
+  "apps/api/src/handlers/legislation/resolve.ts": "search",
   "apps/api/src/lib/legal-search/legislation-work-names.ts": "search",
   "apps/api/src/lib/legal-search/legislation-facet-refresh.ts": "search",
   "apps/api/src/mcp/legislation-tools.ts": "search",
@@ -159,10 +159,12 @@ const SQL_HELPER_DEFINERS = [
   "apps/api/src/handlers/legislation/provision-versions.ts",
   "apps/api/src/handlers/legislation/provision-history.ts",
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts",
+  // Resolves against the country list its caller's surface resolved to.
+  "apps/api/src/lib/legal-search/legislation-works-at-date.ts",
 ] as const;
 
 const SQL_HELPER_NAME =
-  /\b(?:publishedLegislation\w*For|redistributableLegislationVersionFor|readVersionBlocks|readVersionText|readVersionAst|readStoredVersionAst|readBlocks)\(/gu;
+  /\b(?:publishedLegislation\w*(?:For|In)|legislationCountriesFor|redistributableLegislationVersionFor|readVersionBlocks|readVersionText|readVersionAst|readStoredVersionAst|readBlocks)\(/gu;
 
 /** The balanced argument text of every call to a country-list SQL helper. */
 const helperCalls = (source: string): string[] => {
@@ -233,6 +235,14 @@ describe("public law surface consumers", () => {
       }
     },
   );
+
+  test("the helper matcher reads the surface and country-list forms alike", () => {
+    expect(
+      helperCalls(
+        'a(publishedLegislationDocumentFor("pages")); b(publishedLegislationDocumentIn(countries)); c(legislationCountriesFor("search"));',
+      ),
+    ).toEqual(['"pages"', "countries", '"search"']);
+  });
 
   test("no unregistered source file calls a country-list SQL helper", async () => {
     const registered = new Set<string>([
