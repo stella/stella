@@ -4124,7 +4124,7 @@ const runChangedFilesStep = ({
         .split("\n")
         .map((line) => {
           const separator = line.indexOf("=");
-          return [line.slice(0, separator), line.slice(separator + 1)];
+          return [line.slice(0, separator), line.slice(separator + 1)] as const;
         }),
     );
   } finally {

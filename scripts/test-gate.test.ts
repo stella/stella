@@ -476,7 +476,7 @@ context("test registration census", () => {
           file: "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
           scenarios: new Map(),
         }),
-      ).toBeUndefined();
+      ).toBe("runner glob: test command excludes the file");
       const fixturePackage = {
         test: "bun test src --path-ignore-patterns '**/excluded.test.ts'",
       };
@@ -1572,7 +1572,7 @@ jobs:
       file: "scripts/named.test.ts",
       owningWorkflow: ".github/workflows/ci.yml",
       reason: selection,
-    };
+    } as const satisfies TestScenario;
     expect(parseScenarioLedger([scenario])).toEqual([scenario]);
     expect(() =>
       parseScenarioLedger([
@@ -1657,7 +1657,7 @@ jobs:
         source.replace("required=true", "renamed=true"),
         "output is missing or renamed",
       ],
-    ]) {
+    ] as const) {
       const workflow = Bun.YAML.parse(mutation);
       expect(
         validateTrustedOutputProducers({ workflow, registry }).findings.join(
