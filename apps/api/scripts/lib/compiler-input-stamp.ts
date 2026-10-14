@@ -13,14 +13,6 @@ import * as v from "valibot";
 
 import { createSha256, sha256Hex } from "@stll/sha256/bun";
 
-type ReadDirectoryArgs = [
-  path: string,
-  extensions: readonly string[] | undefined,
-  excludes: readonly string[] | undefined,
-  includes: readonly string[] | undefined,
-  depth: number | undefined,
-];
-
 const pathListSchema = v.array(v.string());
 // JSON has no undefined: an omitted readDirectory argument is stored as null.
 const readDirectorySchema = v.tuple([
@@ -88,17 +80,17 @@ const decodeSource = (bytes: Buffer): string => {
   return bytes.toString("utf-8");
 };
 
+// Both the config-file host and the compiler host satisfy this: the listing
+// and read signatures follow ParseConfigFileHost, whose readonly results the
+// compiler host's mutable ones also fit.
 type QueryHost = Partial<
-  Pick<
-    ts.CompilerHost & ts.ParseConfigFileHost,
-    | "readFile"
-    | "fileExists"
-    | "directoryExists"
-    | "realpath"
-    | "getDirectories"
-    | "readDirectory"
-  >
->;
+  Pick<ts.ParseConfigFileHost, "readFile" | "fileExists" | "readDirectory">
+> &
+  Partial<
+    Pick<ts.CompilerHost, "directoryExists" | "realpath" | "getDirectories">
+  >;
+
+type ReadDirectoryArgs = Parameters<ts.ParseConfigFileHost["readDirectory"]>;
 
 export type CompilerInputRecorder = {
   /** Routes the host's file-system questions through the recorder. */
@@ -150,7 +142,9 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
     }
     return bytes === undefined ? undefined : decodeSource(bytes);
   };
-  const wrap = <Host extends QueryHost>(host: Host): Host => {
+  // Mutations go through the concrete query type, so each replacement is
+  // checked against it; `wrap` hands the same object back with its own type.
+  const record = (host: QueryHost): void => {
     const { fileExists, directoryExists, getDirectories, readDirectory } = host;
     const resolveRealpath = host.realpath;
     if (host.readFile !== undefined) {
@@ -190,15 +184,18 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
         const [directory, extensions, excludes, includes, depth] = args;
         const key: v.InferOutput<typeof readDirectorySchema>[0] = [
           directory,
-          extensions === undefined ? null : [...extensions],
+          [...extensions],
           excludes === undefined ? null : [...excludes],
-          includes === undefined ? null : [...includes],
+          [...includes],
           depth ?? null,
         ];
         listings.set(JSON.stringify(key), [key, [...found]]);
         return found;
       };
     }
+  };
+  const wrap = <Host extends QueryHost>(host: Host): Host => {
+    record(host);
     return host;
   };
   return {
@@ -236,7 +233,9 @@ type Check = () => boolean | Promise<boolean>;
 function* checks(stamp: CompilerInputStamp): Generator<Check> {
   for (const [fileName, hash] of Object.entries(stamp.contents)) {
     yield async () => {
-      const read = await Result.tryPromise(() => readFile(fileName));
+      const read = await Result.tryPromise(
+        async () => await readFile(fileName),
+      );
       return (read.isOk() ? sha256Hex(read.value) : null) === hash;
     };
   }
@@ -262,7 +261,9 @@ function* checks(stamp: CompilerInputStamp): Generator<Check> {
   }
   for (const [fileName, real] of Object.entries(stamp.realpaths)) {
     yield async () => {
-      const resolved = await Result.tryPromise(() => realpath(fileName));
+      const resolved = await Result.tryPromise(
+        async () => await realpath(fileName),
+      );
       return (resolved.isOk() ? resolved.value : fileName) === real;
     };
   }
