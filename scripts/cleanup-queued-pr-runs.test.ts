@@ -59,6 +59,8 @@ type CleanupOptions = {
   cancelFailure?: ApiFailure;
   forceFailure?: ApiFailure;
   followingRun?: Run;
+  pullState?: string;
+  draft?: boolean;
 };
 const cleanup = async ({
   run,
@@ -69,6 +71,8 @@ const cleanup = async ({
   cancelFailure,
   forceFailure,
   followingRun,
+  pullState = "open",
+  draft = false,
 }: CleanupOptions) => {
   const cancelled: number[] = [];
   const forced: number[] = [];
@@ -116,7 +120,7 @@ const cleanup = async ({
                 status: metadataStatus,
               });
             }
-            return { data: { head: { sha: head } } };
+            return { data: { state: pullState, draft, head: { sha: head } } };
           },
         },
       },
@@ -341,4 +345,129 @@ test("another refusal containing the state message still fails", async () => {
   expect(result.infos).toContain(
     "Cancellation requested for 2: queued over six hours",
   );
+});
+
+test.each([
+  ["closed", false, "pull request closed"],
+  ["open", true, "draft pull request"],
+] as const)(
+  "a queued run for a %s pull request (draft: %s) is cancelled",
+  async (pullState, draft, reason) => {
+    const result = await cleanup({
+      run: queued("pull_request"),
+      head: "current",
+      pullState,
+      draft,
+    });
+    expect(result.cancelled).toEqual([1]);
+    expect(result.infos).toContain(`Cancellation requested for 1: ${reason}`);
+  },
+);
+
+const resumeSource = workflow.jobs.cleanup.steps.at(1)?.with.script;
+if (!resumeSource) {
+  throw new Error("Missing resume script");
+}
+const resumeScript = new Script(`(async () => {\n${resumeSource}\n})()`);
+
+type DeferredRun = { id: number; head_sha: string; number: number };
+const resume = async ({
+  waiting = false,
+  runs,
+  yieldState = "pending",
+}: {
+  waiting?: boolean;
+  runs: DeferredRun[];
+  yieldState?: string;
+}) => {
+  const reruns: number[] = [];
+  const statuses: { sha: string; state: string }[] = [];
+  await resumeScript.runInNewContext({
+    context: {
+      repo: { owner: "test", repo: "test" },
+      serverUrl: "https://github.com",
+    },
+    core: { info: () => {} },
+    github: {
+      paginate: async () => [],
+      request: async (_route: string, { run_id }: { run_id: number }) => {
+        reruns.push(run_id);
+      },
+      rest: {
+        actions: {
+          listWorkflowRunsForRepo: async ({ status }: { status: string }) => ({
+            data: {
+              total_count: waiting && status === "queued" ? 1 : 0,
+              workflow_runs: [],
+            },
+          }),
+          listWorkflowRuns: async ({ head_sha }: { head_sha?: string }) => ({
+            data: {
+              workflow_runs:
+                head_sha === undefined
+                  ? runs.map((run) => ({
+                      id: run.id,
+                      head_sha: run.head_sha,
+                      pull_requests: [{ number: run.number }],
+                    }))
+                  : runs
+                      .filter((run) => run.head_sha === head_sha)
+                      .map((run) => ({ id: run.id })),
+            },
+          }),
+        },
+        pulls: {
+          get: async ({ pull_number }: { pull_number: number }) => ({
+            data: {
+              state: "open",
+              draft: false,
+              head: {
+                sha: runs.find((run) => run.number === pull_number)?.head_sha,
+              },
+            },
+          }),
+        },
+        repos: {
+          listCommitStatusesForRef: async () => ({
+            data: [{ context: "ci/merge-queue-yield", state: yieldState }],
+          }),
+          createCommitStatus: async ({
+            sha,
+            state,
+          }: {
+            sha: string;
+            state: string;
+          }) => {
+            statuses.push({ sha, state });
+          },
+        },
+      },
+    },
+  });
+  return { reruns, statuses };
+};
+
+const deferred = (count: number): DeferredRun[] =>
+  Array.from({ length: count }, (_, index) => ({
+    id: 100 + index,
+    head_sha: `head-${index}`,
+    number: 10 + index,
+  }));
+
+test("deferred runs stay deferred while the merge queue has waiting work", async () => {
+  const result = await resume({ waiting: true, runs: deferred(2) });
+  expect(result.reruns).toEqual([]);
+});
+
+test("a cleared queue resumes deferred runs a few at a time and marks them", async () => {
+  const result = await resume({ runs: deferred(6) });
+  expect(result.reruns).toEqual([100, 101, 102, 103]);
+  expect(result.statuses).toEqual(
+    [0, 1, 2, 3].map((index) => ({ sha: `head-${index}`, state: "success" })),
+  );
+});
+
+test("a cancellation that did not defer to the queue is never re-run", async () => {
+  const result = await resume({ runs: deferred(2), yieldState: "success" });
+  expect(result.reruns).toEqual([]);
 });

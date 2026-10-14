@@ -4,16 +4,21 @@ defaults:
   run:
     shell: bash
 
+# Pull request runs and merge groups share one hosted runner pool. Every few
+# minutes this steward drops queued pull request work that can no longer
+# matter (superseded heads, closed or draft pull requests) and, once the merge
+# queue has no waiting work, re-runs the pull request runs that deferred to it.
 on:
   schedule:
-    - cron: "23 3 * * *"
+    - cron: "*/5 * * * *"
 
 permissions:
   actions: write
   pull-requests: read
+  statuses: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.run_id }}
+  group: ${{ github.workflow }}
   cancel-in-progress: false
 
 jobs:
@@ -58,6 +63,8 @@ jobs:
                   core.warning(`Superseded-head cleanup skipped for ${run.id}: PR metadata unavailable`);
                   return null;
                 }
+                if (current.state !== "open") return "pull request closed";
+                if (current.draft) return "draft pull request";
                 if (!current.head?.sha || current.head.sha === recordedHead) return null;
               }
               return "superseded head";
@@ -107,3 +114,70 @@ jobs:
               }
             }
             if (failed > 0) core.setFailed(`${failed} queued PR run(s) could not be cancelled`);
+
+      - name: Resume pull request runs that deferred to the merge queue
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        with:
+          script: |
+            const repo = context.repo;
+            const YIELD_CONTEXT = "ci/merge-queue-yield";
+            // Resume a few at a time so deferred work cannot flood the pool again.
+            const RESUMES_PER_TICK = 4;
+            const waiting = async () => {
+              for (const status of ["queued", "waiting", "pending", "requested"]) {
+                const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                  ...repo, event: "merge_group", status, per_page: 1,
+                });
+                if (data.total_count > 0) return true;
+              }
+              const { data } = await github.rest.actions.listWorkflowRunsForRepo({
+                ...repo, event: "merge_group", status: "in_progress", per_page: 20,
+              });
+              for (const run of data.workflow_runs) {
+                const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, {
+                  ...repo, run_id: run.id, filter: "latest", per_page: 100,
+                });
+                if (jobs.some((job) => job.status === "queued" || job.status === "waiting")) return true;
+              }
+              return false;
+            };
+            if (await waiting()) {
+              core.info("Merge queue still has waiting work; deferred pull request runs stay deferred.");
+              return;
+            }
+            const since = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+            const { data } = await github.rest.actions.listWorkflowRuns({
+              ...repo, workflow_id: "ci.yml", event: "pull_request", status: "cancelled",
+              created: `>=${since}`, per_page: 100,
+            });
+            const seen = new Set();
+            let resumed = 0;
+            for (const run of data.workflow_runs) {
+              if (resumed >= RESUMES_PER_TICK) break;
+              if (seen.has(run.head_sha)) continue;
+              seen.add(run.head_sha);
+              const pull = run.pull_requests?.[0];
+              if (!pull?.number) continue;
+              const { data: current } = await github.rest.pulls.get({ ...repo, pull_number: pull.number });
+              if (current.state !== "open" || current.draft || current.head.sha !== run.head_sha) continue;
+              const { data: statuses } = await github.rest.repos.listCommitStatusesForRef({
+                ...repo, ref: run.head_sha, per_page: 100,
+              });
+              const latest = statuses.find((status) => status.context === YIELD_CONTEXT);
+              if (latest?.state !== "pending") continue;
+              const { data: newer } = await github.rest.actions.listWorkflowRuns({
+                ...repo, workflow_id: "ci.yml", head_sha: run.head_sha, per_page: 1,
+              });
+              if (newer.workflow_runs[0]?.id !== run.id) continue;
+              await github.request("POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun", {
+                ...repo, run_id: run.id,
+              });
+              await github.rest.repos.createCommitStatus({
+                ...repo, sha: run.head_sha, state: "success", context: YIELD_CONTEXT,
+                description: "Resumed after the merge queue cleared",
+                target_url: `${context.serverUrl}/${repo.owner}/${repo.repo}/actions/runs/${run.id}`,
+              });
+              resumed += 1;
+              core.info(`Resumed run ${run.id} for #${pull.number}`);
+            }
+            core.info(`Resumed ${resumed} deferred pull request run(s).`);
