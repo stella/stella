@@ -1,6 +1,6 @@
 import { panic } from "better-result";
-import { getTableName, sql } from "drizzle-orm";
-import { pgPolicy } from "drizzle-orm/pg-core";
+import { getColumnTable, getTableName, is, sql } from "drizzle-orm";
+import { PgTable, pgPolicy } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { stellaSystem } from "@/api/db/rls";
@@ -12,7 +12,10 @@ export const systemScopePolicies = (
 ) => {
   const entries = Object.values(columns);
   const first = entries.at(0) ?? panic("System scope requires table columns");
-  const tableName = getTableName(first.table);
+  const table: unknown = getColumnTable(first);
+  const tableName = is(table, PgTable)
+    ? getTableName(table)
+    : panic("System scope columns must belong to a Postgres table");
   const organization = entries.find(
     (column) => column.name === "organization_id",
   );

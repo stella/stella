@@ -854,14 +854,9 @@ const isValidDispatchBoundary = (
               ts.isIdentifier(declaration.name) &&
               declaration.name.text === boundary.registry &&
               declaration.initializer !== undefined &&
-              // A registry is declarative data: an array or object literal of
-              // descriptors that names tables but invokes no feature code.
-              (ts.isArrayLiteralExpression(
+              ts.isArrayLiteralExpression(
                 unwrapExpression(declaration.initializer),
-              ) ||
-                ts.isObjectLiteralExpression(
-                  unwrapExpression(declaration.initializer),
-                )),
+              ),
           ),
       );
     case "admitted": {

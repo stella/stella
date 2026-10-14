@@ -193,11 +193,6 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
           registry: "REVIEW_RESET_SWEEP",
         },
         {
-          type: "registry",
-          module: "apps/api/src/db/org-scope-registry.ts",
-          registry: "ORG_SCOPE_TABLES",
-        },
-        {
           type: "operational",
           module: "apps/api/src/lib/signals/reset-cleanup.ts",
           effects: ["cleanup"],
