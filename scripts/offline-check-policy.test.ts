@@ -208,6 +208,15 @@ test("the offline baseline reader uses the merge base and preserves absent files
   try {
     git(["init", "--initial-branch=main"]);
     writeFileSync(path.join(directory, "baseline.txt"), "original\n");
+    mkdirSync(path.join(directory, "data"));
+    writeFileSync(
+      path.join(directory, "data/font.ttf"),
+      new Uint8Array([0, 255, 10, 128, 13, 2]),
+    );
+    writeFileSync(
+      path.join(directory, "data/config.json"),
+      '{"original":true}',
+    );
     const patchFile = "patches/@tanstack%2Fai@0.65.1.patch";
     mkdirSync(path.join(directory, "patches"));
     writeFileSync(path.join(directory, patchFile), "patch baseline\n");
@@ -229,6 +238,20 @@ test("the offline baseline reader uses the merge base and preserves absent files
       "baseline",
     ]);
     const base = git(["rev-parse", "HEAD"]);
+    const batchTrace = path.join(directory, "batch-trace.json");
+    const binary = runPreloaded(
+      `import { createGitBaselineReader } from './scripts/offline-git-read.ts';
+       process.env['GIT_TRACE2_EVENT'] = ${JSON.stringify(batchTrace)};
+       const read = createGitBaselineReader(${JSON.stringify({ root: directory, base })});
+       console.log(JSON.stringify({ size: read.byteLength('data/font.ttf'), sibling: read('data/config.json') }));`,
+      "--check",
+    );
+    expect(binary.exitCode).toBe(0);
+    expect(JSON.parse(binary.stdout.toString())).toEqual({
+      size: 6,
+      sibling: '{"original":true}',
+    });
+    expect(readFileSync(batchTrace, "utf-8")).toContain('"cat-file","--batch"');
     writeFileSync(path.join(directory, "baseline.txt"), "changed\n");
     writeFileSync(path.join(directory, "introduced.txt"), "new\n");
     git(["add", "."]);

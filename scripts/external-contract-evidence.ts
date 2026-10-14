@@ -381,7 +381,12 @@ export const runtimeModuleReferences = ({
         isLoader(node.expression) ||
         directFactory
       ) {
-        record(node.arguments.length === 1 ? node.arguments.at(0) : undefined);
+        record(
+          node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+            node.arguments.length === 1
+            ? node.arguments.at(0)
+            : undefined,
+        );
         for (const argument of node.arguments) {
           visit(argument);
         }
@@ -422,6 +427,7 @@ export const runtimeModuleReferences = ({
 export type RuntimeSnapshotReader = ((file: string) => string | undefined) & {
   files?: readonly string[] | undefined;
   digest?: ((file: string) => string | undefined) | undefined;
+  byteLength?: ((file: string) => number | undefined) | undefined;
 };
 type GeneratedClosureDefinition = Pick<
   Generator,
@@ -991,6 +997,7 @@ export const createLocalRuntimeClosureReader = (
     const generatedLeaves = new Map<string, string>();
     const dataHashes = new Map<string, string>();
     const visited = new Set<string>();
+    const countedFiles = new Set<string>();
     const references: RuntimeModuleReference[] = [];
     const problems: string[] = [];
     const pending: {
@@ -1003,6 +1010,25 @@ export const createLocalRuntimeClosureReader = (
       mode: "runtime",
     }));
     let bytes = 0;
+    type IncludeSourceOptions = { relative: string; text: string };
+    const includeSource = ({ relative, text }: IncludeSourceOptions) => {
+      if (files.has(relative)) {
+        return undefined;
+      }
+      const size =
+        options.read.byteLength === undefined
+          ? new TextEncoder().encode(text).byteLength
+          : options.read.byteLength(relative);
+      if (size === undefined) {
+        return `Cannot measure runtime source bytes ${relative}`;
+      }
+      bytes += size;
+      if (files.size >= MAX_FILES || bytes > MAX_BYTES) {
+        return `Local runtime closure exceeds its traversal bound at ${relative} (${files.size} files, ${bytes} bytes)`;
+      }
+      files.set(relative, text);
+      return undefined;
+    };
     for (const entry of pending) {
       const file = canonical(entry.file);
       if (
@@ -1021,13 +1047,17 @@ export const createLocalRuntimeClosureReader = (
       if (visited.has(visitKey)) {
         continue;
       }
-      if (visited.size >= MAX_FILES || entry.depth > MAX_DEPTH) {
+      if (
+        (!countedFiles.has(relative) && countedFiles.size >= MAX_FILES) ||
+        entry.depth > MAX_DEPTH
+      ) {
         problems.push(
-          `Local runtime closure exceeds its traversal bound at ${relative}`,
+          `Local runtime closure exceeds its traversal bound at ${relative} (${countedFiles.size} unique files, depth ${entry.depth})`,
         );
         break;
       }
       visited.add(visitKey);
+      countedFiles.add(relative);
       if (generated.derived(relative)) {
         const source = generated.inputs(relative);
         if (source.type === "invalid") {
@@ -1049,18 +1079,11 @@ export const createLocalRuntimeClosureReader = (
         problems.push(`Cannot read local runtime source ${relative}`);
         continue;
       }
-      bytes += new TextEncoder().encode(text).byteLength;
-      if (
-        files.size >= MAX_FILES ||
-        bytes > MAX_BYTES ||
-        entry.depth > MAX_DEPTH
-      ) {
-        problems.push(
-          `Local runtime closure exceeds its traversal bound at ${relative}`,
-        );
+      const accountingProblem = includeSource({ relative, text });
+      if (accountingProblem !== undefined) {
+        problems.push(accountingProblem);
         break;
       }
-      files.set(relative, text);
       if (!RUNTIME_SOURCE.test(file)) {
         const digest =
           options.read.digest === undefined

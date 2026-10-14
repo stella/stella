@@ -140,9 +140,13 @@ test("shared scope needs a refreshed receipt and a runtime-reachable replay impo
       },
     } as const;
     writeFileSync(receiptPath, JSON.stringify(originalReceipt));
-    const problems = checkExternalContracts(ROOT, {
-      baseline: realBaseline,
-      registry,
+    const problems = checkContractEntry({
+      root: ROOT,
+      system: "quickwit",
+      entry: registry.quickwit,
+      baseline: undefined,
+      admitted: undefined,
+      now: new Date(),
     });
     expect(problems.join("\n")).toContain(
       `owner ${sharedOwner} has no reachable fixture receipt`,
@@ -158,9 +162,14 @@ test("shared scope needs a refreshed receipt and a runtime-reachable replay impo
       }),
     );
     expect(
-      checkExternalContracts(ROOT, { baseline: realBaseline, registry }).join(
-        "\n",
-      ),
+      checkContractEntry({
+        root: ROOT,
+        system: "quickwit",
+        entry: registry.quickwit,
+        baseline: undefined,
+        admitted: undefined,
+        now: new Date(),
+      }).join("\n"),
     ).toContain(`owner claim ${sharedOwner} is not runtime-reachable`);
     const replayPath = path.join(root, "shared-replay.test.ts");
     writeFileSync(
@@ -183,9 +192,13 @@ test("shared scope needs a refreshed receipt and a runtime-reachable replay impo
       },
     } as const;
     expect(
-      checkExternalContracts(ROOT, {
-        baseline: realBaseline,
-        registry: refreshedRegistry,
+      checkContractEntry({
+        root: ROOT,
+        system: "quickwit",
+        entry: refreshedRegistry.quickwit,
+        baseline: undefined,
+        admitted: undefined,
+        now: new Date(),
       }),
     ).toEqual([]);
   } finally {
@@ -237,9 +250,13 @@ test("a planted receipt cannot claim an owner outside its replay graph", () => {
         ],
       },
     } as const;
-    const problems = checkExternalContracts(ROOT, {
-      baseline: realBaseline,
-      registry,
+    const problems = checkContractEntry({
+      root: ROOT,
+      system: "quickwit",
+      entry: registry.quickwit,
+      baseline: undefined,
+      admitted: undefined,
+      now: new Date(),
     });
     for (const { path: owner } of contract.owners) {
       expect(problems.join("\n")).toContain(
@@ -1200,6 +1217,90 @@ test("literal binary assets resolve through relative and snapshot path aliases",
       }),
     ).toBe(true);
   }
+});
+
+test("literal dynamic imports with options compare payload data and keep unchanged debt", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; const payload = await import("./payload.json", { with: { type: "json" } }); sdk.send(payload);',
+    ],
+    ["payload.json", '{"body":"old"}'],
+  ]);
+  const read = (file: string) => files.get(file);
+  const options = {
+    root: "/fixture",
+    owners: ["owner.ts"],
+    sdks: ["vendor"],
+    baseline: read,
+    current: read,
+  };
+  expect(hasChangedLocalRuntimeClosure(options)).toBe(false);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === "payload.json" ? '{"body":"new"}' : read(file),
+    }),
+  ).toBe(true);
+  expect(
+    hasChangedLocalRuntimeClosure({
+      ...options,
+      current: (file: string) =>
+        file === "owner.ts"
+          ? 'import sdk from "vendor"; await import(name, { with: { type: "json" } });'
+          : read(file),
+    }),
+  ).toBe(true);
+});
+
+test("runtime and generator input visits count each file's original bytes once", () => {
+  const files = new Map([
+    [
+      "owner.ts",
+      'import sdk from "vendor"; import "./generated/adapter"; import "./payload.json";',
+    ],
+    ["generator.ts", 'export const generate = () => "output";'],
+    ["payload.json", "{}"],
+  ]);
+  const measured = new Map<string, number>();
+  const read = Object.assign((file: string) => files.get(file), {
+    byteLength: (file: string) => {
+      measured.set(file, (measured.get(file) ?? 0) + 1);
+      return file === "payload.json"
+        ? 20 * 1024 * 1024
+        : files.get(file)?.length;
+    },
+  });
+  const options = {
+    root: "/fixture",
+    read,
+    registryFiles: [],
+    generators: [
+      {
+        id: "adapter",
+        outputKind: "derived",
+        outputs: ["generated/adapter.ts"],
+        inputs: ["generator.ts", "payload.json"],
+        write: ["bun", "generator.ts"],
+      },
+    ] as const,
+  };
+  expect(
+    createLocalRuntimeClosureReader(options)(["owner.ts"]).problems,
+  ).toEqual([]);
+  expect(measured.get("payload.json")).toBe(1);
+  expect(
+    createLocalRuntimeClosureReader({
+      ...options,
+      read: Object.assign((file: string) => files.get(file), {
+        byteLength: (file: string) =>
+          file === "payload.json" ? 33 * 1024 * 1024 : files.get(file)?.length,
+      }),
+    })(["owner.ts"]).problems.join("\n"),
+  ).toContain(
+    "Local runtime closure exceeds its traversal bound at payload.json",
+  );
 });
 
 test("published packages with workspace-like names stop the local closure", () => {

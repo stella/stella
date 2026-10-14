@@ -1158,6 +1158,7 @@ export const checkContractEntry = ({
         );
       },
       current: Object.assign(currentSource, {
+        byteLength: (file: string) => readBytes(file)?.byteLength,
         files:
           baseline.files === undefined ? undefined : readGitTrackedFiles(root),
         digest: (file: string) => {
@@ -1268,6 +1269,11 @@ export const checkExternalContracts = (
     census,
     sdks,
   });
+  const publisher = registry["legal-publishers"];
+  if (publisher.status === "uncharacterised") {
+    problems.push("The legal-publishers contract must be characterised.");
+    return problems;
+  }
   const allowances = readExternalContractPinAllowances(
     readFileSync(
       path.join(ROOT, EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH),
@@ -1285,11 +1291,6 @@ export const checkExternalContracts = (
         now,
       }),
     );
-  }
-  const publisher = registry["legal-publishers"];
-  if (publisher.status === "uncharacterised") {
-    problems.push("The legal-publishers contract must be characterised.");
-    return problems;
   }
   for (const fixtureRoot of CAPTURED_FIXTURE_ROOTS) {
     if (

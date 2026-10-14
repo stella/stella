@@ -5,12 +5,14 @@ import { sha256Hex } from "@stll/sha256/bun";
 // The preload imports this owner before denying general subprocess access.
 // Keep the captured primitive private: callers can only read baseline objects.
 const spawnGit = Bun.spawnSync.bind(Bun);
+const MAX_BLOB_BATCH = 32;
 
 type OfflineGitReadOperation =
   | { type: "merge-base"; ref: string }
   | { type: "ls-tree"; commit: string; file: string }
   | { type: "show"; commit: string; file: string }
-  | { type: "files"; commit: string };
+  | { type: "files"; commit: string }
+  | { type: "blobs"; commit: string; files: readonly string[] };
 
 type OfflineGitReadOptions = {
   root: string;
@@ -23,6 +25,16 @@ const validateRef = (ref: string) => {
   }
 };
 
+const validObjectPath = (file: string) =>
+  !(
+    file.includes("..") ||
+    file.startsWith("-") ||
+    /\p{Cc}/u.test(file) ||
+    !file
+      .split("/")
+      .every((part) => part !== "." && /^[\w@.$-][\w.@%$-]*$/u.test(part))
+  );
+
 const validateObjectPath = ({
   commit,
   file,
@@ -33,14 +45,7 @@ const validateObjectPath = ({
   if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(commit)) {
     panic("Invalid offline Git commit");
   }
-  if (
-    file.includes("..") ||
-    file.startsWith("-") ||
-    /\p{Cc}/u.test(file) ||
-    !file
-      .split("/")
-      .every((part) => part !== "." && /^[\w@.$-][\w.@%$-]*$/u.test(part))
-  ) {
+  if (!validObjectPath(file)) {
     panic("Invalid offline Git path");
   }
 };
@@ -63,6 +68,17 @@ const readOfflineGitBytes = ({ root, operation }: OfflineGitReadOptions) => {
       case "show":
         validateObjectPath(operation);
         return ["show", `${operation.commit}:${operation.file}`];
+      case "blobs":
+        if (
+          operation.files.length === 0 ||
+          operation.files.length > MAX_BLOB_BATCH
+        ) {
+          panic("Invalid offline Git blob batch size");
+        }
+        for (const file of operation.files) {
+          validateObjectPath({ commit: operation.commit, file });
+        }
+        return ["cat-file", "--batch"];
       case "files":
         validateObjectPath({ commit: operation.commit, file: "package.json" });
         return ["ls-tree", "-r", "--name-only", operation.commit];
@@ -74,6 +90,14 @@ const readOfflineGitBytes = ({ root, operation }: OfflineGitReadOptions) => {
   })();
   const result = spawnGit(["git", "-c", "protocol.allow=never", ...args], {
     cwd: root,
+    stdin:
+      operation.type === "blobs"
+        ? new TextEncoder().encode(
+            operation.files
+              .map((file) => `${operation.commit}:${file}\n`)
+              .join(""),
+          )
+        : "ignore",
     stdout: "pipe",
     stderr: "pipe",
     env: {
@@ -95,6 +119,47 @@ const readOfflineGitBytes = ({ root, operation }: OfflineGitReadOptions) => {
 export const readOfflineGit = (options: OfflineGitReadOptions): string =>
   new TextDecoder().decode(readOfflineGitBytes(options));
 
+type ReadBlobBatchOptions = {
+  root: string;
+  commit: string;
+  files: readonly string[];
+};
+const readBlobBatch = ({ root, commit, files }: ReadBlobBatchOptions) => {
+  const output = readOfflineGitBytes({
+    root,
+    operation: { type: "blobs", commit, files },
+  });
+  const blobs = new Map<string, Uint8Array>();
+  let offset = 0;
+  for (const file of files) {
+    const newline = output.indexOf(10, offset);
+    if (newline === -1) {
+      panic(
+        `ExternalContractBaselineUnavailable: missing blob header for ${file}`,
+      );
+    }
+    const header = new TextDecoder().decode(output.subarray(offset, newline));
+    const parts = header.split(" ");
+    const size = Number(parts.at(2));
+    if (parts.at(1) !== "blob" || !Number.isSafeInteger(size) || size < 0) {
+      panic(
+        `ExternalContractBaselineUnavailable: ${file}: ${header}. Baseline blob must be present locally; hydrate it before the offline check.`,
+      );
+    }
+    offset = newline + 1;
+    const end = offset + size;
+    if (end >= output.byteLength || output.at(end) !== 10) {
+      panic(`ExternalContractBaselineUnavailable: truncated blob for ${file}`);
+    }
+    blobs.set(file, output.subarray(offset, end));
+    offset = end + 1;
+  }
+  if (offset !== output.byteLength) {
+    panic("Unexpected offline Git blob batch output");
+  }
+  return blobs;
+};
+
 type GitBaselineReaderOptions = { root: string; base: string };
 
 export const createGitBaselineReader = ({
@@ -110,20 +175,53 @@ export const createGitBaselineReader = ({
       .trim()
       .split("\n"),
   );
+  const directories = new Map<string, string[]>();
+  for (const file of files) {
+    if (
+      !validObjectPath(file) ||
+      !/\.(?:[cm]?[jt]sx?|json|ttf|docx)$/u.test(file)
+    ) {
+      continue;
+    }
+    const directory = file.slice(0, file.lastIndexOf("/") + 1);
+    const siblings = directories.get(directory) ?? [];
+    siblings.push(file);
+    directories.set(directory, siblings);
+  }
   const bytes = new Map<string, Uint8Array | undefined>();
   const contents = new Map<string, string | undefined>();
   const digests = new Map<string, string | undefined>();
   const readBytes = (file: string) => {
     validateObjectPath({ commit, file });
-    if (!bytes.has(file)) {
+    if (bytes.has(file)) {
+      return bytes.get(file);
+    }
+    if (!files.has(file)) {
+      bytes.set(file, undefined);
+      return undefined;
+    }
+    const siblings = directories.get(file.slice(0, file.lastIndexOf("/") + 1));
+    if (siblings !== undefined && siblings.includes(file)) {
+      const selected = [
+        file,
+        ...siblings
+          .filter((candidate) => candidate !== file && !bytes.has(candidate))
+          .slice(0, MAX_BLOB_BATCH - 1),
+      ];
+      for (const [name, blob] of readBlobBatch({
+        root,
+        commit,
+        files: selected,
+      })) {
+        bytes.set(name, blob);
+      }
+    } else {
       bytes.set(
         file,
-        files.has(file)
-          ? readOfflineGitBytes({
-              root,
-              operation: { type: "show", commit, file },
-            })
-          : undefined,
+        readOfflineGitBytes({
+          root,
+          operation: { type: "show", commit, file },
+        }),
       );
     }
     return bytes.get(file);
@@ -145,7 +243,11 @@ export const createGitBaselineReader = ({
     }
     return digests.get(file);
   };
-  return Object.assign(read, { files: [...files], digest });
+  return Object.assign(read, {
+    files: [...files],
+    digest,
+    byteLength: (file: string) => readBytes(file)?.byteLength,
+  });
 };
 
 export const readGitTrackedFiles = (root: string): string[] => {
