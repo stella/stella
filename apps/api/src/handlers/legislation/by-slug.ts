@@ -116,7 +116,7 @@ export const readStatuteBySlugHandler = async ({
     }
 
     if (asOf === undefined) {
-      const defaultId = await selectDefaultVersionId(tx, work);
+      const defaultId = await selectDefaultVersionId(tx, work, "pages");
       return defaultId === null
         ? ({ type: "uncovered-date" } as const)
         : ({ type: "expression", id: defaultId } as const);
@@ -128,7 +128,7 @@ export const readStatuteBySlugHandler = async ({
       .from(legislationDocuments)
       .where(
         and(
-          ...workKeyConditions(work),
+          ...workKeyConditions(work, "pages"),
           inForceOn(legislationVersionRef(legislationDocuments), asOfDate),
         ),
       )
@@ -143,7 +143,7 @@ export const readStatuteBySlugHandler = async ({
     }
 
     const inconsistent = await selectInconsistentWindowVersions(tx, {
-      conditions: workKeyConditions(work),
+      conditions: workKeyConditions(work, "pages"),
       asOf: asOfDate,
     });
     return inconsistent.length > 0
@@ -170,5 +170,9 @@ export const readStatuteBySlugHandler = async ({
     return status(404, publisherWindowInconsistentBody(resolved.versions));
   }
 
-  return await readPublicLegislationHandler(resolved.id, legislationDb);
+  return await readPublicLegislationHandler(
+    resolved.id,
+    legislationDb,
+    "pages",
+  );
 };

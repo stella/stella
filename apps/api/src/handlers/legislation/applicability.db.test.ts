@@ -708,6 +708,7 @@ const matrixTests = (shape: ShapeName, works: MatrixWorks) => {
       await resolveStatuteExpression(
         { eli: works.alone.eli, asOf: MATRIX_AS_OF },
         legislationDb,
+        "pages",
       ),
     ).not.toMatchObject({ type: "expression" });
     expect(idOf(await readSlug(works.alone.slug, MATRIX_AS_OF))).toBeNull();
@@ -777,11 +778,15 @@ const matrixTests = (shape: ShapeName, works: MatrixWorks) => {
       expect(
         await legislationDb(
           async (tx) =>
-            await selectDefaultVersionId(tx, {
-              sourceId,
-              eli: works.alone.eli,
-              language: "cs",
-            }),
+            await selectDefaultVersionId(
+              tx,
+              {
+                sourceId,
+                eli: works.alone.eli,
+                language: "cs",
+              },
+              "pages",
+            ),
         ),
       ).toBeNull();
     });
@@ -800,11 +805,15 @@ describe("no applicability read answers with a version that cannot apply", () =>
     expect(
       await legislationDb(
         async (tx) =>
-          await selectDefaultVersionId(tx, {
-            sourceId,
-            eli: RANKING_ELI,
-            language: "cs",
-          }),
+          await selectDefaultVersionId(
+            tx,
+            {
+              sourceId,
+              eli: RANKING_ELI,
+              language: "cs",
+            },
+            "pages",
+          ),
       ),
     ).toBe(ranking.ended);
   });

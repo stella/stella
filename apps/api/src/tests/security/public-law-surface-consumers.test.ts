@@ -129,11 +129,6 @@ const DEFINERS = [
 const SQL_HELPER_CALLERS = {
   // Page reads and the SQL behind sitemaps.
   "apps/api/src/handlers/legislation/by-slug.ts": "pages",
-  "apps/api/src/handlers/legislation/by-eli.ts": "pages",
-  "apps/api/src/handlers/legislation/get.ts": "pages",
-  "apps/api/src/handlers/legislation/work-key.ts": "pages",
-  "apps/api/src/handlers/legislation/provision-versions.ts": "pages",
-  "apps/api/src/handlers/legislation/provision-history.ts": "pages",
   "apps/api/src/handlers/legislation/provision-preview.ts": "pages",
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": "pages",
   "apps/api/src/lib/legal-search/statute-sitemap-shard-sql.ts": "pages",
@@ -150,10 +145,19 @@ const SQL_HELPER_CALLERS = {
   "apps/api/src/mcp/legislation-tools.ts": "search",
 } as const satisfies Record<string, "pages" | "search">;
 
-/** Files that define the helpers; they take the surface as a parameter. */
+/**
+ * Files that define the helpers, or reads built on them that page routes and
+ * agent tools share: they take the surface as a parameter, and each caller
+ * names its own.
+ */
 const SQL_HELPER_DEFINERS = [
   "apps/api/src/lib/legal-search/legislation-redistribution.ts",
   "apps/api/src/lib/legal-search/legislation-version-blocks.ts",
+  "apps/api/src/handlers/legislation/by-eli.ts",
+  "apps/api/src/handlers/legislation/get.ts",
+  "apps/api/src/handlers/legislation/work-key.ts",
+  "apps/api/src/handlers/legislation/provision-versions.ts",
+  "apps/api/src/handlers/legislation/provision-history.ts",
 ] as const;
 
 const SQL_HELPER_NAME =

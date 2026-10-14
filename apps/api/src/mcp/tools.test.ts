@@ -4047,6 +4047,11 @@ describe("OpenAI-compatible MCP tools", () => {
       asOf: "2020-06-01",
       eli: STATUTE_ELI,
     });
+    // An agent read answers for search-admitted countries only.
+    expect(resolveStatuteExpressionMock.mock.calls.at(0)?.at(2)).toBe("search");
+    expect(readPublicLegislationHandlerMock.mock.calls.at(0)?.at(2)).toBe(
+      "search",
+    );
     const expectedText = `\u00a7 1729\n\n${LONG_PROVISION_BODY}`;
     expect(parseToolPayload(result)).toEqual({
       nextCursor: encodePaginationCursor([8000]),
@@ -4221,7 +4226,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(resolveStatuteExpressionMock).toHaveBeenCalledTimes(3);
     expect(
       readLegislationProvisionVersionsMock.mock.calls.at(0)?.at(0),
-    ).toMatchObject({ documentIds: [STATUTE_ID] });
+    ).toMatchObject({ documentIds: [STATUTE_ID], surface: "search" });
     expect(readVersionBlocksMock).toHaveBeenCalledTimes(1);
     expect(readVersionBlocksMock.mock.calls.at(0)?.at(0)).toMatchObject({
       purpose: "derived-ai",

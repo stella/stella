@@ -110,10 +110,11 @@ export const isPublicCaseLawCountry = (
  * crawlers: the pages-public countries plus the search-admitted ones. A page
  * country needs no serving receipt; the receipt gates search admission only.
  */
-export const PUBLIC_CASE_LAW_PAGE_COUNTRIES = PAGES_PUBLIC_COUNTRIES.filter(
-  (country): country is PublicCaseLawCountry =>
-    CASE_LAW_BROWSER_COUNTRIES.some((candidate) => candidate === country),
-);
+export const PUBLIC_CASE_LAW_PAGE_COUNTRIES: readonly PublicCaseLawCountry[] =
+  PAGES_PUBLIC_COUNTRIES.flatMap((country) => {
+    const parsed = v.safeParse(launchReadinessCountrySchema, country);
+    return parsed.success ? [parsed.output] : [];
+  });
 
 export const isPublicCaseLawPageCountry = (
   country: string,

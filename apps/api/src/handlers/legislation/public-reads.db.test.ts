@@ -1467,6 +1467,7 @@ describe("public statute versions", () => {
         documentId: civilCodeCurrent,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -1483,6 +1484,7 @@ describe("public statute versions", () => {
       documentId: civilCodeFuture,
       query: {},
       legislationDb,
+      surface: "pages",
     });
     if (!("items" in page)) {
       throw new Error(`expected a page, got ${JSON.stringify(page)}`);
@@ -1505,6 +1507,7 @@ describe("public statute versions", () => {
           documentId: civilCodeSuperseded,
           query: { limit: 1, ...(cursor === null ? {} : { cursor }) },
           legislationDb,
+          surface: "pages",
         }),
       );
 
@@ -1530,6 +1533,7 @@ describe("public statute versions", () => {
       documentId: withheldAct,
       query: {},
       legislationDb,
+      surface: "pages",
     });
 
     expect(result).not.toHaveProperty("items");
@@ -1557,6 +1561,7 @@ describe("public statute read", () => {
     const publicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
       legislationDb,
+      "pages",
     );
 
     // The fixture must actually carry metadata, or the omission proves nothing.
@@ -1572,10 +1577,12 @@ describe("public statute read", () => {
     const structuredPublicRead = await readPublicLegislationHandler(
       civilCodeCurrent,
       legislationDb,
+      "pages",
     );
     const plainPublicRead = await readPublicLegislationHandler(
       civilCodeEnglish,
       legislationDb,
+      "pages",
     );
 
     // The structured version stores text too, so the null is the fallback.
@@ -1593,6 +1600,7 @@ describe("public statute read", () => {
     const result = await readPublicLegislationHandler(
       withheldAct,
       legislationDb,
+      "pages",
     );
 
     expect(result).toMatchObject({
@@ -1904,7 +1912,11 @@ describe("statute work resolution", () => {
     // The Sunset Act's validity window closed today, so no consolidation of
     // it applies: a history read must still reach it.
     expect(
-      await resolveStatuteWorkVersion({ eli: "CZ/1998/222" }, legislationDb),
+      await resolveStatuteWorkVersion(
+        { eli: "CZ/1998/222" },
+        legislationDb,
+        "pages",
+      ),
     ).toEqual({ type: "expression", id: sunsetAct });
     expect(
       await readStatuteByEliHandler({ eli: "CZ/1998/222" }, legislationDb),
@@ -1918,19 +1930,28 @@ describe("statute work resolution", () => {
       await resolveStatuteWorkVersion(
         { eli: "CZ/2012/89", language: "cs" },
         legislationDb,
+        "pages",
       ),
     ).toEqual({ type: "expression", id: civilCodeFuture });
   });
 
   test("reads as unknown for an ELI the corpus does not hold", async () => {
     expect(
-      await resolveStatuteWorkVersion({ eli: "CZ/1900/1" }, legislationDb),
+      await resolveStatuteWorkVersion(
+        { eli: "CZ/1900/1" },
+        legislationDb,
+        "pages",
+      ),
     ).toEqual({ type: "unknown-work" });
   });
 
   test("reads as unknown for a source not cleared for redistribution", async () => {
     expect(
-      await resolveStatuteWorkVersion({ eli: "CZ/1999/111" }, legislationDb),
+      await resolveStatuteWorkVersion(
+        { eli: "CZ/1999/111" },
+        legislationDb,
+        "pages",
+      ),
     ).toEqual({ type: "unknown-work" });
   });
 });
@@ -1943,6 +1964,7 @@ describe("provision history", () => {
         anchor: DELIVERY_ANCHOR,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -1966,6 +1988,7 @@ describe("provision history", () => {
         anchor: DELIVERY_ANCHOR,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -1982,6 +2005,7 @@ describe("provision history", () => {
       anchor: UNKNOWN_ANCHOR,
       query: {},
       legislationDb,
+      surface: "pages",
     });
 
     expect(result).toMatchObject({
@@ -2000,6 +2024,7 @@ describe("provision history", () => {
         anchor: DELIVERY_ANCHOR,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -2017,6 +2042,7 @@ describe("provision history", () => {
         anchor: DELIVERY_ANCHOR,
         query: {},
         legislationDb,
+        surface: "pages",
       }),
     );
 
@@ -2035,6 +2061,7 @@ describe("provision history", () => {
       anchor: DELIVERY_ANCHOR,
       query: {},
       legislationDb,
+      surface: "pages",
     });
 
     expect(result).toMatchObject({
@@ -2054,6 +2081,7 @@ describe("provision history", () => {
           anchor: DELIVERY_ANCHOR,
           query: { limit: 1, ...(cursor === null ? {} : { cursor }) },
           legislationDb,
+          surface: "pages",
         }),
       );
 
@@ -2094,6 +2122,7 @@ describe("provision history", () => {
               anchor: DELIVERY_ANCHOR,
               query: { limit },
               legislationDb: historyDb,
+              surface: "pages",
             }),
           ).toMatchObject({
             code: 404,
@@ -2113,6 +2142,7 @@ describe("provision history", () => {
               anchor: DELIVERY_ANCHOR,
               query: { limit, ...(cursor === null ? {} : { cursor }) },
               legislationDb: historyDb,
+              surface: "pages",
             }),
           );
           seen.push(...page.items.map((item) => item.documentId));
@@ -2146,10 +2176,12 @@ describe("statute country publication", () => {
         });
       }
       expect(
-        await readPublicLegislationHandler(id, legislationDb),
+        await readPublicLegislationHandler(id, legislationDb, "pages"),
       ).toMatchObject({ code: 404 });
       // The publication filter holds even without the public-law role.
-      expect(await readPublicLegislationHandler(id, ownerDb)).toMatchObject({
+      expect(
+        await readPublicLegislationHandler(id, ownerDb, "pages"),
+      ).toMatchObject({
         code: 404,
       });
       expect(
@@ -2160,6 +2192,7 @@ describe("statute country publication", () => {
           documentId: id,
           query: {},
           legislationDb,
+          surface: "pages",
         }),
       ).toMatchObject({ code: 404 });
       expect(
@@ -2168,6 +2201,7 @@ describe("statute country publication", () => {
           anchor: DELIVERY_ANCHOR,
           query: {},
           legislationDb,
+          surface: "pages",
         }),
       ).toMatchObject({ code: 404 });
     },
