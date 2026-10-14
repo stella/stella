@@ -80,7 +80,8 @@ export const useLoadSampleCase = (workspaceId: string) => {
       await mapWithConcurrency({
         items: writes.completeDetails,
         limit: FACT_WRITE_CONCURRENCY,
-        operation: ({ fact, itemEntityId }) => writeDetails(fact, itemEntityId),
+        operation: async ({ fact, itemEntityId }) =>
+          writeDetails(fact, itemEntityId),
       });
       // Each fact's detail needs the item created just before it.
       await mapWithConcurrency({
