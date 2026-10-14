@@ -62,6 +62,7 @@ const { toSafeId } = await import("@/lib/safe-id");
 const { rootKeys } = await import("@/lib/auth-queries");
 const { propertiesKeys } = await import("@/lib/workspaces/queries/properties");
 const { fileMetadataOptions } = await import("@/lib/files/file-metadata-query");
+const { fileOptions } = await import("@/lib/files/queries");
 
 const entity = (id: string) =>
   ({
@@ -120,6 +121,16 @@ const mount = async (Component: () => ReactNode) => {
   client.setQueryData(
     fileMetadataOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
     {
+      fileId: "file-A",
+      fileName: "A.md",
+      mimeType: "text/markdown",
+      originalMimeType: "text/markdown",
+    },
+  );
+  client.setQueryData(
+    fileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+    {
+      buffer: new ArrayBuffer(0),
       fileId: "file-A",
       fileName: "A.md",
       mimeType: "text/markdown",
@@ -349,6 +360,11 @@ test("breadcrumb pending label settles before file metadata refetch and refusal 
     );
     expect(view.container.textContent).toContain("new-A.md");
     await act(async () => confirm(0));
+    expect(
+      view.client.getQueryData(
+        fileOptions({ workspaceId: "matter", fieldId: "field-A" }).queryKey,
+      ),
+    ).toMatchObject({ fileName: "new-A.md" });
     await waitFor(() =>
       expect(view.getByRole("link", { name: "A.md" })).toBeDefined(),
     );
