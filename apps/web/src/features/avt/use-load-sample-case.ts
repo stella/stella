@@ -6,22 +6,29 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { SAMPLE_FACTS, type SampleFact } from "@/features/avt/sample-case.data";
-import { sampleFactWrites } from "@/features/avt/sample-case.logic";
+import {
+  isSampleCaseComplete,
+  sampleFactWrites,
+} from "@/features/avt/sample-case.logic";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import { entityCreateLocalInvalidationKeys } from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
 import {
   uploadFileEntitiesBatched,
   useBatchUploadLabels,
 } from "@/lib/workspaces/mutations/use-create-file-entities";
+import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import {
   legalListItemsOptions,
   legalListKeys,
   legalListsOptions,
 } from "@/lib/workspaces/queries/legal-lists";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
+import type { AvtWorkspaceView } from "@/lib/workspaces/view-layout";
+import { mergeLayout } from "@/lib/workspaces/view-layout";
 
 const SAMPLE_LIST_NAME = "Whitfield sample facts";
 const SAMPLE_DOCUMENT_NAME = "Whitfield witness statement (sample).docx";
@@ -47,8 +54,15 @@ type SampleCaseLoad = {
  * whatever a failed one left out instead of duplicating it. Every write
  * settles before the load reports, so a retry never overlaps an earlier run.
  */
-export const useLoadSampleCase = (workspaceId: string) => {
+export const useLoadSampleCase = ({
+  view,
+  workspaceId,
+}: {
+  view: AvtWorkspaceView;
+  workspaceId: string;
+}) => {
   const queryClient = useQueryClient();
+  const updateView = useUpdateView(workspaceId);
   const t = useTranslations();
   const user = useAuthenticatedUser();
   const labels = useBatchUploadLabels();
@@ -150,6 +164,8 @@ export const useLoadSampleCase = (workspaceId: string) => {
     return uploaded.length > 0;
   };
 
+  // The view switch and the notices live here, not in a caller's callbacks:
+  // the calling button unmounts as soon as the new list shows up.
   return useMutation({
     mutationKey: ["avt", "sample-case", workspaceId],
     mutationFn: async (): Promise<SampleCaseLoad> => {
@@ -161,11 +177,35 @@ export const useLoadSampleCase = (workspaceId: string) => {
         existing?.id ??
         unwrapEden(await api.lists(scope).put({ name: SAMPLE_LIST_NAME })).id;
       const factsIncomplete = await loadFacts(listId);
+      const documentLoaded = await loadDocument();
+      const load = {
+        listId,
+        factsIncomplete,
+        documentMissing: !documentLoaded,
+      };
+      // Only a complete load opens the list; otherwise the view keeps
+      // offering the load, which completes it.
+      if (isSampleCaseComplete(load)) {
+        await updateView.mutateAsync({
+          viewId: view.id,
+          layout: mergeLayout(view.layout, {
+            listId: toSafeId<"legalList">(listId),
+          }),
+        });
+      }
+      // Last, so the view leaves its empty state only once the load is over.
       await queryClient.invalidateQueries({
         queryKey: legalListKeys.all(workspaceId),
       });
-      const documentLoaded = await loadDocument();
-      return { listId, factsIncomplete, documentMissing: !documentLoaded };
+      return load;
+    },
+    onSuccess: (load) => {
+      if (!isSampleCaseComplete(load)) {
+        notifyUserError(null, t("avt.view.loadSampleFailed"));
+      }
+    },
+    onError: (error) => {
+      notifyUserError(error, t("avt.view.loadSampleFailed"));
     },
   });
 };
