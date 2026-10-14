@@ -6,6 +6,7 @@ import {
   lintsAlone,
   runSingleRule,
   sharedLines,
+  sharedRuns,
 } from "./lint-single-rule.ts";
 
 const CODE = "plugin(rule)";
@@ -89,4 +90,23 @@ test("concurrent fix cases each return their isolated result", async () => {
     ),
   );
   expect(results).toEqual([isolated, isolated, isolated]);
+});
+
+test("concurrent cases of one configuration share a run and keep their own lines", async () => {
+  // Only this test in the file lints no-raw-sha256, so its shared runs are
+  // exactly the ones recorded while it awaits.
+  const code = "no-raw-sha256(no-raw-sha256)";
+  const before = sharedRuns.filter((run) => run.code === code).length;
+  const hash = 'new Bun.CryptoHasher("sha256");';
+  const results = await Promise.all(
+    [
+      'const clean = "sha256";',
+      [hash, "const other = 1;", hash].join("\n"),
+      ["const first = 1;", hash].join("\n"),
+    ].map(async (source) => await lintSingleRule("no-raw-sha256", source)),
+  );
+  expect(results).toEqual([[], [1, 3], [2]]);
+  expect(sharedRuns.filter((run) => run.code === code).slice(before)).toEqual([
+    { code, cases: 3 },
+  ]);
 });

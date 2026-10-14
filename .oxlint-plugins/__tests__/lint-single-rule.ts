@@ -184,6 +184,10 @@ export const sharedLines = (
   );
 };
 
+/** Every accepted shared run in this process, so tests can prove sharing. */
+export const sharedRuns: { readonly code: string; readonly cases: number }[] =
+  [];
+
 const lintTogether = async (
   requests: readonly SharedRequest[],
   code: string,
@@ -203,6 +207,7 @@ const lintTogether = async (
       code,
     );
     if (lines !== null) {
+      sharedRuns.push({ code, cases: requests.length });
       return requests.map(({ lintCase }, index) => ({
         shared: {
           lines: lines[index] ?? [],
