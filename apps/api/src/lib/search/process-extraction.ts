@@ -26,7 +26,6 @@ import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueu
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
-import { shouldGeneratePdfDerivative } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -93,29 +92,18 @@ export const requiresDurableNativeExtraction = (
     return false;
   }
 
-  // A parser reads the original bytes (`pickExtractionSource`). The PDF
-  // preview is a wait only when that rendering is the sole text layer
-  // (images, and other formats with no parser). Holding a .txt file for
-  // the preview keeps its body out of search, and a failed conversion
-  // never comes back to extract it.
-  const extractionMimeType = resolveExtractionMimeType({
-    fileName: fileField.fileName,
-    mimeType: fileField.mimeType,
-  });
-  if (canExtractMimeType(extractionMimeType)) {
-    return true;
-  }
-
-  if (
-    fileField.pdfFileId === null &&
-    shouldGeneratePdfDerivative({
-      encrypted: fileField.encrypted,
-      mimeType: fileField.mimeType,
-    })
-  ) {
-    return false;
-  }
-  return canExtractMimeType(pickExtractionSource(fileField).extractionMimeType);
+  // A parser reads the original bytes (`pickExtractionSource`), so it never
+  // waits for the PDF preview: a failed conversion would otherwise leave the
+  // body out of search for good. Formats with no parser have the rendered
+  // PDF as their only text layer, so they become extractable once it exists.
+  return (
+    canExtractMimeType(
+      resolveExtractionMimeType({
+        fileName: fileField.fileName,
+        mimeType: fileField.mimeType,
+      }),
+    ) || fileField.pdfFileId !== null
+  );
 };
 
 /**

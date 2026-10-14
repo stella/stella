@@ -20,6 +20,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   executeNativeExtraction as executeNativeExtractionWithDependencies,
   persistNativeExtractionProjection as persistNativeExtractionProjectionWithDatabase,
+  pickExtractionSource,
   processExtraction as processExtractionWithDependencies,
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
@@ -342,6 +343,21 @@ describe("processExtraction", () => {
         pdfFileId: "derived_pdf_1",
       }),
     ).toBe(true);
+  });
+
+  // The run's unique source is the original file, so the preview finishing
+  // later reaches the run extracted at upload instead of starting another.
+  test("keeps a parsed file's extraction source when its PDF preview arrives", () => {
+    const notes = {
+      ...fileContent,
+      fileName: "notes.txt",
+      mimeType: "text/plain",
+    };
+
+    expect(
+      pickExtractionSource({ ...notes, pdfFileId: "derived_pdf_1" }),
+    ).toEqual(pickExtractionSource({ ...notes, pdfFileId: null }));
+    expect(pickExtractionSource(notes).fileId).toBe(fileContent.id);
   });
 
   test("orders the current version's fields by id, matching readEntityByIdHandler, so 'first file field' selection is deterministic", async () => {
