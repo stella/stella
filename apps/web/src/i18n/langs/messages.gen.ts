@@ -4338,6 +4338,8 @@ type Messages = {
         "yearMonthSequential": "Year-Month / Sequential (2026-02/001)";
         "yearSequential": "Year / Sequential (2026/001)";
       };
+      "showInTitle": "Show the number next to the matter name";
+      "showInTitleDescription": "When this is off, the title is exactly the name you entered.";
       "title": "Matter numbering";
       "tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)";
     };
@@ -5669,8 +5671,7 @@ type Messages = {
       "title": "Copy to Matter";
     };
     "create": {
-      "ownerTypeToggle": "Matter type";
-      "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team.";
+      "matterName": "Matter name";
     };
     "createNewWorkspace": "Create new matter";
     "defaultName": "Untitled";
@@ -6121,15 +6122,12 @@ type Messages = {
       "upcomingTasks": "Upcoming agenda";
       "uploaded": "uploaded";
     };
-    "ownerType": {
-      "client": "Client";
-      "personal": "Personal";
-    };
     "parties": {
       "addParty": "Add party";
       "changeClient": "Change client";
       "client": "Client";
       "noClient": "No client assigned";
+      "noClientOptional": "No client (optional)";
       "noParties": "No parties added to this matter.";
       "partyRoles": {
         "co_counsel": "Co-counsel";
@@ -6142,11 +6140,7 @@ type Messages = {
         "third_party": "Third party";
         "witness": "Witness";
       };
-      "personalDescription": "Personal matters are private to you. Promote to a client to share with the team.";
-      "personalLabel": "Personal";
-      "promoteCta": "Promote to client";
-      "promoteDescription": "Attach a client to share this matter with the team. This is one-way — promoted matters cannot return to personal.";
-      "promotedSuccess": "Matter promoted";
+      "personalLabel": "No client";
       "removeClient": "Remove client";
       "removeParty": "Remove party";
       "removePartyConfirm": "Are you sure you want to remove this party from the matter?";

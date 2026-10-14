@@ -5,6 +5,7 @@ import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import { Input } from "@stll/ui/input";
@@ -68,6 +69,7 @@ export const MatterNumberingCard = () => {
 type MatterNumberingSettings = {
   matterNumberPattern: string;
   matterNumberPadding: number;
+  matterNumberingEnabled: boolean;
 };
 
 const MatterNumberingCardBody = ({
@@ -111,6 +113,18 @@ const MatterNumberingCardBody = ({
     previewView.type === "items" ? previewView.items : undefined;
   const preview = previewData?.preview ?? null;
 
+  const numberingToggle = useSettingsMutation({
+    mutationFn: async (enabled: boolean) =>
+      unwrapEden(
+        await api["organization-settings"].post({
+          matterNumberingEnabled: enabled,
+        }),
+      ),
+    invalidate: organizationSettingsKeys.all,
+    successToast: { title: t("success.matterNumberingUpdated") },
+    errorToast: { title: t("errors.actionFailed") },
+  });
+
   const updateMutation = useSettingsMutation({
     mutationFn: async () =>
       unwrapEden(
@@ -131,6 +145,24 @@ const MatterNumberingCardBody = ({
     <Frame>
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
+          <Field className="flex-row items-center gap-2">
+            <Checkbox
+              checked={settings.matterNumberingEnabled}
+              disabled={numberingToggle.isPending}
+              onCheckedChange={(checked) => {
+                if (typeof checked !== "boolean") {
+                  return;
+                }
+                numberingToggle.mutate(checked);
+              }}
+            />
+            <FieldLabel>
+              {t("organization.matterNumber.showInTitle")}
+            </FieldLabel>
+          </Field>
+          <p className="text-muted-foreground text-xs text-pretty">
+            {t("organization.matterNumber.showInTitleDescription")}
+          </p>
           <Field>
             <FieldLabel>{t("organization.matterNumber.pattern")}</FieldLabel>
             <Select

@@ -40,9 +40,8 @@ const updateWorkspaceBodySchema = t.Object({
   // Pinned-first avatar on the matters list. Must be an existing
   // workspace member (validated at handler time); pass null to clear.
   leadUserId: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
-  // Promotion (personal -> client) is one-way and is itself the
-  // sharing event: the optional memberUserIds list is added to
-  // the workspace at the same time as the client is attached.
+  // Attaches a client and optional members in one write. Refused
+  // once a client is already set. Ordinary client changes use clientId.
   promote: t.Optional(
     t.Object({
       clientId: tSafeId("contact"),
@@ -58,13 +57,11 @@ const updateWorkspaceBodySchema = t.Object({
 const config = {
   contract: "patch",
   description:
-    "Change a matter: its name, reference, billing reference, colour, or " +
-    "lead (who must already be a member of it). Only the fields you pass are " +
-    "written. Attaching a client to a personal matter is a one-way promotion " +
-    "and must go through promote, which takes the client contact and " +
-    "optionally the members to share it with at the same time; a bare " +
-    "clientId on a personal matter, and any attempt to re-promote a matter " +
-    "that already has a client, are refused.",
+    "Change a matter: its name, client, reference, billing reference, colour, " +
+    "or lead (who must already be a member of it). Only the fields you pass " +
+    "are written. clientId attaches or replaces the client, including when " +
+    "the matter has none. promote still attaches a client and members " +
+    "together, and is refused once a client is already set.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceRealtimeUpdates,
@@ -212,26 +209,13 @@ export const updateWorkspaceHandler = async function* ({
       };
     }
 
-    // Promotion is only valid for personal matters (clientId IS
-    // NULL). Reject any attempt to "re-promote" a client matter so
-    // the call site does not silently overwrite the existing
-    // client + member set.
+    // Refused once a client is set, so a second promote cannot
+    // overwrite the client and member set.
     if (body.promote && workspace.clientId !== null) {
       return {
         ok: false as const,
         status: 400 as const,
         message: "Workspace is already a client matter",
-      };
-    }
-
-    // Bare clientId on a personal matter is conceptually a
-    // promotion we want to be explicit about. Force callers to
-    // use `promote` for personal -> client.
-    if (body.clientId && workspace.clientId === null) {
-      return {
-        ok: false as const,
-        status: 400 as const,
-        message: "Use promote to attach a client to a personal matter",
       };
     }
 

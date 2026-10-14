@@ -125,26 +125,27 @@ describe("updateWorkspace", () => {
     });
   });
 
-  test("rejects clientId update on a personal workspace", async () => {
-    const workspaceSelect = {
-      from: () => ({
-        where: () => ({
-          for: async () => [
-            {
-              id: "ws_test123",
-              name: "Workspace",
-              clientId: null,
-              reference: null,
-              billingReference: null,
-              color: null,
-            },
-          ],
+  test("looks up the contact when attaching a client to a matter that has none", async () => {
+    const workspaceRow = {
+      id: "ws_test123",
+      name: "Workspace",
+      clientId: null,
+      reference: null,
+      billingReference: null,
+      color: null,
+      leadUserId: null,
+    };
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: () =>
+              Object.assign(Promise.resolve([workspaceRow]), {
+                limit: async () => [],
+              }),
+          }),
         }),
       }),
-    };
-
-    const { safeDb, scopedDb } = createScopedDbMock({
-      select: () => workspaceSelect,
     });
 
     const result = await updateWorkspace.handler(
@@ -158,10 +159,8 @@ describe("updateWorkspace", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: {
-        message: "Use promote to attach a client to a personal matter",
-      },
+      code: 404,
+      response: { message: "Client not found" },
     });
   });
 });

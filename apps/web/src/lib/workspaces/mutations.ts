@@ -24,9 +24,8 @@ import { useTableStore } from "@/lib/workspaces/table-store";
 const DEFAULT_FILE_PROPERTY_NAME = "Documents";
 
 type CreateWorkspaceVars = {
-  // Omit `clientId` to create a personal matter (initially visible
-  // only to the creator). With `clientId`, `memberUserIds` may add
-  // other members; for personal matters that field is ignored.
+  // Omit `clientId` to create a matter with no client. `memberUserIds`
+  // adds other members either way; the creator is always a member.
   clientId?: string;
   memberUserIds?: string[];
   name: string;

@@ -71,6 +71,7 @@ const updateOrganizationSettingsBodySchema = t.Object({
   documentProcessingMode: t.Optional(documentProcessingModeSchema),
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
+  matterNumberingEnabled: t.Optional(t.Boolean()),
   promptCachingEnabled: t.Optional(t.Boolean()),
   managedAIResidency: t.Optional(managedAIResidencySchema),
   memoryExtractionEnabled: t.Optional(t.Boolean()),
@@ -96,7 +97,7 @@ const config = {
   contract: "patch",
   description:
     "Change the organization's general settings: document processing mode, " +
-    "matter-number pattern and padding, prompt caching, memory " +
+    "matter-number pattern, padding, whether titles show that number, prompt caching, memory " +
     "extraction, time policy, and time zone. Only the fields you pass are written and the matter-number " +
     "pattern is validated against its padding first. Turning document " +
     "processing off is refused while an automatic run is still going. " +
@@ -201,6 +202,7 @@ type ExistingGeneralSettings = ExistingTimePolicy &
     | "memoryExtractionEnabled"
     | "timeZone"
     | "practiceJurisdictions"
+    | "matterNumberingEnabled"
   >;
 
 const timeZoneAuditChanges = (
@@ -225,6 +227,15 @@ const organizationSettingsAuditChanges = (
         matterNumberPadding: {
           old: null,
           new: body.matterNumberPadding,
+        },
+      }
+    : {}),
+  ...(body.matterNumberingEnabled !== undefined &&
+  body.matterNumberingEnabled !== (existing?.matterNumberingEnabled ?? false)
+    ? {
+        matterNumberingEnabled: {
+          old: existing?.matterNumberingEnabled ?? false,
+          new: body.matterNumberingEnabled,
         },
       }
     : {}),
@@ -422,13 +433,16 @@ export const updateOrganizationSettingsHandler = async function* ({
         body.memoryExtractionEnabled !== undefined;
       const wantsTimePolicyUpdate = Object.keys(timePolicyUpdate).length > 0;
       const wantsTimeZoneUpdate = body.timeZone !== undefined;
+      const wantsMatterNumberingEnabledUpdate =
+        body.matterNumberingEnabled !== undefined;
       const needsSerializedSettingsRead =
         wantsManagedAIResidencyUpdate ||
         wantsPromptCachingUpdate ||
         wantsDocumentProcessingUpdate ||
         wantsMemoryExtractionUpdate ||
         wantsTimePolicyUpdate ||
-        wantsTimeZoneUpdate;
+        wantsTimeZoneUpdate ||
+        wantsMatterNumberingEnabledUpdate;
 
       // Coordinate extraction consent changes with the background worker's
       // persistence transaction as well as concurrent settings requests.
@@ -468,6 +482,8 @@ export const updateOrganizationSettingsHandler = async function* ({
               timeLockedThroughMonth:
                 organizationSettings.timeLockedThroughMonth,
               timeNarrativeRequired: organizationSettings.timeNarrativeRequired,
+              matterNumberingEnabled:
+                organizationSettings.matterNumberingEnabled,
               ...organizationTimeZoneColumns,
             })
             .from(organizationSettings)
@@ -549,6 +565,9 @@ export const updateOrganizationSettingsHandler = async function* ({
             : {}),
           ...timePolicyUpdate,
           ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
+          ...(wantsMatterNumberingEnabledUpdate
+            ? { matterNumberingEnabled: body.matterNumberingEnabled }
+            : {}),
         })
         .onConflictDoUpdate({
           target: organizationSettings.organizationId,
@@ -581,6 +600,9 @@ export const updateOrganizationSettingsHandler = async function* ({
             timeLockedThroughMonth: timePolicyUpdate.timeLockedThroughMonth,
             timeNarrativeRequired: timePolicyUpdate.timeNarrativeRequired,
             ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
+            ...(wantsMatterNumberingEnabledUpdate
+              ? { matterNumberingEnabled: body.matterNumberingEnabled }
+              : {}),
             updatedAt: new Date(),
           },
         });
@@ -634,6 +656,9 @@ export const updateOrganizationSettingsHandler = async function* ({
       : {}),
     ...timePolicyUpdate,
     ...(body.timeZone !== undefined ? { timeZone: body.timeZone } : {}),
+    ...(body.matterNumberingEnabled !== undefined
+      ? { matterNumberingEnabled: body.matterNumberingEnabled }
+      : {}),
   });
 };
 

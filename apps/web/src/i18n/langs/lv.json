@@ -4335,6 +4335,8 @@
         "yearMonthSequential": "Gads-mēnesis / Secīgs (2026-02/001)",
         "yearSequential": "Gads / Secīgs (2026/001)"
       },
+      "showInTitle": "Rādīt numuru blakus lietas nosaukumam",
+      "showInTitleDescription": "Ja tas ir izslēgts, virsraksts ir tieši ievadītais nosaukums.",
       "title": "Lietu numerācija",
       "tokenHelp": "Pieejamie marķieri: '{'SEQ'}' (kārtas numurs), '{'YYYY'}' (gads), '{'YY'}' (2 ciparu gads), '{'MM'}' (mēnesis)"
     },
@@ -5666,8 +5668,7 @@
       "title": "Kopēt uz lietu"
     },
     "create": {
-      "ownerTypeToggle": "Lietas veids",
-      "personalDescription": "Personīgās lietas ir privātas un nav nepieciešams klients. Vēlāk tās var paaugstināt, lai dalītos ar komandu."
+      "matterName": "Lietas nosaukums"
     },
     "createNewWorkspace": "Izveidot jaunu lietu",
     "defaultName": "Bez nosaukuma",
@@ -6118,15 +6119,12 @@
       "upcomingTasks": "Gaidāmā agenda",
       "uploaded": "augšupielādēja"
     },
-    "ownerType": {
-      "client": "Klients",
-      "personal": "Personīga"
-    },
     "parties": {
       "addParty": "Pievienot pusi",
       "changeClient": "Mainīt klientu",
       "client": "Klients",
       "noClient": "Klients nav piešķirts",
+      "noClientOptional": "Bez klienta (neobligāti)",
       "noParties": "Šai lietai nav pievienotas puses.",
       "partyRoles": {
         "co_counsel": "Līdzadvokāts",
@@ -6139,11 +6137,7 @@
         "third_party": "Trešā puse",
         "witness": "Liecinieks"
       },
-      "personalDescription": "Personīgās lietas ir tikai jums. Paaugstiniet klientam, lai dalītos ar komandu.",
-      "personalLabel": "Personīga",
-      "promoteCta": "Paaugstināt klientam",
-      "promoteDescription": "Pievienojiet klientu, lai dalītos ar šo lietu komandai. Tas ir neatgriezeniski — paaugstinātās lietas nevar atgriezties personīgās.",
-      "promotedSuccess": "Lieta paaugstināta",
+      "personalLabel": "Bez klienta",
       "removeClient": "Noņemt klientu",
       "removeParty": "Noņemt pusi",
       "removePartyConfirm": "Vai tiešām vēlaties noņemt šo pusi no lietas?",

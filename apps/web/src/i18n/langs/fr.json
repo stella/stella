@@ -4335,6 +4335,8 @@
         "yearMonthSequential": "Année-Mois / Séquentiel (2026-02/001)",
         "yearSequential": "Année / Séquentiel (2026/001)"
       },
+      "showInTitle": "Afficher le numéro à côté du nom du dossier",
+      "showInTitleDescription": "Lorsque cette option est désactivée, le titre est exactement le nom saisi.",
       "title": "Numérotation des dossiers",
       "tokenHelp": "Jetons disponibles : '{'SEQ'}' (séquence), '{'YYYY'}' (année), '{'YY'}' (année à 2 chiffres), '{'MM'}' (mois)"
     },
@@ -5666,8 +5668,7 @@
       "title": "Copier vers un dossier"
     },
     "create": {
-      "ownerTypeToggle": "Type de dossier",
-      "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
+      "matterName": "Nom du dossier"
     },
     "createNewWorkspace": "Créer un nouveau dossier",
     "defaultName": "Sans titre",
@@ -6118,15 +6119,12 @@
       "upcomingTasks": "Agenda à venir",
       "uploaded": "a importé"
     },
-    "ownerType": {
-      "client": "Client",
-      "personal": "Personnel"
-    },
     "parties": {
       "addParty": "Ajouter une partie",
       "changeClient": "Changer de client",
       "client": "Client",
       "noClient": "Aucun client attribué",
+      "noClientOptional": "Sans client (facultatif)",
       "noParties": "Aucune partie ajoutée à ce dossier.",
       "partyRoles": {
         "co_counsel": "Co-conseil",
@@ -6139,11 +6137,7 @@
         "third_party": "Tiers",
         "witness": "Témoin"
       },
-      "personalDescription": "Les dossiers personnels sont privés. Promouvoir vers un client pour partager avec l'équipe.",
-      "personalLabel": "Personnel",
-      "promoteCta": "Promouvoir au client",
-      "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible — les dossiers promus ne peuvent pas redevenir personnels.",
-      "promotedSuccess": "Dossier promu",
+      "personalLabel": "Sans client",
       "removeClient": "Retirer le client",
       "removeParty": "Retirer la partie",
       "removePartyConfirm": "Voulez-vous vraiment retirer cette partie du dossier ?",

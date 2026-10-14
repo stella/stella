@@ -77,9 +77,6 @@ type MatterMenuBaseCallbacks = {
   onTogglePin: () => void;
   onDelete: () => void;
   isPinned: boolean;
-  // Personal matters are creator-only until promoted; the backend
-  // rejects member adds with 400, so hide the affordance here.
-  isPersonal: boolean;
 };
 
 export type MatterMenuCallbacks =
@@ -119,12 +116,10 @@ export const MatterMenuItems = (props: MatterMenuCallbacks) => {
         <PenLineIcon />
         {t("common.rename")}
       </MenuItem>
-      {!props.isPersonal && (
-        <MenuItem onClick={props.onAddMember}>
-          <UserPlusIcon />
-          {t("workspaces.members.addMember")}
-        </MenuItem>
-      )}
+      <MenuItem onClick={props.onAddMember}>
+        <UserPlusIcon />
+        {t("workspaces.members.addMember")}
+      </MenuItem>
       <MenuItem onClick={props.onCopyLink}>
         <ClipboardCopyIcon />
         {t("common.copyLink")}
@@ -153,7 +148,7 @@ export const MatterMenuItems = (props: MatterMenuCallbacks) => {
 type MatterMenuHeaderProps = {
   id: string;
   name: string;
-  /** Client display name, or null for a personal matter. */
+  /** Client display name, or null when the matter has no client. */
   clientName: string | null;
   color: string | null;
 };
@@ -288,7 +283,6 @@ export const useMatterActions = (
   };
 
   const base = {
-    isPersonal: !target.client,
     isPinned,
     onAddMember: () => setAddMemberOpen(true),
     onCopyLink: () => {

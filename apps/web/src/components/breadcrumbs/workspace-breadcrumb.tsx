@@ -23,6 +23,7 @@ import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-c
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useMatterNumberingEnabled } from "@/lib/organization/use-matter-numbering";
 import { useQueryView } from "@/lib/use-query-view";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
@@ -53,6 +54,7 @@ export const WorkspaceBreadcrumb = ({
     workspaceView.type === "items" ? workspaceView.items : undefined;
   const updateWorkspace = useUpdateWorkspace();
   const updateMattersConfig = useConfigStore((s) => s.updateMatters);
+  const showMatterNumber = useMatterNumberingEnabled();
   const referenceConflictMessage = useReferenceConflictMessage();
   const [referenceConfirmation, setReferenceConfirmation] =
     useState<ReferenceConfirmation>({ status: "closed" });
@@ -223,23 +225,7 @@ export const WorkspaceBreadcrumb = ({
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
     </>
-  ) : (
-    <>
-      <BreadcrumbItem className="min-w-8 shrink">
-        <Link
-          className="hover:text-foreground text-muted-foreground min-w-0 truncate"
-          onClick={() => {
-            updateMattersConfig({ clientFilter: null });
-          }}
-          to="/workspaces"
-          title={t("workspaces.parties.personalLabel")}
-        >
-          {t("workspaces.parties.personalLabel")}
-        </Link>
-      </BreadcrumbItem>
-      <BreadcrumbSeparator className="shrink-0" />
-    </>
-  );
+  ) : null;
 
   const referenceSegment = (() => {
     if (isEditingRef) {
@@ -259,7 +245,7 @@ export const WorkspaceBreadcrumb = ({
         />
       );
     }
-    if (workspace.reference) {
+    if (showMatterNumber && workspace.reference) {
       return (
         <button
           className="text-foreground-muted hover:text-muted-foreground cursor-text text-sm whitespace-pre"
@@ -365,7 +351,7 @@ export const WorkspaceBreadcrumb = ({
                   >
                     {displayName}
                   </BidiText>
-                  {workspace.reference && !isEditingRef ? (
+                  {showMatterNumber && workspace.reference && !isEditingRef ? (
                     <span
                       className="text-foreground-muted shrink-0 text-sm whitespace-pre"
                       onContextMenu={(e) => {

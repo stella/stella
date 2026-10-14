@@ -102,7 +102,6 @@
     "clauses.versionRestored",
     "consent.error",
     "contacts.emailTypes.other",
-    "contacts.emailTypes.personal",
     "contacts.phoneTypes.other",
     "contacts.search",
     "docxReview.applyTracked",
@@ -260,10 +259,8 @@
     "workspaces.overview.activity.actorActions.created",
     "workspaces.overview.activity.actorActions.deleted",
     "workspaces.overview.activity.actorActions.updated",
-    "workspaces.ownerType.personal",
     "workspaces.parties.partyRoles.expert_witness",
     "workspaces.parties.partyRoles.other",
-    "workspaces.parties.personalLabel",
     "workspaces.parties.searchContacts",
     "workspaces.playbooks.run",
     "workspaces.properties.addOption",
@@ -912,21 +909,12 @@
     "workspaces.overview.activity.targets.message": [
       "fr"
     ],
-    "workspaces.ownerType.client": [
-      "fr"
-    ],
-    "workspaces.ownerType.personal": [
-      "es"
-    ],
     "workspaces.parties.client": [
       "fr"
     ],
     "workspaces.parties.partyRoles.mediator": [
       "de",
       "pl"
-    ],
-    "workspaces.parties.personalLabel": [
-      "es"
     ],
     "workspaces.properties.chipSingle": [
       "pl"
@@ -1204,9 +1192,7 @@
     "workspaces.overview.openTasks",
     "workspaces.overview.uploaded",
     "workspaces.parties.noClient",
-    "workspaces.parties.removeClient",
     "workspaces.parties.removePartyConfirm",
-    "workspaces.parties.setClient",
     "workspaces.pdf.entitySidebar",
     "workspaces.pdf.pageEditor.pageCount",
     "workspaces.pdf.pageEditor.title",
