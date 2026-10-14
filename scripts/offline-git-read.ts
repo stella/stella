@@ -86,7 +86,7 @@ const readOfflineGitBytes = ({ root, operation }: OfflineGitReadOptions) => {
   });
   if (result.exitCode !== 0) {
     return panic(
-      `Offline Git ${operation.type} failed: ${result.stderr.toString()}${operation.type === "show" ? "\nBaseline blob must be present locally; hydrate it before the offline check." : ""}`,
+      `ExternalContractBaselineUnavailable: Offline Git ${operation.type} failed: ${result.stderr.toString()}${operation.type === "show" ? "\nBaseline blob must be present locally; hydrate it before the offline check." : ""}`,
     );
   }
   return result.stdout;

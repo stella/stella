@@ -40,6 +40,7 @@ import {
   uncharacterisedFromSource,
 } from "./check-external-contracts";
 import { createLocalRuntimeClosureReader } from "./external-contract-evidence";
+import { createGitBaselineReader } from "./offline-git-read";
 import {
   OUTBOUND_TRANSPORT_CENSUS,
   type OutboundTransportCensusEntry,
@@ -47,6 +48,10 @@ import {
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const directDependencies = readDirectDependencies(ROOT);
+const realBaseline = createGitBaselineReader({
+  root: ROOT,
+  base: process.env["CHECK_BASE_REF"] ?? "origin/main",
+});
 const plantedOwner = {
   path: "apps/api/src/lib/example-unregistered-client.ts",
   class: "third-party",
@@ -55,14 +60,16 @@ const plantedOwner = {
 } as const satisfies OutboundTransportCensusEntry;
 
 test("the real outbound census and SDK manifests have total offline coverage", () => {
-  expect(checkExternalContracts(ROOT)).toEqual([]);
+  expect(checkExternalContracts(ROOT, { baseline: realBaseline })).toEqual([]);
   expect(
     checkExternalContracts(ROOT, {
+      baseline: realBaseline,
       census: [...OUTBOUND_TRANSPORT_CENSUS, plantedOwner],
     }).join("\n"),
   ).toContain(`owner ${plantedOwner.path} maps to 0`);
   expect(
     checkExternalContracts(ROOT, {
+      baseline: realBaseline,
       sdks: [...readExternalSdks(ROOT), "@example/sdk"],
     }).join("\n"),
   ).toContain("SDK @example/sdk maps to 0");
@@ -107,9 +114,9 @@ test("publisher captures require a characterised contract", () => {
       reason: "The publisher replay corpus is not enrolled.",
     },
   } as const;
-  expect(checkExternalContracts(ROOT, { registry })).toEqual([
-    "The legal-publishers contract must be characterised.",
-  ]);
+  expect(
+    checkExternalContracts(ROOT, { baseline: realBaseline, registry }),
+  ).toEqual(["The legal-publishers contract must be characterised."]);
 });
 
 test("shared scope needs a refreshed receipt and a runtime-reachable replay import", () => {
@@ -133,7 +140,10 @@ test("shared scope needs a refreshed receipt and a runtime-reachable replay impo
       },
     } as const;
     writeFileSync(receiptPath, JSON.stringify(originalReceipt));
-    const problems = checkExternalContracts(ROOT, { registry });
+    const problems = checkExternalContracts(ROOT, {
+      baseline: realBaseline,
+      registry,
+    });
     expect(problems.join("\n")).toContain(
       `owner ${sharedOwner} has no reachable fixture receipt`,
     );
@@ -147,9 +157,11 @@ test("shared scope needs a refreshed receipt and a runtime-reachable replay impo
         coveredSdks: contract.sdks,
       }),
     );
-    expect(checkExternalContracts(ROOT, { registry }).join("\n")).toContain(
-      `owner claim ${sharedOwner} is not runtime-reachable`,
-    );
+    expect(
+      checkExternalContracts(ROOT, { baseline: realBaseline, registry }).join(
+        "\n",
+      ),
+    ).toContain(`owner claim ${sharedOwner} is not runtime-reachable`);
     const replayPath = path.join(root, "shared-replay.test.ts");
     writeFileSync(
       replayPath,
@@ -171,7 +183,10 @@ test("shared scope needs a refreshed receipt and a runtime-reachable replay impo
       },
     } as const;
     expect(
-      checkExternalContracts(ROOT, { registry: refreshedRegistry }),
+      checkExternalContracts(ROOT, {
+        baseline: realBaseline,
+        registry: refreshedRegistry,
+      }),
     ).toEqual([]);
   } finally {
     rmSync(root, { recursive: true, force: true });
@@ -222,7 +237,10 @@ test("a planted receipt cannot claim an owner outside its replay graph", () => {
         ],
       },
     } as const;
-    const problems = checkExternalContracts(ROOT, { registry });
+    const problems = checkExternalContracts(ROOT, {
+      baseline: realBaseline,
+      registry,
+    });
     for (const { path: owner } of contract.owners) {
       expect(problems.join("\n")).toContain(
         `owner claim ${owner} is not runtime-reachable`,
@@ -1004,6 +1022,9 @@ test.each(["package.json", "new-package.json"])(
       };
       writeReceipt({ ...currentPins, ...oldReceiptPins });
       expect(checkContractEntry(options)).toEqual([]);
+      expect(
+        checkContractEntry({ ...options, baseline: undefined }).join("\n"),
+      ).toContain("ExternalContractBaselineUnavailable");
       writeReceipt(oldReceiptPins);
       expect(checkContractEntry(options).join("\n")).toContain(
         "fixture pin missing",

@@ -283,6 +283,9 @@ test("the offline baseline reader uses the merge base and preserves absent files
     );
     expect(missing.exitCode).not.toBe(0);
     expect(missing.stderr.toString()).toContain(
+      "ExternalContractBaselineUnavailable",
+    );
+    expect(missing.stderr.toString()).toContain(
       "Baseline blob must be present locally",
     );
     expect(readFileSync(trace, "utf-8")).not.toContain('"child_start"');

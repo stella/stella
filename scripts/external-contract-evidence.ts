@@ -22,6 +22,9 @@ import {
 import { isGeneratedCandidate } from "./generated-source-identification";
 import { parseSource } from "./parse-memo";
 
+// Runtime assets and registered generator inputs can include Markdown anywhere in the tracked tree.
+export const CI_MARKDOWN_READER_INPUTS = ["**/*.md"];
+
 const MAX_FILES = 8192;
 const MAX_DEPTH = 64;
 const MAX_BYTES = 32 * 1024 * 1024;

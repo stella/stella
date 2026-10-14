@@ -3753,7 +3753,11 @@ jobs:
           CHECK_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || 'origin/main' }}
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: |
-          base="$(git merge-base HEAD "$CHECK_BASE_REF")"
+          base="$(git merge-base HEAD "$CHECK_BASE_REF")" || {
+            echo "::error::ExternalContractBaselineUnavailable: cannot resolve merge-base with $CHECK_BASE_REF"
+            exit 1
+          }
+          echo "External contract merge-base: $base"
           baseline_path=packages/external-contracts/src/registry.ts
           if [ -n "$(git ls-tree --name-only "$base" -- "$baseline_path")" ]; then
             # Hydrate a partial clone before verification disables Git transport.

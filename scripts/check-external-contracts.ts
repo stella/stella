@@ -910,6 +910,7 @@ type ChangedLocalRuntimeClosureOptions = {
   registryFiles?: Parameters<
     typeof createLocalRuntimeClosureReader
   >[0]["registryFiles"];
+  onInvalidation?: (reason: string) => void;
 };
 
 export const hasChangedLocalRuntimeClosure = ({
@@ -920,6 +921,7 @@ export const hasChangedLocalRuntimeClosure = ({
   current,
   generators,
   registryFiles,
+  onInvalidation,
 }: ChangedLocalRuntimeClosureOptions): boolean => {
   const previousClosure = createLocalRuntimeClosureReader({
     root,
@@ -955,18 +957,30 @@ export const hasChangedLocalRuntimeClosure = ({
     }
     return emitted.get(key);
   };
+  const invalidate = (reason: string) => {
+    onInvalidation?.(reason);
+    return true;
+  };
   for (const owner of owners) {
     const previous = previousClosure([owner]);
     const present = currentClosure([owner]);
     if (previous.problems.length > 0 || present.problems.length > 0) {
+      for (const reason of new Set([
+        ...previous.problems,
+        ...present.problems,
+      ])) {
+        onInvalidation?.(reason);
+      }
       return true;
     }
     if (previous.generated.size !== present.generated.size) {
-      return true;
+      return invalidate(`Generated closure membership changed for ${owner}`);
     }
     for (const [file, identity] of previous.generated) {
       if (present.generated.get(file) !== identity) {
-        return true;
+        return invalidate(
+          `Generated input registration changed for ${file} in ${owner}`,
+        );
       }
     }
     // Generated leaves stand for inputs, so their untraversed runtime edges cannot rule out SDK reachability.
@@ -993,7 +1007,12 @@ export const hasChangedLocalRuntimeClosure = ({
       continue;
     }
     if (previous.files.size !== present.files.size) {
-      return true;
+      const changed = [
+        ...new Set([...previous.files.keys(), ...present.files.keys()]),
+      ].filter((file) => previous.files.has(file) !== present.files.has(file));
+      return invalidate(
+        `Runtime closure membership changed for ${owner}: ${changed.join(", ")}`,
+      );
     }
     for (const [file, source] of previous.files) {
       const next = present.files.get(file);
@@ -1002,7 +1021,9 @@ export const hasChangedLocalRuntimeClosure = ({
         previous.dataHashes.get(file) !== present.dataHashes.get(file) ||
         executable(file, source) !== executable(file, next)
       ) {
-        return true;
+        return invalidate(
+          `Runtime source or data changed: ${file} in ${owner}`,
+        );
       }
     }
   }
@@ -1057,7 +1078,22 @@ export const checkContractEntry = ({
   admitted,
   now,
 }: ContractEntryCheckOptions): string[] => {
-  const problems: string[] = [];
+  const baselineProblems: string[] = [];
+  if (admitted !== undefined && baseline === undefined) {
+    baselineProblems.push(
+      `${system}: ExternalContractBaselineUnavailable: dated allowance requires a merge-base snapshot.`,
+    );
+  }
+  if (admitted !== undefined && baseline !== undefined) {
+    for (const file of ["package.json", "bun.lock"]) {
+      if (baseline(file) === undefined) {
+        baselineProblems.push(
+          `${system}: ExternalContractBaselineUnavailable: missing merge-base ${file}.`,
+        );
+      }
+    }
+  }
+  const problems = [...baselineProblems];
   for (const owner of entry.owners) {
     if (!existsSync(path.join(root, owner.path))) {
       problems.push(`${system}: missing owner ${owner.path}.`);
@@ -1100,9 +1136,13 @@ export const checkContractEntry = ({
       owners: entry.owners.map(({ path: file }) => file),
       sdks: entry.sdks,
       baseline,
+      onInvalidation: (reason) =>
+        problems.push(
+          `${system}: ExternalContractAllowanceInvalidated: ${reason}.`,
+        ),
       current: Object.assign(currentSource, {
         files:
-          baseline?.files === undefined ? undefined : readGitTrackedFiles(root),
+          baseline.files === undefined ? undefined : readGitTrackedFiles(root),
         digest: (file: string) => {
           const bytes = readBytes(file);
           return bytes === undefined ? undefined : hash(bytes);
@@ -1110,7 +1150,9 @@ export const checkContractEntry = ({
       }),
     });
   const admittedPins =
-    admitted === undefined
+    admitted === undefined ||
+    baseline === undefined ||
+    baselineProblems.length > 0
       ? {}
       : admittedPinDrift({
           current,
