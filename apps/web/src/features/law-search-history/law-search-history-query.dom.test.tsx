@@ -180,7 +180,7 @@ test("leaving the page during a local import does not report its cancellation", 
       ) => {
         const request = input instanceof Request ? input : undefined;
         const url = new URL(
-          request === undefined ? String(input) : request.url,
+          input instanceof Request ? input.url : String(input),
         );
         const method = init?.method ?? request?.method ?? "GET";
         if (url.pathname.endsWith("/import-clock")) {
