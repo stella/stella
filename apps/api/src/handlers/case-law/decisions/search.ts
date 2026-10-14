@@ -137,6 +137,7 @@ import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
 import {
   type CaseLawProvisionFilter,
+  type CaseLawProvisionScope,
   citingDecisionIdsSubquery,
   provisionCitedSql,
   readCaseLawProvisionScope,
@@ -341,6 +342,11 @@ type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema> & {
    * is checked against the links instead.
    */
   provisionDecisionIds?: readonly SafeId<"caseLawDecision">[];
+  /**
+   * The provision's citing set, when the caller read it already (an agent
+   * search reads it once for all its phrasings and warns when it is broad).
+   */
+  provisionScope?: CaseLawProvisionScope;
 };
 
 type PostgresSearchBody = Omit<
@@ -390,7 +396,8 @@ export const searchDecisionsHandler = async ({
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
     const { provision } = scopedBody;
     const provisionScope =
-      provision === undefined
+      scopedBody.provisionScope ??
+      (provision === undefined
         ? null
         : await caseLawDb(
             async (tx) =>
@@ -398,7 +405,7 @@ export const searchDecisionsHandler = async ({
                 jurisdiction: country,
                 provision,
               }),
-          );
+          ));
     return await searchCorpusIndexDecisions({
       body:
         provisionScope?.type === "decisions"

@@ -76,11 +76,16 @@ import {
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
-import type { CaseLawProvisionFilter } from "@/api/lib/case-law/provision-filter";
+import {
+  type CaseLawProvisionFilter,
+  type CaseLawProvisionScope,
+  readCaseLawProvisionScope,
+} from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import {
   type AgentCaseLawSearchWarning,
   manyRequiredTermsWarning,
+  provisionCitedWidelyWarning,
   withFacetValues,
 } from "@/api/lib/case-law/search-warnings";
 import { projectCaseLawCourt } from "@/api/lib/chat/case-law-court-projection";
@@ -2422,6 +2427,67 @@ const mergedCaseLawSearchCursor = (
     : encodePaginationCursor(subCursors);
 };
 
+type SearchProvisionArgRead =
+  | { type: "refused"; result: InternalToolErrorResult }
+  | {
+      type: "read";
+      /** What every phrasing's search body carries for the provision. */
+      body: {
+        provision?: CaseLawProvisionFilter;
+        provisionScope?: CaseLawProvisionScope;
+      };
+      warnings: AgentCaseLawSearchWarning[];
+    };
+
+/**
+ * The provision argument, resolved and, for a search with queries, its
+ * citing set read once for every phrasing. A set too wide for one search to
+ * filter by is said in a warning on each phrasing, with its exact size.
+ */
+const readSearchProvision = async ({
+  args,
+  context,
+  country,
+}: {
+  args: v.InferOutput<typeof searchCaseLawArgsSchema>;
+  context: McpRequestContext;
+  country: string;
+}): Promise<SearchProvisionArgRead> => {
+  const text = args.provision;
+  if (text === undefined) {
+    return { type: "read", body: {}, warnings: [] };
+  }
+  const resolved = resolveSearchProvision(text, country);
+  if (resolved.type === "refused") {
+    return resolved;
+  }
+  const { provision } = resolved;
+  // A provision-only list is complete by construction: no set to read.
+  if (args.queries === undefined) {
+    return { type: "read", body: { provision }, warnings: [] };
+  }
+  const readScope =
+    context.testDependencies?.readCaseLawProvisionScope ??
+    (async (scope) =>
+      await caseLawPublicReadDb(
+        async (tx) => await readCaseLawProvisionScope(tx, scope),
+      ));
+  const provisionScope = await readScope({ jurisdiction: country, provision });
+  return {
+    type: "read",
+    body: { provision, provisionScope },
+    warnings:
+      provisionScope.type === "broad"
+        ? [
+            provisionCitedWidelyWarning({
+              provision: text,
+              citingDecisions: provisionScope.citingDecisions,
+            }),
+          ]
+        : [],
+  };
+};
+
 type ListSearchCaseLawProvisionOptions = {
   args: v.InferOutput<typeof searchCaseLawArgsSchema>;
   context: McpRequestContext;
@@ -2541,19 +2607,20 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       `Pass one of the admitted country codes: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
     );
   }
-  const provisionFilter =
-    parsed.output.provision === undefined
-      ? undefined
-      : resolveSearchProvision(parsed.output.provision, publicCountry);
-  if (provisionFilter?.type === "refused") {
-    return provisionFilter.result;
+  const provisionRead = await readSearchProvision({
+    args: parsed.output,
+    context,
+    country: publicCountry,
+  });
+  if (provisionRead.type === "refused") {
+    return provisionRead.result;
   }
   if (queries === undefined) {
     return await listSearchCaseLawProvision({
       args: parsed.output,
       context,
       country: publicCountry,
-      provision: provisionFilter?.provision,
+      provision: provisionRead.body.provision,
     });
   }
   const pageError = validateSearchQueryPage(limit, queries.length);
@@ -2615,9 +2682,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       ...(courtFilter === undefined ? {} : { court: courtFilter }),
       ...(courtListFilter === undefined ? {} : { courts: courtListFilter }),
       ...caseLawSearchRequestFilters(parsed.output),
-      ...(provisionFilter === undefined
-        ? {}
-        : { provision: provisionFilter.provision }),
+      ...provisionRead.body,
       country: publicCountry,
     };
     return {
@@ -2688,7 +2753,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           query,
           queryUsed: interpretation.queryUsed,
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
-          warnings: filterWarnings,
+          warnings: [...filterWarnings, ...provisionRead.warnings],
         };
       }
       const values = facetValuesForFilters({
@@ -2707,6 +2772,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
         paginationOutcome: outcome.page.paginationOutcome,
         warnings: [
           ...filterWarnings,
+          ...provisionRead.warnings,
           ...outcome.page.warnings.map((warning) =>
             withFacetValues(warning, values),
           ),

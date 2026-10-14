@@ -407,6 +407,7 @@ const searchProviderSearchMock = mock(
 );
 const searchDecisionsHandlerMock = mock();
 const listCaseLawProvisionDecisionsMock = mock();
+const readCaseLawProvisionScopeMock = mock();
 const searchLegislationHandlerMock = mock();
 const resolveStatuteExpressionMock = mock();
 const resolveStatuteWorkVersionMock = mock();
@@ -1144,6 +1145,7 @@ const createContext = ({
     readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
     searchDecisionsHandler: searchDecisionsHandlerMock,
     listCaseLawProvisionDecisions: listCaseLawProvisionDecisionsMock,
+    readCaseLawProvisionScope: readCaseLawProvisionScopeMock,
     readCaseLawCourtNames: async () => STORED_CZ_COURTS,
     searchLegislationHandler: searchLegislationHandlerMock,
     resolveStatuteExpression: resolveStatuteExpressionMock,
@@ -1228,6 +1230,11 @@ describe("OpenAI-compatible MCP tools", () => {
     readContactExecute.mockReset();
     searchDecisionsHandlerMock.mockReset();
     listCaseLawProvisionDecisionsMock.mockReset();
+    readCaseLawProvisionScopeMock.mockReset();
+    readCaseLawProvisionScopeMock.mockResolvedValue({
+      type: "decisions",
+      decisionIds: [],
+    });
     searchLegislationHandlerMock.mockReset();
     resolveStatuteExpressionMock.mockReset();
     resolveStatuteWorkVersionMock.mockReset();
@@ -5164,6 +5171,55 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     );
 
+    test("a provision cited too widely for one search says so on every phrasing, with its count", async () => {
+      readCaseLawProvisionScopeMock.mockResolvedValue({
+        type: "broad",
+        citingDecisions: 4037,
+      });
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["odpovědnost lékaře", "újma na zdraví"],
+          country: "CZE",
+          provision: "§ 2910 OZ",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+      expect(result.isError).toBeUndefined();
+      // Read once for the call, handed to every phrasing's search.
+      expect(readCaseLawProvisionScopeMock).toHaveBeenCalledTimes(1);
+      for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
+        expect(body.provisionScope).toEqual({
+          type: "broad",
+          citingDecisions: 4037,
+        });
+      }
+      const warnings = searchWarnings(result).filter(
+        ({ code }) => code === "provision_cited_widely",
+      );
+      expect(warnings).toHaveLength(2);
+      expect(warnings[0]?.message).toContain("4037");
+      expect(warnings[0]?.message).toContain("§ 2910 OZ");
+      expect(warnings[0]?.hint).toContain("subsection");
+    });
+
+    test("a provision whose citing set fits raises no breadth warning", async () => {
+      const result = await handleMcpToolCall({
+        args: {
+          queries: ["kamera"],
+          country: "CZE",
+          provision: "§ 316 odst. 2 ZP",
+        },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
+      expect(
+        searchWarnings(result).some(
+          ({ code }) => code === "provision_cited_widely",
+        ),
+      ).toBe(false);
+    });
+
     test("a provision without queries lists its citing decisions, with an exact total", async () => {
       listCaseLawProvisionDecisionsMock.mockResolvedValue({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
@@ -5187,6 +5243,7 @@ describe("OpenAI-compatible MCP tools", () => {
       });
       expect(result.isError).toBeUndefined();
       expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+      expect(readCaseLawProvisionScopeMock).not.toHaveBeenCalled();
       expect(listCaseLawProvisionDecisionsMock).toHaveBeenCalledTimes(1);
       const [{ body }] = listCaseLawProvisionDecisionsMock.mock.calls[0] ?? [];
       expect(body).toMatchObject({
