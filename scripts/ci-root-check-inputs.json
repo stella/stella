@@ -79,6 +79,7 @@
     "Test shard partition": ["**"],
     "Landing deploy scope": ["**"],
     "Workflow cache policy": ["**"],
+    "Store cache save supervisor": ["**"],
     "Workflow lint": ["**"],
     "Workflow YAML": ["**"],
     "Module ownership": ["**"],

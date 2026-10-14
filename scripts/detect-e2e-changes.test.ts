@@ -400,6 +400,10 @@ describe("detect-e2e-changes", () => {
       ".github/actions/setup-production-e2e/action.yml",
       ".github/actions/build-e2e-web/action.yml",
       ".github/actions/setup-playwright/action.yml",
+      // Every E2E job installs through these files.
+      ".github/actions/ci-install/action.yml",
+      "scripts/ci-install.ts",
+      "scripts/ci-install-store.ts",
     ]) {
       expect(detects("core", [file])).toBe("true");
       expect(detects("landing", [file])).toBe("true");

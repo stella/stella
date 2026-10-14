@@ -62,6 +62,40 @@ const GENERATOR_DECLARATIONS = [
     after: [],
   },
   {
+    id: "api-image-install-tooling",
+    outputKind: "committed",
+    outputs: ["apps/api/Dockerfile"],
+    blocks: [
+      {
+        path: "apps/api/Dockerfile",
+        begin: "# BEGIN GENERATED INSTALL TOOLING",
+        end: "# END GENERATED INSTALL TOOLING",
+      },
+    ],
+    // The closure has relative imports only, so it changes only through
+    // these files; the check fails when the closure outgrows this list.
+    inputs: [
+      "apps/api/Dockerfile",
+      "packages/scripts/src/child-exit-status.ts",
+      "packages/sha256/src/bun.ts",
+      "scripts/ci-install-store.ts",
+      "scripts/ci-install.ts",
+      "scripts/docker-source-closure.ts",
+    ],
+    write: [
+      "bun",
+      "scripts/docker-source-closure.ts",
+      "--write-install-tooling",
+    ],
+    check: [
+      "bun",
+      "scripts/docker-source-closure.ts",
+      "--check-install-tooling",
+    ],
+    autofix: true,
+    after: [],
+  },
+  {
     id: "bun-toolchain",
     outputKind: "committed",
     outputs: ["scripts/bun-toolchain.gen.json"],

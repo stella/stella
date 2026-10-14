@@ -657,6 +657,7 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
           log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
@@ -984,7 +985,7 @@ jobs:
             # inputs, the files the Dockerfile and the smoke read from the
             # context, and how CI and the release build it.
             case "$file" in
-              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/*.sql|docker/postgres/*.conf|scripts/configure-test-postgres.sh|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/smoke-api-image.sh|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
+              VERSION|apps/api/*|apps/collab/*|apps/legal-atlas-runner/*|packages/*|patches/*|apps/*/package.json|apps/landing/public/fonts/CabinetGrotesk-Regular.otf|docker/postgres/*.sql|docker/postgres/*.conf|scripts/configure-test-postgres.sh|.gitmodules|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/ci-install*|scripts/smoke-api-image.sh|scripts/pull-base-images.sh|scripts/ci-service-images.ts|scripts/ci-service-images.json|scripts/retry.sh|.dockerignore|.github/workflows/ci.yml|.github/workflows/release.yml)
                 api_image_smoke_required=true
                 ;;
             esac
@@ -1610,6 +1611,7 @@ jobs:
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/agent-engine...","--filter","stella"]'
         env:
           NPM_TOKEN: ""
@@ -3151,15 +3153,6 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/ci-generated-sources.ts restore "$RUNNER_TEMP/generated-sources"
 
-      - name: Test oxlint plugins
-        env:
-          CI_CHECK_KIND: STATIC
-          CI_CHECK_INPUTS: tracked-tree+generated-inputs
-        id: static_check_012
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test oxlint plugins')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
-        run: |
-          bun test scripts/oxlint-plugin-test-coverage.test.ts
-
       - name: Prepare route network manifest
         env:
           CI_CHECK_KIND: CONTEXTUAL
@@ -3236,18 +3229,27 @@ jobs:
         # Worst pilot test 153.3 s; 400 s allows about 2.5x contention headroom.
         run: bun test --timeout 400000 scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
-      # Root script tests belong to no workspace package, so no scoped test
-      # run reaches them. Other steps call some by path; this runs every
-      # other one, so a new test cannot miss CI by missing a step.
-      - name: Test remaining repository scripts
+      - name: Generated files manifest guard
         env:
-          CI_CHECK_KIND: CONTEXTUAL
-          CI_CHECK_CONTEXT: "Aggregate dynamically discovers tests; conservatively retain fresh execution for contextual or undeclared environmental dependencies."
-        id: remaining_scripts
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: generated_manifest
         background: true
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
-        # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
-        run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_generated_manifest != 'true') }}
+        # Guard A registers tracked generated files; Guard B checks the
+        # manifest entries with offline checks against committed outputs.
+        run: |
+          bun scripts/generated-files-guard.ts --guard-a
+          bun scripts/generated-files-guard.ts --guard-b
+
+      - name: Test oxlint plugins
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_012
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test oxlint plugins')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
+        run: |
+          bun test scripts/oxlint-plugin-test-coverage.test.ts
 
       - name: Test release image CI gate
         env:
@@ -3722,6 +3724,14 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_038 != 'true') }}
         run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
 
+      - name: Store cache save supervisor
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_119
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_119 != 'true') }}
+        run: bun test scripts/ci-store-save.test.ts
+
       - name: Workflow lint
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
@@ -3907,7 +3917,7 @@ jobs:
 
       # Join both long checks before reusing their background slots.
       - name: Wait for capability and repository checks
-        wait: [capability_parity, remaining_scripts]
+        wait: [capability_parity, generated_manifest]
 
       # The api test runner only globs `src/**`, so the tests beside the api
       # scripts (seed guards, AI provider canary, MCP coverage) need an
@@ -4220,18 +4230,18 @@ jobs:
       - name: Wait for API scripts and CLI runtime checks
         wait: [api_scripts, cli_runtime_parity]
 
-      - name: Generated files manifest guard
+      # Root script tests belong to no workspace package, so no scoped test
+      # run reaches them. Other steps call some by path; this runs every
+      # other one, so a new test cannot miss CI by missing a step.
+      - name: Test remaining repository scripts
         env:
-          CI_CHECK_KIND: STATIC
-          CI_CHECK_INPUTS: tracked-tree+generated-inputs
-        id: generated_manifest
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Aggregate dynamically discovers tests; conservatively retain fresh execution for contextual or undeclared environmental dependencies."
+        id: remaining_scripts
         background: true
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_generated_manifest != 'true') }}
-        # Guard A registers tracked generated files; Guard B checks the
-        # manifest entries with offline checks against committed outputs.
-        run: |
-          bun scripts/generated-files-guard.ts --guard-a
-          bun scripts/generated-files-guard.ts --guard-b
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        # Worst pilot test 13.62 s; 35 s allows about 2.5x contention headroom.
+        run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
 
       - name: Playwright config scope
         env:
@@ -5080,6 +5090,7 @@ jobs:
       - name: Install API script dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
           log-file: "${{ runner.temp }}/bun-install/api-test-durations.log"
         env:
@@ -6048,6 +6059,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
@@ -6980,6 +6992,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -8234,6 +8247,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/playwright-tools","--filter","!stella"]'
         env:
           NPM_TOKEN: ""
@@ -8453,6 +8467,13 @@ jobs:
               annotate "API image smoke" "Failed after: ${last_pass:-no check passed}"
             fi
           elif [[ -f "$build_log" ]]; then
+            # Docker prefixes nested workflow commands with BuildKit progress.
+            # Promote the install owner's fixed diagnostic to a runner annotation.
+            stall=$(grep -oE 'kind=infra class=install-stall .*' "$build_log" | head -n 1 || true)
+            if [[ -n "$stall" ]]; then
+              printf '::error title=infra-stall::%s\n' "$stall"
+              exit 0
+            fi
             # BuildKit prefixes each line with its step number; keep the
             # output of the step that failed. Bun prints an uncaught error's
             # headline under a caret line; without one, fall back to error
@@ -8688,6 +8709,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
           log-file: "${{ runner.temp }}/bun-install/desktop-windows-dry-run.log"
         env:
@@ -8860,6 +8882,7 @@ jobs:
       - name: Install scripts workspace dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
           log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
@@ -8957,6 +8980,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scan-engine","--filter","stella"]'
           log-file: "${{ runner.temp }}/bun-install/scan-engine-wasm.log"
         env:
@@ -9211,6 +9235,7 @@ jobs:
         if: matrix.os == 'macos'
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
         env:
           NPM_TOKEN: ""
