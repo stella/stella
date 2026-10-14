@@ -828,14 +828,15 @@ function SearchWidenedLine({
   const t = useTranslations();
 
   return (
-    <div className="text-muted-foreground flex flex-wrap items-baseline gap-x-2 text-xs">
+    <div className="text-muted-foreground flex max-w-full min-w-0 flex-wrap items-baseline gap-x-2 text-xs">
       {/*
         The sentence reads in the interface's own direction; only the query is
         isolated, because it is the reader's text and may run the other way.
         Isolating the whole line instead would let a Latin query set the
-        direction of an Arabic sentence.
+        direction of an Arabic sentence. A long query ends in an ellipsis on
+        one line rather than wrapping the toolbar row; the title keeps it whole.
       */}
-      <p className="min-w-0">
+      <p className="min-w-0 truncate" title={line.query}>
         {t.rich(line.messageKey, {
           bdi: (chunks) => <BidiText>{chunks}</BidiText>,
           query: line.query,
