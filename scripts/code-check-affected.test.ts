@@ -21,6 +21,7 @@ import {
   WORKSPACE_TYPECHECK_CACHE_INPUTS,
   CommandFailedError,
   codeCheckConcurrency,
+  configuredCodeCheckConcurrency,
   discoverAffectedWorkspaces,
   prioritizeWebLint,
   DEPENDENCY_CACHE_INPUTS,
@@ -281,7 +282,7 @@ describe("affected code-check planning", () => {
       "run",
       "lint",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -295,7 +296,7 @@ describe("affected code-check planning", () => {
       "turbo",
       "run",
       "typecheck:repo",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -480,7 +481,7 @@ describe("affected code-check planning", () => {
       "turbo",
       "run",
       "lint",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -492,7 +493,7 @@ describe("affected code-check planning", () => {
       "turbo",
       "run",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -532,7 +533,7 @@ describe("affected code-check planning", () => {
       "run",
       "lint",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -868,7 +869,7 @@ process.exit(childExitStatus(result));
       "run",
       "lint",
       "typecheck",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -1149,6 +1150,23 @@ describe("parallel code-quality legs", () => {
     for (const requested of ["0", "-1", "1.5", "many", ""]) {
       expect(codeCheckConcurrency(12 * 1024 ** 3, requested)).toBe(3);
     }
+  });
+
+  test("only the configured concurrency reads CODE_CHECK_CONCURRENCY", () => {
+    const probe = Bun.spawnSync(
+      [
+        "bun",
+        "-e",
+        `const m = await import(${JSON.stringify(path.join(import.meta.dirname, "code-check-affected.ts"))});
+console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024 ** 3));`,
+      ],
+      {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, CODE_CHECK_CONCURRENCY: "1" },
+      },
+    );
+    expect(probe.stdout.toString().trim()).toBe("1 3");
   });
 
   test("runs result consumption with the same plan scope and owner in every leg", () => {
@@ -1623,7 +1641,7 @@ const TURBO_LINT_TYPECHECK = [
   "run",
   "lint",
   "typecheck",
-  `--concurrency=${codeCheckConcurrency()}`,
+  `--concurrency=${configuredCodeCheckConcurrency()}`,
 ];
 
 const failure = (command: readonly string[], lines: readonly string[]) =>

@@ -865,11 +865,10 @@ const parseAffectedWorkspacePaths = (output: string): string[] => {
 };
 
 const THREE_TASK_MEMORY_BYTES = 12 * 1024 ** 3;
-// CODE_CHECK_CONCURRENCY lowers the task count on a busy host (pre-push runs
-// one task at a time); child Turbo runs inherit it.
+/** Memory-based task count; a valid request may only lower it. */
 export const codeCheckConcurrency = (
-  memoryBytes = totalmem(),
-  requested = process.env["CODE_CHECK_CONCURRENCY"],
+  memoryBytes: number,
+  requested?: string,
 ): number => {
   const memoryDefault = memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
   const override = Number(requested);
@@ -883,13 +882,18 @@ export const codeCheckConcurrency = (
   return memoryDefault;
 };
 
+// CODE_CHECK_CONCURRENCY lowers the task count on a busy host (pre-push runs
+// one task at a time); child Turbo runs inherit it.
+export const configuredCodeCheckConcurrency = (): number =>
+  codeCheckConcurrency(totalmem(), process.env["CODE_CHECK_CONCURRENCY"]);
+
 const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "bun",
   "--bun",
   "turbo",
   "run",
   ...tasks,
-  `--concurrency=${codeCheckConcurrency()}`,
+  `--concurrency=${configuredCodeCheckConcurrency()}`,
   "--summarize",
   "--remote-cache-timeout=20",
   "--log-order=stream",
@@ -1080,7 +1084,7 @@ export const scopedCommands = (
       "turbo",
       "run",
       "typecheck:repo",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
