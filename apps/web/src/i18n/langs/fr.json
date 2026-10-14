@@ -3617,6 +3617,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Créez un playbook de revue de contrats critère par critère, à partir de vos contrats déjà signés, d’un court entretien et des usages du marché.",
+          "name": "Créer un playbook"
+        }
+      },
       "builtInSection": "Compétences intégrées",
       "deleteFile": "Supprimer le fichier",
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",

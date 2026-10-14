@@ -3617,6 +3617,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Crie um playbook de revisão de contratos posição por posição, com base nos seus contratos já assinados, em uma breve entrevista e nos padrões usuais de mercado.",
+          "name": "Criar um playbook"
+        }
+      },
       "builtInSection": "Habilidades integradas",
       "deleteFile": "Excluir arquivo",
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",

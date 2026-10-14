@@ -50,7 +50,7 @@ export type ChatTab = {
         skillId?: string | undefined;
         /** The skill's identifier (its slug), never shown as its title. */
         skillName: string;
-        /** The title a person reads (`skillLabel`); absent on older tabs. */
+        /** The title a person reads (`useSkillLabel`); absent on older tabs. */
         skillDisplayName?: string | undefined;
       }
     | undefined;
@@ -130,29 +130,29 @@ type SkillResourceTabFields = {
   label: string;
   /** The skill's identifier (its slug), never shown as its title. */
   skillName: string;
-  /** The title a person reads (`skillLabel`), when it was known. */
-  skillDisplayName?: string | undefined;
   target: "body" | "resource";
   resourcePath: string;
   mimeType: string;
   content: string;
 };
 
-export type SkillResourceTab = SkillResourceTabFields & SkillResourceSource;
+/**
+ * A built-in skill's title follows the reader's language (`useSkillLabel`),
+ * so only an installed skill's tab stores one.
+ */
+type SkillResourceTabSource =
+  | { origin: typeof BUILT_IN_SKILL_ORIGIN; skillId: null }
+  | {
+      origin: SkillResourceOrigin;
+      skillId: string;
+      /** The title a person reads, when it was known. */
+      skillDisplayName?: string | undefined;
+    };
 
-/** What a skill is called on screen: its title, or its slug if none is known. */
-export const skillLabel = ({
-  skillDisplayName,
-  skillName,
-}: {
-  skillDisplayName?: string | undefined;
-  skillName: string;
-}): string => skillDisplayName ?? skillName;
+export type SkillResourceTab = SkillResourceTabFields & SkillResourceTabSource;
 
-export type InstalledSkillResourceTab = SkillResourceTabFields & {
-  origin: SkillResourceOrigin;
-  skillId: string;
-};
+export type InstalledSkillResourceTab = SkillResourceTabFields &
+  Exclude<SkillResourceTabSource, { origin: typeof BUILT_IN_SKILL_ORIGIN }>;
 
 export type GenericTab = {
   type: "view";
@@ -333,7 +333,7 @@ type InspectorTabsActions = {
   }) => void;
   openSkillResourceTab: (
     tab: Omit<SkillResourceTabFields, "type" | "id" | "target"> &
-      SkillResourceSource & {
+      SkillResourceTabSource & {
         refreshContent?: boolean | undefined;
         target?: SkillResourceTab["target"];
       },
