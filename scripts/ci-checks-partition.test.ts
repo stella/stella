@@ -11,9 +11,71 @@ import { assertProperty } from "@stll/property-testing";
 
 import { testProcessBudgets } from "../apps/api/scripts/test-process-supervisor";
 import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import { STATIC_RECEIPT_STEP_NAMES } from "./ci-static-checks";
+import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { customLintTestCommand } from "./run-custom-lint-tests";
 import { jobCachePolicy } from "./workflow-cache-policy.ts";
 import { flattenWorkflowSteps, isWorkflowBarrier } from "./workflow-steps";
+
+// Receipt wiring is checked against the real graph in ci-static-checks.test.ts;
+// this census still compares each underlying command and original condition.
+const withoutStaticReceipts = (steps: Record<string, unknown>[]) => {
+  const normalized = steps
+    .filter(
+      (step) =>
+        !STATIC_RECEIPT_STEP_NAMES.some((name) => name === step["name"]),
+    )
+    .map((step) => {
+      const result = { ...withoutStaticReuseCondition(step) };
+      const rawEnv = step["env"];
+      if (
+        typeof rawEnv === "object" &&
+        rawEnv !== null &&
+        !Array.isArray(rawEnv)
+      ) {
+        const env = Object.fromEntries(
+          Object.entries(rawEnv).filter(
+            ([key]) =>
+              ![
+                "CI_CHECK_KIND",
+                "CI_CHECK_INPUTS",
+                "CI_CHECK_CONTEXT",
+              ].includes(key),
+          ),
+        );
+        if (Object.keys(env).length === 0) {
+          delete result["env"];
+        } else {
+          result["env"] = env;
+        }
+      }
+      if (typeof result["if"] === "string") {
+        result["if"] = result["if"].replace(
+          "(steps.standalone_lockfiles.outcome == 'success' || steps.static_receipts.outputs.reuse_standalone_lockfiles == 'true')",
+          "steps.standalone_lockfiles.outcome == 'success'",
+        );
+      }
+      if (
+        typeof result["id"] === "string" &&
+        result["id"].startsWith("static_check_")
+      ) {
+        delete result["id"];
+      }
+      return result;
+    });
+  // Bun must precede the receipt resolver and the install-free shell guards.
+  const localGuard = normalized.findIndex(
+    (step) => step["name"] === "Check local skill overrides",
+  );
+  const setup = normalized.findIndex((step) => step["name"] === "Setup Bun");
+  if (localGuard !== -1 && setup !== -1 && setup < localGuard) {
+    const [bun] = normalized.splice(setup, 1);
+    if (bun) {
+      normalized.splice(localGuard, 0, bun);
+    }
+  }
+  return normalized;
+};
 
 const cancellationJobSchema = (canonical: object) =>
   v.pipe(
@@ -44,7 +106,36 @@ const cancellationJobSchema = (canonical: object) =>
       return { ...job, permissions, steps: job.steps.slice(0, -1) };
     }),
   );
-const headJobSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
+const headCancellationSchema = cancellationJobSchema(CANONICAL_CANCEL_STEP);
+const partitionJobSchema = (
+  cancellation: ReturnType<typeof cancellationJobSchema>,
+) =>
+  v.pipe(
+    cancellation,
+    v.transform((job) => {
+      const result = { ...job };
+      result.steps = v.parse(
+        v.array(v.looseObject({ name: v.string() })),
+        withoutStaticReceipts(job.steps),
+      );
+      if (
+        "env" in job &&
+        typeof job["env"] === "object" &&
+        job["env"] !== null
+      ) {
+        result["env"] = Object.fromEntries(
+          Object.entries(job["env"]).filter(
+            ([key]) =>
+              !["CI_CANCELLATION_KIND", "CI_CANCELLATION_CONTEXT"].includes(
+                key,
+              ),
+          ),
+        );
+      }
+      return result;
+    }),
+  );
+const headJobSchema = partitionJobSchema(headCancellationSchema);
 const workflowSchema = v.object({ jobs: v.record(v.string(), v.unknown()) });
 const removalSchema = v.array(
   v.object({ name: v.string(), reason: v.pipe(v.string(), v.minLength(1)) }),
@@ -211,7 +302,8 @@ const baseCancellation = v.parse(
     `data:text/javascript;base64,${Buffer.from(baseCancellationSource).toString("base64")}`
   ),
 ).CANONICAL_CANCEL_STEP;
-const baseJobSchema = cancellationJobSchema(baseCancellation);
+const baseCancellationSchema = cancellationJobSchema(baseCancellation);
+const baseJobSchema = partitionJobSchema(baseCancellationSchema);
 const parseJobs = (source: string) =>
   v.parse(workflowSchema, Bun.YAML.parse(source)).jobs;
 const jobs = parseJobs(
@@ -2217,7 +2309,7 @@ test("documentation policy widens only its package gate and retains successful i
 });
 
 const expectCancellationNormalization = (
-  schema: typeof headJobSchema,
+  schema: ReturnType<typeof cancellationJobSchema>,
   candidateJobs: Record<string, unknown>,
 ) => {
   for (const id of partitionIds) {
@@ -2251,11 +2343,11 @@ const expectCancellationNormalization = (
 };
 
 test("baseline cancellation normalization uses its own owner and rejects changed tails", () => {
-  expectCancellationNormalization(baseJobSchema, baseJobs);
+  expectCancellationNormalization(baseCancellationSchema, baseJobs);
 });
 
 test("head cancellation normalization is valid as the next base and rejects changed tails", () => {
-  expectCancellationNormalization(headJobSchema, jobs);
+  expectCancellationNormalization(headCancellationSchema, jobs);
 });
 
 test("already hydrated merge-base jobs retain their generated manifest environment", () => {

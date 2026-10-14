@@ -1627,6 +1627,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "TEST_API_ERROR",
   "TEST_LATER",
   "CI_GENERATED_SOURCES_MANIFEST",
+  // Queue proof outcomes and resolved hosted-runner image for static receipts.
+  "CHECK_OUTCOMES",
+  "ImageOS",
+  "ImageVersion",
   // Internal handoff between the code-quality supervisor and its process group.
   "CODE_QUALITY_PROCESS_GROUP",
   // CI installer budget selected from restored package-cache contents.
