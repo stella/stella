@@ -70,20 +70,24 @@ export const useLoadSampleCase = ({
 
   const loadFacts = async (listId: string): Promise<boolean> => {
     // Every page, so a fact past the first one is not created twice.
-    const items = (
-      await queryClient.infiniteQuery({
-        ...legalListItemsOptions({
-          workspaceId,
-          listId,
-          viewer: {
-            userId: user.id,
-            organizationId: user.activeOrganizationId,
-          },
-        }),
-        pages: SAMPLE_LIST_MAX_PAGES,
-        staleTime: 0,
-      })
-    ).pages.flatMap((page) => page.items);
+    const { pages } = await queryClient.infiniteQuery({
+      ...legalListItemsOptions({
+        workspaceId,
+        listId,
+        viewer: {
+          userId: user.id,
+          organizationId: user.activeOrganizationId,
+        },
+      }),
+      pages: SAMPLE_LIST_MAX_PAGES,
+      staleTime: 0,
+    });
+    // A list past the page cap is not the sample any more: write nothing
+    // rather than guess which facts it holds.
+    if (pages.at(-1)?.nextCursor) {
+      return true;
+    }
+    const items = pages.flatMap((page) => page.items);
     const writes = sampleFactWrites(SAMPLE_FACTS, items);
     const writeDetails = async (fact: SampleFact, itemEntityId: string) =>
       unwrapEden(
