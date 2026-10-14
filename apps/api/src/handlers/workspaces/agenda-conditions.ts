@@ -25,3 +25,10 @@ export const openAgendaTask = () =>
 
 /** Due today or later in the database's calendar. */
 export const dueFromToday = () => gte(entities.dueDate, sql`CURRENT_DATE`);
+
+/**
+ * Due yesterday or later in the database's calendar: wide enough for any
+ * reader time zone, whose own today the client then applies exactly.
+ */
+export const dueFromYesterday = () =>
+  gte(entities.dueDate, sql`CURRENT_DATE - 1`);

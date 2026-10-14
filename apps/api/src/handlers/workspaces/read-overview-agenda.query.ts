@@ -4,7 +4,7 @@ import { and, isNull, or } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import {
-  dueFromToday,
+  dueFromYesterday,
   openAgendaTask,
 } from "@/api/handlers/workspaces/agenda-conditions";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -18,7 +18,8 @@ type ReadOverviewAgendaOptions = {
 /**
  * The matter's upcoming agenda, read on its own rather than filtered from
  * recent activity, so an older open task is not pushed out by newer edits.
- * Nearest due date first; undated open tasks follow.
+ * Nearest due date first; undated open tasks follow. Rows due yesterday by
+ * the database's calendar are kept so the reader can apply its own today.
  */
 export const readOverviewAgenda = async ({
   scopedDb,
@@ -32,7 +33,7 @@ export const readOverviewAgenda = async ({
           RAW: () =>
             and(
               openAgendaTask(),
-              or(isNull(entities.dueDate), dueFromToday()),
+              or(isNull(entities.dueDate), dueFromYesterday()),
             ) ?? panic("Agenda condition is never empty"),
         },
         columns: { id: true, name: true, status: true, dueDate: true },

@@ -1,5 +1,5 @@
 import { afterAll, afterEach, beforeAll, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
@@ -51,6 +51,7 @@ const entityId = () => {
 test("the agenda keeps an older open task that newer activity would push out", async () => {
   const olderTaskId = entityId();
   const undatedTaskId = entityId();
+  const databaseYesterdayTaskId = entityId();
   const busyIds = Array.from(
     { length: LIMITS.overviewRecentEntities + 2 },
     entityId,
@@ -70,6 +71,14 @@ test("the agenda keeps an older open task that newer activity would push out", a
       dueDate: "2999-01-01",
       status: "open",
       updatedAt: new Date("2000-01-01T00:00:00.000Z"),
+    },
+    {
+      id: databaseYesterdayTaskId,
+      workspaceId: ids.wsA1,
+      kind: "task",
+      name: "Due yesterday by the database calendar",
+      dueDate: sql`CURRENT_DATE - 1`,
+      status: "open",
     },
     {
       id: undatedTaskId,
@@ -138,8 +147,11 @@ test("the agenda keeps an older open task that newer activity would push out", a
   });
 
   const agendaIds = agenda.map(({ entityId: id }) => id);
-  // The dated task leads; the fixture's own undated tasks may follow it.
-  expect(agendaIds.at(0)).toBe(olderTaskId);
+  // Dated tasks lead; the fixture's own undated tasks may follow them.
+  expect(agendaIds.indexOf(olderTaskId)).toBeGreaterThanOrEqual(0);
+  expect(agendaIds.indexOf(olderTaskId)).toBeLessThan(
+    agendaIds.indexOf(undatedTaskId),
+  );
   for (const excluded of [
     factId,
     eventId,
@@ -150,6 +162,8 @@ test("the agenda keeps an older open task that newer activity would push out", a
   ]) {
     expect(agendaIds).not.toContain(excluded);
   }
+  // A reader behind the database's calendar still sees its own today.
+  expect(agendaIds).toContain(databaseYesterdayTaskId);
   // Undated open tasks follow the dated ones.
   expect(agendaIds).toContain(undatedTaskId);
   expect(agendaIds.indexOf(undatedTaskId)).toBeGreaterThan(0);
