@@ -16,7 +16,7 @@ import type { CaseLawResultsLine } from "@/features/case-law/search-warnings.log
  * Pane widths the results toolbar is measured at: a phone, a split pane and
  * a desktop. The geometry spec reads each one by its width.
  */
-export const PUBLIC_LAW_TOOLBAR_BENCH_WIDTHS = [360, 600, 1024] as const;
+const PUBLIC_LAW_TOOLBAR_BENCH_WIDTHS = [360, 600, 1024] as const;
 
 const BENCH_LAYOUT: PublicLawTableLayout = {
   hidden: [],
