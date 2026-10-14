@@ -128,6 +128,8 @@ describe("resolveProvisionCitation", () => {
     "§ 2910 a násl. OZ",
     "§ 316 ZP a § 317 ZP",
     "§ 316 odst. 2, odst. 3 ZP",
+    "§ 316 odst. 2 ZP a odst. 3 ZP",
+    "§ 52 písm. g) ZP nebo písm. h) ZP",
     "§ 52 písm. g), písm. h) ZP",
     "§ 52 písm. g a h ZP",
     "§ 52 písm. g–h ZP",
@@ -197,6 +199,13 @@ describe("resolveProvisionCitation", () => {
   test("a shorter spelling inside a longer match is the same name, not a second act", () => {
     expect(resolved("§ 316 zákoníku práce")).toMatchObject({
       workIdentifier: "262/2006 Sb.",
+    });
+  });
+
+  test("a later sentence designator refines the same provision", () => {
+    expect(resolved("§ 316 odst. 2 ZP, věta druhá")).toMatchObject({
+      section: 316,
+      subsection: "2",
     });
   });
 

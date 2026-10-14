@@ -123,6 +123,12 @@ type CompiledResolver = {
    * after `a` is a preposition (`§ 316 a v souladu`), not a provision.
    */
   letterContinuation: RegExp;
+  /**
+   * A subdivision reference with its value anywhere later in the citation
+   * (`§ 316 odst. 2 ZP a odst. 3 ZP`): a second provision past the act name.
+   * Sentences are left out: a later `věta druhá` refines the same provision.
+   */
+  laterSubdivision: RegExp;
   sectionUnits: ReadonlyMap<string, SectionUnit>;
   subdivisions: readonly {
     pattern: RegExp;
@@ -147,6 +153,16 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
     ),
     continuation: new RegExp(
       String.raw`^\s*(?:(?:${alternation(profile.andFollowingMarkers)})|(?:[,;]|[-–—]|(?:${connectorSource(profile)})(?=\s))\s*(?:${alternation(profile.sectionTerms.map(({ text }) => text))}|${alternation(profile.subdivisionTerms.map(({ text }) => text))}|\d|[a-z]\)))`,
+      "iu",
+    ),
+    laterSubdivision: new RegExp(
+      String.raw`(?<![\p{L}\p{N}])(?:${profile.subdivisionTerms
+        .filter(({ level }) => level !== "sentence")
+        .map(
+          ({ text, level }) =>
+            String.raw`(?:${termSource(text)})\s*${SUBDIVISION_VALUES[level]}`,
+        )
+        .join("|")})(?![\p{L}\p{N}])`,
       "iu",
     ),
     letterContinuation: new RegExp(
@@ -599,7 +615,8 @@ export const resolveProvisionCitation = ({
     (path.letter !== null && resolver.letterContinuation.test(after)) ||
     // A second provision anywhere after the first (`§ 316 ZP a § 317 ZP`),
     // past an act name the continuation check cannot see across.
-    resolver.section.test(after)
+    resolver.section.test(after) ||
+    resolver.laterSubdivision.test(after)
   ) {
     return { status: "multiple_provisions" };
   }
