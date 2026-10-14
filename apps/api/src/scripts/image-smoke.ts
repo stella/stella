@@ -22,6 +22,7 @@ import {
 } from "@stll/anonymize";
 import { validateIco } from "@stll/business-registries/ares";
 import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "@stll/sanctions";
+import { TextSearch } from "@stll/text-search";
 
 import { OCR_LOCAL_MODEL_FILES } from "@/api/lib/document-processing-contract";
 import { yaraRuleFileCount, yaraScanner } from "@/api/lib/file-scan/yara";
@@ -172,6 +173,24 @@ await probe("anonymize native engine", () => {
   const binding = loadNativeAnonymizeBinding();
   if (!isNativeAnonymizeBinding(binding)) {
     panic("anonymize native loader returned an unexpected binding shape");
+  }
+});
+
+// Literal tenant identifier redaction uses Aho-Corasick; both matching and
+// replacement must execute through the native binding in the compiled image.
+await probe("text-search native binding", () => {
+  const tenantId = "12345678-1234-5678-9abc-123456789abc";
+  const search = new TextSearch([tenantId], { allLiteral: true });
+  const input = `matter ${tenantId}; tenant ${tenantId}`;
+  if (!search.isMatch(input)) {
+    panic("text-search did not match a tenant identifier");
+  }
+  if (
+    // oxlint-disable-next-line require-function-replacer/require-function-replacer -- TextSearch takes literal replacement arrays, not String replacement syntax.
+    search.replaceAll(input, ["[redacted]"]) !==
+    "matter [redacted]; tenant [redacted]"
+  ) {
+    panic("text-search did not redact every tenant identifier");
   }
 });
 
