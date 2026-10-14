@@ -140,7 +140,10 @@ test("glossary and catalogue generation inputs cover their runtime import closur
         `${id}: ${file}`,
       ).toBe(true);
       for (const { path: specifier } of transpiler.scanImports(
-        readFileSync(nodePath.join(repoRoot, file), "utf-8"),
+        readFileSync(nodePath.join(repoRoot, file), "utf-8").replace(
+          /^#![^\n]*/u,
+          "",
+        ),
       )) {
         if (!specifier.startsWith(".") && !specifier.startsWith("@stll/")) {
           continue;
@@ -197,7 +200,10 @@ test("MCP app parser schema imports are registered generation inputs", () => {
     }
     visited.add(file);
     for (const { path: specifier } of transpiler.scanImports(
-      readFileSync(nodePath.join(repoRoot, file), "utf-8"),
+      readFileSync(nodePath.join(repoRoot, file), "utf-8").replace(
+        /^#![^\n]*/u,
+        "",
+      ),
     )) {
       if (!specifier.startsWith(".")) {
         continue;
