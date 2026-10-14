@@ -98,6 +98,11 @@ export const LIST_ITEM_TYPES = Object.freeze([
 
 export type ListItemType = (typeof LIST_ITEM_TYPES)[number];
 
+/** Agenda surfaces show plain tasks and task list items, never reference rows. */
+export const isAgendaListItemType = (
+  listItemType: ListItemType | null,
+): boolean => listItemType === null || listItemType === LIST_ITEM_TYPE.TASK;
+
 export const isListItemType = (value: unknown): value is ListItemType =>
   typeof value === "string" &&
   LIST_ITEM_TYPES.some((itemType) => itemType === value);

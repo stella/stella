@@ -59,7 +59,7 @@ export default eslintCompatPlugin({
             if (
               !(
                 filename.includes("apps/web/src/") ||
-                filename.includes("apps/api/src/mcp/apps/") ||
+                filename.includes("packages/mcp-apps/src/") ||
                 filename.endsWith(
                   "/.oxlint-plugins/__fixtures__/no-hand-built-date-range-filter.fixture.tsx",
                 )

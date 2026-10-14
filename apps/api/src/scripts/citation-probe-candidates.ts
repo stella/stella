@@ -83,6 +83,11 @@ const BENIGN: readonly RegExp[] = [
   // "KU", which no court registry does, and the reference is not a court
   // docket the corpus can hold.
   /^[čc]\.\s{0,3}j\.:?\s{0,3}KU\p{Lu}{2,4}\s{1,3}\d{1,7}\/\d{4}(?![\p{L}\d/-])/u,
+  // Slovak enforcement-officer ("sp. zn. EX 1234/23") and arbitration-court
+  // ("sp. zn. SR 01234/08") file numbers: the registry code opens the
+  // reference with no chamber number, which every court docket carries, and
+  // neither file is a decision the corpus can hold.
+  /^sp\.\s{0,3}zn\.\s{0,3}(?:EX|SR)\s{1,3}\d{1,6}\/\d{2,4}(?![\p{L}\d/-])/u,
   // A purely numeric "number/two-digit-year" after a case-number prefix
   // ("sygn. akt 12345/01", "sp. zn. 12345/01"): the application-number
   // form of the international human-rights court, outside the corpus.
