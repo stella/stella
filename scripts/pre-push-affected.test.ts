@@ -154,15 +154,25 @@ describe("pre-push affected checks", () => {
       expect(result.timedOut).toBe(true);
       expect(result.status).not.toBe(0);
       const grandchild = Number(readFileSync(pidFile, "utf-8").trim());
-      const alive = () => {
-        try {
-          process.kill(grandchild, 0);
-          return true;
-        } catch {
-          return false;
-        }
+      // A killed orphan stays a zombie until its new parent reaps it, and a
+      // container's first process may never do that; only a live state counts.
+      const running = () => {
+        const state = Bun.spawnSync(
+          ["ps", "-o", "stat=", "-p", String(grandchild)],
+          {
+            stdout: "pipe",
+            stderr: "ignore",
+          },
+        )
+          .stdout.toString()
+          .trim();
+        return state !== "" && !state.startsWith("Z");
       };
-      expect(alive()).toBe(false);
+      const settled = Date.now() + 5000;
+      while (running() && Date.now() < settled) {
+        await Bun.sleep(50);
+      }
+      expect(running()).toBe(false);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
