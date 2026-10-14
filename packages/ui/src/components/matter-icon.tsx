@@ -1,7 +1,6 @@
-import { LayersIcon } from "@stll/ui/icons";
-import { cn } from "@stll/ui/utils";
-
-import { resolveMatterColor } from "@/lib/matter-colors";
+import { LayersIcon } from "../icons";
+import { resolveMatterColor } from "../lib/matter-colors";
+import { cn } from "../lib/utils";
 
 // The one and only place allowed to render the matter (layers) glyph.
 //
