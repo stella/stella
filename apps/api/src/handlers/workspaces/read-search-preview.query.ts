@@ -1,22 +1,12 @@
 import { panic } from "better-result";
-import {
-  and,
-  asc,
-  desc,
-  eq,
-  gte,
-  isNotNull,
-  isNull,
-  notInArray,
-  or,
-  sql,
-} from "drizzle-orm";
-
-import { TASK_STATUS } from "@stll/api-contract";
-import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
+import { and, asc, desc, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
+import {
+  dueFromToday,
+  openAgendaTask,
+} from "@/api/handlers/workspaces/agenda-conditions";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import type {
@@ -119,21 +109,9 @@ export const readSearchPreviewHandler = async ({
           .where(
             and(
               eq(entities.workspaceId, workspaceId),
-              eq(entities.kind, "task"),
-              // Reference list items (facts, issues, ...) are never agenda.
-              or(
-                isNull(entities.listItemType),
-                eq(entities.listItemType, LIST_ITEM_TYPE.TASK),
-              ),
+              openAgendaTask(),
               isNotNull(entities.dueDate),
-              gte(entities.dueDate, sql`CURRENT_DATE`),
-              or(
-                isNull(entities.status),
-                notInArray(entities.status, [
-                  TASK_STATUS.DONE,
-                  TASK_STATUS.CANCELLED,
-                ]),
-              ),
+              dueFromToday(),
             ),
           )
           .orderBy(asc(entities.dueDate), asc(entities.id))

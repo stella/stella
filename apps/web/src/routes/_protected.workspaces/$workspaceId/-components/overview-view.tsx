@@ -92,7 +92,6 @@ import {
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { ActivityPanel } from "@/routes/_protected.workspaces/$workspaceId/-components/activity/activity-panel";
 
-import { selectUpcomingAgenda } from "./overview-agenda.logic";
 import { OverviewTimeRead, OverviewTimeTrend } from "./overview-time-read";
 
 type OverviewViewProps = {
@@ -329,10 +328,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   });
 
-  const tasks = useMemo(
-    () => selectUpcomingAgenda(data.recentEntities, today),
-    [data.recentEntities, today],
-  );
+  // The API reads the agenda on its own: open tasks due today or later,
+  // nearest first, undated last.
+  const tasks = data.upcomingAgenda;
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.

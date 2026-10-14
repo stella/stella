@@ -3,6 +3,7 @@ import { eq, sql } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
+import { readOverviewAgenda } from "@/api/handlers/workspaces/read-overview-agenda.query";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -15,8 +16,11 @@ export const readOverviewHandler = async ({
   scopedDb,
   workspaceId,
 }: ReadOverviewHandlerProps) => {
-  const { entityCount, documentCount, taskCount, recentEntities } =
-    await scopedDb(async (tx) => {
+  const [
+    { entityCount, documentCount, taskCount, recentEntities },
+    upcomingAgenda,
+  ] = await Promise.all([
+    scopedDb(async (tx) => {
       const [totals, recent] = await Promise.all([
         tx
           .select({
@@ -107,7 +111,9 @@ export const readOverviewHandler = async ({
         taskCount: totals.taskCount,
         recentEntities: recent,
       };
-    });
+    }),
+    readOverviewAgenda({ scopedDb, workspaceId }),
+  ]);
 
   const recent = recentEntities.map((e) => {
     const cv = e.currentVersion ?? panic("Entity has no currentVersion");
@@ -175,5 +181,6 @@ export const readOverviewHandler = async ({
     documentCount,
     taskCount,
     recentEntities: recent,
+    upcomingAgenda,
   };
 };

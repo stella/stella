@@ -331,6 +331,7 @@ export const LIMITS = {
   billingCodesPageSizeDefault: 500,
   billingCodesPageSizeMax: 1000,
   overviewRecentEntities: 10,
+  overviewUpcomingAgenda: 10,
   matterSearchPreviewAgendaItems: 3,
   matterSearchPreviewDocuments: 3,
   /** Initial number of mixed chat/entity rows shown beneath one matter in
