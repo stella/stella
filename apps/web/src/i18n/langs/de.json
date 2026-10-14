@@ -3617,6 +3617,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Erstellen Sie Standpunkt für Standpunkt ein Playbook für die Vertragsprüfung, gestützt auf Ihre bereits unterzeichneten Verträge, ein kurzes Gespräch und marktübliche Standards.",
+          "name": "Playbook erstellen"
+        }
+      },
       "builtInSection": "Integrierte Skills",
       "deleteFile": "Datei löschen",
       "deleteFileConfirm": "Datei löschen? Dies kann nicht rückgängig gemacht werden.",

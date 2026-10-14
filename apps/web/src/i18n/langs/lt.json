@@ -3169,14 +3169,14 @@
         "steps": {
           "basics": {
             "body": "Pridėkite pavadinimą ir aprašą. Jei reikia, apribokite vienu dokumento tipu.",
-            "title": "Pavadinkite planą"
+            "title": "Pavadinkite peržiūros vadovą"
           },
           "create": {
-            "body": "Pradėkite nuo tuščio plano.",
-            "title": "Sukurkite planą"
+            "body": "Pradėkite nuo tuščio peržiūros vadovo.",
+            "title": "Sukurkite peržiūros vadovą"
           },
           "overview": {
-            "body": "Plane išsaugomi klausimai ir taisyklės kitiems dokumentams.",
+            "body": "Peržiūros vadove išsaugomi klausimai ir taisyklės kitiems dokumentams.",
             "title": "Išsaugokite peržiūros procesą"
           },
           "positions": {
@@ -3184,7 +3184,7 @@
             "title": "Pridėkite peržiūros taisykles"
           }
         },
-        "title": "Sukurkite planą"
+        "title": "Sukurkite peržiūros vadovą"
       },
       "tabularReview": {
         "description": "Išgaukite atsakymus iš daugelio failų vienu metu",
@@ -3617,6 +3617,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Kurkite sutarčių peržiūros vadovą pozicija po pozicijos, remdamiesi anksčiau pasirašytomis sutartimis, trumpu pokalbiu ir įprastais rinkos standartais.",
+          "name": "Kurti peržiūros vadovą"
+        }
+      },
       "builtInSection": "Integruoti įgūdžiai",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
@@ -4445,7 +4451,7 @@
         "governingLaw": "Taikytina teisė",
         "liabilityCap": "Atsakomybės viršutinė riba",
         "missing": "Nepateikta",
-        "outsidePlaybook": "Neatitinka gairių",
+        "outsidePlaybook": "Neatitinka peržiūros vadovo",
         "termination": "Nutraukimas"
       },
       "searchPlaceholder": "Ką reikia daryti?",

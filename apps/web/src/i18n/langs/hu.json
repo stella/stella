@@ -3617,6 +3617,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Hozzon létre szerződés-felülvizsgálati playbookot álláspontról álláspontra, a korábban aláírt szerződései, egy rövid interjú és a szokásos piaci standardok alapján.",
+          "name": "Playbook létrehozása"
+        }
+      },
       "builtInSection": "Beépített készségek",
       "deleteFile": "Fájl törlése",
       "deleteFileConfirm": "Törli a fájlt? Ez nem vonható vissza.",
