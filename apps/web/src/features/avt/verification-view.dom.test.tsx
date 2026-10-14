@@ -638,8 +638,10 @@ test("a DOCX verification offers its original beside the reading view; a PDF one
 const nextFrame = async () => {
   await act(
     async () =>
-      await new Promise((resolve) => {
-        requestAnimationFrame(resolve);
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
       }),
   );
 };
