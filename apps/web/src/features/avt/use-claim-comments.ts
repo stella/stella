@@ -189,7 +189,8 @@ export const useClaimComments = ({
     comments: optionalArray(comments).filter(
       (row) => row.kind === "comment" && row.body !== null,
     ),
-    create: (body, visibility) => create.mutateAsync({ body, visibility }),
+    create: async (body, visibility) =>
+      create.mutateAsync({ body, visibility }),
     remove: remove.mutateAsync,
     update: update.mutateAsync,
   };
