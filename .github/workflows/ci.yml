@@ -2694,6 +2694,17 @@ jobs:
           bun test scripts/check-gh-retry.test.ts scripts/gh-retry.test.ts scripts/promote-dispatch.test.ts
           bun scripts/check-gh-retry.ts
 
+      # Network fetches retry through scripts/retry.sh and carry a step
+      # timeout; the allowlist may only shrink against the measured base.
+      - name: CI network step retries and timeouts
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        run: |
+          bun test scripts/check-ci-network-steps.test.ts
+          bun scripts/check-ci-network-steps.ts --base "$RATCHET_BASE_REF"
+
       - name: Sparse checkout script dependencies
         env:
           CI_CHECK_KIND: STATIC

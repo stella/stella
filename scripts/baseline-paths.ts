@@ -37,6 +37,8 @@ export const BASELINE_PATHS = {
   knipExports: "scripts/knip-exports-baseline.json",
   /** scripts/offline-check-policy.ts */
   offlineCheckImports: "scripts/offline-check-import-allowlist.json",
+  /** scripts/check-ci-network-steps.ts */
+  ciNetworkSteps: "scripts/ci-network-steps-allowlist.json",
   /** scripts/rc-bailouts.ts */
   reactCompilerBailouts: "scripts/react-compiler-bailouts.json",
   /** scripts/design-lint-baseline.ts */
