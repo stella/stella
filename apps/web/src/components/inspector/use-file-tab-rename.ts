@@ -5,6 +5,10 @@ import type {
   FileTab,
   InspectorTab,
 } from "@/components/inspector/inspector-tabs-store";
+import {
+  resolveFileRenameSubmission,
+  splitFileName,
+} from "@/lib/files/file-name-edit";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
 type UseFileTabRenameOptions = {
@@ -17,8 +21,7 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
   const renameEntity = useRenameEntity();
 
   const startRename = useCallback((tab: FileTab) => {
-    const dotIndex = tab.label.lastIndexOf(".");
-    setEditValue(dotIndex > 0 ? tab.label.slice(0, dotIndex) : tab.label);
+    setEditValue(splitFileName(tab.label).baseName);
     setEditingTabId(tab.id);
   }, []);
 
@@ -44,26 +47,18 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
   }, [pendingRenameTabId, tabs, startRename]);
 
   const commitRename = (tab: FileTab) => {
-    const trimmed = editValue.trim();
-    if (!trimmed) {
-      setEditingTabId(null);
-      return;
-    }
-
-    const dotIndex = tab.label.lastIndexOf(".");
-    const ext = dotIndex > 0 ? tab.label.slice(dotIndex) : "";
-    const newName = trimmed + ext;
-
     setEditingTabId(null);
-
-    if (newName === tab.label) {
+    const submission = resolveFileRenameSubmission({
+      draft: editValue,
+      currentName: tab.label,
+    });
+    if (submission.type === "discard") {
       return;
     }
-
     renameEntity.mutate({
       workspaceId: tab.workspaceId,
       entityId: tab.entityId,
-      name: newName,
+      name: submission.name,
     });
   };
 

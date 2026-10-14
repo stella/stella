@@ -12,16 +12,19 @@ import {
 import {
   canRenameDocumentCrumb,
   resolveCrumbRenameShortcut,
-  resolveDocumentRenameSubmission,
-  splitFileName,
 } from "@/components/breadcrumbs/pdf-breadcrumb.logic";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
+import { fileExtensionSuffix } from "@/components/file-extension-suffix";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import {
+  resolveFileRenameSubmission,
+  splitFileName,
+} from "@/lib/files/file-name-edit";
 import { useQueryView } from "@/lib/use-query-view";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
@@ -58,12 +61,12 @@ export const PdfBreadcrumb = () => {
   const renameEntity = useRenameEntity();
 
   const storedName = fileName ?? fieldId;
-  const { baseName, extension } = splitFileName(storedName);
+  const { baseName } = splitFileName(storedName);
 
   const rename = useInlineRename({
     initial: baseName,
     onCommit: (value) => {
-      const submission = resolveDocumentRenameSubmission({
+      const submission = resolveFileRenameSubmission({
         draft: value,
         currentName: storedName,
       });
@@ -113,13 +116,7 @@ export const PdfBreadcrumb = () => {
                 onCommit={() => {
                   detached(rename.commit(), "pdf-breadcrumb.commit");
                 }}
-                suffix={
-                  extension ? (
-                    <span className="text-muted-foreground text-xs">
-                      {extension}
-                    </span>
-                  ) : undefined
-                }
+                suffix={fileExtensionSuffix(storedName)}
                 value={rename.state.draft}
               />
             );
