@@ -89,7 +89,7 @@ const spawnOxlint = async (
 // tests queue here, and cases that share a configuration join one run.
 let oxlintSlot: Promise<unknown> = Promise.resolve();
 
-const withOxlintSlot = <T>(run: () => Promise<T>): Promise<T> => {
+const withOxlintSlot = async <T>(run: () => Promise<T>): Promise<T> => {
   const next = oxlintSlot.then(run);
   oxlintSlot = next.catch(() => undefined);
   return next;
@@ -226,7 +226,7 @@ const lintTogether = async (
 
 const pendingByConfig = new Map<string, SharedRequest[]>();
 
-const nextTurn = () =>
+const nextTurn = async () =>
   new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
@@ -236,7 +236,7 @@ const nextTurn = () =>
  * configuration. Each case keeps its own scratch root and file name, so a
  * shared run sees the same paths and source as the lone runs it replaces.
  */
-const lintShared = (
+const lintShared = async (
   configKey: string,
   code: string,
   lintCase: LintCase,
@@ -253,7 +253,7 @@ const lintShared = (
       await nextTurn();
       const requests = pendingByConfig.get(configKey) ?? [];
       pendingByConfig.delete(configKey);
-      const outcomes = await Result.tryPromise(() =>
+      const outcomes = await Result.tryPromise(async () =>
         lintTogether(requests, code),
       );
       for (const [index, request] of requests.entries()) {
@@ -339,7 +339,7 @@ export const runSingleRule = async (
     // Scratch-relative paths and override globs depend on the case's own
     // root, so those cases keep a run of their own.
     return cwd === "scratch" || overrides !== undefined
-      ? { alone: await withOxlintSlot(() => lintAlone(lintCase)) }
+      ? { alone: await withOxlintSlot(async () => lintAlone(lintCase)) }
       : await lintShared(
           `${fix ? "fix" : "check"}\n${config}`,
           `${plugin}(${ruleName})`,
@@ -437,7 +437,7 @@ export const lintRuleAcrossFiles = async (
     for (const name of names) {
       await Bun.write(path.join(directory, name), files[name] ?? "");
     }
-    const { stdout, exitCode } = await withOxlintSlot(() =>
+    const { stdout, exitCode } = await withOxlintSlot(async () =>
       spawnOxlint(
         [
           "-c",
