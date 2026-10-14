@@ -55,17 +55,30 @@ export type RobotsDirective = {
   noindex: boolean;
 };
 
+/** Every robots meta tag counts: the most restrictive directive applies. */
 export const readRobotsMeta = (html: string): RobotsDirective => {
-  const tags = html.match(/<meta\b[^>]*>/giu) ?? [];
-  for (const tag of tags) {
-    if (!/name\s*=\s*["']robots["']/iu.test(tag)) {
-      continue;
-    }
-    const content = /content\s*=\s*["']([^"']*)["']/iu.exec(tag)?.[1] ?? "";
-    return { present: true, noindex: /\b(?:noindex|none)\b/iu.test(content) };
-  }
-  return { present: false, noindex: false };
+  const tags = (html.match(/<meta\b[^>]*>/giu) ?? []).filter((tag) =>
+    /name\s*=\s*["']robots["']/iu.test(tag),
+  );
+  return {
+    present: tags.length > 0,
+    noindex: tags.some((tag) =>
+      /\b(?:noindex|none)\b/iu.test(
+        /content\s*=\s*["']([^"']*)["']/iu.exec(tag)?.[1] ?? "",
+      ),
+    ),
+  };
 };
+
+/**
+ * The text of the decision itself: the reader renders the body inside an
+ * `<article>`, so page chrome around it (navigation, footer) never counts.
+ */
+export const decisionBodyText = (html: string): string =>
+  Array.from(html.matchAll(/<article\b[^>]*>([\s\S]*?)<\/article>/giu))
+    .map((match) => visibleText(match[1] ?? ""))
+    .join(" ")
+    .trim();
 
 export type DecisionMetadata = {
   caseNumber: string | null;
@@ -153,7 +166,8 @@ export const checkPage = (
   if (ok && (!hasHeading || text.length < MIN_SERVER_RENDERED_CHARS)) {
     failed.push("server-rendered");
   }
-  if (ok && text.length < MIN_DECISION_TEXT_CHARS) {
+  const bodyText = ok ? decisionBodyText(page.html) : "";
+  if (ok && bodyText.length < MIN_DECISION_TEXT_CHARS) {
     failed.push("decision-text");
   }
   if (ok) {
@@ -171,7 +185,7 @@ export const checkPage = (
       failed.push("robots");
     }
   }
-  return { url: page.url, failed, textChars: text.length };
+  return { url: page.url, failed, textChars: bodyText.length };
 };
 
 export type CheckSummary = {

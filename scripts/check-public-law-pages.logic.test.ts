@@ -26,7 +26,13 @@ const jsonLd = (overrides: Record<string, unknown> = {}) =>
   })}</script>`;
 
 const page = (
-  options: { robots?: string; body?: string; ld?: string; h1?: boolean } = {},
+  options: {
+    robots?: string;
+    body?: string;
+    ld?: string;
+    h1?: boolean;
+    chrome?: string;
+  } = {},
 ) =>
   `<!doctype html><html><head><title>t</title>${
     options.robots === undefined
@@ -34,7 +40,9 @@ const page = (
       : `<meta name="robots" content="${options.robots}">`
   }${options.ld ?? jsonLd()}<script>window.x = "${"s".repeat(5000)}"</script></head><body>${
     options.h1 === false ? "" : "<h1>Decision</h1>"
-  }<main>${options.body ?? BODY}</main></body></html>`;
+  }<main><nav>${options.chrome ?? ""}</nav><article lang="sk">${
+    options.body ?? BODY
+  }</article></main></body></html>`;
 
 const observe = (
   html: string,
@@ -75,6 +83,14 @@ describe("readRobotsMeta", () => {
       present: false,
       noindex: false,
     });
+  });
+
+  test("applies a noindex tag in either order", () => {
+    const index = '<meta name="robots" content="index,follow">';
+    const noindex = '<meta name="robots" content="noindex">';
+    for (const html of [index + noindex, noindex + index]) {
+      expect(readRobotsMeta(html)).toEqual({ present: true, noindex: true });
+    }
   });
 });
 
@@ -127,6 +143,21 @@ describe("checkPage", () => {
     expect(checkPage(observe(shell), "noindex").failed).toEqual(
       expect.arrayContaining(["server-rendered", "decision-text", "metadata"]),
     );
+  });
+
+  test("does not count page chrome as decision text", () => {
+    const result = checkPage(
+      observe(
+        page({
+          robots: "noindex",
+          chrome: "Menu item. ".repeat(200),
+          body: "",
+        }),
+      ),
+      "noindex",
+    );
+    expect(result.failed).toEqual(["decision-text"]);
+    expect(result.textChars).toBe(0);
   });
 
   test("flags trivial decision text", () => {
