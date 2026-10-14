@@ -26,6 +26,7 @@ case "$*" in
   *"/actions/runs/7"*) printf '%s\n' "$TEST_HEAVY_RUN" ;;
   *"/actions/runs/9"*) printf '%s\n' "$TEST_PR_DEPTH_RUN" ;;
   *"/actions/runs/5"*) printf '%s\n' "$TEST_MG_RUN" ;;
+  *"/actions/jobs/6"*) printf '%s\n' "$TEST_MG_JOB" ;;
   *"/compare/$TEST_CANDIDATE...main"*) printf '%s\n' "$TEST_COMPARISON" ;;
   *"/issues?"*) printf '%s\n' "$TEST_INCIDENTS" ;;
   *) echo "unexpected API request: $*" >&2; exit 1 ;;
@@ -33,7 +34,7 @@ esac
 STUB
 chmod +x "$fixture/bin/gh"
 export PATH="$fixture/bin:$PATH"
-export TEST_CANDIDATE TEST_CHECK_RUNS TEST_MG_RUN TEST_HEAVY_RUN TEST_COMPARISON TEST_HEAVY_STATUS TEST_PR_DEPTH_STATUS TEST_PR_DEPTH_RUN TEST_STATUSES TEST_REAL_GIT
+export TEST_CANDIDATE TEST_CHECK_RUNS TEST_MG_RUN TEST_MG_JOB TEST_HEAVY_RUN TEST_COMPARISON TEST_HEAVY_STATUS TEST_PR_DEPTH_STATUS TEST_PR_DEPTH_RUN TEST_STATUSES TEST_REAL_GIT
 export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 git init -q "$fixture/repo"
 cd "$fixture/repo"
@@ -57,12 +58,14 @@ reset_health() {
   TEST_COMPARISON=$(jq -nc --arg sha "$TEST_CANDIDATE" '{status:"ahead",merge_base_commit:{sha:$sha}}')
   export TEST_INCIDENTS='[[]]' TEST_API_ERROR=''
   TEST_CHECK_RUNS='[{"total_count":0,"check_runs":[]}]'
-  TEST_MG_RUN='{}'
+  TEST_MG_RUN='{}' TEST_MG_JOB='{}'
 }
-# A merge-group ci-result receipt on the candidate itself.
+# A merge-group ci-result receipt on the candidate itself. The run link names
+# Actions job 6, whose check_run_url points at check run 4.
 use_receipt() {
+  TEST_MG_JOB=$(jq -nc --arg sha "$TEST_CANDIDATE" '{id:6,run_id:5,head_sha:$sha,check_run_url:"https://api.github.com/repos/stella/stella/check-runs/4"}')
   TEST_MG_RUN=$(jq -nc --arg sha "$TEST_CANDIDATE" '{id:5,repository:{full_name:"stella/stella"},path:".github/workflows/ci.yml",event:"merge_group",head_sha:$sha,head_branch:"gh-readonly-queue/main/pr-1-base",status:"completed",conclusion:"success",check_suite_id:3}')
-  TEST_CHECK_RUNS=$(jq -nc --arg sha "$TEST_CANDIDATE" '[{total_count:1,check_runs:[{id:4,name:"ci-result",head_sha:$sha,status:"completed",conclusion:"success",app:{slug:"github-actions"},check_suite:{id:3},details_url:"https://github.com/stella/stella/actions/runs/5/job/4"}]}]')
+  TEST_CHECK_RUNS=$(jq -nc --arg sha "$TEST_CANDIDATE" '[{total_count:1,check_runs:[{id:4,name:"ci-result",head_sha:$sha,status:"completed",conclusion:"success",app:{slug:"github-actions"},check_suite:{id:3},details_url:"https://github.com/stella/stella/actions/runs/5/job/6"}]}]')
 }
 reset_health
 git update-ref refs/remotes/origin/main "$main"
@@ -140,6 +143,11 @@ for expression in '.event="pull_request"' '.event="push"' '.path=".github/workfl
   use_receipt
   TEST_MG_RUN=$(jq -c "$expression" <<< "$TEST_MG_RUN")
   expect_failure "receipt run $expression" 'merge-group receipt = missing' "$TEST_CANDIDATE"
+done
+for expression in '.check_run_url="https://api.github.com/repos/stella/stella/check-runs/5"' '.run_id=7'; do
+  use_receipt
+  TEST_MG_JOB=$(jq -c "$expression" <<< "$TEST_MG_JOB")
+  expect_failure "receipt job $expression" 'merge-group receipt = missing' "$TEST_CANDIDATE"
 done
 use_receipt
 export TEST_STATUSES='[[{"context":"staging/verified","state":"failure"}]]'

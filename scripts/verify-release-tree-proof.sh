@@ -29,8 +29,14 @@ merge_group_receipt() (
     [[ "$run_link" =~ ^https://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)/actions/runs/([1-9][0-9]*)/job/([1-9][0-9]*)$ ]] \
       || refuse_receipt 'ci-result has no run link'
     run_id="${BASH_REMATCH[2]}"
-    [[ "${BASH_REMATCH[1]}" == "$repo" && "${BASH_REMATCH[3]}" == "$(jq -r '.id' <<< "$check_run")" ]] \
-      || refuse_receipt 'ci-result run link names another repository or job'
+    job_id="${BASH_REMATCH[3]}"
+    [[ "${BASH_REMATCH[1]}" == "$repo" ]] || refuse_receipt 'ci-result run link names another repository'
+    # The link names an Actions job id, not the check run id; the job binds both.
+    job=$(bash "$gh_retry_script" api "repos/$repo/actions/jobs/$job_id") || refuse_receipt "job $job_id is unavailable"
+    jq -e --argjson id "$job_id" --argjson run "$run_id" --arg sha "$sha" \
+      --arg check_run_url "https://api.github.com/repos/$repo/check-runs/$(jq -r '.id' <<< "$check_run")" '
+      .id == $id and .run_id == $run and .head_sha == $sha and .check_run_url == $check_run_url
+    ' <<< "$job" >/dev/null || refuse_receipt "job $job_id is not this ci-result in run $run_id"
     run=$(bash "$gh_retry_script" api "repos/$repo/actions/runs/$run_id") || refuse_receipt "run $run_id is unavailable"
     jq -e --argjson id "$run_id" --arg repo "$repo" --arg sha "$sha" --argjson suite "$(jq '.check_suite.id' <<< "$check_run")" '
       .id == $id and .repository.full_name == $repo and .head_sha == $sha and .check_suite_id == $suite

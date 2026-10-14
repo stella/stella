@@ -149,6 +149,9 @@ const exerciseWorkflowReuse = async ({
 type ReceiptOverrides = {
   checkRun?: Record<string, unknown>;
   run?: Record<string, unknown>;
+  job?: Record<string, unknown>;
+  // The Checks API id; the Actions job id in the run link stays 900 + index.
+  checkRunId?: number;
 };
 
 const withRepository = async (
@@ -297,6 +300,10 @@ case "$endpoint" in
     sha="\${endpoint##*/}"
     cat "$PROOF_TEST_RESPONSES/$sha"
     ;;
+  repos/stella/stella/actions/jobs/*)
+    job_id="\${endpoint##*/}"
+    cat "$PROOF_TEST_RESPONSES/job-$job_id"
+    ;;
   repos/stella/stella/actions/runs/*)
     run_id="\${endpoint##*/}"
     cat "$PROOF_TEST_RESPONSES/run-$run_id"
@@ -395,38 +402,52 @@ esac
     sha: string,
     receipts: readonly ReceiptOverrides[] = [{}],
   ) => {
-    const checkRuns = receipts.map(({ checkRun = {}, run = {} }, index) => {
-      const runId = 500 + index;
-      const jobId = 900 + index;
-      const suiteId = 700 + index;
-      writeFileSync(
-        path.join(responses, `run-${String(runId)}`),
-        JSON.stringify({
-          id: runId,
-          html_url: `https://github.com/${repository}/actions/runs/${String(runId)}`,
-          repository: { full_name: repository },
-          path: ".github/workflows/ci.yml",
-          event: "merge_group",
+    const checkRuns = receipts.map(
+      ({ checkRun = {}, run = {}, job = {}, checkRunId }, index) => {
+        const runId = 500 + index;
+        const jobId = 900 + index;
+        const suiteId = 700 + index;
+        const id = checkRunId ?? jobId;
+        writeFileSync(
+          path.join(responses, `job-${String(jobId)}`),
+          JSON.stringify({
+            id: jobId,
+            run_id: runId,
+            head_sha: sha,
+            name: "ci-result",
+            check_run_url: `https://api.github.com/repos/${repository}/check-runs/${String(id)}`,
+            ...job,
+          }),
+        );
+        writeFileSync(
+          path.join(responses, `run-${String(runId)}`),
+          JSON.stringify({
+            id: runId,
+            html_url: `https://github.com/${repository}/actions/runs/${String(runId)}`,
+            repository: { full_name: repository },
+            path: ".github/workflows/ci.yml",
+            event: "merge_group",
+            head_sha: sha,
+            head_branch: `gh-readonly-queue/main/pr-1-${base}`,
+            status: "completed",
+            conclusion: "success",
+            check_suite_id: suiteId,
+            ...run,
+          }),
+        );
+        return {
+          id,
+          name: "ci-result",
           head_sha: sha,
-          head_branch: `gh-readonly-queue/main/pr-1-${base}`,
           status: "completed",
           conclusion: "success",
-          check_suite_id: suiteId,
-          ...run,
-        }),
-      );
-      return {
-        id: jobId,
-        name: "ci-result",
-        head_sha: sha,
-        status: "completed",
-        conclusion: "success",
-        app: { slug: "github-actions" },
-        check_suite: { id: suiteId },
-        details_url: `https://github.com/${repository}/actions/runs/${String(runId)}/job/${String(jobId)}`,
-        ...checkRun,
-      };
-    });
+          app: { slug: "github-actions" },
+          check_suite: { id: suiteId },
+          details_url: `https://github.com/${repository}/actions/runs/${String(runId)}/job/${String(jobId)}`,
+          ...checkRun,
+        };
+      },
+    );
     writeFileSync(
       path.join(responses, `${sha}-check-runs`),
       JSON.stringify([
@@ -804,6 +825,15 @@ describe("merge-group receipt in place of the heavy statuses", () => {
       }
     }));
 
+  test("binds the check run through its Actions job when the two ids differ", async () =>
+    withRepository((fixture) => {
+      publishDirectTargetEvidence(fixture);
+      fixture.publishReceipts(fixture.target, [{ checkRunId: 300 }]);
+      const receipt = fixture.checkReceipt();
+      expect(receipt.exitCode, receipt.stderr.toString()).toBe(0);
+      expect(fixture.checkHealth(true).exitCode).toBe(0);
+    }));
+
   test("ignores ci-result runs of other events beside the merge-group receipt", async () =>
     withRepository((fixture) => {
       publishDirectTargetEvidence(fixture);
@@ -855,6 +885,19 @@ describe("merge-group receipt in place of the heavy statuses", () => {
         },
       ],
     ],
+    [
+      "a job bound to another check run",
+      [
+        {
+          checkRunId: 300,
+          job: {
+            check_run_url: `https://api.github.com/repos/${repository}/check-runs/301`,
+          },
+        },
+      ],
+    ],
+    ["a job of another run", [{ job: { run_id: 501 } }]],
+    ["a job for another commit", [{ job: { head_sha: "f".repeat(40) } }]],
     ["an unresolvable run link", [{ checkRun: { details_url: null } }]],
     [
       "two merge-group runs with one failing",
