@@ -32,16 +32,24 @@ export const LoadSampleCaseButton = ({
       disabled={loadSampleCase.isPending}
       onClick={() => {
         loadSampleCase.mutate(undefined, {
-          onSuccess: ({ listId, documentMissing }) => {
-            if (documentMissing) {
+          onSuccess: ({ listId, factsIncomplete, documentMissing }) => {
+            // Loading again completes what this run left out.
+            if (factsIncomplete || documentMissing) {
               notifyUserError(null, t("avt.view.loadSampleFailed"));
             }
-            updateView.mutate({
-              viewId: view.id,
-              layout: mergeLayout(view.layout, {
-                listId: toSafeId<"legalList">(listId),
-              }),
-            });
+            updateView.mutate(
+              {
+                viewId: view.id,
+                layout: mergeLayout(view.layout, {
+                  listId: toSafeId<"legalList">(listId),
+                }),
+              },
+              {
+                onError: (error) => {
+                  notifyUserError(error, t("errors.actionFailed"));
+                },
+              },
+            );
           },
           onError: (error) => {
             notifyUserError(error, t("avt.view.loadSampleFailed"));

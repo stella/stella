@@ -1,4 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Result } from "better-result";
+import { useTranslations } from "use-intl";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 import { fetchWithTimeout } from "@stll/fetch";
@@ -9,12 +11,17 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
-import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
+import { entityCreateLocalInvalidationKeys } from "@/lib/workspaces/mutations/create-file-upload-payload.logic";
+import {
+  uploadFileEntitiesBatched,
+  useBatchUploadLabels,
+} from "@/lib/workspaces/mutations/use-create-file-entities";
 import {
   legalListItemsOptions,
   legalListKeys,
   legalListsOptions,
 } from "@/lib/workspaces/queries/legal-lists";
+import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 
 const SAMPLE_LIST_NAME = "Whitfield sample facts";
 const SAMPLE_DOCUMENT_NAME = "Whitfield witness statement (sample).docx";
@@ -26,104 +33,139 @@ const SAMPLE_LIST_MAX_PAGES = 10;
 const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 
+type SampleCaseLoad = {
+  listId: string;
+  /** Some fact or its detail failed to save; a repeat load completes it. */
+  factsIncomplete: boolean;
+  /** The witness statement could not be fetched or uploaded. */
+  documentMissing: boolean;
+};
+
 /**
  * Loads the sample case into the matter: the sample fact list with every
  * fact's detail, and the sample witness statement. A repeat run completes
- * whatever a failed one left out instead of duplicating it.
+ * whatever a failed one left out instead of duplicating it. Every write
+ * settles before the load reports, so a retry never overlaps an earlier run.
  */
 export const useLoadSampleCase = (workspaceId: string) => {
   const queryClient = useQueryClient();
+  const t = useTranslations();
   const user = useAuthenticatedUser();
-  const [, createFileEntities] = useCreateFileEntities(workspaceId);
+  const labels = useBatchUploadLabels();
   const scope = { workspaceId: toSafeId<"workspace">(workspaceId) };
 
-  return useMutation({
-    mutationKey: ["avt", "sample-case", workspaceId],
-    mutationFn: async (): Promise<{
-      listId: string;
-      documentMissing: boolean;
-    }> => {
-      const lists = await queryClient.fetchQuery(
-        legalListsOptions(workspaceId),
+  const loadFacts = async (listId: string): Promise<boolean> => {
+    // Every page, so a fact past the first one is not created twice.
+    const items = (
+      await queryClient.infiniteQuery({
+        ...legalListItemsOptions({
+          workspaceId,
+          listId,
+          viewer: {
+            userId: user.id,
+            organizationId: user.activeOrganizationId,
+          },
+        }),
+        pages: SAMPLE_LIST_MAX_PAGES,
+        staleTime: 0,
+      })
+    ).pages.flatMap((page) => page.items);
+    const writes = sampleFactWrites(SAMPLE_FACTS, items);
+    const writeDetails = async (fact: SampleFact, itemEntityId: string) =>
+      unwrapEden(
+        await api.lists(scope)["item-fact-details"].put({
+          listId: toSafeId<"legalList">(listId),
+          itemEntityId: toSafeId<"entity">(itemEntityId),
+          ...fact.details,
+        }),
       );
-      const existing = lists.items.find(
-        (list) => list.name === SAMPLE_LIST_NAME,
-      );
-      const listId =
-        existing?.id ??
-        unwrapEden(await api.lists(scope).put({ name: SAMPLE_LIST_NAME })).id;
-
-      // Every page, so a fact past the first one is not created twice.
-      const items = (
-        await queryClient.fetchInfiniteQuery({
-          ...legalListItemsOptions({
-            workspaceId,
-            listId,
-            viewer: {
-              userId: user.id,
-              organizationId: user.activeOrganizationId,
-            },
-          }),
-          pages: SAMPLE_LIST_MAX_PAGES,
-          staleTime: 0,
-        })
-      ).pages.flatMap((page) => page.items);
-      const writes = sampleFactWrites(SAMPLE_FACTS, items);
-      const writeDetails = async (fact: SampleFact, itemEntityId: string) =>
-        unwrapEden(
-          await api.lists(scope)["item-fact-details"].put({
-            listId: toSafeId<"legalList">(listId),
-            itemEntityId: toSafeId<"entity">(itemEntityId),
-            ...fact.details,
-          }),
-        );
-      await mapWithConcurrency({
-        items: writes.completeDetails,
-        limit: FACT_WRITE_CONCURRENCY,
-        operation: async ({ fact, itemEntityId }) =>
-          writeDetails(fact, itemEntityId),
-      });
-      // Each fact's detail needs the item created just before it.
-      await mapWithConcurrency({
-        items: writes.create,
-        limit: FACT_WRITE_CONCURRENCY,
-        operation: async (fact) => {
-          const created = unwrapEden(
+    const completed = await mapWithConcurrency({
+      items: writes.completeDetails,
+      limit: FACT_WRITE_CONCURRENCY,
+      operation: async ({ fact, itemEntityId }) =>
+        await Result.tryPromise(async () => writeDetails(fact, itemEntityId)),
+    });
+    // Each fact's detail needs the item created just before it.
+    const created = await mapWithConcurrency({
+      items: writes.create,
+      limit: FACT_WRITE_CONCURRENCY,
+      operation: async (fact) =>
+        await Result.tryPromise(async () => {
+          const item = unwrapEden(
             await api.tasks(scope).put({
               name: fact.statement,
               listId: toSafeId<"legalList">(listId),
               listItemType: "fact",
             }),
           );
-          await writeDetails(fact, created.entityId);
-        },
-      });
+          await writeDetails(fact, item.entityId);
+        }),
+    });
+    return [...completed, ...created].some((result) => Result.isError(result));
+  };
+
+  const loadDocument = async (): Promise<boolean> => {
+    const documents = unwrapEden(
+      await api.entities(scope)["query-window"].post({
+        search: SAMPLE_DOCUMENT_NAME,
+        excludedKinds: ["task", "folder"],
+        fieldMode: "visible",
+        limit: 5,
+      }),
+    ).items;
+    if (documents.some((entity) => entity.name === SAMPLE_DOCUMENT_NAME)) {
+      return true;
+    }
+    const response = await fetchWithTimeout(SAMPLE_DOCUMENT_URL, {
+      timeoutMs: SAMPLE_DOCUMENT_TIMEOUT_MS,
+    });
+    if (!response.ok) {
+      return false;
+    }
+    const properties = await queryClient.query(propertiesOptions(workspaceId));
+    const propertyId =
+      properties.find((property) => property.content.type === "file")?.id ??
+      unwrapEden(
+        await api.properties({ workspaceId }).put({
+          name: t("common.documents"),
+          contentType: "file",
+        }),
+      ).id;
+    const uploaded = await uploadFileEntitiesBatched({
+      files: [
+        new File([await response.blob()], SAMPLE_DOCUMENT_NAME, {
+          type: DOCX_MIME_TYPE,
+        }),
+      ],
+      workspaceId,
+      propertyId,
+      parentId: null,
+      labels,
+    });
+    await Promise.all(
+      entityCreateLocalInvalidationKeys(workspaceId).map(
+        async (queryKey) => await queryClient.invalidateQueries({ queryKey }),
+      ),
+    );
+    return uploaded.length > 0;
+  };
+
+  return useMutation({
+    mutationKey: ["avt", "sample-case", workspaceId],
+    mutationFn: async (): Promise<SampleCaseLoad> => {
+      const lists = await queryClient.query(legalListsOptions(workspaceId));
+      const existing = lists.items.find(
+        (list) => list.name === SAMPLE_LIST_NAME,
+      );
+      const listId =
+        existing?.id ??
+        unwrapEden(await api.lists(scope).put({ name: SAMPLE_LIST_NAME })).id;
+      const factsIncomplete = await loadFacts(listId);
       await queryClient.invalidateQueries({
         queryKey: legalListKeys.all(workspaceId),
       });
-
-      const documents = unwrapEden(
-        await api.entities(scope)["query-window"].post({
-          search: SAMPLE_DOCUMENT_NAME,
-          excludedKinds: ["task", "folder"],
-          fieldMode: "visible",
-          limit: 5,
-        }),
-      ).items;
-      if (!documents.some((entity) => entity.name === SAMPLE_DOCUMENT_NAME)) {
-        const response = await fetchWithTimeout(SAMPLE_DOCUMENT_URL, {
-          timeoutMs: SAMPLE_DOCUMENT_TIMEOUT_MS,
-        });
-        if (!response.ok) {
-          return { listId, documentMissing: true };
-        }
-        const file = new File([await response.blob()], SAMPLE_DOCUMENT_NAME, {
-          type: DOCX_MIME_TYPE,
-        });
-        // The upload reports its own progress and errors.
-        createFileEntities({ files: [file], parentId: null });
-      }
-      return { listId, documentMissing: false };
+      const documentLoaded = await loadDocument();
+      return { listId, factsIncomplete, documentMissing: !documentLoaded };
     },
   });
 };
