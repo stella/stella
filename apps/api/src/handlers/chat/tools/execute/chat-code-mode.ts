@@ -18,6 +18,7 @@ import type { ChatCorpusScope } from "@stll/api-contract";
 import { listSkillMetadata } from "@stll/skills";
 import { readDocumentedChatReads } from "@stll/skills/frontmatter";
 
+import { corpusResourceCountries } from "@/api/handlers/chat/tools/corpus-resource-countries";
 import { scopeCorpusRead } from "@/api/handlers/chat/tools/corpus-scope";
 import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { runChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-script-read-boundary";
@@ -361,8 +362,13 @@ export const buildChatCodeMode = (
             args: toolArgs,
             context,
             refRegistry,
-            scopeArgs: (args) =>
-              scopeCorpusRead({ scopes: corpusScopes, toolName, args }),
+            scopeArgs: async (args) =>
+              await scopeCorpusRead({
+                scopes: corpusScopes,
+                toolName,
+                args,
+                resolveCountries: corpusResourceCountries,
+              }),
           }),
       }),
     // A script that calls a direct tool, an unprefixed read or a tool this
