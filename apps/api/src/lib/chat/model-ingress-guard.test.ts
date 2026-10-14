@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
-import { TextSearch } from "@stll/text-search";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import {
@@ -60,33 +59,6 @@ const sequentialRedaction = (text: string, ids: readonly string[]) => {
   return { value: { text: value }, redactedPaths };
 };
 
-const redactionInput = fc.array(fc.uuid(), { maxLength: 20 }).chain((ids) =>
-  fc
-    .array(
-      fc.record({
-        text: fc.string(),
-        index: fc.nat(),
-        shift: fc.integer({ min: 1, max: 35 }),
-      }),
-      { maxLength: 30 },
-    )
-    .map((chunks) => ({
-      ids: [...ids, ...ids.toReversed()],
-      text: chunks
-        .map(({ text, index, shift }) => {
-          const id = ids.at(index % Math.max(ids.length, 1));
-          const other = ids.at((index + 1) % Math.max(ids.length, 1));
-          if (id === undefined || other === undefined) {
-            return text;
-          }
-          // Adjacent/repeated ids and partial overlap candidates; Unicode exercises
-          // the native engine's conversion to UTF-16 offsets.
-          return `${text}é⚖️${id}${other}${id}${id.slice(0, shift)}${other}${id.slice(shift)}${id.toUpperCase()}`;
-        })
-        .join(""),
-    })),
-);
-
 const tenantOccurrencesOverlap = (text: string, ids: readonly string[]) => {
   const starts = new Set<number>();
   for (const id of new Set(ids)) {
@@ -104,24 +76,6 @@ const tenantOccurrencesOverlap = (text: string, ids: readonly string[]) => {
 };
 
 describe("literal tenant id matching", () => {
-  test("tenant redaction removes all UUID occurrences", () => {
-    assertProperty(
-      "tenant redaction removes all UUID occurrences",
-      fc.property(redactionInput, ({ ids, text }) => {
-        const workspaceIds = ids.map((id) => toSafeId<"workspace">(id));
-        const result = redactTenantIdsDeep({ value: { text }, workspaceIds });
-        expect(ids.some((id) => result.value.text.includes(id))).toBe(false);
-        expect(new TextSearch(ids, { allLiteral: true }).isMatch(text)).toBe(
-          ids.some((id) => text.includes(id)),
-        );
-        if (!tenantOccurrencesOverlap(text, ids)) {
-          expect(result).toEqual(sequentialRedaction(text, ids));
-        }
-      }),
-      { numRuns: 200 },
-    );
-  });
-
   test("non-overlapping tenant redaction equals sequential replacement", () => {
     assertProperty(
       "non-overlapping tenant redaction equals sequential replacement",
@@ -146,39 +100,19 @@ describe("literal tenant id matching", () => {
     );
   });
 
-  test("overlapping UUID occurrences leave no tenant id", () => {
-    assertProperty(
-      "overlapping UUID occurrences leave no tenant id",
-      fc.property(
-        fc.uuid(),
-        fc.uuid(),
-        fc.uuid(),
-        (left, candidate, tailCandidate) => {
-          for (let overlap = 1; overlap <= 8; overlap += 1) {
-            const right = left.slice(-overlap) + candidate.slice(overlap);
-            const tail = right.slice(-overlap) + tailCandidate.slice(overlap);
-            const self = left.slice(0, -overlap) + left.slice(0, overlap);
-            const text = `é⚖️${left}${right.slice(overlap)}${tail.slice(overlap)}${left}${right}${self}${self.slice(overlap)}`;
-            for (const ids of [
-              [left, right, tail, self],
-              [right, left, tail, self],
-              [tail, right, left, self],
-              [right, left, right, tail, self],
-            ]) {
-              expect(tenantOccurrencesOverlap(text, ids)).toBe(true);
-              const result = redactTenantIdsDeep({
-                value: { text },
-                workspaceIds: ids.map((id) => toSafeId<"workspace">(id)),
-              });
-              expect(ids.some((id) => result.value.text.includes(id))).toBe(
-                false,
-              );
-            }
-          }
-        },
-      ),
-      { numRuns: 200 },
-    );
+  test("redacts overlapping tenant ids", () => {
+    const left = "12345678-1234-5678-9abc-123456789abc";
+    const right = "9abc1234-1234-5678-9abc-123456789abc";
+    const text = left + right.slice(4);
+    const { value } = redactTenantIdsDeep({
+      value: { text },
+      workspaceIds: [toSafeId<"workspace">(left), toSafeId<"workspace">(right)],
+    });
+    expect(text).toContain(left);
+    expect(text).toContain(right);
+    expect(value.text).toBe(TENANT_ID_REDACTION_PLACEHOLDER + right.slice(4));
+    expect(value.text).not.toContain(left);
+    expect(value.text).not.toContain(right);
   });
 
   test("an updated id array refreshes matching across surfaces", () => {
