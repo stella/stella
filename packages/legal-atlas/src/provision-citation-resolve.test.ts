@@ -127,6 +127,9 @@ describe("resolveProvisionCitation", () => {
     "§ 52 písm. g) a h) ZP",
     "§ 2910 a násl. OZ",
     "§ 316 ZP a § 317 ZP",
+    "§ 52 písm. g a h ZP",
+    "§ 52 písm. g–h ZP",
+    "§ 52 písm. g, h ZP",
     "§ 316 odst. 2 ZP ve spojení s čl. 7 Listiny",
   ])(
     "%s names several provisions and is refused, never narrowed to the first",
@@ -134,6 +137,13 @@ describe("resolveProvisionCitation", () => {
       expect(resolve(text).status).toBe("multiple_provisions");
     },
   );
+
+  test("a lone letter after `a` is a preposition, not a second provision, unless a letter path continues", () => {
+    expect(resolved("§ 316 odst. 2 a v souladu s tím ZP")).toMatchObject({
+      section: 316,
+      subsection: "2",
+    });
+  });
 
   test("an act named after a list-like word is still one provision", () => {
     // `a` joins the act's own words here, not a second provision.

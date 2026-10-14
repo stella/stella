@@ -93,6 +93,12 @@ type CompiledResolver = {
   section: RegExp;
   /** What, right after a provision, continues it into a list or a range. */
   continuation: RegExp;
+  /**
+   * A bare letter continuing a letter path (`písm. g a h`, `písm. g–h`).
+   * Only read after a path that ended at a letter: elsewhere a lone letter
+   * after `a` is a preposition (`§ 316 a v souladu`), not a provision.
+   */
+  letterContinuation: RegExp;
   sectionUnits: ReadonlyMap<string, SectionUnit>;
   subdivisions: readonly {
     pattern: RegExp;
@@ -124,6 +130,15 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
         .join(
           "|",
         )})(?=\s))\s*(?:${alternation(profile.sectionTerms.map(({ text }) => text))}|${alternation(profile.subdivisionTerms.map(({ text }) => text))}|\d|[a-z]\)))`,
+      "iu",
+    ),
+    letterContinuation: new RegExp(
+      String.raw`^\s*(?:[,;]|[-–—]|(?:${[
+        ...profile.enumerationConnectors,
+        ...profile.rangeConnectors,
+      ]
+        .map((word) => RegExp.escape(word))
+        .join("|")})(?=\s))\s*[a-z](?![\p{L}\p{N}])`,
       "iu",
     ),
     sectionUnits: new Map(
@@ -481,6 +496,7 @@ export const resolveProvisionCitation = ({
     // `§§` is the plural designator: it always introduces more than one.
     term.startsWith("§§") ||
     resolver.continuation.test(after) ||
+    (path.letter !== null && resolver.letterContinuation.test(after)) ||
     // A second provision anywhere after the first (`§ 316 ZP a § 317 ZP`),
     // past an act name the continuation check cannot see across.
     resolver.section.test(after)
