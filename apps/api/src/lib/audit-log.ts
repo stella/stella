@@ -3,10 +3,10 @@ import { resolveClientIp } from "@/api/lib/client-ip";
 
 import { createAccountRecorder, recordAuditGroups } from "./db/audit-recording";
 import type {
+  AsyncAuditRecorder,
   AccountAuditBindings,
   AccountAuditRecorder,
   AuditExecutionContext,
-  AuditRecorder,
 } from "./db/audit-recording";
 
 export {
@@ -21,6 +21,7 @@ export {
 } from "./db/audit-recording";
 export type {
   AccountAuditRecorder,
+  AsyncAuditRecorder,
   AuditAction,
   AuditResourceType,
   NonChatAuditResourceType,
@@ -60,7 +61,7 @@ const baseRequestMetadata = (request: Request, server: ServerLike | null) => ({
 
 const createOrganizationAuditRecorder = (
   bindings: OrganizationAuditRecorderBindings,
-): AuditRecorder => {
+): AsyncAuditRecorder => {
   const requestMetadata = baseRequestMetadata(
     bindings.request,
     bindings.server,
@@ -98,10 +99,10 @@ export function createAuditRecorder(
 ): AccountAuditRecorder;
 export function createAuditRecorder(
   bindings: OrganizationAuditRecorderBindings,
-): AuditRecorder;
+): AsyncAuditRecorder;
 export function createAuditRecorder(
   bindings: OrganizationAuditRecorderBindings | AccountRequestAuditBindings,
-): AuditRecorder | AccountAuditRecorder {
+): AsyncAuditRecorder | AccountAuditRecorder {
   if (bindings.account !== undefined) {
     return createAccountRecorder(
       bindings,

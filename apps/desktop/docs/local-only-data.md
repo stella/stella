@@ -16,12 +16,17 @@ local-only feature follows every rule below and adds one entry to
   than one file.
 - **Deletion-only on a missing key.** `local_store::resolve_key` never mints a
   key while encrypted data exists without one; the store opens in a
-  deletion-only state until the user deletes the data.
+  deletion-only state. Activity distinguishes a definitely missing key from
+  a transient keychain failure. Missing-key and corrupt-file erasure require
+  separate confirmation of lost pending recovery. Incompatible activity files
+  require an app update and are always preserved.
 - **Debug builds stay in memory** unless the feature's
   `STELLA_ENABLE_DEBUG_*_PERSISTENCE` variable is set.
 - **Retention sweep.** Expired data for the loaded account is deleted on load
   and by an hourly sweep, whether or not the feature is currently enabled.
-  Activity never automatically deletes another account's history.
+  Activity preserves days with pending draft batches, unreadable days, and
+  incompatible files.
+  It never automatically deletes another account's history.
 - **Payload-free events.** Changes are announced with `emit(..., ())`; the
   window pulls data through commands that take the feature's `LocalCaller`
   (`local_window.rs`), which checks the window label and the app origin.
@@ -67,13 +72,28 @@ prefix, and unloads all readable account state. Relinking another account
 starts with that account's own consent and history. Previous accounts' encrypted
 files remain available when those accounts relink.
 
-Retention uses day filenames even when keys or settings are unreadable. The
-loaded account uses its configured retention. Other namespaces remain untouched
+The loaded account uses its configured retention after reading each day's
+pending draft state. Pending days remain available for recovery beyond that
+window; unreadable day files are preserved. Other namespaces remain untouched
 until explicit deletion: the open activity window shows only their aggregate
 day count and a Delete action with confirmation. It never shows their dates,
-identity or content, and counting and deleting need no key or decryption.
-Explicit deletion removes inactive day files and interrupted-write remnants;
-it preserves the current account and settings. Namespace identity changed before
+identity or content. Counting needs no key or decryption. Deletion reads each
+inactive account's existing key and refuses the operation if a draft batch
+remains unresolved or the keychain lookup fails, before removing any files.
+Inactive history with missing keys or unreadable files requires a separate
+confirmation that pending recovery may be lost; drafts may already exist.
+The operation rechecks keys and readable pending batches before deletion, removes
+missing-key account roots, and preserves the current account. Current-account
+unreadable recovery removes only files that remain unreadable after a live recheck,
+preserving readable history and pending batches. A transient read error never
+authorizes erasure. When time billing is unavailable, a stored batch can be
+discarded locally after confirming the same possible loss of draft recovery.
+Unsupported envelope versions and successfully decrypted payloads that this build
+cannot parse are incompatible: erasure and retention preserve them,
+and the UI asks the user to update the app.
+Version metadata is checked before envelope decoding and before missing-key
+erasure. Settings and day-file rewrites preserve unknown optional payload fields.
+Namespace identity changed before
 release, so there is no migration or read of old unnamespaced stores.
 
 An app exclusion asks whether to keep or delete its past segments. Both choices
@@ -112,7 +132,9 @@ Titles and document filenames appear only in the activity window; the full
 local path appears on hover. Proposed blocks group by document when present
 and require at least three minutes of actual span. Shorter spans still appear
 in the raw list and contribute to the day's active total. Explicit Copy summary
-may include document filenames; draft time-entry narratives remain empty.
+may include document filenames. Draft narratives are prefilled locally from
+recorded document names, opted-in window titles, or app names; the user can edit
+them, and they are sent only after confirmation.
 Titles, paths and documents never enter telemetry, logs or error reports.
 Platform wrappers are listed with the feature's native modules so the same
 network and fixed-code guards cover them.
@@ -124,3 +146,32 @@ and detected private windows suppress that label. Pause and Resume update the
 same account-owned recording state. A local icon dot appears only while
 recording; activity events and a thirty-second refresh keep the menu current.
 Tray source is covered by the local-only network and fixed-code guards.
+
+## Confirmed draft time entries
+
+The activity window can create a draft time entry only after the user confirms
+a matter, date worked, time zone, duration, narrative, and billable choice. The
+narrative is prefilled locally from recorded document names, window titles
+(only when opted in), or app names. It remains editable and is sent only on
+confirmation. `time_entry_commands` holds the activity caller proof
+and linked-account binding; `time_entry_submit` accepts only that account and
+the independently confirmed fields. The block's timestamps and returned entry
+id stay in the account's encrypted local day file. Neither the network owner
+nor a server response can access recorded segments, app names, or summaries.
+
+Matter search sends only the user's picker query. Both features must be enabled
+and the server independently checks the linked user's live create permission
+and matter access. A successful create with a failed local marker write shows
+a fixed warning and keeps the form completed, preventing an immediate retry.
+
+The confirmed batch and its idempotency key are stored before submission.
+Ordinary day rewrites and app-history deletion preserve that exact payload.
+Day deletion and ordinary all-history deletion wait for pending batches to settle;
+only authoritative cancellation or matching creation receipts clear readable batches.
+Recovery remains available when the day has no recorded segments. A stored retry
+does not block day navigation; only an active submission does. A failed receipt
+write retains the same batch key for another retry.
+
+The data-driven guards include the confirmation command owner in the activity
+window's capability and caller checks, and forbid the submission network owner
+from importing any local-only feature's data, including aliased imports.

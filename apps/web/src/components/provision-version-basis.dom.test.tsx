@@ -15,7 +15,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { toSafeId } from "@/lib/safe-id";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/" });
+GlobalRegistrator.register({ url: "http://self-hosted.example.test/" });
 const { act, cleanup, render, fireEvent, within, waitFor } =
   await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
@@ -307,8 +307,10 @@ for (const [locale, messages] of [
       if (href === null) {
         panic("Missing decision reader link");
       }
-      const target = new URL(href);
-      expect(`${target.origin}${target.pathname}`).toBe(readerUrl);
+      expect(href).toStartWith("/");
+      const target = new URL(href, window.location.href);
+      expect(target.origin).toBe(window.location.origin);
+      expect(target.pathname).toBe(new URL(readerUrl).pathname);
       expect(target.searchParams.get("q")).toBe(decision.sentenceText);
       expect(chip.textContent).not.toContain(label);
       const citingBasis = ui.getByText(

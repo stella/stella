@@ -1,5 +1,57 @@
 # @stll/cli
 
+## 4.2.0
+
+### Minor Changes
+
+- [#5521](https://github.com/stella/stella/pull/5521) [`f985952`](https://github.com/stella/stella/commit/f985952ec2dd08baf4f829379d4ee403d089d619) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Connect to the advanced MCP connection (`/mcp/advanced`), which keeps generic capability commands and tools from connected external MCP servers; the default MCP connection now lists only purpose-built tools.
+
+- [#5490](https://github.com/stella/stella/pull/5490) [`2e1697d`](https://github.com/stella/stella/commit/2e1697d58821199e3dade6a6fa341853bca5f027) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a read capability for retained chat answer revisions.
+
+- [#5608](https://github.com/stella/stella/pull/5608) [`a274fe6`](https://github.com/stella/stella/commit/a274fe6d39312b12484c3cc8ac6f7f7bf7191d4b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read exact provision consolidations by document handle and continue long provision wording with text cursors.
+
+- [#5703](https://github.com/stella/stella/pull/5703) [`a67b774`](https://github.com/stella/stella/commit/a67b7744040133eb4d03de216ac8ec693b78fb10) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add the invoice export capability: spreadsheets, accounting import files (POHODA, Money S3, ABRA Flexi, ESO9), ISDOC and UBL 2.1 (EN 16931) e-invoices, and LEDES 1998B.
+
+- [#5491](https://github.com/stella/stella/pull/5491) [`e9c6145`](https://github.com/stella/stella/commit/e9c61452069afbffbdcecb290b0741c95f959206) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add case-law and statute citation resolution commands with the shared legal resolve status envelope. Replace case-law lookup with case-law resolve.
+
+- [#5377](https://github.com/stella/stella/pull/5377) [`eab9b63`](https://github.com/stella/stella/commit/eab9b63240685273f9985dfd82e92d2c0b7f1b1e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add capabilities to list and delete personal search history.
+
+### Patch Changes
+
+- [#5362](https://github.com/stella/stella/pull/5362) [`03c39f9`](https://github.com/stella/stella/commit/03c39f97badbf02e083c869e10eace6fe22b2e8a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law analysis generation answers a failed run with a typed code and whose key it used, and accepts `retry` to run again.
+
+- [#5585](https://github.com/stella/stella/pull/5585) [`152533c`](https://github.com/stella/stella/commit/152533c9466a1d9bbe5fa25121f48bdb81782ef8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law analysis generation describes how long a failed run answers before a plain call starts a new one.
+
+- [#5451](https://github.com/stella/stella/pull/5451) [`88b3ed5`](https://github.com/stella/stella/commit/88b3ed5e6ecebad991d68f4644ca3df6e4973bd2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Always include `textVersion` in case-law decision reads, and report incomplete docket identifiers with an `incomplete_identifier` status and their `missing` components.
+
+- [#5622](https://github.com/stella/stella/pull/5622) [`21fe131`](https://github.com/stella/stella/commit/21fe131e3548ed79ba99b935082022e0c596f5ab) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Case-law coverage now reports searchable year ranges, last sync, publisher-listed decisions awaiting text and recorded gaps per jurisdiction and source.
+
+- [#4962](https://github.com/stella/stella/pull/4962) [`6fbf84c`](https://github.com/stella/stella/commit/6fbf84cab46b5060241ae3da8315a27e79fdf829) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `read_case_law_decision` returns `citedBy.top` as an object with `items` and required `precision`. Bounded rankings include `candidateWindow`; ranking precision is independent of citation count precision.
+
+- [#5347](https://github.com/stella/stella/pull/5347) [`c7f973a`](https://github.com/stella/stella/commit/c7f973adced14ab6250f4a0edfa553303998bc27) Thanks [@jan-kubica](https://github.com/jan-kubica)! - List chat threads with the case-law decision each chat is about, when there is one.
+
+- [#5650](https://github.com/stella/stella/pull/5650) [`6df5c82`](https://github.com/stella/stella/commit/6df5c82677a59358f9c7261ab58be2e0dd6e5300) Thanks [@jan-kubica](https://github.com/jan-kubica)! - List only the chat threads that live in one matter with `matterId`.
+
+- [#5677](https://github.com/stella/stella/pull/5677) [`a4fdd39`](https://github.com/stella/stella/commit/a4fdd398ae85c3a146ec1aa5f572e4ef3d5adb6a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Look up your conversation about a case-law decision with `stella capability chat decision-threads-get`.
+
+- [#5183](https://github.com/stella/stella/pull/5183) [`553416d`](https://github.com/stella/stella/commit/553416dfc37ca3bcb5ba637fe8e78f8c829c470c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Document refusal as an undecided result when previewing template conditions.
+
+- [#5693](https://github.com/stella/stella/pull/5693) [`fec0951`](https://github.com/stella/stella/commit/fec0951abe78c4e626739c8323267b12d0a8e5cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the MCP client dependency.
+
+- [#5631](https://github.com/stella/stella/pull/5631) [`49dda1f`](https://github.com/stella/stella/commit/49dda1f70c52201fb2f4908ef88bf32a17b50bdc) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Fact details can be updated without a confidence value.
+
+- [#5492](https://github.com/stella/stella/pull/5492) [`d1718f7`](https://github.com/stella/stella/commit/d1718f7d2cbe0e3283246825293708f884e7f04e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Recognise the `stella:law_read` scope for reading public statutes and case law.
+
+- [#5209](https://github.com/stella/stella/pull/5209) [`f75f04d`](https://github.com/stella/stella/commit/f75f04d77c8c4a757f256b71104a07c1f12c85ca) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe caller-aware list activity audit details in the capability catalog.
+
+- [#5625](https://github.com/stella/stella/pull/5625) [`a503284`](https://github.com/stella/stella/commit/a503284a4f9c69dc6a7ccfa390f8711f857ce13f) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep case-law and statute content reads independent of organization standing.
+
+- [#5596](https://github.com/stella/stella/pull/5596) [`ebdc0a8`](https://github.com/stella/stella/commit/ebdc0a877838955c1e37f2d3a54fc16c3156722d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use standard skill resource folders and remove the resource kind input from CLI capabilities.
+
+- [#5624](https://github.com/stella/stella/pull/5624) [`e966400`](https://github.com/stella/stella/commit/e9664005d30bea9ff2ccfde9c1f1716ce4ea2a76) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe the deciding source and typed generative fallback in template condition previews.
+- Updated dependencies [[`281be96`](https://github.com/stella/stella/commit/281be96c485b45905f5b4647a7aa9d5fad5adab9)]:
+  - @stll/stable-stringify@0.2.2
+
 ## 4.1.0
 
 ### Minor Changes

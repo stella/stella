@@ -10,12 +10,9 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { installTimeoutMs } from "./ci-install";
 import {
   boundedInstallProblems,
   installWorkflowPolicy,
-  SCOPED_INSTALL_STEP_MINUTES,
-  SCOPED_INSTALL_PHASE_MS,
   compositeInstallProblems,
 } from "./ci-install-policy";
 import {
@@ -62,7 +59,7 @@ test("Windows installs and every explicit CI cold install retain bounded logs", 
   }
 });
 
-test("every composite caller covers restore/verify, its installer budget and cleanup", () => {
+test("every composite caller uses its job as the only outer deadline", () => {
   for (const file of readdirSync(path.join(REPO_ROOT, ".github/workflows"))) {
     if (!/\.ya?ml$/u.test(file)) {
       continue;
@@ -72,23 +69,43 @@ test("every composite caller covers restore/verify, its installer budget and cle
     );
     expect(compositeInstallProblems(workflow), file).toEqual([]);
   }
-  const steps = workflowJobSteps(
-    Bun.YAML.parse(readFileSync(path.join(REPO_ROOT, CI_WORKFLOW), "utf-8")),
-    "e2e-production-shard",
-  );
-  const install = steps.find(
-    (step) => step["uses"] === "$/.github/actions/ci-install",
-  );
-  if (!install) {
-    throw new TypeError("Missing E2E composite install");
-  }
-  expect(install).toHaveProperty(
-    "with.installer-budget-ms",
-    String(SCOPED_INSTALL_PHASE_MS.e2eInstaller),
-  );
 });
 
-test("the real Windows dry-run deadline retains platform headroom regardless of cache restoration", () => {
+test("the caller policy rejects install deadlines and requires finite job bounds across platforms", () => {
+  for (const run of [
+    {
+      uses: "./.github/actions/ci-install",
+      with: { flags: '["--frozen-lockfile","--ignore-scripts"]' },
+    },
+    {
+      run: 'bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile',
+    },
+  ]) {
+    for (const runner of ["windows-latest", "ubuntu-latest", "macos-latest"]) {
+      const check = (step: unknown, timeout: unknown) =>
+        compositeInstallProblems({
+          jobs: {
+            fixture: {
+              "runs-on": runner,
+              "timeout-minutes": timeout,
+              steps: [step],
+            },
+          },
+        });
+      expect(check(run, 15)).toEqual([]);
+      expect(check({ ...run, "timeout-minutes": 3 }, 15)).toContain(
+        "fixture: install must use the job timeout as its only deadline",
+      );
+      for (const timeout of [undefined, 0, -1, "15", Infinity]) {
+        expect(check(run, timeout)).toContain(
+          "fixture: install needs a bounded job timeout",
+        );
+      }
+    }
+  }
+});
+
+test("the real Windows dry-run install has no deadline before its job regardless of cache restoration", () => {
   const workflow: unknown = Bun.YAML.parse(
     readFileSync(path.join(REPO_ROOT, CI_WORKFLOW), "utf-8"),
   );
@@ -99,8 +116,7 @@ test("the real Windows dry-run deadline retains platform headroom regardless of 
   if (install === undefined) {
     expect.unreachable("Missing fixed-owner Windows install action");
   }
-  const minimum = SCOPED_INSTALL_STEP_MINUTES.windows;
-  expect(install["timeout-minutes"]).toBe(minimum);
+  expect(install["timeout-minutes"]).toBeUndefined();
   const check = (candidateSteps: unknown[]) =>
     boundedInstallProblems(
       {
@@ -124,18 +140,20 @@ test("the real Windows dry-run deadline retains platform headroom regardless of 
       ),
     ),
   ).toEqual([]);
-  for (const limit of [minimum - 1, minimum + 1]) {
+  for (const limit of [2, 5, 10]) {
     expect(
       check(
         steps.map((step) =>
           step === install ? { ...step, "timeout-minutes": limit } : step,
         ),
       ),
-    ).toContain("fixture: install needs a bounded step timeout");
+    ).toContain(
+      "fixture: install must use the job timeout as its only deadline",
+    );
   }
 });
 
-test("the install guard rejects bypasses, unbounded steps and lost logs", () => {
+test("the install guard rejects bypasses, install deadlines, unbounded jobs and lost logs", () => {
   const upload = {
     uses: "actions/upload-artifact@fixture",
     if: "failure()",
@@ -143,11 +161,7 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
   };
   const install = {
     run: 'bun scripts/ci-install.ts "$RUNNER_TEMP/bun-install/scripts.log" --ignore-scripts',
-    "timeout-minutes": 5,
   };
-  expect(install["timeout-minutes"]).toBe(
-    Math.ceil(installTimeoutMs("win32") / 60_000) + 1,
-  );
   const workflow = (steps: unknown[]) => ({
     jobs: {
       smoke: { "runs-on": "windows-latest", "timeout-minutes": 10, steps },
@@ -173,7 +187,17 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
       workflow([{ ...install, "timeout-minutes": 10 }, upload]),
       "windows",
     ),
-  ).toContain("smoke: install needs a bounded step timeout");
+  ).toContain("smoke: install must use the job timeout as its only deadline");
+  expect(
+    boundedInstallProblems(
+      {
+        jobs: {
+          smoke: { "runs-on": "windows-latest", steps: [install, upload] },
+        },
+      },
+      "windows",
+    ),
+  ).toContain("smoke: install needs a bounded job timeout");
   expect(boundedInstallProblems(workflow([install]), "windows")).toContain(
     "smoke: install needs a retained failure log",
   );
@@ -187,14 +211,13 @@ test("the install guard rejects bypasses, unbounded steps and lost logs", () => 
   ).toContain("smoke: install bypasses scripts/ci-install.ts");
 });
 
-test("the fixed local composite owns its bounded install and failure log", () => {
+test("the fixed local composite validates warning budgets without an install deadline", () => {
   const action = {
     uses: "$/.github/actions/ci-install",
     with: {
       flags:
         '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]',
     },
-    "timeout-minutes": SCOPED_INSTALL_STEP_MINUTES.windows,
   };
   const check = (steps: unknown[], runner = "windows-latest") =>
     boundedInstallProblems(
@@ -209,59 +232,22 @@ test("the fixed local composite owns its bounded install and failure log", () =>
   expect(check([{ ...action, uses: "./.github/actions/ci-install" }])).toEqual(
     [],
   );
-  expect(
-    check([
-      { ...action, "timeout-minutes": SCOPED_INSTALL_STEP_MINUTES.windows - 1 },
-    ]),
-  ).toContain("smoke: install needs a bounded step timeout");
-  expect(
-    check(
-      [
-        {
-          ...action,
-          "timeout-minutes": SCOPED_INSTALL_STEP_MINUTES.minimum - 1,
-        },
-      ],
-      "ubuntu-latest",
-    ),
-  ).toContain("smoke: install needs a bounded step timeout");
-  expect(
-    check(
-      [{ ...action, "timeout-minutes": SCOPED_INSTALL_STEP_MINUTES.minimum }],
-      "ubuntu-latest",
-    ),
-  ).toContain(
-    "smoke: caller deadline must cover restore/verify, installer and cleanup",
-  );
-  expect(
-    check(
-      [
-        {
-          ...action,
-          "timeout-minutes": 2,
-          with: {
-            ...action.with,
-            "installer-budget-ms": String(SCOPED_INSTALL_PHASE_MS.e2eInstaller),
+  for (const runner of ["windows-latest", "ubuntu-latest"]) {
+    expect(check([{ ...action, "timeout-minutes": 3 }], runner)).toContain(
+      "smoke: install must use the job timeout as its only deadline",
+    );
+    expect(
+      check(
+        [
+          {
+            ...action,
+            with: { ...action.with, "installer-budget-ms": "91000" },
           },
-        },
-      ],
-      "ubuntu-latest",
-    ),
-  ).toEqual([]);
-  expect(
-    check(
-      [
-        {
-          ...action,
-          "timeout-minutes": 2,
-          with: { ...action.with, "installer-budget-ms": "91000" },
-        },
-      ],
-      "ubuntu-latest",
-    ),
-  ).toContain(
-    "smoke: caller deadline must cover restore/verify, installer and cleanup",
-  );
+        ],
+        runner,
+      ),
+    ).toEqual([]);
+  }
   for (const budget of ["0", "invalid", "120001"]) {
     expect(
       check(
@@ -323,7 +309,7 @@ test("the fixed ci-install composite owns the bounded wrapper and failure artifa
   }
   const steps = flattenWorkflowSteps(action.runs.steps);
   const install = steps.find(
-    (step) => step["name"] === "Run bounded frozen install",
+    (step) => step["name"] === "Run frozen install with progress watchdog",
   );
   expect(install?.["run"]).toBe(
     [
