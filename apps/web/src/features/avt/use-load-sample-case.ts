@@ -33,7 +33,7 @@ import { mergeLayout } from "@/lib/workspaces/view-layout";
 const SAMPLE_LIST_NAME = "Whitfield sample facts";
 const SAMPLE_DOCUMENT_NAME = "Whitfield witness statement (sample).docx";
 const SAMPLE_DOCUMENT_URL = "/samples/avt/whitfield-witness-statement.docx";
-const SAMPLE_DOCUMENT_TIMEOUT_MS = 30_000;
+const SAMPLE_DOCUMENT_IDLE_TIMEOUT_MS = 30_000;
 const FACT_WRITE_CONCURRENCY = 4;
 // 200 items a page; a sample list past this size is no longer the sample.
 const SAMPLE_LIST_MAX_PAGES = 10;
@@ -115,7 +115,10 @@ export const useLoadSampleCase = ({
           await writeDetails(fact, item.entityId);
         }),
     });
-    return [...completed, ...created].some((result) => Result.isError(result));
+    return (
+      completed.some((result) => Result.isError(result)) ||
+      created.some((result) => Result.isError(result))
+    );
   };
 
   const loadDocument = async (): Promise<boolean> => {
@@ -131,7 +134,7 @@ export const useLoadSampleCase = ({
       return true;
     }
     const response = await fetchWithTimeout(SAMPLE_DOCUMENT_URL, {
-      timeoutMs: SAMPLE_DOCUMENT_TIMEOUT_MS,
+      timeout: { type: "idle", ms: SAMPLE_DOCUMENT_IDLE_TIMEOUT_MS },
     });
     if (!response.ok) {
       return false;
