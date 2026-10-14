@@ -1,22 +1,38 @@
 import { describe, expect, test } from "bun:test";
 
 import { SAMPLE_FACTS } from "@/features/avt/sample-case.data";
-import { missingSampleFacts } from "@/features/avt/sample-case.logic";
+import { sampleFactWrites } from "@/features/avt/sample-case.logic";
+
+const DETAILS = { confidence: "high" };
 
 describe("sample case", () => {
   test("an empty list needs every sample fact", () => {
-    expect(missingSampleFacts(SAMPLE_FACTS, [])).toEqual([...SAMPLE_FACTS]);
+    expect(sampleFactWrites(SAMPLE_FACTS, [])).toEqual({
+      create: [...SAMPLE_FACTS],
+      completeDetails: [],
+    });
   });
 
-  test("a repeat run adds only what an earlier run left out", () => {
+  test("a repeat run creates only facts an earlier run left out", () => {
     const [first, second, ...rest] = SAMPLE_FACTS;
     expect(
-      missingSampleFacts(SAMPLE_FACTS, [
-        { name: first?.statement ?? "" },
-        { name: second?.statement ?? "" },
-        { name: "An unrelated fact" },
+      sampleFactWrites(SAMPLE_FACTS, [
+        { id: "a", name: first?.statement ?? "", factDetails: DETAILS },
+        { id: "b", name: second?.statement ?? "", factDetails: DETAILS },
+        { id: "c", name: "An unrelated fact", factDetails: null },
       ]),
-    ).toEqual(rest);
+    ).toEqual({ create: rest, completeDetails: [] });
+  });
+
+  test("a fact created without its detail gets the detail, not a duplicate", () => {
+    const [first, ...rest] = SAMPLE_FACTS;
+    const writes = sampleFactWrites(SAMPLE_FACTS, [
+      { id: "created-only", name: first?.statement ?? "", factDetails: null },
+    ]);
+    expect(writes.create).toEqual(rest);
+    expect(writes.completeDetails).toEqual([
+      { fact: first, itemEntityId: "created-only" },
+    ]);
   });
 
   test("statements carry no metadata prefix and stay unique", () => {

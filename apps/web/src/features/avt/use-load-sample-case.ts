@@ -3,8 +3,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { fetchWithTimeout } from "@stll/fetch";
 
-import { SAMPLE_FACTS } from "@/features/avt/sample-case.data";
-import { missingSampleFacts } from "@/features/avt/sample-case.logic";
+import { SAMPLE_FACTS, type SampleFact } from "@/features/avt/sample-case.data";
+import { sampleFactWrites } from "@/features/avt/sample-case.logic";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -53,9 +53,23 @@ export const useLoadSampleCase = (workspaceId: string) => {
           .lists(scope)({ listId: toSafeId<"legalList">(listId) })
           .items.get({ query: { limit: 200 } }),
       ).items;
+      const writes = sampleFactWrites(SAMPLE_FACTS, items);
+      const writeDetails = async (fact: SampleFact, itemEntityId: string) =>
+        unwrapEden(
+          await api.lists(scope)["item-fact-details"].put({
+            listId: toSafeId<"legalList">(listId),
+            itemEntityId: toSafeId<"entity">(itemEntityId),
+            ...fact.details,
+          }),
+        );
+      await mapWithConcurrency({
+        items: writes.completeDetails,
+        limit: FACT_WRITE_CONCURRENCY,
+        operation: ({ fact, itemEntityId }) => writeDetails(fact, itemEntityId),
+      });
       // Each fact's detail needs the item created just before it.
       await mapWithConcurrency({
-        items: missingSampleFacts(SAMPLE_FACTS, items),
+        items: writes.create,
         limit: FACT_WRITE_CONCURRENCY,
         operation: async (fact) => {
           const created = unwrapEden(
@@ -65,13 +79,7 @@ export const useLoadSampleCase = (workspaceId: string) => {
               listItemType: "fact",
             }),
           );
-          unwrapEden(
-            await api.lists(scope)["item-fact-details"].put({
-              listId: toSafeId<"legalList">(listId),
-              itemEntityId: toSafeId<"entity">(created.entityId),
-              ...fact.details,
-            }),
-          );
+          await writeDetails(fact, created.entityId);
         },
       });
       await queryClient.invalidateQueries({
