@@ -22,8 +22,8 @@ export const AnnotationVisibilityToggle = ({
   const t = useTranslations();
   const shared = visibility === "shared";
   const label = shared
-    ? t("knowledge.agentSkills.scopePrivate")
-    : (shareLabel ?? t("legalReader.annotations.visibilityShared"));
+    ? t("legalReader.annotations.visibilityShared")
+    : (shareLabel ?? t("knowledge.agentSkills.scopePrivate"));
   return (
     <Tooltip
       content={label}
@@ -43,9 +43,9 @@ export const AnnotationVisibilityToggle = ({
       }
     >
       {shared ? (
-        <LockIcon className="size-3.5" />
-      ) : (
         <Building2Icon className="size-3.5" />
+      ) : (
+        <LockIcon className="size-3.5" />
       )}
       {shareLabel !== undefined && <span>{label}</span>}
     </Tooltip>
