@@ -1,8 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
+import { getViewConfig, PgDialect } from "drizzle-orm/pg-core";
 
-import { caseLawSources } from "@/api/db/schema";
+import {
+  caseLawSources,
+  publishedCaseLawDecisions,
+  unredactedCaseLawDecisions,
+} from "@/api/db/schema";
 import { readCaseLawCoverageSourcesQuery } from "@/api/handlers/case-law/decisions/coverage";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
@@ -61,6 +66,20 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
             (LIKE public.${sql.identifier(table)} INCLUDING ALL)`);
         }
         await db.execute(sql`SET search_path TO ${schema}, public`);
+        // The reader selects through the decision views; recreate them over
+        // the cloned table so they resolve to this schema, not to public.
+        const dialect = new PgDialect();
+        for (const view of [
+          publishedCaseLawDecisions,
+          unredactedCaseLawDecisions,
+        ]) {
+          const config = getViewConfig(view);
+          const query =
+            config.query ?? panic(`Decision view ${config.name} has no query`);
+          const rendered = dialect.sqlToQuery(query);
+          await db.execute(sql`CREATE VIEW ${schema}.${sql.identifier(config.name)}
+            AS (${sql.raw(rendered.sql)})`);
+        }
         // The coverage index is still online-only: exercise its production DDL
         // rather than depending on what this Postgres fixture has installed.
         const existing = await db.execute(sql`SELECT indexname FROM pg_indexes
@@ -132,7 +151,9 @@ describe.skipIf(!enabled)("published coverage bounds plan (postgres)", () => {
           asTestRaw<CaseLawPublicReadTransaction>(db),
           "pg-fts",
         );
-        expect(captured).toHaveLength(1);
+        // The per-source endpoint read, then one grouped pending-text count
+        // for the page's sources.
+        expect(captured).toHaveLength(2);
         const statement =
           captured.at(0) ??
           panic("The production coverage SQL was not captured");

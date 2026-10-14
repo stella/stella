@@ -5,6 +5,8 @@ import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
 import { declareFailureClass } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
+import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -252,6 +254,12 @@ type DecisionTextSource =
       // Set when retrieval was attempted and failed; it is already reported,
       // so later stages fall back instead of retrying it.
       retrievalFailed: boolean;
+      /**
+       * The court's number for each numbered block of the whole decision, by
+       * anchor. Kept beside the passages, since a passage the index ranked
+       * carries only its anchor.
+       */
+      courtParagraphNumbers: ReadonlyMap<string, number>;
     }
   | { kind: "none" };
 
@@ -260,6 +268,7 @@ type SelectDecisionPassagesOptions = {
   retrieved: readonly ResearchPassage[];
   retrievalFailed: boolean;
   budgetChars: number;
+  courtParagraphNumbers: ReadonlyMap<string, number>;
 };
 
 /** Keep retrieval provenance false when the index returned no usable passage. */
@@ -268,6 +277,7 @@ export const selectDecisionPassages = ({
   retrieved,
   retrievalFailed,
   budgetChars,
+  courtParagraphNumbers,
 }: SelectDecisionPassagesOptions): DecisionTextSource => {
   const selected = selectPassagesWithinBudget(
     retrieved.length > 0 ? retrieved : fallback,
@@ -283,6 +293,7 @@ export const selectDecisionPassages = ({
         passages: selected,
         retrieved: retrieved.length > 0,
         retrievalFailed,
+        courtParagraphNumbers,
       };
 };
 
@@ -374,6 +385,7 @@ const answerDecision = async (
     modelRole: "fast",
     organizationId: input.organizationId,
     orgAIConfig: input.orgAIConfig,
+    modelTier: input.admission.modelTier,
     properties: {
       decision_id: decisionId,
       jurisdiction: decision.country,
@@ -456,6 +468,7 @@ const answerDecision = async (
         {
           dataClass: "customer",
           organizationId: input.organizationId,
+          modelTier: input.admission.modelTier,
         },
       );
       const output = await generateTanStackObjectForRole({
@@ -547,6 +560,7 @@ const answerDecision = async (
       justification: buildAnswerJustification(
         parsedOutcome.anchorIds,
         excerptByAnchor,
+        text.courtParagraphNumbers,
       ),
     };
     outcomes.push({
@@ -648,6 +662,9 @@ const resolveDecisionText = async (
   if (passages.length === 0) {
     return { kind: "none" };
   }
+  // Flat text has no blocks, so it numbers nothing.
+  const courtParagraphNumbers: ReadonlyMap<string, number> =
+    blocks === null ? new Map() : courtParagraphNumbersByAnchor(blocks);
   const total = passages.reduce(
     (sum, passage) => sum + passage.excerpt.length,
     0,
@@ -658,6 +675,7 @@ const resolveDecisionText = async (
       passages,
       retrieved: false,
       retrievalFailed: false,
+      courtParagraphNumbers,
     };
   }
 
@@ -671,6 +689,7 @@ const resolveDecisionText = async (
     retrieved: retrieved.unwrapOr([]),
     retrievalFailed: retrieved.isErr(),
     budgetChars,
+    courtParagraphNumbers,
   });
 };
 
@@ -706,7 +725,7 @@ const readStoredPayload = async <T>({
 
 const readDecisionBlocks = async (
   decision: ResearchDecisionRow,
-): Promise<{ anchorId: string; plainText: string; type: string }[] | null> => {
+): Promise<readonly Block[] | null> => {
   const stored = await readStoredPayload({
     decision,
     key: decision.astS3Key,
@@ -894,6 +913,7 @@ type SystemOnePassOptions = {
     passages: readonly ResearchPassage[];
     retrieved: boolean;
     retrievalFailed: boolean;
+    courtParagraphNumbers: ReadonlyMap<string, number>;
   };
 };
 
@@ -984,6 +1004,7 @@ export const answerWithSystemOne = async ({
     questions: asked,
     outcomes: decodeSystemOneAnswers({ plan, questions: asked, decisions }),
     excerptByAnchor: new Map(sources.map((source) => [source.id, source.text])),
+    courtParagraphNumbers: text.courtParagraphNumbers,
     run: {
       completedAt: Temporal.Now.instant().toString({
         fractionalSecondDigits: 3,

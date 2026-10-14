@@ -132,28 +132,31 @@ const locatorCondition = (locator: DecisionSubjectLocator) => {
   }
 };
 
+/** The rows a condition names, whether or not they are published. */
+const selectLocatedRows = (
+  tx: CaseLawPublicReadTransaction,
+  condition: SQL | undefined,
+) =>
+  tx
+    .select({
+      id: unredactedCaseLawDecisions.id,
+      country: unredactedCaseLawDecisions.country,
+      descriptor: caseLawSources.descriptor,
+      published: sql<boolean>`${publishedCaseLawDecisionFor(unredactedCaseLawDecisions)}`,
+      absorption: decisionAbsorptionSql(unredactedCaseLawDecisions.metadata),
+    })
+    .from(unredactedCaseLawDecisions)
+    .innerJoin(
+      caseLawSources,
+      eq(caseLawSources.id, unredactedCaseLawDecisions.sourceId),
+    )
+    .where(condition);
+
 /** The row a condition names, whether or not it is published. */
 const selectLocatedRow = async (
   tx: CaseLawPublicReadTransaction,
   condition: SQL | undefined,
-) =>
-  (
-    await tx
-      .select({
-        id: unredactedCaseLawDecisions.id,
-        country: unredactedCaseLawDecisions.country,
-        descriptor: caseLawSources.descriptor,
-        published: sql<boolean>`${publishedCaseLawDecisionFor(unredactedCaseLawDecisions)}`,
-        absorption: decisionAbsorptionSql(unredactedCaseLawDecisions.metadata),
-      })
-      .from(unredactedCaseLawDecisions)
-      .innerJoin(
-        caseLawSources,
-        eq(caseLawSources.id, unredactedCaseLawDecisions.sourceId),
-      )
-      .where(condition)
-      .limit(1)
-  ).at(0);
+) => (await selectLocatedRows(tx, condition).limit(1)).at(0);
 
 type LocatedRow = NonNullable<Awaited<ReturnType<typeof selectLocatedRow>>>;
 
@@ -218,6 +221,44 @@ const resolveSubjectIn = async (
     tx,
   });
 };
+
+/**
+ * Gate many decisions, named by id, in one statement and read them in the
+ * same snapshot.
+ *
+ * Only a decision published under its own id passes. An absorbed
+ * supplement's id resolves through its judgment, one hop at a time, which is
+ * `withRedistributableSubject`'s job; a batch caller that names one gets no
+ * subject for it, the same answer as a missing or restricted decision.
+ */
+export const withRedistributableDecisions = async <T>(
+  caseLawDb: CaseLawPublicReadDb,
+  ids: readonly SafeId<"caseLawDecision">[],
+  read: (subjects: readonly RedistributableDecisionSubject[]) => Promise<T>,
+): Promise<T> =>
+  await caseLawDb(
+    async (tx) => {
+      const rows =
+        ids.length === 0
+          ? []
+          : await selectLocatedRows(
+              tx,
+              inArray(unredactedCaseLawDecisions.id, [...ids]),
+            );
+      return await read(
+        rows
+          .filter((row) => row.published && isPublic(row))
+          .map((row) =>
+            subjectOf({
+              id: row.id,
+              resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
+              tx,
+            }),
+          ),
+      );
+    },
+    { isolation: "repeatable-read" },
+  );
 
 /**
  * Gate a decision and read it in one transaction.

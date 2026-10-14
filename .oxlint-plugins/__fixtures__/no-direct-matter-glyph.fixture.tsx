@@ -4,7 +4,7 @@
 // `no-direct-matter-glyph/no-direct-matter-glyph`.
 //
 // The raw matter (layers) glyph is restricted to
-// apps/web/src/components/matter-icon.tsx in every lucide spelling (`X`,
+// packages/ui/src/components/matter-icon.tsx in every lucide spelling (`X`,
 // `XIcon`, `LucideX`) and every way of reaching it.
 
 // expect-clean: no-direct-matter-glyph/no-direct-matter-glyph

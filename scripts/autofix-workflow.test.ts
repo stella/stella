@@ -231,6 +231,12 @@ describe("changed-file autofix boundary", () => {
     expect(job).toContain('NPM_TOKEN: ""');
     expect(job).not.toContain("secrets.");
 
+    const preparationStep = job.indexOf(
+      "- name: Prepare selected MCP app exports",
+    );
+    const fixesStep = job.indexOf("- name: Fix changed files");
+    expect(preparationStep).toBeGreaterThan(0);
+    expect(fixesStep).toBeGreaterThan(preparationStep);
     const restrictionStep = job.indexOf("- name: Restrict autofix changes");
     const pushStep = job.indexOf("- name: Push autofixes");
     expect(restrictionStep).toBeGreaterThanOrEqual(0);
@@ -265,7 +271,7 @@ describe("changed-file autofix boundary", () => {
     );
   });
 
-  test("every selected generator follows every source-rewriting fixer", async () => {
+  test("every selected generator finishes after every source-rewriting fixer", async () => {
     const steps = workflowJobSteps(
       Bun.YAML.parse(await Bun.file(WORKFLOW_URL).text()),
       "regenerate-derived-files",
@@ -278,17 +284,31 @@ describe("changed-file autofix boundary", () => {
     const isGenerator = (run: string) =>
       /scripts\/autofix-plan\.ts run\b/u.test(run) ||
       generatorCommands.some((command) => run.includes(command));
+    const terminalGenerators = (pipeline: typeof steps) => {
+      const positions = new Map<string, number>();
+      for (const [position, step] of pipeline.entries()) {
+        const run = step["run"];
+        if (typeof run !== "string") {
+          continue;
+        }
+        if (/scripts\/autofix-plan\.ts run\b/u.test(run)) {
+          positions.set("selected generators", position);
+        }
+        for (const command of generatorCommands) {
+          if (run.includes(command)) {
+            positions.set(command, position);
+          }
+        }
+      }
+      return [...new Set(positions.values())];
+    };
     const violations = (pipeline: typeof steps) => {
       const fixers = pipeline.flatMap((step, position) =>
         typeof step["run"] === "string" && sourceFixer.test(step["run"])
           ? [position]
           : [],
       );
-      const generators = pipeline.flatMap((step, position) =>
-        typeof step["run"] === "string" && isGenerator(step["run"])
-          ? [position]
-          : [],
-      );
+      const generators = terminalGenerators(pipeline);
       expect(fixers.length).toBeGreaterThan(0);
       expect(generators.length).toBeGreaterThan(0);
       return generators.flatMap((generator) =>
@@ -301,7 +321,8 @@ describe("changed-file autofix boundary", () => {
     for (const [generator, producer] of steps.entries()) {
       if (
         typeof producer["run"] !== "string" ||
-        !isGenerator(producer["run"])
+        !isGenerator(producer["run"]) ||
+        !terminalGenerators(steps).includes(generator)
       ) {
         continue;
       }
@@ -326,6 +347,12 @@ describe("changed-file autofix boundary", () => {
       new URL("../.github/workflows/ci.yml", import.meta.url),
     ).text();
     const ciWorkflow = Bun.YAML.parse(ci);
+    const preparationStep = job.indexOf(
+      "- name: Prepare selected MCP app exports",
+    );
+    const fixesStep = job.indexOf("- name: Fix changed files");
+    expect(preparationStep).toBeGreaterThan(0);
+    expect(fixesStep).toBeGreaterThan(preparationStep);
     const restrictionStep = job.indexOf("- name: Restrict autofix changes");
     const fetchStep = job.indexOf("- name: Fetch changed paths");
     const checkoutStep = job.indexOf("- name: Checkout pull request head");

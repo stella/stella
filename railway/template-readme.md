@@ -54,6 +54,10 @@ SMTP account.
 
 ### Implementation Details
 
+The Postgres service builds the repository database image and initializes a
+non-superuser application login without row-level-security exemptions on a
+persistent volume. The API requires this login before serving requests.
+
 The API service runs database migrations as a Railway pre-deploy command. If a
 migration fails, Railway should not promote the new API deployment.
 

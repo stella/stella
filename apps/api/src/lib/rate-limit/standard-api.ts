@@ -1,6 +1,6 @@
 import { env } from "@/api/env";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
-import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitOptions } from "@/api/lib/rate-limit/contracts";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 /**

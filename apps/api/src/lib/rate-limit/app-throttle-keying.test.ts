@@ -425,7 +425,7 @@ describe("application throttle keying census", () => {
       /const signInRequestBudget = createAuthRequestBudgetHook\(\{\s*type: "authentication",\s*storage: authRateLimitStorage,\s*enabled: rateLimitEnabled,/u,
     );
     expect(authSource).toMatch(
-      /before: createAuthMiddleware\(async \(ctx\) => \{\s*await signInRequestBudget\(ctx\);/u,
+      /before: createAuthMiddleware\(async \(ctx\) => \{\s*markAuthRequestRoute\(ctx\);\s*await signInRequestBudget\(ctx\);/u,
     );
   });
 

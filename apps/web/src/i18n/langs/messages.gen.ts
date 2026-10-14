@@ -366,6 +366,8 @@ type Messages = {
       "chooseList": "Choose a list";
       "createList": "Create a list";
       "evidenceList": "Facts from";
+      "loadSample": "Load sample case";
+      "loadSampleFailed": "Couldn't load the sample case";
       "noLists": "This matter has no lists";
       "pickList": "Choose the list whose facts this matter's documents are checked against.";
     };
@@ -538,6 +540,16 @@ type Messages = {
       "createInvoice": "Create invoice";
       "dueDate": "Due date";
       "editInvoice": "Edit invoice";
+      "export": {
+        "accounting": "Accounting import";
+        "eBilling": "E-billing";
+        "eso9": "ESO9 import sheet (XLSX)";
+        "exporting": "Preparing export…";
+        "isdoc": "ISDOC e-invoice (ABRA Gen and others)";
+        "spreadsheets": "Spreadsheets";
+        "xlsx": "Invoices (XLSX)";
+        "xlsxLines": "Invoice lines (XLSX)";
+      };
       "finalize": "Finalize";
       "invoiceDate": "Invoice date";
       "invoiceDetail": "Invoice detail";
@@ -779,6 +791,9 @@ type Messages = {
       "none": "No citations recorded yet.";
       "openAtCitation": "Open at the citation";
       "openDecision": "Open decision";
+      "paragraphLabel": "Paragraph {paragraph}";
+      "paragraphMark": "¶ {paragraph}";
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, paragraph {paragraph}";
       "partialSummary": "Citation totals and timeline are partial.";
       "passageNotFound": "The citing passage was not located in the text";
       "positiveCount": "{count, plural, one {# positive} other {# positive}}";
@@ -1273,6 +1288,11 @@ type Messages = {
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
+    "history": {
+      "matterUnavailable": "This matter isn't available";
+      "older": "Older";
+      "previous7Days": "Previous 7 days";
+    };
     "historyContext": {
       "overflow": "+{count, number}";
       "unnamed": "{count, plural, one {and # more} other {and # more}}";
@@ -1424,17 +1444,23 @@ type Messages = {
     };
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
+    "sendErrorConnectionFailed": "The connection to chat failed. Check your connection and try again.";
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.";
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.";
     "sendErrorModelUnavailable": "The configured AI model is no longer available. Ask your workspace admin to update the model in organization settings.";
+    "sendErrorNotStarted": "The conversation is still busy. Wait a moment and try again.";
+    "sendErrorPreparationFailed": "Your message could not be prepared. Reopen the chat and try again.";
     "sendErrorProviderBilling": "The AI provider reported a billing problem. Contact your workspace admin.";
     "sendErrorProviderCredentialsRejected": "The AI provider rejected the configured credentials. Ask your workspace admin to check the API key in organization settings.";
     "sendErrorProviderUnavailable": "The AI provider is temporarily unavailable. Please try again in a moment.";
     "sendErrorQuotaExhausted": "The AI provider's quota is exhausted. Try again in a minute, or contact your workspace admin.";
     "sendErrorStreamIncomplete": "The AI reply was cut off before it finished. Try again.";
+    "sendErrorTimedOut": "The chat service did not respond in time. Try again.";
     "sendPrompt": "Send message";
     "sendQueuedMessageNow": "Send now";
     "sendWithoutAnonymization": "Send without anonymization";
+    "signInToChat": "Sign in to chat about this document";
+    "signInToChatAbout": "Sign in to chat about";
     "skills": {
       "scope": {
         "private": "Your skills";
@@ -1765,6 +1791,8 @@ type Messages = {
     "citations": "Citations";
     "clauses": "Clauses";
     "clearDate": "Clear date";
+    "clearFilters": "Clear filters";
+    "clearSearch": "Clear search";
     "close": "Close";
     "closeAll": "Close all";
     "closeOthers": "Close others";
@@ -1795,6 +1823,7 @@ type Messages = {
       "nextDecade": "Next decade";
       "nextMonth": "Next month";
       "nextYear": "Next year";
+      "outOfRange": "Choose a date within the allowed range.";
       "previousDecade": "Previous decade";
       "previousMonth": "Previous month";
       "previousYear": "Previous year";
@@ -2096,28 +2125,27 @@ type Messages = {
     "showAllPermissions": "{count, plural, one {Show the permission} other {Show all # permissions}}";
     "signedInAs": "Signed in as <email>{accountEmail}</email>";
     "summaryAdminRead": "audit log";
-    "summaryAdminWrite": "organization members and settings, including deleting them";
-    "summaryBillingWrite": "time entries, including deleting them";
-    "summaryChat": "chats, including deleting them";
-    "summaryContactsWrite": "contacts, including deleting them";
-    "summaryDocumentsWrite": "documents, including deleting them";
+    "summaryAdminWrite": "organization members and settings";
+    "summaryBillingWrite": "time entries";
+    "summaryChat": "chats";
+    "summaryContactsWrite": "contacts";
+    "summaryDocumentsWrite": "documents";
     "summaryExternalMcps": "connected integrations";
-    "summaryFeedback": "feedback";
-    "summaryKnowledgeWrite": "clauses and playbooks, including deleting clauses";
+    "summaryKnowledgeWrite": "clauses and playbooks";
     "summaryLawRead": "public statutes and case law";
-    "summaryLineChange": "<group>Can change:</group> {items} ({count})";
+    "summaryLineChange": "<group>Create and edit:</group> {items}";
     "summaryLineOther": "<group>Also:</group> {items}";
-    "summaryLineRead": "<group>Can read:</group> {items} ({count})";
-    "summaryMattersWrite": "matters and tasks, including deleting them";
-    "summaryOfflineAccess": "staying signed in";
-    "summaryOnboarding": "practice jurisdictions";
+    "summaryLineRead": "<group>Read:</group> {items}";
+    "summaryLineUse": "<group>Use:</group> {items}";
+    "summaryMattersWrite": "matters and tasks";
     "summaryProfile": "profile";
     "summaryRead": "documents, matters and contacts";
     "summaryReadAnonymized": "anonymized documents and matters";
     "summarySearch": "search";
     "summarySearchAnonymized": "anonymized search";
-    "summarySkills": "skills, including deleting them";
-    "summaryTemplates": "templates, including deleting them";
+    "summarySkills": "skills";
+    "summaryStaySignedIn": "Stay signed in";
+    "summaryTemplates": "templates";
     "summaryTemplatesAnonymized": "anonymized templates";
     "title": "Authorize access";
     "unverifiedApp": "Unverified app";
@@ -3593,6 +3621,12 @@ type Messages = {
   };
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Build a contract review playbook position by position, drawing on your past signed contracts, a short interview, and market-standard defaults.";
+          "name": "Build a playbook";
+        };
+      };
       "builtInSection": "Built-in skills";
       "deleteFile": "Delete file";
       "deleteFileConfirm": "Delete file? This cannot be undone.";
@@ -4120,7 +4154,6 @@ type Messages = {
     "appsSubtitle": "stella also works outside the browser: on your desktop and inside your AI assistant. You can come back to this setup anytime later.";
     "appsTitle": "Get stella everywhere";
     "catalogueAlwaysOn": "Always on";
-    "catalogueClearSearch": "Clear search";
     "catalogueCommunityHeading": "Others";
     "catalogueContinueWithCount": "Continue with {count, plural, one {# tool} other {# tools}}";
     "catalogueDetailAbout": "About";
@@ -4489,6 +4522,8 @@ type Messages = {
   };
   "search": {
     "aiRefine": "Improve query with AI";
+    "caseLawMatchingDecisions": "{count, plural, one {# matching decision} other {# matching decisions}}";
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ matching decision} other {#+ matching decisions}}";
     "continueInChat": "Continue in chat";
     "dateFrom": "From";
     "dateTo": "To";
@@ -6381,7 +6416,6 @@ type Messages = {
         "year": "Year";
       };
       "cannotDeleteRequired": "At least one view of this type is required";
-      "clearFilters": "Clear filters";
       "copySuffix": "{name} (copy)";
       "deleteView": "Delete view";
       "exportCsv": "Export CSV";

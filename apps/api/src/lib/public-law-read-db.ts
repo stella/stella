@@ -14,6 +14,7 @@ import { setSharedReadTransactionGuards } from "@/api/db/shared-pool-timeouts";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
+import { getPublicReadStatementTimeoutMs } from "@/api/lib/legal-search/public-read-timeout-context";
 import {
   PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
@@ -389,8 +390,12 @@ export const configureReadTransaction = async (
   if (!readOnly || statementTimeoutMs === undefined) {
     panic("Public-law read guards require read-only and a statement timeout");
   }
+  const requestTimeoutMs = getPublicReadStatementTimeoutMs();
   await setSharedReadTransactionGuards(tx, {
-    statementTimeoutMs,
+    statementTimeoutMs:
+      requestTimeoutMs === undefined
+        ? statementTimeoutMs
+        : Math.min(statementTimeoutMs, requestTimeoutMs),
     ...(lockTimeoutMs === undefined ? {} : { lockTimeoutMs }),
     ...(idleInTransactionTimeoutMs === undefined
       ? {}

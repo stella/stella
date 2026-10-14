@@ -146,7 +146,24 @@ describe("chatKeys", () => {
     });
 
     expect(searched.queryKey).not.toEqual(unfiltered.queryKey);
-    expect(searched.queryKey.at(-1)).toBe("Matter B");
+    expect(searched.queryKey.at(-2)).toBe("Matter B");
+  });
+
+  test("isolates a matter-filtered history from the unfiltered list", () => {
+    const activeOrganizationId = "org_test";
+    const userId = "user_test";
+    const unfiltered = groupedChatThreadsOptions({
+      activeOrganizationId,
+      userId,
+    });
+    const inMatter = groupedChatThreadsOptions({
+      activeOrganizationId,
+      userId,
+      workspaceId: "matter_b",
+    });
+
+    expect(inMatter.queryKey).not.toEqual(unfiltered.queryKey);
+    expect(inMatter.queryKey.at(-1)).toBe("matter_b");
   });
 
   test("separates plain chat transports from active DOCX edit transports", () => {
@@ -2092,7 +2109,7 @@ describe("chat runtime", () => {
     const messageId = toSafeId<"chatMessage">(
       "22222222-2222-4222-8222-222222222222",
     );
-    const started = runtime.startRouteHandoffMessage({
+    const started = await runtime.startRouteHandoffMessage({
       id: messageId,
       content: "ahoj",
     });
@@ -3377,7 +3394,7 @@ describe("acquireChatRuntime reconcile", () => {
       key: threadRef,
       queryClient,
     });
-    const started = handoff.startRouteHandoffMessage(
+    const started = await handoff.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b2"),
     );
     await responseRequested;
@@ -3458,9 +3475,10 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    await runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222e1"),
-    ).stream;
+    );
+    await started.stream;
 
     expect(runtime.getSnapshot()).toMatchObject({ status: "error" });
     expect(runtime.getSnapshot().messages.at(-1)?.parts.at(0)).toMatchObject({
@@ -3496,7 +3514,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c1"),
     );
     await started.stream;
@@ -3592,7 +3610,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c3"),
     );
     await started.stream;
@@ -3628,7 +3646,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c2"),
     );
     await started.stream;
@@ -3668,7 +3686,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
 
-    const started = runtime.startRouteHandoffMessage(
+    const started = await runtime.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222c4"),
     );
     await started.stream;
@@ -3844,7 +3862,7 @@ describe("acquireChatRuntime reconcile", () => {
       queryClient,
     });
     expect(streaming).not.toBe(idlePlain);
-    const started = streaming.startRouteHandoffMessage(
+    const started = await streaming.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b3"),
     );
     await responseRequested;
@@ -3944,7 +3962,7 @@ describe("acquireChatRuntime reconcile", () => {
       key: threadRef,
       queryClient,
     });
-    const started = streaming.startRouteHandoffMessage(
+    const started = await streaming.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b4"),
     );
     await responseRequested;
@@ -4000,7 +4018,7 @@ describe("acquireChatRuntime reconcile", () => {
       key: threadRef,
       queryClient,
     });
-    const started = streaming.startRouteHandoffMessage(
+    const started = await streaming.startRouteHandoffMessage(
       createOutgoingMessage("22222222-2222-4222-8222-2222222222b5"),
     );
     await responseRequested;
