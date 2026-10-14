@@ -656,6 +656,7 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (inputs.heavy_only == true || (github.event_name == 'merge_group' && steps.depth.outputs.queue_depth == 'thin'))
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
           log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
@@ -1597,6 +1598,7 @@ jobs:
         if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/agent-engine...","--filter","stella"]'
         env:
           NPM_TOKEN: ""
@@ -3725,6 +3727,14 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_038 != 'true') }}
         run: bun test scripts/workflow-cache-policy.test.ts scripts/workflow-run-trust.test.ts scripts/workflow-concurrency.test.ts
 
+      - name: Store cache save supervisor
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: static_check_119
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_119 != 'true') }}
+        run: bun test scripts/ci-store-save.test.ts
+
       - name: Workflow lint
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
@@ -5083,6 +5093,7 @@ jobs:
       - name: Install API script dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
           log-file: "${{ runner.temp }}/bun-install/api-test-durations.log"
         env:
@@ -6051,6 +6062,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
@@ -6983,6 +6995,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/landing...","--filter","@stll/cli...","--filter","stella"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
@@ -8237,6 +8250,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/playwright-tools","--filter","!stella"]'
         env:
           NPM_TOKEN: ""
@@ -8691,6 +8705,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts...","--filter","@stll/desktop...","--filter","!stella"]'
           log-file: "${{ runner.temp }}/bun-install/desktop-windows-dry-run.log"
         env:
@@ -8863,6 +8878,7 @@ jobs:
       - name: Install scripts workspace dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]'
           log-file: "${{ runner.temp }}/bun-install/scripts.log"
         env:
@@ -8960,6 +8976,7 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scan-engine","--filter","stella"]'
           log-file: "${{ runner.temp }}/bun-install/scan-engine-wasm.log"
         env:
@@ -9214,6 +9231,7 @@ jobs:
         if: matrix.os == 'macos'
         uses: $/.github/actions/ci-install
         with:
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/api"]'
         env:
           NPM_TOKEN: ""
