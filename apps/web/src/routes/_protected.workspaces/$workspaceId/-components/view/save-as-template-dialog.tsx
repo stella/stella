@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -14,11 +15,12 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
-import { Field, FieldLabel } from "@stll/ui/field";
+import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
+import { apiFieldIssueMessage } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { ViewLayout } from "@/lib/types";
 import { useCreateViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";
@@ -31,46 +33,77 @@ type SaveAsTemplateDialogProps = {
   onOpenChange: (open: boolean) => void;
 };
 
+type SaveTemplateHandlers = {
+  onSuccess: () => void;
+  onError: (error: unknown) => void;
+};
+
+type SaveAsTemplateDialogViewProps = {
+  defaultName: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Whether a save is in flight. */
+  pending: boolean;
+  save: (name: string, handlers: SaveTemplateHandlers) => void;
+};
+
 export const SaveAsTemplateDialog = ({
   workspaceId,
   layout,
+  ...props
+}: SaveAsTemplateDialogProps) => {
+  const createTemplate = useCreateViewTemplate();
+  return (
+    <SaveAsTemplateDialogView
+      {...props}
+      pending={createTemplate.isPending}
+      save={(name, handlers) => {
+        createTemplate.mutate({ workspaceId, name, layout }, handlers);
+      }}
+    />
+  );
+};
+
+export const SaveAsTemplateDialogView = ({
   defaultName,
   open,
   onOpenChange,
-}: SaveAsTemplateDialogProps) => {
+  pending,
+  save,
+}: SaveAsTemplateDialogViewProps) => {
   const t = useTranslations();
   const [name, setName] = useState(defaultName);
-  const createTemplate = useCreateViewTemplate();
+  // The server's verdict on the name, shown under the field until it changes.
+  const [nameIssue, setNameIssue] = useState<string | undefined>();
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
       setName(defaultName);
+      setNameIssue(undefined);
     }
     onOpenChange(next);
   };
 
   const trimmed = name.trim();
-  const canSubmit = trimmed.length > 0 && !createTemplate.isPending;
+  const canSubmit = trimmed.length > 0 && !pending;
 
   const handleSubmit = () => {
     if (!canSubmit) {
       return;
     }
-    createTemplate.mutate(
-      { workspaceId, name: trimmed, layout },
-      {
-        onSuccess: () => {
-          stellaToast.add({
-            title: t("workspaces.views.templates.created"),
-            type: "success",
-          });
-          onOpenChange(false);
-        },
-        onError: (error) => {
-          notifyUserError(error, t("errors.failedToSaveTemplate"));
-        },
+    save(trimmed, {
+      onSuccess: () => {
+        stellaToast.add({
+          title: t("workspaces.views.templates.created"),
+          type: "success",
+        });
+        onOpenChange(false);
       },
-    );
+      onError: (error) => {
+        setNameIssue(apiFieldIssueMessage(error, "name"));
+        notifyUserError(error, t("errors.failedToSaveTemplate"));
+      },
+    });
   };
 
   return (
@@ -80,6 +113,7 @@ export const SaveAsTemplateDialog = ({
           dirty={name !== defaultName}
           onDiscard={() => {
             setName(defaultName);
+            setNameIssue(undefined);
           }}
         />
         <Form
@@ -95,27 +129,30 @@ export const SaveAsTemplateDialog = ({
             </DialogDescription>
           </DialogHeader>
           <DialogPanel>
-            <Field>
+            <Field invalid={nameIssue !== undefined}>
               <FieldLabel>
                 {t("workspaces.views.templates.nameLabel")}
               </FieldLabel>
               <Input
                 autoFocus
-                onChange={(e) => setName(e.target.value)}
+                maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  setNameIssue(undefined);
+                }}
                 placeholder={t("workspaces.views.templates.namePlaceholder")}
                 value={name}
               />
+              {nameIssue !== undefined && (
+                <FieldError match>{nameIssue}</FieldError>
+              )}
             </Field>
           </DialogPanel>
           <DialogFooter>
             <DialogClose render={<Button variant="ghost" />}>
               {t("common.cancel")}
             </DialogClose>
-            <Button
-              disabled={!canSubmit}
-              loading={createTemplate.isPending}
-              type="submit"
-            >
+            <Button disabled={!canSubmit} loading={pending} type="submit">
               {t("workspaces.views.templates.save")}
             </Button>
           </DialogFooter>

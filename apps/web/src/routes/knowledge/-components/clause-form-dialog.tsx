@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -223,6 +224,7 @@ const ClauseFormDialogBody = ({
           </label>
           <Input
             id="clause-title"
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onChange={(e) =>
               setForm((f) => ({
                 ...f,

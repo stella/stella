@@ -6,6 +6,7 @@ import type { ResolveParams } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { BidiText } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
@@ -316,6 +317,7 @@ export const WorkspaceBreadcrumb = ({
                   <InlineRenameInput
                     className="text-sm font-semibold"
                     disabled={updateWorkspace.isPending}
+                    maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
                     onCommit={() => {
                       detached(
                         nameRename.commit(),
@@ -399,6 +401,7 @@ export const WorkspaceBreadcrumb = ({
           <InlineRenameInput
             className="text-sm font-semibold"
             disabled={updateWorkspace.isPending}
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onCommit={() => {
               detached(nameRename.commit(), "workspace-breadcrumb.commit");
             }}

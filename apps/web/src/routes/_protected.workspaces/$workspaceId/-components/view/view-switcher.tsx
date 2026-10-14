@@ -9,6 +9,7 @@ import {
   isSingleViewLayout,
   type RequiredViewLayoutType,
 } from "@stll/api-contract";
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -479,6 +480,7 @@ const ViewRenameEditor = ({
 
   return (
     <InlineEdit
+      maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
       onCancel={() => {
         onStop();
         setRenameValue(name);

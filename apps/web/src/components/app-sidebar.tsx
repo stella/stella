@@ -26,6 +26,7 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
+import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -1347,6 +1348,7 @@ const MatterItem = ({
           />
           <InlineRenameInput
             className="text-sm"
+            maxLength={DEFAULT_VARCHAR_MAX_LENGTH}
             onCommit={() => {
               detached(rename.commit(), "app-sidebar.commit");
             }}
