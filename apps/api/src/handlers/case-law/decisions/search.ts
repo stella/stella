@@ -3068,8 +3068,14 @@ export const listCaseLawProvisionDecisions = async ({
     snippetById: sentences,
     // The sentences and the rows share one snapshot, so each excerpt belongs
     // to the revision its row was read at.
+    // A row with no applied revision pairs with no excerpt revision, so its
+    // sentence is not shown, as on the search page.
     snippetRevisionById: new Map(
-      [...byId.values()].map((row) => [String(row.id), row.appliedRevision]),
+      [...byId.values()].flatMap((row) =>
+        row.appliedRevision === null
+          ? []
+          : [[String(row.id), row.appliedRevision] as const],
+      ),
     ),
     headnotePresentation: body.headnotePresentation,
     total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, total),
