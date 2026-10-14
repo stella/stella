@@ -24,6 +24,7 @@ import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { browserAuthBaseUrl } from "@/lib/api-url";
+import { AuthClientError } from "@/lib/errors/auth";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 
@@ -193,7 +194,6 @@ export const submitOAuthConsent = async (accept: boolean) => {
 
 export const listAuthSessions = async () => {
   const result = await authClient.listSessions();
-
   if (result.error) {
     return result;
   }
@@ -233,7 +233,11 @@ export const listAuthSessions = async () => {
         }
       } else {
         getAnalytics().captureError(
-          new Error("Invalid MCP handoff session response"),
+          new AuthClientError({
+            message: "Invalid MCP handoff session response",
+            status: 502,
+            statusText: "Bad Gateway",
+          }),
           { type: "detached", operation: "auth.list_sessions.handoffs" },
         );
       }

@@ -6,11 +6,11 @@ GlobalRegistrator.register({ url: "http://localhost:3000/settings" });
 const { listAuthSessions } = await import("@/lib/auth-client");
 
 const originalFetch = globalThis.fetch;
-let handoffResponse: Response | "network-error" = Response.json({
-  sessions: [{ id: "session-one", clientName: "ChatGPT" }],
-});
-let originConsentId: string | undefined;
+let originConsentId: string | null | undefined;
 let handoffRequests = 0;
+let handoffResponse: Response | "network-error" = Response.json({
+  sessions: [{ id: "session-one", clientName: "Connected app" }],
+});
 let sessionResponse: Response | undefined;
 
 globalThis.fetch = Object.assign(
@@ -23,6 +23,7 @@ globalThis.fetch = Object.assign(
       return Response.json([
         {
           id: "session-one",
+          originConsentId,
           userId: "user-one",
           token: "ordinary-session-token",
           expiresAt: "2026-10-14T00:00:00.000Z",
@@ -30,7 +31,6 @@ globalThis.fetch = Object.assign(
           updatedAt: "2026-10-13T00:00:00.000Z",
           ipAddress: null,
           userAgent: "Browser",
-          ...(originConsentId === undefined ? {} : { originConsentId }),
         },
       ]);
     }
@@ -51,7 +51,7 @@ beforeEach(() => {
   handoffRequests = 0;
   sessionResponse = undefined;
   handoffResponse = Response.json({
-    sessions: [{ id: "session-one", clientName: "ChatGPT" }],
+    sessions: [{ id: "session-one", clientName: "Connected app" }],
   });
 });
 
@@ -88,6 +88,7 @@ describe("auth session listing", () => {
 
       const result = await listAuthSessions();
 
+      expect(handoffRequests).toBe(1);
       expect(result.error).toBeNull();
       expect(result.data).toHaveLength(1);
       expect(result.data?.[0]).toMatchObject({
@@ -107,6 +108,13 @@ describe("auth session listing", () => {
     expect(result.data?.[0]?.originClientName).toBeNull();
     expect(handoffRequests).toBe(0);
 
+    originConsentId = null;
+    const nullProvenance = await listAuthSessions();
+
+    expect(nullProvenance.error).toBeNull();
+    expect(nullProvenance.data?.[0]?.originClientName).toBeNull();
+    expect(handoffRequests).toBe(0);
+
     originConsentId = "";
     const emptyProvenance = await listAuthSessions();
 
@@ -120,7 +128,7 @@ describe("auth session listing", () => {
     const result = await listAuthSessions();
 
     expect(result.error).toBeNull();
-    expect(result.data?.[0]?.originClientName).toBe("ChatGPT");
+    expect(result.data?.[0]?.originClientName).toBe("Connected app");
     expect(handoffRequests).toBe(1);
   });
 });

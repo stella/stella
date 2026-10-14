@@ -84,6 +84,7 @@ const endpointConfigProperty = (node: unknown, property: string) => {
 
 const hasAccountAccessProjection = (options: unknown) => {
   if (!isObjectExpression(options)) {
+    // No options object means no forwarded permissions for this rule to pair.
     return true;
   }
 
@@ -146,10 +147,11 @@ export default eslintCompatPlugin({
             }
 
             const routeOptions = node.arguments[2];
+            const reportNode = isAstNode(routeOptions) ? routeOptions : node;
             if (!isDirectHandlerConfig(routeOptions)) {
               if (!hasAccountAccessProjection(routeOptions)) {
                 context.report({
-                  node: routeOptions,
+                  node: reportNode,
                   messageId: "missingAccountAccess",
                 });
               }
@@ -157,7 +159,7 @@ export default eslintCompatPlugin({
             }
 
             context.report({
-              node: routeOptions,
+              node: reportNode,
               messageId: "noDirectHandlerConfig",
             });
           },

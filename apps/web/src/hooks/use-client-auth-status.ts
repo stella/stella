@@ -42,11 +42,11 @@ export const useClientAuthStatus = ({
     ? sessionData.session.userId
     : undefined;
   // Read only for a member: a visitor's cache holds nothing of it.
-  const queries =
-    memberUserId === undefined
-      ? []
-      : [{ ...professionalUseOptions(memberUserId), enabled }];
-  const professionalUse = useQueries({ queries }).at(0);
+  const professionalUseQueries: ReturnType<typeof professionalUseOptions>[] =
+    enabled && !isPending && !isError && memberUserId !== undefined
+      ? [professionalUseOptions(memberUserId)]
+      : [];
+  const professionalUse = useQueries({ queries: professionalUseQueries }).at(0);
 
   if (isPending) {
     return {
@@ -70,7 +70,14 @@ export const useClientAuthStatus = ({
     };
   }
 
-  if (professionalUse === undefined || professionalUse.isPending) {
+  if (memberUserId === undefined || professionalUse?.isPending) {
+    return {
+      status: "checking",
+      isAuthenticated: false,
+    };
+  }
+
+  if (professionalUse === undefined) {
     return {
       status: "checking",
       isAuthenticated: false,

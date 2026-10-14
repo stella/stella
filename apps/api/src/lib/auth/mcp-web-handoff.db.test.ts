@@ -346,14 +346,18 @@ describe("MCP web handoff lifecycle", () => {
       .update(session)
       .set({ lastSeenAt: before })
       .where(eq(session.token, token));
+    const refreshed = await store.refresh({
+      token,
+      now: before,
+      expiresAt: new Date(deadline.getTime() + 7 * 24 * 60 * 60 * 1000),
+      credentialMode: "cookie",
+    });
+    expect(refreshed?.expiresAt).toEqual(deadline);
     expect(
-      await store.refresh({
-        token,
-        now: before,
-        expiresAt: new Date(deadline.getTime() + 7 * 24 * 60 * 60 * 1000),
-        credentialMode: "cookie",
-      }),
-    ).not.toBeNull();
+      (
+        await db.select().from(session).where(eq(session.id, "handoff-session"))
+      ).at(0)?.expiresAt,
+    ).toEqual(deadline);
     expect(
       await store.observe({ token, now: deadline, boundary: "activity" }),
     ).toBeNull();
@@ -381,7 +385,7 @@ describe("MCP web handoff lifecycle", () => {
       }),
     ).toBeNull();
   });
-  test("session client listing refuses an overflow instead of returning a partial list", async () => {
+  test("session labels refuse an incomplete read instead of truncating it", async () => {
     const consentId = Bun.randomUUIDv7();
     const expiresAt = new Date(instant.getTime() + 60_000);
     const sessions = Array.from({ length: 101 }, () => {

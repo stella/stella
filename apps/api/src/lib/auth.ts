@@ -123,7 +123,6 @@ import {
 import {
   createWebHandoffService,
   webHandoffFailure,
-  type WebHandoffMintContext,
 } from "@/api/lib/auth/mcp-web-handoff";
 import {
   createMcpWebHandoffPlugin,
@@ -1071,13 +1070,13 @@ const getWebHandoffService = () =>
     textEnabled: () => env.MCP_WEB_HANDOFF_TEXT_ENABLED === "1",
   }));
 
-type WebHandoffMintKind = Parameters<
+type WebHandoffMintArgs = Parameters<
   ReturnType<typeof createWebHandoffService>["mint"]
->[2];
+>;
 export const mintWebHandoff = async (
-  ctx: WebHandoffMintContext,
+  ctx: WebHandoffMintArgs[0],
   paths: readonly string[],
-  kind: WebHandoffMintKind,
+  kind: WebHandoffMintArgs[2],
 ) => {
   const outcome = await Result.tryPromise({
     try: async () => await getWebHandoffService().mint(ctx, paths, kind),
@@ -2228,7 +2227,8 @@ export const createAuth = (
         markAuthRequestRoute(ctx);
         await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
-        if (!ctx.path) {
+        // Better Call gives pathless server-only operations the middleware path "/".
+        if (!ctx.path || ctx.path === "/") {
           return undefined;
         }
         if (demoConfig.email) {

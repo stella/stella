@@ -105,6 +105,8 @@ export const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
  * registry) fails the guard.
  */
 const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
+  mint_web_handoff:
+    "no dedicated REST endpoint: app-only link refresh invokes the shared handoff mint service (apps/api/src/mcp/web-handoff-links.ts)",
   search:
     "inline endpoint: apps/api/src/handlers/search/routes.ts POST /search",
   search_across_matters:

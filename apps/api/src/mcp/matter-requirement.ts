@@ -5,7 +5,7 @@ import type { CompareToolInput } from "@/api/mcp/document-compare-tool";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { McpEffectiveAuthority } from "@/api/mcp/effective-authority";
 import type { MANAGE_ORG_ACTIONS } from "@/api/mcp/research-admin-tools";
-import type { MODEL_VISIBLE_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 import type { InternalToolErrorResult } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
@@ -37,7 +37,7 @@ type WriteToolScopeByInput = {
 export type WriteToolScope = WriteToolScopeValue | WriteToolScopeByInput;
 
 export type McpWriteToolName = Extract<
-  (typeof MODEL_VISIBLE_MCP_TOOL_DEFINITIONS)[number],
+  (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number],
   { access: "write" }
 >["name"];
 
@@ -106,6 +106,7 @@ export const WRITE_TOOL_SCOPES = {
   // Each catalog capability enforces its own workspace access.
   [MCP_CAPABILITY_EXECUTORS.write]: organization,
   submit_feedback: organization,
+  mint_web_handoff: organization,
 } as const satisfies Record<McpWriteToolName, WriteToolScope>;
 
 const isWriteToolName = (toolName: string): toolName is McpWriteToolName =>

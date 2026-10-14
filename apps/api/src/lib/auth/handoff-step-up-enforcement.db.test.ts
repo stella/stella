@@ -207,6 +207,16 @@ describe("handoff sessions enforce recent authentication at real entry points", 
     };
 
     const mountedPaths = mounted.map(({ path }) => path);
+    expect(mountedPaths).not.toContain("/");
+    expect(registered.verifyApiKey.path).toBeUndefined();
+    expect(registered.addMember.path).toBeUndefined();
+    const verification = await auth.api.verifyApiKey({
+      body: {
+        configId: DESKTOP_REGISTRY_KEY_CONFIG,
+        key: "nonexistent-fixture-key",
+      },
+    });
+    expect(verification.valid).toBe(false);
     expect(census(mountedPaths)).toEqual({
       missingFromPolicy: [],
       absentFromAuth: [],

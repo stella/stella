@@ -38,13 +38,26 @@ import {
   brandPersistedOrganizationId,
 } from "@/api/lib/safe-id-boundaries";
 
+const HANDOFF_SESSION_LABEL_CAP = 100;
+export class WebHandoffOperationError extends TaggedError(
+  "WebHandoffOperationError",
+)<{
+  operation: string;
+  message: string;
+  cause: unknown;
+}> {}
+
+export const webHandoffFailure =
+  (operation: string, message: string) => (cause: unknown) =>
+    new WebHandoffOperationError({ operation, message, cause });
+
 export const WEB_HANDOFF_TTL_MS = {
   text: 10 * 60 * 1000,
   click: 60 * 1000,
 } as const satisfies Record<(typeof MCP_WEB_HANDOFF_KINDS)[number], number>;
 export const WEB_HANDOFF_CODE_PATTERN = /^sh1_[A-Za-z0-9_-]{43}$/u;
 type HandoffKind = (typeof MCP_WEB_HANDOFF_KINDS)[number];
-export type WebHandoffMintContext = {
+type WebHandoffMintContext = {
   credentialType: "oauth" | "api-key" | "anonymous";
   grantedScopes: readonly string[];
   clientId: string | null;
@@ -67,20 +80,6 @@ type HandoffServiceOptions = {
   enabled: () => boolean;
   textEnabled: () => boolean;
 };
-
-const HANDOFF_SESSION_CLIENTS_READ_CAP = 100;
-
-export class WebHandoffOperationError extends TaggedError(
-  "WebHandoffOperationError",
-)<{
-  operation: string;
-  message: string;
-  cause: unknown;
-}> {}
-
-export const webHandoffFailure =
-  (operation: string, message: string) => (cause: unknown) =>
-    new WebHandoffOperationError({ operation, message, cause });
 
 export const canonicalHandoffPath = (path: string): string | undefined => {
   const canonical = canonicalRedirectPath(path);
@@ -243,8 +242,59 @@ export const createWebHandoffService = ({
     });
   };
 
+  const listSessionClients = async (userId: SafeId<"user">) => {
+    const result = await Result.tryPromise({
+      try: async () =>
+        await readBounded(
+          db
+            .select({
+              id: session.id,
+              clientName: sql<string>`COALESCE(${oauthClient.name}, ${oauthClient.clientId})`,
+            })
+            .from(session)
+            .innerJoin(
+              oauthConsent,
+              eq(oauthConsent.id, session.originConsentId),
+            )
+            .innerJoin(
+              oauthClient,
+              eq(oauthClient.clientId, oauthConsent.clientId),
+            )
+            .where(
+              and(
+                eq(session.userId, userId),
+                sql`${session.expiresAt} > ${now()}::timestamptz`,
+              ),
+            ),
+          HANDOFF_SESSION_LABEL_CAP,
+        ),
+      catch: webHandoffFailure(
+        "list_session_clients",
+        "Active handoff sessions could not be listed.",
+      ),
+    });
+    if (Result.isError(result)) {
+      return result;
+    }
+    switch (result.value.type) {
+      case "complete":
+        return Result.ok(result.value.rows);
+      case "overflow":
+        return Result.err(
+          new WebHandoffOperationError({
+            operation: "list_session_clients",
+            message: "Too many active handoff sessions to list safely.",
+            cause: { cap: result.value.cap },
+          }),
+        );
+      default:
+        result.value satisfies never;
+        return panic("Unhandled bounded handoff session read disposition.");
+    }
+  };
   return {
     mint,
+    listSessionClients,
     isEnabled: enabled,
     ...createHandoffRedemption({
       db,
@@ -324,107 +374,6 @@ type HandoffConsumptionOptions = {
   ) => Promise<Result<string | null, Error>>;
 };
 
-type ConsumeHandoffReceiptOptions = Pick<
-  HandoffRedemptionOptions,
-  "db" | "now" | "enabled" | "textEnabled"
-> &
-  HandoffConsumptionOptions;
-
-const consumeHandoffReceipt = async ({
-  db,
-  now,
-  enabled,
-  textEnabled,
-  code,
-  path,
-  request,
-  ipAddress,
-  previousOrganizationId,
-  complete,
-}: ConsumeHandoffReceiptOptions) =>
-  await withAggregateTransaction(db, async (tx) => {
-    if (!enabled()) {
-      return null;
-    }
-    const grantedScopes = sql`ARRAY[${sql.join(
-      MCP_DEFAULT_RESOURCE_SCOPES.map((scope) => sql`${scope}`),
-      sql`, `,
-    )}]::text[]`;
-    const grantIsLive = exists(
-      liveGrant(tx).where(
-        and(
-          eq(oauthConsent.id, mcpWebHandoff.consentId),
-          eq(oauthConsent.userId, mcpWebHandoff.userId),
-          eq(oauthConsent.referenceId, mcpWebHandoff.organizationId),
-          eq(oauthConsent.clientId, mcpWebHandoff.oauthClientId),
-          sql`${oauthConsent.scopes} @> ${grantedScopes}`,
-        ),
-      ),
-    );
-    const consumed = (
-      await tx
-        .update(mcpWebHandoff)
-        .set({
-          consumedAt: now(),
-          consumedIpHash: ipAddress ? sha256Hex(ipAddress) : null,
-        })
-        .where(
-          and(
-            eq(mcpWebHandoff.codeHash, sha256Hex(code)),
-            isNull(mcpWebHandoff.consumedAt),
-            grantIsLive,
-            textEnabled() ? sql`true` : ne(mcpWebHandoff.kind, "text"),
-            sql`${mcpWebHandoff.expiresAt} > ${now()}::timestamptz`,
-            sql`${path} = ANY(${mcpWebHandoff.allowedPaths})`,
-          ),
-        )
-        .returning()
-    ).at(0);
-    if (!consumed) {
-      return null;
-    }
-    const completion = await complete({
-      handoff: consumed,
-      userId: brandPersistedUserId(consumed.userId),
-      organizationId: brandPersistedOrganizationId(consumed.organizationId),
-      consentId: consumed.consentId,
-      transaction: tx,
-    });
-    if (Result.isError(completion)) {
-      return abortTransaction(completion.error);
-    }
-    const sessionId = completion.value;
-    const completed = (
-      await tx
-        .update(mcpWebHandoff)
-        .set({ consumedSessionId: sessionId })
-        .where(eq(mcpWebHandoff.id, consumed.id))
-        .returning()
-    ).at(0);
-    if (!completed) {
-      panic("Handoff completion lost its locked receipt.");
-    }
-    const audit = createAuditRecorder(auditBindings(completed, request));
-    await audit(tx, {
-      action: AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED,
-      resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
-      resourceId: consumed.id,
-      metadata: {
-        kind: consumed.kind,
-        clientId: consumed.oauthClientId,
-        previousOrganizationId,
-        newOrganizationId: consumed.organizationId,
-        sessionId,
-      },
-    });
-    return {
-      handoff: completed,
-      userId: completed.userId,
-      organizationId: completed.organizationId,
-      consentId: completed.consentId,
-    };
-  });
-
 const createHandoffRedemption = ({
   db,
   now,
@@ -458,13 +407,95 @@ const createHandoffRedemption = ({
       });
     });
   };
-  const consume = async (options: HandoffConsumptionOptions) =>
-    await consumeHandoffReceipt({
-      ...options,
-      db,
-      now,
-      enabled,
-      textEnabled,
+  const consume = async ({
+    code,
+    path,
+    request,
+    ipAddress,
+    previousOrganizationId,
+    complete,
+  }: HandoffConsumptionOptions) =>
+    await withAggregateTransaction(db, async (tx) => {
+      if (!enabled()) {
+        return null;
+      }
+      const grantedScopes = sql`ARRAY[${sql.join(
+        MCP_DEFAULT_RESOURCE_SCOPES.map((scope) => sql`${scope}`),
+        sql`, `,
+      )}]::text[]`;
+      const grantIsLive = exists(
+        liveGrant(tx).where(
+          and(
+            eq(oauthConsent.id, mcpWebHandoff.consentId),
+            eq(oauthConsent.userId, mcpWebHandoff.userId),
+            eq(oauthConsent.referenceId, mcpWebHandoff.organizationId),
+            eq(oauthConsent.clientId, mcpWebHandoff.oauthClientId),
+            sql`${oauthConsent.scopes} @> ${grantedScopes}`,
+          ),
+        ),
+      );
+      const consumed = (
+        await tx
+          .update(mcpWebHandoff)
+          .set({
+            consumedAt: now(),
+            consumedIpHash: ipAddress ? sha256Hex(ipAddress) : null,
+          })
+          .where(
+            and(
+              eq(mcpWebHandoff.codeHash, sha256Hex(code)),
+              isNull(mcpWebHandoff.consumedAt),
+              grantIsLive,
+              textEnabled() ? sql`true` : ne(mcpWebHandoff.kind, "text"),
+              sql`${mcpWebHandoff.expiresAt} > ${now()}::timestamptz`,
+              sql`${path} = ANY(${mcpWebHandoff.allowedPaths})`,
+            ),
+          )
+          .returning()
+      ).at(0);
+      if (!consumed) {
+        return null;
+      }
+      const completion = await complete({
+        handoff: consumed,
+        userId: brandPersistedUserId(consumed.userId),
+        organizationId: brandPersistedOrganizationId(consumed.organizationId),
+        consentId: consumed.consentId,
+        transaction: tx,
+      });
+      if (Result.isError(completion)) {
+        return abortTransaction(completion.error);
+      }
+      const sessionId = completion.value;
+      const completed = (
+        await tx
+          .update(mcpWebHandoff)
+          .set({ consumedSessionId: sessionId })
+          .where(eq(mcpWebHandoff.id, consumed.id))
+          .returning()
+      ).at(0);
+      if (!completed) {
+        panic("Handoff completion lost its locked receipt.");
+      }
+      const audit = createAuditRecorder(auditBindings(completed, request));
+      await audit(tx, {
+        action: AUDIT_ACTION.MCP_WEB_HANDOFF_REDEEMED,
+        resourceType: AUDIT_RESOURCE_TYPE.MCP_WEB_HANDOFF,
+        resourceId: consumed.id,
+        metadata: {
+          kind: consumed.kind,
+          clientId: consumed.oauthClientId,
+          previousOrganizationId,
+          newOrganizationId: consumed.organizationId,
+          sessionId,
+        },
+      });
+      return {
+        handoff: completed,
+        userId: completed.userId,
+        organizationId: completed.organizationId,
+        consentId: completed.consentId,
+      };
     });
   const admitRedeem = async (address: string) =>
     (await consumeBudget(
@@ -503,56 +534,6 @@ const createHandoffRedemption = ({
         metadata: { kind: shown.kind, clientId: shown.oauthClientId },
       });
     });
-  const listSessionClients = async (userId: SafeId<"user">) => {
-    const result = await Result.tryPromise({
-      try: async () =>
-        await readBounded(
-          db
-            .select({
-              id: session.id,
-              clientName: sql<string>`COALESCE(${oauthClient.name}, ${oauthClient.clientId})`,
-            })
-            .from(session)
-            .innerJoin(
-              oauthConsent,
-              eq(oauthConsent.id, session.originConsentId),
-            )
-            .innerJoin(
-              oauthClient,
-              eq(oauthClient.clientId, oauthConsent.clientId),
-            )
-            .where(
-              and(
-                eq(session.userId, userId),
-                sql`${session.expiresAt} > ${now()}::timestamptz`,
-              ),
-            ),
-          HANDOFF_SESSION_CLIENTS_READ_CAP,
-        ),
-      catch: webHandoffFailure(
-        "list_session_clients",
-        "Active handoff sessions could not be listed.",
-      ),
-    });
-    if (Result.isError(result)) {
-      return result;
-    }
-    switch (result.value.type) {
-      case "complete":
-        return Result.ok(result.value.rows);
-      case "overflow":
-        return Result.err(
-          new WebHandoffOperationError({
-            operation: "list_session_clients",
-            message: "Too many active handoff sessions to list safely.",
-            cause: { cap: result.value.cap },
-          }),
-        );
-      default:
-        result.value satisfies never;
-        return panic("Unhandled bounded handoff session read disposition.");
-    }
-  };
   return {
     inspect: async (code: string) => {
       const grant = await inspectWebHandoff(db, code);
@@ -563,6 +544,5 @@ const createHandoffRedemption = ({
     auditRefusal,
     admitRedeem,
     admitUser,
-    listSessionClients,
   };
 };

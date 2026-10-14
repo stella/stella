@@ -130,6 +130,7 @@ export const PasswordSignInForm = ({
         // pending a second factor; send them to the same challenge page the
         // email-OTP flow uses instead of treating this as a completed sign-in.
         if (isTwoFactorRedirect(data)) {
+          await invalidateSession.mutateAsync();
           await navigate({
             to: "/auth/two-factor",
             search: { redirectTo },

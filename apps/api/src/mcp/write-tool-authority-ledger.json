@@ -1,5 +1,9 @@
 [
   {
+    "id": "mint_web_handoff::delegated",
+    "reason": "The mint operation verifies current OAuth consent and its live user grant, rather than a workspace mutation permission."
+  },
+  {
     "id": "save_document::any",
     "reason": "entity_id selects entity:update over entity:create; the per-operation grant stays aligned with the document-write authorization owner."
   },

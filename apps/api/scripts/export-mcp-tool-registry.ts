@@ -25,7 +25,6 @@ import {
 } from "@stll/api-contract/mcp-tool-name";
 import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
-import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import {
   dynamicToolNamespacePrefix,
   isDynamicToolNamespace,
@@ -48,13 +47,15 @@ import {
 import { hasGrantedScope } from "@/api/mcp/gateway/static-tool-visibility";
 import { listMcpResources } from "@/api/mcp/resources";
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
-import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
+import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
+  MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
+} from "@/api/mcp/static-tool-definitions";
 import {
   MCP_CLI_TOOL_SCOPES,
   type McpCliToolAnnotation,
   type McpToolDefinition,
 } from "@/api/mcp/tool-types";
-import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 
 type StaticMcpToolDefinition = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
 
@@ -145,14 +146,8 @@ process.stderr.write(
 const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
   {};
-for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
+for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
   if (tool.access !== "write") {
-    continue;
-  }
-  if (!isMcpToolVisibleTo(tool, "model")) {
-    continue;
-  }
-  if (!WRITE_TOOL_REF_FIELD_MAP[tool.name].chatProjectable) {
     continue;
   }
 

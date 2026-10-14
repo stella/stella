@@ -42,6 +42,28 @@ const censusEntry = ({
 });
 
 describe("outbound transport ownership", () => {
+  test("local Better Auth primitives stay separate from network SDKs", () => {
+    for (const module of [
+      "better-auth/cookies",
+      "better-auth/adapters/drizzle",
+      "better-auth/api",
+    ]) {
+      expect(references(`import * as primitive from "${module}";`)).toEqual([]);
+    }
+    for (const module of [
+      "better-auth",
+      "better-auth/plugins",
+      "better-auth/crypto",
+      "better-auth/db",
+      "@better-auth/cimd",
+      "@better-auth/oauth-provider/resource-client",
+    ]) {
+      expect(references(`import * as client from "${module}";`)).toEqual([
+        `module:${module}`,
+      ]);
+    }
+  });
+
   test("global request forms have one outbound capability", () => {
     const forms = [
       "void fetch(url);",
@@ -286,29 +308,6 @@ describe("outbound transport ownership", () => {
     ]) {
       expect(references(source)).toEqual([]);
     }
-  });
-
-  test("Better Auth local API utilities do not acquire transport authority", () => {
-    expect(
-      references(
-        [
-          'import { drizzleAdapter } from "better-auth/adapters/drizzle";',
-          'import { createAuthEndpoint } from "better-auth/api";',
-          'import { setSessionCookie } from "better-auth/cookies";',
-          'import { betterAuth } from "better-auth";',
-          'import { emailOTP } from "better-auth/plugins";',
-          'import { getCookieCache } from "better-auth/cookies";',
-          'import { createAuthMiddleware } from "better-auth/api";',
-          'import { hashPassword } from "better-auth/crypto";',
-          'import { getSessionFromCtx } from "better-auth/db";',
-        ].join("\n"),
-      ),
-    ).toEqual([
-      "module:better-auth",
-      "module:better-auth/crypto",
-      "module:better-auth/db",
-      "module:better-auth/plugins",
-    ]);
   });
 
   test("default client imports retain authority beside named utilities", () => {

@@ -9,7 +9,7 @@ type MountedAuthEndpointPath = Exclude<
   RegisteredAuthApi[keyof RegisteredAuthApi]["path"],
   undefined
 >;
-export type HandoffAuthDisposition = "step-up-method" | "refused" | "ordinary";
+type HandoffAuthDisposition = "step-up-method" | "refused" | "ordinary";
 
 /** Each registered HTTP route has an explicit handoff-session disposition. */
 export const HANDOFF_AUTH_ENDPOINT_POLICY = {

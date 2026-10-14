@@ -63,7 +63,7 @@ export const createHandoffStepUpGuard = (metadata: HandoffAccessMetadata) => {
       (context.handoffOriginConsentId !== null &&
         typeof context.handoffOriginConsentId !== "string")
     ) {
-      return panic("Handoff guard requires resolved authentication");
+      return panic("Handoff guard requires resolved session provenance");
     }
     return context.handoffOriginConsentId
       ? status(403, {
@@ -76,7 +76,7 @@ export const createHandoffStepUpGuard = (metadata: HandoffAccessMetadata) => {
   return guard;
 };
 
-export type HandoffStepUpGuard = (context: unknown) => unknown;
+type HandoffStepUpGuard = ReturnType<typeof createHandoffStepUpGuard>;
 
 export const isHandoffStepUpGuard = (
   value: unknown,

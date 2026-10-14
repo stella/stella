@@ -8,6 +8,7 @@ export default {
     "apps/api/src/lib/auth.ts",
     "apps/api/src/lib/auth/mcp-web-handoff.ts",
     "apps/api/src/lib/auth/mcp-web-handoff-plugin.ts",
+    "apps/api/src/lib/auth/mcp-web-handoff-session.ts",
   ],
   summary:
     "The authentication owner supplies database and budget handles to the " +

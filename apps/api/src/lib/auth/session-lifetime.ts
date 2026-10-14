@@ -98,6 +98,72 @@ const resolveObservedSession = async (
     : null;
 };
 
+type PriorSessionTokenOptions = {
+  context: AuthContext;
+  token: string;
+  now: Date;
+};
+
+const findPriorSessionToken = async ({
+  context,
+  token,
+  now,
+}: PriorSessionTokenOptions) => {
+  const adapter = await getCurrentAdapter(context.adapter);
+  const current: unknown = await adapter.findOne({
+    model: "session",
+    where: [
+      { field: "priorTokenHash", value: hashSessionToken(token) },
+      { field: "priorTokenExpiresAt", operator: "gt", value: now },
+      { field: "expiresAt", operator: "gt", value: now },
+    ],
+    select: ["token"],
+  });
+  return current === null
+    ? null
+    : v.parse(v.object({ token: v.string() }), current).token;
+};
+
+type SessionDeletionOptions = {
+  deleteSession: AuthContext["internalAdapter"]["deleteSession"];
+  observe: (token: string) => Promise<Session | null>;
+  forgetObservations: () => void;
+  now: () => Date;
+};
+
+const createSessionDeleter =
+  ({
+    deleteSession,
+    observe,
+    forgetObservations,
+    now,
+  }: SessionDeletionOptions) =>
+  async (token: string) => {
+    const ctx = tryGetCurrentAuthEndpointContext();
+    if (ctx) {
+      // Revocation inside an SDK transaction must use its adapter throughout.
+      await deleteSession(token);
+      const canonical = await findPriorSessionToken({
+        context: ctx.context,
+        token,
+        now: now(),
+      });
+      if (canonical !== null) {
+        await deleteSession(canonical);
+      }
+      forgetObservations();
+      return;
+    }
+    const current = await observe(token);
+    await deleteSession(current?.token ?? token);
+    forgetObservations();
+    const remaining = await observe(token);
+    if (remaining) {
+      await deleteSession(remaining.token);
+      forgetObservations();
+    }
+  };
+
 export const createSessionLifetime = ({
   store,
   now = () => new Date(),
@@ -237,32 +303,22 @@ export const createSessionLifetime = ({
         const current = await observe(token);
         return current ? await updateSession(current.token, data) : null;
       }
-      const transactionAdapter = await getCurrentAdapter(ctx.context.adapter);
-      const current: unknown = await transactionAdapter.findOne({
-        model: "session",
-        where: [
-          { field: "priorTokenHash", value: hashSessionToken(token) },
-          { field: "priorTokenExpiresAt", operator: "gt", value: now() },
-          { field: "expiresAt", operator: "gt", value: now() },
-        ],
-        select: ["token"],
+      const canonical = await findPriorSessionToken({
+        context: ctx.context,
+        token,
+        now: now(),
       });
-      if (current === null) {
+      if (canonical === null) {
         return null;
       }
-      const canonical = v.parse(v.object({ token: v.string() }), current);
-      return await updateSession(canonical.token, data);
+      return await updateSession(canonical, data);
     };
-    adapter.deleteSession = async (token) => {
-      const current = await observe(token);
-      await deleteSession(current?.token ?? token);
-      forgetObservations();
-      const remaining = await observe(token);
-      if (remaining) {
-        await deleteSession(remaining.token);
-        forgetObservations();
-      }
-    };
+    adapter.deleteSession = createSessionDeleter({
+      deleteSession,
+      observe,
+      forgetObservations,
+      now,
+    });
   };
 
   const plugin = {

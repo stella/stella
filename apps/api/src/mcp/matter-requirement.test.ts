@@ -12,8 +12,8 @@ import {
 import type { McpWriteToolName } from "@/api/mcp/matter-requirement";
 import { MANAGE_ORG_ACTIONS } from "@/api/mcp/research-admin-tools";
 import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
-  MODEL_VISIBLE_MCP_TOOL_DEFINITIONS,
 } from "@/api/mcp/static-tool-definitions";
 import type { McpToolInputSchema } from "@/api/mcp/tool-types";
 
@@ -21,7 +21,7 @@ const WORKSPACE_ID = toSafeId<"workspace">(
   "0dc54d0c-10d7-401d-897e-e801dbd0998c",
 );
 
-const registryWriteToolNames = MODEL_VISIBLE_MCP_TOOL_DEFINITIONS.flatMap(
+const registryWriteToolNames = DEFAULT_MCP_TOOL_DEFINITIONS.flatMap(
   (definition) => (definition.access === "write" ? [definition.name] : []),
 );
 
@@ -81,7 +81,7 @@ describe("write tool scope classification", () => {
     }
   });
 
-  test("keeps creating a matter and the organization library matter-free", () => {
+  test("keeps organization-scoped writes matter-free", () => {
     for (const name of [
       "save_matter",
       "save_playbook",
@@ -91,6 +91,7 @@ describe("write tool scope classification", () => {
       "configure_template_fields",
       "save_contact",
       "set_practice_jurisdictions",
+      "mint_web_handoff",
     ] as const) {
       expect(writeCallNeedsMatter(name, {}), name).toBe(false);
     }
