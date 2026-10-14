@@ -3,12 +3,94 @@ import { describe, expect, test } from "bun:test";
 import {
   UNKNOWN,
   contextFromNested,
+  conjunctiveOutputConditions,
   contextWithPlanOutputs,
   definitelyFalse,
   evaluate,
 } from "./github-expression";
 
 const none = { values: {} };
+
+describe("bounded output condition conjunctions", () => {
+  const output = "needs.plan.outputs.selected";
+  const outputs = new Set([output, "needs.plan.outputs.other"]);
+  test.each([
+    [[`${output} == 'true'`, `${output} == 'false'`], "contradictory"],
+    [[`${output} == 'true'`, `${output} != 'true'`], "contradictory"],
+    [[output, `${output} == ''`], "contradictory"],
+    [
+      [`${output} == 'TRUE'`, `(${output} == 'true') && !cancelled()`],
+      "consistent",
+    ],
+    [[`${output} != 'false'`, `${output} == 'true'`], "consistent"],
+    [
+      [`${output} == 'true' || github.event_name == 'workflow_dispatch'`],
+      "consistent",
+    ],
+    [[`!(${output} == 'false')`], "consistent"],
+    [[`${output} == 'true'`, `!(${output} == 'true')`], "contradictory"],
+    [[`contains(${output}, 'true')`], "consistent"],
+    [[`${output} == needs.plan.outputs.other`], "consistent"],
+    [["false"], "contradictory"],
+    [[`${output} == 'true' &&`], "unresolved"],
+    [[`(${output} == 'true') && (success() || failure())`], "consistent"],
+  ] as const)("bounds %j as %s", (conditions, type) => {
+    expect(conjunctiveOutputConditions({ conditions, outputs }).type).toBe(
+      type,
+    );
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [...conditions].toReversed(),
+        outputs,
+      }).type,
+    ).toBe(type);
+  });
+
+  test.each([
+    "steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
+    "needs.ci-plan.outputs.coverage_profile != 'pilot-fast-v1' || contains(fromJSON(needs.ci-plan.outputs.pilot_fast_jobs || '[]'), 'ci-browser')",
+    "needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true')",
+  ])("keeps the real workflow alternatives consistent: %s", (condition) => {
+    const registered = new Set([
+      "steps.check.outputs.trusted",
+      "needs.ci-plan.outputs.coverage_profile",
+      "needs.ci-plan.outputs.pilot_fast_jobs",
+      "needs.ci-plan.outputs.suite_depth",
+      "needs.ci-plan.outputs.service_suites_pr_required",
+    ]);
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [condition],
+        outputs: registered,
+      }),
+    ).toEqual({ type: "consistent" });
+  });
+
+  test("caps DNF expansion before granting output consistency", () => {
+    const condition = Array.from(
+      { length: 7 },
+      (_, index) =>
+        `(github.field${index} == 'a' || github.field${index} == 'b')`,
+    ).join(" && ");
+    expect(
+      conjunctiveOutputConditions({ conditions: [condition], outputs }),
+    ).toEqual({
+      type: "unresolved",
+      reason: "output condition DNF exceeds 64 disjuncts",
+    });
+    expect(
+      conjunctiveOutputConditions({
+        conditions: [
+          condition.replace(
+            "github.field6 == 'a' || github.field6 == 'b'",
+            "true",
+          ),
+        ],
+        outputs,
+      }).type,
+    ).toBe("consistent");
+  });
+});
 
 describe("GitHub expression evaluation", () => {
   test("nested contexts preserve projections, status functions and unknown paths", () => {

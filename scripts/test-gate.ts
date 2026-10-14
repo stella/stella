@@ -19,6 +19,7 @@ import {
 import { allE2eShards } from "./e2e-spec-shards-core";
 import {
   contextFromNested,
+  conjunctiveOutputConditions,
   definitelyFalse,
   evaluate,
 } from "./github-expression";
@@ -3601,7 +3602,8 @@ const registeredJobOutputs = (
 export const referencedCollectorOutputs = (
   workflow: unknown,
 ): ReadonlySet<string> => {
-  const jobs = workflowRecord(workflowRecord(workflow)?.["jobs"]) ?? {};
+  const root = workflowRecord(workflow);
+  const jobs = workflowRecord(root?.["jobs"]) ?? {};
   const needed = new Set<string>();
   const collect = (jobName: string, expression: unknown): void => {
     if (typeof expression !== "string") {
@@ -3654,6 +3656,7 @@ export const referencedCollectorOutputs = (
       ) {
         continue;
       }
+      collect(name, root?.["if"]);
       collect(name, job["if"]);
       collect(name, workflowRecord(job["strategy"])?.["matrix"]);
       collect(name, step["if"]);
@@ -3785,6 +3788,37 @@ export type GatingWorkflowAnalysis = {
   readonly jobs: ReadonlyMap<string, readonly GatingCommand[]>;
 };
 
+type CollectorOutputConditionOptions = {
+  readonly conditions: readonly unknown[];
+  readonly outputs: ReadonlySet<string>;
+};
+
+const collectorOutputConditionFailure = ({
+  conditions,
+  outputs,
+}: CollectorOutputConditionOptions): string | undefined => {
+  const expressions = conditions.flatMap((condition) => {
+    if (typeof condition === "string") {
+      return [conditionExpression(condition)];
+    }
+    return condition === false ? ["false"] : [];
+  });
+  if (
+    !expressions.some((expression) =>
+      referencedContexts(expression).some((reference) =>
+        outputs.has(reference),
+      ),
+    )
+  ) {
+    return undefined;
+  }
+  const result = conjunctiveOutputConditions({
+    conditions: expressions,
+    outputs,
+  });
+  return result.type === "consistent" ? undefined : result.reason;
+};
+
 const analyzeWorkflowWithProducerDeclarations = (
   workflow: unknown,
   registry: readonly TrustedOutputProducer[] = TRUSTED_OUTPUT_PRODUCERS,
@@ -3857,41 +3891,42 @@ const analyzeWorkflowWithProducerDeclarations = (
         if (typeof command !== "string") {
           return [];
         }
+        const trustedOutputs =
+          registered.references.get(name) ?? new Set<string>();
+        const outputFailure = collectorOutputConditionFailure({
+          conditions: [root?.["if"], job["if"], step["if"]],
+          outputs: trustedOutputs,
+        });
+        if (outputFailure !== undefined) {
+          findings.add(
+            `job condition: ${name}/step-${stepIndex + 1} has ${outputFailure}`,
+          );
+          return [];
+        }
         const executingLegs = new Map<string, MatrixLeg>();
         const unresolvedContexts = new Set<string>();
         for (const eventName of GATING_EVENTS) {
           for (const matrix of legs) {
             const contextOptions = { eventName, inputs, matrix, variables };
-            const jobCondition = executableCondition({
-              ...contextOptions,
-              condition: job["if"],
-              declaredInputs,
-              dynamicMatrix,
-              trustedOutputs:
-                registered.references.get(name) ?? new Set<string>(),
-            });
-            const stepCondition = executableCondition({
-              ...contextOptions,
-              condition: step["if"],
-              declaredInputs,
-              dynamicMatrix,
-              trustedOutputs:
-                registered.references.get(name) ?? new Set<string>(),
-            });
-            if (
-              !jobCondition.staticallyFalse &&
-              !stepCondition.staticallyFalse
-            ) {
-              for (const context of [
-                ...jobCondition.unresolved,
-                ...stepCondition.unresolved,
-              ]) {
+            const conditions = [root?.["if"], job["if"], step["if"]].map(
+              (condition) =>
+                executableCondition({
+                  ...contextOptions,
+                  condition,
+                  declaredInputs,
+                  dynamicMatrix,
+                  trustedOutputs,
+                }),
+            );
+            if (conditions.every((condition) => !condition.staticallyFalse)) {
+              for (const context of conditions.flatMap(
+                (condition) => condition.unresolved,
+              )) {
                 unresolvedContexts.add(context);
               }
             }
             if (
-              jobCondition.executable &&
-              stepCondition.executable &&
+              conditions.every((condition) => condition.executable) &&
               !ignoresFailure(job["continue-on-error"], contextOptions) &&
               !ignoresFailure(step["continue-on-error"], contextOptions)
             ) {

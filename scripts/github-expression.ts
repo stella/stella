@@ -13,7 +13,7 @@
  * guessing.
  */
 
-import { panic } from "better-result";
+import { panic, Result as OperationResult } from "better-result";
 
 export const UNKNOWN = Symbol("unknown");
 type Value =
@@ -100,6 +100,306 @@ const tokenize = (source: string): Token[] => {
     }
   }
   return tokens;
+};
+
+type LiteralOutputConstraint = {
+  readonly output: string;
+  readonly operator: "==" | "!=";
+  readonly value: string;
+};
+
+type OutputCondition =
+  | { readonly type: "literal"; readonly value: boolean }
+  | {
+      readonly type: "constraint";
+      readonly constraint: LiteralOutputConstraint;
+    }
+  | { readonly type: "opaque"; readonly polarity: "positive" | "negative" }
+  | {
+      readonly type: "and" | "or";
+      readonly left: OutputCondition;
+      readonly right: OutputCondition;
+    };
+
+const MAX_OUTPUT_DISJUNCTS = 64;
+
+const ungroupTokens = (input: readonly Token[]): readonly Token[] => {
+  let tokens = input;
+  while (tokens.at(0)?.kind === "op" && tokens.at(0)?.value === "(") {
+    let depth = 0;
+    const end = tokens.findIndex((token) => {
+      if (token.kind !== "op") {
+        return false;
+      }
+      if (token.value === "(") {
+        depth += 1;
+      }
+      if (token.value === ")") {
+        depth -= 1;
+      }
+      return depth === 0;
+    });
+    if (end !== tokens.length - 1) {
+      break;
+    }
+    tokens = tokens.slice(1, -1);
+  }
+  return tokens;
+};
+
+const topLevelOperator = (
+  tokens: readonly Token[],
+  operators: ReadonlySet<string>,
+): number => {
+  let depth = 0;
+  return tokens.findIndex((token) => {
+    if (token.kind !== "op") {
+      return false;
+    }
+    if (token.value === "(") {
+      depth += 1;
+    }
+    if (token.value === ")") {
+      depth -= 1;
+    }
+    return depth === 0 && operators.has(token.value);
+  });
+};
+
+const negateOutputCondition = (node: OutputCondition): OutputCondition => {
+  switch (node.type) {
+    case "literal":
+      return { type: "literal", value: !node.value };
+    case "constraint":
+      return {
+        type: "constraint",
+        constraint: {
+          output: node.constraint.output,
+          operator: node.constraint.operator === "==" ? "!=" : "==",
+          value: node.constraint.value,
+        },
+      };
+    case "opaque":
+      return {
+        type: "opaque",
+        polarity: node.polarity === "positive" ? "negative" : "positive",
+      };
+    case "and":
+    case "or":
+      return {
+        type: node.type === "and" ? "or" : "and",
+        left: negateOutputCondition(node.left),
+        right: negateOutputCondition(node.right),
+      };
+    default:
+      return panic(`Unknown output condition: ${String(node satisfies never)}`);
+  }
+};
+
+const outputAtom = (
+  tokens: readonly Token[],
+  outputs: ReadonlySet<string>,
+): OutputCondition => {
+  const first = tokens.at(0);
+  if (tokens.length === 1 && first?.kind === "word") {
+    if (first.value === "true" || first.value === "false") {
+      return { type: "literal", value: first.value === "true" };
+    }
+    if (outputs.has(first.value)) {
+      return {
+        type: "constraint",
+        constraint: { output: first.value, operator: "!=", value: "" },
+      };
+    }
+  }
+  const operator = tokens.at(1);
+  const last = tokens.at(2);
+  if (
+    tokens.length === 3 &&
+    operator?.kind === "op" &&
+    (operator.value === "==" || operator.value === "!=")
+  ) {
+    const reference = first?.kind === "word" ? first : last;
+    const literal = first?.kind === "string" ? first : last;
+    if (
+      reference?.kind === "word" &&
+      outputs.has(reference.value) &&
+      literal?.kind === "string"
+    ) {
+      return {
+        type: "constraint",
+        constraint: {
+          output: reference.value,
+          operator: operator.value,
+          value: literal.value.toLowerCase(),
+        },
+      };
+    }
+  }
+  return { type: "opaque", polarity: "positive" };
+};
+
+const parseOutputCondition = (
+  input: readonly Token[],
+  outputs: ReadonlySet<string>,
+): OutputCondition => {
+  const tokens = ungroupTokens(input);
+  if (tokens.length === 0) {
+    return panic("Missing output condition atom");
+  }
+  for (const [operator, type] of [
+    ["||", "or"],
+    ["&&", "and"],
+  ] as const) {
+    const index = topLevelOperator(tokens, new Set([operator]));
+    if (index !== -1) {
+      return {
+        type,
+        left: parseOutputCondition(tokens.slice(0, index), outputs),
+        right: parseOutputCondition(tokens.slice(index + 1), outputs),
+      };
+    }
+  }
+  if (
+    tokens.at(0)?.kind === "op" &&
+    tokens.at(0)?.value === "!" &&
+    topLevelOperator(tokens, COMPARISONS) === -1
+  ) {
+    return negateOutputCondition(
+      parseOutputCondition(tokens.slice(1), outputs),
+    );
+  }
+  return outputAtom(tokens, outputs);
+};
+
+type OutputDisjunction =
+  | {
+      readonly type: "expanded";
+      readonly terms: readonly (readonly LiteralOutputConstraint[])[];
+    }
+  | { readonly type: "unresolved"; readonly reason: string };
+
+const expandOutputCondition = (node: OutputCondition): OutputDisjunction => {
+  switch (node.type) {
+    case "literal":
+      return { type: "expanded", terms: node.value ? [[]] : [] };
+    case "opaque":
+      return { type: "expanded", terms: [[]] };
+    case "constraint":
+      return { type: "expanded", terms: [[node.constraint]] };
+    case "and":
+    case "or": {
+      const left = expandOutputCondition(node.left);
+      if (left.type === "unresolved") {
+        return left;
+      }
+      const right = expandOutputCondition(node.right);
+      if (right.type === "unresolved") {
+        return right;
+      }
+      const count =
+        node.type === "and"
+          ? left.terms.length * right.terms.length
+          : left.terms.length + right.terms.length;
+      if (count > MAX_OUTPUT_DISJUNCTS) {
+        return {
+          type: "unresolved",
+          reason: `output condition DNF exceeds ${MAX_OUTPUT_DISJUNCTS} disjuncts`,
+        };
+      }
+      return {
+        type: "expanded",
+        terms:
+          node.type === "or"
+            ? [...left.terms, ...right.terms]
+            : left.terms.flatMap((term) =>
+                right.terms.map((other) => [...term, ...other]),
+              ),
+      };
+    }
+    default:
+      return panic(`Unknown output condition: ${String(node satisfies never)}`);
+  }
+};
+
+type LiteralOutputState = { equal?: string; excluded: Set<string> };
+
+const outputConstraintConflict = (
+  constraints: readonly LiteralOutputConstraint[],
+): string | undefined => {
+  const state = new Map<string, LiteralOutputState>();
+  for (const constraint of constraints) {
+    const entry: LiteralOutputState = state.get(constraint.output) ?? {
+      excluded: new Set<string>(),
+    };
+    if (constraint.operator === "==") {
+      if (
+        (entry.equal !== undefined && entry.equal !== constraint.value) ||
+        entry.excluded.has(constraint.value)
+      ) {
+        return constraint.output;
+      }
+      entry.equal = constraint.value;
+    } else {
+      if (entry.equal === constraint.value) {
+        return constraint.output;
+      }
+      entry.excluded.add(constraint.value);
+    }
+    state.set(constraint.output, entry);
+  }
+  return undefined;
+};
+
+type ConjunctiveOutputConditionsOptions = {
+  readonly conditions: readonly string[];
+  readonly outputs: ReadonlySet<string>;
+};
+
+type ConjunctiveOutputConditionsResult =
+  | { readonly type: "consistent" }
+  | { readonly type: "contradictory"; readonly reason: string }
+  | { readonly type: "unresolved"; readonly reason: string };
+
+/** Bound output consistency without assigning values to other workflow atoms. */
+export const conjunctiveOutputConditions = ({
+  conditions,
+  outputs,
+}: ConjunctiveOutputConditionsOptions): ConjunctiveOutputConditionsResult => {
+  const parsed = OperationResult.try(() => {
+    let path: OutputCondition = { type: "literal", value: true };
+    for (const condition of conditions) {
+      evaluate(condition, { values: {} });
+      path = {
+        type: "and",
+        left: path,
+        right: parseOutputCondition(tokenize(condition), outputs),
+      };
+    }
+    return path;
+  });
+  if (parsed.isErr()) {
+    return { type: "unresolved", reason: "output condition parse failure" };
+  }
+  const disjunction = expandOutputCondition(parsed.value);
+  if (disjunction.type === "unresolved") {
+    return disjunction;
+  }
+  let conflict: string | undefined;
+  for (const term of disjunction.terms) {
+    const output = outputConstraintConflict(term);
+    if (output === undefined) {
+      return { type: "consistent" };
+    }
+    conflict ??= output;
+  }
+  return {
+    type: "contradictory",
+    reason:
+      conflict === undefined
+        ? "literal false condition"
+        : `contradictory trusted output constraints: ${conflict}`,
+  };
 };
 
 const isTruthy = (value: Result): boolean | typeof UNKNOWN => {

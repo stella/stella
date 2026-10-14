@@ -1720,6 +1720,61 @@ jobs:
     expect(analyzeGatingWorkflow(intact, registry).jobs.has("checks")).toBe(
       true,
     );
+    for (const [stepCondition, expected, reason] of [
+      [
+        "needs.ci-plan.outputs.selected == 'false'",
+        false,
+        "contradictory trusted output constraints",
+      ],
+      [
+        "needs.ci-plan.outputs.selected != 'true'",
+        false,
+        "contradictory trusted output constraints",
+      ],
+      ["needs.ci-plan.outputs.selected == 'true'", true, ""],
+      [
+        "!(needs.ci-plan.outputs.selected == 'true')",
+        false,
+        "contradictory trusted output constraints",
+      ],
+      ["needs.ci-plan.outputs.selected == 'true' || success()", true, ""],
+      [
+        Array.from(
+          { length: 7 },
+          (_, index) =>
+            `(github.field${index} == 'a' || github.field${index} == 'b')`,
+        ).join(" && "),
+        false,
+        "output condition DNF exceeds 64 disjuncts",
+      ],
+    ] as const) {
+      const workflow = Bun.YAML.parse(
+        source.replace(
+          "      - run: bun test scripts/named.test.ts",
+          () =>
+            `      - if: ${stepCondition}\n        run: bun test scripts/named.test.ts`,
+        ),
+      );
+      const analysis = analyzeGatingWorkflow(workflow, registry);
+      expect(analysis.jobs.has("checks"), stepCondition).toBe(expected);
+      if (!expected) {
+        expect(analysis.findings.join("\n")).toContain(reason);
+      }
+      const failure = firstCollectionFailure({
+        file: "scripts/named.test.ts",
+        scenarios: new Map(),
+        topology: {
+          workflow: JSON.stringify(workflow),
+          gatingJobs: analysis.jobs,
+          shardedPackages: new Set<string>(),
+        },
+      });
+      if (expected) {
+        expect(failure).toBeUndefined();
+      } else {
+        expect(failure).toBeDefined();
+      }
+    }
     expect(
       validateTrustedOutputProducers({
         workflow: Bun.YAML.parse(
