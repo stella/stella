@@ -201,7 +201,7 @@ ALTER TABLE "legal_reader_annotations" FORCE ROW LEVEL SECURITY;--> statement-br
 -- go with it, whoever wrote them: the claim is not a foreign key here (a key
 -- to the fenced claims would enrol reader notes in the entity gate graph), so
 -- one statement-level trigger does what the cascade would.
--- stella-migration-safety: reviewed security-definer, delete-data - fixed search path, PUBLIC execute revoked; deletes only reader comments whose claim the firing statement deleted, matched on matter and claim through the partial index
+-- stella-migration-safety: reviewed security-definer - fixed search path, PUBLIC execute revoked; deletes only reader comments whose claim the firing statement deleted, matched on matter and claim through the partial index
 CREATE FUNCTION "legal_reader_annotations_drop_claim_comments"()
 RETURNS trigger
 LANGUAGE plpgsql

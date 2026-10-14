@@ -492,7 +492,7 @@ describe.skipIf(!enabled)("comments on verification claims", () => {
           sql`SELECT count(*)::int AS waiting FROM pg_catalog.pg_stat_activity
             WHERE datname = current_database() AND wait_event_type = 'Lock'`,
         );
-        if ((waiting.rows.at(0)?.waiting ?? 0) > 0) {
+        if ((waiting.at(0)?.waiting ?? 0) > 0) {
           break;
         }
         if (attempt > 200) {

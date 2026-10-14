@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { toSafeId } from "@/lib/safe-id";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });
 type RecordedRequest = { method: string; path: string; body: unknown };
@@ -88,7 +90,7 @@ const comment = ({
   createdAt: at,
   endOffset: 10,
   groupId: null,
-  id,
+  id: toSafeId<"legalReaderAnnotation">(id),
   kind: "comment" as const,
   mine,
   quote: claim.text,
