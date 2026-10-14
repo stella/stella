@@ -37,6 +37,12 @@ describe("persisted Folio collaboration snapshot loading", () => {
       },
     });
     expect(Result.isError(loaded) && loaded.error.code).toBe("invalid_update");
+    expect(
+      Result.match(loaded, {
+        ok: ({ outcome }) => outcome,
+        err: ({ code }) => code,
+      }),
+    ).toBe("invalid_update");
     expect(recoveryCalls).toBe(0);
   });
 

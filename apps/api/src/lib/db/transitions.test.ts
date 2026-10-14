@@ -5,6 +5,8 @@ import {
   integer,
   pgTable,
   primaryKey,
+  index,
+  uniqueIndex,
   text,
   PgDialect,
 } from "drizzle-orm/pg-core";
@@ -864,6 +866,86 @@ test("scoped identities accept only schema-declared non-null primary or unique c
     );
   }
 });
+
+test.each([
+  { kind: "unique", accepted: true },
+  { kind: "partial", accepted: false },
+  { kind: "expression", accepted: false },
+  { kind: "ordinary", accepted: false },
+  { kind: "nullable", accepted: false },
+  { kind: "extra-column", accepted: false },
+] as const)(
+  "scoped identity accepts complete unique indexes: $kind",
+  ({ kind, accepted }) => {
+    const rows = pgTable(
+      "indexed_transition_identity",
+      {
+        id: text().notNull(),
+        organizationId: text("organization_id").notNull(),
+        optionalKey: text("optional_key"),
+        state: text({ enum: ["active", "lapsed"] }).notNull(),
+      },
+      (table) => {
+        switch (kind) {
+          case "unique":
+            return [uniqueIndex("identity").on(table.organizationId, table.id)];
+          case "partial":
+            return [
+              uniqueIndex("identity")
+                .on(table.id, table.organizationId)
+                .where(sql`${table.state} = 'active'`),
+            ];
+          case "expression":
+            return [
+              uniqueIndex("identity").on(
+                sql`lower(${table.id})`,
+                table.organizationId,
+              ),
+            ];
+          case "ordinary":
+            return [index("identity").on(table.id, table.organizationId)];
+          case "nullable":
+            return [
+              uniqueIndex("identity").on(
+                table.optionalKey,
+                table.organizationId,
+              ),
+            ];
+          case "extra-column":
+            return [
+              uniqueIndex("identity").on(
+                table.id,
+                table.organizationId,
+                table.state,
+              ),
+            ];
+          default:
+            return kind satisfies never;
+        }
+      },
+    );
+    const declare = () =>
+      defineScopedTransitions({
+        table: rows,
+        key: kind === "nullable" ? "optionalKey" : "id",
+        scope: ["organizationId"],
+        stateColumn: "state",
+        edges: { active: ["lapsed"], lapsed: [] },
+        initial: ["active"],
+      });
+    if (!accepted) {
+      expect(declare).toThrow(
+        "A scoped transition identity must cover exactly one non-null primary or unique key",
+      );
+      return;
+    }
+    expect(declare()).toMatchObject({
+      key: "id",
+      scope: ["organizationId"],
+      stateColumn: "state",
+    });
+  },
+);
 
 const leases = ["idle", "held"] as const;
 const leasedJobs = pgTable("lifecycle_test_jobs", {

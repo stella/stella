@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import type { SQL } from "drizzle-orm";
+import { PgDialect } from "drizzle-orm/pg-core";
 import { Doc, XmlElement, XmlText, encodeStateAsUpdate } from "yjs";
 
 import { FOLIO_YJS_ATTR_SCHEMA_VERSION } from "@stll/folio-core/server";
@@ -30,7 +32,7 @@ type QueryBuilder = {
 
 type QueryApi = {
   delete: () => QueryBuilder;
-  execute: () => Promise<Row[]>;
+  execute: (query: SQL) => Promise<Row[]>;
   insert: () => QueryBuilder;
   select: () => QueryBuilder;
   update: () => QueryBuilder;
@@ -112,9 +114,19 @@ const scopedTransaction: QueryApi = {
     scopedDeleteCalls += 1;
     return createScopedQueryBuilder();
   },
-  execute: async () => {
-    const row = resolveQueuedRows(scopedRows.shift()).at(0);
-    return [{ count: row === undefined ? 0 : 1 }];
+  execute: async (query) => {
+    const { sql } = new PgDialect().sqlToQuery(query);
+    if (sql.includes("pg_advisory_xact_lock")) {
+      return [{}];
+    }
+    if (/FOR (?:NO KEY )?UPDATE/u.test(sql)) {
+      return [{ id: workspaceId, organizationId }];
+    }
+    const rows = resolveQueuedRows(scopedRows.shift());
+    if (sql.includes("AS count FROM changed")) {
+      return [{ count: rows.length }];
+    }
+    return rows;
   },
   insert: () =>
     createScopedQueryBuilder({ captureValues: true, readsRows: false }),
@@ -334,6 +346,38 @@ describe("folio collaboration room token lifetime", () => {
 });
 
 describe("folio collaboration room snapshot generation", () => {
+  test("corrupt persisted snapshots return a handler failure without resetting the room", async () => {
+    const authorized = await authorize(validRow());
+    if (authorized.status !== "authorized") {
+      throw new Error("Expected an authorized snapshot target");
+    }
+    scopedRows = [
+      [
+        {
+          generation: 3,
+          yjsSnapshotFileId,
+          yjsSnapshotRevision: 4,
+          yjsSnapshotUpdatedAt: new Date(),
+        },
+      ],
+    ];
+
+    const loaded = await loadFolioCollabSnapshot(authorized.value, async () =>
+      Buffer.alloc(0),
+    );
+    expect(Result.isError(loaded)).toBe(true);
+    if (!Result.isError(loaded)) {
+      throw new TypeError("Expected corrupt snapshot failure");
+    }
+    expect(loaded.error).toMatchObject({
+      _tag: "HandlerError",
+      status: 500,
+      cause: { code: "invalid_update" },
+    });
+    expect(scopedCalls).toBe(1);
+    expect(scopedInsertedRows).toEqual([]);
+  });
+
   test("retries the current pointer when a concurrent store removes the old object", async () => {
     const authorized = await authorize(validRow());
     expect(authorized.status).toBe("authorized");

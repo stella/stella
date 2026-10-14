@@ -6,6 +6,7 @@ import {
   parseFolioCollabRoomName,
   toFolioCollabRoomName,
 } from "./folio-collab";
+import type { FolioCollabSnapshotLoadResponse } from "./folio-collab";
 import { toSafeId } from "./safe-id";
 
 const ROOM_ID = toSafeId<"folioCollabRoom">(
@@ -39,7 +40,7 @@ test("snapshot reset responses require the generation actually reset and no upda
     resetGeneration: 3,
     snapshotBase64: null,
     snapshotRevision: 5,
-  };
+  } satisfies FolioCollabSnapshotLoadResponse;
   expect(v.parse(folioCollabSnapshotLoadResponseSchema, reset)).toEqual(reset);
   const { resetGeneration, ...withoutResetGeneration } = reset;
   expect(
