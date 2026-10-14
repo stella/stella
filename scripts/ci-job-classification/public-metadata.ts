@@ -67,11 +67,42 @@ const safePath = (path: string) => {
     reject("unsafe metadata path");
   }
 };
+type MetadataReferenceKind = "reusable-workflow" | "action";
+type RemoteMetadataPathOptions = {
+  reference: string;
+  targetPath: string;
+  kind: MetadataReferenceKind;
+};
+const matchesRemoteMetadataPath = ({
+  reference,
+  targetPath,
+  kind,
+}: RemoteMetadataPathOptions) => {
+  const revision = reference.lastIndexOf("@");
+  const parts = reference.slice(0, revision).split("/");
+  if (
+    revision <= 0 ||
+    revision === reference.length - 1 ||
+    parts.length < 2 ||
+    parts.some((part) => part.length === 0)
+  ) {
+    reject("invalid remote metadata reference");
+  }
+  const remotePath = parts.slice(2).join("/");
+  if (remotePath) {
+    safePath(remotePath);
+  }
+  const directory = remotePath ? `${remotePath}/` : "";
+  return kind === "reusable-workflow"
+    ? targetPath === remotePath
+    : targetPath === `${directory}action.yml` ||
+        targetPath === `${directory}action.yaml`;
+};
 type ReferenceOptions = {
   callerRepository: string;
   target: PublicMetadata["nodes"][number];
   reference: string;
-  kind: "reusable-workflow" | "action";
+  kind: MetadataReferenceKind;
 };
 const verifyReference = ({
   callerRepository,
@@ -86,6 +117,21 @@ const verifyReference = ({
     reject("reusable workflow requires callee job metadata");
   }
   if (target.type === "metadata") {
+    if (
+      kind === "reusable-workflow" &&
+      (reference.startsWith("./") || reference.startsWith("$/")) &&
+      (target.repository !== callerRepository ||
+        target.path !== reference.slice(2))
+    ) {
+      reject("local reusable workflow metadata path or repository mismatch");
+    }
+    if (
+      !reference.startsWith("./") &&
+      !reference.startsWith("$/") &&
+      !matchesRemoteMetadataPath({ reference, targetPath: target.path, kind })
+    ) {
+      reject("remote metadata path mismatch");
+    }
     if (reference.startsWith("$/")) {
       const local = reference.slice(2);
       const exactPath = /\.ya?ml$/u.test(local)

@@ -289,6 +289,149 @@ test("job-level reusable calls cannot replace callee classifications with a pinn
     "reusable workflow requires callee job metadata",
   );
 });
+type ReboundReferenceOptions = {
+  original: string;
+  replacement: string;
+  target: string;
+  repository?: string;
+  targetPath?: string;
+};
+const reboundReference = ({
+  original,
+  replacement,
+  target,
+  repository,
+  targetPath,
+}: ReboundReferenceOptions) => {
+  const f = fixture();
+  const rootKey = "candidate:.github/workflows/ci.yml";
+  const originalWorkflow = f.documents.get(rootKey);
+  if (originalWorkflow === undefined || !originalWorkflow.includes(original)) {
+    throw new AdmissionError({ message: "reference fixture missing" });
+  }
+  const workflow = originalWorkflow.replace(original, () => replacement);
+  const parsed = parseDocument(workflow);
+  if (parsed.isErr()) {
+    throw parsed.error;
+  }
+  f.documents.set(rootKey, workflow);
+  const manifest: PublicMetadata = {
+    ...f.manifest,
+    nodes: f.manifest.nodes.map((node) => {
+      if (node.type !== "metadata") {
+        return node;
+      }
+      if (node.id === "root") {
+        return {
+          ...node,
+          digest: sha256(workflow),
+          jobs: node.jobs.map((job) => {
+            const definition = parsed.value.jobs[job.id];
+            if (!definition) {
+              throw new AdmissionError({
+                message: "reference fixture job missing",
+              });
+            }
+            return { ...job, digest: definition.digest };
+          }),
+          edges: Object.fromEntries(
+            Object.entries(node.edges).map(([reference, destination]) => [
+              reference === original ? replacement : reference,
+              destination,
+            ]),
+          ),
+        };
+      }
+      if (node.id !== target) {
+        return node;
+      }
+      const text = f.documents.get(`${node.repository}:${node.path}`);
+      if (text === undefined) {
+        throw new AdmissionError({ message: "target fixture missing" });
+      }
+      const updated = {
+        ...node,
+        repository: repository ?? node.repository,
+        path: targetPath ?? node.path,
+        references: node.references.map((reference) =>
+          reference === original ? replacement : reference,
+        ),
+      };
+      f.documents.set(`${updated.repository}:${updated.path}`, text);
+      return updated;
+    }),
+  };
+  return { manifest, reader: f.reader };
+};
+test("remote reusable references cannot authorize metadata from a different workflow path", () => {
+  failure(
+    verifyPublicMetadata(
+      reboundReference({
+        original:
+          "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        replacement:
+          "vendor/shared/.github/workflows/new.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        target: "callee",
+      }),
+    ),
+    "remote metadata path mismatch",
+  );
+});
+test("local reusable workflows cannot use workspace aliases to change path or repository", () => {
+  for (const route of [
+    { replacement: "./.github/workflows/new.yml", repository: "candidate" },
+    {
+      replacement: "./.github/workflows/reusable.yml",
+      repository: "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    },
+  ]) {
+    failure(
+      verifyPublicMetadata(
+        reboundReference({
+          original:
+            "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          ...route,
+          target: "callee",
+        }),
+      ),
+      "local reusable workflow metadata path or repository mismatch",
+    );
+  }
+});
+test("remote action references bind the directory or repository-root action metadata path", () => {
+  for (const route of [
+    {
+      replacement: "vendor/shared@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      targetPath: "action.yml",
+    },
+    {
+      replacement:
+        "vendor/shared/nested@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      targetPath: "nested/action.yaml",
+    },
+  ]) {
+    expect(
+      verifyPublicMetadata(
+        reboundReference({
+          original: "$/.github/actions/local",
+          target: "action",
+          ...route,
+        }),
+      ).isOk(),
+    ).toBe(true);
+  }
+  failure(
+    verifyPublicMetadata(
+      reboundReference({
+        original: "$/.github/actions/local",
+        target: "action",
+        replacement:
+          "vendor/shared/other@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      }),
+    ),
+    "remote metadata path mismatch",
+  );
+});
 test("a callee cannot hide new jobs, changes or missing classifications", () => {
   const f = fixture();
   const changed: PublicMetadata = {
@@ -301,7 +444,7 @@ test("a callee cannot hide new jobs, changes or missing classifications", () => 
   };
   failure(
     verifyPublicMetadata({ manifest: changed, reader: f.reader }),
-    "callee job classification totality",
+    "reusable workflow requires callee job metadata",
   );
   f.documents.set(
     "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:.github/workflows/reusable.yml",
