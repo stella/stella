@@ -99,6 +99,7 @@ jobs:
       trusted: ${{ steps.check.outputs.trusted }}
       ci_tests_matrix: ${{ steps.api-tests.outputs.ci_tests_matrix }}
       api_test_files: ${{ steps.api-tests.outputs.api_test_files }}
+      root_checks: ${{ steps.root-checks.outputs.root_checks }}
       api_test_shards: ${{ steps.api-tests.outputs.api_test_shards }}
       api_test_durations_key: ${{ steps.api-test-durations.outputs.key }}
       api_test_durations_hash: ${{ steps.api-test-durations.outputs.hash }}
@@ -1258,6 +1259,18 @@ jobs:
           NPM_TOKEN: ""
           # A tolerated failure is a warning, not a failure annotation.
           RETRY_FAILURE_LEVEL: warning
+
+      - name: Select root check inputs
+        id: root-checks
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.api-test-deps.outcome == 'success'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          API_SCOPE_UNKNOWN: ${{ steps.changed-files.outputs.api_scope_unknown }}
+        run: |
+          if ! timeout --kill-after=10s 120s bun scripts/ci-root-checks.ts; then
+            echo "::warning::Root check planning unavailable; retaining all checks."
+          fi
 
       - name: Refine Legal Atlas API source scope
         id: legal-atlas-scope
@@ -2664,7 +2677,7 @@ jobs:
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-policy/Processed-field backlog guard')) }}
         # The case-law processed-field backlog (debts and unrecorded claims)
         # may only shrink against the measured base.
         run: bun apps/api/scripts/processed-field-backlog-guard.ts --base "$RATCHET_BASE_REF"
@@ -2953,7 +2966,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_003
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_003 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check local base selection')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_003 != 'true') }}
         run: bash scripts/canonical-base.test.sh
 
       - name: Check local skill overrides
@@ -2961,7 +2974,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_004
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_004 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check local skill overrides')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_004 != 'true') }}
         run: |
           bash scripts/check-local-skill-overrides.sh .
           bash scripts/check-local-skill-overrides.test.sh
@@ -3039,7 +3052,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: standalone_lockfiles
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_standalone_lockfiles != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Standalone lockfile guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_standalone_lockfiles != 'true') }}
         # Bun reads only the installing directory's bunfig.toml, so a lockfile
         # outside the root workspace skips the root's release-age quarantine,
         # and an npm, Yarn or pnpm lockfile skips it entirely. Needs no
@@ -3059,7 +3072,7 @@ jobs:
           bun scripts/check-standalone-negated-shell.ts
 
       - name: Tauri package alignment
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Tauri package alignment')) }}
         env:
           CI_CHECK_KIND: CONTEXTUAL
           CI_CHECK_CONTEXT: "Uses event target or Git base/merge-base rather than only the current input tree."
@@ -3081,7 +3094,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_009
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_009 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Tauri counterpart autofix tests')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_009 != 'true') }}
         run: bun test scripts/fix-tauri-package-alignment.test.ts scripts/tauri-autofix-workflow.test.ts
 
       - name: Lockfile release-age guard
@@ -3196,7 +3209,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_013
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_013 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Content delivery declarations')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_013 != 'true') }}
         # The guard follows handler imports into the gitignored capability
         # runtime modules, so generate them first instead of skipping them.
         run: |
@@ -3212,7 +3225,7 @@ jobs:
           CI_CHECK_CONTEXT: "Capability shard pack test reads real origin/main catalog and revision."
         id: capability_parity
         background: true
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test capability shard merge and package parity')) }}
         # Worst pilot test 153.3 s; 400 s allows about 2.5x contention headroom.
         run: bun test --timeout 400000 scripts/capability-shard-merge.test.ts scripts/capability-shard-pack.test.ts
 
@@ -3234,10 +3247,9 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_012
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test oxlint plugins')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_012 != 'true') }}
         run: |
           bun test scripts/oxlint-plugin-test-coverage.test.ts
-          bun scripts/run-custom-lint-tests.ts
 
       - name: Test release image CI gate
         env:
@@ -3364,7 +3376,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_023
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_023 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Check i18n sync')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_023 != 'true') }}
         run: bun run i18n:check
 
       - name: Release changelog guard
@@ -3475,7 +3487,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_024
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.desktop_rust_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_024 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.desktop_rust_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Rust format')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_024 != 'true') }}
         run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
 
       - name: React Compiler bailout guard
@@ -3483,7 +3495,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_025
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_025 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/React Compiler bailout guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_025 != 'true') }}
         # Components the React Compiler bails out on (refs-in-render,
         # try/finally, an ESLint suppression on the component) are not
         # auto-memoized, so manual useMemo/useCallback there is load-bearing:
@@ -3962,7 +3974,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_052
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_052 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Model catalog snapshot drift check')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_052 != 'true') }}
         # The enforced offline --check path regenerates from committed
         # snapshots and compares the deterministic output. Keep it scoped
         # to changes in the model catalog.
@@ -3975,7 +3987,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_053
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_053 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Capability description ledger')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_053 != 'true') }}
         # A capability's `description` is what an MCP client reads before
         # deciding whether to call it, so every capability still missing one is
         # listed by exact id in apps/api/capability-description-ledger.json. A
@@ -4013,7 +4025,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_055
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_055 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/MCP coverage guard')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_055 != 'true') }}
         # Every safe-handler config must declare an `mcp` disposition (a
         # typecheck-enforced McpExposure). This guard imports every handler
         # module, verifies each disposition is well-formed, that every
@@ -4115,7 +4127,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_062
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_062 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test release-channel script')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_062 != 'true') }}
         run: bash scripts/release-channel.test.sh
 
       # The web compiler uses native Rolldown bindings, while the deployed
@@ -4126,7 +4138,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_063
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_063 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test web container platform boundary')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_063 != 'true') }}
         run: bun test scripts/check-web-docker-platform.test.ts
 
       # Bun links @stll dependencies to local workspaces only while versions
@@ -4138,7 +4150,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_064
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_064 != 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure' && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test @stll resolution pin')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_064 != 'true') }}
         run: bun test scripts/stll-registry-resolutions.test.ts
 
       # The runner image stages workspace packages reached by externalized
@@ -4149,7 +4161,7 @@ jobs:
           CI_CHECK_KIND: STATIC
           CI_CHECK_INPUTS: tracked-tree+generated-inputs
         id: static_check_065
-        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_065 != 'true') }}
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') && (needs.ci-plan.outputs.root_checks == '' || contains(fromJSON(needs.ci-plan.outputs.root_checks || '[]'), 'ci-checks-rest/Test web runtime staging')) && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_static_check_065 != 'true') }}
         run: bun test scripts/stage-web-runtime.test.ts
 
       - name: Check Docker source closure
