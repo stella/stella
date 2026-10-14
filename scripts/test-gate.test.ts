@@ -9,9 +9,12 @@ import {
   managedServiceRunnerFailure,
   packageTestCollectionFailure,
   packageTestExecutionFailure,
+  parseScenarioLedger,
   parseTestRegistrations,
   rootCommandExecutionFailure,
+  scenarioLedgerGrowth,
 } from "./test-gate";
+import type { TestScenario } from "./test-gate";
 
 const bashJobs = (entries: readonly (readonly [string, readonly string[]])[]) =>
   new Map(
@@ -356,27 +359,35 @@ context("test registration census", () => {
       expect(
         firstCollectionFailure({
           file: "unowned/example.test.ts",
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
         }),
       ).toBe("package task: no owning package.json");
       expect(
         firstCollectionFailure({
           file: "apps/web/e2e/staging/staging-smoke.spec.ts",
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
         }),
       ).toBe("runner glob: web wrapper does not collect the file");
       expect(
         firstCollectionFailure({
           file: "apps/web/e2e/staging/staging-smoke.spec.ts",
-          nonGatingFiles: new Set([
-            "apps/web/e2e/staging/staging-smoke.spec.ts",
+          scenarios: new Map([
+            [
+              "apps/web/e2e/staging/staging-smoke.spec.ts",
+              {
+                type: "non-gating",
+                file: "apps/web/e2e/staging/staging-smoke.spec.ts",
+                owningWorkflow: ".github/workflows/staging-smoke.yml",
+                reason: "deployed-environment scenario",
+              },
+            ],
           ]),
         }),
       ).toBeUndefined();
       expect(
         firstCollectionFailure({
           file: "apps/desktop/tests/browser/theme-prepaint.playwright.spec.ts",
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
         }),
       ).toBeUndefined();
       const fixturePackage = {
@@ -832,14 +843,14 @@ context("test registration census", () => {
       expect(
         firstCollectionFailure({
           file: "packages/scripts/src/query-cache-types.test.ts",
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
           topology,
         }),
       ).toBeUndefined();
       expect(
         firstCollectionFailure({
           file: "packages/scripts/src/i18n-usage.test.ts",
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
           topology,
         }),
       ).toContain("does not collect");
@@ -1800,7 +1811,7 @@ context("root test runner coverage", () => {
           workflow,
         };
         expect(
-          firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
+          firstCollectionFailure({ file, scenarios: new Map(), topology }),
         ).toContain(`job condition: no gating job collects ${file}`);
       });
     }
@@ -1827,13 +1838,356 @@ context("root test runner coverage", () => {
       ".oxlint-plugins/__tests__/nested/orphan.test.ts",
     ]) {
       expect(
-        firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
+        firstCollectionFailure({ file, scenarios: new Map(), topology }),
       ).toBeUndefined();
     }
     const file = ".oxlint-plugins/other/orphan.test.ts";
     expect(
-      firstCollectionFailure({ file, nonGatingFiles: new Set(), topology }),
+      firstCollectionFailure({ file, scenarios: new Map(), topology }),
     ).toContain(`job condition: no gating job collects ${file}`);
+  });
+
+  check("executed scenarios require their exact gating collector", () => {
+    const file = "scripts/test-gate.test.ts";
+    const command = `bun test ${file}`;
+    const scenario: TestScenario = {
+      type: "executed",
+      file,
+      reason: "test-gate regression coverage",
+      collector: {
+        workflow: ".github/workflows/ci.yml",
+        job: "checks",
+        command,
+      },
+    };
+    const scenarios = new Map([[file, scenario]]);
+    const workflowFor = (run: string, job = "checks", needs = "checks") => {
+      const workflow = `jobs:
+  ${job}:
+    steps:
+      - run: ${run}
+  ci-result:
+    needs: [${needs}]
+`;
+      return {
+        workflow,
+        topology: {
+          gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
+          shardedPackages: new Set<string>(),
+          workflow,
+        },
+      };
+    };
+
+    expect(
+      firstCollectionFailure({
+        file,
+        scenarios,
+        topology: workflowFor(command).topology,
+      }),
+    ).toBeUndefined();
+
+    for (const [run, job, reason] of [
+      [
+        "echo bun test scripts/test-gate.test.ts",
+        "checks",
+        `ledger collector: no gating invocation of ${command} in checks`,
+      ],
+      [
+        "false && bun test scripts/test-gate.test.ts",
+        "checks",
+        `ledger collector: no gating invocation of ${command} in checks`,
+      ],
+      [
+        "bun test scripts/other.test.ts",
+        "checks",
+        `ledger collector: no gating invocation of ${command} in checks`,
+      ],
+      [
+        command,
+        "other-checks",
+        "ledger collector: checks does not reach ci-result",
+      ],
+    ] as const) {
+      const failure = firstCollectionFailure({
+        file,
+        scenarios,
+        topology: workflowFor(run, job).topology,
+      });
+      expect(failure, `${job}: ${run}`).toContain(reason);
+    }
+
+    const noErrexitWorkflow = `jobs:
+  checks:
+    steps:
+      - shell: bash {0}
+        run: |
+          ${command}
+          echo done
+  ci-result:
+    needs: [checks]
+`;
+    expect(
+      firstCollectionFailure({
+        file,
+        scenarios,
+        topology: {
+          gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(noErrexitWorkflow)),
+          shardedPackages: new Set<string>(),
+          workflow: noErrexitWorkflow,
+        },
+      }),
+    ).toContain(
+      `ledger collector: no gating invocation of ${command} in checks`,
+    );
+
+    const removedRunner = workflowFor("echo no test command");
+    expect(
+      firstCollectionFailure({
+        file,
+        scenarios,
+        topology: removedRunner.topology,
+      }),
+    ).toContain(
+      `ledger collector: no gating invocation of ${command} in checks`,
+    );
+
+    const otherFile = "scripts/other.test.ts";
+    const otherFileScenario: TestScenario = {
+      type: "executed",
+      file: otherFile,
+      reason: "different named file",
+      collector: scenario.collector,
+    };
+    expect(
+      firstCollectionFailure({
+        file: otherFile,
+        scenarios: new Map([[otherFile, otherFileScenario]]),
+        topology: workflowFor(command).topology,
+      }),
+    ).toContain(`job condition: no gating job collects ${otherFile}`);
+
+    const removedJobWorkflow = `jobs:
+  ci-result:
+    needs: [checks]
+`;
+    expect(
+      firstCollectionFailure({
+        file,
+        scenarios,
+        topology: {
+          gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(removedJobWorkflow)),
+          shardedPackages: new Set<string>(),
+          workflow: removedJobWorkflow,
+        },
+      }),
+    ).toContain(`ledger collector: checks does not reach ci-result`);
+  });
+
+  check("scenario ledger growth reports only newly tracked files", () => {
+    const previous: TestScenario[] = [
+      {
+        type: "non-gating",
+        file: "scripts/retained.test.ts",
+        owningWorkflow: ".github/workflows/staging-smoke.yml",
+        reason: "deployed-environment scenario",
+      },
+      {
+        type: "non-gating",
+        file: "scripts/removed.test.ts",
+        owningWorkflow: ".github/workflows/staging-smoke.yml",
+        reason: "deployed-environment scenario",
+      },
+    ];
+    const current: TestScenario[] = [
+      {
+        type: "non-gating",
+        file: "scripts/retained.test.ts",
+        owningWorkflow: ".github/workflows/staging-smoke.yml",
+        reason: "deployed-environment scenario",
+      },
+      {
+        type: "executed",
+        file: "scripts/new.test.ts",
+        reason: "new local regression test",
+        collector: {
+          workflow: ".github/workflows/ci.yml",
+          job: "checks",
+          command: "bun test scripts/new.test.ts",
+        },
+      },
+    ];
+
+    expect(scenarioLedgerGrowth(previous, current)).toEqual([
+      "scripts/new.test.ts",
+    ]);
+  });
+
+  check("pins the production Playwright collector to its workflow step", () => {
+    const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+    const file = "apps/web/e2e/specs/smoke.spec.ts";
+    const scenarios = new Map<string, TestScenario>([
+      [
+        file,
+        {
+          type: "pinned-collector",
+          file,
+          reason: "production browser shard",
+          collector: {
+            workflow: ".github/workflows/ci.yml",
+            job: "e2e-production-shard",
+            step: "Run Playwright shard",
+            pin: "e2eProductionShards.planSha256",
+            condition: "success()",
+          },
+        },
+      ],
+    ]);
+    const topologyFor = (source: string) => ({
+      ...analyzeGatingWorkflow(Bun.YAML.parse(source)),
+      shardedPackages: new Set<string>(),
+      workflow: source,
+    });
+    const jobRange = (source: string, jobName: string) => {
+      const start = source.indexOf(`  ${jobName}:\n`);
+      expect(start, `missing ${jobName} fixture`).toBeGreaterThanOrEqual(0);
+      const remainder = source.slice(start + 1);
+      const nextJobOffset = remainder.search(/^ {2}[\w-]+:[\t ]*$/mu);
+      return {
+        start,
+        end: nextJobOffset === -1 ? source.length : start + 1 + nextJobOffset,
+      };
+    };
+    const editJob = (
+      source: string,
+      jobName: string,
+      edit: (job: string) => string,
+    ) => {
+      const { start, end } = jobRange(source, jobName);
+      return `${source.slice(0, start)}${edit(source.slice(start, end))}${source.slice(end)}`;
+    };
+    const failureFor = (source: string) =>
+      firstCollectionFailure({
+        file,
+        scenarios,
+        topology: topologyFor(source),
+      });
+
+    expect(failureFor(workflow)).toContain("pinned collector:");
+    const unconditionalWorkflow = editJob(
+      workflow.replace(
+        `shard: \${{ fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard }}`,
+        "shard: [1, 2]",
+      ),
+      "e2e-production-shard",
+      (job) =>
+        job.replace(
+          "        if: >-\n          steps.e2e-stack.outputs.status == 'ready'\n          && matrix.shard != 'network-baseline'\n",
+          "        if: success()\n",
+        ),
+    );
+    expect(unconditionalWorkflow).not.toBe(workflow);
+    expect(failureFor(unconditionalWorkflow)).toBeUndefined();
+
+    const mutations: readonly (readonly [
+      string,
+      (source: string) => string,
+    ])[] = [
+      [
+        "renamed collector step",
+        (source) =>
+          editJob(source, "e2e-production-shard", (job) =>
+            job.replace(
+              "- name: Run Playwright shard",
+              "- name: Renamed shard",
+            ),
+          ),
+      ],
+      [
+        "edited collector condition",
+        (source) =>
+          editJob(source, "e2e-production-shard", (job) =>
+            job.replace("        if: success()", "        if: always()"),
+          ),
+      ],
+      [
+        "baseline-only collector matrix",
+        (source) =>
+          source.replace("shard: [1, 2]", "shard: [network-baseline]"),
+      ],
+      [
+        "incomplete production shard matrix",
+        (source) => source.replace("shard: [1, 2]", "shard: [1]"),
+      ],
+      [
+        "changed collector command",
+        (source) =>
+          editJob(source, "e2e-production-shard", (job) =>
+            job.replace(
+              '          exit "$status"\n',
+              '          exit "$status"\n          echo done\n',
+            ),
+          ),
+      ],
+      [
+        "collector allows errors",
+        (source) =>
+          editJob(source, "e2e-production-shard", (job) =>
+            job.replace(
+              "      - name: Run Playwright shard\n",
+              "      - name: Run Playwright shard\n        continue-on-error: true\n",
+            ),
+          ),
+      ],
+      [
+        "collector is disabled",
+        (source) =>
+          editJob(source, "e2e-production-shard", (job) =>
+            job.replace("        if: success()\n", "        if: false\n"),
+          ),
+      ],
+      [
+        "collector job removed",
+        (source) => {
+          const { start, end } = jobRange(source, "e2e-production-shard");
+          return `${source.slice(0, start)}${source.slice(end)}`;
+        },
+      ],
+      [
+        "collector removed from ci-result dependencies",
+        (source) => source.replace("        e2e-production-shard,\n", ""),
+      ],
+    ];
+    for (const [reason, mutate] of mutations) {
+      const mutated = mutate(unconditionalWorkflow);
+      expect(mutated, reason).not.toBe(unconditionalWorkflow);
+      expect(failureFor(mutated), reason).toContain("pinned collector:");
+    }
+
+    const validScenario = {
+      type: "pinned-collector",
+      file,
+      reason: "production browser shard",
+      collector: {
+        workflow: ".github/workflows/ci.yml",
+        job: "e2e-production-shard",
+        step: "Run Playwright shard",
+        pin: "e2eProductionShards.planSha256",
+        condition: "success()",
+      },
+    };
+    expect(parseScenarioLedger([validScenario])).toEqual([validScenario]);
+    expect(() =>
+      parseScenarioLedger([
+        {
+          ...validScenario,
+          collector: { ...validScenario.collector, pin: "unknown.pin" },
+        },
+      ]),
+    ).toThrow("structured execution collector");
+    expect(() =>
+      parseScenarioLedger([{ ...validScenario, collector: undefined }]),
+    ).toThrow("structured collector");
   });
 
   check(
@@ -1875,7 +2229,7 @@ context("root test runner coverage", () => {
 `;
         const failure = firstCollectionFailure({
           file,
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
           topology: {
             gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
             shardedPackages: new Set<string>(),
@@ -1910,7 +2264,7 @@ context("root test runner coverage", () => {
       expect(
         firstCollectionFailure({
           file: selected,
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
           topology,
         }),
       ).toBe(
@@ -1921,7 +2275,7 @@ context("root test runner coverage", () => {
       expect(
         firstCollectionFailure({
           file: other,
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
           topology,
         }),
       ).toContain(`job condition: no gating job collects ${other}`);
@@ -1943,7 +2297,7 @@ context("root test runner coverage", () => {
       expect(
         firstCollectionFailure({
           file: "scripts/named.test.ts",
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
           topology: {
             gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
             shardedPackages: new Set<string>(),
@@ -1988,7 +2342,7 @@ context("root runner command shapes", () => {
 `;
         const failure = firstCollectionFailure({
           file,
-          nonGatingFiles: new Set(),
+          scenarios: new Map(),
           topology: {
             gatingJobs: gatingWorkflowJobs(Bun.YAML.parse(workflow)),
             shardedPackages: new Set<string>(),
@@ -2034,7 +2388,7 @@ context("suppressed collection", () => {
           expect(
             firstCollectionFailure({
               file: "scripts/named.test.ts",
-              nonGatingFiles: new Set(),
+              scenarios: new Map(),
               topology: {
                 gatingJobs: bashJobs([["root-tests", [command]]]),
                 shardedPackages: new Set<string>(),

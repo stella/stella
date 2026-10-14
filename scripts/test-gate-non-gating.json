@@ -1,322 +1,402 @@
 [
   {
     "file": ".claude/mcp/doc-content.test.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "package test runner uses shell-expanded *.test.ts; the static Bun selector resolver cannot prove that expansion"
+    "reason": "documentation server package is outside the workspace shard filters",
+    "type": "executed",
+    "collector": {
+      "workflow": ".github/workflows/ci.yml",
+      "job": "ci-tests",
+      "command": "bun --cwd .claude/mcp test"
+    }
   },
   {
     "file": ".claude/mcp/fetch-allowed-url.test.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "package test runner uses shell-expanded *.test.ts; the static Bun selector resolver cannot prove that expansion"
+    "reason": "documentation server package is outside the workspace shard filters",
+    "type": "executed",
+    "collector": {
+      "workflow": ".github/workflows/ci.yml",
+      "job": "ci-tests",
+      "command": "bun --cwd .claude/mcp test"
+    }
   },
   {
     "file": ".claude/mcp/stella-docs-http.test.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "package test runner uses shell-expanded *.test.ts; the static Bun selector resolver cannot prove that expansion"
+    "reason": "documentation server package is outside the workspace shard filters",
+    "type": "executed",
+    "collector": {
+      "workflow": ".github/workflows/ci.yml",
+      "job": "ci-tests",
+      "command": "bun --cwd .claude/mcp test"
+    }
   },
   {
     "file": ".claude/mcp/stella-docs.test.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "package test runner uses shell-expanded *.test.ts; the static Bun selector resolver cannot prove that expansion"
+    "reason": "documentation server package is outside the workspace shard filters",
+    "type": "executed",
+    "collector": {
+      "workflow": ".github/workflows/ci.yml",
+      "job": "ci-tests",
+      "command": "bun --cwd .claude/mcp test"
+    }
   },
   {
     "file": ".oxlint-plugins/__fixtures__/no-direct-test-state.fixture.test.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "static lint-rule input checked by the plugin fixture harness; contains deliberate invalid source, not executable tests"
+    "reason": "static lint-rule input checked by the plugin fixture harness; contains deliberate invalid source, not executable tests",
+    "type": "non-gating"
   },
   {
     "file": ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "static lint-rule input checked by the plugin fixture harness; contains deliberate invalid source, not executable tests"
+    "reason": "static lint-rule input checked by the plugin fixture harness; contains deliberate invalid source, not executable tests",
+    "type": "non-gating"
   },
   {
     "file": "apps/landing/e2e/landing-anonymize-demo.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "Playwright config is built by marketingConfig(); coverage proven by e2e-landing at runtime"
+    "reason": "collection through the shared Playwright configuration factory is not statically proven; no execution credit",
+    "type": "non-gating"
   },
   {
     "file": "apps/landing/e2e/landing-navigation.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "Playwright config is built by marketingConfig(); coverage proven by e2e-landing at runtime"
+    "reason": "collection through the shared Playwright configuration factory is not statically proven; no execution credit",
+    "type": "non-gating"
   },
   {
     "file": "apps/visual-preview/browser/render.test.ts",
     "owningWorkflow": ".github/workflows/visual-preview.yml",
-    "reason": "separate workflow; fold decision pending"
+    "reason": "separate workflow; fold decision pending",
+    "type": "non-gating"
   },
   {
     "file": "apps/visual-preview/src/render-validation.test.ts",
     "owningWorkflow": ".github/workflows/visual-preview.yml",
-    "reason": "separate workflow; fold decision pending"
+    "reason": "separate workflow; fold decision pending",
+    "type": "non-gating"
   },
   {
     "file": "apps/web/e2e/marketing/product-screenshots.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "required reusable workflow/composite action; coverage proven by marketing-screenshots at runtime"
+    "reason": "collection through the shared Playwright configuration factory is not statically proven; no execution credit",
+    "type": "non-gating"
   },
   {
     "file": "apps/web/e2e/soak/workspace-replay.playwright.spec.ts",
     "owningWorkflow": ".github/workflows/nightly-test.yml",
-    "reason": "deployed-environment scenario cannot gate merges"
+    "reason": "deployed-environment scenario cannot gate merges",
+    "type": "non-gating"
   },
   {
     "file": "apps/web/e2e/specs/agent-skills.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/app-shell-readiness.unit.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-anonymized-composer.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-bottom-fade.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-clipboard.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-composer-during-stream.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-composer-menu-shortcut.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-long-paste-chip.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-reattach.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-rename.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-stream-commit-budget.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat-stream-error.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chat.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/chrome-divider.unit.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/decision-narrow-reader.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/decision-paragraph-range.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/dev-autocomplete.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/docked-chat-geometry.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/evidence-references.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/filesystem-rename.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/generated-visual-polish.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/generated-visual.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/guides.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/heap-growth-canary.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/i18n-bootstrap.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/kanban-card-drag.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/law-authenticated-sidebar.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/law-cases-ssr.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/lists-granted.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/matter-color-picker.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/mcp-case-law-results.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/navigation-policy.unit.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/oauth-consent.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/oauth-ui-redirect.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/organization-login.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/provision-inspector-layout.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/public-tools.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/reader-chat-first-send.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/reader-chat-first-turn.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/route-pending-shell.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/search-actions.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/selection-toolbar-geometry.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/smoke.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/table-search.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/table-view-state-reconcile.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/template-studio.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/upload-docx.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/verification-review.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/specs/workspace-file-drop.spec.ts",
-    "owningWorkflow": ".github/workflows/ci.yml",
-    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+    "reason": "pinned collector unprovable: rate-limited stack exits 0 (setup-e2e-stack) + dynamic ci-plan matrix; no execution credit",
+    "type": "non-gating",
+    "owningWorkflow": ".github/workflows/ci.yml"
   },
   {
     "file": "apps/web/e2e/staging/public-knowledge.spec.ts",
     "owningWorkflow": ".github/workflows/staging-smoke.yml",
-    "reason": "deployed-environment scenario cannot gate merges"
+    "reason": "deployed-environment scenario cannot gate merges",
+    "type": "non-gating"
   },
   {
     "file": "apps/web/e2e/staging/staging-smoke.spec.ts",
     "owningWorkflow": ".github/workflows/staging-smoke.yml",
-    "reason": "deployed-environment scenario cannot gate merges"
+    "reason": "deployed-environment scenario cannot gate merges",
+    "type": "non-gating"
   },
   {
     "file": "scripts/browser/visual-preview-composition.spec.ts",
     "owningWorkflow": ".github/workflows/visual-preview.yml",
-    "reason": "separate workflow; fold decision pending"
+    "reason": "separate workflow; fold decision pending",
+    "type": "non-gating"
   }
 ]

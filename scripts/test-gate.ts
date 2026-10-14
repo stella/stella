@@ -9,6 +9,12 @@ import ts from "typescript";
 import { repoRelativePath } from "@stll/portable-path";
 
 import { compareCodeUnit } from "../packages/collation/src/collation";
+import configuredBudgets from "./code-quality-task-budgets.json" with { type: "json" };
+import {
+  E2E_PRODUCTION_PLAN_PIN,
+  e2eProductionPlanFingerprint,
+} from "./e2e-shard-plan-pin";
+import { allE2eShards } from "./e2e-spec-shards-core";
 import {
   contextFromNested,
   definitelyFalse,
@@ -69,11 +75,35 @@ type DisabledLedger = {
   readonly identities: readonly string[];
 };
 
-type NonGatingScenario = {
-  readonly file: string;
-  readonly owningWorkflow: string;
-  readonly reason: string;
-};
+export type TestScenario =
+  | {
+      readonly type: "non-gating";
+      readonly file: string;
+      readonly owningWorkflow: string;
+      readonly reason: string;
+    }
+  | {
+      readonly type: "executed";
+      readonly file: string;
+      readonly reason: string;
+      readonly collector: {
+        readonly workflow: string;
+        readonly job: string;
+        readonly command: string;
+      };
+    }
+  | {
+      readonly type: "pinned-collector";
+      readonly file: string;
+      readonly reason: string;
+      readonly collector: {
+        readonly workflow: string;
+        readonly job: string;
+        readonly step: string;
+        readonly pin: typeof E2E_PRODUCTION_PLAN_PIN;
+        readonly condition: string;
+      };
+    };
 
 type DefaultOnContext = {
   readonly context: string;
@@ -117,29 +147,131 @@ const readDisabledLedger = (): DisabledLedger => {
   };
 };
 
-const readNonGatingLedger = (): readonly NonGatingScenario[] => {
-  const value = readJson(NON_GATING_LEDGER);
+export const parseScenarioLedger = (
+  value: unknown,
+): readonly TestScenario[] => {
   if (!Array.isArray(value)) {
     panic(`${NON_GATING_LEDGER} must be an array`);
   }
   return value.map((entry) => {
     if (
-      typeof entry !== "object" ||
-      entry === null ||
-      !("file" in entry) ||
-      typeof entry.file !== "string" ||
-      !("owningWorkflow" in entry) ||
-      typeof entry.owningWorkflow !== "string" ||
-      !("reason" in entry) ||
-      typeof entry.reason !== "string"
+      !isRecord(entry) ||
+      typeof entry["file"] !== "string" ||
+      typeof entry["reason"] !== "string" ||
+      entry["reason"].trim() === ""
     ) {
       panic(`${NON_GATING_LEDGER} contains an invalid entry`);
     }
+    const common = { file: entry["file"], reason: entry["reason"] };
+    if (
+      entry["type"] === "non-gating" &&
+      typeof entry["owningWorkflow"] === "string"
+    ) {
+      return {
+        type: "non-gating",
+        ...common,
+        owningWorkflow: entry["owningWorkflow"],
+      } as const satisfies TestScenario;
+    }
+    const collector = entry["collector"];
+    if (
+      !isRecord(collector) ||
+      typeof collector["workflow"] !== "string" ||
+      typeof collector["job"] !== "string" ||
+      collector["job"].trim() === ""
+    ) {
+      panic(`${NON_GATING_LEDGER} requires a structured collector`);
+    }
+    if (
+      entry["type"] === "pinned-collector" &&
+      collector["pin"] === E2E_PRODUCTION_PLAN_PIN &&
+      typeof collector["step"] === "string" &&
+      collector["step"].trim() !== "" &&
+      typeof collector["condition"] === "string"
+    ) {
+      return {
+        type: "pinned-collector",
+        ...common,
+        collector: {
+          workflow: collector["workflow"],
+          job: collector["job"],
+          step: collector["step"],
+          pin: collector["pin"],
+          condition: collector["condition"],
+        },
+      } as const satisfies TestScenario;
+    }
+    if (
+      entry["type"] !== "executed" ||
+      typeof collector["command"] !== "string" ||
+      collector["command"].trim() === ""
+    ) {
+      panic(`${NON_GATING_LEDGER} requires a structured execution collector`);
+    }
     return {
-      file: entry.file,
-      owningWorkflow: entry.owningWorkflow,
-      reason: entry.reason,
-    };
+      type: "executed",
+      ...common,
+      collector: {
+        workflow: collector["workflow"],
+        job: collector["job"],
+        command: collector["command"],
+      },
+    } as const satisfies TestScenario;
+  });
+};
+
+export const scenarioLedgerGrowth = (
+  previous: readonly { readonly file: string }[],
+  current: readonly { readonly file: string }[],
+): readonly string[] => {
+  const files = new Set(previous.map(({ file }) => file));
+  return current
+    .filter(({ file }) => !files.has(file))
+    .map(({ file }) => file)
+    .toSorted(compareCodeUnit);
+};
+
+const readNonGatingLedger = (): readonly TestScenario[] =>
+  parseScenarioLedger(readJson(NON_GATING_LEDGER));
+
+const scenarioLedgerBaseline = (): readonly { readonly file: string }[] => {
+  const options = { cwd: ROOT, encoding: "utf-8" } as const;
+  const onMain = execFileSync(
+    "git",
+    ["ls-tree", "--name-only", "origin/main", "--", NON_GATING_LEDGER],
+    options,
+  ).trim();
+  const reference =
+    onMain === NON_GATING_LEDGER
+      ? "origin/main"
+      : execFileSync(
+          "git",
+          [
+            "log",
+            "--diff-filter=A",
+            "-n",
+            "1",
+            "--format=%H",
+            "origin/main..HEAD",
+            "--",
+            NON_GATING_LEDGER,
+          ],
+          options,
+        ).trim();
+  if (reference === "") {
+    return [];
+  }
+  const value: unknown = JSON.parse(
+    execFileSync("git", ["show", `${reference}:${NON_GATING_LEDGER}`], options),
+  );
+  if (!Array.isArray(value)) {
+    panic(`${NON_GATING_LEDGER} baseline must be an array`);
+  }
+  return value.map((entry) => {
+    if (!isRecord(entry) || typeof entry["file"] !== "string") {
+      panic(`${NON_GATING_LEDGER} baseline contains an invalid file`);
+    }
+    return { file: entry["file"] };
   });
 };
 
@@ -3558,7 +3690,7 @@ export const gatingPlaywrightCollection = ({
 
 type FirstCollectionOptions = {
   readonly file: string;
-  readonly nonGatingFiles: ReadonlySet<string>;
+  readonly scenarios: ReadonlyMap<string, TestScenario>;
   readonly topology?: RepositoryTestExecutionTopology;
 };
 
@@ -3650,13 +3782,164 @@ const nestedShellInvocation = ({
   };
 };
 
+type ExecutedScenarioOptions = {
+  readonly file: string;
+  readonly scenario: Extract<TestScenario, { type: "executed" }>;
+  readonly topology: RepositoryTestExecutionTopology;
+};
+
+const executedScenarioFailure = ({
+  file,
+  scenario,
+  topology,
+}: ExecutedScenarioOptions): string | undefined => {
+  if (scenario.collector.workflow !== ".github/workflows/ci.yml") {
+    return `ledger collector: unsupported gating workflow ${scenario.collector.workflow}`;
+  }
+  const commands = topology.gatingJobs.get(scenario.collector.job);
+  if (commands === undefined) {
+    return `ledger collector: ${scenario.collector.job} does not reach ci-result`;
+  }
+  const runner = shellWords(scenario.collector.command);
+  const collectedCommands = commands.flatMap(
+    ({ command, propagation, environment }) =>
+      gatingArguments({
+        command,
+        propagation,
+        invocationEnd: ({ words, index }) =>
+          runner.every((word, offset) => words[index + offset] === word)
+            ? index
+            : undefined,
+      }).map((words) => ({
+        command: words.map((word) => JSON.stringify(word)).join(" "),
+        propagation,
+        environment,
+      })),
+  );
+  if (collectedCommands.length === 0) {
+    return `ledger collector: no gating invocation of ${scenario.collector.command} in ${scenario.collector.job}`;
+  }
+  const gatingJobs = new Map([[scenario.collector.job, collectedCommands]]);
+  return firstCollectionFailure({
+    file,
+    scenarios: new Map(),
+    topology: { ...topology, gatingJobs },
+  });
+};
+
+type PinnedScenarioOptions = {
+  readonly file: string;
+  readonly scenario: Extract<TestScenario, { type: "pinned-collector" }>;
+  readonly topology: RepositoryTestExecutionTopology;
+};
+
+const pinnedScenarioFailure = ({
+  file,
+  scenario,
+  topology,
+}: PinnedScenarioOptions): string | undefined => {
+  const { workflow, job: jobId, step: stepName } = scenario.collector;
+  if (workflow !== ".github/workflows/ci.yml") {
+    return `pinned collector: unsupported gating workflow ${workflow}`;
+  }
+  if (!topology.gatingJobs.has(jobId)) {
+    return `pinned collector: ${jobId} does not reach ci-result`;
+  }
+  const root = workflowRecord(Bun.YAML.parse(topology.workflow));
+  const job = workflowRecord(workflowRecord(root?.["jobs"])?.[jobId]);
+  if (job === undefined || !Array.isArray(job["steps"])) {
+    return `pinned collector: ${jobId} has no steps`;
+  }
+  const matches = flattenWorkflowSteps(job["steps"]).filter(
+    (step) => step["name"] === stepName,
+  );
+  const step = matches.at(0);
+  if (
+    matches.length !== 1 ||
+    step === undefined ||
+    typeof step["run"] !== "string"
+  ) {
+    return `pinned collector: missing or ambiguous step ${stepName}`;
+  }
+  if (
+    step["continue-on-error"] !== undefined &&
+    step["continue-on-error"] !== false
+  ) {
+    return `pinned collector: ${stepName} ignores failure`;
+  }
+  if ((step["if"] ?? "") !== scenario.collector.condition) {
+    return `pinned collector: ${stepName} condition differs from the recorded literal`;
+  }
+  const shards = new Set(matrixLegs(job).map((leg) => leg["shard"]));
+  if (
+    hasDynamicMatrix(job) ||
+    allE2eShards().some((shard) => !shards.has(shard))
+  ) {
+    return `pinned collector: ${jobId} does not declare the complete literal shard partition`;
+  }
+  const condition = step["if"];
+  if (
+    condition !== undefined &&
+    condition !== true &&
+    !(
+      typeof condition === "string" &&
+      ["always()", "success()", "true"].includes(conditionExpression(condition))
+    )
+  ) {
+    return `pinned collector: ${stepName} has a conditional execution path`;
+  }
+  const shell = effectiveWorkflowShell({
+    root,
+    job,
+    step,
+    legs: matrixLegs(job),
+  });
+  if (
+    shell.type !== "supported" ||
+    !shell.propagation.errexit ||
+    !shell.propagation.pipefail
+  ) {
+    return `pinned collector: ${stepName} does not use the pinned Bash execution settings`;
+  }
+  if (
+    e2eProductionPlanFingerprint(step["run"]) !==
+    configuredBudgets.e2eProductionShards.planSha256
+  ) {
+    return `pinned collector: ${stepName} plan fingerprint mismatch`;
+  }
+  const configFile = "apps/web/e2e/playwright.config.ts";
+  if (!configuredBudgets.e2eProductionShards.planFiles.includes(configFile)) {
+    return `pinned collector: plan does not pin its runner configuration`;
+  }
+  const collection = playwrightConfigCollection({
+    file,
+    configFile,
+    source: readFileSync(path.join(ROOT, configFile), "utf-8"),
+    readConfig: (configPath) => readFileSync(configPath, "utf-8"),
+    projects: [],
+  });
+  return collection.type === "collected"
+    ? undefined
+    : `pinned collector: ${collection.type === "unresolved" ? collection.finding : `${file} is outside the pinned runner config`}`;
+};
+
 export const firstCollectionFailure = ({
   file,
-  nonGatingFiles,
+  scenarios,
   topology = repositoryTestExecutionTopology(),
 }: FirstCollectionOptions): string | undefined => {
-  if (nonGatingFiles.has(file)) {
-    return undefined;
+  const scenario = scenarios.get(file);
+  if (scenario !== undefined) {
+    switch (scenario.type) {
+      case "non-gating":
+        return undefined;
+      case "executed":
+        return executedScenarioFailure({ file, scenario, topology });
+      case "pinned-collector":
+        return pinnedScenarioFailure({ file, scenario, topology });
+      default:
+        return panic(`Unrecognized scenario: ${scenario satisfies never}`);
+    }
   }
   if (file.startsWith("scripts/") || file.startsWith(".oxlint-plugins/")) {
     const isUnlistedScript =
@@ -3939,14 +4222,25 @@ const run = (): void => {
     NON_GATING_LEDGER,
     errors,
   );
-  const nonGatingFiles = new Set(nonGating.map(({ file }) => file));
+  for (const file of scenarioLedgerGrowth(
+    scenarioLedgerBaseline(),
+    nonGating,
+  )) {
+    errors.push(`scenario ledger is shrink-only: added ${file}`);
+  }
+  const scenarios = new Map(
+    nonGating.map((scenario) => [scenario.file, scenario]),
+  );
+  if (scenarios.size !== nonGating.length) {
+    errors.push("scenario ledger contains duplicate files");
+  }
   for (const scenario of nonGating) {
     if (!files.includes(scenario.file)) {
       errors.push(`non-gating file is not tracked: ${scenario.file}`);
     }
   }
   for (const file of files) {
-    const brokenEdge = firstCollectionFailure({ file, nonGatingFiles });
+    const brokenEdge = firstCollectionFailure({ file, scenarios });
     if (brokenEdge !== undefined) {
       errors.push(`${file}: ${brokenEdge}`);
     }
@@ -3985,7 +4279,7 @@ const run = (): void => {
     return;
   }
   console.log(
-    `Checked ${files.length} tracked test files; manifest derived in memory.`,
+    `Checked ${files.length} tracked test files; ${nonGating.filter(({ type }) => type === "non-gating").length} non-gating scenarios receive no execution credit; manifest derived in memory.`,
   );
 };
 
