@@ -245,6 +245,11 @@
     "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
   },
   {
+    "file": "apps/web/e2e/specs/reader-chat-first-send.spec.ts",
+    "owningWorkflow": ".github/workflows/ci.yml",
+    "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
+  },
+  {
     "file": "apps/web/e2e/specs/reader-chat-first-turn.spec.ts",
     "owningWorkflow": ".github/workflows/ci.yml",
     "reason": "dynamic shard args; coverage proven by e2e-production-shard at runtime"
