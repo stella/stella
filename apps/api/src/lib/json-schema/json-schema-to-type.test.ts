@@ -32,6 +32,11 @@ describe("jsonSchemaToType", () => {
   foo: string;
   bar?: number;
 }`);
+    expect(jsonSchemaToType(schema, { optionalPropertyUndefined: "include" }))
+      .toBe(`{
+  foo: string;
+  bar?: number | undefined;
+}`);
   });
 
   test("renders object schemas with rest properties", () => {
@@ -83,6 +88,28 @@ describe("jsonSchemaToType", () => {
 }>`);
     expect(jsonSchemaToType(tupleSchema)).toBe("[string, number]");
     expect(jsonSchemaToType(tupleWithRestSchema)).toBe("[string, ...number[]]");
+  });
+
+  test("keeps every union branch inside array and tuple-rest element types", () => {
+    const enumItems = toJsonSchema(v.picklist(["a", "b"]), {
+      target: "draft-07",
+    });
+    const nullableItems = toJsonSchema(v.nullable(v.number()), {
+      target: "draft-07",
+    });
+    expect(jsonSchemaToType({ type: "array", items: enumItems })).toBe(
+      'Array<"a" | "b">',
+    );
+    expect(jsonSchemaToType({ type: "array", items: nullableItems })).toBe(
+      "Array<number | null>",
+    );
+    expect(
+      jsonSchemaToType({
+        type: "array",
+        items: [{ type: "string" }],
+        additionalItems: enumItems,
+      }),
+    ).toBe('[string, ...Array<"a" | "b">]');
   });
 
   test("renders enums as literal unions", () => {
@@ -141,6 +168,29 @@ describe("jsonSchemaToType", () => {
     } satisfies JsonSchema;
 
     expect(jsonSchemaToType(schema)).toBe("unknown");
+  });
+
+  test("resolves explicitly named schema references through nested arrays and unions", () => {
+    const knownReferences = new Map([["stella:Block", "Block"]]);
+    expect(
+      jsonSchemaToType({ $ref: "stella:Block" }, { knownReferences }),
+    ).toBe("Block");
+    expect(
+      jsonSchemaToType(
+        { type: "array", items: { $ref: "stella:Block" } },
+        { knownReferences },
+      ),
+    ).toBe("Block[]");
+    expect(
+      jsonSchemaToType(
+        { anyOf: [{ $ref: "stella:Block" }, { type: "null" }] },
+        { knownReferences },
+      ),
+    ).toBe("Block | null");
+    expect(
+      jsonSchemaToType({ $ref: "stella:Unknown" }, { knownReferences }),
+    ).toBe("unknown");
+    expect(jsonSchemaToType({ $ref: "stella:Block" })).toBe("unknown");
   });
 
   test("renders direct union-like schemas", () => {

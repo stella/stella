@@ -20,6 +20,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   executeNativeExtraction as executeNativeExtractionWithDependencies,
   persistNativeExtractionProjection as persistNativeExtractionProjectionWithDatabase,
+  pickExtractionSource,
   processExtraction as processExtractionWithDependencies,
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
@@ -292,9 +293,11 @@ afterEach(() => {
 });
 
 describe("processExtraction", () => {
-  // Files with a pending PDF derivative wait for it so extraction reads the
-  // rendered PDF rather than the original bytes.
-  test("requires durable extraction only after any pending PDF derivative exists", () => {
+  // Direct parsers do not wait for the PDF preview: extraction reads the
+  // original bytes, and a failed preview must not leave the body unindexed.
+  // Formats with no parser still wait, because the rendered PDF is their
+  // only text layer.
+  test("extracts a directly parsed file before its PDF preview exists", () => {
     expect(requiresDurableNativeExtraction(fileContent)).toBe(true);
     expect(
       requiresDurableNativeExtraction({
@@ -309,15 +312,52 @@ describe("processExtraction", () => {
         fileName: "notes.txt",
         mimeType: "text/plain",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       requiresDurableNativeExtraction({
         ...fileContent,
         fileName: "notes.txt",
-        mimeType: "text/plain",
+        mimeType: "text/plain; charset=utf-8",
+      }),
+    ).toBe(true);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "sheet.xlsx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+    ).toBe(true);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "photo.png",
+        mimeType: "image/png",
+      }),
+    ).toBe(false);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "photo.png",
+        mimeType: "image/png",
         pdfFileId: "derived_pdf_1",
       }),
     ).toBe(true);
+  });
+
+  // The run's unique source is the original file, so the preview finishing
+  // later reaches the run extracted at upload instead of starting another.
+  test("keeps a parsed file's extraction source when its PDF preview arrives", () => {
+    const notes = {
+      ...fileContent,
+      fileName: "notes.txt",
+      mimeType: "text/plain",
+    };
+
+    expect(
+      pickExtractionSource({ ...notes, pdfFileId: "derived_pdf_1" }),
+    ).toEqual(pickExtractionSource({ ...notes, pdfFileId: null }));
+    expect(pickExtractionSource(notes).fileId).toBe(fileContent.id);
   });
 
   test("orders the current version's fields by id, matching readEntityByIdHandler, so 'first file field' selection is deterministic", async () => {
