@@ -3,11 +3,13 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
+import { createWebTestEnvironment } from "../../../tests/environment.test-fixtures";
+
 // A DOM for this file only; everything that touches it loads afterwards.
 GlobalRegistrator.register({ url: "https://app.example.test/chat" });
 
-const previousApiUrl = process.env["VITE_API_URL"];
-process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
+const testEnvironment = createWebTestEnvironment({ file: import.meta.path });
+testEnvironment.setEnvIfAbsent("VITE_API_URL", "https://api.example.test");
 
 const { cleanup, render } = await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
@@ -23,11 +25,6 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  if (previousApiUrl === undefined) {
-    delete process.env["VITE_API_URL"];
-  } else {
-    process.env["VITE_API_URL"] = previousApiUrl;
-  }
   await unregisterDomEnvironment();
 });
 
@@ -82,7 +79,7 @@ test("an encrypted attachment's refusal tells the user why, not a generic failur
   ).toBeNull();
 });
 
-test("an unrelated refusal keeps the generic copy", async () => {
+test("an unknown validation refusal asks the user to check the request", async () => {
   const error = await refusedChatRequest({
     code: "some_other_refusal",
     message: "internal detail",
@@ -90,8 +87,6 @@ test("an unrelated refusal keeps the generic copy", async () => {
 
   const view = renderError(error);
 
-  expect(
-    view.getByText(/There was an issue sending your message/u),
-  ).toBeDefined();
+  expect(view.getByText(messages.errors.api.validation)).toBeDefined();
   expect(view.queryByText(/internal detail/u)).toBeNull();
 });

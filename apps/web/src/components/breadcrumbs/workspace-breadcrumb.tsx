@@ -9,9 +9,9 @@ import { useTranslations } from "use-intl";
 import { BidiText } from "@stll/ui/bidi-text";
 import { BreadcrumbItem, BreadcrumbSeparator } from "@stll/ui/breadcrumb";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
+import { MatterIcon } from "@stll/ui/matter-icon";
 
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
-import { MatterIcon } from "@/components/matter-icon";
 import { MatterNumberHint } from "@/components/matter-number-hint";
 import Tooltip from "@/components/tooltip";
 import {

@@ -154,8 +154,11 @@ test("an inferred act shows its basis once and preserves repeated citation count
     ],
     true,
   );
-  expect(screen.getAllByText(title)).toHaveLength(1);
-  expect(screen.getAllByText("Decision date · inferred")).toHaveLength(1);
+  const actName = /40\/1964 Sb\., Občanský zákoník/u;
+  expect(screen.getAllByRole("button", { name: actName })).toHaveLength(1);
+  expect(
+    screen.getAllByRole("button", { name: "Decision date · inferred" }),
+  ).toHaveLength(1);
   expect(
     container.querySelectorAll('[data-version-basis="group"]'),
   ).toHaveLength(1);
@@ -164,7 +167,7 @@ test("an inferred act shows its basis once and preserves repeated citation count
   ).toHaveLength(0);
   expect(screen.getByText("2×")).toBeTruthy();
   expect(
-    screen.getByRole("button", { name: title }).getAttribute("aria-expanded"),
+    screen.getByRole("button", { name: actName }).getAttribute("aria-expanded"),
   ).toBe("true");
 });
 

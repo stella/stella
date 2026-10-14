@@ -6,7 +6,7 @@ import type { DecisionCitationPresentation } from "@/components/references/decis
 import { env } from "@/env";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
-GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
+GlobalRegistrator.register({ url: "http://self-hosted.example.test/chat" });
 const { act, cleanup, fireEvent, render, screen, waitFor } =
   await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
@@ -65,9 +65,7 @@ for (const presentation of Object.values(DECISION_CITATION_PRESENTATION)) {
     const trigger = view.getByRole("button", { name: reference });
     const paragraph = trigger.closest("p");
     expect(paragraph?.firstChild?.textContent).toBe(sentence);
-    expect(trigger.getAttribute("href")).toBe(
-      new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href,
-    );
+    expect(trigger.getAttribute("href")).toBe(decision.readerUrl);
     expect(trigger.dataset["citationPresentation"]).toBe(presentation);
     expect(trigger.textContent).toBe(
       presentation === DECISION_CITATION_PRESENTATION.compact
@@ -144,7 +142,7 @@ for (const activation of Object.values(ACTIVATION)) {
         screen
           .getByRole("link", { name: messages.common.openInStella })
           .getAttribute("href"),
-      ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
+      ).toBe(decision.readerUrl);
       const original = screen.getByRole("link", {
         name: messages.inspector.external.openOriginal,
       });
@@ -194,7 +192,7 @@ test("an unavailable original remains a disabled action alongside the reader act
       screen
         .getByRole("link", { name: messages.common.openInStella })
         .getAttribute("href"),
-    ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
+    ).toBe(decision.readerUrl);
   });
 });
 
@@ -220,10 +218,69 @@ for (const protocol of ["javascript", "data"]) {
         screen
           .getByRole("link", { name: messages.common.openInStella })
           .getAttribute("href"),
-      ).toBe(new URL(decision.readerUrl, env.VITE_PUBLIC_APP_URL).href);
+      ).toBe(decision.readerUrl);
     });
     expect(
       view.container.querySelector('a[href^="javascript:"], a[href^="data:"]'),
     ).toBeNull();
   });
 }
+
+for (const readerUrl of [
+  `${decision.readerUrl}?q=remedy#p-28`,
+  new URL(`${decision.readerUrl}?q=remedy#p-28`, env.VITE_PUBLIC_APP_URL).href,
+  new URL(
+    `${decision.readerUrl}?q=remedy#p-28`,
+    "http://self-hosted.example.test",
+  ).href,
+]) {
+  test(`served reader URL ${readerUrl} stays on this deployment and primary clicks use the in-app opener`, async () => {
+    const opened: string[] = [];
+    const view = render(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <DecisionCitationChip
+            decision={{ ...decision, readerUrl }}
+            onOpen={() => {
+              opened.push(decision.decisionId);
+            }}
+          />
+        </FormattingProvider>
+      </IntlProvider>,
+    );
+    const trigger = view.getByRole("button", { name: reference });
+    expect(trigger.getAttribute("href")).toBe(
+      `${decision.readerUrl}?q=remedy#p-28`,
+    );
+    fireEvent.focus(trigger);
+    const action = await screen.findByRole("link", {
+      name: messages.common.openInStella,
+    });
+    expect(action.getAttribute("href")).toBe(
+      `${decision.readerUrl}?q=remedy#p-28`,
+    );
+    expect(
+      new URL(action.getAttribute("href") ?? "", window.location.href).origin,
+    ).toBe(window.location.origin);
+    expect(fireEvent.click(action, { ctrlKey: true })).toBe(true);
+    expect(opened).toEqual([]);
+    expect(fireEvent.click(action)).toBe(false);
+    expect(opened).toEqual([decision.decisionId]);
+  });
+}
+
+test("a pointer press keeps the citation preview open after focus has opened it", async () => {
+  const view = mount();
+  const trigger = view.getByRole("button", { name: reference });
+  fireEvent.focus(trigger);
+  await waitFor(() =>
+    expect(trigger.getAttribute("aria-expanded")).toBe("true"),
+  );
+  fireEvent.click(trigger);
+  await waitFor(() =>
+    expect(trigger.getAttribute("aria-expanded")).toBe("true"),
+  );
+  expect(
+    screen.getByRole("link", { name: messages.common.openInStella }),
+  ).toBeTruthy();
+});

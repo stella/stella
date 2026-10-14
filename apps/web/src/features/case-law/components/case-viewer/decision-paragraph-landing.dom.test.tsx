@@ -160,15 +160,22 @@ type LandingHarnessProps = {
   documentAst: unknown;
   fragment: string;
   label: string;
+  sessionId?: string;
 };
 
 const LandingHarness = ({
   documentAst,
   fragment,
   label,
+  sessionId,
 }: LandingHarnessProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  useDecisionParagraphLanding({ containerRef, documentAst, fragment });
+  useDecisionParagraphLanding({
+    containerRef,
+    documentAst,
+    fragment,
+    sessionId,
+  });
   return (
     <div ref={containerRef}>
       <button type="button">{label}</button>
@@ -210,6 +217,63 @@ test("lands once per stored AST and fragment, not on every render", () => {
       container.querySelector('[data-anchor="p-13"]'),
     );
     expect(first?.dataset["readerLanding"]).toBeUndefined();
+  } finally {
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  }
+});
+
+test("a repeated citation session restarts the same paragraph range after reader input ends its hold", () => {
+  const scroll = mock(() => {});
+  const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+  HTMLElement.prototype.scrollIntoView = scroll;
+  try {
+    const { container, getByRole, rerender } = render(
+      <LandingHarness
+        documentAst={storedAst}
+        fragment="par=48-49"
+        sessionId="first-citation"
+        label="Elsewhere"
+      />,
+    );
+    const first = container.querySelector<HTMLElement>('[data-anchor="p-12"]');
+    const markedAnchors = () =>
+      [...container.querySelectorAll<HTMLElement>("[data-reader-landing]")].map(
+        (node) => node.dataset["anchor"],
+      );
+    expect(markedAnchors()).toEqual(["p-12", "p-13"]);
+    expect(scroll).toHaveBeenCalledTimes(1);
+
+    container.ownerDocument.dispatchEvent(new Event("wheel"));
+    container.ownerDocument.dispatchEvent(new Event("scroll"));
+    expect(scroll).toHaveBeenCalledTimes(1);
+    getByRole("button").focus();
+    for (const paragraph of container.querySelectorAll<HTMLElement>(
+      "[data-reader-landing]",
+    )) {
+      delete paragraph.dataset["readerLanding"];
+      paragraph.classList.remove("bg-accent", "text-accent-foreground");
+    }
+    expect(markedAnchors()).toEqual([]);
+
+    rerender(
+      <LandingHarness
+        documentAst={storedAst}
+        fragment="par=48-49"
+        sessionId="second-citation"
+        label="Elsewhere"
+      />,
+    );
+    expect(scroll).toHaveBeenCalledTimes(2);
+    expect(container.ownerDocument.activeElement).toBe(first);
+    expect(markedAnchors()).toEqual(["p-12", "p-13"]);
+    for (const paragraph of container.querySelectorAll<HTMLElement>(
+      "[data-reader-landing]",
+    )) {
+      expect(paragraph.classList.contains("bg-accent")).toBe(true);
+      expect(paragraph.classList.contains("text-accent-foreground")).toBe(true);
+    }
+    container.ownerDocument.dispatchEvent(new Event("scroll"));
+    expect(scroll).toHaveBeenCalledTimes(3);
   } finally {
     HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
   }

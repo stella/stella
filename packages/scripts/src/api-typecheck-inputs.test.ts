@@ -42,7 +42,6 @@ test("workspace covering inputs stay stable as files move and imports change wit
     const inputs = apiProgramTypecheckInputs(project, [source, shared]);
     const added = [
       path.join(api, "src/new.test.ts"),
-      path.join(api, "src/mcp/apps/manifest.ts"),
       path.join(api, "src/handlers/visual-sandbox/browser/value.ts"),
       path.join(api, "src/inventory.json"),
       path.join(root, "packages/shared/tests/new.test.ts"),
@@ -85,7 +84,6 @@ test("workspace covering inputs stay stable as files move and imports change wit
     for (const excluded of [
       "!src/**/*.test.ts",
       "!src/not-yet-created/**",
-      "!src/mcp/apps/**",
       "!src/handlers/visual-sandbox/browser/**",
       "!$TURBO_ROOT$/packages/shared/**",
       "!$TURBO_ROOT$/.npmrc",

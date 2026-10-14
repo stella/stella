@@ -1,4 +1,5 @@
 import { BUILT_IN_SKILL_ORIGIN } from "@/components/inspector/inspector-store-types";
+import type { SkillResourceTab } from "@/components/inspector/inspector-store-types";
 import type {
   ChatTab,
   InspectorTab,
@@ -67,20 +68,26 @@ const getToolDetailActiveSkillContext = (
   return isInstalledActiveSkillContext(activeSkill) ? activeSkill : undefined;
 };
 
+/** The skill a skill-resource tab belongs to, named as a chat names it. */
+export const skillResourceTabSkill = (
+  tab: SkillResourceTab,
+): ActiveSkillChatContext =>
+  tab.origin === BUILT_IN_SKILL_ORIGIN
+    ? { skillName: tab.skillName }
+    : {
+        skillId: tab.skillId,
+        skillName: tab.skillName,
+        ...(tab.skillDisplayName === undefined
+          ? {}
+          : { skillDisplayName: tab.skillDisplayName }),
+      };
+
 export const getActiveSkillChatContext = (
   tab: InspectorTab | undefined,
   catalogueEntries?: readonly ActiveSkillCatalogueEntry[],
 ): ActiveSkillChatContext | undefined => {
   if (tab?.type === "skill-resource") {
-    const names = {
-      skillName: tab.skillName,
-      ...(tab.skillDisplayName === undefined
-        ? {}
-        : { skillDisplayName: tab.skillDisplayName }),
-    };
-    return tab.origin === BUILT_IN_SKILL_ORIGIN
-      ? names
-      : { ...names, skillId: tab.skillId };
+    return skillResourceTabSkill(tab);
   }
 
   if (tab?.type === "chat") {

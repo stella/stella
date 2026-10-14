@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 19,
+  "reason": "MCP app frontends move from apps/api into @stll/mcp-apps; the package declares 23 existing external libraries, including statute timeline charts, d3-scale and its types. The shared React Compiler options owner declares the existing Oxc type dependency, and apps/api drops 5. Chart dependencies remain in apps/api for the visual sandbox; no new packages resolve."
+}
