@@ -1208,6 +1208,91 @@ describe("merge-group receipt and the history since the previous release", () =>
     60_000,
   );
 
+  test(
+    "the gate's single uncovered decision binds the suites even when the verifier alone would see coverage",
+    async () =>
+      withRepository((fixture) => {
+        fixture.publishStatuses();
+        fixture.publishReceipts(fixture.target);
+        // History is queue-validated, so a standalone coverage check passes.
+        const statusesPath = path.join(
+          fixture.responses,
+          `${fixture.proof}-statuses`,
+        );
+        const [statuses] = v.parse(
+          v.tuple([
+            v.array(
+              v.looseObject({ context: v.string(), description: v.string() }),
+            ),
+          ]),
+          JSON.parse(readFileSync(statusesPath, "utf-8")),
+        );
+        writeFileSync(
+          statusesPath,
+          JSON.stringify([
+            statuses.map((status) =>
+              status.context === "staging/verified"
+                ? status
+                : { ...status, description: `Proof; main=${"f".repeat(40)}` },
+            ),
+          ]),
+        );
+        const runVerifier = (...args: string[]) =>
+          Bun.spawnSync(
+            [
+              "bash",
+              verifier,
+              ...args,
+              repository,
+              fixture.target,
+              fixture.proof,
+            ],
+            { cwd: fixture.directory, env: fixture.environment },
+          );
+        expect(runVerifier().exitCode).toBe(0);
+        expect(runVerifier("--receipt-coverage", "covered").exitCode).toBe(0);
+        const uncovered = runVerifier("--receipt-coverage", "uncovered");
+        expect(uncovered.exitCode).not.toBe(0);
+        expect(uncovered.stderr.toString()).toContain(
+          "main/heavy tested main base is unverified",
+        );
+        expect(runVerifier("--receipt-coverage", "maybe").exitCode).not.toBe(0);
+        // The receipt turns unreadable for the gate's own decision only: the
+        // verifier, left to itself, would still see coverage and skip the
+        // suite bindings the gate then falls back to.
+        const log = path.join(fixture.directory, "verifier-calls");
+        const wrapper = path.join(fixture.directory, "flaky-verifier.sh");
+        writeFileSync(
+          wrapper,
+          `#!/usr/bin/env bash
+printf '%s\\n' "$*" >> ${JSON.stringify(log)}
+if [[ "$1" == --merge-group-receipt ]]; then echo 'receipt unavailable' >&2; exit 1; fi
+exec bash ${JSON.stringify(verifier)} "$@"
+`,
+        );
+        const health = Bun.spawnSync(
+          ["bash", healthGate, repository, fixture.target, fixture.proof],
+          {
+            cwd: fixture.directory,
+            env: {
+              ...fixture.environment,
+              RELEASE_TREE_PROOF_VERIFIER: wrapper,
+            },
+          },
+        );
+        expect(health.exitCode).not.toBe(0);
+        expect(health.stderr.toString()).toContain(
+          "main/heavy tested main base is unverified",
+        );
+        const calls = readFileSync(log, "utf-8").trim().split("\n");
+        expect(calls.at(0)).toStartWith("--merge-group-receipt ");
+        expect(calls.slice(1)).toEqual([
+          `--receipt-coverage uncovered ${repository} ${fixture.target} ${fixture.proof}`,
+        ]);
+      }),
+    60_000,
+  );
+
   test("without Bun the history cannot be checked, so both statuses stay required", async () =>
     withRepository((fixture) => {
       receiptOnly(fixture);

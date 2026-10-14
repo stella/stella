@@ -61,10 +61,25 @@ fi
 # Whether a receipt may replace the heavy and PR-depth proofs is decided in one
 # place: check-release-receipt-coverage.sh, which also requires queue-validated
 # history since the previous release. Presence of a receipt alone never drops a
-# binding the fallback to main/heavy and main/pr-depth relies on. A missing or
-# failing coverage check counts as no coverage.
+# binding the fallback to main/heavy and main/pr-depth relies on. A caller that
+# acts on the decision (the health gate) makes it once and passes it in with
+# --receipt-coverage, so verification and the gate can never disagree within
+# one run; without the flag the verifier decides itself. A missing or failing
+# coverage check counts as no coverage.
+receipt_coverage_decision=''
+if [[ "${1:-}" == --receipt-coverage ]]; then
+  case "${2:-}" in
+    covered|uncovered) receipt_coverage_decision="$2" ;;
+    *) echo '::error::RELEASE_TREE_PROOF_REFUSED: --receipt-coverage must be covered or uncovered' >&2; exit 1 ;;
+  esac
+  shift 2
+fi
 receipt_coverage="$(dirname "${BASH_SOURCE[0]}")/check-release-receipt-coverage.sh"
 receipt_covers_release() {
+  if [[ -n "$receipt_coverage_decision" ]]; then
+    [[ "$receipt_coverage_decision" == covered ]]
+    return
+  fi
   RELEASE_TREE_PROOF_VERIFIER="${BASH_SOURCE[0]}" bash "$receipt_coverage" "$1" "$2" 2>/dev/null
 }
 # Discovery returns a candidate SHA or empty on a miss; callers still validate it.

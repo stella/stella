@@ -12,24 +12,29 @@ repo="${1:?repository is required}"
 sha="${2:?commit SHA is required}"
 tree_proof_verifier="${RELEASE_TREE_PROOF_VERIFIER:-$(dirname "${BASH_SOURCE[0]}")/verify-release-tree-proof.sh}"
 proof="${3:-}"
-if [[ -z "$proof" ]]; then
-  proof=$(bash "$tree_proof_verifier" --find-proof "$repo" "$sha")
-  proof="${proof:-$sha}"
-fi
-bash "$tree_proof_verifier" "$repo" "$sha" "$proof" >/dev/null
 [[ "$repo" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ && "$sha" =~ ^[0-9a-f]{40}$ ]] || {
   echo '::error::RELEASE_HEAVY_NOT_GREEN: invalid repository or SHA' >&2; exit 1;
 }
 refuse() { echo "::error::$1" >&2; exit 1; }
-# The receipt is read on the release commit itself, never on a reused proof,
-# and counts only when no commit since the previous release bypassed the merge
-# queue. Output stays on stderr: callers forward stdout to step outputs.
+# One receipt decision per run, made before anything relies on it: the
+# receipt is read on the release commit itself, never on a reused proof, and
+# counts only when no commit since the previous release bypassed the merge
+# queue. The verifier receives the same decision, so the suite bindings it
+# skips are exactly the statuses this gate does not require. Output stays on
+# stderr: callers forward stdout to step outputs.
 required_contexts='["staging/verified","main/heavy","main/pr-depth"]'
 receipt=false
+coverage=uncovered
 if bash "$script_dir/check-release-receipt-coverage.sh" "$repo" "$sha"; then
   receipt=true
+  coverage=covered
   required_contexts='["staging/verified"]'
 fi
+if [[ -z "$proof" ]]; then
+  proof=$(bash "$tree_proof_verifier" --receipt-coverage "$coverage" --find-proof "$repo" "$sha")
+  proof="${proof:-$sha}"
+fi
+bash "$tree_proof_verifier" --receipt-coverage "$coverage" "$repo" "$sha" "$proof" >/dev/null
 if [[ "$proof" != "$sha" ]]; then
   target_statuses=$(bash "$gh_retry_script" api --paginate --slurp "repos/$repo/commits/$sha/statuses?per_page=100")
   jq -e --argjson contexts "$required_contexts" '
