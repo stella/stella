@@ -687,6 +687,137 @@ test.each(["unchanged", "refreshed"] as const)(
   },
 );
 
+test("a short strict page is topped up with new partial matches only, after the strict hits", async () => {
+  const db = drizzle({ client });
+  const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+  const indexId = corpusIndexId(manifest.generation, "CZE");
+  // The strict hit, its Slovak language sibling, and one other decision.
+  const held = [czechId, slovakId, projectedId].map((entityId) =>
+    heldProjection({
+      entityId,
+      generation: manifest.generation,
+      indexId,
+      intentId: createSafeId<"corpusIndexProjectionIntent">(),
+    }),
+  );
+  await db
+    .insert(corpusIndexGenerations)
+    .values({
+      family: "case_law",
+      generation: manifest.generation,
+      cluster: manifest.cluster,
+      manifestDigest: corpusIndexManifestDigest(manifest),
+      status: "building",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(corpusIndexProjectionIntents)
+    .values(held.map(({ intent }) => intent));
+  await db
+    .insert(corpusIndexProjectionStates)
+    .values(held.map(({ state }) => state));
+  const resolution = corpusIndexReadTarget({
+    manifest,
+    jurisdiction: "CZE",
+    attestedGroups: new Set(),
+    enrolledGroups: new Set(),
+  });
+  if (resolution.type !== "ready") {
+    panic("Expected the Czech corpus group to be ready");
+  }
+  // Each request scans strictly first; a second scan in the same request is
+  // the relaxed one, which returns the strict hit again, its sibling and one
+  // new partial match.
+  let scans = 0;
+  const hitsOf = (ids: readonly string[]) =>
+    Result.ok({
+      numHits: ids.length,
+      hits: ids.map((id) => ({ document_id: id, anchor_id: `${id}-p` })),
+      snippets: ids.map(() => ({ text: ["<b>promlčení</b> nároku"] })),
+    });
+  const searchSpy = spyOn(
+    getCorpusIndexClient(manifest.cluster),
+    "search",
+  ).mockImplementation(async (options) => {
+    if (options.snippetFields?.includes("text")) {
+      const named = [czechId, slovakId, projectedId].filter((id) =>
+        options.query.includes(id),
+      );
+      return await Promise.resolve(
+        hitsOf(named.length === 0 ? [czechId] : named),
+      );
+    }
+    scans += 1;
+    return await Promise.resolve(
+      hitsOf(scans === 1 ? [czechId] : [czechId, slovakId, projectedId]),
+    );
+  });
+  resetPublicCaseLawConfigForTesting(caseLawDb);
+  const search = async (strict: boolean) => {
+    scans = 0;
+    const result = await searchCorpusIndexDecisions({
+      body: { country: "CZE", query: "promlčení nároku", limit: 5, strict },
+      caseLawDb,
+      observer: "unobserved",
+      dependencies: {
+        configuredVariant: "off",
+        readServingTarget: async () =>
+          await Promise.resolve(
+            Result.ok({
+              ...resolution.target,
+              manifest,
+              serving: {
+                family: "case_law",
+                generation: manifest.generation,
+                cluster: manifest.cluster,
+              },
+            }),
+          ),
+      },
+    });
+    if (!("hits" in result)) {
+      return panic("Expected a successful indexed search page");
+    }
+    return { result, scans };
+  };
+  try {
+    const strictOnly = await search(true);
+    expect(strictOnly.scans).toBe(1);
+    const relaxed = await search(false);
+    expect(relaxed.scans).toBe(2);
+    expect(
+      relaxed.result.hits.map(({ decisionId, match }) => ({
+        decisionId: String(decisionId),
+        match,
+      })),
+    ).toEqual([
+      { decisionId: String(czechId), match: "all_terms" },
+      { decisionId: String(projectedId), match: "some_terms" },
+    ]);
+    // The total and facets stay the strict set's.
+    expect(relaxed.result.total).toEqual(strictOnly.result.total);
+    expect(relaxed.result.facets).toEqual(strictOnly.result.facets);
+  } finally {
+    searchSpy.mockRestore();
+    resetPublicCaseLawConfigForTesting();
+    await db.delete(corpusIndexProjectionStates).where(
+      and(
+        inArray(
+          corpusIndexProjectionStates.entityId,
+          held.map(({ state }) => state.entityId),
+        ),
+        eq(corpusIndexProjectionStates.generation, manifest.generation),
+      ),
+    );
+    await db.delete(corpusIndexProjectionIntents).where(
+      inArray(
+        corpusIndexProjectionIntents.id,
+        held.map(({ intent }) => intent.id),
+      ),
+    );
+  }
+});
+
 test("a generation admits exactly what its projection state holds", async () => {
   const scoped = {
     body: SEARCH_BODY,
