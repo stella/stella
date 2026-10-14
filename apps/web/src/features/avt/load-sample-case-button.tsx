@@ -2,6 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
+import { isSampleCaseComplete } from "@/features/avt/sample-case.logic";
 import { useLoadSampleCase } from "@/features/avt/use-load-sample-case";
 import { usePermissions } from "@/hooks/use-permissions";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -32,11 +33,14 @@ export const LoadSampleCaseButton = ({
       disabled={loadSampleCase.isPending}
       onClick={() => {
         loadSampleCase.mutate(undefined, {
-          onSuccess: ({ listId, factsIncomplete, documentMissing }) => {
-            // Loading again completes what this run left out.
-            if (factsIncomplete || documentMissing) {
+          onSuccess: (load) => {
+            // An incomplete load keeps this action on screen; loading again
+            // completes what this run left out.
+            if (!isSampleCaseComplete(load)) {
               notifyUserError(null, t("avt.view.loadSampleFailed"));
+              return;
             }
+            const { listId } = load;
             updateView.mutate(
               {
                 viewId: view.id,

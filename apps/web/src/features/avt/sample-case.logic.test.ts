@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { SAMPLE_FACTS } from "@/features/avt/sample-case.data";
-import { sampleFactWrites } from "@/features/avt/sample-case.logic";
+import {
+  isSampleCaseComplete,
+  sampleFactWrites,
+} from "@/features/avt/sample-case.logic";
 
 const DETAILS = { confidence: "high" };
 
@@ -38,6 +41,18 @@ describe("sample case", () => {
     expect(writes.completeDetails).toEqual(
       createdOnly.map((fact) => ({ fact, itemEntityId: "created-only" })),
     );
+  });
+
+  test("only a load with nothing left out opens the sample list", () => {
+    expect(
+      isSampleCaseComplete({ factsIncomplete: false, documentMissing: false }),
+    ).toBe(true);
+    expect(
+      isSampleCaseComplete({ factsIncomplete: true, documentMissing: false }),
+    ).toBe(false);
+    expect(
+      isSampleCaseComplete({ factsIncomplete: false, documentMissing: true }),
+    ).toBe(false);
   });
 
   test("statements carry no metadata prefix and stay unique", () => {
