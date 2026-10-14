@@ -612,23 +612,60 @@ type GenerationProjection = {
 
 /**
  * The descriptor each generation is owed for one canonical input. A retiring
- * generation appears only where that descriptor is an erasure. A partial
- * generation is owed nothing for a jurisdiction it does not hold: no state, so
- * it never carries a row per decision of the corpus.
+ * generation appears only where that descriptor is an erasure.
+ *
+ * A partial generation is owed nothing for a jurisdiction it does not hold:
+ * no state, so it never carries a row per decision of the corpus. But a
+ * generation whose scope no longer covers the decision owes an erasure when it
+ * holds a projection of it, so a decision corrected out of a jurisdiction
+ * (or a jurisdiction dropped from a scope) does not leave a copy behind that
+ * nothing would ever delete. The existing projections are read in one probe by
+ * the state primary key.
  */
-const projectionsFor = (
+const projectionsFor = async (
+  tx: Transaction,
+  subject: CorpusIndexProjectionSubject,
   manifests: readonly RegisteredManifest[],
   input: Parameters<typeof deriveCorpusIndexProjectionDescriptor>[1],
-): GenerationProjection[] =>
-  manifests.flatMap(({ generation, manifest, accepts }) => {
+): Promise<GenerationProjection[]> => {
+  const uncovered = manifests.filter(
+    ({ manifest }) =>
+      !corpusIndexManifestCoversJurisdiction(manifest, input.jurisdiction),
+  );
+  const projected =
+    uncovered.length === 0
+      ? new Set<string>()
+      : new Set(
+          (
+            await tx
+              .select({ generation: corpusIndexProjectionStates.generation })
+              .from(corpusIndexProjectionStates)
+              .where(
+                and(
+                  eq(corpusIndexProjectionStates.family, subject.family),
+                  eq(corpusIndexProjectionStates.entityId, subject.entityId),
+                  inArray(
+                    corpusIndexProjectionStates.generation,
+                    uncovered.map(({ generation }) => generation),
+                  ),
+                  eq(corpusIndexProjectionStates.desiredAction, "upsert"),
+                ),
+              )
+              .limit(uncovered.length)
+          ).map(({ generation }) => generation),
+        );
+  return manifests.flatMap(({ generation, manifest, accepts }) => {
     if (!corpusIndexManifestCoversJurisdiction(manifest, input.jurisdiction)) {
-      return [];
+      return projected.has(generation)
+        ? [{ generation, descriptor: { action: "erase" } as const }]
+        : [];
     }
     const descriptor = deriveCorpusIndexProjectionDescriptor(manifest, input);
     return accepts === "erase-only" && descriptor.action !== "erase"
       ? []
       : [{ generation, descriptor }];
   });
+};
 
 export const readActiveCorpusProjectionManifest = async (
   tx: Transaction,
@@ -843,7 +880,9 @@ export const advanceCorpusProjectionDesiredStateTx = async (
   subject: CorpusIndexProjectionSubject,
 ): Promise<{ epoch: bigint; generationCount: number }> => {
   const locked = await lockProjectionInput(tx, subject);
-  const projections = projectionsFor(
+  const projections = await projectionsFor(
+    tx,
+    subject,
     await projectionManifests(tx, subject.family),
     locked.input,
   );
@@ -877,7 +916,9 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
   subject: CorpusIndexProjectionSubject,
 ): Promise<{ epoch: bigint; changed: boolean; generationCount: number }> => {
   const locked = await lockProjectionInput(tx, subject);
-  const projections = projectionsFor(
+  const projections = await projectionsFor(
+    tx,
+    subject,
     await projectionManifests(tx, subject.family),
     locked.input,
   );

@@ -736,3 +736,54 @@ test("a whole generation built while the pointer is set projects the Czech decis
   expect(search.serving.generation).toBe("case_law_v7");
   expect(search.route.indexId).toBe("case_law_v7_cs_sk");
 });
+
+test("a decision corrected out of the partial generation's scope owes it an erasure, and back into it an upsert", async () => {
+  await advance(CZE_DECISION_ID);
+  await advance(SVK_DECISION_ID);
+  await applyDesired("case_law_v9", CZE_DECISION_ID, V9_REVISION);
+  const byGeneration = async (id: typeof CZE_DECISION_ID) =>
+    Object.fromEntries(
+      (await statesOf(id)).map((row) => [row.generation, row]),
+    );
+  const setCountry = async (id: typeof CZE_DECISION_ID, country: string) =>
+    await db
+      .update(caseLawDecisions)
+      .set({ country })
+      .where(eq(caseLawDecisions.id, id));
+
+  // Czech to Polish, through the canonical mutation path.
+  await setCountry(CZE_DECISION_ID, "POL");
+  await advance(CZE_DECISION_ID);
+  const polish = await byGeneration(CZE_DECISION_ID);
+  // The serving generation routes it to its Polish index; the partial
+  // generation, which no longer covers it, owes its existing copy an erasure.
+  expect(polish["case_law_v8"]).toMatchObject({
+    desiredAction: "upsert",
+    desiredIndexId: "case_law_v8_pol",
+  });
+  expect(polish["case_law_v9"]).toMatchObject({
+    desiredAction: "erase",
+    desiredFingerprint: null,
+    desiredIndexId: null,
+  });
+
+  // A decision that was never in scope gets no row in the partial generation.
+  await setCountry(SVK_DECISION_ID, "POL");
+  await advance(SVK_DECISION_ID);
+  expect(Object.keys(await byGeneration(SVK_DECISION_ID))).toEqual([
+    "case_law_v8",
+  ]);
+
+  // Polish back to Czech: the partial generation owes the decision again.
+  await setCountry(CZE_DECISION_ID, "CZE");
+  await advance(CZE_DECISION_ID);
+  const czech = await byGeneration(CZE_DECISION_ID);
+  expect(czech["case_law_v8"]).toMatchObject({
+    desiredAction: "upsert",
+    desiredIndexId: "case_law_v8_cs_sk",
+  });
+  expect(czech["case_law_v9"]).toMatchObject({
+    desiredAction: "upsert",
+    desiredIndexId: "case_law_v9_cze",
+  });
+});
