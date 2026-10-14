@@ -33,8 +33,8 @@ const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 
 const zip = new JSZip();
 writeZipEntry(zip, "[Content_Types].xml", contentTypesXml);
-writeZipEntry(zip.folder("_rels"), ".rels", rootRelsXml);
-writeZipEntry(zip.folder("word"), "document.xml", documentXml);
+writeZipEntry(zip, "_rels/.rels", rootRelsXml);
+writeZipEntry(zip, "word/document.xml", documentXml);
 
 const out = await zip.generateAsync({
   type: "uint8array",

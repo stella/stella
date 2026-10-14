@@ -121,8 +121,8 @@ const createTemplateDocx = async (
   );
 
   writeZipEntry(
-    zip.folder("_rels"),
-    ".rels",
+    zip,
+    "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
@@ -130,14 +130,14 @@ const createTemplateDocx = async (
   );
 
   writeZipEntry(
-    zip.folder("word"),
-    "document.xml",
+    zip,
+    "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escXml(title)}</w:t></w:r></w:p>${bodyXml}</w:body></w:document>`,
   );
 
   writeZipEntry(
-    zip.folder("word")?.folder("_rels"),
-    "document.xml.rels",
+    zip,
+    "word/_rels/document.xml.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
   );

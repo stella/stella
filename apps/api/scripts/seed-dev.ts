@@ -230,8 +230,8 @@ export const createMockDocx = async (
   );
 
   writeZipEntry(
-    zip.folder("_rels"),
-    ".rels",
+    zip,
+    "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
@@ -250,8 +250,8 @@ export const createMockDocx = async (
   }
 
   writeZipEntry(
-    zip.folder("word"),
-    "document.xml",
+    zip,
+    "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       `<w:body>${paragraphs}</w:body>` +
@@ -259,14 +259,14 @@ export const createMockDocx = async (
   );
 
   writeZipEntry(
-    zip.folder("word")?.folder("_rels"),
-    "document.xml.rels",
+    zip,
+    "word/_rels/document.xml.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
         SEED_STYLES_RELATIONSHIP
       }</Relationships>`,
   );
-  writeZipEntry(zip.folder("word"), "styles.xml", SEED_STYLES_XML);
+  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return buf;
@@ -642,8 +642,8 @@ const createSupplierAgreementDocx = async (
   );
 
   writeZipEntry(
-    zip.folder("_rels"),
-    ".rels",
+    zip,
+    "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
@@ -717,8 +717,8 @@ const createSupplierAgreementDocx = async (
   const paragraphs = SUPPLIER_AGREEMENT_PARAGRAPHS.map(paragraphXml).join("");
 
   writeZipEntry(
-    zip.folder("word"),
-    "document.xml",
+    zip,
+    "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       `<w:body>${paragraphs}</w:body>` +
@@ -733,23 +733,23 @@ const createSupplierAgreementDocx = async (
       "</w:comment>",
   ).join("");
   writeZipEntry(
-    zip.folder("word"),
-    "comments.xml",
+    zip,
+    "word/comments.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
       `${commentsXml}</w:comments>`,
   );
 
   writeZipEntry(
-    zip.folder("word")?.folder("_rels"),
-    "document.xml.rels",
+    zip,
+    "word/_rels/document.xml.rels",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
       `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>${
         SEED_STYLES_RELATIONSHIP
       }</Relationships>`,
   );
-  writeZipEntry(zip.folder("word"), "styles.xml", SEED_STYLES_XML);
+  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return buf;

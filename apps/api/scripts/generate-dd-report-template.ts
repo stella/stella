@@ -550,29 +550,28 @@ const createDocx = async (): Promise<Buffer> => {
   );
 
   writeZipEntry(
-    zip.folder("_rels"),
-    ".rels",
+    zip,
+    "_rels/.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       `<Relationship Id="rId1" Type="${REL.officeDocument}" Target="word/document.xml"/>` +
       "</Relationships>",
   );
 
-  const word = zip.folder("word");
   writeZipEntry(
-    word,
-    "document.xml",
+    zip,
+    "word/document.xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"' +
       ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
       `<w:body>${bodyXml}${SECT_PR}</w:body></w:document>`,
   );
-  writeZipEntry(word, "styles.xml", STYLES_XML);
-  writeZipEntry(word, "header1.xml", HEADER_XML);
-  writeZipEntry(word, "footer1.xml", FOOTER_XML);
+  writeZipEntry(zip, "word/styles.xml", STYLES_XML);
+  writeZipEntry(zip, "word/header1.xml", HEADER_XML);
+  writeZipEntry(zip, "word/footer1.xml", FOOTER_XML);
   writeZipEntry(
-    word?.folder("_rels"),
-    "document.xml.rels",
+    zip,
+    "word/_rels/document.xml.rels",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       `<Relationship Id="rId1" Type="${REL.styles}" Target="styles.xml"/>` +
