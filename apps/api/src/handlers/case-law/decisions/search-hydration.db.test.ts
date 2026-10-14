@@ -837,7 +837,7 @@ test("a provision-only list is the complete citing set with an exact total and i
       provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
     },
     caseLawDb,
-    dependencies: { servingGeneration: GENERATION },
+    dependencies: { servingGeneration: GENERATION, provider: "corpus-index" },
   });
   if (!("hits" in listed)) {
     throw new Error("expected a page");
@@ -847,7 +847,7 @@ test("a provision-only list is the complete citing set with an exact total and i
   expect(listed.hits.map(({ decisionId }) => String(decisionId))).toEqual([
     String(czechId),
   ]);
-  expect(listed.total).toEqual({ type: "exact", value: 1 });
+  expect(listed.total).toEqual({ type: "exact", count: 1 });
   expect(listed.nextCursor).toBeNull();
   expect(listed.hits.at(0)?.headline).toBe("sentence par_316-odst_2");
 
@@ -857,11 +857,11 @@ test("a provision-only list is the complete citing set with an exact total and i
       provision: { work: "262/2006 Sb.", unit: "section", section: 317 },
     },
     caseLawDb,
-    dependencies: { servingGeneration: GENERATION },
+    dependencies: { servingGeneration: GENERATION, provider: "corpus-index" },
   });
   expect("hits" in none ? none.total : null).toEqual({
     type: "exact",
-    value: 0,
+    count: 0,
   });
 });
 
@@ -888,7 +888,7 @@ test("a provision-only list reads its page and excerpts in one snapshot", async 
       provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
     },
     caseLawDb,
-    dependencies: { servingGeneration: GENERATION },
+    dependencies: { servingGeneration: GENERATION, provider: "corpus-index" },
   });
   // One read for ids, total, citing sentences and rows (one repeatable-read
   // transaction), one for the language alternates.
@@ -931,13 +931,16 @@ test("a provision-only list cursor resumes only the request it was issued for", 
       await listCaseLawProvisionDecisions({
         body,
         caseLawDb,
-        dependencies: { servingGeneration: GENERATION },
+        dependencies: {
+          servingGeneration: GENERATION,
+          provider: "corpus-index",
+        },
       });
     const first = await list(request);
     if (!("hits" in first) || first.nextCursor === null) {
       throw new Error("expected a first page with a continuation");
     }
-    expect(first.total).toEqual({ type: "exact", value: 2 });
+    expect(first.total).toEqual({ type: "exact", count: 2 });
     const cursor = first.nextCursor;
 
     // The same request continues, to the other decision and the end.
@@ -975,9 +978,12 @@ test("a provision-only list cursor resumes only the request it was issued for", 
 
     // A cursor of this very request whose key no longer fits the order's
     // column is refused as a cursor, never sent to the comparison.
-    const parts = decodePaginationCursor(cursor) ?? [];
+    const [cursorContext, , cursorId] = decodePaginationCursor(cursor) ?? [];
+    if (typeof cursorContext !== "string" || typeof cursorId !== "string") {
+      throw new TypeError("expected a context and an id in the cursor");
+    }
     for (const key of ["not-an-authority", Number.POSITIVE_INFINITY, null]) {
-      const tampered = encodePaginationCursor([parts[0], key, parts[2]]);
+      const tampered = encodePaginationCursor([cursorContext, key, cursorId]);
       expect("hits" in (await list({ ...request, cursor: tampered }))).toBe(
         false,
       );
@@ -986,13 +992,13 @@ test("a provision-only list cursor resumes only the request it was issued for", 
     if (!("hits" in newest) || newest.nextCursor === null) {
       throw new Error("expected a newest first page with a continuation");
     }
-    const newestParts = decodePaginationCursor(newest.nextCursor) ?? [];
+    const [newestContext, , newestId] =
+      decodePaginationCursor(newest.nextCursor) ?? [];
+    if (typeof newestContext !== "string" || typeof newestId !== "string") {
+      throw new TypeError("expected a context and an id in the cursor");
+    }
     for (const key of [7, "2024-13-45", "yesterday"]) {
-      const tampered = encodePaginationCursor([
-        newestParts[0],
-        key,
-        newestParts[2],
-      ]);
+      const tampered = encodePaginationCursor([newestContext, key, newestId]);
       expect(
         "hits" in
           (await list({ ...request, sort: "newest", cursor: tampered })),
@@ -1007,7 +1013,9 @@ test("a provision-only list cursor resumes only the request it was issued for", 
   }
 });
 
-test("the provision filter probes links by decision id, not by scanning them", async () => {
+// The planner picks the decision-id or the work index by the data's shape;
+// either probes the provision's own links, and neither scans the table.
+test("the provision filter reads links through an index, never by scanning them", async () => {
   await caseLawDb(async (tx) => {
     await tx.execute(sql`SET LOCAL enable_seqscan = off`);
     const options = {
@@ -1030,7 +1038,9 @@ test("the provision filter probes links by decision id, not by scanning them", a
       const plan = JSON.stringify(
         await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
       );
-      expect(plan).toContain("case_law_provision_citations_decision_span_idx");
+      expect(plan).toMatch(
+        /Index (?:Only )?Scan using case_law_provision_citations_(?:decision_span|work_anchor|work)_idx/u,
+      );
       expect(plan).not.toContain("Seq Scan on case_law_provision_citations");
     }
   });

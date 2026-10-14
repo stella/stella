@@ -1390,7 +1390,7 @@ describe("OpenAI-compatible MCP tools", () => {
           minLength: 1,
           maxLength: 256,
           description:
-            'Only decisions citing this statutory provision, written as a lawyer cites it: "§ 316 odst. 2 ZP", "§ 2910 OZ", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "§ 316 zákona č. 262/2006 Sb.". A section matches every subsection of it; a subsection or letter narrows. Combine it with queries to find decisions on a topic that apply the provision. An abbreviation or title is read as the act in force today; name the act by number (č. 65/1965 Sb.) for an earlier one. Facets and total stay available while the citing decisions fit one search; a more widely cited provision is checked against ranked candidates, without facets and with a provision_cited_widely warning. Without queries the list is complete, with an exact total.',
+            'Only decisions citing this provision, as a lawyer writes it: "§ 316 odst. 2 ZP", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny". A section includes its subsections. Abbreviations name the act in force today; cite an earlier act by number (č. 65/1965 Sb.). With queries: topic decisions applying it. Without: every citing decision, exact total.',
         },
         has_legal_sentence: {
           type: "boolean",
@@ -5223,6 +5223,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     test("a provision without queries lists its citing decisions, with an exact total", async () => {
+      const listCursor = encodePaginationCursor(["list", 21, "next"]);
       listCaseLawProvisionDecisionsMock.mockResolvedValue({
         paginationOutcome: SEARCH_PAGINATION_COMPLETE,
         facets: null,
@@ -5238,7 +5239,7 @@ describe("OpenAI-compatible MCP tools", () => {
           provision: "§ 316 odst. 2 ZP",
           courts: ["NS"],
           sort: "newest",
-          cursor: "list-cursor",
+          cursor: listCursor,
         },
         context: createContext(),
         toolName: "search_case_law",
@@ -5253,7 +5254,7 @@ describe("OpenAI-compatible MCP tools", () => {
         courts: ["Nejvyšší soud"],
         sort: "newest",
         // The list's own cursor is passed through, not split per phrasing.
-        cursor: "list-cursor",
+        cursor: listCursor,
         provision: {
           work: "262/2006 Sb.",
           unit: "section",

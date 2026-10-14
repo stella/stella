@@ -42,6 +42,13 @@ type ProvisionScopeOptions = {
 };
 
 /**
+ * A path value as links store it: lowercase, no leading zeros, the form the
+ * citation resolver mints. A caller spelling `G` or `02` reads the same link.
+ */
+const canonicalPathValue = (value: string) =>
+  value.toLowerCase().replace(/^0+(?=\d)/u, "");
+
+/**
  * The link rows that cite the provision, level by level. The leading
  * jurisdiction and work equalities are the prefix of the links' work index,
  * so a read of every decision citing a provision walks that index rather
@@ -59,16 +66,18 @@ const provisionLinkConditions = ({
     sql`${link.section} = ${provision.section}`,
     provision.sectionSuffix === undefined
       ? sql`${link.sectionSuffix} IS NULL`
-      : sql`${link.sectionSuffix} = ${provision.sectionSuffix}`,
+      : sql`${link.sectionSuffix} = ${canonicalPathValue(provision.sectionSuffix)}`,
   ];
   if (provision.subsection !== undefined) {
-    levels.push(sql`${link.subsection} = ${provision.subsection}`);
+    levels.push(
+      sql`${link.subsection} = ${canonicalPathValue(provision.subsection)}`,
+    );
   }
   if (provision.letter !== undefined) {
-    levels.push(sql`${link.letter} = ${provision.letter}`);
+    levels.push(sql`${link.letter} = ${canonicalPathValue(provision.letter)}`);
   }
   if (provision.point !== undefined) {
-    levels.push(sql`${link.point} = ${provision.point}`);
+    levels.push(sql`${link.point} = ${canonicalPathValue(provision.point)}`);
   }
   return levels;
 };
@@ -113,10 +122,13 @@ export const readCaseLawProvisionScope = async (
 ): Promise<CaseLawProvisionScope> => {
   const link = caseLawProvisionCitations;
   const conditions = and(...provisionLinkConditions(scope));
+  // Grouped rather than DISTINCT: the public read transaction exposes only
+  // `select`, and a decision citing the provision at several levels is one.
   const rows = await tx
-    .selectDistinct({ decisionId: link.decisionId })
+    .select({ decisionId: link.decisionId })
     .from(link)
     .where(conditions)
+    .groupBy(link.decisionId)
     .limit(idSetMax + 1);
   if (rows.length <= idSetMax) {
     return {
@@ -166,9 +178,11 @@ export const readProvisionCitingSentences = async (
   }
   const link = caseLawProvisionCitations;
   const rows = await tx
-    .selectDistinctOn([link.decisionId], {
+    .select({
       decisionId: link.decisionId,
-      sentence: link.sentenceText,
+      // The earliest citing sentence in text order; the public read
+      // transaction exposes only `select`, so DISTINCT ON is a grouped read.
+      sentence: sql<string>`(array_agg(${link.sentenceText} ORDER BY ${link.spanStart}, ${link.id}))[1]`,
     })
     .from(link)
     .where(
@@ -177,8 +191,8 @@ export const readProvisionCitingSentences = async (
         ...provisionLinkConditions(scope),
       ),
     )
-    .orderBy(link.decisionId, link.spanStart)
-    // One row per decision, by DISTINCT ON.
+    .groupBy(link.decisionId)
+    // One row per decision, by the grouping.
     .limit(decisionIds.length);
   return new Map(rows.map((row) => [String(row.decisionId), row.sentence]));
 };
