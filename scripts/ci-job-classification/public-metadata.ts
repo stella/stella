@@ -8,6 +8,13 @@ import {
   resolveGitHead,
   SOURCE_CONFIG,
 } from "./git-provider";
+import {
+  METADATA_ORIGIN,
+  parseRemoteReference,
+  sameMetadataOrigin,
+  verifyRemoteReference,
+} from "./references";
+import type { MetadataOrigin, MetadataReferenceKind } from "./references";
 import { AdmissionError, parseDocument } from "./yaml";
 
 const TEXT = v.pipe(
@@ -26,6 +33,7 @@ const SOURCE = v.strictObject({
   type: v.literal("metadata"),
   id: TEXT,
   repository: TEXT,
+  origin: METADATA_ORIGIN,
   path: TEXT,
   digest: DIGEST,
   references: v.array(TEXT),
@@ -67,45 +75,16 @@ const safePath = (path: string) => {
     reject("unsafe metadata path");
   }
 };
-type MetadataReferenceKind = "reusable-workflow" | "action";
-type RemoteMetadataPathOptions = {
-  reference: string;
-  targetPath: string;
-  kind: MetadataReferenceKind;
-};
-const matchesRemoteMetadataPath = ({
-  reference,
-  targetPath,
-  kind,
-}: RemoteMetadataPathOptions) => {
-  const revision = reference.lastIndexOf("@");
-  const parts = reference.slice(0, revision).split("/");
-  if (
-    revision <= 0 ||
-    revision === reference.length - 1 ||
-    parts.length < 2 ||
-    parts.some((part) => part.length === 0)
-  ) {
-    reject("invalid remote metadata reference");
-  }
-  const remotePath = parts.slice(2).join("/");
-  if (remotePath) {
-    safePath(remotePath);
-  }
-  const directory = remotePath ? `${remotePath}/` : "";
-  return kind === "reusable-workflow"
-    ? targetPath === remotePath
-    : targetPath === `${directory}action.yml` ||
-        targetPath === `${directory}action.yaml`;
-};
 type ReferenceOptions = {
   callerRepository: string;
+  callerOrigin: MetadataOrigin;
   target: PublicMetadata["nodes"][number];
   reference: string;
   kind: MetadataReferenceKind;
 };
 const verifyReference = ({
   callerRepository,
+  callerOrigin,
   target,
   reference,
   kind,
@@ -121,28 +100,38 @@ const verifyReference = ({
       kind === "reusable-workflow" &&
       (reference.startsWith("./") || reference.startsWith("$/")) &&
       (target.repository !== callerRepository ||
+        !sameMetadataOrigin({ caller: callerOrigin, target: target.origin }) ||
         target.path !== reference.slice(2))
     ) {
       reject("local reusable workflow metadata path or repository mismatch");
     }
-    if (
-      !reference.startsWith("./") &&
-      !reference.startsWith("$/") &&
-      !matchesRemoteMetadataPath({ reference, targetPath: target.path, kind })
-    ) {
-      reject("remote metadata path mismatch");
+    if (!reference.startsWith("./") && !reference.startsWith("$/")) {
+      verifyRemoteReference({
+        reference,
+        origin: target.origin,
+        path: target.path,
+        kind,
+      });
     }
+
     if (reference.startsWith("$/")) {
       const local = reference.slice(2);
       const exactPath = /\.ya?ml$/u.test(local)
         ? target.path === local
         : target.path === `${local}/action.yml` ||
           target.path === `${local}/action.yaml`;
-      if (target.repository !== callerRepository || !exactPath) {
+      if (
+        target.repository !== callerRepository ||
+        !sameMetadataOrigin({ caller: callerOrigin, target: target.origin }) ||
+        !exactPath
+      ) {
         reject("source-relative metadata path mismatch");
       }
     }
-    if (!target.references.includes(reference)) {
+    if (
+      (reference.startsWith("./") || reference.startsWith("$/")) &&
+      !target.references.includes(reference)
+    ) {
       reject("callee metadata reference mismatch");
     }
   } else {
@@ -152,12 +141,14 @@ const verifyReference = ({
     if (reference !== target.reference) {
       reject("supplier reference mismatch");
     }
-    if (
-      target.binding === "immutable" &&
-      !/@[0-9a-f]{40}$/u.test(reference) &&
-      !/^docker:\/\/[^\s]+@sha256:[0-9a-f]{64}$/u.test(reference)
-    ) {
-      reject("mutable supplier marked immutable");
+    if (target.binding === "immutable") {
+      if (reference.startsWith("docker://")) {
+        if (!/^docker:\/\/[^\s]+@sha256:[0-9a-f]{64}$/u.test(reference)) {
+          reject("mutable supplier marked immutable");
+        }
+      } else {
+        parseRemoteReference(reference);
+      }
     }
   }
 };
@@ -255,6 +246,7 @@ export const verifyPublicMetadata = ({ manifest, reader }: MetadataOptions) =>
             }
             verifyReference({
               callerRepository: node.repository,
+              callerOrigin: node.origin,
               target,
               reference,
               kind: reusableWorkflows.has(reference)

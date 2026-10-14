@@ -9,11 +9,15 @@ import {
   PUBLIC_METADATA,
   verifyPublicMetadata,
 } from "./ci-job-classification/public-metadata";
+import {
+  GIT_ORIGIN,
+  sameMetadataOrigin,
+} from "./ci-job-classification/references";
 import { AdmissionError } from "./ci-job-classification/yaml";
 
 const CANDIDATE = "candidate";
 const SNAPSHOT = v.strictObject({
-  revision: v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/u)),
+  origin: GIT_ORIGIN,
   documents: v.record(v.string(), v.string()),
 });
 const SNAPSHOTS = v.record(v.string(), SNAPSHOT);
@@ -56,7 +60,15 @@ export const checkJobClassification = (root: string) =>
       );
       const declaredSnapshots = new Set<string>();
       for (const node of manifest.nodes) {
-        if (node.type !== "metadata" || node.repository === CANDIDATE) {
+        if (node.type !== "metadata") {
+          continue;
+        }
+        if (node.repository === CANDIDATE) {
+          if (node.origin.type !== "checkout") {
+            throw new AdmissionError({
+              message: "Candidate metadata must use checkout origin",
+            });
+          }
           continue;
         }
         const snapshot = snapshots[node.repository];
@@ -72,15 +84,12 @@ export const checkJobClassification = (root: string) =>
             message: "Declared callee snapshot changed",
           });
         }
-        for (const reference of node.references) {
-          if (reference.startsWith("./") || reference.startsWith("$/")) {
-            continue;
-          }
-          if (!reference.endsWith(`@${snapshot.revision}`)) {
-            throw new AdmissionError({
-              message: "Callee snapshot revision differs from its reference",
-            });
-          }
+        if (
+          !sameMetadataOrigin({ caller: node.origin, target: snapshot.origin })
+        ) {
+          throw new AdmissionError({
+            message: "Callee snapshot origin differs from its metadata",
+          });
         }
       }
       const snapshotPaths = Object.entries(snapshots).flatMap(

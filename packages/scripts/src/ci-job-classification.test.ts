@@ -24,6 +24,11 @@ import type {
   MetadataReader,
 } from "../../../scripts/ci-job-classification/public-metadata";
 import {
+  GIT_ORIGIN,
+  parseRemoteReference,
+} from "../../../scripts/ci-job-classification/references";
+import type { MetadataOrigin } from "../../../scripts/ci-job-classification/references";
+import {
   AdmissionError,
   parseDocument,
 } from "../../../scripts/ci-job-classification/yaml";
@@ -47,7 +52,7 @@ test("committed classifications cover the repository and its pinned metadata cal
     v.record(
       v.string(),
       v.object({
-        revision: v.string(),
+        origin: GIT_ORIGIN,
         documents: v.record(v.string(), v.string()),
       }),
     ),
@@ -154,6 +159,7 @@ const fixture = () => {
   type SourceFixtureOptions = {
     id: string;
     repository: string;
+    origin: MetadataOrigin;
     file: string;
     text: string;
     references: string[];
@@ -162,6 +168,7 @@ const fixture = () => {
   const source = ({
     id,
     repository,
+    origin,
     file,
     text,
     references,
@@ -175,6 +182,7 @@ const fixture = () => {
       type: "metadata",
       id,
       repository,
+      origin,
       path: file,
       digest: sha256(text),
       references,
@@ -196,6 +204,7 @@ const fixture = () => {
       source({
         id: "root",
         repository: "candidate",
+        origin: { type: "checkout" },
         file: ".github/workflows/ci.yml",
         text: workflow,
         references: [],
@@ -208,6 +217,7 @@ const fixture = () => {
       source({
         id: "action",
         repository: "candidate",
+        origin: { type: "checkout" },
         file: ".github/actions/local/action.yml",
         text: action,
         references: ["$/.github/actions/local"],
@@ -216,6 +226,12 @@ const fixture = () => {
       source({
         id: "callee",
         repository: "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        origin: {
+          type: "git",
+          owner: "vendor",
+          repo: "shared",
+          sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        },
         file: ".github/workflows/reusable.yml",
         text: callee,
         references: [
@@ -295,6 +311,7 @@ type ReboundReferenceOptions = {
   target: string;
   repository?: string;
   targetPath?: string;
+  origin?: MetadataOrigin;
 };
 const reboundReference = ({
   original,
@@ -302,6 +319,7 @@ const reboundReference = ({
   target,
   repository,
   targetPath,
+  origin,
 }: ReboundReferenceOptions) => {
   const f = fixture();
   const rootKey = "candidate:.github/workflows/ci.yml";
@@ -352,6 +370,7 @@ const reboundReference = ({
       const updated = {
         ...node,
         repository: repository ?? node.repository,
+        origin: origin ?? node.origin,
         path: targetPath ?? node.path,
         references: node.references.map((reference) =>
           reference === original ? replacement : reference,
@@ -377,9 +396,81 @@ test("remote reusable references cannot authorize metadata from a different work
     "remote metadata path mismatch",
   );
 });
+test("remote metadata origins remain independent of changed reference declarations", () => {
+  for (const replacement of [
+    "other/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "vendor/other/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "vendor/shared/.github/workflows/reusable.yml@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  ]) {
+    failure(
+      verifyPublicMetadata(
+        reboundReference({
+          original:
+            "vendor/shared/.github/workflows/reusable.yml@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          replacement,
+          target: "callee",
+        }),
+      ),
+      "remote metadata origin mismatch",
+    );
+  }
+});
+test("remote sources cannot substitute checkout origin for independently pinned Git origin", () => {
+  const f = fixture();
+  const manifest: PublicMetadata = {
+    ...f.manifest,
+    nodes: f.manifest.nodes.map((node) =>
+      node.type === "metadata" && node.id === "callee"
+        ? { ...node, origin: { type: "checkout" } }
+        : node,
+    ),
+  };
+  failure(
+    verifyPublicMetadata({ manifest, reader: f.reader }),
+    "remote metadata origin mismatch",
+  );
+  expect(
+    v.safeParse(PUBLIC_METADATA, {
+      ...f.manifest,
+      nodes: f.manifest.nodes.map((node) =>
+        node.type === "metadata" ? { ...node, origin: undefined } : node,
+      ),
+    }).success,
+  ).toBe(false);
+});
+test("remote references have one canonical immutable tuple parser", () => {
+  expect(
+    parseRemoteReference(
+      "Vendor/Shared/nested@AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    ),
+  ).toEqual({
+    owner: "vendor",
+    repo: "shared",
+    path: "nested",
+    sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  });
+  expect(
+    parseRemoteReference(
+      "vendor/shared@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    ).path,
+  ).toBe("");
+  for (const reference of [
+    "vendor/shared@main",
+    "vendor/shared/@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "vendor/shared/../other@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  ]) {
+    expect(() => parseRemoteReference(reference)).toThrow(
+      "invalid remote metadata reference",
+    );
+  }
+});
 test("local reusable workflows cannot use workspace aliases to change path or repository", () => {
   for (const route of [
     { replacement: "./.github/workflows/new.yml", repository: "candidate" },
+    {
+      replacement: "./.github/workflows/reusable.yml",
+      repository: "candidate",
+    },
     {
       replacement: "./.github/workflows/reusable.yml",
       repository: "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -415,6 +506,14 @@ test("remote action references bind the directory or repository-root action meta
         reboundReference({
           original: "$/.github/actions/local",
           target: "action",
+          repository:
+            "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          origin: {
+            type: "git",
+            owner: "vendor",
+            repo: "shared",
+            sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          },
           ...route,
         }),
       ).isOk(),
@@ -425,6 +524,13 @@ test("remote action references bind the directory or repository-root action meta
       reboundReference({
         original: "$/.github/actions/local",
         target: "action",
+        repository: "public-supplier@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        origin: {
+          type: "git",
+          owner: "vendor",
+          repo: "shared",
+          sha: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        },
         replacement:
           "vendor/shared/other@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       }),

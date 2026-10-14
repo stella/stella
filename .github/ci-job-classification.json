@@ -301,6 +301,9 @@
       "type": "metadata",
       "id": "n0001",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/autofix-generated-conflicts.yml",
       "digest": "7e1e6262b734681fcede7120202263d48d6e5325a2f51b9ebd6ef00e60b17994",
       "references": [],
@@ -320,6 +323,9 @@
       "type": "metadata",
       "id": "n0002",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/generated-conflicts-publish.yml",
       "digest": "3e0f9cfb30fcdd56473f6934d03996f171e069a2997980f1ff0321c22e6acc35",
       "references": [],
@@ -343,6 +349,9 @@
       "type": "metadata",
       "id": "n0003",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/generated-conflicts-resolve.yml",
       "digest": "c2aafa46e7504ea8f0afb54cf9b6f52d0381aa0a9dd23aa29fd9a9d55234684a",
       "references": [],
@@ -364,6 +373,9 @@
       "type": "metadata",
       "id": "n0004",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/build-e2e-web/action.yml",
       "digest": "6241f4dc74d7b1620cea9f6431140ce244070a735920d177643bda476c296b11",
       "references": ["./.github/actions/build-e2e-web"],
@@ -374,6 +386,9 @@
       "type": "metadata",
       "id": "n0005",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/build-web-image/action.yml",
       "digest": "33a61188582b26281a90cfbc9b16cd888ac56b87e6816158bbf6576635f83d46",
       "references": [
@@ -393,6 +408,9 @@
       "type": "metadata",
       "id": "n0006",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/cargo-deny/action.yml",
       "digest": "ca20eec30ca1b5887cc82b10c9c0c568c73322e15218b3076d10b7fdedb67efe",
       "references": ["./.github/actions/cargo-deny"],
@@ -403,6 +421,9 @@
       "type": "metadata",
       "id": "n0007",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/ci-install/action.yml",
       "digest": "d3ac580b2a20d70841de986c683500f12994783f2f2d212b6c09d9a21f069a12",
       "references": ["$/.github/actions/ci-install"],
@@ -417,6 +438,9 @@
       "type": "metadata",
       "id": "n0008",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/desktop-windows-build/action.yml",
       "digest": "b7053327161e6e2eccb2f3f81cc62878ee72d923b0a31a9f2c4b049afc59895a",
       "references": [
@@ -433,6 +457,9 @@
       "type": "metadata",
       "id": "n0009",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/marketing-capture/action.yml",
       "digest": "e15b3385afbe6b91f7907e97eafdd608fe0cc0923df889dad2eb83fe327c88bd",
       "references": ["./.github/actions/marketing-capture"],
@@ -448,6 +475,9 @@
       "type": "metadata",
       "id": "n0010",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/osv-scanner/action.yml",
       "digest": "d3377f0ccbc214b2cd9c0eb9b1e60e19486eb811ef8b7e128ed8eaacb4504f00",
       "references": ["./.github/actions/osv-scanner"],
@@ -460,6 +490,9 @@
       "type": "metadata",
       "id": "n0011",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/prepare-network-baseline/action.yml",
       "digest": "d425e75433868ac78c6fecd95299187d5172f13102ebf130063ef56fb542c1ed",
       "references": ["./.github/actions/prepare-network-baseline"],
@@ -470,6 +503,9 @@
       "type": "metadata",
       "id": "n0012",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/promote-dispatch/action.yml",
       "digest": "04987e479f31fc1838fe8fd403d8fededb0562319ba1e608a258e28a36c01770",
       "references": ["./.github/actions/promote-dispatch"],
@@ -480,6 +516,9 @@
       "type": "metadata",
       "id": "n0013",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/provenance/action.yml",
       "digest": "ad7ce91c1fd75d5c025940e331bace2f3af9c72be0a1440f9c5068dcf5bb9a01",
       "references": [
@@ -496,6 +535,9 @@
       "type": "metadata",
       "id": "n0014",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/safe-chain/action.yml",
       "digest": "2b21b3a268171b8423851b70d5c3592eb2242c2a76cc85817d246a3fc0e2594b",
       "references": ["./.github/actions/safe-chain"],
@@ -508,6 +550,9 @@
       "type": "metadata",
       "id": "n0015",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/setup-e2e-stack/action.yml",
       "digest": "f2c0ad57c987fa0cbee80972d1501b2da6f20d3a82c440ec8f192e1710b007cc",
       "references": ["./.github/actions/setup-e2e-stack"],
@@ -520,6 +565,9 @@
       "type": "metadata",
       "id": "n0016",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/setup-playwright/action.yml",
       "digest": "25c7fa4b135e32a251bc8ab924979a0823d6a06fc7acfdb6ab9dd61539f68613",
       "references": ["./.github/actions/setup-playwright"],
@@ -530,6 +578,9 @@
       "type": "metadata",
       "id": "n0017",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/actions/setup-production-e2e/action.yml",
       "digest": "26f719b87d4e8688022fb590ef614dc59679a8ee0db90b9265aebd2945c3188f",
       "references": ["./.github/actions/setup-production-e2e"],
@@ -544,6 +595,9 @@
       "type": "metadata",
       "id": "n0018",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/agent-sandbox-canary.yml",
       "digest": "5a9445eb54a5fb50a67e0c3a90487ee9a476b2592f7ebf24d0dbc5df8815cfeb",
       "references": [],
@@ -565,6 +619,9 @@
       "type": "metadata",
       "id": "n0019",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/ai-provider-canary.yml",
       "digest": "826ce3b019abfbe2373e2e2d96b5c214333acfe37a139d25d50f776a86bce2d3",
       "references": [],
@@ -593,6 +650,9 @@
       "type": "metadata",
       "id": "n0020",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/api-test-memory.yml",
       "digest": "5999bb7c2326f81e4ade5f9628ac9f17f35cd2ac7ab06bb04afc2688573190e3",
       "references": [],
@@ -623,6 +683,9 @@
       "type": "metadata",
       "id": "n0021",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/audit-branch-protection.yml",
       "digest": "0ed8f15edefbb3702428c33abbaba757b2463a4f1be81fc4f1dbd9a8071cb8a3",
       "references": [],
@@ -656,6 +719,9 @@
       "type": "metadata",
       "id": "n0022",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/audit-image.yml",
       "digest": "79071bf6b87aba7fb337cec002c56ce06063f2c4af239c37664772600f71c33d",
       "references": [],
@@ -675,6 +741,9 @@
       "type": "metadata",
       "id": "n0023",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/auth-md-spec-check.yml",
       "digest": "0e1ce1b7d144b2a52e8096ff85c16e8092b15b91c8216f39b4f569e4ff3987f1",
       "references": [],
@@ -695,6 +764,9 @@
       "type": "metadata",
       "id": "n0024",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/autofix.yml",
       "digest": "66be19c5ec7950d88f620881ab3984840dfbd49256364e5e938f544506179250",
       "references": [],
@@ -735,6 +807,9 @@
       "type": "metadata",
       "id": "n0025",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/bot-refresh-auto-merge.yml",
       "digest": "8f27439a123e85a54ed64229e98d4a77fb21bb34255b9112eea7261ef1bf1b75",
       "references": [],
@@ -755,6 +830,9 @@
       "type": "metadata",
       "id": "n0026",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/build-api-image.yml",
       "digest": "b8b06df8291e6406bd136dcdfa0edee588541e92ca33b34d07018b1ced94d1de",
       "references": [],
@@ -785,6 +863,9 @@
       "type": "metadata",
       "id": "n0027",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/bundle-size-nightly.yml",
       "digest": "9a8e35a2a0fe697ad5a61f2a34c95afb9c9feaac6c56e5c04b4b78ecfb46b358",
       "references": [],
@@ -806,6 +887,9 @@
       "type": "metadata",
       "id": "n0028",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/cancel-stale-merge-groups.yml",
       "digest": "0e642299cc3cfa49b7f79315088e5de8008f2e81e6d97923a4ce9d0425b7c1bd",
       "references": [],
@@ -825,6 +909,9 @@
       "type": "metadata",
       "id": "n0029",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/catalogue-upstream.yml",
       "digest": "9728670166a622ba7cb197ee9e6572d2947384f93468703f8e24aa783ad5d6f6",
       "references": [],
@@ -847,6 +934,9 @@
       "type": "metadata",
       "id": "n0030",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/ci.yml",
       "digest": "842cbeba00b2b3808dc5dd1cf81d4b01176ad5e1efb5a91763765f2cb9193bf6",
       "references": ["./.github/workflows/ci.yml"],
@@ -1137,6 +1227,9 @@
       "type": "metadata",
       "id": "n0031",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/cla-notify.yml",
       "digest": "d770a5b61018f57563bb2fbe3e3fd236a7bf6b557091035c216981942beb8831",
       "references": [],
@@ -1154,6 +1247,9 @@
       "type": "metadata",
       "id": "n0032",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/cla.yml",
       "digest": "a1d17f2f77db2503a671a37546053e59b21856c67cb0c76f0a23ad7bd4401750",
       "references": [],
@@ -1174,6 +1270,9 @@
       "type": "metadata",
       "id": "n0033",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/cleanup-queued-pr-runs.yml",
       "digest": "d5674f7a11369898490a443c346c312ebbcfcd2959b464db654ca8617a6fdc1f",
       "references": [],
@@ -1193,6 +1292,9 @@
       "type": "metadata",
       "id": "n0034",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/codeql.yml",
       "digest": "523167524fa4c46d6d2d29724cf774b0362ae7828c3b8a81b5e8524961b8c9f7",
       "references": [],
@@ -1221,6 +1323,9 @@
       "type": "metadata",
       "id": "n0035",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/dated-waiver-healing.yml",
       "digest": "af2b6ae07e5cf9c062b3565a1bf36ba675aa8e73fc2e6f0bd538751a783d42e3",
       "references": [],
@@ -1242,6 +1347,9 @@
       "type": "metadata",
       "id": "n0036",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/db-migrations.yml",
       "digest": "874ffa6138d9aa47feb985a13474e988d2a561294e7c2a1a93931d06a42cd10e",
       "references": [],
@@ -1276,6 +1384,9 @@
       "type": "metadata",
       "id": "n0037",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/dependency-audit.yml",
       "digest": "6e448966a8321c7ecfb821dfa45645cd2c4e584f3bbbc8f0b333d88ba44b1eb7",
       "references": [],
@@ -1303,6 +1414,9 @@
       "type": "metadata",
       "id": "n0038",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/dependency-malware-nightly.yml",
       "digest": "650f2e20ef0e8393e06640c8ab03498dbe8dba18a71091bd9e33e263a8175b7d",
       "references": [],
@@ -1331,6 +1445,9 @@
       "type": "metadata",
       "id": "n0039",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/dependency-review.yml",
       "digest": "dce510dfec6fbabd822880ed94c8cdf3e66357b0173e1e2c146680bedd32aa4f",
       "references": [],
@@ -1353,6 +1470,9 @@
       "type": "metadata",
       "id": "n0040",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/deploy-landing.yml",
       "digest": "ab4e00c6cb7770a5701cf31e07d057fa2e2ab11779392d5be499f3cb07d4017c",
       "references": [],
@@ -1387,6 +1507,9 @@
       "type": "metadata",
       "id": "n0041",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/deploy-staging.yml",
       "digest": "a3a150e7c37fae209661ac193414ec0892f54434c4a3a9c4228a84274fa45334",
       "references": [],
@@ -1440,6 +1563,9 @@
       "type": "metadata",
       "id": "n0042",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/desktop-release-canary.yml",
       "digest": "1e3f7dc5139e8307d45bc7acc07277b9f089a9ff702a732b578b2f2c4f2e6fd7",
       "references": [],
@@ -1459,6 +1585,9 @@
       "type": "metadata",
       "id": "n0043",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/disarm-auto-merge.yml",
       "digest": "d69fbbe5c324c5654dec8966ee8615399d393dbbcc37685f92e15b13a3d45d03",
       "references": [],
@@ -1478,6 +1607,9 @@
       "type": "metadata",
       "id": "n0044",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/docs-source-policy.yml",
       "digest": "21d266eb9f94fab1d9b9f1cd352508eab7f52ba1ae09df7e1659c82d55fdc184",
       "references": [],
@@ -1498,6 +1630,9 @@
       "type": "metadata",
       "id": "n0045",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/fetch-public-documents.yml",
       "digest": "be2396ad04d9479f8ae5258bcc21ea2e1f86f612bce22393891ab7887a9e194d",
       "references": [],
@@ -1518,6 +1653,9 @@
       "type": "metadata",
       "id": "n0046",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/journey-canary.yml",
       "digest": "295e9b1244813c39b8f491091bfc9c913d7aae2e5b90054891c78611e8eaa160",
       "references": [],
@@ -1538,6 +1676,9 @@
       "type": "metadata",
       "id": "n0047",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/label-sync.yml",
       "digest": "3cd9b4cf1d1e128ca493b7e6f3eabbc163d5615c034e659d27c0a51721e22739",
       "references": [],
@@ -1557,6 +1698,9 @@
       "type": "metadata",
       "id": "n0048",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/landing-canary.yml",
       "digest": "4793b8321bfa9debefcacd69e8b00214af0c99f9fbd9a9c6983572a10e44421f",
       "references": [],
@@ -1576,6 +1720,9 @@
       "type": "metadata",
       "id": "n0049",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/main-heavy.yml",
       "digest": "087f33decef048b2feec5944a43ef6c68ad9decb3320d3552c7fccef42dd8eff",
       "references": [],
@@ -1609,6 +1756,9 @@
       "type": "metadata",
       "id": "n0050",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/main-pr-depth.yml",
       "digest": "d8bde2ffbaa7373a9845e55a23f7149fb4e569bc359aa42099278825617328ac",
       "references": [],
@@ -1642,6 +1792,9 @@
       "type": "metadata",
       "id": "n0051",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/manual-checks.yml",
       "digest": "d36d1dac7dfff73094c138bdb89fb4b89b5ff2ebb7b31b80e79f168d3a8c59bd",
       "references": [],
@@ -1678,6 +1831,9 @@
       "type": "metadata",
       "id": "n0052",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/marketing-screenshots-capture.yml",
       "digest": "0771fbd3f13109f9cbf483f5a81cdaeb001b1eea7ab4a8ba37e7dd20a2ec5909",
       "references": [],
@@ -1699,6 +1855,9 @@
       "type": "metadata",
       "id": "n0053",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/marketing-screenshots-publish.yml",
       "digest": "4620f0bf72d007722a6886f2ebe840f762de110ca3887696ce9448f3a38e3803",
       "references": [],
@@ -1722,6 +1881,9 @@
       "type": "metadata",
       "id": "n0054",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/marketing-screenshots-update.yml",
       "digest": "9b7ec07f6cd37d0afbff40c30f64f478ed6067751a06565ffca26d8289656d60",
       "references": [],
@@ -1741,6 +1903,9 @@
       "type": "metadata",
       "id": "n0055",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/marketing-screenshots.yml",
       "digest": "99e01737fd3bc5b99645ecfb5bcd2b5983900fb780f3c5f197447f78f3708236",
       "references": ["./.github/workflows/marketing-screenshots.yml"],
@@ -1762,6 +1927,9 @@
       "type": "metadata",
       "id": "n0056",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/mcp-canary.yml",
       "digest": "d9334f9d44d730a7d202a0b0da377c630d8e54e945ee2dca32e24185448a3aa5",
       "references": [],
@@ -1789,6 +1957,9 @@
       "type": "metadata",
       "id": "n0057",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/mirror-ci-service-images.yml",
       "digest": "2ad43f1d6df46052d8b49a24bd8c2402b8399ac31025d3e7f9f1ffb46c3e685a",
       "references": [],
@@ -1810,6 +1981,9 @@
       "type": "metadata",
       "id": "n0058",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/model-catalog-check.yml",
       "digest": "33b6d98b7dd18ee59664f2fd8b536df376cbef627a9a37171a06ea53e85bb3be",
       "references": [],
@@ -1833,6 +2007,9 @@
       "type": "metadata",
       "id": "n0059",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/network-baseline-deliver.yml",
       "digest": "f1fe201835bcc843ea608dbb29d2b5e2c8bcf55420ebe4ade769dc9670f59094",
       "references": ["./.github/workflows/network-baseline-deliver.yml"],
@@ -1854,6 +2031,9 @@
       "type": "metadata",
       "id": "n0060",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/network-baseline-record.yml",
       "digest": "087b07000937dd06db73832608d4b38be58d1e5aa7baf2abae354a4099615979",
       "references": [],
@@ -1892,6 +2072,9 @@
       "type": "metadata",
       "id": "n0061",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/network-baseline-request.yml",
       "digest": "e5b9170561d5011316ac539902fdf23632e4b895cc6dcac6faceb62f2447bfc0",
       "references": [],
@@ -1911,6 +2094,9 @@
       "type": "metadata",
       "id": "n0062",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/nightly-property-test.yml",
       "digest": "552d555b6b2db7838fa6e215aa0117d475f308c718b4f36cf544832d20cd502f",
       "references": [],
@@ -1955,6 +2141,9 @@
       "type": "metadata",
       "id": "n0063",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/nightly-test.yml",
       "digest": "7d62a878690fc38f2f0d5d1050d68c085cf9a13507708b88548859027d31b852",
       "references": [],
@@ -2034,6 +2223,9 @@
       "type": "metadata",
       "id": "n0064",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/nightly-typecheck.yml",
       "digest": "c49f666e74e2e95a169c62d89add50572b39243c8d49e96c541424dda9d55cdf",
       "references": [],
@@ -2066,6 +2258,9 @@
       "type": "metadata",
       "id": "n0065",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/pr-lint.yml",
       "digest": "e37b546b2141e4a2e3f4e049ae126beaa9858950aedc1290147191ec066a9fb2",
       "references": [],
@@ -2085,6 +2280,9 @@
       "type": "metadata",
       "id": "n0066",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/provenance-nightly.yml",
       "digest": "f9d16a2b647917b7cd1be17cf7513841c364583723084f16246b529fc8defaaf",
       "references": [],
@@ -2104,6 +2302,9 @@
       "type": "metadata",
       "id": "n0067",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/provider-request-schemas-check.yml",
       "digest": "4d49ea1a42b5131fba25e7a7d1de32674420f90b55d71f02a08c1fde9060239d",
       "references": [],
@@ -2125,6 +2326,9 @@
       "type": "metadata",
       "id": "n0068",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/publish-npm.yml",
       "digest": "d7c6470f4cee5ac5d41939a17f40415ab56e6e844ec955eebc0f52859c6b0d12",
       "references": [],
@@ -2166,6 +2370,9 @@
       "type": "metadata",
       "id": "n0069",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/publish-product-media.yml",
       "digest": "893651361e2b23bfb2763a37c4e0e5d5d0832d8c866dfaa029fc8325d625d5d7",
       "references": [],
@@ -2186,6 +2393,9 @@
       "type": "metadata",
       "id": "n0070",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/quarantine-prune.yml",
       "digest": "da6eacbe2e1bfbec4d6fce788d2ac44268e7b42da4392de25b60aa1c9de8b356",
       "references": [],
@@ -2208,6 +2418,9 @@
       "type": "metadata",
       "id": "n0071",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/query-perf.yml",
       "digest": "86f4b0aa409538c8d3c2088abe68292f5b3b484d1e5e6b5ee2c8b8556989e7f3",
       "references": ["./.github/workflows/query-perf.yml"],
@@ -2229,6 +2442,9 @@
       "type": "metadata",
       "id": "n0072",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/railway-smoke.yml",
       "digest": "3aad92d8d99ab6956a0c9d89e3d13ff8a498ac11c7341882f0ec13e31075aca6",
       "references": [],
@@ -2249,6 +2465,9 @@
       "type": "metadata",
       "id": "n0073",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/railway-template-source.yml",
       "digest": "3e9edd242db4d27c5311f5aad89c49c3968090a0858bfa86e2f221a760b27373",
       "references": [],
@@ -2269,6 +2488,9 @@
       "type": "metadata",
       "id": "n0074",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/release-desktop.yml",
       "digest": "ea8fc2623d4a7e8b471e1a238c8b78ad7e61f85f6d5ccd3fb273d280a2b5241b",
       "references": [],
@@ -2323,6 +2545,9 @@
       "type": "metadata",
       "id": "n0075",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/release-pr.yml",
       "digest": "1f9c14f2ddb40d3b0d7c0ef8caf7b7cd54c9d292615eb5677412ddaee75f1c1a",
       "references": [],
@@ -2349,6 +2574,9 @@
       "type": "metadata",
       "id": "n0076",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/release-proof.yml",
       "digest": "68371025462dcd384b1e597f9109d90f6a93aeee5a35299d32c8bc4ebd3bfca8",
       "references": [],
@@ -2368,6 +2596,9 @@
       "type": "metadata",
       "id": "n0077",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/release-tag.yml",
       "digest": "b7bbe14281414b97be22c12e1dd0c018f04b79dd051043e568ec9d4bee79dc7c",
       "references": [],
@@ -2395,6 +2626,9 @@
       "type": "metadata",
       "id": "n0078",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/release.yml",
       "digest": "4b8a309fbdace50e3e599c6c40426a8371e499fbc6752b9fe15935a21dcdcb8b",
       "references": [],
@@ -2461,6 +2695,9 @@
       "type": "metadata",
       "id": "n0079",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/safe-chain-cache.yml",
       "digest": "f85d4a6065211c25a597dbcbeaf10c8fce8e957b1e1e368115e8d34028bcfecd",
       "references": [],
@@ -2481,6 +2718,9 @@
       "type": "metadata",
       "id": "n0080",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/scheduled-run-alerts.yml",
       "digest": "26afd87e86c6ab078643b4a9f9710cd4d02e2428ca21fb6707c60533f1ef7657",
       "references": [],
@@ -2500,6 +2740,9 @@
       "type": "metadata",
       "id": "n0081",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/scorecard.yml",
       "digest": "8d87d40e6eae148bda61b14c089feedabacafc771b1463f34be03042e3a221d2",
       "references": [],
@@ -2521,6 +2764,9 @@
       "type": "metadata",
       "id": "n0082",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/security-txt-guard.yml",
       "digest": "37b4ed6420ed5245548165e2fe6211060a49d3cfce9ffbc526c110a04ce9f7a4",
       "references": [],
@@ -2540,6 +2786,9 @@
       "type": "metadata",
       "id": "n0083",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/staging-response-policy.yml",
       "digest": "958cbd4f08e28e69df9423e6d8790bcbbf4fbd25a7c345b10d77a1b5bb52b11b",
       "references": [],
@@ -2560,6 +2809,9 @@
       "type": "metadata",
       "id": "n0084",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/sync-branch-protection.yml",
       "digest": "67f5473963e4735ec74811c7e75129e5e73b9c7b5fc57c78989e6d3e8092264b",
       "references": [],
@@ -2580,6 +2832,9 @@
       "type": "metadata",
       "id": "n0085",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/type-cost-measurement.yml",
       "digest": "06a186855bd18f4f263ebd211701f3558feca82274468353efef6ae20245f2f3",
       "references": [],
@@ -2608,6 +2863,9 @@
       "type": "metadata",
       "id": "n0086",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/typecheck-base.yml",
       "digest": "52942fcb384e3b190152cec70c169dfee67c361e71dfbbcce92d3c5882673e1b",
       "references": [],
@@ -2629,6 +2887,9 @@
       "type": "metadata",
       "id": "n0087",
       "repository": "candidate",
+      "origin": {
+        "type": "checkout"
+      },
       "path": ".github/workflows/visual-preview.yml",
       "digest": "5c6bf5f772a638dde31de8ca60bafc054e5526ca1aab266d2e3387982372f489",
       "references": [],
@@ -2650,6 +2911,12 @@
       "type": "metadata",
       "id": "n0088",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": ".github/actions/changeset-policy/action.yml",
       "digest": "738a6bb23409ce8a3bf83588b999deef32da392f2d0d1a761fc17f74a03295bf",
       "references": [
@@ -2662,6 +2929,12 @@
       "type": "metadata",
       "id": "n0089",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": ".github/actions/npm-independent-release/action.yml",
       "digest": "97b85acfff4913eb6dbc1dd5bcecadd1ecb3f177fa572fcd8130b08360f1dff0",
       "references": [
@@ -2678,6 +2951,12 @@
       "type": "metadata",
       "id": "n0090",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": ".github/actions/signed-commit/action.yml",
       "digest": "81208f3202da284b34016692bd7e6d1303b6272f4115d091bb972cf454235d22",
       "references": [
@@ -2692,6 +2971,12 @@
       "type": "metadata",
       "id": "n0091",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": ".github/workflows/audit-branch-protection.yml",
       "digest": "f7ef39fecd5bd888e9a376772e223fafa568c96ea03767be2e55552f8224ec5c",
       "references": [
@@ -2715,6 +3000,12 @@
       "type": "metadata",
       "id": "n0092",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": ".github/workflows/changeset-release-pr.yml",
       "digest": "8f200a342f598241f346aae13420ee0737ad92cbcac483d147f1079261f59380",
       "references": [
@@ -2742,6 +3033,12 @@
       "type": "metadata",
       "id": "n0093",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": ".github/workflows/label-sync.yml",
       "digest": "ea2f691e7e6e8e5237579704fa4cc760f6f70628048d306b7e5d365cb7ab84db",
       "references": [
@@ -2763,6 +3060,12 @@
       "type": "metadata",
       "id": "n0094",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": ".github/workflows/npm-independent-release.yml",
       "digest": "f9031a3b4c193b6a82388aadb5be1a8f73790d9f8326b9961fac64985e4be3b5",
       "references": [
@@ -2786,6 +3089,12 @@
       "type": "metadata",
       "id": "n0095",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": ".github/workflows/pr-lint.yml",
       "digest": "01dc7c187a0dc0c058479646ce496fe307e31270820225bb3ca7451a8ec133ba",
       "references": [
@@ -2811,6 +3120,12 @@
       "type": "metadata",
       "id": "n0096",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": ".github/workflows/provenance-update.yml",
       "digest": "c8c4d96f05bd6ea4acebaf332a4a989b5e32e9c5c0f4f13e4f02a8af9d668322",
       "references": [
@@ -2837,6 +3152,12 @@
       "type": "metadata",
       "id": "n0097",
       "repository": "supplier1",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
+      },
       "path": "actions/setup-bun-cached/action.yml",
       "digest": "865d7c5596178bf885c0d4b0f07c784fd93102e1807b19806a44a85380a33c7c",
       "references": [
@@ -2853,6 +3174,12 @@
       "type": "metadata",
       "id": "n0098",
       "repository": "supplier2",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "167fb396c6c0f4e07296ad2cd72e6ef15367c776"
+      },
       "path": "actions/setup-bun-cached/action.yml",
       "digest": "872c62f44f20aecdbb596464e761fc4ae644777dbb89143c4ce1cb363739dfd7",
       "references": [
@@ -2869,6 +3196,12 @@
       "type": "metadata",
       "id": "n0099",
       "repository": "supplier3",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "42bd6a23099a2dc219dd1af9c55f8f0506fcfffd"
+      },
       "path": ".github/actions/npm-publish-hardened/action.yml",
       "digest": "c39892557e3f48af6663980fa708930f19805ca0054580b26df552fac60443b1",
       "references": [
@@ -2881,6 +3214,12 @@
       "type": "metadata",
       "id": "n0100",
       "repository": "supplier4",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "636b7841096c8f0cc5a1572077b78768ef8fea42"
+      },
       "path": ".github/actions/changeset-release-lifecycle/action.yml",
       "digest": "6b1eb4f9f47de784b978dcb4810153eba4bb7188980683628dd7bc81cf24cf5d",
       "references": [
@@ -2893,6 +3232,12 @@
       "type": "metadata",
       "id": "n0101",
       "repository": "supplier4",
+      "origin": {
+        "type": "git",
+        "owner": "stella",
+        "repo": ".github",
+        "sha": "636b7841096c8f0cc5a1572077b78768ef8fea42"
+      },
       "path": ".github/actions/sync-cargo-workspace-lock/action.yml",
       "digest": "7b73a9100b970f85976a0dfcc039b870990615270b890985aa73cfe8b55d8955",
       "references": [
