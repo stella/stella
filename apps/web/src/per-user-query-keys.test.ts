@@ -77,6 +77,8 @@ const WEB_SOURCE = import.meta.dirname;
 const API_SOURCE = nodePath.join(WEB_SOURCE, "../../api/src");
 const API_HANDLERS = nodePath.join(API_SOURCE, "handlers");
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.tsx?$/u;
+// Widened once so flag arithmetic compares numbers, not enum members.
+const CONST_DECLARATION_FLAG: number = ts.NodeFlags.Const;
 
 const ORG = "org-probe";
 const USER = "user-probe";
@@ -1061,7 +1063,7 @@ const calledReadScanAliases = (
         declaration.initializer !== undefined &&
         ts.isVariableDeclarationList(declaration.parent) &&
         declaration.parent.flags % (ts.NodeFlags.BlockScoped + 1) ===
-          Number(ts.NodeFlags.Const) &&
+          CONST_DECLARATION_FLAG &&
         (ts.isPropertyAccessExpression(declaration.initializer) ||
           ts.isElementAccessExpression(declaration.initializer))
       ) {

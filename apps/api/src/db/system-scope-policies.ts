@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { getColumnTable, getTableName, sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 import { pgPolicy } from "drizzle-orm/pg-core";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
@@ -12,7 +12,7 @@ export const systemScopePolicies = (
 ) => {
   const entries = Object.values(columns);
   const first = entries.at(0) ?? panic("System scope requires table columns");
-  const tableName = getTableName(getColumnTable(first));
+  const tableName = getTableName(first.table);
   const organization = entries.find(
     (column) => column.name === "organization_id",
   );

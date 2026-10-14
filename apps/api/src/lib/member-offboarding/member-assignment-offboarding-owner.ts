@@ -253,7 +253,7 @@ const assertAssignmentScope = (proof: OrgScope, requested: AssignmentScope) => {
       return;
     default: {
       requested satisfies never;
-      return panic("Unhandled assignment scope");
+      panic("Unhandled assignment scope");
     }
   }
 };
@@ -373,8 +373,9 @@ const clearMemberObligationOwners = async ({
                     const changedOwners = [ownedRow].filter(({ entityId }) =>
                       changedIds.has(entityId),
                     );
-                    const recorder = (async (_auditTx, events) => {
+                    const recorder = ((_auditTx, events) => {
                       auditEvents.push(events);
+                      return Promise.resolve();
                     }) satisfies AuditRecorder;
                     await recorder(
                       auditTx,
