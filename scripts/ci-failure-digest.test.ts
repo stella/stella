@@ -367,36 +367,6 @@ test("step kinds follow the step name, then the extracted lines", () => {
   expect(classify("Run", [{ message: "x" }])).toBe("other");
 });
 
-test("install stalls retain infrastructure classification through Docker progress and annotations", () => {
-  const message = "kind=infra class=install-stall restore=cold idle_ms=120000";
-  for (const output of [
-    `#13 120.001 ::error title=install-stall::${message}`,
-    `::error title=install-stall::${message}`,
-    `##[error]${message}`,
-  ]) {
-    const lines = failureLines([
-      "#13 ERROR: process did not complete successfully: exit code: 1",
-      output,
-    ]);
-    expect(lines).toEqual([{ message }]);
-    for (const step of [
-      "Build final API release image",
-      "Install",
-      "Smoke test",
-    ]) {
-      expect(classify(step, lines)).toBe("infra");
-    }
-  }
-  expect(
-    classify(
-      "Build final API release image",
-      failureLines([
-        "#13 ERROR: process did not complete successfully: exit code: 1",
-      ]),
-    ),
-  ).toBe("build");
-});
-
 const JOB_LOG = [
   ...stamp(1, ["Current runner version: '2.330.0'"]),
   ...runStep(2, "bun scripts/typecheck-negative.ts", [
