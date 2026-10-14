@@ -363,6 +363,8 @@
       "chooseList": "Pasirinkti sąrašą",
       "createList": "Sukurti sąrašą",
       "evidenceList": "Faktai iš",
+      "loadSample": "Įkelti pavyzdinę bylą",
+      "loadSampleFailed": "Nepavyko įkelti pavyzdinės bylos",
       "noLists": "Šioje byloje nėra sąrašų.",
       "pickList": "Pasirinkite sąrašą, pagal kurio faktus tikrinami šios bylos dokumentai."
     }
