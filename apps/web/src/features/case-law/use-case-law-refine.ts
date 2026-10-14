@@ -1,6 +1,8 @@
 import { useMutation } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { refineOutcome } from "@/features/case-law/case-law-empty-results.logic";
 import { fromCaseLawCountryParam } from "@/features/case-law/case-law-jurisdiction";
 import { refineCaseLawQuery } from "@/features/case-law/queries/decisions";
 import { useI18nStore } from "@/i18n/i18n-store";
@@ -47,23 +49,26 @@ export const useCaseLawRefine = ({
         locale,
         query: asked.entry,
       }),
-    // The box stays editable while the model answers. A rewrite of an entry
-    // the reader has since changed, or of another jurisdiction, is dropped
-    // rather than written over what they typed. A rewrite that says the same
-    // words would search the same nothing again.
     onSuccess: (refined, asked) => {
-      if (
-        asked.entry !== query.trim() ||
-        asked.country !== country ||
-        refined.query.trim() === asked.entry
-      ) {
-        return;
+      const outcome = refineOutcome({
+        asked,
+        current: { country, query },
+        refined: refined.query,
+      });
+      switch (outcome) {
+        case "stale":
+        case "unchanged":
+          return;
+        case "automatic":
+          onAutoRefined(refined.query, asked.entry);
+          return;
+        case "manual":
+          onRefined(refined.query);
+          return;
+        default:
+          outcome satisfies never;
+          panic(`Unhandled refine outcome: ${String(outcome)}`);
       }
-      if (asked.automatic) {
-        onAutoRefined(refined.query, asked.entry);
-        return;
-      }
-      onRefined(refined.query);
     },
     onError: (error, asked) => {
       analytics.captureError(error);

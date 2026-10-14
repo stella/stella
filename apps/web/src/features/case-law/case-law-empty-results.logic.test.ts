@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   isQuestionLike,
+  refineOutcome,
   shouldAutoRewrite,
 } from "@/features/case-law/case-law-empty-results.logic";
 import {
@@ -55,6 +56,43 @@ describe("rewriting a search by itself", () => {
     ["it is not a question", { query: "okamžité zrušení" }],
   ])("not when %s", (_reason, change) => {
     expect(shouldAutoRewrite({ ...EMPTY_QUESTION, ...change })).toBe(false);
+  });
+});
+
+describe("a rewrite that lands", () => {
+  const ASKED = { country: "cze", entry: "kauce nájem", automatic: false };
+  const CURRENT = { country: "cze", query: "kauce nájem " };
+
+  test("searches when the box still holds what was asked", () => {
+    expect(
+      refineOutcome({ asked: ASKED, current: CURRENT, refined: "jistota" }),
+    ).toBe("manual");
+    expect(
+      refineOutcome({
+        asked: { ...ASKED, automatic: true },
+        current: CURRENT,
+        refined: "jistota",
+      }),
+    ).toBe("automatic");
+  });
+
+  test.each([
+    ["the reader typed on", { ...CURRENT, query: "kauce nájem byt" }],
+    ["the reader switched jurisdiction", { ...CURRENT, country: "svk" }],
+  ])("is dropped when %s before it landed", (_reason, current) => {
+    expect(refineOutcome({ asked: ASKED, current, refined: "jistota" })).toBe(
+      "stale",
+    );
+  });
+
+  test("the same words again search nothing new", () => {
+    expect(
+      refineOutcome({
+        asked: ASKED,
+        current: CURRENT,
+        refined: " kauce nájem",
+      }),
+    ).toBe("unchanged");
   });
 });
 
