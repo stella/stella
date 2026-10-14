@@ -2384,6 +2384,7 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "In die Databox zugestellt",
       "delivery": "Zustellung",
+      "directionUnknown": "Richtung unbekannt",
       "messageId": "Nachrichten-ID",
       "openFile": ".zfo-Datei öffnen",
       "personalDelivery": "Zu eigenen Händen",
@@ -2391,6 +2392,7 @@
       "recipientReference": "Aktenzeichen des Empfängers",
       "sealNotVerified": "Das elektronische Siegel der Datei wird mit ihr aufbewahrt und nicht geprüft.",
       "senderReference": "Aktenzeichen des Absenders",
+      "sent": "Gesendet",
       "statedInFile": "Databox-Nachricht (laut Datei)",
       "toHands": "Zu Händen von {name}",
       "uploaded": "Hochgeladene Databox-Nachricht"
@@ -4796,6 +4798,12 @@
       "auditLogsTo": "Bis",
       "auditLogsUserId": "Benutzer-ID",
       "auditLogsUserIdPlaceholder": "Nach Benutzer-ID filtern",
+      "dataBoxes": {
+        "description": "Eine von einer dieser Databoxen gesendete Nachricht wird als ausgehend abgelegt, eine an sie gesendete als eingehend. Jede Änderung leitet die Richtung bereits abgelegter Nachrichten in den Akten, auf die Sie zugreifen können, neu ab.",
+        "invalid": "Eine Databox-ID besteht aus sieben Buchstaben oder Ziffern.",
+        "remove": "Databox {boxId} entfernen",
+        "title": "Databoxen der Organisation"
+      },
       "documentProcessing": {
         "description": "Erkennt Text in gescannten PDFs automatisch, damit deren Inhalt durchsuchbar ist.",
         "title": "Dokumenttexterkennung",

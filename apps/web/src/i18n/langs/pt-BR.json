@@ -2384,6 +2384,7 @@
       "contact": "Contato: {name}",
       "deliveredAt": "Entregue na caixa",
       "delivery": "Entrega",
+      "directionUnknown": "Direção desconhecida",
       "messageId": "ID da mensagem",
       "openFile": "Abrir arquivo .zfo",
       "personalDelivery": "Em mãos ao destinatário",
@@ -2391,6 +2392,7 @@
       "recipientReference": "Referência do destinatário",
       "sealNotVerified": "O selo eletrônico do arquivo é mantido com ele e não é verificado.",
       "senderReference": "Referência do remetente",
+      "sent": "Enviada",
       "statedInFile": "Mensagem de caixa de dados (conforme o arquivo)",
       "toHands": "Aos cuidados de {name}",
       "uploaded": "Mensagem de caixa de dados enviada"
@@ -4796,6 +4798,12 @@
       "auditLogsTo": "Data final",
       "auditLogsUserId": "ID do usuário",
       "auditLogsUserIdPlaceholder": "Filtrar por ID do usuário",
+      "dataBoxes": {
+        "description": "Uma mensagem enviada de uma destas caixas é arquivada como enviada; uma enviada para elas, como recebida. Cada alteração recalcula a direção das mensagens já arquivadas nos casos a que você tem acesso.",
+        "invalid": "Um ID de caixa de dados tem sete letras ou dígitos.",
+        "remove": "Remover a caixa de dados {boxId}",
+        "title": "Caixas de dados da organização"
+      },
       "documentProcessing": {
         "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",
         "title": "Reconhecimento de texto de documentos",

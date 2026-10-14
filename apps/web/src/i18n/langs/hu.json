@@ -2384,6 +2384,7 @@
       "contact": "Kapcsolat: {name}",
       "deliveredAt": "Kézbesítve a fiókba",
       "delivery": "Kézbesítés",
+      "directionUnknown": "Ismeretlen irány",
       "messageId": "Üzenetazonosító",
       "openFile": ".zfo-fájl megnyitása",
       "personalDelivery": "Saját kézbe",
@@ -2391,6 +2392,7 @@
       "recipientReference": "Címzett ügyszáma",
       "sealNotVerified": "A fájl elektronikus bélyegzője a fájllal együtt megmarad, ellenőrzése nem történik.",
       "senderReference": "Feladó ügyszáma",
+      "sent": "Elküldve",
       "statedInFile": "Adatfiók-üzenet (a fájl szerint)",
       "toHands": "{name} kezéhez",
       "uploaded": "Feltöltött adatfiók-üzenet"
@@ -4796,6 +4798,12 @@
       "auditLogsTo": "Záró dátum",
       "auditLogsUserId": "Felhasználói azonosító",
       "auditLogsUserIdPlaceholder": "Szűrés felhasználói azonosító alapján",
+      "dataBoxes": {
+        "description": "Az ezek egyikéből küldött üzenet kimenőként, a nekik küldött bejövőként kerül iktatásra. Minden módosítás újra meghatározza a már iktatott üzenetek irányát azokban az ügyekben, amelyekhez hozzáfér.",
+        "invalid": "Az adatfiók-azonosító hét betűből vagy számjegyből áll.",
+        "remove": "{boxId} adatfiók eltávolítása",
+        "title": "A szervezet adatfiókjai"
+      },
       "documentProcessing": {
         "description": "Automatikusan felismeri a szkennelt PDF-ek szövegét, hogy a tartalmuk kereshető legyen.",
         "title": "Dokumentumszöveg-felismerés",

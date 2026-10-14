@@ -2384,6 +2384,7 @@
       "contact": "Kontakt: {name}",
       "deliveredAt": "Dostarczono do skrzynki",
       "delivery": "Doręczenie",
+      "directionUnknown": "Kierunek nieznany",
       "messageId": "Identyfikator wiadomości",
       "openFile": "Otwórz plik .zfo",
       "personalDelivery": "Do rąk własnych",
@@ -2391,6 +2392,7 @@
       "recipientReference": "Sygnatura adresata",
       "sealNotVerified": "Elektroniczna pieczęć pliku jest przechowywana wraz z nim i nie jest weryfikowana.",
       "senderReference": "Sygnatura nadawcy",
+      "sent": "Wysłana",
       "statedInFile": "Wiadomość ze skrzynki danych (według pliku)",
       "toHands": "Do rąk: {name}",
       "uploaded": "Przesłana wiadomość ze skrzynki danych"
@@ -4796,6 +4798,12 @@
       "auditLogsTo": "Data do",
       "auditLogsUserId": "Identyfikator użytkownika",
       "auditLogsUserIdPlaceholder": "Filtruj według identyfikatora użytkownika",
+      "dataBoxes": {
+        "description": "Wiadomość wysłana z jednej z tych skrzynek jest zapisywana jako wychodząca, a wysłana do nich jako przychodząca. Każda zmiana ponownie ustala kierunek wiadomości już zapisanych w sprawach, do których masz dostęp.",
+        "invalid": "Identyfikator skrzynki danych ma siedem liter lub cyfr.",
+        "remove": "Usuń skrzynkę danych {boxId}",
+        "title": "Skrzynki danych organizacji"
+      },
       "documentProcessing": {
         "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",
         "title": "Rozpoznawanie tekstu dokumentów",

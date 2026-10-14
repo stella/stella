@@ -2384,6 +2384,7 @@
       "contact": "Kontakts: {name}",
       "deliveredAt": "Piegādāts pastkastē",
       "delivery": "Piegāde",
+      "directionUnknown": "Virziens nezināms",
       "messageId": "Ziņas ID",
       "openFile": "Atvērt .zfo failu",
       "personalDelivery": "Personīgi adresātam",
@@ -2391,6 +2392,7 @@
       "recipientReference": "Adresāta atsauce",
       "sealNotVerified": "Faila elektroniskais zīmogs tiek glabāts kopā ar to un netiek pārbaudīts.",
       "senderReference": "Sūtītāja atsauce",
+      "sent": "Nosūtīta",
       "statedInFile": "Datu pastkastes ziņa (saskaņā ar failu)",
       "toHands": "Personīgi: {name}",
       "uploaded": "Augšupielādēta datu pastkastes ziņa"
@@ -4796,6 +4798,12 @@
       "auditLogsTo": "Datums līdz",
       "auditLogsUserId": "Lietotāja ID",
       "auditLogsUserIdPlaceholder": "Filtrēt pēc lietotāja ID",
+      "dataBoxes": {
+        "description": "Ziņa, kas nosūtīta no kādas no šīm pastkastēm, tiek reģistrēta kā izejošā, bet tām nosūtītā — kā ienākošā. Katra izmaiņa no jauna nosaka jau reģistrēto ziņu virzienu lietās, kurām jums ir piekļuve.",
+        "invalid": "Datu pastkastes ID ir septiņi burti vai cipari.",
+        "remove": "Noņemt datu pastkasti {boxId}",
+        "title": "Organizācijas datu pastkastes"
+      },
       "documentProcessing": {
         "description": "Automātiski atpazīstiet tekstu skenētos PDF, lai to saturs būtu meklējams.",
         "title": "Dokumentu teksta atpazīšana",

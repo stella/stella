@@ -92,6 +92,15 @@ export const DataBoxEnvelope = ({
     <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
       <h2 className="text-sm font-medium sm:col-span-2">
         {t("correspondence.dataBox.statedInFile")}
+        {envelope.directionBasis !== "organization_recipient" && (
+          <span className="text-muted-foreground ms-2 text-xs font-normal">
+            {t(
+              envelope.directionBasis === "organization_sender"
+                ? "correspondence.dataBox.sent"
+                : "correspondence.dataBox.directionUnknown",
+            )}
+          </span>
+        )}
       </h2>
       <Field label={t("emailViewer.from")}>
         <Party contacts={contacts?.sender ?? []} party={envelope.sender} />

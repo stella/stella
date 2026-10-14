@@ -10,6 +10,8 @@ export const DATA_BOX_MESSAGE_MIME_TYPE =
 
 const DATA_BOX_MESSAGE_EXTENSION = "zfo";
 
+export const DATA_BOX_ID_LENGTH = 7;
+
 /** A box ID: seven characters, stored lowercase like contact data boxes. */
 export const DATA_BOX_ID_PATTERN = /^[a-z0-9]{7}$/u;
 

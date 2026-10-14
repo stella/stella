@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { DataBoxDirectionBasis } from "@stll/api-contract/data-box";
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyIcon, RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
@@ -13,6 +14,7 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
+import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -33,6 +35,21 @@ import {
   useRevokeCorrespondenceAddress,
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
+
+// An incoming message is the default and needs no label.
+const DIRECTION_LABEL_KEYS = {
+  organization_sender: "correspondence.dataBox.sent",
+  organization_recipient: null,
+  unknown: "correspondence.dataBox.directionUnknown",
+} as const satisfies Record<DataBoxDirectionBasis, TranslationKey | null>;
+
+const DataBoxDirectionLabel = ({ basis }: { basis: DataBoxDirectionBasis }) => {
+  const t = useTranslations();
+  const label = DIRECTION_LABEL_KEYS[basis];
+  return label === null ? null : (
+    <span className="text-muted-foreground text-xs">{t(label)}</span>
+  );
+};
 
 /**
  * Body of a matter's correspondence view: the matter's inbound address, the
@@ -234,6 +251,11 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                     <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-xs">
                       {t("correspondence.dataBox.channel")}
                     </span>
+                  )}
+                  {item.channel === "data_box" && (
+                    <DataBoxDirectionLabel
+                      basis={item.dataBox.directionBasis}
+                    />
                   )}
                 </span>
                 {item.channel === "data_box" ? (

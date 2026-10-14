@@ -2384,6 +2384,7 @@
       "contact": "Contact : {name}",
       "deliveredAt": "Remis dans la boîte",
       "delivery": "Remise",
+      "directionUnknown": "Sens inconnu",
       "messageId": "Identifiant du message",
       "openFile": "Ouvrir le fichier .zfo",
       "personalDelivery": "En main propre",
@@ -2391,6 +2392,7 @@
       "recipientReference": "Référence du destinataire",
       "sealNotVerified": "Le cachet électronique du fichier est conservé avec celui-ci et n’est pas vérifié.",
       "senderReference": "Référence de l’expéditeur",
+      "sent": "Envoyé",
       "statedInFile": "Message de boîte de données (selon le fichier)",
       "toHands": "À l’attention de {name}",
       "uploaded": "Message de boîte de données importé"
@@ -4796,6 +4798,12 @@
       "auditLogsTo": "Date de fin",
       "auditLogsUserId": "ID utilisateur",
       "auditLogsUserIdPlaceholder": "Filtrer par ID utilisateur",
+      "dataBoxes": {
+        "description": "Un message envoyé depuis l’une de ces boîtes est classé comme sortant, un message qui leur est adressé comme entrant. Chaque modification recalcule le sens des messages déjà classés dans les dossiers auxquels vous avez accès.",
+        "invalid": "Un identifiant de boîte de données compte sept lettres ou chiffres.",
+        "remove": "Retirer la boîte de données {boxId}",
+        "title": "Boîtes de données de l’organisation"
+      },
       "documentProcessing": {
         "description": "Reconnaissez automatiquement le texte des PDF numérisés afin de pouvoir rechercher leur contenu.",
         "title": "Reconnaissance de texte des documents",

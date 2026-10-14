@@ -2387,6 +2387,7 @@ type Messages = {
       "contact": "Contact: {name}";
       "deliveredAt": "Delivered to the box";
       "delivery": "Delivery terms";
+      "directionUnknown": "Direction unknown";
       "messageId": "Message ID";
       "openFile": "Open .zfo file";
       "personalDelivery": "To the addressee in person";
@@ -2394,6 +2395,7 @@ type Messages = {
       "recipientReference": "Recipient’s reference";
       "sealNotVerified": "The file’s electronic seal is kept with it and not verified.";
       "senderReference": "Sender’s reference";
+      "sent": "Outgoing";
       "statedInFile": "Data-box message (as stated in the file)";
       "toHands": "To the attention of {name}";
       "uploaded": "Uploaded data-box message";
@@ -4799,6 +4801,12 @@ type Messages = {
       "auditLogsTo": "To date";
       "auditLogsUserId": "User ID";
       "auditLogsUserIdPlaceholder": "Filter by user ID";
+      "dataBoxes": {
+        "description": "A data-box message sent from one of these boxes is filed as outgoing, one sent to them as incoming. Each change re-derives the direction of messages already filed in the matters you can access.";
+        "invalid": "A data box ID has seven letters or digits.";
+        "remove": "Remove data box {boxId}";
+        "title": "Organization data boxes";
+      };
       "documentProcessing": {
         "description": "Automatically recognize text in scanned PDFs so their contents can be searched.";
         "title": "Document text recognition";

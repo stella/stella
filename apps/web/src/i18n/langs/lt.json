@@ -2384,6 +2384,7 @@
       "contact": "Kontaktas: {name}",
       "deliveredAt": "Pristatyta į dėžutę",
       "delivery": "Įteikimas",
+      "directionUnknown": "Kryptis nežinoma",
       "messageId": "Pranešimo ID",
       "openFile": "Atidaryti .zfo failą",
       "personalDelivery": "Įteikti asmeniškai",
@@ -2391,6 +2392,7 @@
       "recipientReference": "Gavėjo nuoroda",
       "sealNotVerified": "Failo elektroninis spaudas saugomas kartu su juo ir netikrinamas.",
       "senderReference": "Siuntėjo nuoroda",
+      "sent": "Išsiųstas",
       "statedInFile": "Duomenų dėžutės pranešimas (pagal failą)",
       "toHands": "Asmeniškai: {name}",
       "uploaded": "Įkeltas duomenų dėžutės pranešimas"
@@ -4796,6 +4798,12 @@
       "auditLogsTo": "Data iki",
       "auditLogsUserId": "Naudotojo ID",
       "auditLogsUserIdPlaceholder": "Filtruoti pagal naudotojo ID",
+      "dataBoxes": {
+        "description": "Pranešimas, išsiųstas iš vienos iš šių dėžučių, registruojamas kaip siunčiamas, o joms išsiųstas – kaip gaunamas. Kiekvienas pakeitimas iš naujo nustato jau užregistruotų pranešimų kryptį bylose, prie kurių turite prieigą.",
+        "invalid": "Duomenų dėžutės ID sudaro septynios raidės arba skaitmenys.",
+        "remove": "Pašalinti duomenų dėžutę {boxId}",
+        "title": "Organizacijos duomenų dėžutės"
+      },
       "documentProcessing": {
         "description": "Automatiškai atpažinkite tekstą nuskenuotuose PDF, kad jų turinį būtų galima ieškoti.",
         "title": "Dokumentų teksto atpažinimas",
