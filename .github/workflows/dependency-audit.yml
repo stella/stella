@@ -106,8 +106,32 @@ jobs:
       - name: Install cargo-deny
         uses: ./.github/actions/cargo-deny
 
+      # The cache keeps each fetch incremental; the newest entry is restored and
+      # a fresh one saved, so the check still reads a current database.
+      - name: Restore advisory database
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/advisory-dbs
+            ~/.cargo/registry/index
+          key: cargo-advisory-db-${{ github.run_id }}
+          restore-keys: cargo-advisory-db-
+
+      - name: Fetch advisory database
+        env:
+          CARGO_NET_RETRY: "5"
+        run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml
+
+      - name: Save advisory database
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/advisory-dbs
+            ~/.cargo/registry/index
+          key: cargo-advisory-db-${{ github.run_id }}
+
       - name: Desktop advisories
-        run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph advisories
+        run: cargo deny --offline --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph advisories
 
   remediate:
     name: Open dependency audit remediation
