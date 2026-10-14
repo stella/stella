@@ -20,7 +20,9 @@
 // Exit status: 0 the checks passed, 1 a check failed (block the push), 2 the
 // checks could not run: no base ref, or the 10-minute total time cap ran out.
 // A hook allows the push on 2, since CI runs the same checks. The last line
-// reports the elapsed time and the largest process's peak resident memory.
+// reports the elapsed time and the highest peak resident memory among the
+// commands this script starts directly; their descendants (Turbo tasks, lint
+// and typecheck workers) are not included.
 //
 //   bun scripts/pre-push-affected.ts [--base origin/main] [--dry-run]
 
@@ -265,7 +267,7 @@ const main = async (): Promise<number> => {
     options.dryRun,
   );
   process.stdout.write(
-    `pre-push affected: exit=${status} elapsed_s=${Math.round((Date.now() - startedAt) / 1000)} peak_rss_mib=${Math.round(peakRssBytes / 1024 ** 2)}\n`,
+    `pre-push affected: exit=${status} elapsed_s=${Math.round((Date.now() - startedAt) / 1000)} direct_child_peak_rss_mib=${Math.round(peakRssBytes / 1024 ** 2)}\n`,
   );
   return status;
 };
