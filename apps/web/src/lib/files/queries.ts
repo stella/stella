@@ -138,31 +138,30 @@ export const fileOptions = (props: FileOptionsProps) =>
     structuralSharing: shareFileData,
   });
 
+const withFileName =
+  <T extends { fileName: string }>(fileName: string) =>
+  (current: T | undefined): T | undefined =>
+    current === undefined || current.fileName === fileName
+      ? current
+      : { ...current, fileName };
+
 /**
- * The open preview reads `fileName` off the downloaded file, not the metadata
- * query a rename already invalidates. Patch that cache in place so the chat
- * placeholder changes with the rename instead of waiting for a byte refetch.
+ * Open previews read `fileName` off the downloaded file (every purpose
+ * variant) or the decoded text, not the metadata query a rename already
+ * invalidates. Patch both caches in place so the chat placeholder changes
+ * with the rename instead of waiting for a byte refetch.
  */
 export const replaceCachedFileName = (
   queryClient: QueryClient,
-  {
-    fieldId,
-    fileName,
-    workspaceId,
-  }: {
-    fieldId: string;
-    fileName: string;
-    workspaceId: string;
-  },
+  { fieldId, fileName, workspaceId }: FileByFieldIdKey & { fileName: string },
 ) => {
   queryClient.setQueriesData<FileData>(
     { queryKey: filesKeys.contentByFieldId({ workspaceId, fieldId }) },
-    (current) => {
-      if (current === undefined || current.fileName === fileName) {
-        return current;
-      }
-      return { ...current, fileName };
-    },
+    withFileName(fileName),
+  );
+  queryClient.setQueryData(
+    textFileOptions({ workspaceId, fieldId }).queryKey,
+    withFileName<TextFileData>(fileName),
   );
 };
 
