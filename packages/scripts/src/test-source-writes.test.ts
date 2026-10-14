@@ -314,16 +314,119 @@ const filesToInspect = (root: string) =>
       /\/(?:tests|__tests__|test-helpers|test-fixtures)\//u.test(file),
   );
 
-test("tests keep generated files outside application and package source trees", () => {
-  const files = filesToInspect(repositoryRoot);
-  expect(files.length).toBeGreaterThan(0);
-  const violations = files.flatMap((file) =>
-    inspectSourceWrites(
-      readFileSync(path.join(repositoryRoot, file), "utf-8"),
-      file,
-    ),
-  );
-  expect(sourceWriteExceptionIssues(repositoryRoot, violations)).toEqual([]);
+// The complete source census exceeds Bun's unit-test budget; each Git child
+// has its own deadline and is reaped before this outer deadline.
+const SOURCE_CENSUS_TIMEOUT_MS = 30_000;
+
+test(
+  "tests keep generated files outside application and package source trees",
+  () => {
+    const files = filesToInspect(repositoryRoot);
+    expect(files.length).toBeGreaterThan(0);
+    const violations = files.flatMap((file) =>
+      inspectSourceWrites(
+        readFileSync(path.join(repositoryRoot, file), "utf-8"),
+        file,
+      ),
+    );
+    expect(
+      sourceWriteExceptionIssues({
+        root: repositoryRoot,
+        observed: violations,
+      }),
+    ).toEqual([]);
+  },
+  SOURCE_CENSUS_TIMEOUT_MS,
+);
+
+test("ledger failures report termination even when Git emits no stderr", () => {
+  for (const command of ["merge-base", "ls-tree", "show"]) {
+    for (const termination of [
+      { status: 1, signal: null, stderr: "" },
+      { status: null, signal: "SIGKILL", stderr: "" },
+      { status: 128, signal: null, stderr: "fatal: unavailable revision" },
+      { status: 0, signal: "SIGTERM", stderr: "" },
+    ] as const) {
+      const issues = sourceWriteExceptionIssues({
+        root: repositoryRoot,
+        observed: [],
+        git: (args) =>
+          args.at(0) === command
+            ? { ...termination, stdout: "" }
+            : { status: 0, signal: null, stdout: "fixture", stderr: "" },
+      });
+      expect(issues).toHaveLength(1);
+      expect(issues.at(0)).toContain(
+        `exit status ${String(termination.status)}, signal ${String(termination.signal)}`,
+      );
+      expect(issues.at(0)).toContain(
+        termination.stderr || "git produced no diagnostic",
+      );
+    }
+  }
+});
+
+test("ledger failures preserve a Git spawn error", () => {
+  const issues = sourceWriteExceptionIssues({
+    root: repositoryRoot,
+    observed: [],
+    git: () => ({
+      status: null,
+      signal: "SIGKILL",
+      stdout: "",
+      stderr: "",
+      error: new Error("spawnSync git ETIMEDOUT"),
+    }),
+  });
+  expect(issues).toEqual([
+    "Source-write ledger merge base unavailable: exit status null, signal SIGKILL; spawnSync git ETIMEDOUT",
+  ]);
+});
+
+test("ledger loading preserves the first rollout and shrink-only comparison", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "stella-source-write-ledger-"));
+  const exception = {
+    source: "packages/example/src/example.test.ts",
+    operation: "writeFileSync",
+    destination: "packages/example/src/baseline.json",
+    reason: "Explicit regeneration of a committed baseline.",
+  };
+  const current = JSON.stringify([exception]);
+  const observed = [
+    `${exception.source}:12: ${exception.operation} writes into src (${exception.destination})`,
+  ];
+  try {
+    mkdirSync(path.join(root, "scripts"));
+    writeFileSync(
+      path.join(root, "scripts/test-source-write-exceptions.json"),
+      current,
+    );
+    for (const baseline of [null, current, "[]"]) {
+      const issues = sourceWriteExceptionIssues({
+        root,
+        observed,
+        git: (args) => {
+          let stdout = "fixture-revision";
+          if (args.at(0) === "ls-tree") {
+            stdout = baseline === null ? "" : "ledger";
+          }
+          if (args.at(0) === "show") {
+            stdout = baseline ?? "";
+          }
+          return { status: 0, signal: null, stderr: "", stdout };
+        },
+      });
+      expect(issues).toEqual(
+        baseline === "[]"
+          ? [
+              `Source-write exceptions may only shrink: ${exception.source}: ${exception.operation} writes into src (${exception.destination})`,
+            ]
+          : [],
+      );
+    }
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
 });
 
 test("the census inspects test helper directories and fixture modules", () => {

@@ -199,6 +199,22 @@ afterAll(async () => {
 });
 
 describe("confirmed file rename state", () => {
+  test("edits the base name and sends a typed extension once", async () => {
+    const target = file("A");
+    useInspectorTabsStore.getState().openFile(target);
+    const { result } = mount();
+
+    act(() => result.current.fileRename.startRename(target));
+    expect(result.current.fileRename.editValue).toBe("A");
+
+    act(() => result.current.fileRename.setEditValue("minutes.MD"));
+    act(() => result.current.fileRename.commitRename(target));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests.at(0)?.name).toBe("minutes.MD");
+    success(0, "A", "minutes.MD");
+    await waitFor(() => expect(tab("A")?.label).toBe("minutes.MD"));
+  });
+
   test("optimistic labels rollback by entity identity after version replacement", async () => {
     useInspectorTabsStore.getState().openFile(file("A"));
     const { result, client } = mount();

@@ -139,7 +139,7 @@ const isClipboardSourceApp = (value: unknown): value is ClipboardSourceApp =>
   (value["page"] === null || isClipboardSourcePage(value["page"])) &&
   (value["visualKey"] === null || typeof value["visualKey"] === "string");
 
-const isClipboardSourceAppVisual = (
+export const isClipboardSourceAppVisual = (
   value: unknown,
 ): value is ClipboardSourceAppVisual =>
   isRecord(value) &&

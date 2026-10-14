@@ -73,9 +73,18 @@ test("state-column ownership covers every scoped runtime transition", () => {
     }
     return 0;
   };
+  // Desktop batch receipts are written once, committed or cancelled, per
+  // account and idempotency key.
+  const desktopBatchReceipt = {
+    tableName: "desktopTimeEntryBatches",
+    key: "idempotencyKey",
+    scope: ["organizationId", "userId"],
+    stateColumn: "status",
+  };
   expect(registered.toSorted(order)).toEqual(
     [
       ...Object.values(SANCTIONS_MONITORING_TRANSITION_IDENTITIES),
+      desktopBatchReceipt,
       ...Object.values(READER_ANSWER_TRANSITION_IDENTITIES),
     ].toSorted(order),
   );

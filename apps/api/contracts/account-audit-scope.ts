@@ -7,7 +7,10 @@ import {
   createAuditRecorder,
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
-import type { AccountAuditRecorder, AuditRecorder } from "@/api/lib/audit-log";
+import type {
+  AccountAuditRecorder,
+  AsyncAuditRecorder,
+} from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 
 declare const userId: SafeId<"user">;
@@ -26,7 +29,7 @@ expectTypeOf(
 ).toEqualTypeOf<AccountAuditRecorder>();
 expectTypeOf(
   createAuditRecorder({ ...organization, ...transport }),
-).toEqualTypeOf<AuditRecorder>();
+).toEqualTypeOf<AsyncAuditRecorder>();
 expectTypeOf(
   createBackgroundAuditRecorder({
     ...organization,
@@ -35,7 +38,7 @@ expectTypeOf(
       trigger: { type: "direct" },
     },
   }),
-).toEqualTypeOf<AuditRecorder>();
+).toEqualTypeOf<AsyncAuditRecorder>();
 
 // @ts-expect-error An audit recorder requires a scope.
 createAuditRecorder(transport);

@@ -170,10 +170,9 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
  * joined the issuance policy: the configured set minus
  * `MCP_OAUTH_PROTOCOL_SCOPES`.
  *
- * Contract step of an expand/contract rollout. The previous release accepts
- * both this set and the configured set at boot, so the deploy repair now
- * upgrades rows holding exactly this set to the configured set, and the boot
- * census accepts only the configured set.
+ * Databases seeded before then still hold this set. The deploy repair
+ * reconciles it to the configured set like any earlier configured scope set,
+ * and the boot census accepts only the configured set.
  */
 export const predecessorOAuthResourceScopes = (
   allowedScopes: readonly string[],

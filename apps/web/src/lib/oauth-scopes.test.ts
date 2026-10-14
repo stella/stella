@@ -1,18 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { createTranslator } from "use-intl";
 import * as v from "valibot";
 
 import {
-  MCP_DEFAULT_RESOURCE_SCOPES,
   MCP_ADVANCED_RESOURCE_SCOPES,
+  MCP_ANONYMIZED_RESOURCE_SCOPES,
+  MCP_DEFAULT_RESOURCE_SCOPES,
+  MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
 
 import en from "@/i18n/langs/en.json";
 import {
   groupOAuthScopeDisplayEntries,
-  orderOAuthScopeSummary,
+  groupOAuthScopeSummaryEntries,
   toOAuthScopeDisplayEntries,
   translateOAuthScopeSummary,
   type OAuthScopeDisplayEntry,
@@ -83,6 +84,7 @@ describe("OAuth scope display groups", () => {
         label: "consent.scopeSearch",
         summary: "consent.summarySearch",
         group: "read",
+        summaryGroup: "read",
         sensitive: false,
         type: "known",
       },
@@ -90,13 +92,15 @@ describe("OAuth scope display groups", () => {
         label: "consent.scopeTemplates",
         summary: "consent.summaryTemplates",
         group: "change",
+        summaryGroup: "use",
         sensitive: true,
         type: "known",
       },
       {
         label: "consent.scopeOfflineAccess",
-        summary: "consent.summaryOfflineAccess",
+        summary: "consent.summaryStaySignedIn",
         group: "other",
+        summaryGroup: "other",
         sensitive: false,
         type: "known",
       },
@@ -113,6 +117,7 @@ describe("OAuth scope display groups", () => {
         label: "consent.scopeLawRead",
         summary: "consent.summaryLawRead",
         group: "read",
+        summaryGroup: "read",
         sensitive: false,
         type: "known",
       },
@@ -137,6 +142,7 @@ describe("OAuth scope display groups", () => {
         label: "consent.scopeProfile",
         summary: "consent.summaryProfile",
         group: "read",
+        summaryGroup: "read",
         sensitive: false,
         type: "known",
       },
@@ -145,32 +151,58 @@ describe("OAuth scope display groups", () => {
     ] satisfies OAuthScopeDisplayEntry[]);
   });
 
-  test("summarizes deleting and administering first", () => {
-    const { change } = groupOAuthScopeDisplayEntries(
-      toOAuthScopeDisplayEntries([
-        "stella:onboarding",
-        "stella:templates",
-        "stella:matters_write",
-        "stella:documents_write",
-        "stella:skills",
-        "stella:admin_write",
-      ]),
-    );
+  test("every grantable scope contributes to exactly one summary line without duplicates", () => {
+    const scopes = [
+      ...MCP_ADVANCED_RESOURCE_SCOPES,
+      ...MCP_ANONYMIZED_RESOURCE_SCOPES,
+      ...MCP_OAUTH_PROTOCOL_SCOPES,
+    ];
+    for (const scope of scopes) {
+      const entries = toOAuthScopeDisplayEntries([scope, scope]);
+      expect(entries).toHaveLength(1);
+      expect(entries.at(0)?.type).toBe("known");
+      expect(
+        Object.values(groupOAuthScopeSummaryEntries(entries)).flat(),
+      ).toEqual(entries);
+    }
+    const entries = toOAuthScopeDisplayEntries([
+      ...scopes,
+      ...scopes,
+      "vendor:custom",
+      "vendor:custom",
+    ]);
+    const groups = groupOAuthScopeSummaryEntries(entries);
+    const regrouped = Object.values(groups).flat();
+    expect(new Set(regrouped).size).toBe(entries.length);
+    expect(new Set(regrouped)).toEqual(new Set(entries));
+    expect(Object.values(groups)).toHaveLength(4);
     expect(
-      orderOAuthScopeSummary(change).map((entry) =>
-        entry.type === "known" ? entry.summary : entry.scope,
+      groups.use.map((entry) =>
+        entry.type === "known" ? entry.label : entry.scope,
       ),
     ).toEqual([
-      "consent.summaryTemplates",
-      "consent.summaryMattersWrite",
-      "consent.summaryDocumentsWrite",
-      "consent.summarySkills",
-      "consent.summaryAdminWrite",
-      "consent.summaryOnboarding",
+      "consent.scopeTemplates",
+      "consent.scopeSkills",
+      "consent.scopeExternalMcps",
+      "consent.scopeTemplatesAnonymized",
     ]);
+    expect(
+      groups.other
+        .filter((entry) => entry.type === "known")
+        .map((entry) => entry.label),
+    ).toEqual([
+      "consent.scopeOnboarding",
+      "consent.scopeFeedback",
+      "consent.scopeOfflineAccess",
+    ]);
+    expect(groups.other).toContainEqual({
+      scope: "vendor:custom",
+      group: "other",
+      type: "unknown",
+    });
   });
 
-  test("every destructive capability scope discloses sensitive access and deletion", () => {
+  test("every destructive capability scope triggers the single deletion warning", () => {
     const catalog = path.resolve(
       import.meta.dir,
       "../../../../packages/cli/capabilities",
@@ -197,8 +229,7 @@ describe("OAuth scope display groups", () => {
         continue;
       }
       expect(entry.sensitive).toBe(true);
-      const t = createTranslator({ locale: "en", messages: en });
-      expect(translateOAuthScopeSummary(t, entry)).toContain("delet");
+      expect(en.consent.sensitiveAccess).toContain("delete data");
     }
   });
 });
