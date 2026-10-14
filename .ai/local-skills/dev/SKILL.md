@@ -113,7 +113,11 @@ exercised in an easier state than the one that broke. In a `run` flow:
   empty, long content.
 - **The failure path.** Fail the request at the network boundary with
   `page.route` and check the message the user sees. Do not throw from inside
-  the component.
+  the component. The report lists the injected response, and an injected 5xx
+  makes the run exit 1; that is the expected result when it is the only
+  finding. `page.route` sees only requests the browser makes: a request made
+  during server render cannot be failed from the page, so prove that failure
+  in a server-render test and say the browser state was not driven.
 
 If the seed lacks a precondition, or the stack will not start, the change is
 unverified: say which state was not driven and why. Never weaken the flow
