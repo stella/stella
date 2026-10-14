@@ -33,4 +33,28 @@ export const GUARD_ROLLOUTS: readonly GuardRollout[] = [
     expiresAt: "2026-10-20T00:00:00.000Z",
     check: ["bun", "scripts/check-oxlint-test-timeouts.ts"],
   },
+  {
+    id: "worker-database-login-posture",
+    rules: [
+      "require-worker-database-login-posture/require-worker-database-login-posture",
+    ],
+    type: "full",
+    check: [
+      "bun",
+      "--bun",
+      "oxlint",
+      "-c",
+      "oxlint.config.ts",
+      "--allow",
+      "all",
+      "--deny",
+      "require-worker-database-login-posture/require-worker-database-login-posture",
+      "apps/api/src",
+    ],
+  },
+  {
+    id: "tracked-symlinks",
+    type: "full",
+    check: ["bun", "scripts/check-tracked-symlinks.ts"],
+  },
 ] as const;

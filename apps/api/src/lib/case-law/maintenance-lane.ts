@@ -158,6 +158,9 @@ const laneRootHandle = (rootDb: typeof rootDatabase): CaseLawRootHandle => {
 
 const loadWriteHandles = async (): Promise<CaseLawWriteHandles> => {
   const { rlsDb, rootDb } = await import("@/api/db/root");
+  const { assertDatabaseLoginPosture } =
+    await import("@/api/lib/db/assert-database-login-posture");
+  await assertDatabaseLoginPosture(rootDb);
   const { createIngestionDb } = await import("@/api/db/scoped");
   return {
     rootDb: laneRootHandle(rootDb),

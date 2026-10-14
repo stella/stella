@@ -468,6 +468,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
   ]),
+  fixtureRuleOverride("require-worker-database-login-posture.fixture.ts", [
+    "require-worker-database-login-posture/require-worker-database-login-posture",
+  ]),
   fixtureRuleOverride("require-audit-on-mutation.fixture.ts", [
     "require-audit-on-mutation/require-audit-on-mutation",
   ]),
@@ -1553,6 +1556,7 @@ const config = defineConfig({
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
+    "./.oxlint-plugins/require-worker-database-login-posture.ts",
     "./.oxlint-plugins/require-billing-cap-crossings.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
@@ -2581,6 +2585,30 @@ const config = defineConfig({
           "error",
           {
             approvedAdapters: [
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/batch.ts",
+                binding: "responseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/batch-status.ts",
+                binding: "responseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/candidates.ts",
+                binding: "responseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
+              {
+                path: "apps/api/src/handlers/desktop-time-entries/matters.ts",
+                binding: "mattersResponseSchema",
+                reason:
+                  "Runtime JSON Schema and static response type derive from the same shared Valibot schema.",
+              },
               {
                 path: "apps/api/src/handlers/chat/messages/revisions/accept.ts",
                 binding: "acceptedEditSchema",
@@ -4316,6 +4344,13 @@ const config = defineConfig({
             systemModules: SYSTEM_AUDIT_MODULES,
           },
         ],
+      },
+    },
+    {
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "require-worker-database-login-posture/require-worker-database-login-posture":
+          "error",
       },
     },
     {
