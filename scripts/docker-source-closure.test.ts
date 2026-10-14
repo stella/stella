@@ -1257,7 +1257,11 @@ describe("Docker source closure", () => {
       ),
     );
     put("scripts/generated-files.ts", "export const CI_GENERATED_FILES = [];");
-    const available = tree([helper]);
+    const identity = put(
+      "packages/scripts/src/generated-input-identity.ts",
+      "export const generatedInputGit = () => ''; export const generatedInputTreeHash = () => '';",
+    );
+    const available = tree([helper, identity]);
     expect(sourceClosureProblems(root, available, [`/app/${helper}`])).toEqual([
       `${helper} imports ../../../scripts/generated-files, unavailable in Docker stage`,
     ]);

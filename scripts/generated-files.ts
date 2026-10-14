@@ -478,6 +478,7 @@ const GENERATOR_DECLARATIONS = [
       "apps/web/route-tree.config.ts",
       "apps/web/scripts/generate-route-tree.ts",
       "packages/scripts/src/prepared-generated-sources.ts",
+      "packages/scripts/src/generated-input-identity.ts",
       "scripts/generated-files.ts",
       "packages/scripts/src/generated-files.ts",
       "apps/web/package.json",
