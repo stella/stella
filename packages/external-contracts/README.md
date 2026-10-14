@@ -33,7 +33,9 @@ external packages stop traversal. Changed, added or removed reachable files
 invalidate the allowance, including calls through derived clients and aliases.
 Unresolved local imports and non-literal runtime module references fail closed
 in every owner closure, including those without known SDK reachability.
-Comments and type-only changes keep the allowance. New unregistered SDK
+Pins absent from the merge base are additions: they cannot receive a dated
+allowance, and their current receipts must cover them. Comments and type-only
+changes keep the allowance. New unregistered SDK
 usage still fails the closed census. Removed patch pins use the explicit
 `<removed>` value. The existing `dated-waiver-expiry` job rejects an elapsed
 allowance on every merge candidate, even when package checks are not selected.

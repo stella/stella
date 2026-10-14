@@ -21,6 +21,8 @@ import { EXTERNAL_CONTRACTS } from "../packages/external-contracts/src/registry"
 import type { ExternalContractEntry } from "../packages/external-contracts/src/types";
 import {
   admittedPinDrift,
+  checkContractEntry,
+  readBaselinePins,
   hasChangedExecutableUsage,
   hasChangedLocalRuntimeClosure,
   REMOVED_PIN,
@@ -889,3 +891,134 @@ test("SDK reachability through a local helper includes the entire owner closure"
     }),
   ).toBe(true);
 });
+
+test.each(["package.json", "new-package.json"])(
+  "SDK additions with a pin source in %s require current receipts despite existing debt",
+  (newManifest) => {
+    const root = mkdtempSync(
+      path.join(tmpdir(), "external-contract-addition-"),
+    );
+    try {
+      const owner = "owner.ts";
+      const ownerText =
+        'import oldSdk from "old-sdk"; import newSdk from "new-sdk"; oldSdk.send(); newSdk.send();';
+      const packageText = JSON.stringify({
+        catalog: { "old-sdk": "2", "new-sdk": "2" },
+      });
+      const lockText = JSON.stringify({
+        packages: {
+          "old-sdk": ["old-sdk@2", "", {}, "sha512:test"],
+          "new-sdk": ["new-sdk@2", "", {}, "sha512:test"],
+        },
+      });
+      writeFileSync(path.join(root, "package.json"), packageText);
+      if (newManifest !== "package.json") {
+        writeFileSync(path.join(root, newManifest), packageText);
+      }
+      writeFileSync(path.join(root, "bun.lock"), lockText);
+      writeFileSync(path.join(root, owner), ownerText);
+      writeFileSync(path.join(root, "replay.test.ts"), 'import "./owner";');
+      mkdirSync(path.join(root, "fixtures"));
+      for (const sdk of ["old-sdk", "new-sdk"]) {
+        const directory = path.join(root, "node_modules", sdk);
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(
+          path.join(directory, "package.json"),
+          JSON.stringify({ name: sdk, version: "2", exports: "./client.js" }),
+        );
+        writeFileSync(path.join(directory, "client.js"), "export default {}; ");
+      }
+      const entry = {
+        owners: [{ path: owner, role: "primary" }],
+        sdks: ["old-sdk", "new-sdk"],
+        pinSources: [
+          {
+            type: "manifest",
+            file: "package.json",
+            section: "catalog",
+            package: "old-sdk",
+          },
+          {
+            type: "manifest",
+            file: newManifest,
+            section: "catalog",
+            package: "new-sdk",
+          },
+        ],
+        driftTriggers: [],
+        status: "characterised",
+        fixtures: [
+          {
+            path: "fixtures",
+            replayFiles: ["replay.test.ts"],
+            replay: "wire-fake",
+            provenance: { type: "authored", kind: "recorded" },
+            metadata: "receipt.json",
+          },
+        ],
+        uncharacterisedScope: { owners: [], sdks: [] },
+      } as const satisfies ExternalContractEntry;
+      const baseFiles = new Map([
+        ["package.json", JSON.stringify({ catalog: { "old-sdk": "2" } })],
+        [
+          "bun.lock",
+          JSON.stringify({
+            packages: { "old-sdk": ["old-sdk@2", "", {}, "sha512:test"] },
+          }),
+        ],
+        [owner, ownerText],
+      ]);
+      const existingPins = {
+        "package.json#catalog.old-sdk": "2",
+        "bun.lock#old-sdk": "old-sdk@2",
+      };
+      const currentPins = readCurrentPins(root, entry);
+      const baseline = (file: string) => baseFiles.get(file);
+      expect(readBaselinePins(entry, baseline)).toEqual(existingPins);
+      baseFiles.set("package.json", packageText);
+      expect(readBaselinePins(entry, baseline)).toEqual(existingPins);
+      const options = {
+        root,
+        system: "example",
+        entry,
+        baseline,
+        admitted: { ...pinDebt, pins: existingPins },
+        now: new Date("2026-10-15T00:00:00.000Z"),
+      };
+      const writeReceipt = (characterisedAt: Record<string, string>) =>
+        writeFileSync(
+          path.join(root, "receipt.json"),
+          JSON.stringify({
+            characterisedAt,
+            coveredOwners: [owner],
+            coveredSdks: entry.sdks,
+            fixtureSet: "fixtures",
+            provenance: entry.fixtures[0].provenance,
+          }),
+        );
+      const oldReceiptPins = {
+        "package.json#catalog.old-sdk": "1",
+        "bun.lock#old-sdk": "old-sdk@1",
+      };
+      writeReceipt({ ...currentPins, ...oldReceiptPins });
+      expect(checkContractEntry(options)).toEqual([]);
+      writeReceipt(oldReceiptPins);
+      expect(checkContractEntry(options).join("\n")).toContain(
+        "fixture pin missing",
+      );
+      writeReceipt({
+        ...oldReceiptPins,
+        [`${newManifest}#catalog.new-sdk`]: "1",
+        "bun.lock#new-sdk": "new-sdk@1",
+      });
+      expect(
+        checkContractEntry({
+          ...options,
+          admitted: { ...pinDebt, pins: currentPins },
+        }).join("\n"),
+      ).toContain("re-characterise example at 2");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  },
+);

@@ -92,11 +92,12 @@ const unwrap = (expression: ts.Expression): ts.Expression => {
   return expression;
 };
 
-const declaredInitializer = (
-  file: string,
-  text: string,
-  name: string,
-): ts.Expression => {
+type DeclaredInitializerOptions = { file: string; text: string; name: string };
+const findDeclaredInitializer = ({
+  file,
+  text,
+  name,
+}: DeclaredInitializerOptions): ts.Expression | undefined => {
   const source = parseSource({ fileName: file, text });
   for (const statement of source.statements) {
     if (!ts.isVariableStatement(statement)) {
@@ -113,39 +114,46 @@ const declaredInitializer = (
       return unwrap(declaration.initializer);
     }
   }
-  return panic(
-    `${file}: missing ${name}; update its external contract pin source.`,
-  );
+  return undefined;
 };
+
+const declaredInitializer = (
+  file: string,
+  text: string,
+  name: string,
+): ts.Expression =>
+  findDeclaredInitializer({ file, text, name }) ??
+  panic(`${file}: missing ${name}; update its external contract pin source.`);
 
 const readPinFromFiles = (
   source: PinSource,
-  read: (file: string) => string,
-): string => {
+  read: (file: string) => string | undefined,
+): string | undefined => {
+  const text = read(source.file);
+  if (text === undefined) {
+    return undefined;
+  }
   switch (source.type) {
     case "manifest": {
-      const manifest = v.parse(manifestSchema, JSON.parse(read(source.file)));
-      return (
-        manifest[source.section][source.package] ??
-        panic(`${pinSourceKey(source)}: missing package pin.`)
-      );
+      const manifest = v.parse(manifestSchema, JSON.parse(text));
+      return manifest[source.section][source.package];
     }
     case "image": {
       const images = v.parse(
         v.array(v.object({ name: v.string(), source: v.string() })),
-        JSON.parse(read(source.file)),
+        JSON.parse(text),
       );
-      return (
-        images.find(({ name }) => name === source.name)?.source ??
-        panic(`${pinSourceKey(source)}: missing image pin.`)
-      );
+      return images.find(({ name }) => name === source.name)?.source;
     }
     case "constant": {
-      const initializer = declaredInitializer(
-        source.file,
-        read(source.file),
-        source.name,
-      );
+      const initializer = findDeclaredInitializer({
+        file: source.file,
+        text,
+        name: source.name,
+      });
+      if (initializer === undefined) {
+        return undefined;
+      }
       if (!ts.isArrayLiteralExpression(initializer)) {
         return panic(`${pinSourceKey(source)} must be a literal string array.`);
       }
@@ -166,7 +174,7 @@ const readPinFromFiles = (
 export const readPin = (root: string, source: PinSource): string =>
   readPinFromFiles(source, (file) =>
     readFileSync(path.join(root, file), "utf-8"),
-  );
+  ) ?? panic(`${pinSourceKey(source)}: missing pin.`);
 
 /** The installed package a bun.lock key names: its last `parent/child` segment, where either side may be scoped. */
 export const lockKeyPackageName = (key: string): string => {
@@ -177,50 +185,96 @@ export const lockKeyPackageName = (key: string): string => {
 };
 
 /** Include installed SDK versions and patches: a caret or patch edit can move code without moving its manifest range. */
-const readPinsFromFiles = (
-  entry: ExternalContractEntry,
-  read: (file: string) => string,
-): Record<string, string> => {
-  const current = Object.fromEntries(
-    entry.pinSources.map((source) => [
-      pinSourceKey(source),
-      readPinFromFiles(source, read),
-    ]),
-  );
+type ReadPinsFromFilesOptions = {
+  entry: ExternalContractEntry;
+  read: (file: string) => string | undefined;
+  snapshot: "current" | "baseline";
+};
+
+const readPinsFromFiles = ({
+  entry,
+  read,
+  snapshot,
+}: ReadPinsFromFilesOptions): Record<string, string> => {
+  const pins = new Map<string, string>();
+  for (const source of entry.pinSources) {
+    const value = readPinFromFiles(source, read);
+    if (value === undefined) {
+      if (snapshot === "current") {
+        panic(`${pinSourceKey(source)}: missing pin.`);
+      }
+      continue;
+    }
+    pins.set(pinSourceKey(source), value);
+  }
+  const lockText = read("bun.lock");
+  const manifestText = read("package.json");
+  if (
+    snapshot === "current" &&
+    (lockText === undefined || manifestText === undefined)
+  ) {
+    panic("Missing current external contract pin manifest or lockfile.");
+  }
   const lock = v.parse(
     v.object({ packages: objectSchema }),
-    parseBunLockText(read("bun.lock")),
+    lockText === undefined ? { packages: {} } : parseBunLockText(lockText),
   );
-  const manifest = v.parse(manifestSchema, JSON.parse(read("package.json")));
+  const manifest = v.parse(
+    manifestSchema,
+    manifestText === undefined ? {} : JSON.parse(manifestText),
+  );
   for (const sdk of entry.sdks) {
     const instances = Object.entries(lock.packages).filter(
       ([key]) => lockKeyPackageName(key) === sdk,
     );
     if (instances.length === 0) {
-      panic(`${sdk}: no installed SDK pin in bun.lock.`);
+      if (snapshot === "current") {
+        panic(`${sdk}: no installed SDK pin in bun.lock.`);
+      }
+      // An SDK addition cannot borrow an old manifest or patch allowance.
+      for (const source of entry.pinSources) {
+        if (source.type === "manifest" && source.package === sdk) {
+          pins.delete(pinSourceKey(source));
+        }
+      }
+      continue;
     }
     for (const [key, value] of instances) {
       const tuple = v.parse(v.array(v.unknown()), value);
-      const version = v.parse(v.string(), tuple.at(0));
-      current[`bun.lock#${key}`] = version;
+      pins.set(`bun.lock#${key}`, v.parse(v.string(), tuple.at(0)));
     }
     for (const [key, file] of Object.entries(manifest.patchedDependencies)) {
       if (!key.startsWith(`${sdk}@`)) {
         continue;
       }
-      current[`package.json#patchedDependencies.${key}`] = hash(read(file));
+      const patch = read(file);
+      if (patch === undefined) {
+        if (snapshot === "current") {
+          panic(`Missing current external contract patch ${file}.`);
+        }
+        continue;
+      }
+      pins.set(`package.json#patchedDependencies.${key}`, hash(patch));
     }
   }
-  return current;
+  return Object.fromEntries(pins);
 };
+
+export const readBaselinePins = (
+  entry: ExternalContractEntry,
+  read: (file: string) => string | undefined,
+): Record<string, string> =>
+  readPinsFromFiles({ entry, read, snapshot: "baseline" });
 
 export const readCurrentPins = (
   root: string,
   entry: ExternalContractEntry,
 ): Record<string, string> =>
-  readPinsFromFiles(entry, (file) =>
-    readFileSync(path.join(root, file), "utf-8"),
-  );
+  readPinsFromFiles({
+    entry,
+    read: (file) => readFileSync(path.join(root, file), "utf-8"),
+    snapshot: "current",
+  });
 
 export const readDirectDependencies = (root: string): string[] => {
   const dependencies = new Set<string>();
@@ -951,10 +1005,120 @@ export const admittedPinDrift = ({
   return Object.fromEntries(
     Object.entries(allowance.pins).filter(
       ([key, value]) =>
+        (!Object.hasOwn(current, key) || Object.hasOwn(baseline, key)) &&
         (current[key] ?? REMOVED_PIN) === value &&
         (baseline[key] ?? REMOVED_PIN) === value,
     ),
   );
+};
+
+type ContractEntryCheckOptions = {
+  root: string;
+  system: string;
+  entry: ExternalContractEntry;
+  baseline?: (file: string) => string | undefined;
+  admitted?: ReturnType<typeof readExternalContractPinAllowances>[number];
+  now: Date;
+};
+
+export const checkContractEntry = ({
+  root,
+  system,
+  entry,
+  baseline,
+  admitted,
+  now,
+}: ContractEntryCheckOptions): string[] => {
+  const problems: string[] = [];
+  for (const owner of entry.owners) {
+    if (!existsSync(path.join(root, owner.path))) {
+      problems.push(`${system}: missing owner ${owner.path}.`);
+    }
+  }
+  const current = readCurrentPins(root, entry);
+  const baselinePins =
+    baseline === undefined || admitted === undefined
+      ? current
+      : readBaselinePins(entry, baseline);
+  const currentSources = new Map<string, string | undefined>();
+  const currentSource = (file: string) => {
+    if (!currentSources.has(file)) {
+      const absolute = path.join(root, file);
+      currentSources.set(
+        file,
+        existsSync(absolute) && statSync(absolute).isFile()
+          ? readFileSync(absolute, "utf-8")
+          : undefined,
+      );
+    }
+    return currentSources.get(file);
+  };
+  const usageChanged =
+    baseline !== undefined &&
+    admitted !== undefined &&
+    hasChangedLocalRuntimeClosure({
+      root,
+      owners: entry.owners.map(({ path: file }) => file),
+      sdks: entry.sdks,
+      baseline,
+      current: currentSource,
+    });
+  const admittedPins =
+    admitted === undefined
+      ? {}
+      : admittedPinDrift({
+          current,
+          baseline: baselinePins,
+          allowance: admitted,
+          now,
+          usageChanged,
+        });
+  if (entry.status === "uncharacterised") {
+    return problems;
+  }
+  const coveredOwners = new Set<string>();
+  const coveredSdks = new Set<string>();
+  for (const fixture of entry.fixtures) {
+    const checked = checkFixture({
+      root,
+      system,
+      fixture,
+      current,
+      admittedPins,
+      owners: entry.owners.map(({ path: ownerPath }) => ownerPath),
+      sdks: entry.sdks,
+    });
+    problems.push(...checked.problems);
+    for (const owner of checked.coveredOwners) {
+      coveredOwners.add(owner);
+    }
+    for (const sdk of checked.coveredSdks) {
+      coveredSdks.add(sdk);
+    }
+  }
+  problems.push(
+    ...checkScopePartition({
+      system,
+      kind: "owner",
+      declared: entry.owners.map(({ path: ownerPath }) => ownerPath),
+      covered: coveredOwners,
+      uncharacterised: entry.uncharacterisedScope.owners.map(
+        ({ path: ownerPath, reason }) => ({ key: ownerPath, reason }),
+      ),
+    }),
+  );
+  problems.push(
+    ...checkScopePartition({
+      system,
+      kind: "SDK",
+      declared: entry.sdks,
+      covered: coveredSdks,
+      uncharacterised: entry.uncharacterisedScope.sdks.map(
+        ({ package: name, reason }) => ({ key: name, reason }),
+      ),
+    }),
+  );
+  return problems;
 };
 
 type ExternalContractCheckOptions = {
@@ -993,100 +1157,14 @@ export const checkExternalContracts = (
     ),
   );
   for (const [system, entry] of Object.entries(registry)) {
-    for (const owner of entry.owners) {
-      if (!existsSync(path.join(root, owner.path))) {
-        problems.push(`${system}: missing owner ${owner.path}.`);
-      }
-    }
-    const current = readCurrentPins(root, entry);
-    const admitted = allowances.find(
-      (allowance) => allowance.system === system,
-    );
-    const baselinePins =
-      baseline === undefined || admitted === undefined
-        ? current
-        : readPinsFromFiles(
-            entry,
-            (file) =>
-              baseline(file) ??
-              panic(`Missing external contract baseline: ${file}`),
-          );
-    const currentSources = new Map<string, string | undefined>();
-    const currentSource = (file: string) => {
-      if (!currentSources.has(file)) {
-        const absolute = path.join(root, file);
-        currentSources.set(
-          file,
-          existsSync(absolute) && statSync(absolute).isFile()
-            ? readFileSync(absolute, "utf-8")
-            : undefined,
-        );
-      }
-      return currentSources.get(file);
-    };
-    const usageChanged =
-      baseline !== undefined &&
-      admitted !== undefined &&
-      hasChangedLocalRuntimeClosure({
+    problems.push(
+      ...checkContractEntry({
         root,
-        owners: entry.owners.map(({ path: file }) => file),
-        sdks: entry.sdks,
+        system,
+        entry,
         baseline,
-        current: currentSource,
-      });
-    const admittedPins =
-      admitted === undefined
-        ? {}
-        : admittedPinDrift({
-            current,
-            baseline: baselinePins,
-            allowance: admitted,
-            now,
-            usageChanged,
-          });
-    if (entry.status === "uncharacterised") {
-      continue;
-    }
-    const coveredOwners = new Set<string>();
-    const coveredSdks = new Set<string>();
-    for (const fixture of entry.fixtures) {
-      const checked = checkFixture({
-        root,
-        system,
-        fixture,
-        current,
-        admittedPins,
-        owners: entry.owners.map(({ path: ownerPath }) => ownerPath),
-        sdks: entry.sdks,
-      });
-      problems.push(...checked.problems);
-      for (const owner of checked.coveredOwners) {
-        coveredOwners.add(owner);
-      }
-      for (const sdk of checked.coveredSdks) {
-        coveredSdks.add(sdk);
-      }
-    }
-    problems.push(
-      ...checkScopePartition({
-        system,
-        kind: "owner",
-        declared: entry.owners.map(({ path: ownerPath }) => ownerPath),
-        covered: coveredOwners,
-        uncharacterised: entry.uncharacterisedScope.owners.map(
-          ({ path: ownerPath, reason }) => ({ key: ownerPath, reason }),
-        ),
-      }),
-    );
-    problems.push(
-      ...checkScopePartition({
-        system,
-        kind: "SDK",
-        declared: entry.sdks,
-        covered: coveredSdks,
-        uncharacterised: entry.uncharacterisedScope.sdks.map(
-          ({ package: name, reason }) => ({ key: name, reason }),
-        ),
+        admitted: allowances.find((allowance) => allowance.system === system),
+        now,
       }),
     );
   }
