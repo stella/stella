@@ -195,12 +195,17 @@ test("the fallback read stops serving a version whose source was revoked", async
     documentAst: DOCUMENT_AST,
   });
 
-  expect(await readStoredVersionAst({ legislationDb, id: documentId })).toEqual(
-    DOCUMENT_AST,
-  );
+  expect(
+    await readStoredVersionAst({
+      surface: "search",
+      legislationDb,
+      id: documentId,
+    }),
+  ).toEqual(DOCUMENT_AST);
 
   expect(
     await readStoredVersionAst({
+      surface: "search",
       legislationDb,
       id: documentId,
       purpose: "derived-ai",
@@ -220,6 +225,10 @@ test("the fallback read stops serving a version whose source was revoked", async
     .where(eq(legislationSources.id, sourceId));
 
   expect(
-    await readStoredVersionAst({ legislationDb, id: documentId }),
+    await readStoredVersionAst({
+      surface: "search",
+      legislationDb,
+      id: documentId,
+    }),
   ).toBeNull();
 });
