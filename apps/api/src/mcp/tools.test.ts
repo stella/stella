@@ -5263,7 +5263,7 @@ describe("OpenAI-compatible MCP tools", () => {
         },
       });
       expect(parseToolPayload(result)).toMatchObject({
-        total: { type: "exact", value: 21 },
+        total: { type: "exact", count: 21 },
         nextCursor: "next-page",
         searches: [{ query: "§ 316 odst. 2 ZP" }],
       });
