@@ -3,8 +3,10 @@
 
 import skill0 from "../skills/playbook-builder/SKILL.md" with { type: "text" };
 
+export type BuiltInSkillId = "playbook-builder";
+
 type GeneratedSkillEntry = {
-  id: string;
+  id: BuiltInSkillId;
   source: string;
   resources: readonly {
     path: string;

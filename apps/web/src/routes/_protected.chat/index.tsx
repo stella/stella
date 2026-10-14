@@ -562,7 +562,7 @@ function ChatIndex() {
     // TanStack boundary fails before appending, this
     // throws here so the composer restores the draft
     // instead of navigating to an empty thread.
-    chat.startRouteHandoffMessage(message);
+    await chat.startRouteHandoffMessage(message);
 
     await navigate({
       to: "/chat/$threadId",

@@ -426,6 +426,7 @@ export const DEFAULT_MODELS = {
  */
 export const BYOK_MODEL_OPTIONS = {
   google: [
+    "gemini-4-argon",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
@@ -462,6 +463,7 @@ export const BYOK_MODEL_OPTIONS = {
     ...GPT_61_OPENROUTER_MODEL_IDS,
     ...GPT_6_OPENROUTER_MODEL_IDS,
     ...GPT_56_OPENROUTER_MODEL_IDS,
+    "google/gemini-4-argon",
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
     "google/gemini-3.6-flash",
@@ -549,6 +551,10 @@ export const RECOMMENDED_CHAT_MODELS = [
  * creator's icon while their routing provider remains available separately.
  */
 export const MODEL_DISPLAY_METADATA = {
+  "gemini-4-argon": {
+    displayName: "Gemini 4 Argon",
+    iconProvider: "google",
+  },
   "gemini-3.8-flash": {
     displayName: "Gemini 3.8 Flash",
     iconProvider: "google",
@@ -719,6 +725,10 @@ export const MODEL_DISPLAY_METADATA = {
   [GPT_56_MODEL_IDS.terra.openrouter]: {
     displayName: "GPT-5.6 Terra",
     iconProvider: "openai",
+  },
+  "google/gemini-4-argon": {
+    displayName: "Gemini 4 Argon",
+    iconProvider: "google",
   },
   "google/gemini-3.8-flash": {
     displayName: "Gemini 3.8 Flash",
@@ -1185,6 +1195,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "anthropic/claude-haiku-5.5": "supported",
   "us.anthropic.claude-haiku-5-5": "supported",
   "claude-haiku-5-5": "supported",
+  "gemini-4-argon": "supported",
   "gemini-3.8-flash": "supported",
   "gemini-3.7-flash": "supported",
   "gemini-3.6-flash": "supported",
@@ -1199,6 +1210,7 @@ export const MODEL_STREAMING_TOOL_USE = {
   "openai/gpt-5.6-sol": "supported",
   "openai/gpt-5.6-terra": "supported",
   "openai/gpt-5.6-luna": "supported",
+  "google/gemini-4-argon": "supported",
   "google/gemini-3.8-flash": "supported",
   "google/gemini-3.7-flash": "supported",
   "google/gemini-3.6-flash": "supported",
@@ -1421,6 +1433,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "gemini-3.6-flash": 1_048_576,
   "gemini-3.7-flash": 1_048_576,
   "gemini-3.8-flash": 1_048_576,
+  "gemini-4-argon": 1_048_576,
   "gemini-3.1-pro-preview": 1_048_576,
   // OpenAI: GPT-4o family 128K; GPT-5 varies by generation.
   "gpt-4o-mini": 128_000,
@@ -1458,6 +1471,7 @@ export const CONTEXT_WINDOW_TOKENS = {
   "mistral-medium-3-5": 128_000,
   "magistral-small-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
+  "google/gemini-4-argon": 1_048_576,
   "google/gemini-3.8-flash": 1_048_576,
   "google/gemini-3.7-flash": 1_048_576,
   "google/gemini-3.6-flash": 1_048_576,
