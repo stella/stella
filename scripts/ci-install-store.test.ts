@@ -11,7 +11,6 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
-import { SCOPED_INSTALL_STEP_MINUTES } from "./ci-install-policy";
 import {
   completeInstallStoreKey,
   parseInstallFlags,
@@ -37,9 +36,22 @@ const identity = {
   globalStoreMode: "enabled" as const,
 };
 
+const lockFixture = () => ({
+  lockfileVersion: 3,
+  workspaces: {
+    "": { name: "stella", version: "0.1.0" },
+    "apps/api": {
+      name: "@stll/api",
+      version: "0.1.0",
+      dependencies: { example: "^1.0.0" },
+    },
+  },
+  packages: { example: ["example@1.0.0", "", {}, "sha512-first"] },
+});
+
 const makeRoot = () => {
   const root = mkdtempSync(path.join(tmpdir(), "bun-install-key-"));
-  writeFileSync(path.join(root, "bun.lock"), "lock bytes\n");
+  writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lockFixture()));
   writeFileSync(
     path.join(root, "bunfig.toml"),
     '[install]\nlinker = "hoisted"\n',
@@ -57,12 +69,12 @@ type InstallStoreOverrides = Partial<
 const keyFor = (root: string, options: InstallStoreOverrides = {}) =>
   completeInstallStoreKey({ root, flags, ...identity, ...options });
 
-test("v3 keys bind ordered flags, required config and the full runtime identity", () => {
+test("v4 keys bind ordered flags, required config and the full runtime identity", () => {
   const root = makeRoot();
   try {
     const key = keyFor(root);
     expect(key).toStartWith(
-      "bun-complete-store-v3-linux-x64-bun-revision-123-enabled-",
+      "bun-complete-store-v4-linux-x64-bun-revision-123-enabled-",
     );
     expect(keyFor(root)).toBe(key);
     expect(
@@ -95,9 +107,12 @@ test("v3 keys bind ordered flags, required config and the full runtime identity"
       expect(keyFor(root, override)).not.toBe(key);
     }
 
-    writeFileSync(path.join(root, "bun.lock"), "changed lock bytes\n");
+    writeFileSync(
+      path.join(root, "bun.lock"),
+      JSON.stringify({ ...lockFixture(), lockfileVersion: 4 }),
+    );
     expect(keyFor(root)).not.toBe(key);
-    writeFileSync(path.join(root, "bun.lock"), "lock bytes\n");
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lockFixture()));
     writeFileSync(
       path.join(root, "bunfig.toml"),
       '[install]\nlinker = "isolated"\n',
@@ -108,11 +123,46 @@ test("v3 keys bind ordered flags, required config and the full runtime identity"
   }
 });
 
+test("workspace self versions preserve the key while installed dependency inputs change it", () => {
+  const root = makeRoot();
+  try {
+    const baseline = keyFor(root);
+    const lock = lockFixture();
+    lock.workspaces[""].version = "0.2.0";
+    lock.workspaces["apps/api"].version = "0.2.0";
+    const source = JSON.stringify(lock);
+    expect(source).not.toBe(JSON.stringify(lockFixture()));
+    // Bun lockfiles permit comments and trailing commas.
+    writeFileSync(
+      path.join(root, "bun.lock"),
+      `// lock\n${source.slice(0, -1)},}`,
+    );
+    expect(keyFor(root)).toBe(baseline);
+
+    lock.workspaces["apps/api"].dependencies.example = "^2.0.0";
+    lock.packages.example = ["example@2.0.0", "", {}, "sha512-first"];
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lock));
+    expect(keyFor(root)).not.toBe(baseline);
+
+    const integrityChange = lockFixture();
+    integrityChange.packages.example = [
+      "example@1.0.0",
+      "",
+      {},
+      "sha512-second",
+    ];
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(integrityChange));
+    expect(keyFor(root)).not.toBe(baseline);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("key generation rejects missing inputs, empty identities and incomplete flags", () => {
   const root = mkdtempSync(path.join(tmpdir(), "bun-install-missing-"));
   try {
     expect(() => keyFor(root)).toThrow("Missing bun.lock");
-    writeFileSync(path.join(root, "bun.lock"), "lock\n");
+    writeFileSync(path.join(root, "bun.lock"), JSON.stringify(lockFixture()));
     expect(() => keyFor(root)).toThrow("Missing required bunfig.toml");
     writeFileSync(path.join(root, "bunfig.toml"), "[install]\n");
 
@@ -181,7 +231,7 @@ test("sealing accepts a populated package cache without links when the global st
 
     const marker = path.join(store, ".stella-install-complete");
     expect(JSON.parse(readFileSync(marker, "utf-8"))).toMatchObject({
-      format: "v3",
+      format: "v4",
       key: "package-cache-key",
       globalStoreMode: "disabled",
     });
@@ -495,11 +545,7 @@ test("the manual install-cache benchmark is dispatch-only and reports measured p
   );
   expect(linux.env["BUN_INSTALL_GLOBAL_STORE"]).toBe("1");
 
-  const measure = (
-    job: typeof windows,
-    expectedFlags: string[],
-    timeout: number,
-  ) => {
+  const measure = (job: typeof windows, expectedFlags: string[]) => {
     const install = job.steps.find(
       (step) => step["name"] === "Measure scoped install",
     );
@@ -509,7 +555,7 @@ test("the manual install-cache benchmark is dispatch-only and reports measured p
     expect(v.parse(v.string(), install["uses"])).toBe(
       "$/.github/actions/ci-install",
     );
-    expect(install["timeout-minutes"]).toBe(timeout);
+    expect(install).not.toHaveProperty("timeout-minutes");
     const withInputs = v.parse(
       v.object({ flags: v.string() }),
       install["with"],
@@ -541,17 +587,13 @@ test("the manual install-cache benchmark is dispatch-only and reports measured p
     expect(run).not.toMatch(/(?:restoreMs|installMs):\s*\d+/u);
   };
 
-  measure(
-    windows,
-    [
-      "--frozen-lockfile",
-      "--ignore-scripts",
-      "--filter",
-      "@stll/desktop...",
-      "--filter",
-      "!stella",
-    ],
-    SCOPED_INSTALL_STEP_MINUTES.windows,
-  );
-  measure(linux, ["--frozen-lockfile", "--ignore-scripts"], 3);
+  measure(windows, [
+    "--frozen-lockfile",
+    "--ignore-scripts",
+    "--filter",
+    "@stll/desktop...",
+    "--filter",
+    "!stella",
+  ]);
+  measure(linux, ["--frozen-lockfile", "--ignore-scripts"]);
 });

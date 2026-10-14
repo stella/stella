@@ -173,7 +173,6 @@ jobs:
       - name: Measure scoped install
         id: install
         uses: $/.github/actions/ci-install
-        timeout-minutes: 5
         with:
           flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/desktop...","--filter","!stella"]'
       - name: Report measured phases
@@ -222,7 +221,6 @@ jobs:
       - name: Measure scoped install
         id: install
         uses: $/.github/actions/ci-install
-        timeout-minutes: 3
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
       - name: Report measured phases

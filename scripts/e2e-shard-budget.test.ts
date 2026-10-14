@@ -23,6 +23,10 @@ const jobSchema = v.object({
       name: v.string(),
       if: v.optional(v.string()),
       run: v.optional(v.string()),
+      uses: v.optional(v.string()),
+      with: v.optional(
+        v.object({ "installer-budget-ms": v.optional(v.string()) }),
+      ),
       "timeout-minutes": v.optional(v.union([v.number(), v.string()])),
     }),
   ),
@@ -60,7 +64,14 @@ const deadlineMinutes = (deadline: number | string, shard: number | string) =>
       );
 
 const budgetViolations = (candidate: typeof job) => {
+  const restoreHeadroomMs = 30_000;
   const violations: string[] = [];
+  const isInstall = (step: (typeof candidate.steps)[number]) =>
+    step.uses === "$/.github/actions/ci-install" ||
+    step.uses === "./.github/actions/ci-install";
+  if (candidate.steps.filter(isInstall).length !== 1) {
+    violations.push("production shards need exactly one scoped install owner");
+  }
   for (const shard of candidate.strategy.matrix.shard) {
     let total = 0;
     for (const step of candidate.steps) {
@@ -69,9 +80,27 @@ const budgetViolations = (candidate: typeof job) => {
         continue;
       }
       const deadline = step["timeout-minutes"];
-      if (deadline === undefined || deadlineMinutes(deadline, shard) <= 0) {
+      let allocation: number;
+      if (isInstall(step)) {
+        if (deadline !== undefined) {
+          violations.push(`${step.name} must use only the job deadline`);
+        }
+        const budget = Number(step.with?.["installer-budget-ms"]);
+        if (!Number.isSafeInteger(budget) || budget <= 0) {
+          violations.push(`${step.name} needs a positive warning allowance`);
+          continue;
+        }
+        // Reserve the warning allowance inside the outer job budget; a
+        // progressing install may use remaining job time beyond this allowance.
+        allocation = Math.ceil((budget + restoreHeadroomMs) / 60_000);
+      } else if (
+        deadline === undefined ||
+        deadlineMinutes(deadline, shard) <= 0
+      ) {
         violations.push(`${step.name} needs an independent deadline`);
         continue;
+      } else {
+        allocation = deadlineMinutes(deadline, shard);
       }
       const active =
         step.if === undefined
@@ -94,7 +123,7 @@ const budgetViolations = (candidate: typeof job) => {
             });
       expect(typeof active, step.name).toBe("boolean");
       if (active === true) {
-        total += deadlineMinutes(deadline, shard);
+        total += allocation;
       }
     }
     if (candidate["timeout-minutes"] < total + 2) {
@@ -104,16 +133,44 @@ const budgetViolations = (candidate: typeof job) => {
   return violations;
 };
 
-test("every production shard retains independent phase deadlines and cleanup time", () => {
+test("every production shard reserves install warning time, phase deadlines and cleanup inside its job", () => {
   expect(budgetViolations(job)).toEqual([]);
 });
 
-test("the shard budget guard rejects a shared deadline and any unbounded phase", () => {
+test("the shard budget guard rejects install deadlines, missing install allowances and unbounded phases", () => {
   expect(
     budgetViolations({ ...job, "timeout-minutes": 12 }).length,
   ).toBeGreaterThan(0);
   for (const step of job.steps) {
     if (step.name === CANONICAL_CANCEL_STEP.name) {
+      continue;
+    }
+    if (
+      step.uses === "$/.github/actions/ci-install" ||
+      step.uses === "./.github/actions/ci-install"
+    ) {
+      expect(
+        budgetViolations({
+          ...job,
+          steps: job.steps.map((entry) =>
+            entry === step ? { ...entry, "timeout-minutes": 2 } : entry,
+          ),
+        }),
+      ).toContain(`${step.name} must use only the job deadline`);
+      expect(
+        budgetViolations({
+          ...job,
+          steps: job.steps.map((entry) =>
+            entry === step ? { ...entry, with: undefined } : entry,
+          ),
+        }),
+      ).toContain(`${step.name} needs a positive warning allowance`);
+      expect(
+        budgetViolations({
+          ...job,
+          steps: job.steps.filter((entry) => entry !== step),
+        }),
+      ).toContain("production shards need exactly one scoped install owner");
       continue;
     }
     const unbounded = {

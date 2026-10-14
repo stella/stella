@@ -1439,14 +1439,18 @@
     },
     "sendError": "Un problème est survenu lors de l’envoi de votre message. Contactez le support si l’erreur persiste.",
     "sendErrorAnonymizationBlocked": "stella n’a pas pu anonymiser une pièce jointe, donc rien n’a été envoyé. Retirez le fichier ou envoyez ce message sans anonymisation.",
+    "sendErrorConnectionFailed": "La connexion à la conversation a échoué. Vérifiez votre connexion et réessayez.",
     "sendErrorEmptyCompletion": "L’IA a renvoyé une réponse vide. Réessayez ou reformulez votre message.",
     "sendErrorLoopDetected": "La réponse de l’IA s’est trop répétée. Réessayez avec une demande plus ciblée.",
     "sendErrorModelUnavailable": "Le modèle d’IA configuré n’est plus disponible. Demandez à l’administrateur de l’espace de travail de le mettre à jour dans les paramètres de l’organisation.",
+    "sendErrorNotStarted": "La conversation est encore occupée. Patientez un instant et réessayez.",
+    "sendErrorPreparationFailed": "Votre message n’a pas pu être préparé. Rouvrez la conversation et réessayez.",
     "sendErrorProviderBilling": "Le fournisseur d’IA a signalé un problème de facturation. Contactez l’administrateur de l’espace de travail.",
     "sendErrorProviderCredentialsRejected": "Le fournisseur d’IA a rejeté les identifiants configurés. Demandez à l’administrateur de l’espace de travail de vérifier la clé API dans les paramètres de l’organisation.",
     "sendErrorProviderUnavailable": "Le fournisseur d’IA est temporairement indisponible. Réessayez dans un instant.",
     "sendErrorQuotaExhausted": "Le quota du fournisseur d’IA est épuisé. Réessayez dans une minute ou contactez l’administrateur de l’espace de travail.",
     "sendErrorStreamIncomplete": "La réponse de l’IA a été interrompue avant la fin. Réessayez.",
+    "sendErrorTimedOut": "Le service de conversation n’a pas répondu à temps. Réessayez.",
     "sendPrompt": "Envoyer le message",
     "sendQueuedMessageNow": "Envoyer maintenant",
     "sendWithoutAnonymization": "Envoyer sans anonymisation",
@@ -3613,6 +3617,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Créez un playbook de revue de contrats critère par critère, à partir de vos contrats déjà signés, d’un court entretien et des usages du marché.",
+          "name": "Créer un playbook"
+        }
+      },
       "builtInSection": "Compétences intégrées",
       "deleteFile": "Supprimer le fichier",
       "deleteFileConfirm": "Supprimer le fichier ? Cette action est irréversible.",

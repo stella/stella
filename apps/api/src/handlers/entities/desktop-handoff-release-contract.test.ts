@@ -28,6 +28,7 @@ import {
   hashPdfSigningToken,
   recordPdfSigningHandoffFailure,
 } from "@/api/lib/files/pdf-signing/sessions";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import {
   claimFixtureDeviceProof,
@@ -292,6 +293,7 @@ test("a supported PDF desktop with its matching account redeems the signing sess
           organizationId: ids.orgA,
           userId: ids.userA1,
           keyId: "desktop-account-key",
+          memberRole: sessionMemberRole("member"),
           scopedDb: tokenDb.scoped({
             organizationId: ids.orgA,
             userId: ids.userA1,

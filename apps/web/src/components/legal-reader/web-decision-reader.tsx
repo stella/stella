@@ -35,6 +35,7 @@ export type WebDecisionReaderProps = Omit<
   "placements" | "articleRef"
 > & {
   surface: DecisionReaderSurface;
+  landingSessionId?: string | undefined;
   citationAnchors?: readonly CitationAnchorSource[] | undefined;
   provisionAnchors?: readonly DecisionProvisionAnchor[] | undefined;
   statuteCitationAnchors?: readonly DecisionStatuteCitationAnchor[] | undefined;
@@ -53,6 +54,7 @@ const WebDecisionReaderContent = ({
   provisionAnchors = NO_ANCHORS,
   statuteCitationAnchors = NO_ANCHORS,
   surface,
+  landingSessionId,
   ...props
 }: WebDecisionReaderContentProps) => {
   const adapters = useReaderAdapters();
@@ -124,7 +126,7 @@ const WebDecisionReaderContent = ({
       disclosure.open = true;
     }
     return holdLanding({ article, target });
-  }, [landingAnchorId]);
+  }, [landingAnchorId, landingSessionId]);
 
   return (
     <DecisionText

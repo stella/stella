@@ -1439,14 +1439,18 @@
     },
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
+    "sendErrorConnectionFailed": "A conexão com o chat falhou. Verifique sua conexão e tente novamente.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
     "sendErrorLoopDetected": "A resposta da IA se repetiu muitas vezes. Tente novamente com uma solicitação mais específica.",
     "sendErrorModelUnavailable": "O modelo de IA configurado não está mais disponível. Peça ao administrador do espaço de trabalho para atualizar o modelo nas configurações da organização.",
+    "sendErrorNotStarted": "A conversa ainda está ocupada. Aguarde um momento e tente novamente.",
+    "sendErrorPreparationFailed": "Não foi possível preparar sua mensagem. Abra o chat novamente e tente de novo.",
     "sendErrorProviderBilling": "O provedor de IA relatou um problema de faturamento. Fale com o administrador do espaço de trabalho.",
     "sendErrorProviderCredentialsRejected": "O provedor de IA rejeitou as credenciais configuradas. Peça ao administrador do espaço de trabalho para verificar a chave de API nas configurações da organização.",
     "sendErrorProviderUnavailable": "O provedor de IA está temporariamente indisponível. Tente novamente em instantes.",
     "sendErrorQuotaExhausted": "A cota do provedor de IA foi esgotada. Tente novamente em um minuto ou fale com o administrador do espaço de trabalho.",
     "sendErrorStreamIncomplete": "A resposta da IA foi interrompida antes de terminar. Tente novamente.",
+    "sendErrorTimedOut": "O chat não respondeu a tempo. Tente novamente.",
     "sendPrompt": "Enviar mensagem",
     "sendQueuedMessageNow": "Enviar agora",
     "sendWithoutAnonymization": "Enviar sem anonimização",
@@ -3613,6 +3617,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Crie um playbook de revisão de contratos posição por posição, com base nos seus contratos já assinados, em uma breve entrevista e nos padrões usuais de mercado.",
+          "name": "Criar um playbook"
+        }
+      },
       "builtInSection": "Habilidades integradas",
       "deleteFile": "Excluir arquivo",
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",
