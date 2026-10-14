@@ -8,6 +8,7 @@ import {
 
 import { planTableChart } from "@/api/handlers/chat/table-chart-plan";
 import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { Decision } from "@/api/lib/workflow/decisions/decide";
 import {
   DEFAULT_SYSTEM_ONE_MODEL,
@@ -15,6 +16,7 @@ import {
   SYSTEM_ONE_MAX_REQUEST_BYTES,
 } from "@/api/lib/workflow/decisions/system-one";
 import type { ChoiceAnswer } from "@/api/lib/workflow/decisions/system-one";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
@@ -57,11 +59,25 @@ const askWith =
   async () =>
     await Promise.resolve({ decisions: answers, model: "test" });
 
+const organizationId = toSafeId<"organization">("org-table-chart");
+const generation = {
+  role: "fast",
+  dataClass: "customer",
+  orgAIConfig: null,
+  managedAIResidency: "eu",
+  organizationId,
+  admission: testModelAdmission(organizationId, "chat.table-chart"),
+  tenantWorkspaceIds: [],
+  serviceTier: "standard",
+  caching: { enabled: false, reason: "org-disabled" },
+  prompt: "Decide the chart of the supplied table.",
+} as const;
+
 const plan = async (decide: TableChartDecisionCaller) =>
   await planTableChart({
     table,
     decide,
-    decisionOptions: { orgAIConfig: null },
+    decisionOptions: { orgAIConfig: null, generation },
   });
 
 describe("table chart decisions", () => {
@@ -133,7 +149,7 @@ describe("table chart decisions", () => {
       await planTableChart({
         table: { ...table, rows: [["2024", "1,234"]] },
         decide: askWith(decisions()),
-        decisionOptions: { orgAIConfig: null },
+        decisionOptions: { orgAIConfig: null, generation },
       }),
     ).toEqual({ status: "unavailable" });
   });
@@ -153,7 +169,11 @@ describe("table chart decisions", () => {
     const controller = new AbortController();
     const result = await planTableChart({
       table,
-      decisionOptions: { orgAIConfig: null, abortSignal: controller.signal },
+      decisionOptions: {
+        orgAIConfig: null,
+        generation,
+        abortSignal: controller.signal,
+      },
       decide: async () => {
         controller.abort();
         return await Promise.reject(
@@ -184,7 +204,7 @@ describe("table chart decisions", () => {
       const bounded = v.parse(tableChartRequestSchema, { headers, rows });
       await planTableChart({
         table: bounded,
-        decisionOptions: { orgAIConfig: null },
+        decisionOptions: { orgAIConfig: null, generation },
         decide: async ({ state, questions }) => {
           const body = serializeSystemOneRequest({
             state,

@@ -13,7 +13,10 @@ import type {
 
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import type { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type {
+  decideMany,
+  DecisionGenerationOptions,
+} from "@/api/lib/workflow/decisions/decide";
 import { choice } from "@/api/lib/workflow/decisions/system-one";
 import type { ChoiceQuestion } from "@/api/lib/workflow/decisions/system-one";
 
@@ -62,13 +65,18 @@ export type TableChartDecisionCaller = typeof decideMany<
   Record<string, ChoiceQuestion>
 >;
 
+type TableChartDecisionOptions = Pick<
+  Parameters<typeof decideMany>[0],
+  "orgAIConfig" | "abortSignal" | "usageMetering"
+> & {
+  /** The org generative fallback; customer tables never leave admission. */
+  generation: Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
+};
+
 type PlanTableChartOptions = {
   table: TableChartRequest;
   decide: TableChartDecisionCaller;
-  decisionOptions: Omit<
-    Parameters<typeof decideMany>[0],
-    "questions" | "state" | "id" | "dataClass"
-  >;
+  decisionOptions: TableChartDecisionOptions;
 };
 
 export const planTableChart = async ({

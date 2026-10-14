@@ -6,7 +6,13 @@ import { tableChartRequestSchema } from "@stll/api-contract/table-chart";
 
 import type { TableChartDecisionCaller } from "@/api/handlers/chat/table-chart-plan";
 import { planTableChart } from "@/api/handlers/chat/table-chart-plan";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import { resolveCaching } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -32,6 +38,9 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
       actionSignal,
       body,
       orgAIConfig,
+      managedAIResidency,
+      modelAdmission,
+      promptCachingEnabled,
       request,
       safeDb,
       session,
@@ -47,21 +56,49 @@ export const createTableChart = ({ decide }: CreateTableChartOptions) =>
           }),
         );
       }
+      const admission = configuredModelAdmission({ modelAdmission });
+      const abortSignal = actionSignal ?? request.signal;
+      const usageMetering = {
+        actionType: "chat",
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        userId: user.id,
+        workspaceId: null,
+        serviceTier: "standard",
+      } as const;
       return Result.ok(
         await planTableChart({
           table: table.output,
           decide,
           decisionOptions: {
             orgAIConfig,
-            abortSignal: actionSignal ?? request.signal,
-            usageMetering: {
-              actionType: "chat",
+            abortSignal,
+            usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
+            generation: {
+              dataClass: "customer",
+              orgAIConfig,
+              managedAIResidency,
               organizationId: session.activeOrganizationId,
-              safeDb,
-              userId: user.id,
-              workspaceId: null,
+              admission,
+              tenantWorkspaceIds: [],
+              role: "fast",
               serviceTier: "standard",
-              callId: Bun.randomUUIDv7(),
+              caching: resolveCaching({
+                promptCachingEnabled,
+                role: "fast",
+                scopeKey: null,
+              }),
+              prompt: "Decide the chart of the supplied table.",
+              analytics: createTanStackAIAnalyticsCallbacks({
+                dataClass: "customer",
+                feature: "chat.table-chart",
+                modelRole: "fast",
+                orgAIConfig,
+                modelTier: admission.modelTier,
+                organizationId: session.activeOrganizationId,
+                traceId: Bun.randomUUIDv7(),
+                usageMetering,
+              }),
             },
           },
         }),
