@@ -285,7 +285,7 @@ test("the index only lists currently published jurisdictions", async () => {
 
 test("a pending public jurisdiction reports unavailability before reading its stored statutes", async () => {
   const response = await listStatuteSitemapStatutesHandler(
-    { country: "svk" },
+    { country: "pol" },
     () => panic("A pending country must not read the statute database"),
   );
   expect(response).toMatchObject({
@@ -293,7 +293,7 @@ test("a pending public jurisdiction reports unavailability before reading its st
     response: {
       code: "public_country_unavailable",
       status: "unavailable",
-      country: "SVK",
+      country: "POL",
       reason: "pending_public",
     },
   });

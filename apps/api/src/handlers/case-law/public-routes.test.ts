@@ -157,7 +157,7 @@ describe("public case-law routes", () => {
       expect(await response.json()).toMatchObject({
         status: "unavailable",
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
         code: "public_country_unavailable",
       });
     }

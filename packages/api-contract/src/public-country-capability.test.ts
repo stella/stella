@@ -32,7 +32,7 @@ describe("public country availability contract", () => {
     expect(ADMITTED_PUBLIC_COUNTRIES).toEqual(PUBLIC_CASE_LAW_COUNTRIES);
     expect(PUBLIC_LEGISLATION_COUNTRIES).toEqual(ADMITTED_PUBLIC_COUNTRIES);
     expect(PUBLIC_COUNTRY_CAPABILITIES.CZE).toBe("admitted");
-    expect(PUBLIC_COUNTRY_CAPABILITIES.SVK).toBe("pending_public");
+    expect(PUBLIC_COUNTRY_CAPABILITIES.SVK).toBe("pages_public");
     for (const country of PUBLIC_COUNTRIES) {
       const unavailable = publicCountryUnavailable(country, "search");
       if (PUBLIC_COUNTRY_CAPABILITIES[country] === "admitted") {

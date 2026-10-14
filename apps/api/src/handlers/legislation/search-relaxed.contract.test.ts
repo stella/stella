@@ -893,7 +893,7 @@ describe.skipIf(!runEngineTests)(
         response: {
           code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
           country: "SVK",
-          reason: "pending_public",
+          reason: "pages_public",
         },
       });
       expect(searchCalls.length).toBe(callStart);

@@ -2940,7 +2940,7 @@ describe("OpenAI-compatible MCP tools", () => {
       expect(result.structuredContent).toMatchObject({
         status: "unavailable",
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
       });
       expect(result.structuredContent).not.toHaveProperty("results");
     }

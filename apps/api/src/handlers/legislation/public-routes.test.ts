@@ -65,7 +65,7 @@ describe("public statute routes", () => {
       response: {
         status: "unavailable",
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
       },
     });
     for (const request of requests) {
@@ -76,7 +76,7 @@ describe("public statute routes", () => {
       expect(await response.json()).toMatchObject({
         status: "unavailable",
         country: "SVK",
-        reason: "pending_public",
+        reason: "pages_public",
       });
     }
   });

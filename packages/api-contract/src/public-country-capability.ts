@@ -49,7 +49,7 @@ export const PUBLIC_COUNTRY_CAPABILITIES = {
   EU: "pending_public",
   HUN: "pending_public",
   POL: "pending_public",
-  SVK: "pending_public",
+  SVK: "pages_public",
   USA: "pending_public",
 } as const satisfies Record<string, PublicCountryCapability>;
 
