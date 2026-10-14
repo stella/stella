@@ -1064,10 +1064,6 @@
     "reason": "Existing spansSchema UI validation or presentation bound; contract migration pending."
   },
   {
-    "id": "apps/web/src/components/matter-icon.tsx::ALL_MATTERS_STACK_COLORS::domain:[\"var(--option-red)\",\"var(--option-blue)\",\"var(--option-green)\"]::1",
-    "reason": "Existing ALL_MATTERS_STACK_COLORS domain; contract ownership pending migration."
-  },
-  {
     "id": "apps/web/src/components/pdf/versions-sidebar.tsx::MENU_OWNED_KEYS::domain:[\"Escape\",\"ArrowDown\",\"ArrowUp\"]::1",
     "reason": "Existing MENU_OWNED_KEYS domain; contract ownership pending migration."
   },

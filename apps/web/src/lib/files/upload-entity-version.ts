@@ -5,6 +5,7 @@ import { sha256Hex as hashSha256Hex } from "@stll/sha256/browser";
 
 import { api } from "@/lib/api";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
+import { withActiveUpload } from "@/lib/files/active-uploads";
 import { toSafeId } from "@/lib/safe-id";
 
 import {
@@ -74,45 +75,48 @@ export const uploadEntityVersion = async ({
       );
   }
 
-  signal?.throwIfAborted();
-  const sha256Hex = await hashSha256Hex(fileToUpload);
-  signal?.throwIfAborted();
+  // The page holds the bytes until this settles, so a reload must prompt.
+  return await withActiveUpload(async () => {
+    signal?.throwIfAborted();
+    const sha256Hex = await hashSha256Hex(fileToUpload);
+    signal?.throwIfAborted();
 
-  const wsClient = api.uploads({
-    workspaceId: toSafeId<"workspace">(workspaceId),
-  });
-  const presign = await wsClient.presign.post(
-    {
-      purpose: "entity_version",
-      entityId: toSafeId<"entity">(entityId),
-      name: fileToUpload.name,
-      mimeType: fileToUpload.type || "application/octet-stream",
-      size: fileToUpload.size,
-      sha256Hex,
-    },
-    signal ? { fetch: { signal } } : undefined,
-  );
-  const { uploadId, url, headers } = unwrapEden(presign);
+    const wsClient = api.uploads({
+      workspaceId: toSafeId<"workspace">(workspaceId),
+    });
+    const presign = await wsClient.presign.post(
+      {
+        purpose: "entity_version",
+        entityId: toSafeId<"entity">(entityId),
+        name: fileToUpload.name,
+        mimeType: fileToUpload.type || "application/octet-stream",
+        size: fileToUpload.size,
+        sha256Hex,
+      },
+      signal ? { fetch: { signal } } : undefined,
+    );
+    const { uploadId, url, headers } = unwrapEden(presign);
 
-  await completeEntityVersionUpload({
-    abort: async () => await abortUpload(workspaceId, uploadId),
-    finalize: async () => {
-      const response = await wsClient({ uploadId }).finalize.post(
-        undefined,
-        signal ? { fetch: { signal } } : undefined,
-      );
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
-    put: async () =>
-      await fetchWithTimeout(url, {
-        method: "PUT",
-        headers,
-        body: fileToUpload,
-        signal,
-        timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
-      }),
+    await completeEntityVersionUpload({
+      abort: async () => await abortUpload(workspaceId, uploadId),
+      finalize: async () => {
+        const response = await wsClient({ uploadId }).finalize.post(
+          undefined,
+          signal ? { fetch: { signal } } : undefined,
+        );
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+      },
+      put: async () =>
+        await fetchWithTimeout(url, {
+          method: "PUT",
+          headers,
+          body: fileToUpload,
+          signal,
+          timeoutMs: UPLOAD_PUT_TIMEOUT_MS,
+        }),
+    });
+    return { type: ENTITY_VERSION_UPLOAD_RESULT.uploaded };
   });
-  return { type: ENTITY_VERSION_UPLOAD_RESULT.uploaded };
 };

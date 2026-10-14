@@ -1,0 +1,14 @@
+name: Save scoped store after job work
+description: Non-fatal zstd cache save with a progress-based stall watchdog.
+inputs:
+  key:
+    description: Exact sealed install-store key.
+    required: true
+  path:
+    description: Absolute sealed install-store directory.
+    required: true
+runs:
+  using: node24
+  main: index.mjs
+  post: index.mjs
+  post-if: always()

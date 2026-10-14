@@ -5,6 +5,7 @@ import {
   type DecisionParagraphRange,
   decisionParagraphFragment,
 } from "@stll/api-contract/decision-paragraph-range";
+import { DECISION_READER_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
@@ -14,7 +15,6 @@ import {
   brandPersistedLegislationDocumentId,
 } from "@/api/lib/safe-id-boundaries";
 
-import { DECISION_READER_RESOURCE_URI } from "./apps/resource-uri";
 import type { McpRequestContext } from "./context";
 import {
   blocksDecisionOutput,
