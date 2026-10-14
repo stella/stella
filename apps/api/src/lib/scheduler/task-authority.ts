@@ -237,7 +237,7 @@ export const SCHEDULER_TASK_AUTHORITY = {
   ),
   "dataExports.maintain": platform(
     "data-export-maintenance.ts",
-    "Deletes expired export files and fails stalled runs; queued exports are handed back to their queue, whose worker reads as the requester's membership.",
+    "Marks exports past their expiry as expired (the bucket lifecycle deletes their files) and resumes or fails stalled runs; queued exports are handed back to their queue, whose worker reads as the requester's membership.",
   ),
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",

@@ -12,7 +12,8 @@ import {
 
 /** Lifecycle of one organisation data export. `queued` on insert, `running`
  *  while the worker packs parts, then `ready` or `failed`; a `ready` export
- *  becomes `expired` once its files are deleted. */
+ *  becomes `expired` once downloads close (the bucket lifecycle deletes the
+ *  files). */
 export const DATA_EXPORT_STATUSES = [
   "queued",
   "running",
@@ -32,9 +33,10 @@ export const ACTIVE_DATA_EXPORT_STATUSES = [
  *  `scope.versions`. */
 export const DATA_EXPORT_VERSION_SCOPE_VALUES = ["all", "current"] as const;
 
-/** A file that needs attention; mirrors the manifest's `problems`. */
+/** Something that needs attention; mirrors the manifest's `problems`. */
 export type DataExportProblemRecord =
   | { reason: "missing" | "fetch_failed"; path: string; fileId: string }
+  | { reason: "matter_unavailable"; matterId: string }
   | {
       reason: "checksum_mismatch";
       path: string;
@@ -67,14 +69,23 @@ export type DataExportPlanRecord = {
   bytesTotal: number;
 };
 
-/** Attempts (first run plus resumes) before an export is failed for good. */
-export const DATA_EXPORT_MAX_ATTEMPTS = 5;
+/** Failed attempts before an export is failed for good. A resume after a
+ *  graceful shutdown is not a failure and does not count. */
+export const DATA_EXPORT_MAX_FAILURES = 5;
 
 const sqlValues = (values: readonly string[]) =>
   sql.join(
     values.map((value) => sql.raw(`'${value}'`)),
     sql`, `,
   );
+
+/**
+ * The one-active-export index predicate as literal SQL. An `ON CONFLICT`
+ * that names the partial index must repeat it with literals: a bound
+ * parameter stops matching the index once Postgres switches to a generic
+ * plan.
+ */
+export const ACTIVE_DATA_EXPORT_PREDICATE = sql`status IN (${sqlValues(ACTIVE_DATA_EXPORT_STATUSES)})`;
 
 export const organizationDataExports = p.pgTable(
   "organization_data_exports",
@@ -107,8 +118,12 @@ export const organizationDataExports = p.pgTable(
     plan: jsonb("plan").$type<DataExportPlanRecord>(),
     // Finished parts, appended as each one is committed: the checkpoint.
     parts: jsonb("parts").$type<DataExportPartRecord[]>().notNull().default([]),
-    // Runs started for this export; a resume after a restart is one more.
+    // Runs started for this export, resumes included. Fences run-owned
+    // writes: a superseded run's attempt no longer matches.
     attempts: p.integer("attempts").notNull().default(0),
+    // Attempts that ended in an error or a lost worker; bounded by
+    // DATA_EXPORT_MAX_FAILURES.
+    failures: p.integer("failures").notNull().default(0),
     // Files the manifest lists under `problems`.
     problemCount: p.integer("problem_count").notNull().default(0),
     error: p.text("error"),

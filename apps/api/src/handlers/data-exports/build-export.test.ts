@@ -215,15 +215,25 @@ const organizationFixture = (): SourceOrganizationRecords => ({
 type RunOptions = {
   partTargetBytes?: number;
   completedParts?: CompletedPart[];
+  beforePart?: () => Promise<void>;
+  source?: ExportSource;
 };
 
 const run = async (
   world: FakeWorld,
-  { partTargetBytes = 1_000_000, completedParts = [] }: RunOptions = {},
+  {
+    partTargetBytes = 1_000_000,
+    completedParts = [],
+    beforePart = async () => {},
+    source = fakeSource(world),
+  }: RunOptions = {},
 ) => {
   const memory = memorySink();
-  const source = fakeSource(world);
-  const plan = await planDataExport({ source, partTargetBytes });
+  const plan = await planDataExport({
+    source,
+    partTargetBytes,
+    scope: { versions: "all" },
+  });
   const checkpoints: CompletedPart[] = [];
   let paced = 0;
   const manifest = await buildDataExport({
@@ -240,6 +250,7 @@ const run = async (
       paced += 1;
     },
     signal: new AbortController().signal,
+    beforePart,
     onPartComplete: async (part) => {
       checkpoints.push(part);
     },
@@ -463,7 +474,11 @@ describe("organisation data export builder", () => {
   test("stops between files when its signal aborts", async () => {
     const controller = new AbortController();
     const source = fakeSource(basicWorld());
-    const plan = await planDataExport({ source, partTargetBytes: 10 });
+    const plan = await planDataExport({
+      source,
+      partTargetBytes: 10,
+      scope: { versions: "all" },
+    });
     const checkpoints: CompletedPart[] = [];
     const rejection = await rejectionOf(
       buildDataExport({
@@ -480,6 +495,7 @@ describe("organisation data export builder", () => {
           controller.abort();
         },
         signal: controller.signal,
+        beforePart: async () => {},
         onPartComplete: async (part) => {
           checkpoints.push(part);
         },
@@ -512,5 +528,33 @@ describe("organisation data export builder", () => {
     }
     const broken: PartManifest | undefined = partManifests[0];
     expect(validate({ ...broken, formatVersion: 2 })).toBe(false);
+  });
+
+  test("records a planned matter that can no longer be read instead of dropping it", async () => {
+    const world = basicWorld();
+    const source = fakeSource(world);
+    const gone: ExportSource = {
+      ...source,
+      // Planned (listed) but unreadable when its part is built.
+      loadMatter: async (matterId, scope) =>
+        matterId === "m-2" ? null : await source.loadMatter(matterId, scope),
+    };
+    const { manifest } = await run(world, { source: gone });
+    expect(manifest.problems).toEqual([
+      { reason: "matter_unavailable", matterId: "m-2" },
+    ]);
+    expect(manifest.parts.flatMap((part) => part.matterIds)).toEqual(["m-1"]);
+  });
+
+  test("stops before a part when the run may no longer continue", async () => {
+    const refusal = new Error("requester lost the export permission");
+    const rejection = await rejectionOf(
+      run(basicWorld(), {
+        beforePart: async () => {
+          throw refusal;
+        },
+      }),
+    );
+    expect(rejection).toBe(refusal);
   });
 });

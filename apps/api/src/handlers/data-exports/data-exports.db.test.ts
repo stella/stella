@@ -1,28 +1,34 @@
 /**
- * Organisation data exports against a real (PGlite) database: who may run
- * one, what one organisation can see of another's exports, that a run
- * carries every version of every document the requester's organisation
- * holds, and that expiry removes files before it marks a row expired.
+ * Organisation data exports against a real (PGlite) database: who may start
+ * and run one, what one organisation can see of another's exports, that a
+ * run carries every version of every client-matter document and never a
+ * personal matter, that only the claimed attempt may write, and that expiry
+ * only marks rows (the bucket lifecycle deletes the files).
  */
 
 import { Result } from "better-result";
 import { afterAll, describe, expect, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import JSZip from "jszip";
 import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
-  DATA_EXPORT_MAX_ATTEMPTS,
+  ACTIVE_DATA_EXPORT_PREDICATE,
+  DATA_EXPORT_MAX_FAILURES,
   entities,
   entityVersions,
   fields,
   organizationDataExports,
+  workspaceMembers,
+  workspaces,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { createSafeDb } from "@/api/db/scoped";
+import type { ExportSource } from "@/api/handlers/data-exports/build-export";
 import createDataExport from "@/api/handlers/data-exports/create";
 import {
   DATA_EXPORT_FAILURE_MESSAGE,
@@ -34,11 +40,18 @@ import { createExportSource } from "@/api/handlers/data-exports/export-source";
 import readDataExport from "@/api/handlers/data-exports/get";
 import listDataExports from "@/api/handlers/data-exports/list";
 import { partManifestSchema } from "@/api/handlers/data-exports/manifest-schema";
+import {
+  DATA_EXPORT_START_OUTCOME,
+  startDataExport,
+} from "@/api/handlers/data-exports/start-export";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DATA_EXPORT_RETENTION_MS } from "@/api/lib/data-export-queue";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { createRootMembershipScopedDb } from "@/api/lib/root-scoped-db";
+import {
+  createRootMembershipScopedDb,
+  createRootScopedDb,
+} from "@/api/lib/root-scoped-db";
 import { DueSlot } from "@/api/lib/scheduler/due-slot";
 import { createMaintainDataExportsTask } from "@/api/lib/scheduler/tasks/data-export-maintenance";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
@@ -177,15 +190,25 @@ const memorySink = () => {
   };
 };
 
+type RunForOptions = {
+  /** Wraps the database-backed source, to act between run steps. */
+  wrapSource?: (source: ExportSource) => ExportSource;
+  controller?: AbortController;
+};
+
 const runFor = async (
   userId: SafeId<"user">,
   exportId: SafeId<"dataExport">,
+  {
+    wrapSource = (source) => source,
+    controller = new AbortController(),
+  }: RunForOptions = {},
 ) => {
   const db = createRootMembershipScopedDb(
     { organizationId: ids.orgA, userId },
     database,
   );
-  const signal = new AbortController().signal;
+  const signal = controller.signal;
   const pace = async () => {};
   const source = createExportSource({
     db,
@@ -203,7 +226,7 @@ const runFor = async (
     { exportId, organizationId: ids.orgA, userId },
     {
       db,
-      source: {
+      source: wrapSource({
         ...source,
         readFile: async (ref) => {
           const data =
@@ -218,7 +241,7 @@ const runFor = async (
                 })(),
               };
         },
-      },
+      }),
       sink: memory.sink,
       writeManifest: async (bytes) => {
         manifest = bytes;
@@ -444,6 +467,7 @@ describe("data export maintenance", () => {
       status: "running",
       requestedBy: ids.userAdmin,
       attempts: 1,
+      failures: 0,
       createdAt: new Date(now.getTime() - 2 * 60 * 60 * 1000),
       heartbeatAt: new Date(now.getTime() - 60 * 60 * 1000),
     });
@@ -451,7 +475,8 @@ describe("data export maintenance", () => {
       organizationId: ids.orgB,
       status: "running",
       requestedBy: ids.userB1,
-      attempts: DATA_EXPORT_MAX_ATTEMPTS,
+      attempts: DATA_EXPORT_MAX_FAILURES,
+      failures: DATA_EXPORT_MAX_FAILURES - 1,
       heartbeatAt: new Date(now.getTime() - 60 * 60 * 1000),
     });
     const enqueued: string[] = [];
@@ -484,5 +509,262 @@ describe("data export maintenance", () => {
     const statusById = new Map(rows.map((row) => [row.id, row.status]));
     expect(statusById.get(stale)).toBe("queued");
     expect(statusById.get(exhausted)).toBe("failed");
+  });
+});
+
+const setRole = async (memberId: string, role: "member" | "admin") => {
+  await testDb.update(member).set({ role }).where(eq(member.id, memberId));
+};
+
+const statusOf = async (exportId: SafeId<"dataExport">) =>
+  (
+    await testDb
+      .select({
+        status: organizationDataExports.status,
+        error: organizationDataExports.error,
+        attempts: organizationDataExports.attempts,
+        failures: organizationDataExports.failures,
+      })
+      .from(organizationDataExports)
+      .where(eq(organizationDataExports.id, exportId))
+  ).at(0);
+
+describe("personal matters", () => {
+  test("are never exported, whoever runs the export", async () => {
+    // A personal matter (no client) of member A1, who is promoted to admin
+    // for this test, so both admins of the organisation run an export.
+    const personalId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    await testDb.insert(workspaces).values({
+      id: personalId,
+      organizationId: ids.orgA,
+      clientId: null,
+      name: "Personal notes",
+      reference: `P-${personalId.slice(0, 8)}`,
+      status: "active",
+    });
+    await testDb.insert(workspaceMembers).values({
+      id: toSafeId<"workspaceMember">(Bun.randomUUIDv7()),
+      workspaceId: personalId,
+      userId: ids.userA1,
+    });
+    await setRole(ids.memberA1org, "admin");
+    try {
+      for (const userId of [ids.userA1, ids.userAdmin]) {
+        const exportId = await insertExport({
+          organizationId: ids.orgA,
+          requestedBy: userId,
+        });
+        // db-await-in-loop: two sequential export runs; each needs the organisation's single export slot
+        const { outcome, memory } = await runFor(userId, exportId);
+        expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.READY);
+        const [partChunks] = [...memory.parts.values()];
+        const zip = await JSZip.loadAsync(Buffer.concat(partChunks ?? []));
+        const manifest = v.parse(
+          partManifestSchema,
+          JSON.parse((await zip.file("manifest.json")?.async("string")) ?? ""),
+        );
+        const matterIds = manifest.matters.map((matter) => matter.id);
+        expect(matterIds).toContain(ids.wsA1);
+        expect(matterIds).not.toContain(personalId);
+        expect(Object.keys(zip.files).join("\n")).not.toContain(
+          "Personal notes",
+        );
+      }
+    } finally {
+      await setRole(ids.memberA1org, "member");
+      await testDb.delete(workspaces).where(eq(workspaces.id, personalId));
+    }
+  });
+});
+
+describe("starting an export", () => {
+  const scopedDb = createRootScopedDb(
+    { organizationId: ids.orgB, userId: ids.userB1, workspaceIds: [] },
+    database,
+  );
+  const start = async () =>
+    await scopedDb(
+      async (tx) =>
+        await startDataExport({
+          tx,
+          organizationId: ids.orgB,
+          userId: ids.userB1,
+          versions: "all",
+          recordAuditEvent: async () => {},
+        }),
+    );
+  const finishActive = async () => {
+    await testDb
+      .update(organizationDataExports)
+      .set({ status: "failed" })
+      .where(
+        and(
+          eq(organizationDataExports.organizationId, ids.orgB),
+          ACTIVE_DATA_EXPORT_PREDICATE,
+        ),
+      );
+  };
+
+  test("starts one export and returns it while it is active", async () => {
+    await finishActive();
+    const first = await start();
+    expect(first.outcome).toBe(DATA_EXPORT_START_OUTCOME.STARTED);
+    const second = await start();
+    expect(second.outcome).toBe(DATA_EXPORT_START_OUTCOME.ALREADY_ACTIVE);
+    expect(second.row?.id).toBe(first.row?.id ?? "");
+    if (first.row !== null) {
+      createdExportIds.push(first.row.id);
+    }
+    await finishActive();
+  });
+
+  test("lets only one of two concurrent requests start an export", async () => {
+    await finishActive();
+    const results = await Promise.all([start(), start()]);
+    const started = results.filter(
+      (result) => result.outcome === DATA_EXPORT_START_OUTCOME.STARTED,
+    );
+    expect(started).toHaveLength(1);
+    expect(new Set(results.map((result) => result.row?.id)).size).toBe(1);
+    for (const result of started) {
+      if (result.row !== null) {
+        createdExportIds.push(result.row.id);
+      }
+    }
+    await finishActive();
+  });
+
+  test("keeps matching the partial index under a generic plan", async () => {
+    await finishActive();
+    // The insert exactly as the start path builds it, prepared once and
+    // executed more times than Postgres takes to switch to a generic plan.
+    const query = testDb
+      .insert(organizationDataExports)
+      .values({
+        organizationId: ids.orgB,
+        requestedBy: ids.userB1,
+        versionScope: "all",
+      })
+      .onConflictDoNothing({
+        target: organizationDataExports.organizationId,
+        where: ACTIVE_DATA_EXPORT_PREDICATE,
+      })
+      .returning({ id: organizationDataExports.id })
+      .toSQL();
+    const literal = (value: unknown) =>
+      `'${String(value).replaceAll("'", "''")}'`;
+    await testDb.execute(sql.raw("SET plan_cache_mode = force_generic_plan"));
+    await testDb.execute(sql.raw(`PREPARE start_data_export AS ${query.sql}`));
+    try {
+      for (let execution = 0; execution < 7; execution++) {
+        // A fresh id per execution; the first starts an export, the rest
+        // meet the active one and do nothing.
+        const params = query.params.map((param, index) =>
+          index === 0 ? literal(Bun.randomUUIDv7()) : literal(param),
+        );
+        // db-await-in-loop: the test is repeated execution of one prepared statement
+        await testDb.execute(
+          sql.raw(`EXECUTE start_data_export(${params.join(", ")})`),
+        );
+      }
+    } finally {
+      await testDb.execute(sql.raw("DEALLOCATE start_data_export"));
+      await testDb.execute(sql.raw("RESET plan_cache_mode"));
+    }
+    const active = await testDb
+      .select({ id: organizationDataExports.id })
+      .from(organizationDataExports)
+      .where(
+        and(
+          eq(organizationDataExports.organizationId, ids.orgB),
+          ACTIVE_DATA_EXPORT_PREDICATE,
+        ),
+      );
+    expect(active).toHaveLength(1);
+    createdExportIds.push(...active.map((row) => row.id));
+    await finishActive();
+  });
+});
+
+describe("run ownership", () => {
+  test("a run superseded by a newer attempt cannot finish the export", async () => {
+    const exportId = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userAdmin,
+    });
+    const { outcome } = await runFor(ids.userAdmin, exportId, {
+      // While this attempt plans, the sweep hands the export to a newer
+      // attempt, which claims it.
+      wrapSource: (source) => ({
+        ...source,
+        listMatters: async (scope) => {
+          await testDb
+            .update(organizationDataExports)
+            .set({ attempts: sql`${organizationDataExports.attempts} + 1` })
+            .where(eq(organizationDataExports.id, exportId));
+          return await source.listMatters(scope);
+        },
+      }),
+    });
+    expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.SKIPPED);
+    const row = await statusOf(exportId);
+    expect(row?.status).toBe("running");
+    expect(row?.attempts).toBe(2);
+    await testDb
+      .update(organizationDataExports)
+      .set({ status: "failed" })
+      .where(eq(organizationDataExports.id, exportId));
+  });
+
+  test("stops before a part once the requester loses the permission", async () => {
+    await setRole(ids.memberA1org, "admin");
+    const exportId = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userA1,
+    });
+    try {
+      const { outcome, memory } = await runFor(ids.userA1, exportId, {
+        wrapSource: (source) => ({
+          ...source,
+          listMatters: async (scope) => {
+            await setRole(ids.memberA1org, "member");
+            return await source.listMatters(scope);
+          },
+        }),
+      });
+      expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.FAILED);
+      expect(memory.parts.size).toBe(0);
+      const row = await statusOf(exportId);
+      expect(row?.status).toBe("failed");
+      expect(row?.error).toBe(DATA_EXPORT_FAILURE_MESSAGE.notAuthorized);
+    } finally {
+      await setRole(ids.memberA1org, "member");
+    }
+  });
+
+  test("a graceful stop hands the run back without using up its failure budget", async () => {
+    const exportId = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userAdmin,
+    });
+    const controller = new AbortController();
+    const { outcome } = await runFor(ids.userAdmin, exportId, {
+      controller,
+      wrapSource: (source) => ({
+        ...source,
+        listMatters: async (scope) => {
+          controller.abort();
+          return await source.listMatters(scope);
+        },
+      }),
+    });
+    expect(outcome).toBe(DATA_EXPORT_RUN_OUTCOME.RESUMABLE);
+    const row = await statusOf(exportId);
+    expect(row?.status).toBe("queued");
+    expect(row?.failures).toBe(0);
+    await testDb
+      .update(organizationDataExports)
+      .set({ status: "failed" })
+      .where(eq(organizationDataExports.id, exportId));
   });
 });

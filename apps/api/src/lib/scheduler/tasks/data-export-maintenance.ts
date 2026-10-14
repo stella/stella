@@ -3,7 +3,7 @@ import { and, asc, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import type { AnyColumn } from "drizzle-orm";
 
 import {
-  DATA_EXPORT_MAX_ATTEMPTS,
+  DATA_EXPORT_MAX_FAILURES,
   organizationDataExports,
 } from "@/api/db/schema";
 import {
@@ -89,17 +89,23 @@ const expireReady = async ({ db, summary, now }: StepArgs) => {
 const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
   const staleBefore = new Date(now.getTime() - DATA_EXPORT_HEARTBEAT_STALE_MS);
   // A worker that vanished (crash, killed deploy) leaves its checkpoints:
-  // hand the run back so the next attempt resumes, unless it is out of
-  // attempts.
+  // hand the run back so the next attempt resumes. A lost worker counts as
+  // a failure (a graceful shutdown hands itself back without one); an
+  // export out of failures is failed. If the old worker is in fact alive,
+  // its writes stop matching here: they require `running` and the attempt
+  // number it claimed.
   // audit: skip - lifecycle bookkeeping for a run whose worker disappeared
   const resumed = await db
     .update(organizationDataExports)
-    .set({ status: "queued" })
+    .set({
+      status: "queued",
+      failures: sql`${organizationDataExports.failures} + 1`,
+    })
     .where(
       and(
         eq(organizationDataExports.status, "running"),
         before(organizationDataExports.heartbeatAt, staleBefore),
-        lt(organizationDataExports.attempts, DATA_EXPORT_MAX_ATTEMPTS),
+        lt(organizationDataExports.failures, DATA_EXPORT_MAX_FAILURES - 1),
       ),
     )
     .returning({ id: organizationDataExports.id });
@@ -112,7 +118,7 @@ const resumeStaleRuns = async ({ db, summary, now }: StepArgs) => {
       and(
         eq(organizationDataExports.status, "running"),
         before(organizationDataExports.heartbeatAt, staleBefore),
-        gte(organizationDataExports.attempts, DATA_EXPORT_MAX_ATTEMPTS),
+        gte(organizationDataExports.failures, DATA_EXPORT_MAX_FAILURES - 1),
       ),
     )
     .returning({ id: organizationDataExports.id });

@@ -88,9 +88,9 @@ export const enqueueDataExport = async ({
 
 /**
  * Object-key prefix holding every file of one export. It sits under the
- * root `exports/` prefix: the bucket's lifecycle rule there expires objects
- * a week after creation, a backstop behind the maintenance sweep, and the
- * `exports` signing keyspace scopes download URLs to the organisation.
+ * root `exports/` prefix: the bucket's lifecycle rule there deletes objects
+ * a week after creation (the only deletion mechanism), and the `exports`
+ * signing keyspace scopes download URLs to the organisation.
  */
 export const dataExportPrefix = ({
   organizationId,

@@ -16,7 +16,8 @@ export const DATA_EXPORT_SCHEMA_ID =
 export type DataExportVersionScope =
   (typeof DATA_EXPORT_VERSION_SCOPE_VALUES)[number];
 
-/** Entity kinds the manifest lists as documents: both carry files. */
+/** Entity kinds the manifest lists as documents: both carry files. Matter
+ *  tasks are exported as records; `link` entities are not exported. */
 export const EXPORTED_DOCUMENT_KINDS = ["document", "message"] as const;
 
 /** Why a stored file could not be put in the archive. */
@@ -144,10 +145,13 @@ const organizationRecordsSchema = v.strictObject({
 });
 
 /**
- * A file that needs attention. `missing` and `fetch_failed` files are not in
- * the archive. A `checksum_mismatch` file is in the archive as stored; its
- * file record carries the SHA-256 of those bytes, and `recordedSha256` is
- * the checksum recorded when it was uploaded.
+ * Something that needs attention. `missing` and `fetch_failed` files are
+ * not in the archive. A `checksum_mismatch` file is in the archive as
+ * stored; its file record carries the SHA-256 of those bytes, and
+ * `recordedSha256` is the checksum recorded when it was uploaded. A
+ * `matter_unavailable` matter was planned for this part but could no
+ * longer be read (deleted, or no longer visible to the requester), so none
+ * of it is in the archive.
  */
 const problemSchema = v.variant("reason", [
   v.strictObject({
@@ -160,6 +164,10 @@ const problemSchema = v.variant("reason", [
     path: archivePathSchema,
     fileId: idSchema,
     recordedSha256: sha256Schema,
+  }),
+  v.strictObject({
+    reason: v.literal("matter_unavailable"),
+    matterId: idSchema,
   }),
 ]);
 

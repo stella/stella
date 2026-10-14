@@ -26,6 +26,8 @@ import {
   ArchivePathAllocator,
   compressionForMimeType,
   sanitizeArchiveSegment,
+  SEGMENT_SUFFIX_RESERVE,
+  withSegmentSuffix,
 } from "@/api/handlers/data-exports/archive-paths";
 import {
   DATA_EXPORT_FORMAT,
@@ -151,8 +153,13 @@ export type SourceOrganizationRecords = {
 };
 
 export type ExportSource = {
-  /** Every matter in the export, in any order. */
-  listMatters: () => Promise<readonly SourceMatterSummary[]>;
+  /**
+   * Every matter in the export, in any order, sized for `scope`. Personal
+   * matters are never part of an organisation export.
+   */
+  listMatters: (
+    scope: DataExportVersionScope,
+  ) => Promise<readonly SourceMatterSummary[]>;
   /** `null` when the matter is gone since the export was planned. */
   loadMatter: (
     matterId: string,
@@ -170,7 +177,8 @@ export type PartSink = {
 };
 
 export type ExportSink = {
-  openPart: (fileName: string) => PartSink;
+  /** `estimatedBytes` is the plan's size for the part, for upload sizing. */
+  openPart: (fileName: string, estimatedBytes: number) => PartSink;
 };
 
 /** The fixed split of an export into parts, stored before packing starts. */
@@ -217,21 +225,17 @@ const byName = (
     normalizeUnicode(b.name, "NFC"),
   ) || compareCodeUnit(a.id, b.id);
 
-const splitExtension = (fileName: string) => {
-  const dotIndex = fileName.lastIndexOf(".");
-  return dotIndex <= 0
-    ? { stem: fileName, extension: "" }
-    : {
-        stem: fileName.slice(0, dotIndex),
-        extension: fileName.slice(dotIndex),
-      };
-};
-
-/** `Draft.docx` version 3 becomes `Draft (v3).docx`. */
-const versionedFileName = (fileName: string, versionNumber: number): string => {
-  const { stem, extension } = splitExtension(fileName);
-  return `${stem} (v${versionNumber})${extension}`;
-};
+/**
+ * `Draft.docx` version 3 becomes `Draft (v3).docx`, shortened by UTF-8
+ * bytes where needed so the segment, with room for a collision suffix,
+ * stays inside the 255-byte file-name limit.
+ */
+const versionedFileName = (fileName: string, versionNumber: number): string =>
+  withSegmentSuffix(
+    sanitizeArchiveSegment(fileName),
+    ` (v${versionNumber})`,
+    SEGMENT_SUFFIX_RESERVE.open,
+  );
 
 export const partFileName = ({
   exportId,
@@ -536,10 +540,7 @@ const matterEntries = async function* ({
           ? context.allocator.allocate(currentDir, file.fileName)
           : context.allocator.allocate(
               historyDir,
-              versionedFileName(
-                sanitizeArchiveSegment(file.fileName),
-                version.versionNumber,
-              ),
+              versionedFileName(file.fileName, version.versionNumber),
             );
         const written = yield* fileEntry({
           context,
@@ -666,7 +667,7 @@ const organizationEntries = async function* ({
     templateDirById.set(file.templateId, directory);
     const path = context.allocator.allocate(
       directory,
-      versionedFileName(sanitizeArchiveSegment(file.fileName), file.version),
+      versionedFileName(file.fileName, file.version),
     );
     const written = yield* fileEntry({
       context,
@@ -729,14 +730,16 @@ const sumTotals = (matters: readonly ManifestMatter[]) => {
 type PlanDataExportArgs = {
   source: ExportSource;
   partTargetBytes: number;
+  scope: { versions: DataExportVersionScope };
 };
 
 /** Fix the split into parts. Stored, so a resumed run packs the same parts. */
 export const planDataExport = async ({
   source,
   partTargetBytes,
+  scope,
 }: PlanDataExportArgs): Promise<ExportPlan> => {
-  const matters = (await source.listMatters()).toSorted(byName);
+  const matters = (await source.listMatters(scope.versions)).toSorted(byName);
   const organization = await source.loadOrganizationRecords();
   const organizationBytes = organization.templateFiles.reduce(
     (sum, file) => sum + file.sizeBytes,
@@ -781,6 +784,11 @@ type BuildDataExportArgs = {
   signal: AbortSignal;
   /** Awaited after each part is committed: the checkpoint. */
   onPartComplete: (part: CompletedPart) => Promise<void>;
+  /**
+   * Awaited before each part; throws to stop the run (for instance when the
+   * requester no longer holds the export permission).
+   */
+  beforePart: () => Promise<void>;
   /** Awaited after each matter. */
   onProgress?: (progress: ExportProgress) => Promise<void>;
   now?: () => Date;
@@ -804,6 +812,7 @@ export const buildDataExport = async ({
   pace,
   signal,
   onPartComplete,
+  beforePart,
   onProgress,
   now = () => new Date(),
 }: BuildDataExportArgs): Promise<ExportManifest> => {
@@ -838,6 +847,7 @@ export const buildDataExport = async ({
       continue;
     }
     signal.throwIfAborted();
+    await beforePart();
     const context: PartContext = {
       allocator: new ArchivePathAllocator(),
       problems: [],
@@ -870,8 +880,11 @@ export const buildDataExport = async ({
         signal.throwIfAborted();
         const matter = await source.loadMatter(matterId, scope.versions);
         await pace();
-        // Deleted since the plan was made: nothing of it is left to export.
-        if (matter !== null) {
+        // Planned but no longer readable: deleted since the plan was made, or
+        // out of the requester's reach. Recorded, never dropped silently.
+        if (matter === null) {
+          context.problems.push({ reason: "matter_unavailable", matterId });
+        } else {
           const label =
             matter.summary.reference.length > 0
               ? `${matter.summary.name} [${matter.summary.reference}]`
@@ -903,7 +916,7 @@ export const buildDataExport = async ({
     };
 
     const fileName = partFileName({ exportId, index: planned.index, count });
-    const partSink = sink.openPart(fileName);
+    const partSink = sink.openPart(fileName, planned.estimatedBytes);
     const hasher = createSha256();
     let sizeBytes = 0;
     for await (const chunk of writeZip(entries())) {

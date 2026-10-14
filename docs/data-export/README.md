@@ -1,8 +1,15 @@
 # stella data export format, version 1
 
-An organisation owner or admin can export everything the organisation keeps
-in stella through the `data-exports.*` capabilities (API, MCP and CLI). The
-export is a set of ZIP parts plus one export manifest. This page describes the format; the machine-readable
+An organisation owner or admin can export what the organisation keeps in
+stella through the `data-exports.*` capabilities (API, MCP and CLI). The
+export is a set of ZIP parts plus one export manifest.
+
+Scope: every client matter of the organisation with its folders, documents
+(all live versions, or only current ones), tasks, time entries and
+invoices, and the organisation's contacts, clauses, templates and time
+entries without a matter. Not included: personal matters (matters without
+a client, which belong to one member), deleted document versions, `link`
+entities, and custom property values. This page describes the format; the machine-readable
 contract is [`stella-data-export.v1.schema.json`](./stella-data-export.v1.schema.json),
 generated from `apps/api/src/handlers/data-exports/manifest-schema.ts`
 (`bun apps/api/scripts/generate-data-export-schema.ts`).
@@ -44,7 +51,9 @@ matters/<matter name> [<reference>]/
   archive). `problems` lists files that need attention: `missing` and
   `fetch_failed` files are not in the archive; a `checksum_mismatch` file is
   in the archive as stored, and `recordedSha256` is the checksum recorded
-  when it was uploaded.
+  when it was uploaded. A `matter_unavailable` entry names a matter that
+  was planned for the part but could no longer be read when the part was
+  built (deleted, or no longer visible); none of it is in the archive.
 - `documents[].currentVersionId` names the current version; `versions` is
   ordered by `versionNumber` and excludes deleted versions. With
   `scope.versions: "current"` only the current version is present.

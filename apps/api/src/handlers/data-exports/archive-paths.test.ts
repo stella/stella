@@ -7,7 +7,11 @@ import { normalizeUnicode } from "@stll/text-normalize";
 import {
   ArchivePathAllocator,
   compressionForMimeType,
+  MAX_SEGMENT_BYTES,
   sanitizeArchiveSegment,
+  SEGMENT_SUFFIX_RESERVE,
+  truncateUtf8,
+  withSegmentSuffix,
 } from "@/api/handlers/data-exports/archive-paths";
 import { ZIP_COMPRESSION } from "@/api/handlers/data-exports/zip-writer";
 
@@ -99,6 +103,49 @@ describe("export archive paths", () => {
         }
       }),
     );
+  });
+});
+
+describe("export file-name length", () => {
+  const bytes = (text: string) => new TextEncoder().encode(text).byteLength;
+  // Two-byte characters: 300 of them are 600 UTF-8 bytes but only 300
+  // UTF-16 units, so a character-count limit would let them through.
+  const longCzech = `${"Žluťoučký kůň úpěl ďábelské ódy ".repeat(10)}.docx`;
+
+  test("shortens long names by UTF-8 bytes and keeps the extension", () => {
+    expect(bytes(longCzech)).toBeGreaterThan(MAX_SEGMENT_BYTES);
+    const segment = sanitizeArchiveSegment(longCzech);
+    expect(bytes(segment)).toBeLessThanOrEqual(MAX_SEGMENT_BYTES);
+    expect(segment.endsWith(".docx")).toBe(true);
+    // Never cuts a character in half.
+    expect(segment).toBe(segment.toWellFormed());
+  });
+
+  test("keeps version and collision suffixes inside the limit", () => {
+    const allocator = new ArchivePathAllocator();
+    const versioned = withSegmentSuffix(
+      sanitizeArchiveSegment(longCzech),
+      " (v12)",
+      SEGMENT_SUFFIX_RESERVE.open,
+    );
+    const paths = [1, 2, 3].map((n) =>
+      allocator.allocate("dir", n === 1 ? longCzech : versioned),
+    );
+    paths.push(allocator.allocate("dir", versioned));
+    for (const path of paths) {
+      const segment = path.slice("dir/".length);
+      expect(bytes(segment)).toBeLessThanOrEqual(MAX_SEGMENT_BYTES);
+      expect(segment.endsWith(".docx")).toBe(true);
+    }
+    expect(paths[1]).toContain(" (v12)");
+    expect(paths[2]).toContain(" (v12) (2)");
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+
+  test("truncates at code-point boundaries", () => {
+    expect(truncateUtf8("ž😀a", 2)).toBe("ž");
+    expect(truncateUtf8("ž😀a", 5)).toBe("ž");
+    expect(truncateUtf8("ž😀a", 6)).toBe("ž😀");
   });
 });
 

@@ -757,6 +757,21 @@
                 },
                 "required": ["reason", "path", "fileId", "recordedSha256"],
                 "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "const": "matter_unavailable"
+                  },
+                  "matterId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                },
+                "required": ["reason", "matterId"],
+                "additionalProperties": false
               }
             ]
           }
@@ -975,6 +990,21 @@
                   }
                 },
                 "required": ["reason", "path", "fileId", "recordedSha256"],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "const": "matter_unavailable"
+                  },
+                  "matterId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 255
+                  }
+                },
+                "required": ["reason", "matterId"],
                 "additionalProperties": false
               }
             ]

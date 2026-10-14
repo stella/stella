@@ -1232,13 +1232,32 @@ export const openS3ObjectStream = async ({
       }),
   );
 
-/** Size of one multipart part; S3 allows at most 10,000 per object. */
-const STREAMING_UPLOAD_PART_BYTES = 16 * 1024 * 1024;
+/** S3 multipart limits: at most 10,000 parts of 5 MiB to 5 GiB each. */
+const MULTIPART_MAX_PARTS = 10_000;
+const MULTIPART_MAX_PART_BYTES = 5 * 1024 ** 3;
+/** Smallest part used: large enough to keep request counts low. */
+const STREAMING_UPLOAD_MIN_PART_BYTES = 16 * 1024 * 1024;
+/** An object's real size may exceed its estimate; parts leave room for it. */
+const STREAMING_UPLOAD_SIZE_HEADROOM = 2;
 const STREAMING_UPLOAD_QUEUE_SIZE = 4;
 const STREAMING_UPLOAD_PART_RETRIES = 3;
 
+/**
+ * The part size that fits an object of about `expectedBytes` (with
+ * headroom) into the multipart part limit, or `null` when no part size can.
+ */
+export const multipartPartBytes = (expectedBytes: number): number | null => {
+  const needed = Math.ceil(
+    (expectedBytes * STREAMING_UPLOAD_SIZE_HEADROOM) / MULTIPART_MAX_PARTS,
+  );
+  if (needed > MULTIPART_MAX_PART_BYTES) {
+    return null;
+  }
+  return Math.max(needed, STREAMING_UPLOAD_MIN_PART_BYTES);
+};
+
 export type S3StreamingUpload = {
-  /** Resolves once the chunk is buffered; applies backpressure. */
+  /** Resolves once the chunk is accepted; waits while a part is in flight. */
   write: (chunk: Uint8Array) => Promise<void>;
   /** Completes the multipart upload; the object exists only after this. */
   end: () => Promise<void>;
@@ -1247,19 +1266,27 @@ export type S3StreamingUpload = {
 type OpenS3StreamingUploadOptions = {
   key: string;
   contentType: string;
+  /** From `multipartPartBytes`. */
+  partBytes: number;
   /** The key must live under a prefix whose owner deletes it. */
   ownership: { type: "lifecycle-prefix"; prefix: string };
 };
 
 /**
  * Stream an object too large to hold in memory to `key` as a multipart
- * upload (16 MiB parts, at most 4 in flight, each part retried). Nothing is
- * visible at `key` until `end()` resolves; an upload that never ends leaves
- * only incomplete parts, which the bucket's multipart cleanup removes.
+ * upload (at most 4 parts in flight, each part retried). Nothing is visible
+ * at `key` until `end()` resolves; an upload that never ends leaves only
+ * incomplete parts, which the bucket lifecycle aborts.
+ *
+ * Bun's writer may accept a chunk synchronously (`write` returns a number)
+ * without waiting for the upload, so it is not a reliable backpressure
+ * signal: this flushes and awaits after each part's worth of bytes, which
+ * bounds what is buffered to about one part.
  */
 export const openS3StreamingUpload = ({
   key,
   contentType,
+  partBytes,
   ownership,
 }: OpenS3StreamingUploadOptions): S3StreamingUpload => {
   if (!key.startsWith(ownership.prefix)) {
@@ -1267,13 +1294,19 @@ export const openS3StreamingUpload = ({
   }
   const writer = getS3().file(key).writer({
     type: contentType,
-    partSize: STREAMING_UPLOAD_PART_BYTES,
+    partSize: partBytes,
     queueSize: STREAMING_UPLOAD_QUEUE_SIZE,
     retry: STREAMING_UPLOAD_PART_RETRIES,
   });
+  let unflushedBytes = 0;
   return {
     write: async (chunk) => {
       await writer.write(chunk);
+      unflushedBytes += chunk.byteLength;
+      if (unflushedBytes >= partBytes) {
+        unflushedBytes = 0;
+        await writer.flush();
+      }
     },
     end: async () => {
       await writer.end();

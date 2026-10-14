@@ -7,8 +7,8 @@ import {
   DATA_EXPORT_PAGE_SIZE_DEFAULT,
   DATA_EXPORT_PAGE_SIZE_MAX,
   dataExportCreatedAtCursor,
-  dataExportSummaryColumns,
-  toDataExportSummary,
+  dataExportListColumns,
+  toDataExportListItem,
 } from "@/api/handlers/data-exports/summary";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -21,7 +21,8 @@ const config = {
   contract: "patch",
   description:
     "List the organization's data exports, newest first, with status, " +
-    "progress, parts and expiry. Paginate with limit and cursor. " +
+    "progress, part count and expiry; data-exports.get lists the parts. " +
+    "Paginate with limit and cursor. " +
     "Organization owners and admins only.",
   permissions: { dataExport: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -59,7 +60,7 @@ const listDataExports = createSafeRootHandler(
       safeDb((tx) =>
         tx
           .select({
-            ...dataExportSummaryColumns,
+            ...dataExportListColumns,
             createdAtCursor:
               dataExportCreatedAtCursor.cursorValue.as("created_at_cursor"),
           })
@@ -95,7 +96,7 @@ const listDataExports = createSafeRootHandler(
     return Result.ok({
       ...page,
       items: page.items.map(({ createdAtCursor: _cursor, ...row }) =>
-        toDataExportSummary(row),
+        toDataExportListItem(row),
       ),
     });
   },

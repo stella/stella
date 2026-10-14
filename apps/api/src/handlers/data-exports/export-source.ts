@@ -6,6 +6,10 @@
 // matters, and nothing of another organisation. The export therefore never
 // needs a row-level-security bypass.
 //
+// Personal matters (no client) are never exported: an organisation export
+// is visible to every owner and admin, and a personal matter belongs to one
+// member. `isOrganizationMatter` is applied to every matter read.
+//
 // The export is low-priority work, so it reads gently: every query is one
 // keyset page (by id, on an indexed tenant column) in its own short
 // transaction, child rows are read for one page of parents at a time, and
@@ -13,7 +17,7 @@
 // File bytes are streamed, never read whole.
 
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { AnyColumn } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -115,6 +119,9 @@ const chunk = <T>(items: readonly T[], size: number): T[][] => {
   return chunks;
 };
 
+/** Client matters only: personal matters stay out of organisation exports. */
+const isOrganizationMatter = isNotNull(workspaces.clientId);
+
 // Keyset condition on a uuid id column; the cursor is the last id read.
 const after = (column: AnyColumn, afterId: string | null) =>
   afterId === null ? undefined : sql<boolean>`${column} > ${afterId}`;
@@ -180,12 +187,10 @@ const createPagedReader = ({
   },
 });
 
-const listMatters = async ({
-  db,
-  organizationId,
-  readAll,
-  readForParents,
-}: PagedReader): Promise<SourceMatterSummary[]> => {
+const listMatters = async (
+  { db, organizationId, readAll, readForParents }: PagedReader,
+  scope: DataExportVersionScope,
+): Promise<SourceMatterSummary[]> => {
   const matterRows = await readAll(
     async (afterId) =>
       await db(
@@ -203,6 +208,7 @@ const listMatters = async ({
               and(
                 eq(workspaces.organizationId, organizationId),
                 ne(workspaces.status, DELETING_STATUS),
+                isOrganizationMatter,
                 after(workspaces.id, afterId),
               ),
             )
@@ -229,10 +235,22 @@ const listMatters = async ({
                 eq(entityVersions.workspaceId, fields.workspaceId),
               ),
             )
+            .innerJoin(
+              entities,
+              and(
+                eq(entities.id, entityVersions.entityId),
+                eq(entities.workspaceId, entityVersions.workspaceId),
+              ),
+            )
             .where(
               and(
                 inArray(fields.workspaceId, ids),
                 isNull(entityVersions.deletedAt),
+                inArray(entities.kind, ["document", "message"]),
+                // Sized for what the export will carry.
+                scope === "current"
+                  ? eq(entities.currentVersionId, entityVersions.id)
+                  : undefined,
                 sql`${fields.content}->>'type' = 'file'`,
               ),
             )
@@ -513,6 +531,7 @@ const loadMatter = async (
             eq(workspaces.organizationId, reader.organizationId),
             eq(workspaces.id, workspaceId),
             ne(workspaces.status, DELETING_STATUS),
+            isOrganizationMatter,
           ),
         ),
   );
@@ -837,6 +856,9 @@ export const createExportSource = (
   // Filled by `loadOrganizationRecords`; template bytes are addressed by
   // their stored key, which never leaves this module.
   const templateKeys = new Map<string, string>();
+  // Planning and part 1 both need the organisation records; read them once
+  // per attempt.
+  let organizationRecords: Promise<SourceOrganizationRecords> | null = null;
 
   const readFile = async (ref: ExportFileRef): Promise<FileRead> => {
     switch (ref.type) {
@@ -863,11 +885,13 @@ export const createExportSource = (
   };
 
   return {
-    listMatters: async () => await listMatters(reader),
+    listMatters: async (scope) => await listMatters(reader, scope),
     loadMatter: async (matterId, scope) =>
       await loadMatter(reader, matterId, scope),
-    loadOrganizationRecords: async () =>
-      await loadOrganizationRecords(reader, templateKeys),
+    loadOrganizationRecords: async () => {
+      organizationRecords ??= loadOrganizationRecords(reader, templateKeys);
+      return await organizationRecords;
+    },
     readFile,
   };
 };

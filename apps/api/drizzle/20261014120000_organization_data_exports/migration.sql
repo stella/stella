@@ -17,6 +17,7 @@ CREATE TABLE "organization_data_exports" (
 	"plan" jsonb,
 	"parts" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"attempts" integer DEFAULT 0 NOT NULL,
+	"failures" integer DEFAULT 0 NOT NULL,
 	"problem_count" integer DEFAULT 0 NOT NULL,
 	"error" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

@@ -14,7 +14,8 @@ export const dataExportCreatedAtCursor = createTimestampIdCursorCodec({
   brandId: brandPersistedDataExportId,
 });
 
-export const dataExportSummaryColumns = {
+/** What a list row shows: no parts, so a page stays small. */
+export const dataExportListColumns = {
   id: organizationDataExports.id,
   status: organizationDataExports.status,
   versionScope: organizationDataExports.versionScope,
@@ -24,7 +25,6 @@ export const dataExportSummaryColumns = {
   bytesTotal: organizationDataExports.bytesTotal,
   bytesDone: organizationDataExports.bytesDone,
   partCount: organizationDataExports.partCount,
-  parts: organizationDataExports.parts,
   problemCount: organizationDataExports.problemCount,
   error: organizationDataExports.error,
   createdAt: organizationDataExports.createdAt,
@@ -33,10 +33,20 @@ export const dataExportSummaryColumns = {
   expiresAt: organizationDataExports.expiresAt,
 };
 
-type SummaryRow = {
+/** One export in full: the list row plus its finished parts. */
+export const dataExportSummaryColumns = {
+  ...dataExportListColumns,
+  parts: organizationDataExports.parts,
+};
+
+type ListRow = {
   [
-    K in keyof typeof dataExportSummaryColumns
+    K in keyof typeof dataExportListColumns
   ]: (typeof organizationDataExports.$inferSelect)[K];
+};
+
+type SummaryRow = ListRow & {
+  parts: (typeof organizationDataExports.$inferSelect)["parts"];
 };
 
 const iso = (value: Date | null): string | null =>
@@ -50,10 +60,7 @@ const ETA_MIN_BYTES_DONE = 50 * 1024 * 1024;
  * little to go on. Cheap and rough on purpose: the run is paced, so the
  * rate already reflects how much room it is given.
  */
-const estimateSecondsRemaining = (
-  row: SummaryRow,
-  now: Date,
-): number | null => {
+const estimateSecondsRemaining = (row: ListRow, now: Date): number | null => {
   if (
     row.status !== "running" ||
     row.startedAt === null ||
@@ -67,7 +74,8 @@ const estimateSecondsRemaining = (
   return Math.ceil((row.bytesTotal - row.bytesDone) / bytesPerSecond);
 };
 
-export const toDataExportSummary = (row: SummaryRow, now = new Date()) => ({
+/** A list row: lifecycle, progress and expiry, without parts. */
+export const toDataExportListItem = (row: ListRow, now = new Date()) => ({
   id: row.id,
   status: row.status,
   scope: { versions: row.versionScope },
@@ -79,6 +87,18 @@ export const toDataExportSummary = (row: SummaryRow, now = new Date()) => ({
     bytesDone: row.bytesDone,
     estimatedSecondsRemaining: estimateSecondsRemaining(row, now),
   },
+  partCount: row.partCount,
+  problemCount: row.problemCount,
+  error: row.error,
+  createdAt: row.createdAt.toISOString(),
+  startedAt: iso(row.startedAt),
+  completedAt: iso(row.completedAt),
+  expiresAt: iso(row.expiresAt),
+});
+
+/** One export in full: the list row plus its downloadable parts. */
+export const toDataExportSummary = (row: SummaryRow, now = new Date()) => ({
+  ...toDataExportListItem(row, now),
   // Parts are listed only once the export is ready; before that the count
   // is the plan, and after expiry the files are gone.
   parts:
@@ -92,11 +112,4 @@ export const toDataExportSummary = (row: SummaryRow, now = new Date()) => ({
           fileCount: part.fileCount,
         }))
       : [],
-  partCount: row.partCount,
-  problemCount: row.problemCount,
-  error: row.error,
-  createdAt: row.createdAt.toISOString(),
-  startedAt: iso(row.startedAt),
-  completedAt: iso(row.completedAt),
-  expiresAt: iso(row.expiresAt),
 });

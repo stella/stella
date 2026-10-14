@@ -16,12 +16,13 @@
  * It never deletes what it wrote: objects under `exports/` are removed by
  * the bucket lifecycle (see `data-export-queue.ts`).
  */
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { TaggedError } from "better-result";
+import { and, eq, sql } from "drizzle-orm";
 
 import { member, organization } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
-  DATA_EXPORT_MAX_ATTEMPTS,
+  DATA_EXPORT_MAX_FAILURES,
   organizationDataExports,
 } from "@/api/db/schema";
 import type {
@@ -67,7 +68,11 @@ import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootMembershipScopedDb } from "@/api/lib/root-scoped-db";
-import { openS3StreamingUpload, writeS3ObjectWithRetry } from "@/api/lib/s3";
+import {
+  multipartPartBytes,
+  openS3StreamingUpload,
+  writeS3ObjectWithRetry,
+} from "@/api/lib/s3";
 import {
   brandPersistedDataExportId,
   brandPersistedOrganizationId,
@@ -87,6 +92,8 @@ export const DATA_EXPORT_FAILURE_MESSAGE = {
   notAuthorized:
     "The export was stopped because its requester is no longer an organization owner or admin.",
   failed: "The export could not be completed. Please start a new export.",
+  partTooLarge:
+    "A matter is larger than one export part can hold. Contact support to export it.",
 } as const;
 
 export type DataExportRunDependencies = {
@@ -124,7 +131,52 @@ const ownRow = ({ exportId, organizationId }: RunIds) =>
     eq(organizationDataExports.organizationId, organizationId),
   );
 
-const markFailed = async (db: ScopedDb, ids: RunIds, message: string) => {
+/**
+ * Every write a run makes is fenced on the attempt it claimed: once the
+ * maintenance sweep hands a stalled run to a new attempt, the old worker's
+ * writes match nothing.
+ */
+const ownRun = (ids: RunIds, attempt: number) =>
+  and(
+    ownRow(ids),
+    eq(organizationDataExports.status, "running"),
+    eq(organizationDataExports.attempts, attempt),
+  );
+
+/** The requester lost the export permission while the run was going. */
+export class DataExportNotAuthorizedError extends TaggedError(
+  "DataExportNotAuthorizedError",
+)<{ message: string }> {}
+
+/** One part would exceed the largest object multipart upload can write. */
+export class DataExportPartTooLargeError extends TaggedError(
+  "DataExportPartTooLargeError",
+)<{ message: string }> {}
+
+const readAuthorized = async (
+  tx: Parameters<Parameters<ScopedDb>[0]>[0],
+  { organizationId, userId }: RunIds,
+): Promise<boolean> => {
+  const roles = await tx
+    .select({ role: member.role })
+    .from(member)
+    .where(
+      and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+    );
+  const role = roles.at(0)?.role;
+  return (
+    role !== undefined &&
+    isMemberRole(role) &&
+    hasCurrentMemberPermission(role, { dataExport: ["create"] })
+  );
+};
+
+const markFailed = async (
+  db: ScopedDb,
+  ids: RunIds,
+  attempt: number,
+  message: string,
+) => {
   await db(async (tx) => {
     // audit: skip - terminal bookkeeping on an export whose request is audited
     await tx
@@ -134,32 +186,102 @@ const markFailed = async (db: ScopedDb, ids: RunIds, message: string) => {
         error: message.slice(0, ERROR_MESSAGE_MAX_CHARS),
         completedAt: new Date(),
       })
-      .where(
-        and(
-          ownRow(ids),
-          inArray(organizationDataExports.status, ["queued", "running"]),
-        ),
-      );
+      .where(ownRun(ids, attempt));
   });
 };
 
+/** Why a run handed itself back to the queue. */
+const RESUME_REASON = {
+  /** Graceful shutdown: not a failure, does not use up the budget. */
+  SHUTDOWN: "shutdown",
+  FAILURE: "failure",
+} as const;
+type ResumeReason = (typeof RESUME_REASON)[keyof typeof RESUME_REASON];
+
 /** Hand a stopped run back to the queue, keeping its plan and parts. */
-const markResumable = async (db: ScopedDb, ids: RunIds) => {
+const markResumable = async (
+  db: ScopedDb,
+  ids: RunIds,
+  attempt: number,
+  reason: ResumeReason,
+) => {
   await db(async (tx) => {
     // audit: skip - lifecycle transition of an audited export request
     await tx
       .update(organizationDataExports)
-      .set({ status: "queued" })
-      .where(and(ownRow(ids), eq(organizationDataExports.status, "running")));
+      .set({
+        status: "queued",
+        failures:
+          reason === RESUME_REASON.FAILURE
+            ? sql`${organizationDataExports.failures} + 1`
+            : organizationDataExports.failures,
+      })
+      .where(ownRun(ids, attempt));
+  });
+};
+
+type MarkReadyArgs = {
+  db: ScopedDb;
+  ids: RunIds;
+  attempt: number;
+  values: {
+    problemCount: number;
+    mattersDone: number;
+    bytesDone: number;
+    completedAt: Date;
+    expiresAt: Date;
+  };
+  audit: { parts: number; problems: number };
+};
+
+/**
+ * Mark the export ready and audit it, only if `attempt` still owns the row.
+ * Returns false when a newer attempt has taken over.
+ */
+const markReady = async ({
+  db,
+  ids,
+  attempt,
+  values,
+  audit,
+}: MarkReadyArgs): Promise<boolean> => {
+  const recordAuditEvent = createBackgroundAuditRecorder({
+    execution: {
+      performer: { id: "data-export", name: "Data export", type: "service" },
+      trigger: { source: "action", type: "user_dispatch", userId: ids.userId },
+    },
+    organizationId: ids.organizationId,
+    workspaceId: null,
+    userId: ids.userId,
+  });
+  return await db(async (tx) => {
+    const updated = await tx
+      .update(organizationDataExports)
+      .set({ status: "ready", heartbeatAt: values.completedAt, ...values })
+      .where(ownRun(ids, attempt))
+      .returning({ id: organizationDataExports.id });
+    // Superseded by a newer attempt: that attempt owns the row now.
+    if (updated.length === 0) {
+      return false;
+    }
+    await recordAuditEvent(tx, {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.DATA_EXPORT,
+      resourceId: ids.exportId,
+      metadata: { status: "ready", ...audit },
+    });
+    return true;
   });
 };
 
 type ClaimedRun = {
   createdAt: Date;
+  startedAt: Date | null;
   versionScope: "all" | "current";
   plan: DataExportPlanRecord | null;
   parts: DataExportPartRecord[];
   attempts: number;
+  failures: number;
 };
 
 /**
@@ -174,16 +296,7 @@ export const runDataExport = async (
   const { exportId, organizationId, userId } = ids;
   const now = deps.now();
   const claimed = await deps.db(async (tx) => {
-    const roles = await tx
-      .select({ role: member.role })
-      .from(member)
-      .where(
-        and(
-          eq(member.organizationId, organizationId),
-          eq(member.userId, userId),
-        ),
-      );
-    const role = roles.at(0)?.role;
+    const authorized = await readAuthorized(tx, ids);
     // audit: skip - lifecycle transition of an audited export request
     const rows = await tx
       .update(organizationDataExports)
@@ -201,6 +314,7 @@ export const runDataExport = async (
         plan: organizationDataExports.plan,
         parts: organizationDataExports.parts,
         attempts: organizationDataExports.attempts,
+        failures: organizationDataExports.failures,
       });
     const orgRows = await tx
       .select({ name: organization.name })
@@ -208,23 +322,25 @@ export const runDataExport = async (
       .where(eq(organization.id, organizationId));
     return {
       row: rows.at(0),
-      authorized:
-        role !== undefined &&
-        isMemberRole(role) &&
-        hasCurrentMemberPermission(role, { dataExport: ["create"] }),
+      authorized,
       organizationName: orgRows.at(0)?.name ?? "",
     };
   });
   if (claimed.row === undefined) {
     return DATA_EXPORT_RUN_OUTCOME.SKIPPED;
   }
+  const run: ClaimedRun = claimed.row;
   // The read scope is the requester's live membership: a demoted admin
-  // would silently export only their own matters. Refuse instead.
+  // would silently export only part of the organisation. Refuse instead.
   if (!claimed.authorized) {
-    await markFailed(deps.db, ids, DATA_EXPORT_FAILURE_MESSAGE.notAuthorized);
+    await markFailed(
+      deps.db,
+      ids,
+      run.attempts,
+      DATA_EXPORT_FAILURE_MESSAGE.notAuthorized,
+    );
     return DATA_EXPORT_RUN_OUTCOME.FAILED;
   }
-  const run: ClaimedRun & { startedAt: Date | null } = claimed.row;
 
   const heartbeat = async (
     values: Partial<typeof organizationDataExports.$inferInsert>,
@@ -234,7 +350,7 @@ export const runDataExport = async (
       await tx
         .update(organizationDataExports)
         .set({ ...values, heartbeatAt: deps.now() })
-        .where(and(ownRow(ids), eq(organizationDataExports.status, "running")));
+        .where(ownRun(ids, run.attempts));
     });
   };
 
@@ -253,11 +369,13 @@ export const runDataExport = async (
   });
 
   try {
+    const scope = { versions: run.versionScope };
     const plan =
       run.plan ??
       (await planDataExport({
         source: deps.source,
         partTargetBytes: deps.partTargetBytes,
+        scope,
       }));
     if (run.plan === null) {
       await heartbeat({
@@ -272,13 +390,25 @@ export const runDataExport = async (
       organization: { id: organizationId, name: claimed.organizationName },
       requestedBy: userId,
       createdAt: run.createdAt,
-      scope: { versions: run.versionScope },
+      scope,
       plan,
       completedParts: run.parts,
       source: deps.source,
       sink: deps.sink,
       pace: deps.pace,
       signal: deps.signal,
+      // Each part re-checks the permission, so a requester demoted mid-run
+      // stops the export instead of silently narrowing what it reads.
+      beforePart: async () => {
+        const authorized = await deps.db(
+          async (tx) => await readAuthorized(tx, ids),
+        );
+        if (!authorized) {
+          throw new DataExportNotAuthorizedError({
+            message: DATA_EXPORT_FAILURE_MESSAGE.notAuthorized,
+          });
+        }
+      },
       onProgress: async (progress: ExportProgress) => {
         await heartbeat({
           mattersDone: progress.mattersDone,
@@ -302,44 +432,37 @@ export const runDataExport = async (
     // the bucket's own expiry of the same age never removes a file still
     // offered.
     const firstStart = run.startedAt ?? now;
-    const recordAuditEvent = createBackgroundAuditRecorder({
-      execution: {
-        performer: { id: "data-export", name: "Data export", type: "service" },
-        trigger: { source: "action", type: "user_dispatch", userId },
+    const finished = await markReady({
+      db: deps.db,
+      ids,
+      attempt: run.attempts,
+      values: {
+        problemCount: manifest.problems.length,
+        mattersDone: plan.mattersTotal,
+        bytesDone: plan.bytesTotal,
+        completedAt,
+        expiresAt: new Date(firstStart.getTime() + DATA_EXPORT_RETENTION_MS),
       },
-      organizationId,
-      workspaceId: null,
-      userId,
+      audit: {
+        parts: manifest.parts.length,
+        problems: manifest.problems.length,
+      },
     });
-    await deps.db(async (tx) => {
-      await tx
-        .update(organizationDataExports)
-        .set({
-          status: "ready",
-          problemCount: manifest.problems.length,
-          mattersDone: plan.mattersTotal,
-          bytesDone: plan.bytesTotal,
-          completedAt,
-          heartbeatAt: completedAt,
-          expiresAt: new Date(firstStart.getTime() + DATA_EXPORT_RETENTION_MS),
-        })
-        .where(and(ownRow(ids), eq(organizationDataExports.status, "running")));
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.DATA_EXPORT,
-        resourceId: exportId,
-        metadata: {
-          status: "ready",
-          parts: manifest.parts.length,
-          problems: manifest.problems.length,
-        },
-      });
-    });
-    return DATA_EXPORT_RUN_OUTCOME.READY;
+    return finished
+      ? DATA_EXPORT_RUN_OUTCOME.READY
+      : DATA_EXPORT_RUN_OUTCOME.SKIPPED;
   } catch (error) {
     // Boundary of a background job: every failure ends in a row state.
+    if (error instanceof DataExportNotAuthorizedError) {
+      await markFailed(deps.db, ids, run.attempts, error.message);
+      return DATA_EXPORT_RUN_OUTCOME.FAILED;
+    }
+    if (error instanceof DataExportPartTooLargeError) {
+      await markFailed(deps.db, ids, run.attempts, error.message);
+      return DATA_EXPORT_RUN_OUTCOME.FAILED;
+    }
     if (deps.signal.aborted) {
-      await markResumable(deps.db, ids);
+      await markResumable(deps.db, ids, run.attempts, RESUME_REASON.SHUTDOWN);
       return DATA_EXPORT_RUN_OUTCOME.RESUMABLE;
     }
     captureError(error, { exportId, organizationId });
@@ -348,13 +471,18 @@ export const runDataExport = async (
       attempt: String(run.attempts),
       "error.type": errorTag(error),
     });
-    if (run.attempts < DATA_EXPORT_MAX_ATTEMPTS) {
-      await markResumable(deps.db, ids);
+    if (run.failures + 1 < DATA_EXPORT_MAX_FAILURES) {
+      await markResumable(deps.db, ids, run.attempts, RESUME_REASON.FAILURE);
       return DATA_EXPORT_RUN_OUTCOME.RESUMABLE;
     }
     // Parts already written stay until the bucket lifecycle expires them;
     // a failed export never offers a download link for them.
-    await markFailed(deps.db, ids, DATA_EXPORT_FAILURE_MESSAGE.failed);
+    await markFailed(
+      deps.db,
+      ids,
+      run.attempts,
+      DATA_EXPORT_FAILURE_MESSAGE.failed,
+    );
     return DATA_EXPORT_RUN_OUTCOME.FAILED;
   } finally {
     await closeHeartbeat();
@@ -380,13 +508,23 @@ export const createS3RunDependencies = ({
     db,
     source: createExportSource({ db, organizationId, signal, pace }),
     sink: {
-      openPart: (fileName) => {
+      openPart: (fileName, estimatedBytes) => {
+        // A matter is never split, so one huge matter makes one huge part:
+        // size the upload parts for it, and stop with a clear message when
+        // even the largest parts cannot hold it.
+        const partBytes = multipartPartBytes(estimatedBytes);
+        if (partBytes === null) {
+          throw new DataExportPartTooLargeError({
+            message: DATA_EXPORT_FAILURE_MESSAGE.partTooLarge,
+          });
+        }
         // Part keys are deterministic: a part rebuilt by a resumed attempt
         // overwrites the earlier object, and an unfinished multipart upload
         // is aborted by the bucket lifecycle.
         const upload = openS3StreamingUpload({
           key: dataExportPartKey({ organizationId, exportId, fileName }),
           contentType: ZIP_CONTENT_TYPE,
+          partBytes,
           ownership: { type: "lifecycle-prefix", prefix },
         });
         return { write: upload.write, close: upload.end };

@@ -16,10 +16,84 @@ const WINDOWS_RESERVED_RE = /^(con|prn|aux|nul|com\d|lpt\d)(\..*)?$/iu;
 // Control characters break shells and some unzip tools.
 const CONTROL_CHARS_RE = /\p{Cc}/gu;
 
+/** File systems cap one name at 255 bytes (ext4, APFS) or UTF-16 units. */
+export const MAX_SEGMENT_BYTES = 255;
+/**
+ * Bytes a sanitised segment leaves free for suffixes added later: a version
+ * marker ` (v12345)` and a collision counter ` (12345)`.
+ */
+const SUFFIX_RESERVE_BYTES = 24;
+/** Longer "extensions" are part of the name and may be shortened. */
+const MAX_EXTENSION_BYTES = 32;
+
+const encoder = new TextEncoder();
+const utf8Bytes = (text: string): number => encoder.encode(text).byteLength;
+
+/** The longest prefix of `text`, by whole code points, within `maxBytes`. */
+export const truncateUtf8 = (text: string, maxBytes: number): string => {
+  let bytes = 0;
+  let end = 0;
+  for (const character of text) {
+    const size = utf8Bytes(character);
+    if (bytes + size > maxBytes) {
+      break;
+    }
+    bytes += size;
+    end += character.length;
+  }
+  return text.slice(0, end);
+};
+
+const splitExtension = (
+  fileName: string,
+): { base: string; extension: string } => {
+  const dotIndex = fileName.lastIndexOf(".");
+  // A leading dot is part of the name, not an extension separator; an
+  // overlong tail is part of the name too, so it may be shortened.
+  if (
+    dotIndex <= 0 ||
+    utf8Bytes(fileName.slice(dotIndex)) > MAX_EXTENSION_BYTES
+  ) {
+    return { base: fileName, extension: "" };
+  }
+  return {
+    base: fileName.slice(0, dotIndex),
+    extension: fileName.slice(dotIndex),
+  };
+};
+
+export const SEGMENT_SUFFIX_RESERVE = {
+  /** The final suffix: the result may use the whole byte limit. */
+  final: 0,
+  /** A suffix that may still be followed by a collision counter. */
+  open: SUFFIX_RESERVE_BYTES,
+} as const;
+
+type SuffixReserve =
+  (typeof SEGMENT_SUFFIX_RESERVE)[keyof typeof SEGMENT_SUFFIX_RESERVE];
+
+/**
+ * `segment` with `suffix` inserted before its extension, the base shortened
+ * by UTF-8 bytes so the result, plus `reserve`, stays within
+ * MAX_SEGMENT_BYTES.
+ */
+export const withSegmentSuffix = (
+  segment: string,
+  suffix: string,
+  reserve: SuffixReserve = SEGMENT_SUFFIX_RESERVE.final,
+): string => {
+  const { base, extension } = splitExtension(segment);
+  const room =
+    MAX_SEGMENT_BYTES - reserve - utf8Bytes(suffix) - utf8Bytes(extension);
+  return `${truncateUtf8(base, room).trimEnd()}${suffix}${extension}`;
+};
+
 /**
  * One path segment: NFC (so a name typed on macOS and one typed on Windows
  * compare and extract identically), no separators or traversal, no
- * device names, no surrounding whitespace.
+ * device names, no surrounding whitespace, and short enough by UTF-8 bytes
+ * that suffixes added later still fit the file-system limit. The extension
+ * survives shortening.
  */
 export const sanitizeArchiveSegment = (name: string): string => {
   const normalized = normalizeUnicode(name, "NFC")
@@ -32,25 +106,16 @@ export const sanitizeArchiveSegment = (name: string): string => {
   if (sanitized.length === 0) {
     return "_";
   }
-  return WINDOWS_RESERVED_RE.test(sanitized) ? `_${sanitized}` : sanitized;
+  const named = WINDOWS_RESERVED_RE.test(sanitized)
+    ? `_${sanitized}`
+    : sanitized;
+  const { base, extension } = splitExtension(named);
+  const room = MAX_SEGMENT_BYTES - SUFFIX_RESERVE_BYTES - utf8Bytes(extension);
+  return `${truncateUtf8(base, room).trimEnd()}${extension}`;
 };
 
 const foldKey = (path: string): string =>
   normalizeUnicode(path, "NFC").toLowerCase();
-
-const splitExtension = (
-  fileName: string,
-): { base: string; extension: string } => {
-  const dotIndex = fileName.lastIndexOf(".");
-  // A leading dot is part of the name, not an extension separator.
-  if (dotIndex <= 0) {
-    return { base: fileName, extension: "" };
-  }
-  return {
-    base: fileName.slice(0, dotIndex),
-    extension: fileName.slice(dotIndex),
-  };
-};
 
 /**
  * Hands out unique archive paths. Two paths collide when they are equal
@@ -82,9 +147,8 @@ export class ArchivePathAllocator {
       this.#taken.add(foldKey(first));
       return first;
     }
-    const { base, extension } = splitExtension(segment);
     for (let n = 2; ; n++) {
-      const candidate = `${prefix}${base} (${n})${extension}`;
+      const candidate = `${prefix}${withSegmentSuffix(segment, ` (${n})`)}`;
       if (!this.#taken.has(foldKey(candidate))) {
         this.#taken.add(foldKey(candidate));
         return candidate;
