@@ -388,23 +388,45 @@ for (const { kind, path } of citations) {
         );
         const sources = view.getByRole("region", { name: "Sources" });
         const answer = view.getByRole("region", { name: "Answer" });
+        const expectPublisherLink = (
+          source: Element | undefined,
+          label: string,
+        ) => {
+          expect(source?.textContent).toBe(label);
+          expect(source?.getAttribute("href")).toBe(publisher);
+          expect(source?.getAttribute("target")).toBe("_blank");
+          expect(source?.getAttribute("rel")).toBe("noopener noreferrer");
+        };
         await waitFor(() => {
           for (const surface of [sources, answer]) {
-            const primary = surface.querySelector("a");
-            expect(primary?.getAttribute("href")).toBe(
+            expect(surface.querySelector("a")?.getAttribute("href")).toBe(
               held ? internal : publisher,
             );
-            const links = [...surface.querySelectorAll("a")];
-            expect(links).toHaveLength(held ? 2 : 1);
-            if (held) {
-              const source = links.at(1);
-              expect(source?.textContent).toBe(messages.common.source);
-              expect(source?.getAttribute("href")).toBe(publisher);
-              expect(source?.getAttribute("target")).toBe("_blank");
-              expect(source?.getAttribute("rel")).toBe("noopener noreferrer");
-            }
           }
+          const answerLinks = [...answer.querySelectorAll("a")];
+          expect(answerLinks).toHaveLength(held ? 2 : 1);
+          if (held) {
+            expectPublisherLink(answerLinks.at(1), messages.common.source);
+          }
+          // A held act is one chip: the chip is the link, and its official
+          // source sits in the expanded view, not beside it.
+          expect(sources.querySelectorAll("a")).toHaveLength(1);
         });
+        if (held) {
+          const toggle = sources.querySelector("button[aria-expanded]");
+          expect(toggle).not.toBeNull();
+          if (toggle !== null) {
+            fireEvent.click(toggle);
+          }
+          await waitFor(() => {
+            const sourceLinks = [...sources.querySelectorAll("a")];
+            expect(sourceLinks.at(-1)?.getAttribute("href")).toBe(publisher);
+            expectPublisherLink(
+              sourceLinks.at(-1),
+              messages.common.openOriginalSource,
+            );
+          });
+        }
         expect(view.container.querySelector("a a, a button")).toBeNull();
         expect(view.container.querySelector("img")).toBeNull();
         expect(requests).toEqual([]);
@@ -703,12 +725,19 @@ test("a relative held primary keeps its publisher source in the tray and passive
     for (const primary of primaryLinks) {
       expect(primary.getAttribute("href")).toBe(primaryUrl);
     }
+    // The answer keeps its source beside the link; the tray chip keeps it in
+    // its expanded view.
     const sources = view.getAllByRole("link", { name: messages.common.source });
-    expect(sources).toHaveLength(2);
-    for (const source of sources) {
-      expect(source.getAttribute("href")).toBe(publisher);
-    }
+    expect(sources).toHaveLength(1);
+    expect(sources.at(0)?.getAttribute("href")).toBe(publisher);
   });
+  fireEvent.click(
+    view.getByRole("button", { name: messages.common.showDetails }),
+  );
+  const original = await screen.findByRole("link", {
+    name: messages.common.openOriginalSource,
+  });
+  expect(original.getAttribute("href")).toBe(publisher);
 });
 
 test("a publisher alias with a canonical decision keeps the passage before the shared court chip", async () => {

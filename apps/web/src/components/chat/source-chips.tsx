@@ -13,6 +13,8 @@ import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { LegalCitationLink } from "@/components/chat/legal-citation-link";
 import { findMcpConnectorIconHref } from "@/components/chat/mcp-connector-icon";
+import { SourceChipGroupChip } from "@/components/chat/source-chip-group";
+import { groupSourceChips } from "@/components/chat/source-chip-groups.logic";
 import type { ExternalSourceEntry } from "@/components/chat/source-chips.logic";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { ReferenceIcon } from "@/components/references/reference-chip";
@@ -64,6 +66,13 @@ export const SourceChips = ({
     });
     return iconHref === undefined ? source : { ...source, iconHref };
   });
+  // A decision or an act is one chip however many of its parts were cited.
+  const sourceGroups = groupSourceChips({
+    answerTexts: parts.flatMap((part) =>
+      part.type === "text" ? [part.content] : [],
+    ),
+    sources: uniqueExternalSourcesWithIcons,
+  });
   const registerSources = useExternalSourceStore(
     (state) => state.registerSources,
   );
@@ -93,13 +102,20 @@ export const SourceChips = ({
             workspaceId={workspaceId}
           />
         ))}
-        {uniqueExternalSourcesWithIcons.map((source) => (
-          <PublisherSourceChip
-            key={`${messageId}-external-source-${source.url}`}
-            source={source}
-            workspaceId={workspaceId ?? null}
-          />
-        ))}
+        {sourceGroups.map((group) =>
+          group.type === "source" ? (
+            <PublisherSourceChip
+              key={`${messageId}-external-source-${group.source.url}`}
+              source={group.source}
+              workspaceId={workspaceId ?? null}
+            />
+          ) : (
+            <SourceChipGroupChip
+              key={`${messageId}-${group.key}`}
+              group={group}
+            />
+          ),
+        )}
       </div>
     </>
   );
