@@ -31,7 +31,6 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
-import { nextAvailableMatterName } from "@/api/lib/matter-name";
 import {
   allocateMatterReference,
   DEFAULT_MATTER_NUMBER_PADDING,
@@ -42,6 +41,7 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
+import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
 
 // A request without `clientId` creates a personal matter (initially
 // visible only to the creator). With `clientId`, it's a normal

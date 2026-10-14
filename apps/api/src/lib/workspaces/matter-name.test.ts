@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { nextAvailableMatterName } from "@/api/lib/matter-name";
+import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
 
 describe("nextAvailableMatterName", () => {
   test("keeps a name no matter uses", () => {
