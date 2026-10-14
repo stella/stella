@@ -10,7 +10,7 @@ import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
-import { NO_FEATURE_ACCESS_FACTS } from "@/api/tests/helpers/member-authorization";
+import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
@@ -27,7 +27,7 @@ const memberAuthorization = {
   email: "user@example.test",
   role: "owner",
   workspace: null,
-  ...NO_FEATURE_ACCESS_FACTS,
+  ...PLAIN_MEMBER_FACTS,
 };
 
 let analytics: RecordingAnalytics;
