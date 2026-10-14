@@ -123,6 +123,7 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
     ownership: {
       handlerDirectories: [
         "apps/api/src/handlers/lists/verifications",
+        "apps/api/src/handlers/lists/sample-case",
         "apps/api/src/handlers/lists/items/fact-details",
         "apps/api/src/handlers/lists/items/sources/verification",
       ],
