@@ -13,6 +13,7 @@ import * as v from "valibot";
 
 import {
   completeInstallStoreKey,
+  installStorePath,
   parseInstallFlags,
   parseGlobalStoreMode,
   sealInstallStore,
@@ -610,4 +611,95 @@ test("the manual install-cache benchmark is dispatch-only and reports measured p
   }
   measure(windows, workflowCiInstallFlags(windowsInstall));
   measure(linux, ["--frozen-lockfile", "--ignore-scripts"]);
+});
+
+// Astro (vite-plugin-utils normalizeFilename) treats an absolute id as
+// project-relative unless it shares a non-root ancestor with the project.
+const astroSeesPathInRoot = (filename: string, root: string) => {
+  const a = filename.split("/");
+  const b = root.split("/");
+  const common: string[] = [];
+  for (const [index, part] of a.entries()) {
+    if (part !== b[index]) {
+      break;
+    }
+    common.push(part);
+  }
+  return common.join("/") !== "";
+};
+
+test("hosted Linux jobs and job containers share one store path Astro can load from", () => {
+  const host = installStorePath({
+    key: "k",
+    platform: "linux",
+    runnerTemp: "/home/runner/work/_temp",
+    workspace: "/home/runner/work/stella/stella",
+  });
+  const container = installStorePath({
+    key: "k",
+    platform: "linux",
+    runnerTemp: "/__w/_temp",
+    workspace: "/__w/stella/stella",
+  });
+  expect(host).toEqual({
+    store: "/home/runner/work/_temp/bun-scoped-install/k",
+    alias: undefined,
+  });
+  expect(container).toEqual({
+    store: "/home/runner/work/_temp/bun-scoped-install/k",
+    alias: { link: "/home/runner/work", target: "/__w" },
+  });
+  expect(
+    astroSeesPathInRoot(
+      host.store,
+      "/home/runner/work/stella/stella/apps/landing",
+    ),
+  ).toBe(true);
+  expect(
+    astroSeesPathInRoot(
+      "/__w/_temp/bun-scoped-install/k",
+      "/__w/stella/stella/apps/landing",
+    ),
+  ).toBe(true);
+  expect(
+    astroSeesPathInRoot(
+      "/tmp/bun-scoped-install/k",
+      "/home/runner/work/stella/stella/apps/landing",
+    ),
+  ).toBe(false);
+});
+
+test("other runners keep RUNNER_TEMP and a store outside the workspace tree fails", () => {
+  expect(
+    installStorePath({
+      key: "k",
+      platform: "darwin",
+      runnerTemp: "/opt/runner/work/_temp",
+      workspace: "/opt/runner/work/stella/stella",
+    }),
+  ).toEqual({
+    store: "/opt/runner/work/_temp/bun-scoped-install/k",
+    alias: undefined,
+  });
+  expect(() =>
+    installStorePath({
+      key: "k",
+      platform: "linux",
+      runnerTemp: "/tmp",
+      workspace: "/home/runner/work/stella/stella",
+    }),
+  ).toThrow("shares no non-root ancestor");
+});
+
+test("ci-install aliases the hosted work directory before restoring the store", () => {
+  const source = readFileSync(
+    path.join(import.meta.dir, "../.github/actions/ci-install/action.yml"),
+    "utf-8",
+  );
+  const alias = source.indexOf(
+    "Alias the hosted work directory inside job containers",
+  );
+  const restore = source.indexOf("Restore exact complete install store");
+  expect(alias).toBeGreaterThan(-1);
+  expect(alias).toBeLessThan(restore);
 });

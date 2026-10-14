@@ -62,6 +62,26 @@ runs:
         bun scripts/ci-install-store.ts key >> "$GITHUB_OUTPUT"
         echo "artifact-id=$(bun -e 'console.log(crypto.randomUUID())')" >> "$GITHUB_OUTPUT"
         echo "start=$(bun -e 'console.log(Date.now())')" >> "$GITHUB_OUTPUT"
+    - name: Alias the hosted work directory inside job containers
+      if: steps.identity.outputs.alias-link != ''
+      shell: bash
+      env:
+        ALIAS_LINK: ${{ steps.identity.outputs.alias-link }}
+        ALIAS_TARGET: ${{ steps.identity.outputs.alias-target }}
+      run: |
+        # The store path and its absolute Bun links name the hosted path.
+        sudo_cmd=()
+        if [[ "$(id -u)" != 0 ]]; then
+          sudo_cmd=(sudo)
+        fi
+        "${sudo_cmd[@]}" mkdir -p "$(dirname "$ALIAS_LINK")"
+        if [[ ! -e "$ALIAS_LINK" ]]; then
+          "${sudo_cmd[@]}" ln -s "$ALIAS_TARGET" "$ALIAS_LINK"
+        fi
+        if [[ "$(realpath "$ALIAS_LINK")" != "$(realpath "$ALIAS_TARGET")" ]]; then
+          echo "::error title=install-store-alias::$ALIAS_LINK does not resolve to $ALIAS_TARGET"
+          exit 1
+        fi
     - name: Restore exact complete install store
       id: cache
       if: steps.compression.outcome == 'success'

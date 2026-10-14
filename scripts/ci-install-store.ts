@@ -249,6 +249,60 @@ export const verifyInstallStore = (options: InstallStoreOptions) => {
   }
 };
 
+// Hosted Linux runners keep RUNNER_TEMP here; job containers mount the same
+// directory at /__w. Cache versions hash the absolute store path and Bun
+// global-store links are absolute, so both environments use this one path.
+const HOSTED_LINUX_WORK = "/home/runner/work";
+const CONTAINER_WORK = "/__w";
+
+// Astro resolves a module id as project-relative unless it shares a
+// non-root ancestor with the project, so a store under /tmp breaks Astro
+// builds that load .astro files from the store.
+const sharesNonRootAncestor = (left: string, right: string) => {
+  const first = path.resolve(left).split(path.sep).find(Boolean);
+  return (
+    first !== undefined &&
+    first === path.resolve(right).split(path.sep).find(Boolean)
+  );
+};
+
+export const installStorePath = ({
+  key,
+  platform,
+  runnerTemp,
+  workspace,
+}: {
+  key: string;
+  platform: string;
+  runnerTemp: string;
+  workspace: string;
+}) => {
+  const container =
+    platform === "linux" &&
+    runnerTemp === path.join(CONTAINER_WORK, "_temp") &&
+    workspace.startsWith(`${CONTAINER_WORK}/`);
+  const canonicalTemp =
+    platform === "linux" &&
+    (container || runnerTemp === path.join(HOSTED_LINUX_WORK, "_temp"))
+      ? path.join(HOSTED_LINUX_WORK, "_temp")
+      : runnerTemp;
+  const store = path.join(canonicalTemp, "bun-scoped-install", key);
+  const resolved = container
+    ? `${CONTAINER_WORK}${store.slice(HOSTED_LINUX_WORK.length)}`
+    : store;
+  if (!sharesNonRootAncestor(resolved, workspace)) {
+    throw new InstallStoreInvariantError(
+      `Install store ${resolved} shares no non-root ancestor with workspace ${workspace}`,
+    );
+  }
+  return {
+    store,
+    alias: container
+      ? { link: HOSTED_LINUX_WORK, target: CONTAINER_WORK }
+      : undefined,
+  };
+};
+
 export const parseInstallFlags = (serialized: string | undefined) => {
   if (serialized === undefined) {
     throw new InstallStoreInvariantError(
@@ -290,10 +344,17 @@ if (import.meta.main) {
     console.log(`key=${key}`);
     const temporary = process.env["RUNNER_TEMP"];
     if (temporary !== undefined) {
-      // Cache versions hash the absolute path. Linux hosts and job containers
-      // must use the same path, including absolute Bun global-store links.
-      const base = process.platform === "linux" ? "/tmp" : temporary;
-      console.log(`store=${path.join(base, "bun-scoped-install", key)}`);
+      const { store: storePath, alias } = installStorePath({
+        key,
+        platform: process.platform,
+        runnerTemp: temporary,
+        workspace: process.env["GITHUB_WORKSPACE"] ?? process.cwd(),
+      });
+      console.log(`store=${storePath}`);
+      if (alias !== undefined) {
+        console.log(`alias-link=${alias.link}`);
+        console.log(`alias-target=${alias.target}`);
+      }
     }
   } else if (
     (operation === "seal" || operation === "verify") &&
