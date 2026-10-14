@@ -55,6 +55,7 @@ import {
   clearedCaseLawFilters,
   decisionDateRange,
   decisionSortOrder,
+  isStrictSearch,
   STRICT_SEARCH_VALUE,
   validDecisionDate,
   withAutoRewrite,
@@ -918,6 +919,7 @@ const useCaseLawRewriteFlow = ({
     rowsAnswerQuery,
     rewrittenFrom: search.rewrittenFrom,
     rewriteOff: search.rewrite === "off",
+    strict: isStrictSearch(search.strict),
   });
   return { autoRewrite, refine, searchOriginalWords };
 };

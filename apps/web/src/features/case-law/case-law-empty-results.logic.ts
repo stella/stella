@@ -64,6 +64,11 @@ type AutoRewriteInput = {
   rewrittenFrom: string | undefined;
   /** The reader went back to their own words: leave them there. */
   rewriteOff: boolean;
+  /**
+   * The reader asked for every word: an empty answer to that is the answer,
+   * not a cue to search different, looser words.
+   */
+  strict: boolean;
 };
 
 /**
@@ -78,10 +83,12 @@ export const shouldAutoRewrite = ({
   rowsAnswerQuery,
   rewrittenFrom,
   rewriteOff,
+  strict,
 }: AutoRewriteInput): boolean =>
   isTextSearch &&
   rowsAnswerQuery &&
   resultCount === 0 &&
   rewrittenFrom === undefined &&
   !rewriteOff &&
+  !strict &&
   isQuestionLike(query);

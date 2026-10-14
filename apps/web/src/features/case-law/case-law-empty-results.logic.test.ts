@@ -41,6 +41,7 @@ describe("rewriting a search by itself", () => {
     rowsAnswerQuery: true,
     rewrittenFrom: undefined,
     rewriteOff: false,
+    strict: false,
   };
 
   test("a question that found nothing is rewritten once", () => {
@@ -53,6 +54,7 @@ describe("rewriting a search by itself", () => {
     ["it is a browse or a lookup", { isTextSearch: false }],
     ["it is already a rewrite", { rewrittenFrom: "the original words" }],
     ["the reader went back to their own words", { rewriteOff: true }],
+    ["the reader asked for every word", { strict: true }],
     ["it is not a question", { query: "okamžité zrušení" }],
   ])("not when %s", (_reason, change) => {
     expect(shouldAutoRewrite({ ...EMPTY_QUESTION, ...change })).toBe(false);
