@@ -2474,6 +2474,41 @@ context("root test runner coverage", () => {
     },
   );
 
+  check.each([
+    "cd packages/fixture | cat",
+    "printf ready | cd packages/fixture",
+  ])("does not infer a parent directory from a pipeline: %s", (prefix) => {
+    const parsed = {
+      jobs: {
+        checks: {
+          "runs-on": "ubuntu-latest",
+          shell: "bash",
+          steps: [{ shell: "bash", run: `${prefix}; bun test src` }],
+        },
+        "ci-result": { needs: ["checks"] },
+      },
+    };
+    const topology = {
+      workflow: JSON.stringify(parsed),
+      gatingJobs: gatingWorkflowJobs(parsed),
+      shardedPackages: new Set<string>(),
+    };
+    expect(
+      firstCollectionFailure({
+        file: "packages/fixture/src/selected.test.ts",
+        scenarios: new Map(),
+        topology,
+      }),
+    ).toBeDefined();
+    expect(
+      firstCollectionFailure({
+        file: "scripts/root.test.ts",
+        scenarios: new Map(),
+        topology,
+      }),
+    ).toContain("unresolved directory change");
+  });
+
   check("counts the actual root collectors and their file boundaries", () => {
     const workflow = `jobs:
   root-tests:

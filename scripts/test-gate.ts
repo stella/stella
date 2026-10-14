@@ -1647,9 +1647,14 @@ const invocationWorkingDirectory = ({
     if (words[cursor] !== "cd") {
       continue;
     }
-    const arguments_ = shellCommandSpan(tokens, cursor + 1).words;
+    const { words: arguments_, end } = shellCommandSpan(tokens, cursor + 1);
+    const precedingOperator = tokens
+      .slice(0, cursor)
+      .findLast((token) => token.role === "operator" && token.value !== "\n");
     if (
       arguments_.length !== 1 ||
+      precedingOperator?.value === "|" ||
+      tokens[end]?.value === "|" ||
       approvedInvocationFailure({
         tokens,
         index: cursor,
