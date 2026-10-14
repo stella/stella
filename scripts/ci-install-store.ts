@@ -133,6 +133,37 @@ export const completeInstallStoreKey = ({
   return `bun-complete-store-${STORE_CACHE_VERSION}-${platform}-${arch}-${revision}-${globalStoreMode}-${digest}`;
 };
 
+type ExtractionScratchOptions = {
+  directory: string;
+  entry: string;
+  filename: string;
+};
+
+const isExtractionScratch = ({
+  directory,
+  entry,
+  filename,
+}: ExtractionScratchOptions) => {
+  if (
+    (directory !== "" && directory !== "links") ||
+    !/\.tmp(?:-|$)/u.test(entry)
+  ) {
+    return false;
+  }
+  const manifest = path.join(filename, "package.json");
+  if (
+    directory !== "" ||
+    !lstatSync(filename).isDirectory() ||
+    !existsSync(manifest)
+  ) {
+    return true;
+  }
+  // A root package name may end in .tmp; extraction scratch does not
+  // carry a manifest identifying that directory as the package itself.
+  const metadata: unknown = Bun.JSONC.parse(readFileSync(manifest, "utf-8"));
+  return !isRecord(metadata) || metadata["name"] !== entry;
+};
+
 const storeFingerprint = (store: string, globalStoreMode: GlobalStoreMode) => {
   const root = lstatSync(store);
   if (!root.isDirectory() || root.isSymbolicLink()) {
@@ -163,12 +194,9 @@ const storeFingerprint = (store: string, globalStoreMode: GlobalStoreMode) => {
       ) {
         continue;
       }
-      if (
-        (directory === "" || directory === "links") &&
-        /\.tmp(?:-|$)/u.test(entry)
-      ) {
+      if (isExtractionScratch({ directory, entry, filename })) {
         throw new InstallStoreInvariantError(
-          `Incomplete Bun install store: ${path.join(directory, entry)}`,
+          `Incomplete Bun install store: ${relative}`,
         );
       }
       let kind = "file";
