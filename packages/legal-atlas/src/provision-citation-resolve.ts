@@ -277,21 +277,31 @@ const readNamedAct = (
   citedOn: string,
 ): ActRead => {
   const folded = foldKey(rest);
-  let longest = 0;
-  const matches: ActTitleSpec[] = [];
+  // Longest spellings first: a shorter one inside a longer match is the same
+  // words (`zákoník` inside `zákoník práce`) and is dropped, but a spelling
+  // elsewhere in the text names another act and is kept, so two acts named
+  // side by side (`občanského zákoníku nebo ZP`) are reported, not one picked.
+  const accepted: { start: number; end: number; entry: ActTitleSpec }[] = [];
   for (const act of resolver.acts) {
-    if (act.spelling.length < longest) {
-      break;
-    }
     const found = act.caseSensitive
       ? occurs(rest, act.key)
       : occurs(folded, act.key);
     if (found === null) {
       continue;
     }
-    longest = act.spelling.length;
-    matches.push(act.entry);
+    const start = found.index;
+    const end = start + found[0].length;
+    const insideLonger = accepted.some(
+      (match) =>
+        match.start < end &&
+        start < match.end &&
+        match.end - match.start > end - start,
+    );
+    if (!insideLonger) {
+      accepted.push({ start, end, entry: act.entry });
+    }
   }
+  const matches = accepted.map(({ entry }) => entry);
   if (matches.length === 0) {
     return { kind: "none" };
   }

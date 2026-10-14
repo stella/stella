@@ -141,6 +141,22 @@ describe("resolveProvisionCitation", () => {
     },
   );
 
+  test("two acts named side by side are ambiguous, never resolved to the longer name", () => {
+    const read = resolve("§ 10 občanského zákoníku nebo ZP");
+    expect(read.status).toBe("ambiguous_act");
+    if (read.status === "ambiguous_act") {
+      expect(
+        read.candidates.map(({ workIdentifier }) => workIdentifier).toSorted(),
+      ).toEqual(["262/2006 Sb.", "89/2012 Sb."]);
+    }
+  });
+
+  test("a shorter spelling inside a longer match is the same name, not a second act", () => {
+    expect(resolved("§ 316 zákoníku práce")).toMatchObject({
+      workIdentifier: "262/2006 Sb.",
+    });
+  });
+
   test("a lone letter after `a` is a preposition, not a second provision, unless a letter path continues", () => {
     expect(resolved("§ 316 odst. 2 a v souladu s tím ZP")).toMatchObject({
       section: 316,
