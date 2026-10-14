@@ -1,28 +1,14 @@
 import { panic } from "better-result";
 
-import { normalizeCountry } from "@stll/agent-input";
-import {
-  parseDecisionQuery,
-  resolveDecisionIdentity,
-} from "@stll/api-contract/decision-query-intent";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
-import {
-  isPublicCountry,
-  PUBLIC_COUNTRY_CAPABILITIES,
-} from "@stll/api-contract/public-country-capability";
-import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import type { Block } from "@stll/legal-ast/document-ast";
 
 import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
-import {
-  decisionIdentityLocatorOf,
-  lookupDecisionsByIdentity,
-} from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { LawReadAdmission } from "@/api/handlers/legal-resolve/admission";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
-import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
+import { lookupDecisionIdentity } from "@/api/handlers/legal-resolve/decision-identity";
 import { buildCaseLawDecisionUrl } from "@/api/lib/legal-search/public-law-app-urls";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -148,46 +134,24 @@ type ResolveDecisionOptions = {
 
 export const resolveDecision = async ({
   admission: _admission,
-  country: countryInput,
+  country,
   identifier,
   dependencies: {
     lookup = lookupDecisionsByIdentity,
     read = readDecisionReaderSource,
   } = {},
 }: ResolveDecisionOptions): Promise<LegalResolveResponse> => {
-  if (identifier.trim().length === 0) {
-    return { status: "incomplete_identifier", missing: ["identifier"] };
-  }
-  const normalized = normalizeCountry(countryInput);
-  if (!normalized.ok) {
-    return { status: "country_unavailable" };
-  }
-  const country = normalized.value.alpha3;
-  if (!isPublicCountry(country)) {
-    return { status: "country_unavailable" };
-  }
-  if (PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted") {
-    return { status: "country_unavailable" };
-  }
-  const grammar = decisionDocketGrammarForCountry(country);
-  const reporters = decisionReporterGrammarForJurisdiction(country);
-  const intent = parseDecisionQuery(identifier, { grammar, reporters });
-  if (intent.type !== "identifier") {
-    return { status: "not_found", reason: "no_exact_identity" };
-  }
-  const rows = await lookup({
-    caseLawDb: caseLawPublicReadDb,
+  const resolution = await lookupDecisionIdentity({
     country,
-    locator: decisionIdentityLocatorOf(intent),
+    identifier,
+    lookup,
   });
-  const resolution = resolveDecisionIdentity(intent, rows, { reporters });
   switch (resolution.status) {
-    case "none":
+    case "country_unavailable":
+      return { status: "country_unavailable" };
+    case "not_found":
       return { status: "not_found", reason: "no_exact_identity" };
     case "ambiguous":
-      if (resolution.reason === "selector_unmatched") {
-        return { status: "not_found", reason: "no_exact_identity" };
-      }
       return {
         status: "ambiguous",
         candidates: resolution.candidates

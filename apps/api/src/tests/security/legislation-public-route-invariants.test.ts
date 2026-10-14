@@ -24,6 +24,7 @@ const PUBLIC_LEGISLATION_ROUTES = [
   "GET /law/statutes/facets",
   "GET /law/statutes/search",
   "GET /law/statutes/shelf",
+  "POST /law/citations/links",
   "POST /law/statutes/resolve",
 ] as const;
 

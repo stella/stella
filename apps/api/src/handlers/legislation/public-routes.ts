@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import Elysia, { t } from "elysia";
 
+import legalCitationLinks from "@/api/handlers/legal-citation-links/resolve";
 import {
   readStatuteByEliHandler,
   readStatuteByEliQuerySchema,
@@ -403,6 +404,10 @@ export const publicLegislationRoute = new Elysia({
   .post("/statutes/resolve", resolveStatutes.handler, {
     body: resolveStatutes.config.body,
     response: resolveStatutes.config.response,
+  })
+  .post("/citations/links", legalCitationLinks.handler, {
+    body: legalCitationLinks.config.body,
+    response: legalCitationLinks.config.response,
   })
   // Ahead of `/statutes/:documentId` for the same reason: `by-slug` is a
   // literal segment, not a document id.

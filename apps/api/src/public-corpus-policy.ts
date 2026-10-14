@@ -17,6 +17,7 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /law/statutes/facets": "aggregate",
   "GET /law/statutes/by-eli": "browse",
   "POST /law/statutes/resolve": "aggregate",
+  "POST /law/citations/links": "aggregate",
   "GET /law/statutes/by-slug/:slug": "browse",
   "GET /law/statutes/:documentId": "browse",
   "GET /law/statutes/:documentId/versions": "browse",

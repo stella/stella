@@ -703,6 +703,21 @@ export const LIMITS = {
    * each is one indexed probe of the Work key, joined in a single statement.
    */
   legislationResolveWorksMax: 200,
+  /**
+   * Characters of one answer the citation linker reads. A long chat answer
+   * stays well under it; past it the text is refused, never cut, so a link
+   * never lands on an offset the caller's text does not have.
+   */
+  legalCitationLinksTextMaxChars: 64_000,
+  /** Jurisdictions one citation-link read tries, in the caller's order. */
+  legalCitationLinksCountriesMax: 4,
+  /**
+   * Distinct decision identifiers one read resolves. Each is an exact
+   * identity probe per jurisdiction tried; identifiers past it stay unlinked.
+   */
+  legalCitationLinksDecisionsMax: 24,
+  /** Links one read returns; spans past it stay plain text. */
+  legalCitationLinksSpansMax: 200,
   /** Works (one canonical URL each) in one statute sitemap shard. */
   statuteSitemapShardUrlLimit: 5000,
   /** Max child sitemap entries in one sitemap index by protocol. */
