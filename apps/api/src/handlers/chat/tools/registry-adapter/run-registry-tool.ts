@@ -190,6 +190,16 @@ export type RunRegistryReadToolProps = {
    * meets, without a database.
    */
   handler?: McpToolHandler | undefined;
+  /**
+   * Narrows the normalized arguments before the handler runs (the turn's
+   * corpus scope). It sees canonical values, so it compares a country as the
+   * handler will read it; a refusal stops the read.
+   */
+  scopeArgs?:
+    | ((
+        args: Record<string, unknown>,
+      ) => Result<Record<string, unknown>, ChatToolError>)
+    | undefined;
 };
 
 /**
@@ -269,6 +279,7 @@ export const runRegistryReadTool = async ({
   context,
   refRegistry,
   handler,
+  scopeArgs,
 }: RunRegistryReadToolProps): Promise<Result<unknown, ChatToolError>> => {
   if (!isProjectableRegistryReadToolName(toolName)) {
     return Result.err(
@@ -327,15 +338,22 @@ export const runRegistryReadTool = async ({
       ),
     );
   }
+  const scoped =
+    scopeArgs === undefined
+      ? Result.ok(normalized.value)
+      : scopeArgs(normalized.value);
+  if (Result.isError(scoped)) {
+    return Result.err(scoped.error);
+  }
 
   const response =
     handler === undefined
       ? await REGISTRY_READ_TOOL_HANDLERS[toolName]({
-          args: normalized.value,
+          args: scoped.value,
           context,
         })
       : await runInjectedHandler({
-          args: normalized.value,
+          args: scoped.value,
           context,
           toolName,
           handler,
