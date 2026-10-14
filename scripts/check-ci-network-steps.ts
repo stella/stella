@@ -277,48 +277,56 @@ type ScriptReference = { file: string; wrapped: boolean };
 // is cheaper than missing an invocation behind `if !`, `$(...)`, `source` or a
 // pipeline, and an over-report can be allowlisted with a reason.
 const SCRIPT_REFERENCE =
-  /(?:(?:\$\{?GITHUB_ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\}|(?<![\w./-])\.)\/(?<relative>[\w./-]+\.sh)|(?<=^|[^\w./-]|\$\{?GITHUB_WORKSPACE\}?\/|\.[\w-]+\/)(?<rooted>(?:scripts|\.github)\/[\w./-]+\.sh))/gu;
+  /(?:(?:\$\{?GITHUB_WORKSPACE\}?|\$\{\{\s*github\.workspace\s*\}\})\/(?<workspace>[\w./-]+\.sh)|(?:\$\{?GITHUB_ACTION_PATH\}?|\$\{\{\s*github\.action_path\s*\}\})\/(?<action>[\w./-]+\.sh)|(?<![\w./-])\.\/(?<dot>[\w./-]+\.sh)|(?<=^|[^\w./-]|\.[\w-]+\/)(?<rooted>(?:scripts|\.github)\/[\w./-]+\.sh))/gu;
 const RETRY_SCRIPTS = new Set(["scripts/retry.sh", "scripts/gh-retry.sh"]);
 
-const referencedFile = (
-  rooted: string | undefined,
-  relative: string | undefined,
+const joined = (dir: string, file: string): string =>
+  path.posix.normalize(path.posix.join(dir, file));
+
+/**
+ * Repository files a reference may name. The working directory (the
+ * repository root unless a `working-directory:` says otherwise) resolves
+ * `./x.sh` and bare `scripts/x.sh`; the action directory resolves
+ * `$GITHUB_ACTION_PATH/x.sh`; `$GITHUB_WORKSPACE/` is the repository root.
+ */
+const referencedFiles = (
+  groups: Record<string, string | undefined>,
   actionDir: string | null,
-): string | undefined => {
-  if (relative === undefined) {
-    return rooted;
+  cwd: string,
+): string[] => {
+  const { workspace, action, dot, rooted } = groups;
+  if (workspace !== undefined) {
+    return [joined(".", workspace)];
   }
-  if (actionDir === null) {
-    return undefined;
+  if (action !== undefined) {
+    return actionDir === null ? [] : [joined(actionDir, action)];
   }
-  return path.posix.normalize(path.posix.join(actionDir, relative));
+  if (dot !== undefined) {
+    return [
+      joined(cwd, dot),
+      ...(actionDir === null ? [] : [joined(actionDir, dot)]),
+    ];
+  }
+  return rooted === undefined ? [] : [joined(cwd, rooted), rooted];
 };
 
 /** Repository shell scripts a source invokes, resolved from the repo root. */
 const scriptReferences = (
   source: string,
   actionDir: string | null,
+  cwd: string,
 ): ScriptReference[] =>
   logicalLines(source).flatMap((line) =>
     segments(line).flatMap((segment) => {
       const wrapped = startsWithRetry(segment);
-      return [...segment.matchAll(SCRIPT_REFERENCE)].flatMap((match) => {
-        const groups = match.groups ?? {};
-        const file = referencedFile(
-          groups["rooted"],
-          groups["relative"],
-          actionDir,
-        );
+      return [...segment.matchAll(SCRIPT_REFERENCE)].flatMap((match) =>
         // Test scripts stub the network commands they exercise.
-        if (
-          file === undefined ||
-          RETRY_SCRIPTS.has(file) ||
-          file.endsWith(".test.sh")
-        ) {
-          return [];
-        }
-        return [{ file, wrapped }];
-      });
+        [...new Set(referencedFiles(match.groups ?? {}, actionDir, cwd))]
+          .filter(
+            (file) => !RETRY_SCRIPTS.has(file) && !file.endsWith(".test.sh"),
+          )
+          .map((file) => ({ file, wrapped })),
+      );
     }),
   );
 
@@ -329,11 +337,19 @@ type Repository = {
 const MAX_SCRIPT_DEPTH = 4;
 
 /** Fetches in a run step, including the repository scripts it invokes. */
+type RunContext = {
+  /** Directory of the composite action that owns the step, if any. */
+  actionDir: string | null;
+  /** File reported as the source of fetches written in the step. */
+  label: string;
+  /** Working directory relative to the repository root. */
+  cwd?: string;
+};
+
 export const runFetches = (
   repo: Repository,
   run: string,
-  actionDir: string | null,
-  label: string,
+  { actionDir, label, cwd = "." }: RunContext,
 ): NetworkFetch[] => {
   const fetches = scanShell(run, label);
   const visited = new Set<string>();
@@ -346,7 +362,7 @@ export const runFetches = (
     if (depth > MAX_SCRIPT_DEPTH) {
       return;
     }
-    for (const reference of scriptReferences(source, dir)) {
+    for (const reference of scriptReferences(source, dir, cwd)) {
       const inherited = wrapped || reference.wrapped;
       // A script reached once through retry.sh and once bare is scanned in
       // both contexts, so the bare invocation still reports its fetches.
@@ -393,6 +409,30 @@ const stepName = (step: Record<string, unknown>, index: number): string => {
     }
   }
   return `step ${index + 1}`;
+};
+
+const defaultWorkingDirectory = (scope: Record<string, unknown>): unknown => {
+  const defaults = scope["defaults"];
+  const run = record(defaults) ? defaults["run"] : undefined;
+  return record(run) ? run["working-directory"] : undefined;
+};
+
+/** The step's working directory relative to the repository root. */
+const workingDirectory = (
+  workflow: Record<string, unknown>,
+  job: Record<string, unknown>,
+  step: Record<string, unknown>,
+): string => {
+  const configured = [
+    step["working-directory"],
+    defaultWorkingDirectory(job),
+    defaultWorkingDirectory(workflow),
+  ].find((value) => typeof value === "string");
+  // An expression cannot be resolved statically; the root is the default.
+  if (typeof configured !== "string" || configured.includes("${{")) {
+    return ".";
+  }
+  return joined(".", configured);
 };
 
 export const violationId = (
@@ -457,7 +497,7 @@ export const networkViolations = (
       const name = stepName(rawStep, index);
       const run = rawStep["run"];
       if (typeof run === "string") {
-        const fetches = runFetches(repo, run, dir, file);
+        const fetches = runFetches(repo, run, { actionDir: dir, label: file });
         summary.fetches.push(...fetches);
         const unwrapped = fetches.filter((fetch) => !fetch.wrapped);
         if (unwrapped.length > 0) {
@@ -500,7 +540,11 @@ export const networkViolations = (
         const fetches: NetworkFetch[] = [];
         const run = step["run"];
         if (typeof run === "string") {
-          const own = runFetches(repo, run, null, file);
+          const own = runFetches(repo, run, {
+            actionDir: null,
+            label: file,
+            cwd: workingDirectory(parsed, rawJob, step),
+          });
           // A download inside an invoked script hangs the step exactly like
           // an inline one, so script fetches count for the timeout rule too.
           fetches.push(...own);

@@ -261,6 +261,46 @@ describe("scripts and composite actions", () => {
     expect(report.errors).toEqual([]);
   });
 
+  test("a ./ script in a workflow step resolves from the repository root", () => {
+    const report = check({
+      ...tool,
+      [WORKFLOW]: workflow(`      - name: Install tool
+        run: bash ./scripts/install-tool.sh
+`),
+    });
+
+    expect(report.errors).toEqual([retryError, timeoutError]);
+  });
+
+  test("a step working-directory resolves relative scripts", () => {
+    const report = check({
+      [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
+        working-directory: apps/web
+        run: bash ./scripts/install-tool.sh
+`),
+      "apps/web/scripts/install-tool.sh":
+        "curl -fsSL https://example.com/tool -o tool\n",
+    });
+
+    expect(report.errors).toEqual([
+      `${WORKFLOW}: build: Install tool: route curl (apps/web/scripts/install-tool.sh) through scripts/retry.sh`,
+    ]);
+  });
+
+  test("a workspace-anchored script resolves from the repository root", () => {
+    const report = check({
+      ...tool,
+      [WORKFLOW]: workflow(`      - name: Install tool
+        timeout-minutes: 2
+        working-directory: apps/web
+        run: bash "\${{ github.workspace }}/scripts/install-tool.sh"
+`),
+    });
+
+    expect(report.errors).toEqual([retryError]);
+  });
+
   test("a sourced library is followed", () => {
     const report = check({
       [WORKFLOW]: workflow(`      - name: Install tool
