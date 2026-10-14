@@ -362,8 +362,9 @@ describe("folio collaboration room snapshot generation", () => {
       ],
     ];
 
-    const loaded = await loadFolioCollabSnapshot(authorized.value, async () =>
-      Buffer.alloc(0),
+    const loaded = await loadFolioCollabSnapshot(
+      authorized.value,
+      async () => new ArrayBuffer(0),
     );
     expect(Result.isError(loaded)).toBe(true);
     if (!Result.isError(loaded)) {

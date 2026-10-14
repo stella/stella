@@ -1009,7 +1009,7 @@ export const createCollabServer = async (
           break;
         default: {
           result satisfies never;
-          return panic("Unhandled snapshot load outcome");
+          panic("Unhandled snapshot load outcome");
         }
       }
       context.tokenState.generation = result.generation;

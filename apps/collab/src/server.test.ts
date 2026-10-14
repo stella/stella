@@ -1029,7 +1029,9 @@ describe("collaboration server", () => {
     const closeCodes: number[] = [];
     const refusedProvider = createProvider({
       name: TEST_ROOM_NAME,
-      onClose: (code) => closeCodes.push(code),
+      onClose: (code) => {
+        closeCodes.push(code);
+      },
       token: "collab_token_test",
       url: collabServer.websocketUrl,
       ydoc: refusedDocument,
@@ -1105,7 +1107,9 @@ describe("collaboration server", () => {
     const closeCodes: number[] = [];
     const provider = createProvider({
       name: TEST_ROOM_NAME,
-      onClose: (code) => closeCodes.push(code),
+      onClose: (code) => {
+        closeCodes.push(code);
+      },
       token: "collab_token_test",
       url: collabServer.websocketUrl,
       ydoc: document,
@@ -1184,7 +1188,9 @@ describe("collaboration server", () => {
       const closeCodes: number[] = [];
       const provider = createProvider({
         name: TEST_ROOM_NAME,
-        onClose: (code) => closeCodes.push(code),
+        onClose: (code) => {
+          closeCodes.push(code);
+        },
         token: "collab_token_test",
         url: collabServer.websocketUrl,
         ydoc: document,
