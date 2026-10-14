@@ -2192,8 +2192,6 @@ context("root test runner coverage", () => {
           {
             type: "non-gating",
             file: pinned.file,
-            owningWorkflow: ".github/workflows/staging-smoke.yml",
-            reason: "deployed-environment scenario",
           },
         ],
       ),
@@ -2437,7 +2435,7 @@ context("root test runner coverage", () => {
         pin: "e2eProductionShards.planSha256",
         condition: "success()",
       },
-    };
+    } as const satisfies TestScenario;
     expect(parseScenarioLedger([validScenario])).toEqual([validScenario]);
     expect(() =>
       parseScenarioLedger([

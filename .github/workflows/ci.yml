@@ -3075,7 +3075,11 @@ jobs:
           fi
 
       - name: Tauri package alignment tests
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        env:
+          CI_CHECK_KIND: STATIC
+          CI_CHECK_INPUTS: tracked-tree+generated-inputs
+        id: tauri_alignment_tests
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'merge_group' || steps.static_receipts.outputs.reuse_tauri_alignment_tests != 'true') }}
         run: bun test scripts/check-tauri-package-alignment.test.ts
 
       - name: Tauri counterpart autofix tests
@@ -3242,6 +3246,9 @@ jobs:
         run: bun scripts/run-unlisted-script-tests.ts --timeout 35000
 
       - name: Check test execution paths and disabled states
+        env:
+          CI_CHECK_KIND: CONTEXTUAL
+          CI_CHECK_CONTEXT: "Compares the scenario ledger with the Git merge-base."
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         run: bun scripts/test-gate.ts
 
