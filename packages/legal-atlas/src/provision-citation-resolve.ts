@@ -240,35 +240,47 @@ type ActRead =
       units: (SectionUnit | undefined)[];
     };
 
-const readGazetteAct = (
+/**
+ * Every act the text names by its gazette number, distinct. More than one
+ * (`zákona č. 89/2012 Sb. nebo č. 262/2006 Sb.`) is two acts, which the
+ * caller hears about rather than getting the first.
+ */
+const readGazetteActs = (
   rest: string,
   resolver: CompiledResolver,
   profile: JurisdictionProfile,
-): WorkIdentifier | null => {
-  const match = resolver.gazette.exec(rest);
-  const number = Number(match?.groups?.["number"]);
-  const year = Number(match?.groups?.["year"]);
-  if (
-    match === null ||
-    !Number.isSafeInteger(number) ||
-    number < 1 ||
-    year < profile.earliestYear
-  ) {
-    return null;
-  }
-  const after = rest.slice(match.index + match[0].length);
-  const collection =
-    resolver.collections.find(({ pattern }) => pattern.test(after))
-      ?.canonical ?? null;
+): WorkIdentifier[] => {
   // A bare `262/2006` names the national gazette, the profile's statute
   // collection; it is listed after any treaty collection sharing a prefix.
   const statutes =
     profile.collections.find(({ canonical }) => canonical === "Sb.") ??
     profile.collections.find(({ canonical }) => canonical === "Z. z.");
-  const canonical = collection ?? statutes?.canonical;
-  return canonical === undefined
-    ? null
-    : { number, year, collection: canonical };
+  const works: WorkIdentifier[] = [];
+  for (const match of rest.matchAll(
+    new RegExp(resolver.gazette.source, "giu"),
+  )) {
+    const number = Number(match.groups?.["number"]);
+    const year = Number(match.groups?.["year"]);
+    if (
+      !Number.isSafeInteger(number) ||
+      number < 1 ||
+      year < profile.earliestYear
+    ) {
+      continue;
+    }
+    const after = rest.slice(match.index + match[0].length);
+    const canonical =
+      resolver.collections.find(({ pattern }) => pattern.test(after))
+        ?.canonical ?? statutes?.canonical;
+    if (canonical === undefined) {
+      continue;
+    }
+    const work = { number, year, collection: canonical };
+    if (!works.some((known) => sameWork(known, work))) {
+      works.push(work);
+    }
+  }
+  return works;
 };
 
 const readNamedAct = (
@@ -392,8 +404,11 @@ const readSubdivisionPath = (
   text: string,
   start: number,
   resolver: CompiledResolver,
-): { path: SubdivisionPath; end: number } => {
+): { path: SubdivisionPath; end: number; repeated: boolean } => {
   let path: SubdivisionPath = { subsection: null, letter: null, point: null };
+  // A level named twice (`odst. 2, odst. 3`) is two provisions, never the
+  // last one read.
+  let repeated = false;
   let cursor = start;
   // `§ 316/2` is the shorthand for a subsection.
   const slash = /^\s*\/\s*(?<value>\d{1,4}[a-z]?)(?![\p{L}\p{N}])/iu.exec(
@@ -412,16 +427,19 @@ const readSubdivisionPath = (
     const match = step?.match ?? null;
     const value = match?.groups?.["value"];
     if (step === undefined || match === null || value === undefined) {
-      return { path, end: cursor };
+      return { path, end: cursor, repeated };
     }
     switch (step.level) {
       case "subsection":
+        repeated ||= path.subsection !== null;
         path = { ...path, subsection: canonicalValue(value) };
         break;
       case "letter":
+        repeated ||= path.letter !== null;
         path = { ...path, letter: canonicalValue(value) };
         break;
       case "point":
+        repeated ||= path.point !== null;
         path = { ...path, point: canonicalValue(value) };
         break;
       case "sentence":
@@ -449,8 +467,21 @@ const resolveAct = (
   profile: JurisdictionProfile,
   citedOn: string,
 ): ActResolution => {
-  const gazette = readGazetteAct(rest, resolver, profile);
-  if (gazette !== null) {
+  const numbered = readGazetteActs(rest, resolver, profile);
+  if (numbered.length > 1) {
+    return {
+      kind: "refused",
+      resolution: {
+        status: "ambiguous_act",
+        candidates: numbered.map((work) => ({
+          work,
+          workIdentifier: formatWorkIdentifier(work),
+        })),
+      },
+    };
+  }
+  const [gazette] = numbered;
+  if (gazette !== undefined) {
     // A number the profile knows carries that act's unit (`§ 10 zákona
     // č. 2/1993 Sb.` names the Charter, which has articles); an act the
     // profile does not list is taken as numbered.
@@ -508,7 +539,7 @@ export const resolveProvisionCitation = ({
     resolver.sectionUnits.get(termKey) ??
     resolver.sectionUnits.get(`${termKey}.`) ??
     "section";
-  const { path, end } = readSubdivisionPath(
+  const { path, end, repeated } = readSubdivisionPath(
     normalized,
     section.index + section[0].length,
     resolver,
@@ -517,6 +548,7 @@ export const resolveProvisionCitation = ({
   if (
     // `§§` is the plural designator: it always introduces more than one.
     term.startsWith("§§") ||
+    repeated ||
     resolver.continuation.test(after) ||
     (path.letter !== null && resolver.letterContinuation.test(after)) ||
     // A second provision anywhere after the first (`§ 316 ZP a § 317 ZP`),

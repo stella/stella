@@ -127,6 +127,8 @@ describe("resolveProvisionCitation", () => {
     "§ 52 písm. g) a h) ZP",
     "§ 2910 a násl. OZ",
     "§ 316 ZP a § 317 ZP",
+    "§ 316 odst. 2, odst. 3 ZP",
+    "§ 52 písm. g), písm. h) ZP",
     "§ 52 písm. g a h ZP",
     "§ 52 písm. g–h ZP",
     "§ 52 písm. g, h ZP",
@@ -140,6 +142,20 @@ describe("resolveProvisionCitation", () => {
       expect(resolve(text).status).toBe("multiple_provisions");
     },
   );
+
+  test("two acts named by number are ambiguous, never the first", () => {
+    const read = resolve("§ 10 zákona č. 89/2012 Sb. nebo č. 262/2006 Sb.");
+    expect(read.status).toBe("ambiguous_act");
+    if (read.status === "ambiguous_act") {
+      expect(
+        read.candidates.map(({ workIdentifier }) => workIdentifier).toSorted(),
+      ).toEqual(["262/2006 Sb.", "89/2012 Sb."]);
+    }
+    // The same number twice is one act.
+    expect(
+      resolved("§ 316 zákona č. 262/2006 Sb. (zákon č. 262/2006 Sb.)"),
+    ).toMatchObject({ workIdentifier: "262/2006 Sb." });
+  });
 
   test("two acts named side by side are ambiguous, never resolved to the longer name", () => {
     const read = resolve("§ 10 občanského zákoníku nebo ZP");
