@@ -262,6 +262,76 @@ describe("presentation actions normalize raw model input before transport", () =
   });
 });
 
+test("a filter the server refuses keeps paging on the arguments of the page still shown", async () => {
+  const page = { results: ["existing decision"] };
+  const calls: unknown[] = [];
+  const bridge = createPresentationBridge({
+    manifest: CASE_LAW_RESULTS_APP,
+    parse: () => page,
+    host: {
+      callServerTool: async ({ arguments: arguments_ }) => {
+        calls.push(arguments_);
+        if (
+          typeof arguments_ === "object" &&
+          arguments_ !== null &&
+          "courts" in arguments_
+        ) {
+          return {
+            content: [],
+            isError: true,
+            structuredContent: {
+              appFailure: {
+                ...appFailure("invalid_arguments", "receipt-court"),
+                fields: ["courts"],
+                toolCode: "validation_error",
+              },
+            },
+          };
+        }
+        return { content: [], structuredContent: {} };
+      },
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      getHostContext: () => ({}),
+      getHostCapabilities: () => undefined,
+      connect: async () => {},
+      openLink: async () => ({}),
+      requestDisplayMode: async () => ({ mode: "inline" }),
+      onteardown: undefined,
+    },
+  });
+  await bridge.call({
+    name: "search_case_law",
+    arguments: { queries: ["dismissal"], country: "CZE" },
+  });
+  await bridge.call({
+    name: "search_case_law",
+    arguments: { queries: ["dismissal"], country: "CZE", courts: ["X"] },
+  });
+  const refused = bridge.getSnapshot().result;
+  expect(refused.status).toBe("error");
+  if (refused.status !== "error") {
+    return;
+  }
+  expect(refused.failure.type).toBe("invalid_arguments");
+  expect(refused.previous).toEqual({ status: "ready", view: page });
+  expect(bridge.getSnapshot().input).toEqual({
+    queries: ["dismissal"],
+    country: "CZE",
+  });
+
+  await bridge.call({
+    name: "search_case_law",
+    arguments: { ...bridge.getSnapshot().input, cursor: "existing-page-next" },
+  });
+  expect(calls.at(-1)).toEqual({
+    queries: ["dismissal"],
+    country: "CZE",
+    cursor: "existing-page-next",
+  });
+  expect(bridge.getSnapshot().result.status).toBe("ready");
+});
+
 test("a locally refused filter preserves its page input and leaves Next working without entering loading", async () => {
   const page = { results: ["existing decision"] };
   const states: string[] = [];

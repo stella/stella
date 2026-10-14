@@ -119,6 +119,63 @@ type AppSnapshot<View> = {
 };
 type ReadCall = { name: ToolName; arguments: Record<string, unknown> };
 
+/** The last page shown, with the arguments that produced it. */
+type ShownPage<View> =
+  | { status: "empty" }
+  | {
+      status: "ready";
+      view: View;
+      input: Record<string, unknown>;
+      tool: ToolName;
+    };
+const shownPage = <View>(
+  view: View,
+  { input, tool }: AppSnapshot<View>,
+): ShownPage<View> => ({ status: "ready", view, input, tool });
+
+type FailedSnapshotOptions<View> = {
+  snapshot: AppSnapshot<View>;
+  shown: ShownPage<View>;
+  failure: AppFailure;
+};
+/**
+ * A refused request (invalid arguments) keeps the page already shown, and
+ * paging continues from that page's arguments rather than the refused ones.
+ * Any other failure shows no page.
+ */
+const failedSnapshot = <View>({
+  snapshot,
+  shown,
+  failure,
+}: FailedSnapshotOptions<View>): AppSnapshot<View> => {
+  const message = formatAppFailure(
+    failure,
+    appLocale(snapshot.context.locale).t,
+  );
+  if (failure.type !== "invalid_arguments" || shown.status !== "ready") {
+    return {
+      ...snapshot,
+      result: {
+        status: "error",
+        failure,
+        previous: { status: "empty" },
+        message,
+      },
+    };
+  }
+  return {
+    context: snapshot.context,
+    input: shown.input,
+    tool: shown.tool,
+    result: {
+      status: "error",
+      failure,
+      previous: { status: "ready", view: shown.view },
+      message,
+    },
+  };
+};
+
 type PresentationHost = Pick<
   App,
   | "callServerTool"
@@ -328,12 +385,10 @@ export const createPresentationBridge = <View>({
   let stopViewport: (() => void) | undefined;
   let generation = 0;
   let lastCall: ReadCall | undefined;
-  let previous: { status: "empty" } | { status: "ready"; view: View } = {
-    status: "empty",
-  };
+  let shown: ShownPage<View> = { status: "empty" };
   const publish = (result: ResultState<View>) => {
     if (result.status === "ready") {
-      previous = { status: "ready", view: result.view };
+      shown = shownPage(result.view, snapshot);
     }
     snapshot = {
       context: snapshot.context,
@@ -345,14 +400,10 @@ export const createPresentationBridge = <View>({
       listener();
     }
   };
-  const publishFailure = (failure: AppFailure) =>
-    publish({
-      status: "error",
-      failure,
-      previous:
-        failure.type === "invalid_arguments" ? previous : { status: "empty" },
-      message: formatAppFailure(failure, appLocale(snapshot.context.locale).t),
-    });
+  const publishFailure = (failure: AppFailure) => {
+    snapshot = failedSnapshot({ snapshot, shown, failure });
+    publish(snapshot.result);
+  };
   const publishUnavailable = () =>
     publishFailure(appFailure("unavailable", createAppRequestId(), true));
   const receive = (result: AppToolResult, requestId = createAppRequestId()) => {
@@ -376,7 +427,7 @@ export const createPresentationBridge = <View>({
     }
   };
   const toolInput = ({ arguments: input }: AppEventMap["toolinput"]) => {
-    previous = { status: "empty" };
+    shown = { status: "empty" };
     generation += 1;
     lastCall = undefined;
     snapshot = {
