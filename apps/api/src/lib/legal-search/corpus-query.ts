@@ -1057,7 +1057,8 @@ type CaseLawCorpusFilters = {
 };
 
 /** Typed against the manifests, so a renamed id field cannot drift from here. */
-const DECISION_ID_FIELD: CorpusIndexManifest["documentIdField"] = "document_id";
+const DECISION_ID_FIELD: CorpusIndexManifest["projection"]["documentIdField"] =
+  "document_id";
 
 export type CaseLawCorpusQueryOptions = {
   queryVariant?: CorpusIndexQueryVariant | undefined;

@@ -281,7 +281,10 @@ import {
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
-import { escapeAndHighlight } from "@/api/lib/search/highlight";
+import {
+  escapeAndHighlight,
+  escapeSearchHtml,
+} from "@/api/lib/search/highlight";
 
 import { projectCaseLawSearchResponse } from "./search-response";
 
@@ -2900,7 +2903,7 @@ const readProvisionListCursor = (
   sort: SearchSort,
 ): ProvisionListCursor | null => {
   const parts = decodePaginationCursor(cursor);
-  if (parts === null || parts.length !== 3) {
+  if (parts?.length !== 3) {
     return null;
   }
   const [cursorContext, key, id] = parts;
@@ -3065,7 +3068,11 @@ export const listCaseLawProvisionDecisions = async ({
     nextCursor,
     pageRanked,
     passageCountById: new Map(),
-    snippetById: sentences,
+    // A headline is rendered as markup; a citing sentence is stored text,
+    // so it is escaped like any snippet (it carries no highlights).
+    snippetById: new Map(
+      [...sentences].map(([id, sentence]) => [id, escapeSearchHtml(sentence)]),
+    ),
     // The sentences and the rows share one snapshot, so each excerpt belongs
     // to the revision its row was read at.
     // A row with no applied revision pairs with no excerpt revision, so its

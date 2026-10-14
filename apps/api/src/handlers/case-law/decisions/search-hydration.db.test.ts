@@ -844,7 +844,7 @@ test("a provision-only list is the complete citing set with an exact total and i
   }
   // § 316 of the labour code: the Czech decision cites odst. 2; the Slovak
   // one cites § 31 of it and § 316 of another act, so it is not listed.
-  expect(listed.hits.map(({ decisionId }) => String(decisionId))).toEqual([
+  expect(listed.hits.map(({ decisionId }) => decisionId)).toEqual([
     String(czechId),
   ]);
   expect(listed.total).toEqual({ type: "exact", count: 1 });
@@ -863,6 +863,53 @@ test("a provision-only list is the complete citing set with an exact total and i
     type: "exact",
     count: 0,
   });
+});
+
+test("a provision-only list escapes the citing sentence it shows as markup", async () => {
+  const db = drizzle({ client });
+  // An earlier citing sentence of the same provision, holding markup.
+  const [marked] = await db
+    .insert(caseLawProvisionCitations)
+    .values({
+      anchor: "par_316-odst_2",
+      confidence: 0.9,
+      decisionDate: "2024-01-01",
+      decisionId: czechId,
+      jurisdiction: "CZE",
+      section: 316,
+      subsection: "2",
+      sentenceText: `<img src=x onerror=alert(1)> "a" & 'b'`,
+      spanEnd: 2,
+      spanStart: 1,
+      unit: "section",
+      workCollection: "Sb.",
+      workIdentifier: "262/2006 Sb.",
+      workNumber: 262,
+      workYear: 2006,
+    })
+    .returning({ id: caseLawProvisionCitations.id });
+  try {
+    const listed = await listCaseLawProvisionDecisions({
+      body: {
+        ...SEARCH_BODY,
+        provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
+      },
+      caseLawDb,
+      dependencies: { servingGeneration: GENERATION, provider: "corpus-index" },
+    });
+    if (!("hits" in listed)) {
+      throw new Error("expected a page");
+    }
+    expect(listed.hits.at(0)?.headline).toBe(
+      "&lt;img src=x onerror=alert(1)&gt; &quot;a&quot; &amp; &#x27;b&#x27;",
+    );
+  } finally {
+    if (marked !== undefined) {
+      await db
+        .delete(caseLawProvisionCitations)
+        .where(eq(caseLawProvisionCitations.id, marked.id));
+    }
+  }
 });
 
 test("a provision-only list under the Postgres provider says it needs corpus-index search", async () => {
@@ -951,7 +998,7 @@ test("a provision-only list cursor resumes only the request it was issued for", 
     expect(second.nextCursor).toBeNull();
     expect(
       [...first.hits, ...second.hits]
-        .map(({ decisionId }) => String(decisionId))
+        .map(({ decisionId }) => decisionId)
         .toSorted(),
     ).toEqual([String(czechId), String(slovakId)].toSorted());
 
