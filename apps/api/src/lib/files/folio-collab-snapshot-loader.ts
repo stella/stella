@@ -22,7 +22,7 @@ type LoadPersistedFolioSnapshotOptions = {
  * either return a safe update or explicitly require a DOCX-backed reseed;
  * callers never inspect, patch, or partially apply refused state.
  */
-export const loadPersistedFolioSnapshot = ({
+export const loadPersistedFolioSnapshot = async ({
   onRefused,
   snapshotBytes,
 }: LoadPersistedFolioSnapshotOptions) =>
