@@ -145,7 +145,8 @@ psql_legacy() {
   docker exec -i "$legacy_postgres" psql -U postgres -d stella -v ON_ERROR_STOP=1 "$@"
 }
 # Force host password authentication ahead of initdb's loopback trust entries.
-docker exec -i "$legacy_postgres" sh -se <<'SH'
+# Rewrite as the server user: init.sql later rewrites the same file from SQL.
+docker exec -i --user postgres "$legacy_postgres" sh -se <<'SH'
 hba="$PGDATA/pg_hba.conf"
 { printf 'host all all 0.0.0.0/0 md5\nhost all all ::/0 md5\n'; cat "$hba"; } > "$hba.password-smoke"
 mv "$hba.password-smoke" "$hba"
