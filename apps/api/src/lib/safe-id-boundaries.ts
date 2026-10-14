@@ -100,6 +100,10 @@ export const brandPersistedReportExportId = (
   reportExportId: string,
 ): SafeId<"reportExport"> => toSafeId<"reportExport">(reportExportId);
 
+export const brandPersistedDataExportId = (
+  dataExportId: string,
+): SafeId<"dataExport"> => toSafeId<"dataExport">(dataExportId);
+
 export const brandPersistedFieldId = (fieldId: string): SafeId<"field"> =>
   toSafeId<"field">(fieldId);
 

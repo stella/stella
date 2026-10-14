@@ -161,6 +161,7 @@ export type SafeIdType =
   | "sellerProfile"
   | "numberSeries"
   | "reportExport"
+  | "dataExport"
   | "schedulerJobRun"
   | "sharepointConnection"
   | "sharepointOAuthState"
