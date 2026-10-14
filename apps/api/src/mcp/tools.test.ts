@@ -1375,6 +1375,13 @@ describe("OpenAI-compatible MCP tools", () => {
           },
           FILTER_KIND,
         ),
+        provision: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+          description:
+            'Only decisions citing this statutory provision, written as a lawyer cites it: "§ 316 odst. 2 ZP", "§ 2910 OZ", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "§ 316 zákona č. 262/2006 Sb.". A section matches every subsection of it; a subsection or letter narrows. Combine it with queries to find decisions on a topic that apply the provision. An abbreviation or title is read as the act in force today; name the act by number (č. 65/1965 Sb.) for an earlier one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
+        },
         has_legal_sentence: {
           type: "boolean",
           description:
@@ -5088,6 +5095,69 @@ describe("OpenAI-compatible MCP tools", () => {
           category: "A",
           hasLegalSentence,
         });
+      },
+    );
+
+    test.each([
+      [
+        "§ 316 odst. 2 ZP",
+        {
+          work: "262/2006 Sb.",
+          unit: "section",
+          section: 316,
+          subsection: "2",
+        },
+      ],
+      [
+        "§ 52 písm. g) zákoníku práce",
+        { work: "262/2006 Sb.", unit: "section", section: 52, letter: "g" },
+      ],
+      ["čl. 10 Listiny", { unit: "article", section: 10 }],
+    ])(
+      "reads the provision %s onto every phrasing's search",
+      async (provision, expected) => {
+        const result = await handleMcpToolCall({
+          args: {
+            queries: ["kamerový systém na pracovišti", "monitorování"],
+            country: "CZE",
+            provision,
+          },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(result.isError).toBeUndefined();
+        expect(searchDecisionsHandlerMock).toHaveBeenCalledTimes(2);
+        for (const [{ body }] of searchDecisionsHandlerMock.mock.calls) {
+          expect(body.provision).toMatchObject(expected);
+        }
+        // A level the caller left out is absent, so it matches every value.
+        const body = searchedBody();
+        if (!("subsection" in expected)) {
+          expect(body["provision"]).not.toHaveProperty("subsection");
+        }
+      },
+    );
+
+    test.each([
+      ["kamerový systém", "names no section"],
+      ["§ 316 odst. 2", "names no act"],
+      ["§ 10 Listiny", "is not divided into the units"],
+    ])(
+      "refuses the provision %s before any search, naming the fix",
+      async (provision, message) => {
+        const result = await handleMcpToolCall({
+          args: { queries: ["kamera"], country: "CZE", provision },
+          context: createContext(),
+          toolName: "search_case_law",
+        });
+        expect(result.isError).toBe(true);
+        expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+        const payload = parseToolPayload(result);
+        expect(payload).toMatchObject({
+          error: { code: "validation_error" },
+        });
+        expect(JSON.stringify(payload)).toContain(message);
+        expect(JSON.stringify(payload)).toContain('"hint"');
       },
     );
 

@@ -35,7 +35,10 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
+import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
+import { resolveProvisionCitation } from "@stll/legal-atlas/provision-citation-resolve";
 import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
+import { Temporal } from "@stll/time";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -73,6 +76,7 @@ import {
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
+import type { CaseLawProvisionFilter } from "@/api/lib/case-law/provision-filter";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import {
   type AgentCaseLawSearchWarning,
@@ -759,6 +763,16 @@ const searchCaseLawArgsSchema = nullAsAbsent(
         v.maxLength(128),
         v.description(
           'Exact publisher category from metadata.category, for example "A" or "B"; this does not imply Sbírka publication. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
+        ),
+      ),
+    ),
+    provision: v.optional(
+      v.pipe(
+        v.string(),
+        v.nonEmpty(),
+        v.maxLength(LIMITS.caseLawProvisionFilterMaxLength),
+        v.description(
+          'Only decisions citing this statutory provision, written as a lawyer cites it: "§ 316 odst. 2 ZP", "§ 2910 OZ", "§ 52 písm. g) zákoníku práce", "čl. 10 Listiny", "§ 316 zákona č. 262/2006 Sb.". A section matches every subsection of it; a subsection or letter narrows. Combine it with queries to find decisions on a topic that apply the provision. An abbreviation or title is read as the act in force today; name the act by number (č. 65/1965 Sb.) for an earlier one. Applied to live rows within the bounded candidate scan; corpus-index facets and total are unavailable.',
         ),
       ),
     ),
@@ -2128,6 +2142,88 @@ const readCaseLawSearchAnswer = (
   return { type: "page", page: answer };
 };
 
+type SearchProvisionRead =
+  | { type: "resolved"; provision: CaseLawProvisionFilter }
+  | { type: "refused"; result: InternalToolErrorResult };
+
+const provisionRefusal = (
+  message: string,
+  hint: string,
+): SearchProvisionRead => ({
+  type: "refused",
+  result: structuredErrorResult({
+    code: "validation_error",
+    message,
+    hint,
+    issues: [{ path: "provision", message }],
+  }),
+});
+
+/**
+ * Reads the provision a caller names against the country's citation profile,
+ * the vocabulary the corpus's provision links were extracted with, as the act
+ * in force today. Every refusal names what to send instead.
+ */
+const resolveSearchProvision = (
+  text: string,
+  country: string,
+): SearchProvisionRead => {
+  const profile = provisionCitationProfileFor(country);
+  if (profile === null) {
+    return provisionRefusal(
+      `Provision filtering is not available for ${country}`,
+      "Omit provision and put the provision in queries instead.",
+    );
+  }
+  const read = resolveProvisionCitation({
+    text,
+    profile,
+    citedOn: Temporal.Now.plainDateISO("UTC").toString(),
+  });
+  switch (read.status) {
+    case "resolved":
+      return {
+        type: "resolved",
+        provision: {
+          work: read.workIdentifier,
+          unit: read.unit,
+          section: read.section,
+          ...(read.sectionSuffix === null
+            ? {}
+            : { sectionSuffix: read.sectionSuffix }),
+          ...(read.subsection === null ? {} : { subsection: read.subsection }),
+          ...(read.letter === null ? {} : { letter: read.letter }),
+          ...(read.point === null ? {} : { point: read.point }),
+        },
+      };
+    case "no_provision":
+      return provisionRefusal(
+        "The provision names no section",
+        'Write it with its section, for example "§ 316 odst. 2 ZP" or "čl. 10 Listiny".',
+      );
+    case "no_act":
+      return provisionRefusal(
+        "The provision names no act this corpus recognises",
+        'Name the act by abbreviation, title or number, for example "§ 316 ZP", "§ 316 zákoníku práce" or "§ 316 zákona č. 262/2006 Sb.".',
+      );
+    case "ambiguous_act":
+      return provisionRefusal(
+        "The provision's act name fits more than one act",
+        `Name the act by number: ${read.candidates
+          .map(({ workIdentifier }) => workIdentifier)
+          .join(", ")}.`,
+      );
+    case "unit_mismatch":
+      return provisionRefusal(
+        `${read.workIdentifier} is not divided into the units the provision names`,
+        "Use the act's own unit: articles (čl.) or sections (§).",
+      );
+    default:
+      read satisfies never;
+      return panic(`Unknown provision resolution ${String(read)}`);
+  }
+};
+
 const caseLawSearchRequestFilters = ({
   category,
   has_legal_sentence: hasLegalSentence,
@@ -2344,6 +2440,13 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       `Pass one of the admitted country codes: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
     );
   }
+  const provisionFilter =
+    parsed.output.provision === undefined
+      ? undefined
+      : resolveSearchProvision(parsed.output.provision, publicCountry);
+  if (provisionFilter?.type === "refused") {
+    return provisionFilter.result;
+  }
   const resolved = resolveCaseLawSearchCursors({
     cursor,
     queryCount: queries.length,
@@ -2400,6 +2503,9 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       ...(courtFilter === undefined ? {} : { court: courtFilter }),
       ...(courtListFilter === undefined ? {} : { courts: courtListFilter }),
       ...caseLawSearchRequestFilters(parsed.output),
+      ...(provisionFilter === undefined
+        ? {}
+        : { provision: provisionFilter.provision }),
       country: publicCountry,
     };
     return {

@@ -126,6 +126,7 @@ import {
 import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
 import { readCaseLawSourceRegistry } from "@/api/lib/case-law/non-redistributable-sources";
+import { provisionCitedSql } from "@/api/lib/case-law/provision-filter";
 import {
   loadPublicCourtWeights,
   loadPublicFtsSearchConfigs,
@@ -465,6 +466,13 @@ export const caseLawSearchPlan = ({
   const languageFilter = body.language
     ? sql`AND d.language = ${body.language}`
     : sql``;
+  const provisionFilter = body.provision
+    ? sql`AND ${provisionCitedSql({
+        decisionId: sql`d.id`,
+        jurisdiction: body.country,
+        provision: body.provision,
+      })}`
+    : sql``;
 
   const scoreExpr = blendedRankSql({
     authority: sql`cb.authority`,
@@ -501,6 +509,7 @@ export const caseLawSearchPlan = ({
     ${typeFilter}
     ${sourceFilter}
     ${languageFilter}
+    ${provisionFilter}
   `;
 
   // The citing court can belong to any jurisdiction — citation graphs cross
@@ -1274,6 +1283,7 @@ type CaseLawSearchRowFilterBody = Pick<
   | "courts"
   | "category"
   | "hasLegalSentence"
+  | "provision"
   | "dateFrom"
   | "dateTo"
   | "decisionType"
@@ -1306,6 +1316,15 @@ export const caseLawSearchRowFilters = (
   if (body.hasLegalSentence !== undefined) {
     filters.push(
       sql`${decisionHasLegalSentenceSql(caseLawDecisions.metadata)} = ${body.hasLegalSentence}`,
+    );
+  }
+  if (body.provision !== undefined) {
+    filters.push(
+      provisionCitedSql({
+        decisionId: sql`${caseLawDecisions.id}`,
+        jurisdiction: body.country,
+        provision: body.provision,
+      }),
     );
   }
   filters.push(eq(caseLawDecisions.country, body.country));
@@ -2056,7 +2075,8 @@ const readCaseLawSearchFacets = async ({
   if (
     queryFor === null ||
     body.category !== undefined ||
-    body.hasLegalSentence !== undefined
+    body.hasLegalSentence !== undefined ||
+    body.provision !== undefined
   ) {
     return null;
   }

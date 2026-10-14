@@ -12,6 +12,7 @@ import {
 
 import {
   caseLawDecisions,
+  caseLawProvisionCitations,
   caseLawSources,
   caseLawSearchDocuments,
   corpusIndexGenerations,
@@ -287,6 +288,42 @@ beforeAll(
         contentHash: "hash-queued",
       },
     ]);
+
+    const link = (
+      decisionId: SafeId<"caseLawDecision">,
+      work: { number: number; year: number },
+      section: number,
+      subsection: string | null,
+      spanStart: number,
+    ): typeof caseLawProvisionCitations.$inferInsert => {
+      const anchor = `par_${String(section)}${subsection === null ? "" : `-odst_${subsection}`}`;
+      return {
+        anchor,
+        confidence: 0.9,
+        decisionDate: "2024-01-01",
+        decisionId,
+        jurisdiction: "CZE",
+        section,
+        subsection,
+        sentenceText: `sentence ${anchor}`,
+        spanEnd: spanStart + 10,
+        spanStart,
+        unit: "section",
+        workCollection: "Sb.",
+        workIdentifier: `${String(work.number)}/${String(work.year)} Sb.`,
+        workNumber: work.number,
+        workYear: work.year,
+      };
+    };
+    const labourCode = { number: 262, year: 2006 };
+    const civilCode = { number: 89, year: 2012 };
+    await db
+      .insert(caseLawProvisionCitations)
+      .values([
+        link(czechId, labourCode, 316, "2", 10),
+        link(slovakId, labourCode, 31, null, 10),
+        link(slovakId, civilCode, 316, "1", 30),
+      ]);
 
     await db.insert(caseLawSearchDocuments).values(
       [czechId, withheldId].map((decisionId) => ({
@@ -731,6 +768,91 @@ test.each([
     expect([...rows.keys()]).toEqual([...expectedIds]);
   },
 );
+
+test.each([
+  {
+    name: "a section matches a link to one of its subsections",
+    provision: { work: "262/2006 Sb.", section: 316 },
+    expectedIds: [czechId],
+  },
+  {
+    name: "a subsection matches its own links",
+    provision: { work: "262/2006 Sb.", section: 316, subsection: "2" },
+    expectedIds: [czechId],
+  },
+  {
+    name: "a sibling subsection matches nothing",
+    provision: { work: "262/2006 Sb.", section: 316, subsection: "1" },
+    expectedIds: [],
+  },
+  {
+    name: "a shorter section number is not a prefix of a longer one",
+    provision: { work: "262/2006 Sb.", section: 31 },
+    expectedIds: [slovakId],
+  },
+  {
+    name: "the work is part of the provision",
+    provision: { work: "89/2012 Sb.", section: 316 },
+    expectedIds: [slovakId],
+  },
+  {
+    name: "a section suffix the link lacks matches nothing",
+    provision: { work: "262/2006 Sb.", section: 316, sectionSuffix: "a" },
+    expectedIds: [],
+  },
+] as const)(
+  "both indexed reads apply the provision filter: $name",
+  async ({ provision, expectedIds }) => {
+    const body = {
+      ...SEARCH_BODY,
+      provision: { unit: "section" as const, ...provision },
+    };
+    const ranking = await rehydrateCaseLawCandidates({
+      body,
+      candidates: candidatesOf(czechId, slovakId),
+      caseLawDb,
+      courtWeights,
+      generation: GENERATION,
+    });
+    expect(ranking.ranked.map(({ id }) => id)).toEqual([...expectedIds]);
+    const rows = await readCaseLawPageDecisionRows({
+      body,
+      caseLawDb,
+      generation: GENERATION,
+      ids: [czechId, slovakId],
+    });
+    expect([...rows.keys()]).toEqual([...expectedIds]);
+  },
+);
+
+test("the provision filter probes links by decision id, not by scanning them", async () => {
+  await caseLawDb(async (tx) => {
+    await tx.execute(sql`SET LOCAL enable_seqscan = off`);
+    const options = {
+      body: {
+        ...SEARCH_BODY,
+        provision: {
+          work: "262/2006 Sb.",
+          unit: "section" as const,
+          section: 316,
+          subsection: "2",
+        },
+      },
+      generation: GENERATION,
+      ids: [czechId, slovakId],
+    };
+    for (const query of [
+      candidateDecisionRowsStatement(tx, options),
+      pageDecisionRowsStatement(tx, options),
+    ]) {
+      const plan = JSON.stringify(
+        await tx.execute(sql`EXPLAIN (COSTS OFF) ${query.getSQL()}`),
+      );
+      expect(plan).toContain("case_law_provision_citations_decision_span_idx");
+      expect(plan).not.toContain("Seq Scan on case_law_provision_citations");
+    }
+  });
+});
 
 test.each([true, false])(
   "metadata filters keep the decision-id access path (%s)",

@@ -43,7 +43,7 @@ const DESCRIPTION_HEAD =
   "across them.";
 
 const DESCRIPTION_TAIL =
-  " Filters: court, language, dates, decision type, " +
+  " Filters: court, language, dates, decision type, provision, " +
   "source_id (a `facets.source` bucket's `value`). Facets describe the " +
   "first phrasing on page one, null later. Total is uncounted for " +
   "multiple phrasings. Function words are not required terms; " +

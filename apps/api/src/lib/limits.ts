@@ -405,6 +405,8 @@ export const LIMITS = {
   entityNameMaxLength: ENTITY_NAME_MAX_LENGTH,
   workspaceContributors: 5,
   searchQueryMaxLength: SEARCH_QUERY_MAX_LENGTH,
+  /** Characters of a provision citation a case-law search is narrowed by. */
+  caseLawProvisionFilterMaxLength: 256,
   searchPageSizeDefault: 20,
   searchPageSizeMax: 100,
   /** Maximum visible text returned by any global-search preview response. */
