@@ -8,6 +8,10 @@ import {
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 // Type-only, so the decision reader's component graph never loads here.
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
 import type { DecisionWorkspaceProps } from "@/features/case-law/components/case-viewer/decision-workspace";
 import { publicToolCrawlPaths } from "@/public-crawl-policy";
 
@@ -710,12 +714,20 @@ describe("public law sitemap", () => {
     // Boundary-anchored rules: dir prefixes emit a subtree + exact-path pair,
     // the sitemap.xml file prefix emits just the exact-path rule.
     expect(allowLines).toEqual([
-      "Allow: /law/",
       "Allow: /law$",
+      // One subtree per admitted jurisdiction, from the admission state.
+      ...PUBLIC_CASE_LAW_COUNTRIES.flatMap((country) => {
+        const path = `/law/${toCaseLawCountryParam(country)}`;
+        return [`Allow: ${path}/`, `Allow: ${path}$`];
+      }),
       "Allow: /sitemap.xml$",
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",
     ]);
+    // A jurisdiction the corpus does not admit stays behind Disallow: /.
+    expect(allowLines.some((line) => line.startsWith("Allow: /law/svk"))).toBe(
+      false,
+    );
     // Sibling-path regression: never emit a bare un-anchored prefix (which
     // would also match /lawyer, /law-admin, …). Every Allow rule ends in / or $.
     for (const line of allowLines) {

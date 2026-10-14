@@ -2,6 +2,10 @@ import { describe, expect, test } from "bun:test";
 
 import { loadCatalogue } from "@stll/catalogue";
 
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
 import {
@@ -33,6 +37,41 @@ describe("public crawl policy", () => {
       }
       expect(isPublicCrawlPath(path, options)).toBe(true);
     }
+  });
+
+  test("opens the law pages of admitted jurisdictions only", () => {
+    const rules = createPublicCrawlRules(options).filter(
+      ({ path }) => path === "/law" || path.startsWith("/law/"),
+    );
+    expect(rules).toEqual([
+      { path: "/law", scope: "exact" },
+      ...PUBLIC_CASE_LAW_COUNTRIES.map(
+        (country) =>
+          ({
+            path: `/law/${toCaseLawCountryParam(country)}`,
+            scope: "subtree",
+          }) as const,
+      ),
+    ]);
+    // The admitted corpus today, and what stays closed beside it.
+    expect(isPublicCrawlPath("/law/cze/cases/nejvyssi-soud/x", options)).toBe(
+      PUBLIC_CASE_LAW_COUNTRIES.includes("CZE"),
+    );
+    for (const country of ["svk", "usa", "gbr", "eu", "pol", "hun", "aut"]) {
+      if (
+        PUBLIC_CASE_LAW_COUNTRIES.some(
+          (admitted) => toCaseLawCountryParam(admitted) === country,
+        )
+      ) {
+        continue;
+      }
+      expect(
+        isPublicCrawlPath(`/law/${country}/cases/court/slug`, options),
+      ).toBe(false);
+    }
+    // Cross-country pages are not a jurisdiction's own.
+    expect(isPublicCrawlPath("/law/cases", options)).toBe(false);
+    expect(isPublicCrawlPath("/law/coverage", options)).toBe(false);
   });
 
   test("enumerates the published tool pages for both namespaces", () => {

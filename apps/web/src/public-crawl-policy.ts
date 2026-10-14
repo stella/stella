@@ -1,9 +1,19 @@
 import { loadCatalogue } from "@stll/catalogue";
 
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  toCaseLawCountryParam,
+} from "@/features/case-law/case-law-jurisdiction";
+
 type PublicCrawlRoute = {
   path: `/${string}`;
   route: `/${string}`;
-  scope: "exact" | "subtree" | "catalogue";
+  /**
+   * `jurisdictions`: the path itself, plus a subtree per jurisdiction the
+   * public case-law corpus admits. A country that is not admitted stays
+   * outside the crawl, whatever pages it may serve.
+   */
+  scope: "exact" | "subtree" | "catalogue" | "jurisdictions";
   permission: "law" | "tools" | "knowledge";
   format: "html" | "xml";
 };
@@ -12,7 +22,7 @@ export const PUBLIC_CRAWL_ROUTES = [
   {
     path: "/law",
     route: "/law",
-    scope: "subtree",
+    scope: "jurisdictions",
     permission: "law",
     format: "html",
   },
@@ -65,6 +75,12 @@ export type PublicCrawlRule = {
   scope: "exact" | "subtree";
 };
 
+/** The admitted jurisdictions' law subtrees, read from the admission state. */
+export const publicLawJurisdictionCrawlPaths = (): readonly `/${string}`[] =>
+  PUBLIC_CASE_LAW_COUNTRIES.map(
+    (country): `/${string}` => `/law/${toCaseLawCountryParam(country)}`,
+  );
+
 export const publicToolCrawlPaths = (
   toolsBasePath: PublicCrawlOptions["toolsBasePath"],
 ): readonly `/${string}`[] => [
@@ -89,6 +105,13 @@ export const createPublicCrawlRules = ({
   const rules: PublicCrawlRule[] = [];
   for (const entry of PUBLIC_CRAWL_ROUTES) {
     if (!permissions[entry.permission]) {
+      continue;
+    }
+    if (entry.scope === "jurisdictions") {
+      rules.push({ path: entry.path, scope: "exact" });
+      for (const path of publicLawJurisdictionCrawlPaths()) {
+        rules.push({ path, scope: "subtree" });
+      }
       continue;
     }
     if (entry.scope === "catalogue") {
