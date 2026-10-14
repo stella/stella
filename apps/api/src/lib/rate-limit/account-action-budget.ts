@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import {
   createRedisRateLimit,
   createRedisRateLimitRequestKey,

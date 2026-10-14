@@ -4,6 +4,7 @@ import {
   toPersonalChatThreadResponse,
 } from "@/api/handlers/chat/personal-data-response";
 import { projectPrivateAnnotationForAccountExport } from "@/api/handlers/legal-reader/annotations/personal-data-response";
+import { projectPrivateReaderAnswerForAccountExport } from "@/api/handlers/legal-reader/answers/personal-data-response";
 import { toMemoryResponse } from "@/api/handlers/memories/response";
 import { toSavedSearchResponse } from "@/api/handlers/saved-searches/response";
 import { toSavedTimeNarrativeItem } from "@/api/handlers/saved-time-narratives/schema";
@@ -31,6 +32,7 @@ export const ACCOUNT_EXPORT_PROJECTIONS = {
   member: projectAccountMembership,
   feedback_reports: projectFeedbackReportForAccountExport,
   legal_reader_annotations: projectPrivateAnnotationForAccountExport,
+  legal_reader_answers: projectPrivateReaderAnswerForAccountExport,
   saved_time_narratives: toSavedTimeNarrativeItem,
   template_lookup_format_user_defaults: toUserDefaultAccountExport,
   chat_threads: toPersonalChatThreadResponse,

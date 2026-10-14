@@ -7,6 +7,8 @@ import type {
   chatMessages,
   chatThreads,
   legalReaderAnnotations,
+  legalReaderAnswerMessages,
+  legalReaderAnswers,
   savedSearches,
   savedTimeNarratives,
   searchHistoryEntries,
@@ -56,6 +58,10 @@ type AccountExportProjectionSignatures = {
   ) => Promise<unknown>;
   legal_reader_annotations: (
     row: typeof legalReaderAnnotations.$inferSelect,
+  ) => unknown;
+  legal_reader_answers: (
+    row: typeof legalReaderAnswers.$inferSelect,
+    messages: (typeof legalReaderAnswerMessages.$inferSelect)[],
   ) => unknown;
   saved_time_narratives: (
     row: typeof savedTimeNarratives.$inferSelect,
