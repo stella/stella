@@ -145,3 +145,19 @@ export const isPublicCrawlPath = (
       path === rule.path ||
       (rule.scope === "subtree" && path.startsWith(`${rule.path}/`)),
   );
+
+/**
+ * The one owner of "may a crawler index this law page": robots.txt, the law
+ * sitemap and each page's meta robots all ask this, so a page is listed and
+ * `index,follow` exactly when robots.txt allows it.
+ */
+export const isPublicLawPathIndexable = (
+  path: string,
+  publicLawCrawlAllowed: boolean,
+): boolean =>
+  isPublicCrawlPath(path, {
+    publicKnowledgeCrawlAllowed: false,
+    publicLawCrawlAllowed,
+    publicToolsCrawlAllowed: false,
+    toolsBasePath: "/tools",
+  });
