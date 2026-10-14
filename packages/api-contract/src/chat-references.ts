@@ -15,6 +15,7 @@ export type ChatMentionHrefPrefixMap = {
 export const CHAT_REFERENCE_CATEGORIES = [
   ...CHAT_MENTION_CATEGORIES,
   "decision",
+  "corpus",
 ] as const;
 
 export type ChatReferenceCategory = (typeof CHAT_REFERENCE_CATEGORIES)[number];
@@ -27,6 +28,9 @@ export const CHAT_REFERENCE_HREF_PREFIXES = {
   entity: CHAT_RESOURCE_HREF_PREFIX.entity,
   workspace: CHAT_RESOURCE_HREF_PREFIX.workspace,
   decision: CHAT_RESOURCE_HREF_PREFIX.case_law_decision,
+  // A public corpus scope chip ("@Case law · Czechia"): no resource row, so
+  // its id is the scope itself (`formatChatCorpusId`).
+  corpus: "#stella-corpus=",
 } as const satisfies ChatReferenceHrefPrefixMap;
 
 export const CHAT_MENTION_HREF_PREFIXES = {
