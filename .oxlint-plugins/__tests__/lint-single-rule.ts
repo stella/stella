@@ -195,14 +195,7 @@ const lintTogether = async (
     const sourceFiles = requests.map(({ lintCase }) => lintCase.sourceFile);
     const lines = sharedLines(
       await spawnOxlint(
-        [
-          "-c",
-          first.lintCase.configPath,
-          "-f",
-          "json",
-          ...(first.lintCase.fix ? ["--fix"] : []),
-          ...sourceFiles,
-        ],
+        ["-c", first.lintCase.configPath, "-f", "json", ...sourceFiles],
         REPOSITORY_ROOT,
       ),
       sourceFiles,
@@ -230,6 +223,18 @@ const nextTurn = async () =>
   new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
+
+/**
+ * Whether a case must lint in a run of its own. Scratch-relative paths and
+ * override globs depend on the case's own root, and a fix rewrites the file:
+ * rerunning a rejected shared --fix run would apply the fixer twice.
+ */
+export const lintsAlone = ({
+  cwd,
+  overrides,
+  fix,
+}: Pick<LintSingleRuleOptions, "cwd" | "overrides" | "fix">): boolean =>
+  cwd === "scratch" || overrides !== undefined || fix === true;
 
 /**
  * Lint one case together with every concurrent case of the same rule
@@ -336,15 +341,9 @@ export const runSingleRule = async (
       directory: cwd === "scratch" ? directory : undefined,
       sourcePath,
     };
-    // Scratch-relative paths and override globs depend on the case's own
-    // root, so those cases keep a run of their own.
-    return cwd === "scratch" || overrides !== undefined
+    return lintsAlone({ cwd, overrides, fix })
       ? { alone: await withOxlintSlot(async () => lintAlone(lintCase)) }
-      : await lintShared(
-          `${fix ? "fix" : "check"}\n${config}`,
-          `${plugin}(${ruleName})`,
-          lintCase,
-        );
+      : await lintShared(config, `${plugin}(${ruleName})`, lintCase);
   });
   await rm(directory, { force: true, recursive: true });
   if (Result.isError(lintResult)) {
