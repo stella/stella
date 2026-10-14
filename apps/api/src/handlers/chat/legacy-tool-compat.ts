@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import {
   ASK_USER_TOOL_NAME,
@@ -13,7 +15,6 @@ import type {
   createSuggestChangesTools,
 } from "@/api/handlers/chat/tools/folio-agent-tools";
 import type { ChatPart } from "@/api/handlers/chat/types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 
 type FolioClientToolName =
@@ -50,20 +51,14 @@ export const normalizeStoredChatToolExecutor = (part: ChatPart): ChatPart => {
     return part;
   }
   const metadata = part.metadata;
+  // Every writer proves its content before storing it, so a stored call with
+  // non-object metadata or an unrecognised executor is corrupted state.
   if (metadata !== undefined && !isRecord(metadata)) {
-    throw new HandlerError({
-      status: 422,
-      code: "CHAT_STORED_TOOL_METADATA_INVALID",
-      message: "Stored tool call has invalid metadata",
-    });
+    return panic("Stored tool call has invalid metadata");
   }
   const provider = isRecord(metadata) ? metadata : {};
   if (provider[CHAT_TOOL_EXECUTOR_METADATA_KEY] !== undefined) {
-    throw new HandlerError({
-      status: 422,
-      code: "CHAT_STORED_TOOL_EXECUTOR_INVALID",
-      message: "Stored tool call has invalid executor ownership",
-    });
+    return panic("Stored tool call has invalid executor ownership");
   }
   // Stored calls predate recorded ownership and deferred server execution.
   // A request registry must never change ownership of a historical call.

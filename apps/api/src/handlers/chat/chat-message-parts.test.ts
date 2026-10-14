@@ -4,7 +4,7 @@ import {
   StreamProcessor,
   uiMessagesToWire,
 } from "@tanstack/ai";
-import { Result } from "better-result";
+import { Panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -56,7 +56,6 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import { richChatParts, unsafeScriptUrl } from "./__fixtures__/rich-chat-parts";
@@ -673,7 +672,7 @@ describe("persisted chat message parts", () => {
     }
   });
 
-  test("malformed legacy tool metadata produces a structured read error", () => {
+  test("malformed stored tool metadata is rejected as corrupted state", () => {
     const call = {
       type: "tool-call",
       name: "list_templates",
@@ -708,9 +707,8 @@ describe("persisted chat message parts", () => {
       });
       expect(Result.isError(result)).toBe(true);
       if (Result.isError(result)) {
-        expect(HandlerError.is(result.error)).toBe(true);
-        if (HandlerError.is(result.error)) {
-          expect(result.error.status).toBe(422);
+        expect(result.error).toBeInstanceOf(Panic);
+        if (result.error instanceof Panic) {
           expect(result.error.message).toContain(
             "Stored tool call has invalid",
           );
