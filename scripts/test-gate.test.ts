@@ -18,6 +18,7 @@ import {
   scenarioLedgerGrowth,
   scenarioBlockerFailure,
   validateTrustedOutputProducers,
+  validateGatingEventFacts,
 } from "./test-gate";
 import type { ScenarioBlocker, TestScenario } from "./test-gate";
 import { TRUSTED_OUTPUT_PRODUCERS } from "./test-gate-output-producers";
@@ -1752,6 +1753,119 @@ jobs:
     },
   );
 
+  check.each([
+    {
+      condition: "steps.missing.outcome == 'success'",
+      preceding: [],
+      following: [],
+      credited: false,
+    },
+    {
+      condition: "steps.later.outcome == 'success'",
+      preceding: [],
+      following: [{ id: "later", run: "true" }],
+      credited: false,
+    },
+    {
+      condition: "steps.prep.outcome == 'success'",
+      preceding: [{ id: "prep", run: "true" }],
+      following: [],
+      credited: true,
+    },
+    {
+      condition: "steps.prep.outcome == 'success'",
+      preceding: [{ id: "prep", if: false, run: "true" }],
+      following: [],
+      credited: false,
+    },
+    {
+      condition: "steps.prep.outcome == 'success'",
+      preceding: [{ id: "prep", "continue-on-error": true, run: "true" }],
+      following: [],
+      credited: false,
+    },
+    {
+      condition: "github.ref == 'refs/heads/main'",
+      preceding: [],
+      following: [],
+      credited: false,
+    },
+    {
+      condition: "github.event_name == 'merge_group'",
+      preceding: [],
+      following: [],
+      credited: true,
+    },
+    {
+      condition: "startsWith(github.ref, 'refs/heads/gh-readonly-queue/main/')",
+      preceding: [],
+      following: [],
+      credited: true,
+    },
+    {
+      condition: "github.actor == 'maintainer'",
+      preceding: [],
+      following: [],
+      credited: false,
+    },
+    {
+      condition:
+        "github.event_name == 'pull_request' && github.event.pull_request.draft == false",
+      preceding: [],
+      following: [],
+      credited: true,
+    },
+  ])(
+    "gating event and prior step reachability: $condition",
+    ({ condition, preceding, following, credited }) => {
+      const analysis = analyzeGatingWorkflow(
+        {
+          jobs: {
+            checks: {
+              "runs-on": "ubuntu-latest",
+              steps: [
+                ...preceding,
+                { if: condition, run: "bun test scripts/named.test.ts" },
+                ...following,
+              ],
+            },
+            "ci-result": { needs: ["checks"] },
+          },
+        },
+        [],
+      );
+      const commands = analysis.jobs.get("checks") ?? [];
+      expect(
+        commands.some(({ command }) => command.includes("named.test.ts")),
+      ).toBe(credited);
+      if (!credited) {
+        expect(analysis.findings.length).toBeGreaterThan(0);
+      }
+    },
+  );
+
+  check("process facts must be read by a real workflow condition", () => {
+    const workflow = {
+      jobs: {
+        checks: { if: "github.event.pull_request.draft != true", steps: [] },
+      },
+    };
+    const facts = {
+      pull_request: { "github.event.pull_request.draft": false },
+    };
+    expect(validateGatingEventFacts(workflow, facts)).toEqual([]);
+    expect(
+      validateGatingEventFacts(workflow, {
+        pull_request: { ...facts.pull_request, "github.actor": "unused" },
+      }),
+    ).toContain("gating event fact: pull_request/github.actor is unused");
+    expect(
+      validateGatingEventFacts(
+        Bun.YAML.parse(readFileSync(".github/workflows/ci.yml", "utf-8")),
+      ),
+    ).toEqual([]);
+  });
+
   check("trusted output producers keep their named producer and proof", () => {
     const registry = [
       {
@@ -1782,6 +1896,21 @@ jobs:
     needs: [ci-plan, checks, proof]
 `;
     const intact = Bun.YAML.parse(source);
+    const failureTolerant = Bun.YAML.parse(
+      source.replace(
+        "- id: selection",
+        "- id: selection\n        continue-on-error: true",
+      ),
+    );
+    expect(
+      validateTrustedOutputProducers({ workflow: failureTolerant, registry })
+        .findings,
+    ).toContain(
+      "trusted output producer: ci-plan/selection uses continue-on-error",
+    );
+    expect(
+      analyzeGatingWorkflow(failureTolerant, registry).jobs.has("checks"),
+    ).toBe(false);
     expect(
       validateTrustedOutputProducers({ workflow: intact, registry }).findings,
     ).toEqual([]);

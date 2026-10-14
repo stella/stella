@@ -3214,46 +3214,124 @@ const hasDynamicMatrix = (job: Record<string, unknown>): boolean => {
   );
 };
 
+export const GITHUB_EVENT_SHAPE = {
+  pull_request: {
+    "github.event_name": "pull_request",
+    "github.ref": "refs/pull/<number>/merge",
+    "github.base_ref": "main",
+    "github.head_ref": "<source-branch>",
+    "github.repository": "stella/stella",
+    "github.event.merge_group.base_ref": null,
+  },
+  merge_group: {
+    "github.event_name": "merge_group",
+    "github.ref": "refs/heads/gh-readonly-queue/main/<group>",
+    "github.base_ref": "",
+    "github.head_ref": "",
+    "github.repository": "stella/stella",
+    "github.event.merge_group.base_ref": "refs/heads/main",
+  },
+} as const;
+
+export const GATING_EVENT_FACTS = {
+  pull_request: {
+    // Draft pull requests do not provide gating CI proof.
+    "github.event.pull_request.draft": false,
+    // Contributor changes enter gating CI through a canonical-repository branch.
+    "github.event.pull_request.head.repo.fork": false,
+  },
+  merge_group: {
+    // Merge groups have no pull-request payload.
+    "github.event.pull_request.draft": null,
+    // Merge groups have no pull-request head repository.
+    "github.event.pull_request.head.repo.fork": null,
+  },
+} as const;
+const GATING_EVENT_FIELDS = new Set([
+  ...Object.keys(GITHUB_EVENT_SHAPE.pull_request),
+  ...Object.keys(GATING_EVENT_FACTS.pull_request),
+]);
+
+export const validateGatingEventFacts = (
+  workflow: unknown,
+  facts: Readonly<
+    Record<string, Readonly<Record<string, string | boolean | null>>>
+  > = GATING_EVENT_FACTS,
+): readonly string[] => {
+  const root = workflowRecord(workflow);
+  const conditions = [root?.["if"]];
+  for (const value of Object.values(workflowRecord(root?.["jobs"]) ?? {})) {
+    const job = workflowRecord(value);
+    conditions.push(job?.["if"]);
+    if (Array.isArray(job?.["steps"])) {
+      conditions.push(
+        ...flattenWorkflowSteps(job["steps"]).map((step) => step["if"]),
+      );
+    }
+  }
+  const used = new Set(
+    conditions.flatMap((condition) =>
+      typeof condition === "string" ? referencedContexts(condition) : [],
+    ),
+  );
+  return Object.entries(facts).flatMap(([event, values]) =>
+    Object.keys(values)
+      .filter((field) => !used.has(field))
+      .map((field) => `gating event fact: ${event}/${field} is unused`),
+  );
+};
+
 type GatingContextOptions = {
   readonly eventName: (typeof GATING_EVENTS)[number];
   readonly inputs: Readonly<Record<string, unknown>>;
   readonly matrix: MatrixLeg;
   readonly variables: Readonly<Record<string, string | boolean>>;
+  readonly stepResults?: Readonly<
+    Record<string, { readonly outcome: string; readonly conclusion: string }>
+  >;
+  readonly unresolvedSteps?: ReadonlySet<string>;
 };
 
 const gatingEventContext = (
-  { eventName, inputs, matrix, variables }: GatingContextOptions,
+  {
+    eventName,
+    inputs,
+    matrix,
+    variables,
+    stepResults = {},
+  }: GatingContextOptions,
   expression = "",
 ) => {
-  const steps = Object.fromEntries(
-    [...expression.matchAll(/\bsteps\.([\w-]+)\.(outcome|conclusion)\b/gu)]
-      .map((match) => match[1])
-      .filter((id): id is string => id !== undefined)
-      .map((id) => [id, { conclusion: "success", outcome: "success" }]),
-  );
   const needs = Object.fromEntries(
     [...expression.matchAll(/\bneeds\.([\w-]+)\.result\b/gu)]
       .map((match) => match[1])
       .filter((id): id is string => id !== undefined)
       .map((id) => [id, { result: "success" }]),
   );
-  return contextFromNested({
+  const context = contextFromNested({
     always: () => true,
     cancelled: () => false,
     failure: () => false,
-    github: {
-      event: {
-        pull_request: eventName === "pull_request" ? { draft: false } : null,
-      },
-      event_name: eventName,
-    },
     inputs,
     matrix,
     needs,
-    steps,
+    steps: stepResults,
     success: () => true,
     vars: variables,
   });
+  return {
+    ...context,
+    values: {
+      ...context.values,
+      ...GITHUB_EVENT_SHAPE[eventName],
+      ...GATING_EVENT_FACTS[eventName],
+    },
+    fallback: (reference: string) =>
+      context.fallback?.(reference) ??
+      (/^steps\.[\w-]+\.(?:outcome|conclusion)$/u.test(reference)
+        ? "skipped"
+        : undefined),
+  };
 };
 
 const referencedContexts = (expression: string): readonly string[] =>
@@ -3288,14 +3366,19 @@ const executableCondition = ({
   const expression = conditionExpression(condition);
   const unresolved = referencedContexts(expression).filter((reference) => {
     if (
-      /^steps\.[\w-]+\.(?:conclusion|outcome)$/u.test(reference) ||
       /^needs\.[\w-]+\.result$/u.test(reference) ||
       trustedOutputs.has(reference)
     ) {
       return false;
     }
+    if (/^steps\.[\w-]+\.(?:conclusion|outcome)$/u.test(reference)) {
+      const id = reference.split(".").at(1);
+      return (
+        id === undefined || contextOptions.unresolvedSteps?.has(id) === true
+      );
+    }
     if (reference.startsWith("github.")) {
-      return false;
+      return !GATING_EVENT_FIELDS.has(reference);
     }
     const [root, name] = reference.split(".");
     if (root === "vars") {
@@ -3733,6 +3816,14 @@ export const validateTrustedOutputProducers = ({
       findings.push(`${label} step is missing or duplicated`);
       continue;
     }
+    if (
+      [job["continue-on-error"], step["continue-on-error"]].some(
+        (value) => value !== undefined && value !== false,
+      )
+    ) {
+      findings.push(`${label} uses continue-on-error`);
+      continue;
+    }
     const source =
       typeof step["run"] === "string"
         ? step["run"]
@@ -3828,12 +3919,14 @@ type CollectorOutputConditionOptions = {
   readonly conditions: readonly unknown[];
   readonly outputs: ReadonlySet<string>;
   readonly producers: ReadonlyMap<string, string>;
+  readonly context?: ReturnType<typeof gatingEventContext>;
 };
 
 const collectorOutputConditionFailure = ({
   conditions,
   outputs,
   producers,
+  context,
 }: CollectorOutputConditionOptions): string | undefined => {
   const expressions = conditions.flatMap((condition) => {
     if (typeof condition === "string") {
@@ -3842,6 +3935,7 @@ const collectorOutputConditionFailure = ({
     return condition === false ? ["false"] : [];
   });
   if (
+    context === undefined &&
     !expressions.some((expression) =>
       referencedContexts(expression).some((reference) =>
         outputs.has(reference),
@@ -3853,8 +3947,187 @@ const collectorOutputConditionFailure = ({
   const result = conjunctiveOutputConditions({
     conditions: expressions,
     outputs: producers,
+    context,
   });
   return result.type === "consistent" ? undefined : result.reason;
+};
+
+type EarlierStepResultsOptions = {
+  readonly steps: readonly Record<string, unknown>[];
+  readonly conditions: readonly unknown[];
+  readonly contextOptions: GatingContextOptions;
+  readonly declaredInputs: ReadonlySet<string>;
+  readonly trustedOutputs: ReadonlySet<string>;
+  readonly producers: ReadonlyMap<string, string>;
+};
+
+const earlierStepResults = ({
+  steps,
+  conditions,
+  contextOptions,
+  declaredInputs,
+  trustedOutputs,
+  producers,
+}: EarlierStepResultsOptions) => {
+  const stepResults = new Map<
+    string,
+    { outcome: string; conclusion: string }
+  >();
+  const unresolvedSteps = new Set<string>();
+  const snapshots: {
+    stepResults: Record<string, { outcome: string; conclusion: string }>;
+    unresolvedSteps: Set<string>;
+  }[] = [];
+  for (const step of steps) {
+    snapshots.push({
+      stepResults: Object.fromEntries(stepResults),
+      unresolvedSteps: new Set(unresolvedSteps),
+    });
+    const id = step["id"];
+    if (typeof id !== "string") {
+      continue;
+    }
+    const options = {
+      ...contextOptions,
+      stepResults: Object.fromEntries(stepResults),
+      unresolvedSteps,
+    };
+    const conditionPath = [...conditions, step["if"]];
+    const failed = collectorOutputConditionFailure({
+      conditions: conditionPath,
+      outputs: trustedOutputs,
+      producers,
+      context: gatingEventContext(options),
+    });
+    const executable =
+      failed === undefined &&
+      conditionPath.every(
+        (condition) =>
+          executableCondition({
+            ...options,
+            condition,
+            declaredInputs,
+            dynamicMatrix: false,
+            trustedOutputs,
+          }).executable,
+      );
+    if (ignoresFailure(step["continue-on-error"], options)) {
+      unresolvedSteps.add(id);
+    }
+    stepResults.set(id, {
+      outcome: executable ? "success" : "skipped",
+      conclusion: executable ? "success" : "skipped",
+    });
+  }
+  return snapshots;
+};
+
+type ExecutingCollectorLegsOptions = {
+  readonly root: Record<string, unknown> | undefined;
+  readonly job: Record<string, unknown>;
+  readonly step: Record<string, unknown>;
+  readonly stepIndex: number;
+  readonly steps: readonly Record<string, unknown>[];
+  readonly legs: readonly MatrixLeg[];
+  readonly inputs: Readonly<Record<string, unknown>>;
+  readonly variables: Readonly<Record<string, string | boolean>>;
+  readonly declaredInputs: ReadonlySet<string>;
+  readonly trustedOutputs: ReadonlySet<string>;
+  readonly producers: ReadonlyMap<string, string>;
+  readonly priorResults: Map<string, ReturnType<typeof earlierStepResults>>;
+};
+
+const executingCollectorLegs = ({
+  root,
+  job,
+  step,
+  stepIndex,
+  steps,
+  legs,
+  inputs,
+  variables,
+  declaredInputs,
+  trustedOutputs,
+  producers,
+  priorResults,
+}: ExecutingCollectorLegsOptions) => {
+  const dynamicMatrix = false;
+  const executingLegs = new Map<string, MatrixLeg>();
+  const unresolvedContexts = new Set<string>();
+  for (const eventName of GATING_EVENTS) {
+    for (const matrix of legs) {
+      const key = JSON.stringify({ eventName, matrix });
+      let snapshots = priorResults.get(key);
+      if (snapshots === undefined) {
+        snapshots = earlierStepResults({
+          steps,
+          conditions: [root?.["if"], job["if"]],
+          contextOptions: { eventName, inputs, matrix, variables },
+          declaredInputs,
+          trustedOutputs,
+          producers,
+        });
+        priorResults.set(key, snapshots);
+      }
+      const prior =
+        snapshots.at(stepIndex) ?? panic("Step result snapshot is missing");
+      const contextOptions = {
+        eventName,
+        inputs,
+        matrix,
+        variables,
+        ...prior,
+      };
+      const outputFailure = collectorOutputConditionFailure({
+        conditions: [root?.["if"], job["if"], step["if"]],
+        outputs: trustedOutputs,
+        producers,
+        context: gatingEventContext(contextOptions),
+      });
+      if (outputFailure !== undefined) {
+        const outcomeReferences = [root?.["if"], job["if"], step["if"]].flatMap(
+          (condition) =>
+            typeof condition === "string"
+              ? referencedContexts(condition).filter((reference) =>
+                  /^steps\.[\w-]+\.(?:outcome|conclusion)$/u.test(reference),
+                )
+              : [],
+        );
+        for (const reference of outcomeReferences) {
+          unresolvedContexts.add(
+            `step outcome has no earlier executable success: ${reference}`,
+          );
+        }
+        unresolvedContexts.add(outputFailure);
+        continue;
+      }
+      const conditions = [root?.["if"], job["if"], step["if"]].map(
+        (condition) =>
+          executableCondition({
+            ...contextOptions,
+            condition,
+            declaredInputs,
+            dynamicMatrix,
+            trustedOutputs,
+          }),
+      );
+      if (conditions.every((condition) => !condition.staticallyFalse)) {
+        for (const context of conditions.flatMap(
+          (condition) => condition.unresolved,
+        )) {
+          unresolvedContexts.add(context);
+        }
+      }
+      if (
+        conditions.every((condition) => condition.executable) &&
+        !ignoresFailure(job["continue-on-error"], contextOptions) &&
+        !ignoresFailure(step["continue-on-error"], contextOptions)
+      ) {
+        executingLegs.set(JSON.stringify(matrix), matrix);
+      }
+    }
+  }
+  return { executingLegs, unresolvedContexts };
 };
 
 const analyzeWorkflowWithProducerDeclarations = (
@@ -3921,128 +4194,102 @@ const analyzeWorkflowWithProducerDeclarations = (
       findings.add(`job condition: ${name} ${matrixResolution.reason}`);
       continue;
     }
-    const dynamicMatrix = false;
     const legs = matrixResolution.legs;
-    const commands = flattenWorkflowSteps(job["steps"]).flatMap(
-      (step, stepIndex) => {
-        const command = step["run"];
-        if (typeof command !== "string") {
-          return [];
-        }
-        const trustedOutputs =
-          registered.references.get(name) ?? new Set<string>();
-        for (const reference of [root?.["if"], job["if"], step["if"]].flatMap(
-          (condition) =>
-            typeof condition === "string" ? referencedContexts(condition) : [],
-        )) {
-          const reason = registered.opaque.get(reference);
-          if (reason !== undefined) {
-            findings.add(
-              `job condition: ${name}/step-${stepIndex + 1} uses opaque output ${reference}: ${reason}`,
-            );
-          }
-        }
-        const outputFailure = collectorOutputConditionFailure({
-          conditions: [root?.["if"], job["if"], step["if"]],
-          outputs: trustedOutputs,
-          producers: registered.producers.get(name) ?? new Map(),
-        });
-        if (outputFailure !== undefined) {
+    const priorResults = new Map<
+      string,
+      ReturnType<typeof earlierStepResults>
+    >();
+    const steps = flattenWorkflowSteps(job["steps"]);
+    const commands = steps.flatMap((step, stepIndex) => {
+      const command = step["run"];
+      if (typeof command !== "string") {
+        return [];
+      }
+      const trustedOutputs =
+        registered.references.get(name) ?? new Set<string>();
+      for (const reference of [root?.["if"], job["if"], step["if"]].flatMap(
+        (condition) =>
+          typeof condition === "string" ? referencedContexts(condition) : [],
+      )) {
+        const reason = registered.opaque.get(reference);
+        if (reason !== undefined) {
           findings.add(
-            `job condition: ${name}/step-${stepIndex + 1} has ${outputFailure}`,
+            `job condition: ${name}/step-${stepIndex + 1} uses opaque output ${reference}: ${reason}`,
           );
-          return [];
         }
-        const executingLegs = new Map<string, MatrixLeg>();
-        const unresolvedContexts = new Set<string>();
-        for (const eventName of GATING_EVENTS) {
-          for (const matrix of legs) {
-            const contextOptions = { eventName, inputs, matrix, variables };
-            const conditions = [root?.["if"], job["if"], step["if"]].map(
-              (condition) =>
-                executableCondition({
-                  ...contextOptions,
-                  condition,
-                  declaredInputs,
-                  dynamicMatrix,
-                  trustedOutputs,
-                }),
-            );
-            if (conditions.every((condition) => !condition.staticallyFalse)) {
-              for (const context of conditions.flatMap(
-                (condition) => condition.unresolved,
-              )) {
-                unresolvedContexts.add(context);
-              }
-            }
-            if (
-              conditions.every((condition) => condition.executable) &&
-              !ignoresFailure(job["continue-on-error"], contextOptions) &&
-              !ignoresFailure(step["continue-on-error"], contextOptions)
-            ) {
-              executingLegs.set(JSON.stringify(matrix), matrix);
-            }
-          }
-        }
-        if (executingLegs.size === 0) {
-          for (const context of unresolvedContexts) {
-            findings.add(
-              `job condition: ${name}/step-${stepIndex + 1} has unresolved context ${context}`,
-            );
-          }
-        }
-        if (executingLegs.size === 0) {
-          return [];
-        }
-        const shell = effectiveWorkflowShell({
-          root,
-          job,
-          step,
-          legs: [...executingLegs.values()],
-        });
-        if (shell.type === "unsupported") {
-          if (hasTestCollector(command)) {
-            findings.add(
-              `job condition: ${name}/step-${stepIndex + 1} uses unsupported shell ${shell.name}`,
-            );
-          }
-          return [];
-        }
-        const workingDirectory = effectiveWorkingDirectory({ root, job, step });
-        if (workingDirectory === undefined) {
+      }
+      const { executingLegs, unresolvedContexts } = executingCollectorLegs({
+        root,
+        job,
+        step,
+        stepIndex,
+        steps,
+        legs,
+        inputs,
+        variables,
+        declaredInputs,
+        trustedOutputs,
+        producers: registered.producers.get(name) ?? new Map(),
+        priorResults,
+      });
+      if (executingLegs.size === 0) {
+        for (const context of unresolvedContexts) {
           findings.add(
-            `job condition: ${name}/step-${stepIndex + 1} has unresolved working-directory`,
+            `job condition: ${name}/step-${stepIndex + 1} has unresolved context ${context}`,
           );
-          return [];
         }
-        const environment = {
-          ...workflowRecord(root?.["env"]),
-          ...workflowRecord(job["env"]),
-          ...workflowRecord(step["env"]),
-        };
-        return [...executingLegs.values()].map((leg) => ({
-          command: executableShell(command),
-          workingDirectory,
-          environment: Object.fromEntries(
-            Object.entries(environment).map(([key, value]) => [
-              key,
-              typeof value === "string" &&
-              value.startsWith("${{") &&
-              value.indexOf("}}") === value.length - 2 &&
-              referencedContexts(value).every((reference) =>
-                reference.startsWith("matrix."),
-              )
-                ? evaluate(
-                    conditionExpression(value),
-                    contextFromNested({ matrix: leg }),
-                  )
-                : value,
-            ]),
-          ),
-          propagation: shell.propagation,
-        }));
-      },
-    );
+      }
+      if (executingLegs.size === 0) {
+        return [];
+      }
+      const shell = effectiveWorkflowShell({
+        root,
+        job,
+        step,
+        legs: [...executingLegs.values()],
+      });
+      if (shell.type === "unsupported") {
+        if (hasTestCollector(command)) {
+          findings.add(
+            `job condition: ${name}/step-${stepIndex + 1} uses unsupported shell ${shell.name}`,
+          );
+        }
+        return [];
+      }
+      const workingDirectory = effectiveWorkingDirectory({ root, job, step });
+      if (workingDirectory === undefined) {
+        findings.add(
+          `job condition: ${name}/step-${stepIndex + 1} has unresolved working-directory`,
+        );
+        return [];
+      }
+      const environment = {
+        ...workflowRecord(root?.["env"]),
+        ...workflowRecord(job["env"]),
+        ...workflowRecord(step["env"]),
+      };
+      return [...executingLegs.values()].map((leg) => ({
+        command: executableShell(command),
+        workingDirectory,
+        environment: Object.fromEntries(
+          Object.entries(environment).map(([key, value]) => [
+            key,
+            typeof value === "string" &&
+            value.startsWith("${{") &&
+            value.indexOf("}}") === value.length - 2 &&
+            referencedContexts(value).every((reference) =>
+              reference.startsWith("matrix."),
+            )
+              ? evaluate(
+                  conditionExpression(value),
+                  contextFromNested({ matrix: leg }),
+                )
+              : value,
+          ]),
+        ),
+        propagation: shell.propagation,
+      }));
+    });
     if (commands.length > 0) {
       gating.set(name, commands);
     }
@@ -4120,6 +4367,7 @@ const repositoryTestExecutionTopology = (): RepositoryTestExecutionTopology => {
   const packageNames = workspacePackages()
     .filter(({ hasTestScript }) => hasTestScript)
     .map(({ name }) => name);
+  errors.push(...validateGatingEventFacts(Bun.YAML.parse(workflow)));
   const analysis = analyzeGatingWorkflow(Bun.YAML.parse(workflow));
   const gatingJobs = analysis.jobs;
   const plannedJob = workflowRecord(

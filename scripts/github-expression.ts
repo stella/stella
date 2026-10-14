@@ -199,6 +199,7 @@ const negateOutputCondition = (node: OutputCondition): OutputCondition => {
 const outputAtom = (
   tokens: readonly Token[],
   outputs: ReadonlyMap<string, string>,
+  context: Context,
 ): OutputCondition => {
   const first = tokens.at(0);
   if (tokens.length === 1 && first?.kind === "word") {
@@ -244,12 +245,23 @@ const outputAtom = (
       };
     }
   }
-  return { type: "opaque", polarity: "positive" };
+  const source = tokens
+    .map((token) =>
+      token.kind === "string"
+        ? `'${token.value.replaceAll("'", "''")}'`
+        : String(token.value),
+    )
+    .join(" ");
+  const value = isTruthy(evaluate(source, context));
+  return value === UNKNOWN
+    ? { type: "opaque", polarity: "positive" }
+    : { type: "literal", value };
 };
 
 const parseOutputCondition = (
   input: readonly Token[],
   outputs: ReadonlyMap<string, string>,
+  context: Context,
 ): OutputCondition => {
   const tokens = ungroupTokens(input);
   if (tokens.length === 0) {
@@ -263,8 +275,8 @@ const parseOutputCondition = (
     if (index !== -1) {
       return {
         type,
-        left: parseOutputCondition(tokens.slice(0, index), outputs),
-        right: parseOutputCondition(tokens.slice(index + 1), outputs),
+        left: parseOutputCondition(tokens.slice(0, index), outputs, context),
+        right: parseOutputCondition(tokens.slice(index + 1), outputs, context),
       };
     }
   }
@@ -274,10 +286,10 @@ const parseOutputCondition = (
     topLevelOperator(tokens, COMPARISONS) === -1
   ) {
     return negateOutputCondition(
-      parseOutputCondition(tokens.slice(1), outputs),
+      parseOutputCondition(tokens.slice(1), outputs, context),
     );
   }
-  return outputAtom(tokens, outputs);
+  return outputAtom(tokens, outputs, context);
 };
 
 type OutputDisjunction =
@@ -362,6 +374,7 @@ const outputConstraintConflict = (
 type ConjunctiveOutputConditionsOptions = {
   readonly conditions: readonly string[];
   readonly outputs: ReadonlyMap<string, string>;
+  readonly context?: Context;
 };
 
 type ConjunctiveOutputConditionsResult =
@@ -373,6 +386,7 @@ type ConjunctiveOutputConditionsResult =
 export const conjunctiveOutputConditions = ({
   conditions,
   outputs,
+  context = { values: {} },
 }: ConjunctiveOutputConditionsOptions): ConjunctiveOutputConditionsResult => {
   const parsed = OperationResult.try(() => {
     let path: OutputCondition = { type: "literal", value: true };
@@ -381,7 +395,7 @@ export const conjunctiveOutputConditions = ({
       path = {
         type: "and",
         left: path,
-        right: parseOutputCondition(tokenize(condition), outputs),
+        right: parseOutputCondition(tokenize(condition), outputs, context),
       };
     }
     return path;
