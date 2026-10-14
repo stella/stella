@@ -63,6 +63,11 @@ const NETWORK_MODULES = new Set([
   "@opentelemetry/exporter-trace-otlp-http",
   "@opentelemetry/exporter-metrics-otlp-http",
 ]);
+const LOCAL_BETTER_AUTH_MODULES = new Set([
+  "better-auth/adapters/drizzle",
+  "better-auth/api",
+  "better-auth/cookies",
+]);
 const NETWORK_PACKAGE_PREFIXES = [
   "@aws-sdk/client-",
   "@openrouter/sdk",
@@ -518,6 +523,9 @@ const registerModule = ({
     names !== null &&
     !names.includes("createRemoteJWKSet")
   ) {
+    return;
+  }
+  if (LOCAL_BETTER_AUTH_MODULES.has(module)) {
     return;
   }
   const isNetworkModule = NETWORK_MODULES.has(module);

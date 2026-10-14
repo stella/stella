@@ -288,6 +288,29 @@ describe("outbound transport ownership", () => {
     }
   });
 
+  test("Better Auth local API utilities do not acquire transport authority", () => {
+    expect(
+      references(
+        [
+          'import { drizzleAdapter } from "better-auth/adapters/drizzle";',
+          'import { createAuthEndpoint } from "better-auth/api";',
+          'import { setSessionCookie } from "better-auth/cookies";',
+          'import { betterAuth } from "better-auth";',
+          'import { emailOTP } from "better-auth/plugins";',
+          'import { getCookieCache } from "better-auth/cookies";',
+          'import { createAuthMiddleware } from "better-auth/api";',
+          'import { hashPassword } from "better-auth/crypto";',
+          'import { getSessionFromCtx } from "better-auth/db";',
+        ].join("\n"),
+      ),
+    ).toEqual([
+      "module:better-auth",
+      "module:better-auth/crypto",
+      "module:better-auth/db",
+      "module:better-auth/plugins",
+    ]);
+  });
+
   test("default client imports retain authority beside named utilities", () => {
     expect(references('import runtime, { file } from "bun";')).toEqual([
       "module:bun",

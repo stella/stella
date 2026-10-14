@@ -16,6 +16,12 @@ export const readTurboTypecheckInputs = (filename: string) =>
     Bun.JSONC.parse(readFileSync(filename, "utf-8")),
   );
 
+/** The leading whitespace of the line holding `offset`. */
+const lineIndent = (text: string, offset: number) => {
+  const lineStart = text.lastIndexOf("\n", offset - 1) + 1;
+  return /^[ \t]*/u.exec(text.slice(lineStart, offset))?.[0] ?? "";
+};
+
 export const writeTurboTypecheckInputs = (
   filename: string,
   inputs: ReadonlyMap<string, readonly string[]>,
@@ -36,7 +42,10 @@ export const writeTurboTypecheckInputs = (
             edits.push({
               start: property.initializer.getStart(document),
               end: property.initializer.end,
-              text: JSON.stringify(expected, null, 2),
+              text: JSON.stringify(expected, null, 2).replaceAll(
+                "\n",
+                () => `\n${lineIndent(text, property.getStart(document))}`,
+              ),
             });
           }
         }

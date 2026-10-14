@@ -97,6 +97,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "case_law_statute_citation_memberships",
   "case_law_statute_citation_counts",
   "case_law_statute_citation_count_state",
+  "case_law_decision_citation_stats",
+  "case_law_decision_citation_stats_state",
   // Per-decision provision-citation state and revisions: request code reads
   // them; owner-run database functions and the extraction writers own every
   // mutation.
@@ -145,9 +147,10 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "sanctions_edition_entries",
 ]);
 
-// Request transactions append names alongside chat messages and read them on
-// later requests. The role needs SELECT and INSERT, never UPDATE or DELETE.
+// Request transactions append history and read it on later requests.
+// The role needs SELECT and INSERT, never UPDATE or DELETE.
 const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set([
+  "account_audit_logs",
   "chat_thread_names",
   "chat_message_revisions",
 ]);

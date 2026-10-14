@@ -175,14 +175,14 @@ describe("which column becomes an opinion's text", () => {
       refused: ["xml_harvard/xml:no-visible-text"],
     },
     {
-      name: "the citation column's XML stands in for Harvard XML carrying markup as text",
+      name: "Harvard XML preserves publisher-escaped literal tags",
       cluster: "5804213",
       columns: {
         xml_harvard:
           '<opinion type="majority"><p>&lt;p class="x"&gt;The judgment is affirmed.&lt;/p&gt;</p></opinion>',
       },
-      winner: "html_with_citations/xml",
-      refused: ["xml_harvard/xml:markup-residue"],
+      winner: "xml_harvard/xml",
+      refused: [],
     },
     {
       name: "a preformatted citation column wins over plain text",

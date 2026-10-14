@@ -80,4 +80,21 @@ describe("MCP app web navigation", () => {
     });
     expect(opened).toEqual(["https://app.example/law/cz/2020/1#section=2"]);
   });
+
+  test("opens the plain URL when the minted structured content is malformed", async () => {
+    const opened: string[] = [];
+    const app = {
+      callServerTool: async () => ({ content: [], structuredContent: null }),
+      openLink: async ({ url }) => {
+        opened.push(url);
+        return {};
+      },
+    } satisfies Pick<App, "openLink" | "callServerTool">;
+    await openPresentationLink({
+      app,
+      url: "https://app.example/law/cz/2020/1#section=2",
+      fail: () => expect.unreachable("Unexpected navigation refusal"),
+    });
+    expect(opened).toEqual(["https://app.example/law/cz/2020/1#section=2"]);
+  });
 });

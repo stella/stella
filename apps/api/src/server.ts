@@ -783,7 +783,9 @@ const startServer = async (): Promise<void> => {
   await initBuiltinReportTemplates();
 
   const closeManagedProviderChecks = await startManagedProviderChecks();
-  const backgroundWorkers = initApiBackgroundWorkers(env.SCHEDULED_JOBS_MODE);
+  const backgroundWorkers = await initApiBackgroundWorkers(
+    env.SCHEDULED_JOBS_MODE,
+  );
 
   // Every process outside local development starts it. Same URL as the pools
   // in `db/root.ts`.

@@ -53,6 +53,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/workspaces/$workspaceId": "private-no-store",
   "/chat/$threadId": "private-no-store",
   "/chat/new": "private-no-store",
+  "/chat/history": "private-no-store",
   "/contacts/$contactId": "private-no-store",
   "/contacts/import": "private-no-store",
   "/verify/$code": "private-no-store",

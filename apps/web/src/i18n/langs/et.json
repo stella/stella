@@ -539,6 +539,16 @@
       "createInvoice": "Loo arve",
       "dueDate": "Tähtaeg",
       "editInvoice": "Muuda arvet",
+      "export": {
+        "accounting": "Raamatupidamise import",
+        "eBilling": "E-arveldus",
+        "eso9": "ESO9 impordileht (XLSX)",
+        "exporting": "Eksporti valmistatakse ette…",
+        "isdoc": "ISDOC e-arve (ABRA Gen jt)",
+        "spreadsheets": "Tabelid",
+        "xlsx": "Arved (XLSX)",
+        "xlsxLines": "Arveread (XLSX)"
+      },
       "finalize": "Lõpeta",
       "invoiceDate": "Arve kuupäev",
       "invoiceDetail": "Arve detailid",
@@ -1277,6 +1287,11 @@
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
+    "history": {
+      "matterUnavailable": "See toimik pole saadaval",
+      "older": "Vanemad",
+      "previous7Days": "Eelmised 7 päeva"
+    },
     "historyContext": {
       "overflow": "+{count, number}",
       "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
@@ -1439,6 +1454,8 @@
     "sendPrompt": "Saada sõnum",
     "sendQueuedMessageNow": "Saada kohe",
     "sendWithoutAnonymization": "Saada anonüümimiseta",
+    "signInToChat": "Logi sisse, et sellest dokumendist vestelda",
+    "signInToChatAbout": "Logi sisse, et vestelda:",
     "skills": {
       "scope": {
         "private": "Sinu AI oskused",
@@ -1769,6 +1786,8 @@
     "citations": "Viited",
     "clauses": "Klauslid",
     "clearDate": "Tühjenda kuupäev",
+    "clearFilters": "Tühjenda filtrid",
+    "clearSearch": "Tühjenda otsing",
     "close": "Sulge",
     "closeAll": "Sulge kõik",
     "closeOthers": "Sulge teised",
@@ -1799,6 +1818,7 @@
       "nextDecade": "Järgmine kümnend",
       "nextMonth": "Järgmine kuu",
       "nextYear": "Järgmine aasta",
+      "outOfRange": "Valige kuupäev lubatud vahemikust.",
       "previousDecade": "Eelmine kümnend",
       "previousMonth": "Eelmine kuu",
       "previousYear": "Eelmine aasta",
@@ -4124,7 +4144,6 @@
     "appsSubtitle": "stella töötab ka väljaspool brauserit: teie töölaual ja teie AI-assistendis. Selle seadistuse juurde saate alati hiljem tagasi tulla.",
     "appsTitle": "Hankige stella igale poole",
     "catalogueAlwaysOn": "Alati sees",
-    "catalogueClearSearch": "Tühjenda otsing",
     "catalogueCommunityHeading": "Muud",
     "catalogueContinueWithCount": "{count, plural, one {Jätka # tööriistaga} other {Jätka # tööriistaga}}",
     "catalogueDetailAbout": "Teave",
@@ -6385,7 +6404,6 @@
         "year": "Aasta"
       },
       "cannotDeleteRequired": "Vähemalt üks seda tüüpi vaade on nõutav",
-      "clearFilters": "Tühjenda filtrid",
       "copySuffix": "{name} (koopia)",
       "deleteView": "Kustuta vaade",
       "exportCsv": "Ekspordi CSV",

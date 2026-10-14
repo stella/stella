@@ -18,6 +18,7 @@ import type { McpRequestContext } from "@/api/mcp/context";
 import { listOfferedStaticMcpToolDefinitions } from "@/api/mcp/gateway/static-tool-visibility";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
   isAccountAuthorizedForMcpTool,
@@ -48,6 +49,12 @@ const writeDefinitions = (): McpToolDefinition[] => {
     left.name < right.name ? -1 : 1,
   );
 };
+
+const modelVisibleWriteDefinitions = (): McpToolDefinition[] =>
+  writeDefinitions().filter(
+    (definition) =>
+      definition.access === "write" && isMcpToolVisibleTo(definition, "model"),
+  );
 
 const mcpContextFor = (role: MemberRole): McpRequestContext =>
   asTestRaw<McpRequestContext>({
@@ -205,8 +212,8 @@ describe("write tool permissions", () => {
     }
   });
 
-  test("declarations weaker than one exact grant are exactly the ledger", () => {
-    const current = writeDefinitions()
+  test("model-visible declarations weaker than one exact grant are exactly the ledger", () => {
+    const current = modelVisibleWriteDefinitions()
       .map(ledgerId)
       .filter((id): id is string => id !== null)
       .toSorted();
@@ -216,11 +223,11 @@ describe("write tool permissions", () => {
     }
   });
 
-  test("MCP discovery offers no role a write tool its permissions do not grant", () => {
+  test("MCP discovery offers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), mcpOffered)).toEqual([]);
   });
 
-  test("chat registers no role a write tool its permissions do not grant", () => {
+  test("chat registers no role a model-visible write tool its permissions do not grant", () => {
     expect(unauthorizedOffers(writeDefinitions(), chatOffered)).toEqual([]);
   });
 
@@ -646,6 +653,7 @@ describe("write tool account access", () => {
     ).toEqual([
       "fill_template:standard",
       "manage_organization:account-control",
+      "mint_web_handoff:standard",
       "save_filled_template:standard",
       "set_practice_jurisdictions:standard",
       "submit_feedback:standard",

@@ -15,6 +15,7 @@ import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import {
   getMcpToolDefinition,
   getMcpToolRequiredScopesHint,
+  listMcpTools as listWireMcpTools,
 } from "@/api/mcp/tools";
 import { MCP_WEB_HANDOFF_TOOL } from "@/api/mcp/web-handoff-links";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
@@ -77,7 +78,7 @@ const call = async ({
       return { content: [{ type: "text", text: "app data" }] };
     },
     listMcpTools: async (context, mode, scopes) =>
-      await listGatewayMcpToolDefinitions({ context, mode, scopes }),
+      await listWireMcpTools(context, mode, scopes),
     listMcpResources: () => [],
     readMcpResource: () => ({ contents: [] }),
     recordMcpSessionInitialized: () => undefined,

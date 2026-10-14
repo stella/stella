@@ -146,11 +146,13 @@ const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
 const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
   {};
 for (const tool of DEFAULT_MCP_TOOL_DEFINITIONS) {
-  if (
-    tool.access !== "write" ||
-    !isMcpToolVisibleTo(tool, "model") ||
-    !WRITE_TOOL_REF_FIELD_MAP[tool.name].chatProjectable
-  ) {
+  if (tool.access !== "write") {
+    continue;
+  }
+  if (!isMcpToolVisibleTo(tool, "model")) {
+    continue;
+  }
+  if (!WRITE_TOOL_REF_FIELD_MAP[tool.name].chatProjectable) {
     continue;
   }
 

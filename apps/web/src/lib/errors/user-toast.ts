@@ -9,11 +9,11 @@ import { stellaToast } from "@stll/ui/toast";
 import { notifyActionAdmissionRefusal } from "@/components/action-admission-outcome";
 import { ProviderDiagnosticToast } from "@/components/provider-diagnostic-content";
 import { getTranslator } from "@/i18n/translator";
+import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { notifyStepUp } from "@/lib/mcp-step-up";
 
 type UserErrorToastOptions = Omit<
   Parameters<typeof stellaToast.add>[0],

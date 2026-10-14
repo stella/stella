@@ -40,9 +40,9 @@ const hasSensitivePermissions = (permissions: unknown) => {
 
 const isHandoffStepUpRefusal = (value: unknown) =>
   isRecord(value) &&
-  value.code === 403 &&
-  isRecord(value.response) &&
-  value.response.code === MCP_HANDOFF_STEP_UP_REQUIRED;
+  value["code"] === 403 &&
+  isRecord(value["response"]) &&
+  value["response"]["code"] === MCP_HANDOFF_STEP_UP_REQUIRED;
 
 const routeRequiresStepUp = (route: (typeof api.routes)[number]) => {
   const metadata = getSafeHandlerAccessMetadata(route.handler);
@@ -133,12 +133,14 @@ describe("handoff sessions require recent account authentication", () => {
   });
 
   test("raw route detail retains account-control sensitivity beside ordinary permissions", () => {
+    const detail = {
+      description: "Account-control fixture",
+      [HANDOFF_ACCESS_DETAIL.accountAccess]: ACCOUNT_ACCESS.accountControl,
+      [HANDOFF_ACCESS_DETAIL.permissions]: { workspace: ["read"] },
+    };
     const rawRoute = new Elysia()
       .get("/raw-account-control", () => "ok", {
-        detail: {
-          [HANDOFF_ACCESS_DETAIL.accountAccess]: ACCOUNT_ACCESS.accountControl,
-          [HANDOFF_ACCESS_DETAIL.permissions]: { workspace: ["read"] },
-        },
+        detail,
       })
       .routes.at(0);
     expect(rawRoute).toBeDefined();

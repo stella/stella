@@ -5,13 +5,9 @@
  */
 
 import { Result, panic } from "better-result";
-import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import {
-  legalListClaimReviewEvents,
-  legalListVerificationRuns,
-} from "@/api/db/schema";
+import { legalListClaimReviewEvents } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -24,11 +20,11 @@ import type { ClaimReviewEventPayload } from "@/api/lib/lists/verification/contr
 import {
   readClaimReviews,
   readClaimsForBulkReview,
+  readContestedFactIds,
   serializeClaimReview,
 } from "@/api/lib/lists/verification/read-run";
 import {
   EMPTY_CLAIM_REVIEW,
-  contestedFactIds,
   needsAttention,
   reviewedView,
 } from "@/api/lib/lists/verification/review-fold";
@@ -74,19 +70,12 @@ const createBulkClaimReviews = createSafeHandler(
 
     const result = yield* Result.await(
       safeDb(async (tx) => {
-        const run = (
-          await tx
-            .select({ evidence: legalListVerificationRuns.evidence })
-            .from(legalListVerificationRuns)
-            .where(
-              and(
-                eq(legalListVerificationRuns.id, runId),
-                eq(legalListVerificationRuns.workspaceId, workspaceId),
-              ),
-            )
-            .limit(1)
-        ).at(0);
-        if (run === undefined) {
+        const contested = await readContestedFactIds({
+          tx,
+          workspaceId,
+          runId,
+        });
+        if (contested === null) {
           return { type: "not-found" } as const;
         }
         const claims = await readClaimsForBulkReview({
@@ -116,7 +105,6 @@ const createBulkClaimReviews = createSafeHandler(
               VERIFICATION_LIMITS.REVIEW_EVENTS_PER_CLAIM_MAX
           );
         });
-        const contested = contestedFactIds(run.evidence);
         const attention = toMark.filter((claim) =>
           needsAttention(
             reviewedView(

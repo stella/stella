@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "better-auth";
-import { createAuthEndpoint, getEndpoints } from "better-auth/api";
+import { betterAuth, type BetterAuthPlugin } from "better-auth";
+import { createAuthEndpoint } from "better-auth/api";
 import { panic } from "better-result";
 import {
   afterAll,
@@ -18,6 +18,7 @@ import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
 import { HANDOFF_AUTH_ENDPOINT_POLICY } from "@/api/lib/auth/handoff-auth-endpoint-policy";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
+import { DESKTOP_REGISTRY_KEY_CONFIG } from "@/api/lib/business-registries/desktop/config";
 import {
   createHumanSession,
   signInHuman,
@@ -51,10 +52,12 @@ const expectStepUp = async (response: Response) => {
 };
 
 // The SDK types pathless server helpers as endpoints, so inspect their runtime path.
-const mountedEndpoints = (
-  endpoints: Readonly<Record<string, { path: unknown }>>,
-) =>
-  Object.entries(endpoints).flatMap(([name, { path }]) => {
+const mountedEndpoints = (endpoints: Readonly<Record<string, unknown>>) =>
+  Object.entries(endpoints).flatMap(([name, endpoint]) => {
+    if (typeof endpoint !== "function" || !("path" in endpoint)) {
+      return panic("Auth endpoint has no runtime path metadata");
+    }
+    const path = endpoint.path;
     if (path === undefined) {
       return [];
     }
@@ -173,9 +176,22 @@ describe("handoff sessions enforce recent authentication at real entry points", 
     expect(response.status, await response.clone().text()).toBe(200);
   });
 
+  test("server-only authentication helpers retain their own refusal", async () => {
+    const auth = getAuth();
+    const registered = auth.api;
+    expect(registered.verifyApiKey.path).toBeUndefined();
+    const verified = await auth.api.verifyApiKey({
+      body: {
+        configId: DESKTOP_REGISTRY_KEY_CONFIG,
+        key: "invalid-fixture-value",
+      },
+    });
+    expect(verified.valid).toBe(false);
+  });
+
   test("registered authentication methods remain available beside account management", async () => {
     const auth = getAuth();
-    const { api: registered } = getEndpoints(await auth.$context, auth.options);
+    const registered = auth.api;
     const mounted = mountedEndpoints(registered);
     const census = (paths: readonly string[]) => {
       const mountedPaths = new Set(paths);
@@ -218,10 +234,7 @@ describe("handoff sessions enforce recent authentication at real entry points", 
       ...auth.options,
       plugins: [...auth.options.plugins, futurePlugin],
     };
-    const { api: futureRegistered } = getEndpoints(
-      await auth.$context,
-      futureOptions,
-    );
+    const futureRegistered = betterAuth(futureOptions).api;
     const futurePaths = mountedEndpoints(futureRegistered).map(
       ({ path }) => path,
     );

@@ -13,11 +13,16 @@ export const HANDOFF_ACCESS_DETAIL = {
   permissions: "__stellaHandoffPermissions",
 } as const;
 
-const normalizePath = (path: string) =>
-  path
+const normalizePath = (path: string) => {
+  const normalized = path
     .replace(/^\/api(?=\/|$)/u, "")
-    .replace(/^\/v1(?=\/|$)/u, "")
-    .replace(/\/+$/u, "") || "/";
+    .replace(/^\/v1(?=\/|$)/u, "");
+  let end = normalized.length;
+  while (end > 0 && normalized[end - 1] === "/") {
+    end -= 1;
+  }
+  return normalized.slice(0, end) || "/";
+};
 
 export const requiresHandoffStepUpForRequest = (request: Request): boolean => {
   const path = normalizePath(new URL(request.url).pathname);
@@ -33,37 +38,45 @@ type HandoffAccessMetadata = {
   accountAccess?: AccountAccess;
   permissions?: Readonly<Record<string, readonly string[] | undefined>>;
 };
-export const requiresHandoffStepUpForMetadata = ({
+const requiresHandoffStepUpForMetadata = ({
   accountAccess,
   permissions,
 }: HandoffAccessMetadata) =>
   accountAccess === ACCOUNT_ACCESS.accountControl ||
-  (permissions?.organizationSettings?.length ?? 0) > 0 ||
-  (permissions?.member?.length ?? 0) > 0 ||
-  (permissions?.apiKey?.length ?? 0) > 0 ||
-  (permissions?.integration?.length ?? 0) > 0;
+  (permissions?.["organizationSettings"]?.length ?? 0) > 0 ||
+  (permissions?.["member"]?.length ?? 0) > 0 ||
+  (permissions?.["apiKey"]?.length ?? 0) > 0 ||
+  (permissions?.["integration"]?.length ?? 0) > 0;
 
 const registeredGuards = new WeakSet<object>();
 export const createHandoffStepUpGuard = (metadata: HandoffAccessMetadata) => {
   const required = requiresHandoffStepUpForMetadata(metadata);
-  const guard = ({
-    handoffOriginConsentId,
-  }: {
-    handoffOriginConsentId: string | null;
-  }) =>
-    required && handoffOriginConsentId
+  const guard = (context: unknown) => {
+    if (!required) {
+      return undefined;
+    }
+    // Macro dependencies resolve at runtime before their beforeHandle hooks.
+    if (
+      typeof context !== "object" ||
+      context === null ||
+      !("handoffOriginConsentId" in context) ||
+      (context.handoffOriginConsentId !== null &&
+        typeof context.handoffOriginConsentId !== "string")
+    ) {
+      return panic("Handoff guard requires resolved authentication");
+    }
+    return context.handoffOriginConsentId
       ? status(403, {
           code: MCP_HANDOFF_STEP_UP_REQUIRED,
           message: "Sign in again to continue.",
         })
       : undefined;
+  };
   registeredGuards.add(guard);
   return guard;
 };
 
-export type HandoffStepUpGuard = (context: {
-  handoffOriginConsentId: string | null;
-}) => unknown;
+export type HandoffStepUpGuard = (context: unknown) => unknown;
 
 export const isHandoffStepUpGuard = (
   value: unknown,
@@ -78,6 +91,10 @@ const parameterizedAuthDispositions = Object.entries(
 ).filter(([path]) => path.includes(":"));
 
 export const requiresHandoffStepUpForAuthPath = (path: string): boolean => {
+  // Better Call also dispatches server-only helpers, which have no HTTP path.
+  if (!path.startsWith("/")) {
+    return false;
+  }
   const normalized = normalizePath(path).replace(/^\/auth(?=\/|$)/u, "");
   const disposition =
     authDispositionByPath.get(normalized) ??

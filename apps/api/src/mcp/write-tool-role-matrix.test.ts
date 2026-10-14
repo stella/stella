@@ -36,6 +36,7 @@ import { CAPABILITY_FEATURE_BINDINGS } from "@/api/mcp/generated/capability-feat
 import { DEFAULT_MCP_CLI_ANNOTATIONS } from "@/api/mcp/static-cli-metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import {
   isMemberAuthorizedForMcpTool,
@@ -263,12 +264,15 @@ const restDeclarationOf = async (
 
 type WriteTool = McpToolDefinition & McpToolAuthorityDeclaration;
 
-/** Every static write tool, once per name, with the modes it is served on. */
+/** Every model-visible static write tool, once per name, with served modes. */
 const writeTools = (() => {
   const byName = new Map<string, { definition: WriteTool; modes: McpMode[] }>();
   for (const mode of MCP_MODES) {
     for (const definition of listStaticMcpToolDefinitions(mode)) {
       if (definition.access !== "write") {
+        continue;
+      }
+      if (!isMcpToolVisibleTo(definition, "model")) {
         continue;
       }
       const current = byName.get(definition.name);
@@ -812,8 +816,8 @@ const MATRIX: readonly MatrixRow[] = writeTools.flatMap(
     MEMBER_ROLES.map((role) => ({ tool: definition.name, role, modes })),
 );
 
-describe("write tool role matrix", () => {
-  test("every write tool has a REST counterpart or a stated reason it has none", () => {
+describe("model-visible write tool role matrix", () => {
+  test("every model-visible write tool has a REST counterpart or a stated reason it has none", () => {
     const unaccounted = writeTools
       .map(({ definition }) => definition.name)
       .filter(
@@ -841,7 +845,7 @@ describe("write tool role matrix", () => {
     }
   });
 
-  test("the matrix covers every write tool for every role", () => {
+  test("the matrix covers every model-visible write tool for every role", () => {
     expect(MEMBER_ROLES.length).toBe(5);
     expect(MATRIX.length).toBe(writeTools.length * MEMBER_ROLES.length);
   });

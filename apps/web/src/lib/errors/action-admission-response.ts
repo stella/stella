@@ -2,9 +2,9 @@ import { Result } from "better-result";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
+import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { toAPIError } from "@/lib/errors/api";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
-import { notifyStepUp } from "@/lib/mcp-step-up";
 
 type ObserveActionAdmissionResponseOptions = {
   notifyRefusal: (error: unknown) => boolean;

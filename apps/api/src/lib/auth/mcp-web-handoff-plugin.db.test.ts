@@ -41,6 +41,7 @@ import { databaseRelations } from "@/api/db/database-relations";
 import { auditLogs } from "@/api/db/schema";
 import { AUDIT_ACTION } from "@/api/lib/audit-log.constants";
 import { requiresHandoffStepUpForAuthPath } from "@/api/lib/auth/handoff-step-up-policy";
+import { createWebHandoffService } from "@/api/lib/auth/mcp-web-handoff";
 import { createMcpWebHandoffPlugin } from "@/api/lib/auth/mcp-web-handoff-plugin";
 import { SESSION_LIFETIME_FIELDS } from "@/api/lib/auth/session-lifetime";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -49,7 +50,6 @@ import {
   queryCountLogger,
   runWithQueryCounter,
 } from "@/api/lib/db-query-counter";
-import { createWebHandoffService } from "@/api/lib/mcp-web-handoff";
 import { MCP_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
@@ -67,6 +67,7 @@ let auth: ReturnType<typeof makeAuth>;
 let handoffEnabled = true;
 let handoffTextEnabled = true;
 let deliveredEmailOtp: string | undefined;
+const readDeliveredEmailOtp = () => deliveredEmailOtp;
 const fixture = {
   credentialType: "oauth" as const,
   grantedScopes: [...MCP_OAUTH_SCOPES],
@@ -405,6 +406,12 @@ describe("MCP link sign-in", () => {
     });
     expect(read?.session.activeOrganizationId).toBe(fixture.organizationId);
     expect(read?.session.originConsentId).toBe(fixture.consentId);
+    const listed = await auth.api.listSessions({
+      headers: { cookie: cookieOf(response) },
+    });
+    expect(listed.find(({ id }) => id === read?.session.id)).toMatchObject({
+      originConsentId: fixture.consentId,
+    });
     const stored = (
       await db.select().from(session).where(eq(session.id, read!.session.id))
     ).at(0);
@@ -509,7 +516,7 @@ describe("MCP link sign-in", () => {
       }),
     );
     expect(sent.status).toBe(200);
-    expect(deliveredEmailOtp).toBe("314159");
+    expect(readDeliveredEmailOtp()).toBe("314159");
     const completed = await auth.handler(
       new Request(`${baseURL}/api/auth/sign-in/email-otp`, {
         method: "POST",
@@ -520,7 +527,7 @@ describe("MCP link sign-in", () => {
         },
         body: JSON.stringify({
           email: "handoff@example.test",
-          otp: deliveredEmailOtp,
+          otp: readDeliveredEmailOtp(),
         }),
       }),
     );

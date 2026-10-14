@@ -4,6 +4,8 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import { isRecord } from "@/api/lib/type-guards";
+
 import {
   handoffLinkResult,
   decorateWebHandoffLinks,
@@ -106,7 +108,11 @@ describe("MCP web handoff result links", () => {
       },
     });
     expect(calls).toEqual([["/workspaces/matter", "/law/cz/2020/1"]]);
-    expect(decorated.structuredContent?.["appUrl"]).toBe(
+    const structuredContent = decorated.structuredContent;
+    if (!isRecord(structuredContent)) {
+      expect.unreachable("Expected decorated structured content");
+    }
+    expect(structuredContent["appUrl"]).toBe(
       `${base}/workspaces/matter#sh=sh1_example`,
     );
     expect(
@@ -160,7 +166,11 @@ describe("MCP web handoff result links", () => {
             links,
             "sh1_example",
           );
-          const value = decorated.structuredContent?.["appUrl"];
+          const structuredContent = decorated.structuredContent;
+          if (!isRecord(structuredContent)) {
+            expect.unreachable("Expected decorated structured content");
+          }
+          const value = structuredContent["appUrl"];
           expect(typeof value).toBe("string");
           if (typeof value !== "string") {
             expect.unreachable("Expected a decorated URL");

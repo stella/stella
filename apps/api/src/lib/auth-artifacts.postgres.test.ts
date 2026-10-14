@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { getColumns, getTableName, sql } from "drizzle-orm";
 
+import { sha256Hex } from "@stll/sha256/bun";
+
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   apikey,
@@ -21,6 +23,7 @@ import {
   folioCollabRoomTokens,
   mcpOAuthState,
   mcpUserConnections,
+  mcpWebHandoff,
   pdfSigningSessions,
   sharepointConnections,
   sharepointOAuthState,
@@ -43,6 +46,7 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const credentialTables = [
   mcpUserConnections,
   mcpOAuthState,
+  mcpWebHandoff,
   sharepointConnections,
   sharepointOAuthState,
   desktopEditHandoffs,
@@ -82,6 +86,7 @@ const snapshot = async (tx: Transaction) => ({
     .from(mcpUserConnections)
     .orderBy(mcpUserConnections.id),
   mcpStates: await tx.select().from(mcpOAuthState).orderBy(mcpOAuthState.state),
+  webHandoffs: await tx.select().from(mcpWebHandoff).orderBy(mcpWebHandoff.id),
   sharepointConnections: await tx
     .select()
     .from(sharepointConnections)
@@ -252,6 +257,17 @@ if (!databaseUrl || !enabled) {
                 resourceUrl: "https://example.test",
                 authorizationServerUrl: "https://example.test",
               });
+              await tx.insert(mcpWebHandoff).values({
+                id: Bun.randomUUIDv7(),
+                codeHash: sha256Hex(Bun.randomUUIDv7()),
+                userId: scope.userId,
+                organizationId: scope.organizationId,
+                oauthClientId: "handoff-client",
+                consentId: "handoff-consent",
+                allowedPaths: ["/matters/example"],
+                kind: "click",
+                expiresAt: future,
+              });
               await tx.insert(sharepointConnections).values({
                 id: createSafeId<"sharepointConnection">(),
                 organizationId: scope.organizationId,
@@ -403,6 +419,12 @@ if (!databaseUrl || !enabled) {
           );
           expect(after.mcpStates).toEqual(
             before.mcpStates.filter(
+              (row) =>
+                row.organizationId !== organizationId || row.userId !== userId,
+            ),
+          );
+          expect(after.webHandoffs).toEqual(
+            before.webHandoffs.filter(
               (row) =>
                 row.organizationId !== organizationId || row.userId !== userId,
             ),

@@ -125,7 +125,11 @@ describe("evidence references", () => {
 
   test("DOCX save and reopen preserve source identity, generated label and ordinary prose", async () => {
     const doc = documentWith([1]);
-    const parsedDocument = await parseDocx(await createDocx(fromProseDoc(doc)));
+    const parsedDocument = await parseDocx(
+      await createDocx(
+        fromProseDoc(doc, undefined, { stylesheetSource: { type: "package" } }),
+      ),
+    );
     const reopened = toProseDoc(parsedDocument);
     const collected = collectEvidenceReferences(reopened);
     expect(collected.references).toHaveLength(1);
@@ -134,7 +138,13 @@ describe("evidence references", () => {
       "Důkaz 1: Faktura ",
     );
     const second = toProseDoc(
-      await parseDocx(await createDocx(fromProseDoc(reopened, parsedDocument))),
+      await parseDocx(
+        await createDocx(
+          fromProseDoc(reopened, parsedDocument, {
+            stylesheetSource: { type: "package" },
+          }),
+        ),
+      ),
     );
     expect(
       collectEvidenceReferences(second).references.at(0)?.reference,

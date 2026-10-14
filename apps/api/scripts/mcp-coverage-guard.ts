@@ -182,6 +182,7 @@ export type CoverageIssues = {
 };
 
 type ClassifyInput = {
+  appTools: readonly { app: string; name: string }[];
   endpoints: readonly { id: string; exposure: ParsedExposure }[];
   registryToolNames: readonly string[];
   waivers: Record<string, string>;
@@ -193,6 +194,7 @@ type ClassifyInput = {
  * Kept pure (no I/O) so the test suite can exercise the logic directly.
  */
 export const classifyCoverage = ({
+  appTools,
   endpoints,
   registryToolNames,
   waivers,
@@ -222,6 +224,13 @@ export const classifyCoverage = ({
       if (!registry.has(exposure.by)) {
         unknownToolNames.push({ id, name: exposure.by });
       }
+    }
+  }
+
+  for (const { app, name } of appTools) {
+    referencedTools.add(name);
+    if (!registry.has(name)) {
+      unknownToolNames.push({ id: `app:${app}`, name });
     }
   }
 
@@ -402,7 +411,7 @@ const printIssues = (issues: CoverageIssues): boolean => {
   if (issues.unknownToolNames.length > 0) {
     failed = true;
     console.error(
-      "\nmcp-coverage-guard: these tool/covered references name a tool that is not in the static registry:",
+      "\nmcp-coverage-guard: these endpoint/App references name a tool that is not in the static registry:",
     );
     for (const { id, name } of issues.unknownToolNames) {
       console.error(`  ${id} -> ${name}`);
@@ -411,7 +420,7 @@ const printIssues = (issues: CoverageIssues): boolean => {
   if (issues.orphanTools.length > 0) {
     failed = true;
     console.error(
-      '\nmcp-coverage-guard: these registry tools are orphaned (no `type: "tool"`/`covered` endpoint references them, and no TOOLS_WITHOUT_ENUMERABLE_ENDPOINT waiver):',
+      "\nmcp-coverage-guard: these registry tools are orphaned (no endpoint or MCP App manifest references them, and no TOOLS_WITHOUT_ENUMERABLE_ENDPOINT waiver):",
     );
     for (const tool of issues.orphanTools) {
       console.error(`  ${tool}`);
@@ -484,10 +493,15 @@ const runCheck = async (): Promise<number> => {
     return 1;
   }
 
-  const { MCP_STATIC_TOOL_NAMES } =
-    await import("../src/mcp/static-tool-definitions");
+  const [{ MCP_STATIC_TOOL_NAMES }, { MCP_APPS }] = await Promise.all([
+    import("../src/mcp/static-tool-definitions"),
+    import("../src/mcp/apps/manifest"),
+  ]);
 
   const issues = classifyCoverage({
+    appTools: MCP_APPS.flatMap(({ directory, callableTools }) =>
+      callableTools.map((name) => ({ app: directory, name })),
+    ),
     endpoints,
     registryToolNames: MCP_STATIC_TOOL_NAMES,
     waivers: TOOLS_WITHOUT_ENUMERABLE_ENDPOINT,
@@ -577,6 +591,7 @@ const runSelfTest = (): number => {
   }
 
   const orphan = classifyCoverage({
+    appTools: [],
     endpoints: [{ id: "x.ts", exposure: { type: "pending" } }],
     registryToolNames: ["only_tool"],
     waivers: {},
@@ -585,7 +600,28 @@ const runSelfTest = (): number => {
     failures.push("classifyCoverage did not flag an orphan tool");
   }
 
+  const appReference = classifyCoverage({
+    appTools: [{ app: "reader", name: "only_tool" }],
+    endpoints: [],
+    registryToolNames: ["only_tool"],
+    waivers: {},
+  });
+  if (appReference.orphanTools.length > 0) {
+    failures.push("classifyCoverage did not recognize an MCP App callable");
+  }
+
+  const unknownAppReference = classifyCoverage({
+    appTools: [{ app: "reader", name: "missing_tool" }],
+    endpoints: [],
+    registryToolNames: [],
+    waivers: {},
+  });
+  if (unknownAppReference.unknownToolNames.length !== 1) {
+    failures.push("classifyCoverage accepted an unknown MCP App callable");
+  }
+
   const badName = classifyCoverage({
+    appTools: [],
     endpoints: [{ id: "x.ts", exposure: { type: "tool", name: "ghost" } }],
     registryToolNames: ["real"],
     waivers: { real: "waived" },
@@ -595,6 +631,7 @@ const runSelfTest = (): number => {
   }
 
   const missing = classifyCoverage({
+    appTools: [],
     endpoints: [{ id: "x.ts", exposure: { type: "invalid", raw: undefined } }],
     registryToolNames: [],
     waivers: {},

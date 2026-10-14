@@ -184,7 +184,6 @@ for (const mode of Object.values(SIGN_IN_MODE)) {
     fireEvent.click(
       ui.getByRole("button", {
         name: messages.auth.continueWithEmail,
-        exact: true,
       }),
     );
     await waitFor(() => expect(sent).toHaveLength(1));

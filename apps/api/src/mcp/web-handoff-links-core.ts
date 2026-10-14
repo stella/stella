@@ -5,7 +5,11 @@ const URL_PATTERN = /https?:\/\/[^\s<>"'`\\]+/gu;
 
 const mapProseLinks = (text: string, transform: (url: string) => string) =>
   text.replace(URL_PATTERN, (match) => {
-    const url = match.replace(/[),.;\]}]+$/u, "");
+    let end = match.length;
+    while (end > 0 && "),.;]}".includes(match.charAt(end - 1))) {
+      end -= 1;
+    }
+    const url = match.slice(0, end);
     return `${transform(url)}${match.slice(url.length)}`;
   });
 
@@ -40,11 +44,32 @@ const mapText = (text: string, transform: (value: string) => string) => {
   if (Result.isOk(parsed)) {
     return JSON.stringify(mapStrings(parsed.value, transform));
   }
-  return text.replace(
-    /(\[[^\]]*\]\()([^\s)]+)(\))/gu,
-    (_, prefix: string, url: string, suffix: string) =>
-      `${prefix}${transform(url)}${suffix}`,
-  );
+  const parts: string[] = [];
+  let cursor = 0;
+  while (cursor < text.length) {
+    const labelStart = text.indexOf("[", cursor);
+    const labelEnd = text.indexOf("]", labelStart + 1);
+    if (labelStart === -1 || labelEnd === -1) {
+      break;
+    }
+    if (text[labelEnd + 1] !== "(") {
+      parts.push(text.slice(cursor, labelEnd + 1));
+      cursor = labelEnd + 1;
+      continue;
+    }
+    const urlStart = labelEnd + 2;
+    const urlEnd = text.indexOf(")", urlStart);
+    if (urlEnd === -1) {
+      break;
+    }
+    const url = text.slice(urlStart, urlEnd);
+    parts.push(text.slice(cursor, urlStart));
+    parts.push(url.length > 0 && !/\s/u.test(url) ? transform(url) : url);
+    parts.push(")");
+    cursor = urlEnd + 1;
+  }
+  parts.push(text.slice(cursor));
+  return parts.join("");
 };
 
 export const webHandoffPaths = (

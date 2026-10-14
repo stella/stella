@@ -13,16 +13,18 @@ import { Result, panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import { AUTH_DATABASE_ADAPTER_OPTIONS } from "@/api/lib/auth-adapter-options";
-import { requireAuthRetention } from "@/api/lib/auth/registration-adapter";
-import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import {
   canonicalHandoffPath,
-  getWebHandoffService,
+  type createWebHandoffService,
   hasWebHandoffScopes,
+  webHandoffFailure,
   WEB_HANDOFF_CODE_PATTERN,
-} from "@/api/lib/mcp-web-handoff";
+} from "@/api/lib/auth/mcp-web-handoff";
+import { requireAuthRetention } from "@/api/lib/auth/registration-adapter";
+import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import {
   CACHE_CONTROL_HEADER,
@@ -33,10 +35,15 @@ class HandoffCompletionError extends TaggedError("HandoffCompletionError")<{
   message: string;
 }> {}
 
+const WEB_HANDOFF_ENDPOINT_FAILURE_SINK = failureSink({
+  event: "mcp_web_handoff.endpoint_failed",
+  expected: [],
+});
+
 export const MCP_HANDOFF_REDEEM_PATH = "/mcp-handoff/redeem";
-type WebHandoffService = ReturnType<typeof getWebHandoffService>;
+type WebHandoffService = ReturnType<typeof createWebHandoffService>;
 type HandoffPluginOptions = {
-  service?: () => WebHandoffService;
+  service: () => WebHandoffService;
   now?: () => Date;
   textSessionMaxSeconds?: () => number;
 };
@@ -66,8 +73,8 @@ const completeHandoffSession = async ({
     ...AUTH_DATABASE_ADAPTER_OPTIONS,
     transaction: false,
   })(ctx.context.options);
-  const completion = await Result.tryPromise(
-    async () =>
+  const completion = await Result.tryPromise({
+    try: async () =>
       await runWithAdapter(adapter, async () => {
         if (existing?.user.id === completionContext.userId) {
           const updated = await ctx.context.internalAdapter.updateSession(
@@ -115,15 +122,42 @@ const completeHandoffSession = async ({
         await setSessionCookie(ctx, { session: created, user: account });
         return Result.ok(created.id);
       }),
-  );
+    catch: webHandoffFailure(
+      "complete_session",
+      "Web handoff session could not be completed.",
+    ),
+  });
   return Result.isOk(completion) ? completion.value : completion;
 };
 
+const createListMcpHandoffSessionClientsEndpoint = (
+  service: () => WebHandoffService,
+) =>
+  createAuthEndpoint(
+    "/mcp-handoff/sessions",
+    { method: "GET", requireHeaders: true, use: [sessionMiddleware] },
+    async (ctx) => {
+      ctx.setHeader(CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL);
+      const result = await service().listSessionClients(
+        brandPersistedUserId(ctx.context.session.user.id),
+      );
+      if (Result.isError(result)) {
+        observeFailure(result.error, {
+          sink: WEB_HANDOFF_ENDPOINT_FAILURE_SINK,
+          ctx: { operation: "list_session_clients" },
+        });
+        ctx.setStatus(503);
+        return ctx.json({ status: "unavailable" as const });
+      }
+      return ctx.json({ sessions: result.value });
+    },
+  );
+
 export const createMcpWebHandoffPlugin = ({
-  service = getWebHandoffService,
+  service,
   now = () => new Date(),
   textSessionMaxSeconds = () => env.MCP_WEB_HANDOFF_TEXT_SESSION_MAX_SECONDS,
-}: HandoffPluginOptions = {}) =>
+}: HandoffPluginOptions) =>
   ({
     id: "mcp-web-handoff",
     endpoints: {
@@ -162,12 +196,17 @@ export const createMcpWebHandoffPlugin = ({
           }
           const address =
             ctx.headers.get(AUTH_CLIENT_ADDRESS_HEADER) ?? "unknown";
-          const admitted = await Result.tryPromise(
-            async () => await currentService.admitRedeem(address),
-          );
+          const admitted = await Result.tryPromise({
+            try: async () => await currentService.admitRedeem(address),
+            catch: webHandoffFailure(
+              "redeem_admission",
+              "Web handoff redemption is temporarily unavailable.",
+            ),
+          });
           if (Result.isError(admitted)) {
-            captureError(admitted.error, {
-              operation: "mcp_web_handoff.admission",
+            observeFailure(admitted.error, {
+              sink: WEB_HANDOFF_ENDPOINT_FAILURE_SINK,
+              ctx: { operation: "admission" },
             });
             return refusalResponse();
           }
@@ -176,95 +215,111 @@ export const createMcpWebHandoffPlugin = ({
           }
           // Receipt-specific work is allowed only after address and global admission.
           const refuse = async (reason: string) => {
-            const audited = await Result.tryPromise(
-              async () =>
+            const audited = await Result.tryPromise({
+              try: async () =>
                 await currentService.auditRefusal(code, reason, request),
-            );
+              catch: webHandoffFailure(
+                "refusal_audit",
+                "Web handoff refusal could not be audited.",
+              ),
+            });
             if (Result.isError(audited)) {
-              captureError(audited.error, {
-                operation: "mcp_web_handoff.refusal_audit",
+              observeFailure(audited.error, {
+                sink: WEB_HANDOFF_ENDPOINT_FAILURE_SINK,
+                ctx: { operation: "refusal_audit" },
               });
             }
             return refusalResponse();
           };
           const originalCookies = ctx.responseHeaders.getSetCookie();
           const originalSession = ctx.context.newSession;
-          const outcome = await Result.tryPromise(async () => {
-            const canonical = canonicalHandoffPath(path);
-            if (
-              !WEB_HANDOFF_CODE_PATTERN.test(code) ||
-              !canonical ||
-              canonical !== path
-            ) {
-              return await refuse("input");
-            }
-            const grant = await currentService.inspect(code);
-            if (!grant) {
-              return await refuse("unavailable");
-            }
-            const userAdmitted = await Result.tryPromise(
-              async () =>
-                await currentService.admitUser(
-                  brandPersistedUserId(grant.userId),
+          const outcome = await Result.tryPromise({
+            try: async () => {
+              const canonical = canonicalHandoffPath(path);
+              if (
+                !WEB_HANDOFF_CODE_PATTERN.test(code) ||
+                !canonical ||
+                canonical !== path
+              ) {
+                return await refuse("input");
+              }
+              const grant = await currentService.inspect(code);
+              if (!grant) {
+                return await refuse("unavailable");
+              }
+              const userAdmitted = await Result.tryPromise({
+                try: async () =>
+                  await currentService.admitUser(
+                    brandPersistedUserId(grant.userId),
+                  ),
+                catch: webHandoffFailure(
+                  "user_admission",
+                  "Web handoff redemption is temporarily unavailable.",
                 ),
-            );
-            if (Result.isError(userAdmitted)) {
-              captureError(userAdmitted.error, {
-                operation: "mcp_web_handoff.admission",
               });
-              return refusalResponse();
-            }
-            if (!userAdmitted.value) {
-              return refusalResponse();
-            }
-            if (
-              grant.handoff.consumedAt ||
-              grant.handoff.expiresAt <= now() ||
-              !hasWebHandoffScopes(grant.scopes)
-            ) {
-              return await refuse("unavailable");
-            }
-            if (!grant.handoff.allowedPaths.includes(canonical)) {
-              return await refuse("path");
-            }
-            const existing = await getAuthoritativeSessionFromCtx(ctx);
-            if (
-              (grant.handoff.kind === "text" ||
-                (existing && existing.user.id !== grant.userId)) &&
-              confirmation !== "confirmed"
-            ) {
-              await currentService.recordConfirmation(code, request);
-              return ctx.json({
-                status: "needs_confirmation" as const,
-                email: grant.email,
-                organizationName: grant.organizationName,
+              if (Result.isError(userAdmitted)) {
+                observeFailure(userAdmitted.error, {
+                  sink: WEB_HANDOFF_ENDPOINT_FAILURE_SINK,
+                  ctx: { operation: "admission" },
+                });
+                return refusalResponse();
+              }
+              if (!userAdmitted.value) {
+                return refusalResponse();
+              }
+              if (
+                grant.handoff.consumedAt ||
+                grant.handoff.expiresAt <= now() ||
+                !hasWebHandoffScopes(grant.scopes)
+              ) {
+                return await refuse("unavailable");
+              }
+              if (!grant.handoff.allowedPaths.includes(canonical)) {
+                return await refuse("path");
+              }
+              const existing = await getAuthoritativeSessionFromCtx(ctx);
+              if (
+                (grant.handoff.kind === "text" ||
+                  (existing && existing.user.id !== grant.userId)) &&
+                confirmation !== "confirmed"
+              ) {
+                await currentService.recordConfirmation(code, request);
+                return ctx.json({
+                  status: "needs_confirmation" as const,
+                  email: grant.email,
+                  organizationName: grant.organizationName,
+                });
+              }
+              const sameUser = existing?.user.id === grant.userId;
+              const consumed = await currentService.consume({
+                code,
+                path: canonical,
+                request,
+                ipAddress: address === "unknown" ? null : address,
+                previousOrganizationId:
+                  sameUser &&
+                  typeof existing.session["activeOrganizationId"] === "string"
+                    ? existing.session["activeOrganizationId"]
+                    : null,
+                complete: async (completionContext) =>
+                  await completeHandoffSession({
+                    ctx,
+                    completionContext,
+                    existing,
+                    originalSession,
+                    now,
+                    textSessionMaxSeconds,
+                  }),
               });
-            }
-            const sameUser = existing?.user.id === grant.userId;
-            const consumed = await currentService.consume({
-              code,
-              path: canonical,
-              request,
-              ipAddress: address === "unknown" ? null : address,
-              previousOrganizationId:
-                sameUser &&
-                typeof existing.session["activeOrganizationId"] === "string"
-                  ? existing.session["activeOrganizationId"]
-                  : null,
-              complete: async (completionContext) =>
-                await completeHandoffSession({
-                  ctx,
-                  completionContext,
-                  existing,
-                  originalSession,
-                  now,
-                  textSessionMaxSeconds,
-                }),
-            });
-            if (!consumed) {
-              return await refuse("unavailable");
-            }
-            return ctx.json({ status: "redeemed" as const });
+              if (!consumed) {
+                return await refuse("unavailable");
+              }
+              return ctx.json({ status: "redeemed" as const });
+            },
+            catch: webHandoffFailure(
+              "redeem",
+              "Web handoff could not be redeemed.",
+            ),
           });
           if (Result.isOk(outcome)) {
             return outcome.value;
@@ -275,23 +330,14 @@ export const createMcpWebHandoffPlugin = ({
             ctx.responseHeaders.append("set-cookie", cookie);
           }
           ctx.context.setNewSession(originalSession);
-          captureError(outcome.error, {
-            operation: "mcp_web_handoff.redeem",
+          observeFailure(outcome.error, {
+            sink: WEB_HANDOFF_ENDPOINT_FAILURE_SINK,
+            ctx: { operation: "redeem" },
           });
           return await refuse("runtime");
         },
       ),
-      listMcpHandoffSessionClients: createAuthEndpoint(
-        "/mcp-handoff/sessions",
-        { method: "GET", requireHeaders: true, use: [sessionMiddleware] },
-        async (ctx) => {
-          ctx.setHeader(CACHE_CONTROL_HEADER, PRIVATE_CACHE_CONTROL);
-          return ctx.json({
-            sessions: await service().listSessionClients(
-              brandPersistedUserId(ctx.context.session.user.id),
-            ),
-          });
-        },
-      ),
+      listMcpHandoffSessionClients:
+        createListMcpHandoffSessionClientsEndpoint(service),
     },
   }) satisfies BetterAuthPlugin;

@@ -11,8 +11,11 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import * as v from "valibot";
 
+import { isPathInside } from "@stll/portable-path";
+
+import { repoRelativePath } from "../packages/portable-path/src/index";
 import { lexShell } from "./install-free-ci";
-import { workflowJobSteps } from "./workflow-steps";
+import { flattenWorkflowSteps, workflowJobSteps } from "./workflow-steps";
 
 const root = path.resolve(import.meta.dirname, "..");
 const workflow: unknown = Bun.YAML.parse(
@@ -20,11 +23,23 @@ const workflow: unknown = Bun.YAML.parse(
 );
 const targets = {
   "e2e-report": ["@stll/playwright-tools", "!stella"],
-  "desktop-windows-dry-run": ["@stll/desktop...", "!stella"],
+  "desktop-windows-dry-run": [
+    "@stll/scripts...",
+    "@stll/desktop...",
+    "!stella",
+  ],
   "docker-checks": ["@stll/agent-engine...", "stella"],
   "landing-build": ["@stll/landing...", "@stll/cli...", "stella"],
   "e2e-landing": ["@stll/landing...", "@stll/cli...", "stella"],
 } as const;
+
+const filtersFromFlags = (flags: readonly string[]) => {
+  expect(flags).toContain("--frozen-lockfile");
+  expect(flags).toContain("--ignore-scripts");
+  return flags.flatMap((flag, index) =>
+    flag === "--filter" ? [flags.at(index + 1)] : [],
+  );
+};
 
 const installFilters = (command: string) => {
   const invocations = [...lexShell(command)]
@@ -44,21 +59,35 @@ const installFilters = (command: string) => {
   );
 };
 
+const actionFlags = (step: Record<string, unknown>) => {
+  const selector = v.parse(v.string(), step["uses"]);
+  expect([
+    "$/.github/actions/ci-install",
+    "./.github/actions/ci-install",
+  ]).toContain(selector);
+  const inputs = v.parse(v.object({ flags: v.string() }), step["with"]);
+  return v.parse(v.array(v.string()), JSON.parse(inputs.flags));
+};
+
+const installFiltersFromAction = (step: Record<string, unknown>) =>
+  filtersFromFlags(actionFlags(step));
+
 for (const [job, filters] of Object.entries(targets)) {
   test(`${job} installs only its frozen task closure`, () => {
     const install = workflowJobSteps(workflow, job).find(
       (step) => step["name"] === "Install dependencies",
     );
-    const command = v.parse(v.string(), install?.["run"]);
-    expect(installFilters(command)).toEqual([...filters]);
+    if (install === undefined) {
+      expect.unreachable(`Missing ${job} install`);
+    }
+    expect(installFiltersFromAction(install)).toEqual([...filters]);
   });
 }
 
 test("a full workspace install cannot satisfy a scoped job", () => {
-  const full =
-    "bash scripts/retry.sh bun ci --frozen-lockfile --ignore-scripts";
+  const full = ["--frozen-lockfile", "--ignore-scripts"];
   for (const filters of Object.values(targets)) {
-    expect(installFilters(full)).not.toEqual([...filters]);
+    expect(filtersFromFlags(full)).not.toEqual([...filters]);
   }
 });
 
@@ -127,6 +156,451 @@ const closure = (seeds: readonly string[]) => {
   }
   return visited;
 };
+
+const workspaceDirectories = new Map(
+  [
+    ...new Bun.Glob("{apps,packages}/*/package.json").scanSync({ cwd: root }),
+  ].map((file) => [
+    path.dirname(file),
+    v.parse(
+      manifestSchema,
+      JSON.parse(readFileSync(path.join(root, file), "utf-8")),
+    ).name,
+  ]),
+);
+
+const selectedWorkspaces = (filters: readonly string[]) => {
+  if (filters.length === 0) {
+    return new Set(manifests.keys());
+  }
+  const matches = (selector: string) => {
+    const pattern = selector.replace(/\.\.\.$/u, "");
+    const glob = new Bun.Glob(pattern);
+    const names = [...manifests.keys()].filter((name) => glob.match(name));
+    expect(
+      names.length,
+      `Unknown workspace filter ${selector}`,
+    ).toBeGreaterThan(0);
+    return names;
+  };
+  const included = filters.filter((filter) => !filter.startsWith("!"));
+  const installed = closure(
+    included.length === 0 ? [...manifests.keys()] : included.flatMap(matches),
+  );
+  for (const filter of filters.filter((value) => value.startsWith("!"))) {
+    for (const name of matches(filter.slice(1))) {
+      installed.delete(name);
+    }
+  }
+  return installed;
+};
+
+const scopedFlags = (step: Record<string, unknown>) => {
+  if (
+    ["$/.github/actions/ci-install", "./.github/actions/ci-install"].includes(
+      v.parse(v.optional(v.string(), ""), step["uses"]),
+    )
+  ) {
+    return actionFlags(step);
+  }
+  if (typeof step["run"] !== "string") {
+    return undefined;
+  }
+  for (const event of lexShell(step["run"])) {
+    if (
+      event.type !== "command" ||
+      event.words.includes("-g") ||
+      event.words.includes("--global")
+    ) {
+      continue;
+    }
+    const owner = event.words.findIndex((word) =>
+      word.endsWith("/ci-install.ts"),
+    );
+    if (owner !== -1) {
+      return event.words.slice(owner + 2);
+    }
+  }
+  return undefined;
+};
+
+const scopedInstallCoverageProblems = (source: unknown) => {
+  const defaultsSchema = v.object({
+    run: v.optional(
+      v.object({
+        "working-directory": v.optional(v.string(), "."),
+      }),
+      { "working-directory": "." },
+    ),
+  });
+  const { jobs, defaults } = v.parse(
+    v.object({
+      jobs: v.record(v.string(), v.unknown()),
+      defaults: v.optional(defaultsSchema, {
+        run: { "working-directory": "." },
+      }),
+    }),
+    source,
+  );
+  const problems: string[] = [];
+  for (const [job, value] of Object.entries(jobs)) {
+    const configuration = v.parse(
+      v.looseObject({
+        steps: v.optional(v.array(v.unknown())),
+        defaults: v.optional(defaultsSchema, defaults),
+      }),
+      value,
+    );
+    if (configuration.steps === undefined) {
+      continue;
+    }
+    const steps = flattenWorkflowSteps(configuration.steps);
+    const installIndex = steps.findIndex(
+      (step) => scopedFlags(step) !== undefined,
+    );
+    if (installIndex === -1) {
+      continue;
+    }
+    const install = steps.at(installIndex);
+    if (install === undefined) {
+      expect.unreachable("Missing indexed install");
+    }
+    const installed = selectedWorkspaces(
+      v.parse(
+        v.array(v.string()),
+        filtersFromFlags(v.parse(v.array(v.string()), scopedFlags(install))),
+      ),
+    );
+    const directoryScopes = new Map([[root, installed]]);
+    const requireDirectory = (directory: string, step: string) => {
+      const normalized = path.resolve(
+        root,
+        directory.replaceAll(
+          /\$\{\{\s*github\.workspace\s*\}\}|\$(?:GITHUB_WORKSPACE|\{GITHUB_WORKSPACE\})/gu,
+          () => root,
+        ),
+      );
+      for (const [candidate, name] of workspaceDirectories) {
+        const absolute = path.join(root, candidate);
+        if (isPathInside(absolute, normalized) && !installed.has(name)) {
+          problems.push(`${job}/${step}: ${name} is outside the install scope`);
+        }
+      }
+    };
+    const inspectStep = (
+      step: Record<string, unknown>,
+      defaultDirectory: string,
+    ) => {
+      const name = v.parse(v.optional(v.string(), "unnamed"), step["name"]);
+      let directory = v.parse(
+        v.optional(v.string(), defaultDirectory),
+        step["working-directory"],
+      );
+      if (typeof step["working-directory"] === "string") {
+        requireDirectory(directory, name);
+      }
+      const uses = step["uses"];
+      if (
+        [
+          "$/.github/actions/ci-install",
+          "./.github/actions/ci-install",
+        ].includes(v.parse(v.optional(v.string(), ""), uses))
+      ) {
+        const scope = selectedWorkspaces(
+          v.parse(v.array(v.string()), filtersFromFlags(actionFlags(step))),
+        );
+        const location = path.resolve(root, directory);
+        const existing = directoryScopes.get(location) ?? new Set<string>();
+        for (const selected of scope) {
+          existing.add(selected);
+        }
+        directoryScopes.set(location, existing);
+        return;
+      }
+      if (
+        typeof uses === "string" &&
+        /^(?:\$|\.)\/\.github\/actions\//u.test(uses)
+      ) {
+        const action = v.parse(
+          v.object({
+            inputs: v.optional(
+              v.record(
+                v.string(),
+                v.object({ default: v.optional(v.string(), "") }),
+              ),
+              {},
+            ),
+            runs: v.object({ steps: v.array(v.unknown()) }),
+          }),
+          Bun.YAML.parse(
+            readFileSync(path.join(root, uses.slice(2), "action.yml"), "utf-8"),
+          ),
+        );
+        const inputs = v.parse(
+          v.optional(v.record(v.string(), v.unknown()), {}),
+          step["with"],
+        );
+        if (uses.endsWith("/setup-playwright")) {
+          requireDirectory(
+            v.parse(
+              v.string(),
+              inputs["package-directory"] ??
+                action.inputs["package-directory"]?.default,
+            ),
+            name,
+          );
+        }
+        for (const child of flattenWorkflowSteps(action.runs.steps)) {
+          const expanded = { ...child };
+          for (const key of ["run", "working-directory"]) {
+            const text = expanded[key];
+            if (typeof text !== "string") {
+              continue;
+            }
+            expanded[key] = text.replace(
+              /\$\{\{\s*inputs\.([\w-]+)\s*\}\}/gu,
+              (_match, input: string) =>
+                v.parse(
+                  v.string(),
+                  inputs[input] ?? action.inputs[input]?.default,
+                ),
+            );
+          }
+          inspectStep(expanded, directory);
+        }
+      }
+      if (typeof step["run"] !== "string") {
+        return;
+      }
+      const directoryStack: string[] = [];
+      const environment = v.parse(
+        v.optional(v.record(v.string(), v.unknown()), {}),
+        step["env"],
+      );
+      if (typeof environment["PLAYWRIGHT_PACKAGE_DIR"] === "string") {
+        requireDirectory(environment["PLAYWRIGHT_PACKAGE_DIR"], name);
+      }
+      for (const event of lexShell(step["run"])) {
+        if (event.type === "subshell-start") {
+          directoryStack.push(directory);
+        }
+        if (event.type === "subshell-end") {
+          directory = directoryStack.pop() ?? directory;
+        }
+        if (event.type !== "command") {
+          continue;
+        }
+        const { words } = event;
+        if (words.at(0) === "cd" && words.at(1) !== undefined) {
+          directory = path.resolve(
+            root,
+            directory,
+            v.parse(v.string(), words.at(1)),
+          );
+        }
+        const bunIndex = words.findIndex((word) =>
+          ["bun", "bunx", "npx"].includes(word),
+        );
+        if (bunIndex === -1) {
+          continue;
+        }
+        const command = words.slice(bunIndex + 1);
+        // Pruned image checks perform a separate frozen install in their tree.
+        // Install selectors declare that tree; they are not task consumers.
+        if (
+          command.some(
+            (word) =>
+              word.endsWith("/ci-install.ts") ||
+              word === "install" ||
+              word === "ci",
+          )
+        ) {
+          if (command.includes("-g") || command.includes("--global")) {
+            continue;
+          }
+          const filters = command.flatMap((word, index) => {
+            if (word === "--filter") {
+              return [v.parse(v.string(), command.at(index + 1))];
+            }
+            if (word.startsWith("--filter=")) {
+              return [word.slice(9)];
+            }
+            return [];
+          });
+          const location = path.resolve(root, directory);
+          const existing = directoryScopes.get(location) ?? new Set<string>();
+          for (const selected of selectedWorkspaces(filters)) {
+            existing.add(selected);
+          }
+          directoryScopes.set(location, existing);
+          continue;
+        }
+        const commandScope =
+          directoryScopes.get(path.resolve(root, directory)) ?? installed;
+        for (const [index, word] of command.entries()) {
+          if (word === "--cwd" || word.startsWith("--cwd=")) {
+            requireDirectory(
+              path.resolve(
+                root,
+                directory,
+                v.parse(
+                  v.string(),
+                  word === "--cwd" ? command.at(index + 1) : word.slice(6),
+                ),
+              ),
+              name,
+            );
+          }
+          if (word === "--filter" || word.startsWith("--filter=")) {
+            const selector = v.parse(
+              v.string(),
+              word === "--filter" ? command.at(index + 1) : word.slice(9),
+            );
+            for (const selected of selectedWorkspaces([selector])) {
+              if (manifests.has(selected) && !commandScope.has(selected)) {
+                problems.push(
+                  `${job}/${name}: ${selected} is outside the install scope`,
+                );
+              }
+            }
+          }
+          // File arguments (for example a source path passed to a selector)
+          // do not execute in that workspace. Only Bun's entrypoint does.
+          if (index === 0 && /^(?:apps|packages)\//u.test(word)) {
+            requireDirectory(path.resolve(root, directory, word), name);
+          }
+        }
+        requireDirectory(directory, name);
+      }
+    };
+    for (const step of steps.slice(installIndex + 1)) {
+      inspectStep(step, configuration.defaults.run["working-directory"]);
+    }
+  }
+  return problems;
+};
+
+test("every scoped install covers later workspace commands and browser paths regardless of event", () => {
+  expect(scopedInstallCoverageProblems(workflow)).toEqual([]);
+});
+
+test("the scope census rejects omitted workspaces in merge-only and scheduled jobs", () => {
+  for (const consumer of [
+    { run: "bun test", "working-directory": "apps/web" },
+    { run: "bun --cwd=apps/web test" },
+    { run: "bun --cwd apps/web test" },
+    { run: "bun --filter @stll/web test:e2e" },
+    { run: "cd apps/web\nbun test" },
+    { uses: "./.github/actions/setup-playwright" },
+    {
+      uses: "./.github/actions/setup-playwright",
+      with: { "package-directory": "apps/web" },
+    },
+  ]) {
+    const fixture = {
+      on: ["merge_group", "schedule"],
+      jobs: {
+        browser: {
+          if: "github.event_name != 'pull_request'",
+          steps: [
+            {
+              uses: "./.github/actions/ci-install",
+              with: {
+                flags:
+                  '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scripts"]',
+              },
+            },
+            consumer,
+          ],
+        },
+      },
+    };
+    expect(scopedInstallCoverageProblems(fixture)).toContain(
+      "browser/unnamed: @stll/web is outside the install scope",
+    );
+  }
+});
+
+test("later browser jobs inherit the exact installed global store", () => {
+  const action = Bun.YAML.parse(
+    readFileSync(
+      path.join(root, ".github/actions/ci-install/action.yml"),
+      "utf-8",
+    ),
+  );
+  const parsed = v.parse(
+    v.object({ runs: v.object({ steps: v.array(v.unknown()) }) }),
+    action,
+  );
+  const step = flattenWorkflowSteps(parsed.runs.steps).find(
+    (candidate) => candidate["id"] === "restore-time",
+  );
+  const script = v.parse(v.string(), step?.["run"]);
+  const temporary = mkdtempSync(path.join(tmpdir(), "ci-store-export-"));
+  try {
+    const store = path.join(realpathSync(temporary), "scoped-store");
+    const environment = path.join(temporary, "env");
+    writeFileSync(environment, "");
+    const result = Bun.spawnSync(["bash", "-e", "-c", script], {
+      env: {
+        ...process.env,
+        BUN_INSTALL_CACHE_DIR: store,
+        CACHE_HIT: "false",
+        START_MS: "0",
+        GITHUB_ENV: environment,
+        GITHUB_OUTPUT: path.join(temporary, "output"),
+      },
+    });
+    expect(result.exitCode, result.stderr.toString()).toBe(0);
+    let checked = 0;
+    const missingStores: string[] = [];
+    for (const [job, value] of Object.entries(
+      v.parse(v.object({ jobs: v.record(v.string(), v.unknown()) }), workflow)
+        .jobs,
+    )) {
+      const configuration = v.parse(
+        v.looseObject({ steps: v.optional(v.array(v.unknown())) }),
+        value,
+      );
+      if (configuration.steps === undefined) {
+        continue;
+      }
+      const steps = flattenWorkflowSteps(configuration.steps);
+      if (
+        !steps.some(
+          (candidate) => candidate["uses"] === "$/.github/actions/ci-install",
+        ) ||
+        !steps.some(
+          (candidate) =>
+            candidate["uses"] === "./.github/actions/setup-playwright" ||
+            (typeof candidate["run"] === "string" &&
+              candidate["run"].includes("setup-playwright/run-in-image.sh")),
+        )
+      ) {
+        continue;
+      }
+      if (
+        !readFileSync(environment, "utf-8").includes(
+          `BUN_INSTALL_CACHE_DIR=${store}\n`,
+        )
+      ) {
+        missingStores.push(
+          `${job}: later browser cache is outside the installed store`,
+        );
+      }
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(0);
+    expect(missingStores).toEqual([]);
+    const cache = Bun.spawnSync([process.execPath, "pm", "cache"], {
+      env: { ...process.env, BUN_INSTALL_CACHE_DIR: store },
+    });
+    expect(cache.exitCode, cache.stderr.toString()).toBe(0);
+    expect(cache.stdout.toString().trim()).toBe(store);
+  } finally {
+    rmSync(temporary, { recursive: true, force: true });
+  }
+});
 
 test("the scoped closures exclude the API and ONNX runtime", () => {
   for (const [job, filters] of Object.entries(targets)) {
@@ -435,7 +909,7 @@ test("landing diagnostics follow the browser configuration output directory", ()
       ),
     );
     expect(artifacts.with.path.split("\n")).toContain(
-      `${path.relative(directory, config.outputDir)}/`,
+      `${repoRelativePath(directory, config.outputDir)}/`,
     );
   } finally {
     rmSync(directory, { recursive: true, force: true });

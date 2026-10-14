@@ -72,7 +72,8 @@
     "provider-request-schemas-check.yml/provider-request-schemas-check": "main",
     "staging-response-policy.yml/check": "main",
     "marketing-screenshots.yml/check": "main",
-    "marketing-screenshots-update.yml/publish": "main",
+    "marketing-screenshots-capture.yml/capture": "main",
+    "marketing-screenshots-publish.yml/publish": "main",
     "model-catalog-check.yml/model-catalog-check": "main",
     "network-baseline-record.yml/build": "main",
     "network-baseline-record.yml/deliver": "main",
@@ -163,8 +164,10 @@
     "main-pr-depth.yml/status": "main",
     "ci.yml/query-perf": "pr-fast",
     "query-perf.yml/query-perf": "pr-fast",
-    "manual-checks.yml/check": "main",
-    "bundle-size-nightly.yml/report": "main"
+    "manual-checks.yml/check": "dispatch-only",
+    "bundle-size-nightly.yml/report": "main",
+    "manual-checks.yml/install-cache-windows": "main",
+    "manual-checks.yml/install-cache-linux": "main"
   },
   "pushMain": {
     "audit-image.yml": {

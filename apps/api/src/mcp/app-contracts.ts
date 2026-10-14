@@ -4,6 +4,7 @@ import { legalResolveResponseSchema } from "@stll/api-contract/legal-resolve";
 import { mcpWebHandoffLinkOutputSchema } from "@stll/api-contract/mcp-web-handoff";
 
 import { SEARCH_CASE_LAW_PROJECTION } from "../lib/chat/case-law-result-projections";
+import { READ_PROVISION_HISTORY_PROJECTION } from "../lib/chat/legislation-result-projections";
 import { MCP_APPS } from "./apps/manifest";
 import type { PresentationApp } from "./apps/manifest";
 import {
@@ -12,15 +13,14 @@ import {
   provisionPreviewOutput,
 } from "./decision-reader-contract";
 import type { DEFAULT_MCP_TOOL_DEFINITIONS } from "./static-tool-definitions";
+import type { McpToolVisibleTo } from "./tool-visibility";
 
 type Tool = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
 type ReadToolName = Extract<Tool, { access: "read" }>["name"];
+type ModelVisibleTool = McpToolVisibleTo<Tool, "model">;
 type AppOnlyWriteToolName = Extract<
-  Tool,
-  {
-    access: "write";
-    _meta: { ui: { visibility: readonly ["app"] } };
-  }
+  Exclude<Extract<Tool, { access: "write" }>, ModelVisibleTool>,
+  { access: "write" }
 >["name"];
 type AppManifest = {
   directory: string;
@@ -43,6 +43,7 @@ MCP_APPS satisfies readonly AppManifest[];
 
 export const MCP_APP_OUTPUT_SCHEMAS = {
   mint_web_handoff: mcpWebHandoffLinkOutputSchema,
+  read_provision_history: READ_PROVISION_HISTORY_PROJECTION,
   open_case_law_decision: openDecisionOutput,
   read_case_law_decision_blocks: blocksDecisionOutput,
   preview_cited_provision: provisionPreviewOutput,

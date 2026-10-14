@@ -51,13 +51,15 @@ const assertBunSetupContract = (candidate: typeof plan, context: Context) => {
   }
   for (const step of candidate.steps) {
     const runs = enabled(step.if);
-    if (
-      runs &&
-      step.uses?.startsWith("stella/.github/actions/setup-bun-cached@")
-    ) {
+    if (runs && step.uses?.startsWith("oven-sh/setup-bun@")) {
       setups++;
     }
-    if (runs && /\bbun\b/u.test(step.run ?? "")) {
+    if (
+      runs &&
+      (/\bbun\b/u.test(step.run ?? "") ||
+        step.uses === "$/.github/actions/ci-install" ||
+        step.uses === "./.github/actions/ci-install")
+    ) {
       consumers++;
       expect(setups, `Bun setup count before ${step.name}`).toBe(1);
     }
@@ -183,7 +185,7 @@ test("ci-plan sets up Bun exactly once before every Bun consumer across event, d
 
 test("Bun setup contract rejects duplicate setup and missing setup fixtures", () => {
   const setup = (step: (typeof plan.steps)[number]) =>
-    step.uses?.startsWith("stella/.github/actions/setup-bun-cached@");
+    step.uses?.startsWith("oven-sh/setup-bun@");
   expect(plan.steps.filter(setup)).toHaveLength(1);
   const duplicate = {
     ...plan,

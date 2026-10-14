@@ -91,7 +91,10 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
-import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
+import {
+  createAuthRefusalLogPlugin,
+  markAuthRequestRoute,
+} from "@/api/lib/auth/auth-request-observability";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
@@ -111,13 +114,17 @@ import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
-import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import {
   requiresHandoffStepUpForAuthPath,
   requiresHandoffStepUpForRequest,
   createHandoffStepUpGuard,
   HANDOFF_ACCESS_DETAIL,
 } from "@/api/lib/auth/handoff-step-up-policy";
+import {
+  createWebHandoffService,
+  webHandoffFailure,
+  type WebHandoffMintContext,
+} from "@/api/lib/auth/mcp-web-handoff";
 import {
   createMcpWebHandoffPlugin,
   MCP_HANDOFF_REDEEM_PATH,
@@ -216,6 +223,10 @@ import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-del
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  buildFeatureAccessSnapshot,
+  featureAccessReadPlan,
+} from "@/api/lib/feature-access/snapshot";
+import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
   LIMITS,
@@ -270,6 +281,7 @@ import {
   brandPersistedUserId,
   parseAuthProviderId,
 } from "@/api/lib/safe-id-boundaries";
+import { typedPgArray } from "@/api/lib/search/sql";
 import {
   assertSelfhostEmailOtpAllowed,
   assertSelfhostBootstrapSignUp,
@@ -1037,33 +1049,6 @@ const socialSignInOutcomePlugin = {
   },
 } satisfies BetterAuthPlugin;
 
-/**
- * Logs each 4xx answer of an auth endpoint by its route pattern and protocol
- * error code (`describeAuthRefusal`), so a failing token refresh is visible
- * apart from every other refused call behind the catch-all auth route.
- */
-const authRefusalLogPlugin = {
-  id: "stella-auth-refusal-log",
-  hooks: {
-    after: [
-      {
-        matcher: () => true,
-        handler: createAuthMiddleware(async (ctx) => {
-          const refusal = describeAuthRefusal({
-            path: ctx.path,
-            returned: ctx.context.returned,
-            body: ctx.body,
-          });
-          if (refusal.type === "refused") {
-            logger.warn("auth.request_refused", refusal.attributes);
-          }
-          await Promise.resolve();
-        }),
-      },
-    ],
-  },
-} satisfies BetterAuthPlugin;
-
 // Lazy singleton: `betterAuth()` eagerly resolves the
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
@@ -1071,6 +1056,41 @@ const authRefusalLogPlugin = {
 type CreateAuthOptions = {
   rateLimitStorage?: ReturnType<typeof createAuthRateLimitStorage>;
   rateLimitEnabled?: boolean;
+};
+
+const WEB_HANDOFF_MINT_FAILURE_SINK = failureSink({
+  event: "mcp_web_handoff.mint_failed",
+  expected: [],
+});
+let webHandoffService: ReturnType<typeof createWebHandoffService> | undefined;
+const getWebHandoffService = () =>
+  (webHandoffService ??= createWebHandoffService({
+    db: rootDb,
+    budget: new RedisRateLimitContext({ failurePolicy: "fail_closed" }),
+    enabled: () => env.MCP_WEB_HANDOFF_MINT_ENABLED,
+    textEnabled: () => env.MCP_WEB_HANDOFF_TEXT_ENABLED === "1",
+  }));
+
+type WebHandoffMintKind = Parameters<
+  ReturnType<typeof createWebHandoffService>["mint"]
+>[2];
+export const mintWebHandoff = async (
+  ctx: WebHandoffMintContext,
+  paths: readonly string[],
+  kind: WebHandoffMintKind,
+) => {
+  const outcome = await Result.tryPromise({
+    try: async () => await getWebHandoffService().mint(ctx, paths, kind),
+    catch: webHandoffFailure("mint", "Web handoff could not be created."),
+  });
+  if (Result.isOk(outcome)) {
+    return outcome.value;
+  }
+  observeFailure(outcome.error, {
+    sink: WEB_HANDOFF_MINT_FAILURE_SINK,
+    ctx: { operation: "mint" },
+  });
+  return null;
 };
 
 export const createAuth = (
@@ -1911,7 +1931,7 @@ export const createAuth = (
     plugins: [
       REGISTRATION_RETENTION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
-      createMcpWebHandoffPlugin(),
+      createMcpWebHandoffPlugin({ service: getWebHandoffService }),
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
       createSessionBearer(),
@@ -2201,10 +2221,11 @@ export const createAuth = (
       oauthUiFragmentBridgePlugin,
       createSocialLinkHintPlugin(getOAuthState),
       // Last, so it records the answer every other hook has settled on.
-      authRefusalLogPlugin,
+      createAuthRefusalLogPlugin(createAuthMiddleware),
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        markAuthRequestRoute(ctx);
         await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
         if (!ctx.path) {
@@ -2251,7 +2272,8 @@ export const createAuth = (
             }
           }
         }
-        if (requiresHandoffStepUpForAuthPath(ctx.path)) {
+        // Better Call supplies `/` to hooks for server-only, pathless helpers.
+        if (ctx.path !== "/" && requiresHandoffStepUpForAuthPath(ctx.path)) {
           const current = await getAuthoritativeSessionFromCtx(ctx);
           if (typeof current?.session["originConsentId"] === "string") {
             throw new APIError("FORBIDDEN", {
@@ -2525,55 +2547,59 @@ const VALIDATE_AUTH_REJECTION_BODY = {
   { code: string; message: string }
 >;
 
-export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
-  validateSession: {
-    async resolve({ status, request, set }) {
-      const sessionResult = await Result.tryPromise(async () => {
-        const resolved = await getAuth().api.getSession({
-          headers: request.headers,
-          returnHeaders: true,
+export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" })
+  .macro({
+    validateSession: {
+      async resolve({ status, request, set }) {
+        const sessionResult = await Result.tryPromise(async () => {
+          const resolved = await getAuth().api.getSession({
+            headers: request.headers,
+            returnHeaders: true,
+          });
+          forwardAuthResponseCookies(set.headers, resolved.headers);
+          return resolved.response;
         });
-        forwardAuthResponseCookies(set.headers, resolved.headers);
-        return resolved.response;
-      });
 
-      if (Result.isError(sessionResult)) {
-        return status(500, AUTH_REJECTION_BODY[500]);
-      }
+        if (Result.isError(sessionResult)) {
+          return status(500, AUTH_REJECTION_BODY[500]);
+        }
 
-      const session = sessionResult.value?.session;
-      const user = sessionResult.value?.user;
-      if (!session || !user) {
-        return status(401, AUTH_REJECTION_BODY[401]);
-      }
+        const session = sessionResult.value?.session;
+        const user = sessionResult.value?.user;
+        if (!session || !user) {
+          return status(401, AUTH_REJECTION_BODY[401]);
+        }
 
-      if (session.originConsentId && requiresHandoffStepUpForRequest(request)) {
-        return status(403, {
-          code: MCP_HANDOFF_STEP_UP_REQUIRED,
-          message: "Sign in again to continue.",
+        if (
+          session.originConsentId &&
+          requiresHandoffStepUpForRequest(request)
+        ) {
+          return status(403, {
+            code: MCP_HANDOFF_STEP_UP_REQUIRED,
+            message: "Sign in again to continue.",
+          });
+        }
+
+        const userId = toSafeId<"user">(user.id);
+        enrichRequestContext(request, {
+          posthogDistinctId: userId,
         });
-      }
 
-      const userId = toSafeId<"user">(user.id);
-      enrichRequestContext(request, {
-        posthogDistinctId: userId,
-      });
-
-      return {
-        handoffOriginConsentId: session.originConsentId ?? null,
-        user: {
-          id: userId,
-          email: user.email,
-        },
-      };
+        return {
+          handoffOriginConsentId: session.originConsentId ?? null,
+          user: {
+            id: userId,
+            email: user.email,
+          },
+        };
+      },
     },
-  },
-  accountAccess: (accountAccess: AccountAccess) => ({
-    validateSession: true,
+  })
+  .macro("accountAccess", (accountAccess: AccountAccess) => ({
+    validateSession: true as const,
     detail: { [HANDOFF_ACCESS_DETAIL.accountAccess]: accountAccess },
     beforeHandle: createHandoffStepUpGuard({ accountAccess }),
-  }),
-});
+  }));
 
 /**
  * Structural subset of `rootDb` the bounded membership query needs. Tests can
@@ -2581,17 +2607,19 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
  */
 type MemberAuthorizationDb = Pick<typeof rootDb, "select">;
 
-// Bounded by the enrolment primary key (user, organization, feature) and the
-// feature registry. The caller is read as the table owner, which the
-// enrolment owner policy admits.
-const enrolledFeatureIdsOfMember = sql<
-  string[]
->`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId}), '{}')`;
-
-const featureAccessColumns = {
-  emailVerified: authUser.emailVerified,
-  userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
-  enrolledFeatureIds: enrolledFeatureIdsOfMember,
+const featureAccessColumns = (organizationId: SafeId<"organization">) => {
+  const { enrolmentFeatureIds } = featureAccessReadPlan({ organizationId });
+  return {
+    emailVerified: authUser.emailVerified,
+    userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
+    // Fold enrolments into the member read only when a self-serve decision needs them.
+    enrolledFeatureIds:
+      enrolmentFeatureIds.length === 0
+        ? sql<string[]>`'{}'::text[]`
+        : sql<
+            string[]
+          >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId} and ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`,
+  };
 };
 
 const ACTIVE_WORKSPACE_STATUS = "active";
@@ -2658,7 +2686,7 @@ export const resolveMemberAuthorization = async (
         memberId: member.id,
         role: member.role,
         email: authUser.email,
-        ...featureAccessColumns,
+        ...featureAccessColumns(organizationId),
         ...professionalUseColumns,
       })
       .from(member)
@@ -2697,7 +2725,7 @@ export const resolveMemberAuthorization = async (
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
-      ...featureAccessColumns,
+      ...featureAccessColumns(organizationId),
       ...professionalUseColumns,
     })
     .from(member)
@@ -2960,6 +2988,57 @@ type AuthSafeDb = ReturnType<
   typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
 >;
 
+const createAuthDatabases = (
+  databaseIdentity: Parameters<
+    typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
+  >[1],
+): { scopedDb: AuthScopedDb; safeDb: AuthSafeDb } => ({
+  scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
+  safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
+});
+
+type AuthWorkspaceAccessOptions = {
+  initialAccess: {
+    workspaceId: SafeId<"workspace">;
+    workspace: AccessibleWorkspace | null;
+  } | null;
+  loadWorkspace: (
+    workspaceId: SafeId<"workspace">,
+  ) => Promise<AccessibleWorkspace | null>;
+  onAuthorizedWorkspace: (workspaceId: SafeId<"workspace">) => void;
+};
+
+const createAuthWorkspaceAccess = ({
+  initialAccess,
+  loadWorkspace,
+  onAuthorizedWorkspace,
+}: AuthWorkspaceAccessOptions) => {
+  const accessPromises = new Map<
+    SafeId<"workspace">,
+    Promise<AccessibleWorkspace | null>
+  >();
+  if (initialAccess) {
+    accessPromises.set(
+      initialAccess.workspaceId,
+      Promise.resolve(initialAccess.workspace),
+    );
+  }
+  return async (
+    workspaceId: SafeId<"workspace">,
+  ): Promise<AccessibleWorkspace | null> => {
+    let access = accessPromises.get(workspaceId);
+    if (!access) {
+      access = loadWorkspace(workspaceId);
+      accessPromises.set(workspaceId, access);
+    }
+    const workspace = await access;
+    if (workspace) {
+      onAuthorizedWorkspace(workspace.id);
+    }
+    return workspace;
+  };
+};
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -3057,15 +3136,12 @@ const resolveValidateAuth = async ({
     return true;
   };
   const databaseIdentity = {
+    featureAccessSnapshot,
     organizationId: activeOrganizationId,
     serverValidatedWorkspaceIds,
     userId,
   };
-  const scopedDb: AuthScopedDb = createMembershipScopedDb(
-    rlsDb,
-    databaseIdentity,
-  );
-  const safeDb: AuthSafeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
+  const { scopedDb, safeDb } = createAuthDatabases(databaseIdentity);
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {
@@ -3098,50 +3174,29 @@ const resolveValidateAuth = async ({
     return await activeWorkspaceIdsPromise;
   };
 
-  const workspaceAccessPromises = new Map<
-    SafeId<"workspace">,
-    Promise<AccessibleWorkspace | null>
-  >();
-  if (initialWorkspaceId) {
-    workspaceAccessPromises.set(
-      initialWorkspaceId,
-      Promise.resolve(authorization.workspace),
-    );
-  }
-  const getWorkspaceAccess = async (
-    workspaceId: SafeId<"workspace">,
-  ): Promise<AccessibleWorkspace | null> => {
-    let accessPromise = workspaceAccessPromises.get(workspaceId);
-    if (!accessPromise) {
-      accessPromise = accessibleWorkspacesPromise
-        ? accessibleWorkspacesPromise.then(
-            (items) => items.find((item) => item.id === workspaceId) ?? null,
-          )
-        : resolveMemberAuthorization(
-            {
-              organizationId: activeOrganizationId,
-              userId,
-              workspaceId,
-            },
-            rootDb,
-          ).then((targetAuthorization) => {
-            if (targetAuthorization?.workspace?.id !== workspaceId) {
-              return null;
-            }
-            return targetAuthorization.workspace;
-          });
-      workspaceAccessPromises.set(workspaceId, accessPromise);
-    }
-    const workspace = await accessPromise;
-    if (workspace) {
-      // The factories above intentionally retain this small array by
-      // reference. A later transaction therefore preserves only the target
-      // this request just proved, never the full accessible-workspace list.
-      validatedWorkspaceIdSet.add(workspace.id);
-      pinServerValidatedWorkspaceId(workspace.id);
-    }
-    return workspace;
-  };
+  const getWorkspaceAccess = createAuthWorkspaceAccess({
+    initialAccess: initialWorkspaceId
+      ? { workspaceId: initialWorkspaceId, workspace: authorization.workspace }
+      : null,
+    loadWorkspace: async (workspaceId: SafeId<"workspace">) => {
+      if (accessibleWorkspacesPromise) {
+        const items = await accessibleWorkspacesPromise;
+        return items.find((item) => item.id === workspaceId) ?? null;
+      }
+      const targetAuthorization = await resolveMemberAuthorization(
+        { organizationId: activeOrganizationId, userId, workspaceId },
+        rootDb,
+      );
+      return targetAuthorization?.workspace?.id === workspaceId
+        ? targetAuthorization.workspace
+        : null;
+    },
+    onAuthorizedWorkspace: (workspaceId: SafeId<"workspace">) => {
+      // Keep only proved targets available to later transactions in this request.
+      validatedWorkspaceIdSet.add(workspaceId);
+      pinServerValidatedWorkspaceId(workspaceId);
+    },
+  });
 
   const recorderBindings = {
     organizationId: activeOrganizationId,

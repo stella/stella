@@ -424,6 +424,22 @@ export const ReferenceIcon = ({ reference }: { reference: ChatReference }) => {
   ) : null;
 };
 
+/**
+ * The glyph of a document known only by its file type (an inline citation
+ * into a Word file or a PDF), drawn by the same rule as a document reference,
+ * so a cited file looks like that file in the source tray. Decorative: the
+ * chip's label names the source.
+ */
+export const ReferenceFileTypeIcon = ({ mimeType }: { mimeType: string }) => (
+  <ReferenceGlyphIcon
+    glyph={{
+      type: "entity",
+      source: { type: "resolved", kind: "document", mimeType },
+    }}
+    matter={{ type: "none" }}
+  />
+);
+
 const isReactNodeArray = (node: ReactNode): node is readonly ReactNode[] =>
   Array.isArray(node);
 

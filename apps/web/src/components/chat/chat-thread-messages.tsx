@@ -128,7 +128,7 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { chatRefusal } from "@/lib/errors/api";
+import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -1040,6 +1040,13 @@ export const ChatErrorMessage = ({
     isThirdPartyBoundaryRefusalError(error);
   const refusal = chatRefusal(error);
   const diagnostic = providerDiagnosticFromThrown(error);
+  const rejectedInput =
+    refusal !== null &&
+    (refusal.status === 400 || refusal.status === 422) &&
+    !isDisplayableAPIError(refusal);
+  const errorMessage = rejectedInput
+    ? t("errors.api.validation")
+    : (refusal?.message ?? t(chatErrorTranslationKey(error)));
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -1067,9 +1074,7 @@ export const ChatErrorMessage = ({
         {diagnostic !== undefined ? (
           <ProviderDiagnosticMessage diagnostic={diagnostic} />
         ) : (
-          <p className="text-sm">
-            {refusal ? refusal.message : t(chatErrorTranslationKey(error))}
-          </p>
+          <p className="text-sm">{errorMessage}</p>
         )}
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (

@@ -9,11 +9,17 @@ const originalFetch = globalThis.fetch;
 let handoffResponse: Response | "network-error" = Response.json({
   sessions: [{ id: "session-one", clientName: "ChatGPT" }],
 });
+let originConsentId: string | undefined;
+let handoffRequests = 0;
+let sessionResponse: Response | undefined;
 
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request) => {
     const url = new URL(input instanceof Request ? input.url : String(input));
     if (url.pathname.endsWith("/list-sessions")) {
+      if (sessionResponse) {
+        return sessionResponse;
+      }
       return Response.json([
         {
           id: "session-one",
@@ -24,10 +30,12 @@ globalThis.fetch = Object.assign(
           updatedAt: "2026-10-13T00:00:00.000Z",
           ipAddress: null,
           userAgent: "Browser",
+          ...(originConsentId === undefined ? {} : { originConsentId }),
         },
       ]);
     }
     if (url.pathname.endsWith("/mcp-handoff/sessions")) {
+      handoffRequests += 1;
       if (handoffResponse === "network-error") {
         throw new TypeError("Network unavailable");
       }
@@ -39,6 +47,9 @@ globalThis.fetch = Object.assign(
 );
 
 beforeEach(() => {
+  originConsentId = undefined;
+  handoffRequests = 0;
+  sessionResponse = undefined;
   handoffResponse = Response.json({
     sessions: [{ id: "session-one", clientName: "ChatGPT" }],
   });
@@ -50,6 +61,18 @@ afterAll(async () => {
 });
 
 describe("auth session listing", () => {
+  test("returns a session-list error without requesting handoff labels", async () => {
+    sessionResponse = Response.json(
+      { message: "Unavailable" },
+      { status: 503 },
+    );
+
+    const result = await listAuthSessions();
+
+    expect(result.error).not.toBeNull();
+    expect(handoffRequests).toBe(0);
+  });
+
   test.each([
     [
       "HTTP failure",
@@ -60,6 +83,7 @@ describe("auth session listing", () => {
   ] as const)(
     "keeps ordinary sessions when handoff lookup has %s",
     async (_, response) => {
+      originConsentId = "consent-one";
       handoffResponse = response;
 
       const result = await listAuthSessions();
@@ -70,14 +94,33 @@ describe("auth session listing", () => {
         id: "session-one",
         userId: "user-one",
       });
-      expect(result.data?.[0]?.originClientName).toBeUndefined();
+      expect(result.data?.[0]?.originClientName).toBeNull();
+      expect(handoffRequests).toBe(1);
     },
   );
 
+  test("does not request handoff labels for ordinary sessions", async () => {
+    const result = await listAuthSessions();
+
+    expect(result.error).toBeNull();
+    expect(result.data).toHaveLength(1);
+    expect(result.data?.[0]?.originClientName).toBeNull();
+    expect(handoffRequests).toBe(0);
+
+    originConsentId = "";
+    const emptyProvenance = await listAuthSessions();
+
+    expect(emptyProvenance.error).toBeNull();
+    expect(emptyProvenance.data?.[0]?.originClientName).toBeNull();
+    expect(handoffRequests).toBe(0);
+  });
+
   test("labels a session when the optional handoff lookup succeeds", async () => {
+    originConsentId = "consent-one";
     const result = await listAuthSessions();
 
     expect(result.error).toBeNull();
     expect(result.data?.[0]?.originClientName).toBe("ChatGPT");
+    expect(handoffRequests).toBe(1);
   });
 });

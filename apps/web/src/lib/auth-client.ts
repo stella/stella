@@ -21,10 +21,10 @@ import {
   takeBootPrefetch,
 } from "@/boot-prefetch";
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { notifyStepUp } from "@/lib/account/mcp-step-up";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { browserAuthBaseUrl } from "@/lib/api-url";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { notifyStepUp } from "@/lib/mcp-step-up";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
@@ -192,50 +192,56 @@ export const submitOAuthConsent = async (accept: boolean) => {
 };
 
 export const listAuthSessions = async () => {
-  const [result, handoffSessionsResult] = await Promise.all([
-    authClient.listSessions(),
-    Result.tryPromise({
-      try: async () =>
-        await authClient.$fetch<unknown>("/mcp-handoff/sessions"),
-      catch: (cause) => cause,
-    }),
-  ]);
+  const result = await authClient.listSessions();
 
   if (result.error) {
     return result;
   }
 
-  let handoffs: v.InferOutput<typeof mcpHandoffSessionsSchema> | null = null;
-  if (Result.isError(handoffSessionsResult)) {
-    getAnalytics().captureError(handoffSessionsResult.error, {
-      type: "detached",
-      operation: "auth.list_sessions.handoffs",
+  const hasHandoffSession = result.data.some(
+    (session) =>
+      "originConsentId" in session &&
+      typeof session.originConsentId === "string" &&
+      session.originConsentId.length > 0,
+  );
+  const clientsBySessionId = new Map<string, string | null>();
+  if (hasHandoffSession) {
+    const handoffSessionsResult = await Result.tryPromise({
+      try: async () =>
+        await authClient.$fetch<unknown>("/mcp-handoff/sessions"),
+      catch: (cause) => cause,
     });
-  } else if (handoffSessionsResult.value.error) {
-    getAnalytics().captureError(handoffSessionsResult.value.error, {
-      type: "detached",
-      operation: "auth.list_sessions.handoffs",
-    });
-  } else {
-    const handoffsResult = v.safeParse(
-      mcpHandoffSessionsSchema,
-      handoffSessionsResult.value.data,
-    );
-    if (handoffsResult.success) {
-      handoffs = handoffsResult.output;
+
+    if (Result.isError(handoffSessionsResult)) {
+      getAnalytics().captureError(handoffSessionsResult.error, {
+        type: "detached",
+        operation: "auth.list_sessions.handoffs",
+      });
+    } else if (handoffSessionsResult.value.error) {
+      getAnalytics().captureError(handoffSessionsResult.value.error, {
+        type: "detached",
+        operation: "auth.list_sessions.handoffs",
+      });
     } else {
-      getAnalytics().captureError(
-        new Error("Invalid MCP handoff session response"),
-        { type: "detached", operation: "auth.list_sessions.handoffs" },
+      const handoffsResult = v.safeParse(
+        mcpHandoffSessionsSchema,
+        handoffSessionsResult.value.data,
       );
+      if (handoffsResult.success) {
+        for (const { id, clientName } of handoffsResult.output.sessions) {
+          clientsBySessionId.set(id, clientName);
+        }
+      } else {
+        getAnalytics().captureError(
+          new Error("Invalid MCP handoff session response"),
+          { type: "detached", operation: "auth.list_sessions.handoffs" },
+        );
+      }
     }
   }
-  const clientsBySessionId = new Map(
-    handoffs?.sessions.map(({ id, clientName }) => [id, clientName]),
-  );
   return {
     data: result.data.map((session) => ({
-      originClientName: clientsBySessionId.get(session.id),
+      originClientName: clientsBySessionId.get(session.id) ?? null,
       createdAt: session.createdAt,
       expiresAt: session.expiresAt,
       id: session.id,
