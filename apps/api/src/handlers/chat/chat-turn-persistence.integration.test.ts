@@ -14,7 +14,6 @@ import { createScopedDb } from "@/api/db/scoped";
 import {
   toPersistedChatMessageContentV3,
   getAwaitingUserInteractions,
-  toChatMessageContent,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -100,7 +99,7 @@ const unwrap = <T>(result: Result<T, unknown>): T => {
   return result.value;
 };
 
-const awaitingAskUserContent = toChatMessageContent({
+const awaitingAskUserContent = {
   data: [
     {
       arguments:
@@ -121,24 +120,23 @@ const awaitingAskUserContent = toChatMessageContent({
       metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     },
   ] satisfies ChatPart[],
-  version: 2,
-});
+};
 
-const awaitingApprovalAndAskUserContent = toChatMessageContent({
+const awaitingApprovalAndAskUserContent = {
   data: [
     {
       approval: { id: "approval-1", needsApproval: true },
       arguments: '{"query":"Draft"}',
       id: "approval-1",
       input: { query: "Draft" },
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       name: "mcp__test__write",
       state: "approval-requested",
       type: "tool-call",
     },
     ...awaitingAskUserContent.data,
   ] satisfies ChatPart[],
-  version: 2,
-});
+};
 
 const seedAwaitingTurn = async () => {
   const { assistantMessageId, threadId, userMessageId } = await seedThread();
@@ -1121,6 +1119,7 @@ describe("durable chat turn persistence", () => {
           arguments: '{"name":"First","source":"@title First"}',
           id: "approval-first",
           input: { name: "First", source: "@title First" },
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           name: "create-document",
           state: "approval-requested",
           type: "tool-call",
@@ -1129,6 +1128,7 @@ describe("durable chat turn persistence", () => {
           arguments: '{"name":"Second","source":"@title Second"}',
           id: "approval-second",
           input: { name: "Second", source: "@title Second" },
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           name: "create-document",
           state: "approval-requested",
           type: "tool-call",
@@ -1146,6 +1146,7 @@ describe("durable chat turn persistence", () => {
               },
             ],
           },
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
           name: "ask-user",
           state: "input-complete",
           type: "tool-call",

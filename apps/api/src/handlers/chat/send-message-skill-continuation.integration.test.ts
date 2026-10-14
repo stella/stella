@@ -10,6 +10,7 @@ import {
 import { inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkills, chatMessages, chatThreads } from "@/api/db/schema";
@@ -165,6 +166,7 @@ const pendingAskUserCall = {
   arguments: JSON.stringify(askUserInput),
   id: ASK_USER_CALL_ID,
   input: askUserInput,
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
   name: "ask-user",
   state: "input-complete",
   type: "tool-call",
@@ -184,6 +186,7 @@ const completedSkillCallParts = ({
       arguments: JSON.stringify(input),
       id: `${name}-1`,
       input,
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       name,
       output,
       state: "complete",

@@ -993,6 +993,7 @@ if (!databaseUrl || !runPostgres) {
                     name: "mcp__external__search",
                     state: "input-streaming",
                     arguments: '{"query":"partial',
+                    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
                   },
                 ],
               }),

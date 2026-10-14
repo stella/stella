@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
@@ -70,6 +72,7 @@ describe("a thread's names derived from its stored messages", () => {
               name: "mcp__external__lookup",
               arguments: "{}",
               state: "input-complete",
+              metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
             },
           ],
         }),

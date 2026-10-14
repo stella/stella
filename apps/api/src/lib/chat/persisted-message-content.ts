@@ -13,7 +13,7 @@ export type PersistedJsonValue =
   | PersistedJsonValue[]
   | string;
 
-export type PersistedJsonObject = {
+type PersistedJsonObject = {
   readonly [key: string]: PersistedJsonValue;
 };
 
@@ -85,14 +85,6 @@ export type PersistedToolResultPart = {
   toolCallId: string;
   type: "tool-result";
 };
-
-export type PersistedChatPart<TOtherPart> =
-  | PersistedToolCallPart
-  | PersistedToolResultPart
-  | TOtherPart;
-
-// Proof for the in-memory version-2 wire envelope, never a stored row.
-export declare const persistedChatMessageContentProof: unique symbol;
 
 export declare const persistedChatMessageContentV3Proof: unique symbol;
 type PersistedChatMessageContentV3Proof = {

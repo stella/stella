@@ -8,6 +8,7 @@ import {
   resourceRef,
   toChatResourceHref,
 } from "@stll/api-contract";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -155,6 +156,7 @@ const pendingAskUserCall = {
   arguments: JSON.stringify(askUserInput),
   id: ASK_USER_CALL_ID,
   input: askUserInput,
+  metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
   name: "ask-user",
   state: "input-complete",
   type: "tool-call",

@@ -42,7 +42,6 @@ import type {
 import type {
   PersistedToolCallPart,
   PersistedToolResultPart,
-  persistedChatMessageContentProof,
   persistedChatMessageContentV3Proof,
 } from "@/api/lib/chat/persisted-message-content";
 import type { ChatRefContext, ChatRefEncoding } from "@/api/lib/chat/ref-token";
@@ -272,14 +271,6 @@ export type ChatCompactionSummary = {
 export type ChatMessageContentCandidate = {
   data: ChatMessage["parts"];
   metadata?: ChatMessageMetadata | undefined;
-  version: 2;
-};
-
-export type ChatMessageContent = {
-  data: ChatMessage["parts"];
-  metadata?: ChatMessageMetadata | undefined;
-  readonly [persistedChatMessageContentProof]: true;
-  version: 2;
 };
 
 type PersistedChatToolPartV3 = PersistedToolCallPart | PersistedToolResultPart;

@@ -30,7 +30,6 @@ import type {
   ChatAttachmentPart,
   ChatMessage,
   ChatMessageContentCandidate,
-  ChatMessageContent,
   ChatMessageMetadata,
   ChatMessageRole,
   ChatPart,
@@ -1244,39 +1243,13 @@ export const toPersistableChatMessage = (
   return normalized;
 };
 
-const isChatMessageContent = (
-  content: ChatMessageContentCandidate,
-): content is ChatMessageContent => content.data.every(isChatPart);
-
-export const toChatMessageContent = (
-  content: ChatMessageContentCandidate,
-): ChatMessageContent => {
-  if (!isChatMessageContent(content)) {
-    panic("Cannot persist chat message content with unsupported parts");
-  }
-  const normalized = {
-    version: content.version,
-    data: normalizeChatPartsForPersistence(content.data),
-    ...(content.metadata === undefined ? {} : { metadata: content.metadata }),
-  };
-  if (!isChatMessageContent(normalized)) {
-    panic("Normalized chat content violates the persistence policy");
-  }
-  return normalized;
-};
-
 /**
  * Encode one message for the v3 JSONB representation. Canonical tool input and
  * output are stored directly; TanStack wire strings are reconstructed only by
  * `normalizePersisted...` on read.
  */
-type PersistedChatMessageContentV3Source = Omit<
-  ChatMessageContentCandidate,
-  "version"
->;
-
 export const toPersistedChatMessageContentV3 = (
-  content: PersistedChatMessageContentV3Source,
+  content: ChatMessageContentCandidate,
 ): PersistedChatMessageContentV3 => {
   if (!content.data.every(isChatPart)) {
     panic("Cannot persist chat message content with unsupported parts");

@@ -3,6 +3,7 @@ import { inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
@@ -272,6 +273,7 @@ const seedCodeModeChat = async () => {
           arguments: "{}",
           id: "call-1",
           input: {},
+          metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
           name: "execute_typescript",
           output: { result: [{ id: "ent_1", name: "entityA1" }] },
           state: "complete",
