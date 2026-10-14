@@ -4517,6 +4517,8 @@
   },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
+    "caseLawMatchingDecisions": "{count, plural, one {# egyező határozat} other {# egyező határozat}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ egyező határozat} other {#+ egyező határozat}}",
     "continueInChat": "Folytatás a csevegésben",
     "dateFrom": "Mettől",
     "dateTo": "Meddig",
