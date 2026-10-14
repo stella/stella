@@ -11,7 +11,7 @@ const { act, cleanup, render } = await import("@testing-library/react");
 const { createMemoryHistory, createRootRoute, createRouter, RouterProvider } =
   await import("@tanstack/react-router");
 const { hasUnsavedWork } = await import("@/hooks/use-unsaved-work");
-const { UploadUnloadGuard } = await import("./upload-unload-guard");
+const { UploadUnloadGuard } = await import("./-upload-unload-guard");
 
 const renderGuard = async () => {
   const root = createRootRoute({ component: UploadUnloadGuard });
@@ -36,7 +36,7 @@ test("an in-flight upload is unsaved work until the batch releases", async () =>
   await renderGuard();
   expect(hasUnsavedWork()).toBe(false);
 
-  let release = () => undefined;
+  let release: () => void = () => undefined;
   await act(async () => {
     release = retainActiveUpload();
   });
