@@ -89,6 +89,28 @@ describe("model catalog newer-generation guard", () => {
     ]);
   });
 
+  test("a newer Argon is a family member", () => {
+    const upstreamIds = emptyProviderMap();
+    upstreamIds.google.push("gemini-4.1-argon", "gemini-4-flash");
+    const offered = emptyProviderMap();
+    offered.google.push("gemini-4-argon", "gemini-3.8-flash");
+
+    expect(
+      findNewerGenerationModels({ upstreamIds, offered, asOf: "2026-10-10" }),
+    ).toEqual([
+      {
+        type: "newer-generation",
+        provider: "google",
+        modelId: "gemini-4-flash",
+      },
+      {
+        type: "newer-generation",
+        provider: "google",
+        modelId: "gemini-4.1-argon",
+      },
+    ]);
+  });
+
   test("a date suffix is not a minor version", () => {
     const upstreamIds = emptyProviderMap();
     upstreamIds.anthropic.push("claude-haiku-5-6");
