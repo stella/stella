@@ -2774,6 +2774,7 @@ export const searchCorpusIndexDecisions = async ({
             };
       },
     });
+  const concurrentStartedAt = performance.now();
   const pageRead = readTextPage(scopedQuery, limit, null);
   // Stamped where it resolves rather than after the phase: the reader waits on
   // the slower arm, and which arm that was is the whole point of the pair.
