@@ -18,6 +18,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { containedHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
+import { isPendingAnnotationId } from "@/components/legal-reader/annotations/use-optimistic-annotation-mutations";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -727,7 +728,10 @@ const CommentNote = ({
   const [editing, setEditing] = useState(false);
   const shared = item.visibility === "shared";
   const position = notePlacementPresentation(placement);
-  const onEdit = item.onEdit;
+  // A comment the server has not stored yet has no id to change or remove it
+  // by; its controls appear once the create answers.
+  const controllable = item.mine && !isPendingAnnotationId(item.id);
+  const onEdit = controllable ? item.onEdit : undefined;
 
   if (editing && onEdit !== undefined) {
     return (
@@ -812,7 +816,7 @@ const CommentNote = ({
           {item.text}
         </button>
       )}
-      {item.mine && (
+      {controllable && (
         <div
           className={cn(
             "mt-1 flex items-center gap-1 transition-opacity",

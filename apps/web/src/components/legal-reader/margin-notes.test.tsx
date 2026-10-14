@@ -49,4 +49,19 @@ describe("notes drawn in the text's own flow", () => {
     expect(markup).toContain(messages.common.delete);
     expect(markup).not.toContain("opacity-0");
   });
+
+  // Every reader's optimistic comment carries a pending id until the server
+  // stores it; there is nothing yet to change or delete it by.
+  test("a reader's own comment not yet stored offers no controls", () => {
+    const markup = renderInline([
+      {
+        ...ownComment,
+        id: "pending:1:0",
+        onEdit: () => undefined,
+      },
+    ]);
+
+    expect(markup).toContain("My own words.");
+    expect(markup).not.toContain("<button");
+  });
 });

@@ -11,7 +11,8 @@ type RecordedRequest = { method: string; path: string; body: unknown };
 // assertions see exactly the comment traffic.
 const requests: RecordedRequest[] = [];
 const unexpectedRequests: string[] = [];
-const answers: Response[] = [];
+// An answer may be held open, to look at the UI while a request is in flight.
+const answers: (Response | Promise<Response>)[] = [];
 const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
   Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -241,6 +242,51 @@ test("a reviewer adds, edits and deletes a comment on the selected claim", async
   await waitFor(() =>
     expect(screen.getByText(messages.folio.comments.noComments)).toBeTruthy(),
   );
+});
+
+test("a comment still being stored offers no controls until the server answers", async () => {
+  mount([]);
+  const stored = comment({
+    id: "comment-stored",
+    body: "Ask for the minutes.",
+    mine: true,
+  });
+  const { promise: created, resolve: answerCreate } =
+    Promise.withResolvers<Response>();
+  answers.push(created);
+  fireEvent.click(screen.getByRole("button", { name: messages.folio.comment }));
+  fireEvent.change(
+    screen.getByRole("textbox", { name: messages.folio.comment }),
+    { target: { value: "Ask for the minutes." } },
+  );
+  fireEvent.click(screen.getByRole("button", { name: messages.common.save }));
+  await waitFor(() => expect(requests).toHaveLength(1));
+
+  // The optimistic comment shows at once, with nothing to edit, delete or
+  // share it by: the server has not given it an id yet.
+  expect(screen.getByText("Ask for the minutes.")).toBeTruthy();
+  for (const name of [
+    messages.common.edit,
+    messages.common.delete,
+    messages.legalReader.annotations.visibilityShared,
+  ]) {
+    expect(screen.queryByRole("button", { name })).toBeNull();
+  }
+  expect(requests.map(({ method }) => method)).toEqual(["POST"]);
+
+  answers.push(page([stored]));
+  answerCreate(
+    Response.json({ groupId: null, id: stored.id, ids: [stored.id] }),
+  );
+  await waitFor(() =>
+    expect(
+      screen.getByRole("button", { name: messages.common.edit }),
+    ).toBeTruthy(),
+  );
+  expect(
+    screen.getByRole("button", { name: messages.common.delete }),
+  ).toBeTruthy();
+  expect(requests.map(({ method }) => method)).toEqual(["POST", "GET"]);
 });
 
 test("a comment being written on one claim is discarded when another claim is selected", () => {
