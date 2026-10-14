@@ -3145,7 +3145,6 @@ const config = defineConfig({
         "apps/web/src/components/ai-suggestions/file-chat-overlay*.tsx",
         "apps/web/src/components/ai-suggestions/file-viewer-with-ai*.tsx",
         "packages/chat/src/**/*.tsx",
-        "apps/api/src/mcp/apps/**/*message*.tsx",
         ".oxlint-plugins/__fixtures__/no-ad-hoc-chat-link.fixture.tsx",
       ],
       excludeFiles: [
