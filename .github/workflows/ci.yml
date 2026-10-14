@@ -200,9 +200,8 @@ jobs:
       windows_scripts_required: ${{ steps.changed-files.outputs.windows_scripts_required }}
       desktop_windows_dry_run_required: ${{ steps.changed-files.outputs.desktop_windows_dry_run_required }}
     steps:
-      # Pull request runs and merge groups share one hosted runner pool. When
-      # the merge queue has work waiting, a pull request run defers itself so
-      # the queue lands first; the merge-queue steward re-runs it later.
+      # When the merge queue has work waiting, a pull request run defers
+      # itself so the queue lands first; the merge-queue steward re-runs it.
       - name: Yield to the merge queue
         if: >-
           github.event_name == 'pull_request'
