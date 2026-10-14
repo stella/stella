@@ -8,6 +8,7 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "member",
         workspaceMemberId: null,
+        workspaceVisibility: "organization",
       }),
     ).toBe(false);
 
@@ -15,6 +16,7 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "member",
         workspaceMemberId: "workspace_member_test",
+        workspaceVisibility: "organization",
       }),
     ).toBe(true);
   });
@@ -24,6 +26,7 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "owner",
         workspaceMemberId: null,
+        workspaceVisibility: "organization",
       }),
     ).toBe(true);
 
@@ -31,8 +34,28 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "admin",
         workspaceMemberId: null,
+        workspaceVisibility: "organization",
       }),
     ).toBe(true);
+  });
+
+  test("needs a membership row on a private matter, even for owners and admins", () => {
+    for (const organizationRole of ["owner", "admin"]) {
+      expect(
+        canWriteWorkspaceEntities({
+          organizationRole,
+          workspaceMemberId: null,
+          workspaceVisibility: "private",
+        }),
+      ).toBe(false);
+      expect(
+        canWriteWorkspaceEntities({
+          organizationRole,
+          workspaceMemberId: "workspace_member_test",
+          workspaceVisibility: "private",
+        }),
+      ).toBe(true);
+    }
   });
 
   test("rejects roles without entity update permission", () => {
@@ -40,6 +63,7 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "intern",
         workspaceMemberId: "workspace_member_test",
+        workspaceVisibility: "organization",
       }),
     ).toBe(false);
 
@@ -47,6 +71,7 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "external",
         workspaceMemberId: "workspace_member_test",
+        workspaceVisibility: "organization",
       }),
     ).toBe(false);
   });
@@ -56,6 +81,7 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: null,
         workspaceMemberId: "workspace_member_test",
+        workspaceVisibility: "organization",
       }),
     ).toBe(false);
 
@@ -63,6 +89,7 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "custom",
         workspaceMemberId: "workspace_member_test",
+        workspaceVisibility: "organization",
       }),
     ).toBe(false);
 
@@ -70,6 +97,7 @@ describe("canWriteWorkspaceEntities", () => {
       canWriteWorkspaceEntities({
         organizationRole: "toString",
         workspaceMemberId: "workspace_member_test",
+        workspaceVisibility: "organization",
       }),
     ).toBe(false);
   });

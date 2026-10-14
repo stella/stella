@@ -3,6 +3,11 @@ import { and, count, eq, ilike, inArray, sql } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import {
+  DEFAULT_MATTER_VISIBILITY,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
+
 import { member } from "@/api/db/auth-schema";
 import { SETTING_WORKSPACE_IDS } from "@/api/db/rls";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -41,10 +46,11 @@ import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
+import { tMatterVisibility } from "@/api/lib/workspaces/visibility";
 
-// A request without `clientId` creates a personal matter (initially
-// visible only to the creator). With `clientId`, it's a normal
-// client matter and `memberUserIds` may add additional members.
+// The client is optional and says nothing about who can see the matter:
+// `visibility` decides that (organization unless the creator chooses
+// private). `memberUserIds` adds members alongside the creator either way.
 const createWorkspaceBodySchema = t.Object({
   id: tSafeId("workspace"),
   clientId: t.Optional(
@@ -59,6 +65,13 @@ const createWorkspaceBodySchema = t.Object({
   ),
   name: withDescription(tDefaultVarchar, "Matter name"),
   filePropertyName: tDefaultVarchar,
+  visibility: t.Optional(
+    tMatterVisibility({
+      description:
+        "Who can see the matter: organization (owners, admins and members; " +
+        "the default) or private (only its members)",
+    }),
+  ),
 });
 
 const config = {
@@ -66,7 +79,10 @@ const config = {
   featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Create a new matter (name required; pass clientId to attach a client " +
-    "contact). Returns the matter ID.",
+    "contact). visibility decides who can see it, independent of the " +
+    "client: organization (the default) reaches the organization's owners " +
+    "and admins plus the matter's members; private reaches only its " +
+    "members. Returns the matter ID.",
   permissions: { workspace: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: organizationWorkspaceRealtimeUpdates,
@@ -94,16 +110,16 @@ export const createWorkspaceHandler = async function* ({
   recordAuditEvent,
   body,
 }: CreateWorkspaceHandlerProps) {
-  if (body.clientId !== undefined && (body.memberUserIds?.length ?? 0) > 0) {
+  if ((body.memberUserIds?.length ?? 0) > 0) {
     yield* checkDemoAccountOperation(userEmail);
   }
+  const visibility = body.visibility ?? DEFAULT_MATTER_VISIBILITY;
   const txResult = yield* Result.await(
     resultTx(safeDb, async (tx) => {
-      // New personal matters (no clientId) start with exactly one
-      // member: the creator. Additional members can be attached
-      // through the workspace members endpoint after creation.
+      // The creator is always a member; requested members join them
+      // whether or not the matter has a client.
       const requestedMemberUserIds =
-        body.clientId !== undefined && body.memberUserIds !== undefined
+        body.memberUserIds !== undefined
           ? Array.from(new Set(body.memberUserIds))
           : [];
 
@@ -180,8 +196,7 @@ export const createWorkspaceHandler = async function* ({
 
       // Membership verified above — brand each requested user ID.
       // Combined with the session user.id, this gives a typed list
-      // of org-validated members for the insert below. New personal
-      // matters start with exactly one member: the creator.
+      // of org-validated members for the insert below.
       const workspaceMemberUserIds = Array.from(
         new Set([
           userId,
@@ -227,6 +242,13 @@ export const createWorkspaceHandler = async function* ({
         clientId: body.clientId ?? null,
         name: newName,
         reference,
+        visibility,
+        // A private matter is reachable only through its members, so its
+        // creator leads it: the lead (or an organization admin who is a
+        // member) is who may later open it to the organization.
+        ...(visibility === MATTER_VISIBILITY.private
+          ? { leadUserId: userId }
+          : {}),
       });
 
       // Append the new workspace ID to the RLS session variable
@@ -321,6 +343,7 @@ export const createWorkspaceHandler = async function* ({
               name: newName,
               reference,
               clientId: body.clientId ?? null,
+              visibility,
               memberCount: workspaceMemberUserIds.length,
             },
           },

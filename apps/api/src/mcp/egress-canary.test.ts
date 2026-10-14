@@ -394,6 +394,7 @@ describe("MCP anonymization canary corpus", () => {
       name: "Fixture matter",
       reference: "REF-1",
       status: "active",
+      visibility: "organization",
       client: null,
     });
     readOverviewHandlerMock.mockResolvedValue({
@@ -542,6 +543,7 @@ describe("MCP anonymization canary corpus", () => {
               name: nameSeed,
               reference: "REF-1",
               status: "active",
+              visibility: "organization",
               lastActivityAt: new Date("2026-01-01"),
               createdAt: new Date("2026-01-01"),
             },
@@ -568,6 +570,7 @@ describe("MCP anonymization canary corpus", () => {
             name: "[ANON_0]",
             reference: "[ANON_1]",
             status: "active",
+            visibility: "organization",
             lastActivityAt: "2026-01-01T00:00:00.000Z",
             createdAt: "2026-01-01T00:00:00.000Z",
           },
@@ -593,6 +596,7 @@ describe("MCP anonymization canary corpus", () => {
         name: matterNameSeed,
         reference: "REF-1",
         status: "active",
+        visibility: "organization",
         client: { displayName: clientNameSeed },
       });
       readOverviewHandlerMock.mockResolvedValue({

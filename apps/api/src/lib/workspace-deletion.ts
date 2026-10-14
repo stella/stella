@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
+import type { MatterVisibility } from "@stll/api-contract";
 
 import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
@@ -22,6 +22,7 @@ import type { MemberRole } from "@/api/lib/member-roles";
 import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardown";
 import { hasCurrentMemberPermission } from "@/api/lib/permission-authorization";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
+import { reachesMatterWithoutMembership } from "@/api/lib/workspaces/visibility";
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 
@@ -102,11 +103,13 @@ const actorCanAccessWorkspace = async ({
   actorRole: MemberRole;
   actorUserId: SafeId<"user">;
   tx: Transaction;
-  workspace: { clientId: string | null; id: SafeId<"workspace"> };
+  workspace: { id: SafeId<"workspace">; visibility: MatterVisibility };
 }): Promise<boolean> => {
   if (
-    workspace.clientId !== null &&
-    CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
+    reachesMatterWithoutMembership({
+      role: actorRole,
+      visibility: workspace.visibility,
+    })
   ) {
     return true;
   }
@@ -170,6 +173,7 @@ export const executeAuthorizedWorkspaceDeletion = async (
             name: workspaces.name,
             reference: workspaces.reference,
             status: workspaces.status,
+            visibility: workspaces.visibility,
           })
           .from(workspaces)
           .where(

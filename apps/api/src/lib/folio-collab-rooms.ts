@@ -2,7 +2,8 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import { CLIENT_MATTER_ADMIN_ROLES, roles } from "@stll/permissions";
+import type { MatterVisibility } from "@stll/api-contract";
+import { roles } from "@stll/permissions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
@@ -56,6 +57,7 @@ import {
 } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { reachesMatterWithoutMembership } from "@/api/lib/workspaces/visibility";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
@@ -321,24 +323,26 @@ type FolioCollabRoomDecisionInput = {
   organizationRole: string | null;
   tokenCanEdit: boolean;
   tokenGeneration: number;
-  workspaceClientId: string | null;
   workspaceMemberId: string | null;
   workspaceStatus: (typeof workspaces.$inferSelect)["status"];
+  workspaceVisibility: MatterVisibility;
 };
 
 export const canUseFolioCollabWorkspace = ({
   organizationRole,
-  workspaceClientId,
   workspaceMemberId,
+  workspaceVisibility,
 }: Pick<
   FolioCollabRoomDecisionInput,
-  "organizationRole" | "workspaceClientId" | "workspaceMemberId"
+  "organizationRole" | "workspaceMemberId" | "workspaceVisibility"
 >) =>
   organizationRole !== null &&
   isMemberRole(organizationRole) &&
   (workspaceMemberId !== null ||
-    (workspaceClientId !== null &&
-      CLIENT_MATTER_ADMIN_ROLES.some((role) => role === organizationRole)));
+    reachesMatterWithoutMembership({
+      role: organizationRole,
+      visibility: workspaceVisibility,
+    }));
 
 export const decideFolioCollabRoomAuthorization = ({
   actualGeneration,
@@ -347,9 +351,9 @@ export const decideFolioCollabRoomAuthorization = ({
   organizationRole,
   tokenCanEdit,
   tokenGeneration,
-  workspaceClientId,
   workspaceMemberId,
   workspaceStatus,
+  workspaceVisibility,
 }: FolioCollabRoomDecisionInput):
   | { status: "authorized"; canEdit: boolean }
   | { status: "generation-conflict" }
@@ -370,8 +374,8 @@ export const decideFolioCollabRoomAuthorization = ({
   const role = organizationRole;
   const canUseWorkspace = canUseFolioCollabWorkspace({
     organizationRole: role,
-    workspaceClientId,
     workspaceMemberId,
+    workspaceVisibility,
   });
   if (role === null || !isMemberRole(role) || !canUseWorkspace) {
     return { status: "workspace-access-revoked" };
@@ -413,9 +417,9 @@ export const authorizeFolioCollabRoom = async ({
       userId: folioCollabRoomTokens.userId,
       userName: user.name,
       workspaceId: folioCollabRooms.workspaceId,
-      workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
       workspaceStatus: workspaces.status,
+      workspaceVisibility: workspaces.visibility,
     })
     .from(folioCollabRoomTokens)
     .innerJoin(
@@ -461,9 +465,9 @@ export const authorizeFolioCollabRoom = async ({
     organizationRole: row.organizationRole,
     tokenCanEdit: row.permissions.canEdit,
     tokenGeneration: row.tokenGeneration,
-    workspaceClientId: row.workspaceClientId,
     workspaceMemberId: row.workspaceMemberId,
     workspaceStatus: row.workspaceStatus,
+    workspaceVisibility: row.workspaceVisibility,
   });
   if (decision.status !== "authorized") {
     return decision;

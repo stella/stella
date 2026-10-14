@@ -3,6 +3,7 @@ import * as v from "valibot";
 import {
   CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
   ENTITY_KINDS,
+  MATTER_VISIBILITIES,
   NUMBER_SERIES_DOCUMENT_TYPES,
   TIME_ENTRY_ACTIVITY_GROUPS,
 } from "@stll/api-contract";
@@ -134,6 +135,7 @@ export const LIST_MATTERS_LIST_PROJECTION = v.strictObject({
       name: v.string(),
       reference: v.string(),
       status: v.string(),
+      visibility: v.picklist(MATTER_VISIBILITIES),
       lastActivityAt: v.string(),
       createdAt: v.string(),
     }),
@@ -158,6 +160,7 @@ export const LIST_MATTERS_DETAIL_PROJECTION = v.strictObject({
     name: v.string(),
     reference: v.string(),
     status: v.string(),
+    visibility: v.picklist(MATTER_VISIBILITIES),
     clientName: v.nullable(v.string()),
   }),
   overview: v.strictObject({

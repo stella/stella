@@ -1,11 +1,12 @@
-import { and, eq, inArray, isNotNull, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
+import { ORGANIZATION_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isOrganizationVisibleMatter } from "@/api/lib/workspaces/visibility";
 
 type HoldMemberAccessOptions = {
   organizationId: SafeId<"organization">;
@@ -26,10 +27,11 @@ export type MemberAccessHold =
  *
  * Locks the rows that decide that access `FOR SHARE`: the organization
  * `member` row and, per requested matter, the `workspace_members` row, or the
- * client matter itself when the member's organization role reaches every
- * client matter. Removing a member or changing their role deletes or updates
- * one of those rows, which waits for `tx` to finish; a removal that committed
- * first is reported here. Work done in `tx` after this call therefore happens
+ * organization-visible matter itself when the member's organization role
+ * reaches every organization-visible matter; that lock also holds the
+ * matter's visibility. Removing a member, changing their role or making the
+ * matter private deletes or updates one of those rows, which waits for `tx`
+ * to finish; a removal that committed first is reported here. Work done in `tx` after this call therefore happens
  * either entirely before a removal or not at all.
  *
  * Reads the rows directly rather than through the RLS access view, so the
@@ -78,23 +80,23 @@ export const holdMemberAccessOnTx = async (
     .for("share", { of: workspaceMembers });
   const held = new Set(assigned.map((row) => row.workspaceId));
   const unassigned = requested.filter((id) => !held.has(id));
-  const reachesClientMatters = CLIENT_MATTER_ADMIN_ROLES.some(
+  const reachesOrganizationMatters = ORGANIZATION_MATTER_ADMIN_ROLES.some(
     (role) => role === organizationMember.role,
   );
-  if (unassigned.length > 0 && reachesClientMatters) {
-    const clientMatters = await tx
+  if (unassigned.length > 0 && reachesOrganizationMatters) {
+    const organizationMatters = await tx
       .select({ id: workspaces.id })
       .from(workspaces)
       .where(
         and(
           inArray(workspaces.id, unassigned),
           eq(workspaces.organizationId, organizationId),
-          isNotNull(workspaces.clientId),
+          isOrganizationVisibleMatter(),
           ne(workspaces.status, "deleting"),
         ),
       )
       .for("share");
-    for (const { id } of clientMatters) {
+    for (const { id } of organizationMatters) {
       held.add(id);
     }
   }

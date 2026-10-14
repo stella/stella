@@ -159,6 +159,7 @@ export const authorizeDesktopEditSessionWithDb = async (
       tokenExpiresAt: desktopEditSessions.tokenExpiresAt,
       workspaceMemberId: workspaceMembers.id,
       workspaceId: desktopEditSessions.workspaceId,
+      workspaceVisibility: workspaces.visibility,
     })
     .from(desktopEditSessions)
     .innerJoin(workspaces, eq(desktopEditSessions.workspaceId, workspaces.id))
@@ -202,6 +203,7 @@ export const authorizeDesktopEditSessionWithDb = async (
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
       workspaceMemberId: session.workspaceMemberId,
+      workspaceVisibility: session.workspaceVisibility,
     })
   ) {
     return {
@@ -246,6 +248,7 @@ export const readDesktopEditSessionEventState = async (
     .select({
       organizationRole: member.role,
       workspaceMemberId: workspaceMembers.id,
+      workspaceVisibility: workspaces.visibility,
     })
     .from(desktopEditSessions)
     .innerJoin(workspaces, eq(desktopEditSessions.workspaceId, workspaces.id))
@@ -277,6 +280,7 @@ export const readDesktopEditSessionEventState = async (
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
       workspaceMemberId: session.workspaceMemberId,
+      workspaceVisibility: session.workspaceVisibility,
     })
   ) {
     return null;

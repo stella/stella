@@ -200,9 +200,9 @@ const validRow = (overrides: Row = {}): Row => ({
   userId: "user_1",
   userName: "Authorized user",
   workspaceId,
-  workspaceClientId: "client_1",
   workspaceMemberId: null,
   workspaceStatus: "active",
+  workspaceVisibility: "organization",
   ...overrides,
 });
 
@@ -238,16 +238,16 @@ describe("authorizeFolioCollabRoom", () => {
     ).toEqual({ status: "workspace-access-revoked" });
   });
 
-  test("requires personal-matter membership even for organization admins", async () => {
+  test("requires private-matter membership even for organization admins", async () => {
     expect(
       await authorize(
-        validRow({ workspaceClientId: null, workspaceMemberId: null }),
+        validRow({ workspaceVisibility: "private", workspaceMemberId: null }),
       ),
     ).toEqual({ status: "workspace-access-revoked" });
 
     expect(
       await authorize(
-        validRow({ workspaceClientId: null, workspaceMemberId: "wm_1" }),
+        validRow({ workspaceVisibility: "private", workspaceMemberId: "wm_1" }),
       ),
     ).toMatchObject({ status: "authorized" });
   });
@@ -279,9 +279,9 @@ describe("authorizeFolioCollabRoom", () => {
         organizationRole: "owner",
         tokenCanEdit: false,
         tokenGeneration: 3,
-        workspaceClientId: "client_1",
         workspaceMemberId: null,
         workspaceStatus: "active",
+        workspaceVisibility: "organization",
       }),
     ).toEqual({ status: "authorized", canEdit: false });
   });

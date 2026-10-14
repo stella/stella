@@ -1,3 +1,5 @@
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+import type { MatterVisibility } from "@stll/api-contract";
 import { roles } from "@stll/permissions";
 
 import { isMemberRole } from "@/api/lib/member-roles";
@@ -5,8 +7,9 @@ import type { MemberRole } from "@/api/lib/member-roles";
 
 /**
  * Whether a role reaches a workspace it is not a member of. Firm
- * owners/admins carry the deliberate organization-wide override; everyone
- * else needs a `workspace_members` row.
+ * owners/admins carry the deliberate organization-wide override, which
+ * covers organization-visible matters only; everyone else, and everyone on a
+ * private matter, needs a `workspace_members` row.
  */
 const WORKSPACE_ACCESS_BY_ROLE = {
   owner: "organization-wide",
@@ -31,9 +34,11 @@ const WORKSPACE_ACCESS_BY_ROLE = {
 export const canWriteWorkspaceEntities = ({
   organizationRole,
   workspaceMemberId,
+  workspaceVisibility,
 }: {
   organizationRole: string | null;
   workspaceMemberId: string | null;
+  workspaceVisibility: MatterVisibility;
 }) => {
   if (!organizationRole || !isMemberRole(organizationRole)) {
     return false;
@@ -43,7 +48,8 @@ export const canWriteWorkspaceEntities = ({
     entity: ["update"],
   }).success;
   const hasWorkspaceAccess =
-    WORKSPACE_ACCESS_BY_ROLE[organizationRole] === "organization-wide" ||
+    (WORKSPACE_ACCESS_BY_ROLE[organizationRole] === "organization-wide" &&
+      workspaceVisibility === MATTER_VISIBILITY.organization) ||
     workspaceMemberId !== null;
 
   return hasEntityUpdate && hasWorkspaceAccess;

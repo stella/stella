@@ -21,16 +21,7 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import {
-  and,
-  count,
-  eq,
-  exists,
-  inArray,
-  isNotNull,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, count, eq, exists, inArray, or, sql } from "drizzle-orm";
 import type { Context } from "elysia";
 import Elysia, { t } from "elysia";
 
@@ -43,7 +34,7 @@ import { errorOutputLogger } from "@stll/errors";
 import {
   ac,
   assignableRoles,
-  CLIENT_MATTER_ADMIN_ROLES,
+  ORGANIZATION_MATTER_ADMIN_ROLES,
   roles,
 } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
@@ -287,6 +278,7 @@ import {
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
+import { isOrganizationVisibleMatter } from "@/api/lib/workspaces/visibility";
 import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
@@ -2555,8 +2547,8 @@ const memberWorkspaceAccess = (db: MemberAuthorizationDb) => {
   return or(
     membershipExists,
     and(
-      inArray(member.role, CLIENT_MATTER_ADMIN_ROLES),
-      isNotNull(workspaces.clientId),
+      inArray(member.role, ORGANIZATION_MATTER_ADMIN_ROLES),
+      isOrganizationVisibleMatter(),
     ),
   );
 };

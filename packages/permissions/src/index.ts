@@ -189,11 +189,12 @@ export const isOrganizationManagementRole = (
   );
 
 /**
- * The roles that reach every client matter without a matter assignment. The
+ * The roles that reach every organization-visible matter without a matter
+ * assignment. Private matters stay reachable only through membership. The
  * stella_authorized_workspaces view repeats this list in SQL; the API's RLS
  * coverage test binds the two.
  */
-export const CLIENT_MATTER_ADMIN_ROLES = [
+export const ORGANIZATION_MATTER_ADMIN_ROLES = [
   "owner",
   "admin",
 ] as const satisfies readonly OrganizationRoleName[];

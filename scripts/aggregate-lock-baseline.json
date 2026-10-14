@@ -187,6 +187,12 @@
   },
   {
     "file": "apps/api/scripts/seed-dev.ts",
+    "fingerprint": "3093a86d6d59138e1e50e4a3d9146e2211fa94750b6aae0dfdd193e8dbf1e834",
+    "count": 1,
+    "reason": "Existing seed transaction; the condition satisfies check changes its source fingerprint while preserving emitted JavaScript and transaction boundaries."
+  },
+  {
+    "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "3574339da7a6a2fd6b9484d7b820e1a11d0a284004bdf688de7d9755d6380caa",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
@@ -206,12 +212,6 @@
   {
     "file": "apps/api/scripts/seed-dev.ts",
     "fingerprint": "46d892dae3ccf484a29dbbfd796ba3e1384185f86a145ae10d627ef1d05d8e04",
-    "count": 1,
-    "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/scripts/seed-dev.ts",
-    "fingerprint": "3093a86d6d59138e1e50e4a3d9146e2211fa94750b6aae0dfdd193e8dbf1e834",
     "count": 1,
     "reason": "transaction-boundary in apps/api/scripts/seed-dev.ts: Existing root transaction runner on db; opens the owning database transaction for this module."
   },
@@ -687,7 +687,7 @@
     "file": "apps/api/src/db/scoped.ts",
     "fingerprint": "0d8e1c0920ab27a71bcd3fc39e6bbb4a7bc09c9cacf525156c0e75923893f5e7",
     "count": 1,
-    "reason": "Same root scoped transaction; its role and tenant settings move to the shared production helper, without changing the transaction boundary or lock acquisitions."
+    "reason": "Reuse request feature decisions within the existing scoped transaction; transaction boundary and lock acquisitions are unchanged."
   },
   {
     "file": "apps/api/src/db/scoped.ts",
@@ -2041,9 +2041,9 @@
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",
-    "fingerprint": "79386eeb06ec6ca911b7fe3ec8ae6c0d676cb45a269766db5cbec65b4e171a39",
+    "fingerprint": "6180d6835d6c7a5c454ef296ae4f9ecf127d4b32eef799852746351cd2b587f6",
     "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/workspaces/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Same FOR UPDATE on the matter row being changed; the locked read also selects its visibility."
   },
   {
     "file": "apps/api/src/handlers/workspaces/update.ts",
@@ -2539,12 +2539,6 @@
   },
   {
     "file": "apps/api/src/lib/db/member-access-hold.ts",
-    "fingerprint": "4d0ff3a1232e8708641540aea532d71a6edc4bfd90eee22ab25e7987991cbcb5",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/db/member-access-hold.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/db/member-access-hold.ts",
     "fingerprint": "854e3be7f649cd9bf2b939d828bc3afe157358bf51f9c2c7dc36ad10d49d9813",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/db/member-access-hold.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2554,6 +2548,12 @@
     "fingerprint": "9ad0805ba65355cbec6f574e9137e9de0453d7e6cecd9587105cdd849757dc4d",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/db/member-access-hold.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+  },
+  {
+    "file": "apps/api/src/lib/db/member-access-hold.ts",
+    "fingerprint": "ff08b5e599801f6fe492f534e9697c0ee5193409dcdb19c59f2e3b2ac2367670",
+    "count": 1,
+    "reason": "Same FOR SHARE on the organization-visible matters an admin reaches; the filter reads visibility instead of the client."
   },
   {
     "file": "apps/api/src/lib/db/operator-registrations/read.ts",
@@ -2905,6 +2905,12 @@
   },
   {
     "file": "apps/api/src/lib/files/pdf-signing/sessions.ts",
+    "fingerprint": "51c3621984343f4d7b66e676683a10c654633cfe7ccf9e3610de1576eaf25ac4",
+    "count": 1,
+    "reason": "Same FOR UPDATE OF the signing session; the locked read also selects the matter's visibility for the write check."
+  },
+  {
+    "file": "apps/api/src/lib/files/pdf-signing/sessions.ts",
     "fingerprint": "5380fc03cc8d2288380ec4e58e46a54e4a5a4bb30183a2d35a924b87f0b5554f",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/files/pdf-signing/sessions.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -2912,12 +2918,6 @@
   {
     "file": "apps/api/src/lib/files/pdf-signing/sessions.ts",
     "fingerprint": "9ad7ad0e90cd6a65061715b5ee1d56d9a4f7bb3c16cc6b03dde1c8901ad65842",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/files/pdf-signing/sessions.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/files/pdf-signing/sessions.ts",
-    "fingerprint": "bb2c0d1fdd89296750310debff2ec785e192cf0ebbf42f75389776c69b43410a",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/files/pdf-signing/sessions.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
@@ -4129,9 +4129,9 @@
   },
   {
     "file": "apps/api/src/lib/time-entry-timer-access.ts",
-    "fingerprint": "e9cc074ef434731dee1ca517f7b19023a7e5bfe15b7113cc7a02d9f4f83a581d",
+    "fingerprint": "69252a8641beccdbbc279555bbaf0d68703db0f1eada9f1505a3ca5a3875dd87",
     "count": 2,
-    "reason": "for share in apps/api/src/lib/time-entry-timer-access.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Same FOR SHARE on the matter and member rows; the admin branch now reads the matter's visibility instead of its client."
   },
   {
     "file": "apps/api/src/lib/uploads/entity-create.ts",
@@ -4231,6 +4231,12 @@
   },
   {
     "file": "apps/api/src/lib/workspace-deletion.ts",
+    "fingerprint": "0bd9ba054686e0e66aa4cf82b6f842559e3ff0ab7a2b7bd50b82c68d47b09055",
+    "count": 1,
+    "reason": "Same FOR UPDATE on the matter being deleted; the locked read also selects its visibility."
+  },
+  {
+    "file": "apps/api/src/lib/workspace-deletion.ts",
     "fingerprint": "122efa602d9ec233a6b6e358ee5e0673eb3120117c4f5028bcf171193aae10d6",
     "count": 1,
     "reason": "transaction-boundary in apps/api/src/lib/workspace-deletion.ts: Existing root transaction runner on rootDb; opens the owning database transaction for this module."
@@ -4255,15 +4261,9 @@
   },
   {
     "file": "apps/api/src/lib/workspace-deletion.ts",
-    "fingerprint": "64b6b45709f00dc3273f623d0137839de1f9c554deec5440a0ecd28ccad822b9",
+    "fingerprint": "d6460635c126ccf7a0397860b7740e7b7fa7ebfe90368b147103354148adbb90",
     "count": 1,
-    "reason": "transaction-boundary in apps/api/src/lib/workspace-deletion.ts: Existing root transaction runner on database; opens the owning database transaction for this module."
-  },
-  {
-    "file": "apps/api/src/lib/workspace-deletion.ts",
-    "fingerprint": "837ee1e4a66f80b891712a0f16ea36fbe738bbe24d8b7276962d66bf45b862cb",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/lib/workspace-deletion.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
+    "reason": "Same deletion transaction boundary; its body now reads the matter's visibility for the access check."
   },
   {
     "file": "apps/api/src/scripts/adapter-health-query.ts",

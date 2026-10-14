@@ -118,7 +118,7 @@ describe("createWorkspaces", () => {
     expect(getCallCount()).toBe(1);
   });
 
-  test("personal workspace skips the contacts lookup", async () => {
+  test("a matter without a client skips the contacts lookup", async () => {
     // Force an early return on the workspaces-limit branch so the
     // handler never reaches the audit log (which the test fixture
     // does not set up). The assertion of interest is that the
@@ -180,14 +180,14 @@ describe("createWorkspaces", () => {
 
     // 400 from the workspaces-limit branch confirms we got past the
     // schema gate without a client lookup; 0 calls confirms the
-    // contacts table was never queried for a personal matter.
+    // contacts table was never queried for a matter without a client.
     expect(result).toEqual({
       code: 400,
       response: { message: "Workspaces limit reached" },
     });
     expect(clientSelectCalls).toBe(0);
   });
-  test("personal creation holds its creator's organization membership", async () => {
+  test("creation without a client holds its creator's organization membership", async () => {
     let strength: string | undefined;
     const { safeDb, scopedDb } = createScopedDbMock({
       select: (fields: Record<string, unknown>) => ({

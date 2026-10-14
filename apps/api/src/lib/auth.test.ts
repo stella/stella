@@ -70,6 +70,7 @@ const orgFull = orgId();
 const ownerInFull = userId();
 const memberInFull = userId();
 const loneMemberInFull = userId();
+const assignedMemberInFull = userId();
 
 const orgEmpty = orgId();
 const ownerInEmpty = userId();
@@ -79,6 +80,10 @@ const strangerUser = userId();
 const clientContactId = toSafeId<"contact">(tid());
 const clientWorkspaceId = workspaceId();
 const memberPersonalWorkspaceId = workspaceId();
+// Visibility is independent of the client: an organization matter without a
+// client, and a private matter with one.
+const clientlessOrganizationWorkspaceId = workspaceId();
+const privateClientWorkspaceId = workspaceId();
 
 testState.beforeAll(async () => {
   testDb = await getTestDb();
@@ -88,6 +93,7 @@ testState.beforeAll(async () => {
       ownerInFull,
       memberInFull,
       loneMemberInFull,
+      assignedMemberInFull,
       ownerInEmpty,
       memberInEmpty,
       strangerUser,
@@ -137,6 +143,13 @@ testState.beforeAll(async () => {
     },
     {
       id: tid(),
+      organizationId: orgFull,
+      userId: assignedMemberInFull,
+      role: "member",
+      createdAt: new Date(),
+    },
+    {
+      id: tid(),
       organizationId: orgEmpty,
       userId: ownerInEmpty,
       role: "owner",
@@ -171,13 +184,42 @@ testState.beforeAll(async () => {
       clientId: null,
       name: "Member personal matter",
       reference: "AUTH-PERSONAL",
+      visibility: "private",
+    },
+    {
+      id: clientlessOrganizationWorkspaceId,
+      organizationId: orgFull,
+      clientId: null,
+      name: "Firm know-how",
+      reference: "AUTH-KNOW-HOW",
+      visibility: "organization",
+    },
+    {
+      id: privateClientWorkspaceId,
+      organizationId: orgFull,
+      clientId: clientContactId,
+      name: "Private client matter",
+      reference: "AUTH-PRIVATE-CLIENT",
+      visibility: "private",
     },
   ]);
-  await testDb.insert(workspaceMembers).values({
-    id: toSafeId<"workspaceMember">(tid()),
-    workspaceId: memberPersonalWorkspaceId,
-    userId: memberInFull,
-  });
+  await testDb.insert(workspaceMembers).values([
+    {
+      id: toSafeId<"workspaceMember">(tid()),
+      workspaceId: memberPersonalWorkspaceId,
+      userId: memberInFull,
+    },
+    {
+      id: toSafeId<"workspaceMember">(tid()),
+      workspaceId: clientlessOrganizationWorkspaceId,
+      userId: assignedMemberInFull,
+    },
+    {
+      id: toSafeId<"workspaceMember">(tid()),
+      workspaceId: privateClientWorkspaceId,
+      userId: memberInFull,
+    },
+  ]);
 });
 
 afterAll(async () => {
@@ -330,6 +372,34 @@ describe("resolveMemberAuthorization", () => {
       expected: memberPersonalWorkspaceId,
     },
     { actor: memberInFull, target: clientWorkspaceId, expected: null },
+    // An organization matter without a client follows the client-matter rule.
+    {
+      actor: ownerInFull,
+      target: clientlessOrganizationWorkspaceId,
+      expected: clientlessOrganizationWorkspaceId,
+    },
+    {
+      actor: assignedMemberInFull,
+      target: clientlessOrganizationWorkspaceId,
+      expected: clientlessOrganizationWorkspaceId,
+    },
+    {
+      actor: memberInFull,
+      target: clientlessOrganizationWorkspaceId,
+      expected: null,
+    },
+    // A private matter with a client stays closed to an owner who is not on it.
+    { actor: ownerInFull, target: privateClientWorkspaceId, expected: null },
+    {
+      actor: memberInFull,
+      target: privateClientWorkspaceId,
+      expected: privateClientWorkspaceId,
+    },
+    {
+      actor: assignedMemberInFull,
+      target: privateClientWorkspaceId,
+      expected: null,
+    },
   ])(
     "worker membership uses the session access rule under RLS: %p",
     async ({ actor, target, expected }) => {
@@ -388,6 +458,7 @@ describe("resolveWorkspaceRealtimeAudience", () => {
       ownerInFull,
       memberInFull,
       loneMemberInFull,
+      assignedMemberInFull,
       ownerInEmpty,
       strangerUser,
     ];
@@ -401,8 +472,22 @@ describe("resolveWorkspaceRealtimeAudience", () => {
       testDb,
     );
 
+    const clientlessOrganizationAudience =
+      await resolveWorkspaceRealtimeAudience(
+        { userIds: candidates, workspaceId: clientlessOrganizationWorkspaceId },
+        testDb,
+      );
+    const privateClientAudience = await resolveWorkspaceRealtimeAudience(
+      { userIds: candidates, workspaceId: privateClientWorkspaceId },
+      testDb,
+    );
+
     expect(clientMatterAudience).toEqual(new Set([ownerInFull]));
     expect(personalMatterAudience).toEqual(new Set([memberInFull]));
+    expect(clientlessOrganizationAudience).toEqual(
+      new Set([ownerInFull, assignedMemberInFull]),
+    );
+    expect(privateClientAudience).toEqual(new Set([memberInFull]));
   });
 });
 

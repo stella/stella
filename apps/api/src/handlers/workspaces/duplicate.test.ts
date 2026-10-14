@@ -247,6 +247,7 @@ describe("duplicateWorkspace", () => {
               billingReference: "BILL-123",
               color: "blue",
               leadUserId: "user_lead123",
+              visibility: "private",
             }),
           },
           properties: {
@@ -399,6 +400,7 @@ describe("duplicateWorkspace", () => {
           color: "blue",
           leadUserId: "user_lead123",
           name: "Smith v Jones",
+          visibility: "private",
         }),
       ]);
       expect(insertedWorkspaceMembers).toEqual([
@@ -440,6 +442,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
+            visibility: "organization",
           }),
         },
         properties: {
@@ -591,6 +594,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
+            visibility: "organization",
           }),
         },
         properties: {
@@ -851,6 +855,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
+            visibility: "organization",
           }),
         },
         properties: {
@@ -1016,6 +1021,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
+            visibility: "organization",
           }),
         },
         properties: {
@@ -1132,6 +1138,7 @@ describe("duplicateWorkspace", () => {
             billingReference: null,
             color: null,
             leadUserId: null,
+            visibility: "organization",
           }),
         },
         properties: { findMany: async () => [] },

@@ -161,6 +161,7 @@ test("desktop account linking preserves document access for each supported role"
       canWriteWorkspaceEntities({
         organizationRole: role,
         workspaceMemberId: "member-fixture",
+        workspaceVisibility: "organization",
       }),
     ).toBe(webWriteAllowed);
   }

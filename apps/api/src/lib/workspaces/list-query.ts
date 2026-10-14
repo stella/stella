@@ -35,6 +35,7 @@ export const readWorkspaceListRows = ({
       clientId: true,
       color: true,
       status: true,
+      visibility: true,
       leadUserId: true,
       lastActivityAt: true,
       createdAt: true,

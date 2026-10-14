@@ -296,6 +296,7 @@ export const redeemPdfSigningHandoff = async (
         stamp: pdfSigningSessions.stamp,
         status: pdfSigningSessions.status,
         workspaceId: pdfSigningSessions.workspaceId,
+        workspaceVisibility: workspaces.visibility,
       })
       .from(pdfSigningSessions)
       .innerJoin(workspaces, eq(pdfSigningSessions.workspaceId, workspaces.id))
@@ -328,6 +329,7 @@ export const redeemPdfSigningHandoff = async (
       !canWriteWorkspaceEntities({
         organizationRole: roles.at(0)?.role ?? null,
         workspaceMemberId: memberships.at(0)?.id ?? null,
+        workspaceVisibility: session.workspaceVisibility,
       })
     ) {
       return null;
@@ -472,6 +474,7 @@ export const authorizePdfSigningSession = async (
           tokenExpiresAt: pdfSigningSessions.tokenExpiresAt,
           workspaceId: pdfSigningSessions.workspaceId,
           workspaceMemberId: workspaceMembers.id,
+          workspaceVisibility: workspaces.visibility,
         })
         .from(pdfSigningSessions)
         .innerJoin(
@@ -534,6 +537,7 @@ export const authorizePdfSigningSession = async (
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
       workspaceMemberId: session.workspaceMemberId,
+      workspaceVisibility: session.workspaceVisibility,
     })
   ) {
     return { status: "permission-revoked" };

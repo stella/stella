@@ -471,6 +471,56 @@ describe("every MCP tool's real output passes its output contract", () => {
     ).toEqual(Object.keys(TOOL_COVERAGE).toSorted());
   });
 
+  test("save_matter and list_matters carry visibility both ways, independent of the client", async () => {
+    const caller = await createOrganization();
+    const call = async (toolName: string, args: Record<string, unknown>) => {
+      const result = await handleMcpToolCall({
+        mode: "advanced",
+        args,
+        context: await requestContext(caller),
+        toolName,
+      });
+      expect({ toolName, isError: result.isError === true }).toEqual({
+        toolName,
+        isError: false,
+        ...(result.isError === true ? { response: textOf(result) } : {}),
+      });
+      const { structuredContent } = result;
+      if (!isRecord(structuredContent)) {
+        throw new TypeError(`${toolName} returned no structured content`);
+      }
+      return structuredContent;
+    };
+    const visibilityOf = async (matterId: string) => {
+      const listed = await call("list_matters", { matter_id: matterId });
+      const matter = listed["matter"];
+      return isRecord(matter) ? matter["visibility"] : undefined;
+    };
+
+    const created = await call("save_matter", {
+      name: "Partner compensation review",
+      visibility: "private",
+    });
+    const matterId = idAt(created, "matterId");
+    expect(await visibilityOf(matterId)).toBe("private");
+
+    const listed = await call("list_matters", {});
+    const rows = Array.isArray(listed["matters"]) ? listed["matters"] : [];
+    expect(
+      rows.find((row) => isRecord(row) && row["id"] === matterId),
+    ).toMatchObject({ visibility: "private" });
+
+    await call("save_matter", {
+      matter_id: matterId,
+      visibility: "organization",
+    });
+    expect(await visibilityOf(matterId)).toBe("organization");
+
+    // No client and no visibility: the organization default.
+    const internal = await call("save_matter", { name: "Firm know-how" });
+    expect(await visibilityOf(idAt(internal, "matterId"))).toBe("organization");
+  });
+
   test("a seeded organization drives each runnable tool", async () => {
     const caller = await createOrganization();
     const seeded: Seeded = { userId: caller.userId };

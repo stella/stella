@@ -471,6 +471,12 @@ export type { SafeId, SafeIdType } from "./safe-id";
 export { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "./workspace-contacts";
 export type { ContactType, WorkspaceContactRole } from "./workspace-contacts";
 export {
+  DEFAULT_MATTER_VISIBILITY,
+  MATTER_VISIBILITIES,
+  MATTER_VISIBILITY,
+} from "./matter-visibility";
+export type { MatterVisibility } from "./matter-visibility";
+export {
   CONTACT_IMPORT_LABELED_FIELDS,
   CONTACT_IMPORT_VOCABULARIES,
 } from "./contact-import-labeled";

@@ -80,9 +80,9 @@ const canStillEditWorkspace = async ({
   const memberships = await tx
     .select({
       organizationRole: member.role,
-      workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
       workspaceStatus: workspaces.status,
+      workspaceVisibility: workspaces.visibility,
     })
     .from(member)
     .innerJoin(
@@ -115,8 +115,8 @@ const canStillEditWorkspace = async ({
 
   const canUseWorkspace = canUseFolioCollabWorkspace({
     organizationRole: membership.organizationRole,
-    workspaceClientId: membership.workspaceClientId,
     workspaceMemberId: membership.workspaceMemberId,
+    workspaceVisibility: membership.workspaceVisibility,
   });
   return (
     canUseWorkspace &&

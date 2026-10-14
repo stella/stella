@@ -3,7 +3,11 @@ import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
-import { MATTER_REFERENCE_RETIRED_CODE } from "@stll/api-contract";
+import {
+  MATTER_REFERENCE_RETIRED_CODE,
+  MATTER_VISIBILITY,
+} from "@stll/api-contract";
+import type { MatterVisibility } from "@stll/api-contract";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -25,11 +29,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { tMatterVisibility } from "@/api/lib/workspaces/visibility";
 
 const updateWorkspaceBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
@@ -40,9 +46,12 @@ const updateWorkspaceBodySchema = t.Object({
   // Pinned-first avatar on the matters list. Must be an existing
   // workspace member (validated at handler time); pass null to clear.
   leadUserId: t.Optional(t.Nullable(t.String({ maxLength: 128 }))),
-  // Promotion (personal -> client) is one-way and is itself the
-  // sharing event: the optional memberUserIds list is added to
-  // the workspace at the same time as the client is attached.
+  // Who can see the matter. Only the matter lead or an organization
+  // owner/admin may change it, and every change is audited.
+  visibility: t.Optional(tMatterVisibility()),
+  // Attaches a client to a matter that has none, optionally adding
+  // members in the same write. It does not change who can see the
+  // matter; `visibility` alone decides that.
   promote: t.Optional(
     t.Object({
       clientId: tSafeId("contact"),
@@ -64,7 +73,10 @@ const config = {
     "and must go through promote, which takes the client contact and " +
     "optionally the members to share it with at the same time; a bare " +
     "clientId on a personal matter, and any attempt to re-promote a matter " +
-    "that already has a client, are refused.",
+    "that already has a client, are refused. visibility (organization or " +
+    "private) decides who can see the matter, independent of its client; " +
+    "only the matter lead or an organization owner or admin may change it, " +
+    "and a private matter must keep at least one member.",
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: workspaceRealtimeUpdates,
@@ -165,7 +177,75 @@ const checkReferenceNotRetired = async ({
   };
 };
 
+/**
+ * Who is changing the matter, as far as its visibility is concerned. An
+ * organization owner or admin may change any matter they can reach; anyone
+ * else only a matter they lead.
+ */
+export type WorkspaceUpdateActor = {
+  userId: SafeId<"user">;
+  managesOrganizationMatters: boolean;
+};
+
+type VisibilityChangeFailure =
+  | {
+      ok: false;
+      status: 403;
+      message: "Only the matter lead or an organization admin can change who can see this matter";
+    }
+  | {
+      ok: false;
+      status: 400;
+      message: "A private matter needs at least one member";
+    };
+
+/**
+ * Refuse a visibility change the actor may not make, or one that would leave
+ * a private matter nobody can reach. Reads the lead from the row the caller
+ * already locked, so a lead assigned in the same request does not count.
+ */
+const checkVisibilityChange = async ({
+  tx,
+  actor,
+  workspaceId,
+  currentLeadUserId,
+  next,
+}: {
+  tx: Transaction;
+  actor: WorkspaceUpdateActor;
+  workspaceId: SafeId<"workspace">;
+  currentLeadUserId: string | null;
+  next: MatterVisibility;
+}): Promise<VisibilityChangeFailure | null> => {
+  if (!actor.managesOrganizationMatters && currentLeadUserId !== actor.userId) {
+    return {
+      ok: false,
+      status: 403,
+      message:
+        "Only the matter lead or an organization admin can change who can see this matter",
+    };
+  }
+  if (next !== MATTER_VISIBILITY.private) {
+    return null;
+  }
+  // No lock: removing a member already refuses to remove the last one, so a
+  // matter that has a member now keeps one.
+  const members = await tx
+    .select({ id: workspaceMembers.id })
+    .from(workspaceMembers)
+    .where(eq(workspaceMembers.workspaceId, workspaceId))
+    .limit(1);
+  return members.length === 0
+    ? {
+        ok: false,
+        status: 400,
+        message: "A private matter needs at least one member",
+      }
+    : null;
+};
+
 export type UpdateWorkspaceHandlerProps = {
+  actor: WorkspaceUpdateActor;
   userEmail: string;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -178,6 +258,7 @@ export type UpdateWorkspaceHandlerProps = {
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
 export const updateWorkspaceHandler = async function* ({
+  actor,
   userEmail,
   safeDb,
   organizationId,
@@ -198,6 +279,7 @@ export const updateWorkspaceHandler = async function* ({
         billingReference: workspaces.billingReference,
         color: workspaces.color,
         leadUserId: workspaces.leadUserId,
+        visibility: workspaces.visibility,
       })
       .from(workspaces)
       .where(eq(workspaces.id, workspaceId))
@@ -301,6 +383,21 @@ export const updateWorkspaceHandler = async function* ({
       return leadCheck;
     }
 
+    const visibilityChanged =
+      body.visibility !== undefined && body.visibility !== workspace.visibility;
+    if (body.visibility !== undefined && visibilityChanged) {
+      const visibilityCheck = await checkVisibilityChange({
+        tx,
+        actor,
+        workspaceId,
+        currentLeadUserId: workspace.leadUserId,
+        next: body.visibility,
+      });
+      if (visibilityCheck) {
+        return visibilityCheck;
+      }
+    }
+
     // Before the write, so a reference that is both retired and currently held
     // answers with the specific refusal rather than the unique-violation 409.
     if (
@@ -328,6 +425,7 @@ export const updateWorkspaceHandler = async function* ({
           "billingReference",
           "color",
           "leadUserId",
+          "visibility",
         ]),
         ...promotionUpdate,
       })
@@ -396,12 +494,31 @@ export const updateWorkspaceHandler = async function* ({
         new: insertedMemberUserIds,
       };
     }
+    if (visibilityChanged) {
+      changes["visibility"] = {
+        old: workspace.visibility,
+        new: body.visibility,
+      };
+    }
 
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
       resourceId: workspaceId,
       changes,
+      // Opening a private matter to the organization exposes its contents to
+      // people who could not see them before; mark it so the audit log can be
+      // filtered for exactly those events.
+      ...(visibilityChanged
+        ? {
+            metadata: {
+              visibilityChange:
+                body.visibility === MATTER_VISIBILITY.organization
+                  ? "opened_to_organization"
+                  : "made_private",
+            },
+          }
+        : {}),
     });
 
     await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
@@ -445,11 +562,18 @@ const updateWorkspace = createSafeHandler(
     safeDb,
     session,
     user,
+    memberRole,
     workspaceId,
     body,
     recordAuditEvent,
   }) {
     return yield* updateWorkspaceHandler({
+      actor: {
+        userId: user.id,
+        managesOrganizationMatters: hasManagementPermission(memberRole, {
+          workspace: ["update"],
+        }),
+      },
       userEmail: user.email,
       safeDb,
       organizationId: session.activeOrganizationId,

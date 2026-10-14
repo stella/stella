@@ -1,7 +1,8 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+import { ORGANIZATION_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -32,9 +33,9 @@ export const hasCurrentTimerMatterAccess = async ({
       AND workspace.status = 'active'
       AND CASE
         WHEN organization_member.role IN (${sql.join(
-          CLIENT_MATTER_ADMIN_ROLES.map((role) => sql`${role}`),
+          ORGANIZATION_MATTER_ADMIN_ROLES.map((role) => sql`${role}`),
           sql`, `,
-        )}) AND workspace.client_id IS NOT NULL THEN true
+        )}) AND workspace.visibility = ${MATTER_VISIBILITY.organization} THEN true
         ELSE EXISTS (
           SELECT 1 FROM workspace_members AS workspace_member
           WHERE workspace_member.workspace_id = workspace.id

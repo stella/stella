@@ -301,6 +301,10 @@ describe("matter reference change", () => {
     const { safeDb } = scopeFor([workspaceId]);
     return await Result.gen(() =>
       updateWorkspaceHandler({
+        actor: {
+          userId: ids.userA1,
+          managesOrganizationMatters: true,
+        },
         userEmail: "standard@example.test",
         safeDb,
         organizationId: ids.orgA,

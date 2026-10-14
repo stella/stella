@@ -3,7 +3,7 @@ import { is, sql } from "drizzle-orm";
 import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 
 import {
-  CLIENT_MATTER_ADMIN_ROLES,
+  ORGANIZATION_MATTER_ADMIN_ROLES,
   ORGANIZATION_MANAGEMENT_ROLES,
 } from "@stll/permissions";
 
@@ -537,7 +537,7 @@ describe("policy coverage", () => {
     });
   });
 
-  test("workspace access view grants client matters to CLIENT_MATTER_ADMIN_ROLES", async () => {
+  test("workspace access view grants organization-visible matters to ORGANIZATION_MATTER_ADMIN_ROLES", async () => {
     const result = await testDb.execute<{ definition: string }>(sql`
       SELECT pg_catalog.pg_get_viewdef(
         ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`}::regclass
@@ -546,14 +546,14 @@ describe("policy coverage", () => {
     const definition = result.rows.at(0)?.definition ?? "";
 
     expect(roleListsIn(definition)).toEqual([
-      new Set(CLIENT_MATTER_ADMIN_ROLES),
+      new Set(ORGANIZATION_MATTER_ADMIN_ROLES),
     ]);
   });
 
   test("every policy role list is a named role set", async () => {
     const namedSets = [
       new Set(ORGANIZATION_MANAGEMENT_ROLES),
-      new Set(CLIENT_MATTER_ADMIN_ROLES),
+      new Set(ORGANIZATION_MATTER_ADMIN_ROLES),
     ];
     const policies = await fetchStellaPolicies(testDb);
     const roleLists = policies.flatMap((policy) =>

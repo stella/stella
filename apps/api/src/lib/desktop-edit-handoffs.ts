@@ -188,6 +188,7 @@ export const readDesktopEditHandoffAccess = async ({
       organizationId: workspaces.organizationId,
       organizationRole: member.role,
       workspaceMemberId: workspaceMembers.id,
+      workspaceVisibility: workspaces.visibility,
     })
     .from(workspaces)
     .leftJoin(
@@ -216,6 +217,7 @@ export const readDesktopEditHandoffAccess = async ({
     canWriteWorkspaceEntities: canWriteWorkspaceEntities({
       organizationRole: access.organizationRole,
       workspaceMemberId: access.workspaceMemberId,
+      workspaceVisibility: access.workspaceVisibility,
     }),
     organizationId: access.organizationId,
   };

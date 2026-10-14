@@ -74,7 +74,7 @@ const isArrayWithLength = (
 ): value is unknown[] => Array.isArray(value) && value.length === length;
 
 describe("addWorkspaceMember", () => {
-  test("adds a member to a personal matter", async () => {
+  test("adds a member to a matter without a client", async () => {
     const createdAt = new Date("2026-01-01T00:00:00.000Z");
     const createdWorkspaceMemberId = toSafeId<"workspaceMember">(
       Bun.randomUUIDv7(),

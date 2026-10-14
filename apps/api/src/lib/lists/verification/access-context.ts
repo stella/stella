@@ -1,5 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 
+import type { MatterVisibility } from "@stll/api-contract";
+
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { workspaces, workspaceMembers } from "@/api/db/schema";
@@ -16,18 +18,22 @@ type VerificationWorkspaceAccessOptions = {
   organizationRole: string | null;
   workspaceMemberId: string | null;
   workspaceStatus: string | null;
-  clientId: string | null;
+  workspaceVisibility: MatterVisibility | null;
 };
 
 const canExecuteListVerificationInWorkspace = ({
   organizationRole,
   workspaceMemberId,
   workspaceStatus,
-  clientId,
+  workspaceVisibility,
 }: VerificationWorkspaceAccessOptions): boolean =>
   workspaceStatus === "active" &&
-  (workspaceMemberId !== null || clientId !== null) &&
-  canWriteWorkspaceEntities({ organizationRole, workspaceMemberId });
+  workspaceVisibility !== null &&
+  canWriteWorkspaceEntities({
+    organizationRole,
+    workspaceMemberId,
+    workspaceVisibility,
+  });
 
 type ResolveListVerificationAccessArgs = {
   tx: Pick<Transaction, "select">;
@@ -69,7 +75,7 @@ export const resolveListVerificationAccess = async ({
         role: member.role,
         workspaceId: workspaces.id,
         workspaceStatus: workspaces.status,
-        clientId: workspaces.clientId,
+        workspaceVisibility: workspaces.visibility,
         workspaceMemberId: workspaceMembers.id,
       })
       .from(member)
@@ -103,7 +109,7 @@ export const resolveListVerificationAccess = async ({
       organizationRole: identity.role,
       workspaceMemberId: identity.workspaceMemberId,
       workspaceStatus: identity.workspaceStatus,
-      clientId: identity.clientId,
+      workspaceVisibility: identity.workspaceVisibility,
     });
   if (identity === undefined || !workspaceAllowed) {
     return { status: "unavailable" };

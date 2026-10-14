@@ -1,0 +1,38 @@
+[
+  {
+    "file": "apps/api/src/lib/time-entry-timer-access.ts",
+    "from": "e9cc074ef434731dee1ca517f7b19023a7e5bfe15b7113cc7a02d9f4f83a581d",
+    "to": "69252a8641beccdbbc279555bbaf0d68703db0f1eada9f1505a3ca5a3875dd87",
+    "reason": "Same FOR SHARE on the matter and member rows; the admin branch now reads the matter's visibility instead of its client."
+  },
+  {
+    "file": "apps/api/src/lib/db/member-access-hold.ts",
+    "from": "4d0ff3a1232e8708641540aea532d71a6edc4bfd90eee22ab25e7987991cbcb5",
+    "to": "ff08b5e599801f6fe492f534e9697c0ee5193409dcdb19c59f2e3b2ac2367670",
+    "reason": "Same FOR SHARE on the organization-visible matters an admin reaches; the filter reads visibility instead of the client."
+  },
+  {
+    "file": "apps/api/src/handlers/workspaces/update.ts",
+    "from": "79386eeb06ec6ca911b7fe3ec8ae6c0d676cb45a269766db5cbec65b4e171a39",
+    "to": "6180d6835d6c7a5c454ef296ae4f9ecf127d4b32eef799852746351cd2b587f6",
+    "reason": "Same FOR UPDATE on the matter row being changed; the locked read also selects its visibility."
+  },
+  {
+    "file": "apps/api/src/lib/files/pdf-signing/sessions.ts",
+    "from": "bb2c0d1fdd89296750310debff2ec785e192cf0ebbf42f75389776c69b43410a",
+    "to": "51c3621984343f4d7b66e676683a10c654633cfe7ccf9e3610de1576eaf25ac4",
+    "reason": "Same FOR UPDATE OF the signing session; the locked read also selects the matter's visibility for the write check."
+  },
+  {
+    "file": "apps/api/src/lib/workspace-deletion.ts",
+    "from": "64b6b45709f00dc3273f623d0137839de1f9c554deec5440a0ecd28ccad822b9",
+    "to": "d6460635c126ccf7a0397860b7740e7b7fa7ebfe90368b147103354148adbb90",
+    "reason": "Same deletion transaction boundary; its body now reads the matter's visibility for the access check."
+  },
+  {
+    "file": "apps/api/src/lib/workspace-deletion.ts",
+    "from": "837ee1e4a66f80b891712a0f16ea36fbe738bbe24d8b7276962d66bf45b862cb",
+    "to": "0bd9ba054686e0e66aa4cf82b6f842559e3ff0ab7a2b7bd50b82c68d47b09055",
+    "reason": "Same FOR UPDATE on the matter being deleted; the locked read also selects its visibility."
+  }
+]

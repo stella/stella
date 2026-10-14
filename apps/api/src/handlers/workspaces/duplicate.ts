@@ -477,6 +477,7 @@ export const createDuplicateWorkspace = (
               billingReference: true,
               color: true,
               leadUserId: true,
+              visibility: true,
             },
           });
 
@@ -712,6 +713,9 @@ export const createDuplicateWorkspace = (
           leadUserId: snapshot.workspace.leadUserId,
           name: newName,
           reference,
+          // A copy is seen by exactly who could see the original; duplicating
+          // a private matter must not open it to the organization.
+          visibility: snapshot.workspace.visibility,
         });
 
         await tx.execute(
