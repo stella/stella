@@ -13,10 +13,7 @@ import type {
 
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import type {
-  decideMany,
-  Decisions,
-} from "@/api/lib/workflow/decisions/decide";
+import type { decideMany } from "@/api/lib/workflow/decisions/decide";
 import { choice } from "@/api/lib/workflow/decisions/system-one";
 import type { ChoiceQuestion } from "@/api/lib/workflow/decisions/system-one";
 
@@ -60,14 +57,10 @@ class TableChartDecisionError extends TaggedError("TableChartDecisionError")<{
   cause: unknown;
 }> {}
 
-export type TableChartDecisionCaller = (
-  options: Omit<Parameters<typeof decideMany>[0], "questions"> & {
-    questions: Record<string, ChoiceQuestion>;
-  },
-) => Promise<{
-  decisions: Decisions<Record<string, ChoiceQuestion>>;
-  model: string | null;
-}>;
+/** `decideMany` for choice questions; tests substitute their own answers. */
+export type TableChartDecisionCaller = typeof decideMany<
+  Record<string, ChoiceQuestion>
+>;
 
 type PlanTableChartOptions = {
   table: TableChartRequest;

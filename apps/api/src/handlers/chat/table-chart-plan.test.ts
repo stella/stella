@@ -32,7 +32,10 @@ const table = {
   ],
 };
 const confident = (selected: string): Decision<ChoiceAnswer> => ({
+  source: "decision-model",
+  model: null,
   state: "decided",
+  evidence: null,
   probability: 0.99,
   confidence: 0.99,
   answer: {
@@ -96,6 +99,8 @@ describe("table chart decisions", () => {
     for (const reason of ["below-floor", "no-backend", "failed"] as const) {
       for (const key of Object.keys(decisions())) {
         const unavailable = {
+          source: "decision-model",
+          model: null,
           state: "undecided",
           reason,
           confidence: null,

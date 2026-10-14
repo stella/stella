@@ -23,7 +23,9 @@ const fixture = {
 } satisfies TableChartResponse;
 const requestPlan = async () => await Promise.resolve(fixture);
 const components = {
-  a: StreamdownMentionLink,
+  a: (props: React.AnchorHTMLAttributes<HTMLAnchorElement>) => (
+    <StreamdownMentionLink {...props} interactive={false} />
+  ),
   table: (
     props: Omit<React.ComponentProps<typeof ChatTableChart>, "cacheScope">,
   ) => (
