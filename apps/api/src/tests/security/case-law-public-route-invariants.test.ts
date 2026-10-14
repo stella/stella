@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import {
+  PUBLIC_CASE_LAW_COUNTRIES,
+  PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+} from "@stll/api-contract/case-law-launch-readiness";
+import { PUBLIC_COUNTRIES } from "@stll/api-contract/public-country-capability";
 import { repoRelativePath } from "@stll/portable-path";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
@@ -13,6 +18,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { CASE_LAW_SURFACE_COUNTRIES } from "@/api/lib/case-law/public-subject";
 import { corpusIndexReadContract } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 import {
@@ -708,9 +714,35 @@ describe("public case-law route boundary", () => {
         readSource(CITATION_GRAPH_FILE),
         readSource(LAUNCH_READINESS_FILE),
       ]);
-    expect(subject).toContain("!isPublicCaseLawPageCountry(row.country)");
-    for (const source of [sitemap, alternates, citations]) {
+    // The subject gate resolves the surface it was asked for to one country
+    // list, from one table that names both, and checks the row against it.
+    // The subject carries that list, and the citation graph filters the
+    // subject's far ends against it, so a far end answers to the same surface.
+    expect(subject).toContain("!isListed(countries, row.country)");
+    expect(subject).toContain("CASE_LAW_SURFACE_COUNTRIES[surface]");
+    for (const entry of [
+      "pages: PUBLIC_CASE_LAW_PAGE_COUNTRIES,",
+      "search: PUBLIC_CASE_LAW_COUNTRIES,",
+    ]) {
+      expect(subject).toContain(entry);
+    }
+    expect(citations).toContain("[...countries]");
+    for (const source of [sitemap, alternates]) {
       expect(source).toContain("PUBLIC_CASE_LAW_PAGE_COUNTRIES");
+    }
+    // Behaviour, not spelling: the default table is the contract's two lists,
+    // pages a superset of search. A pages-public decision's own behaviour on
+    // both surfaces is proven in citation-graph-surface.db.test.ts.
+    expect(CASE_LAW_SURFACE_COUNTRIES.pages).toEqual(
+      PUBLIC_CASE_LAW_PAGE_COUNTRIES,
+    );
+    expect(CASE_LAW_SURFACE_COUNTRIES.search).toEqual(
+      PUBLIC_CASE_LAW_COUNTRIES,
+    );
+    for (const country of PUBLIC_COUNTRIES) {
+      if (CASE_LAW_SURFACE_COUNTRIES.search.includes(country)) {
+        expect(CASE_LAW_SURFACE_COUNTRIES.pages).toContain(country);
+      }
     }
     expect(readiness).toContain("evalSetExists: v.literal(true)");
     expect(readiness).toContain("lastCensusGreen: v.literal(true)");
@@ -923,7 +955,7 @@ describe("public case-law route boundary", () => {
     for (const component of [
       "redistributableCaseLawSourceFor(",
       "publishedCaseLawDecisionFor(",
-      "[...PUBLIC_CASE_LAW_PAGE_COUNTRIES]",
+      "[...countries]",
     ]) {
       expect({ component, count: count(component) }).toEqual({
         component,

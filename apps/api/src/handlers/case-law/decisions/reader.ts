@@ -211,6 +211,7 @@ export const readDecisionReaderSource = async ({
               tx: subject.tx,
               decisionId: subject.id,
               cursor: referenceCursor,
+              countries: subject.countries,
             })
           : null;
       const provisions =

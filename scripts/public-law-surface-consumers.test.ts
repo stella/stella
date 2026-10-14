@@ -52,7 +52,6 @@ const CONSUMERS = {
   "apps/api/src/handlers/case-law/public-routes.ts": "pages",
   "apps/api/src/lib/case-law/decision-badges.ts": "pages",
   "apps/api/src/lib/case-law/language-alternates.ts": "pages",
-  "apps/api/src/handlers/case-law/decisions/citation-graph.ts": "pages",
   "apps/api/src/handlers/legislation/by-slug.ts": "pages",
   "apps/web/src/routes/law/-case-detail.logic.ts": "pages",
   "apps/web/src/components/chat/case-law-open.ts": "pages",
