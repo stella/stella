@@ -364,8 +364,9 @@ const setupSteps = (steps: readonly Step[]) =>
     .map(withoutContinuation)
     .map(withoutStepId)
     .map(withoutActionRef);
-// Shared runners need ephemeral cache ports. Preserve every other baseline input.
-const withIsolatedCachePort = (step: Step): Step => {
+// Task receipts share the GitHub cache server with Turbo; the versioned
+// namespace separates their format and relative paths make receipts portable.
+const withTaskResultCacheSetup = (step: Step): Step => {
   if (usesOf(step) !== "rharkor/caching-for-turbo@<pinned>") {
     return step;
   }
@@ -373,7 +374,16 @@ const withIsolatedCachePort = (step: Step): Step => {
     v.looseObject({ with: v.optional(v.record(v.string(), v.unknown())) }),
     step,
   ).with;
-  return { ...step, with: { ...inputs, "server-port": "0" } };
+  return {
+    ...step,
+    with: {
+      ...inputs,
+      "server-port": "0",
+      provider: "github",
+      "cache-prefix": "task-results-v1_",
+      "use-relative-cache-path": "true",
+    },
+  };
 };
 const ownedInstallFlags = '["--frozen-lockfile","--ignore-scripts"]';
 const scopedInstallActions = new Set([
@@ -829,6 +839,28 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
   });
 });
 
+test("task result cache checks belong exactly once to the rest leg", () => {
+  const checks = partitions.flatMap(({ steps }, index) =>
+    ownedSteps(steps)
+      .filter(
+        ({ run }) =>
+          typeof run === "string" &&
+          run.includes("scripts/task-result-cache.test.ts"),
+      )
+      .map((step) => ({ leg: partitionIds.at(index), step })),
+  );
+  expect(checks).toEqual([
+    {
+      leg: "ci-checks-rest",
+      step: {
+        name: "Task result cache contract",
+        if: PACKAGE_SCOPE,
+        run: "bun test scripts/task-result-cache.test.ts",
+      },
+    },
+  ]);
+});
+
 test("each CI check leg preserves merge-base setup, supply-chain protection and scope", () => {
   const result = v.parse(
     v.looseObject({
@@ -864,7 +896,7 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     } = base;
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps)
-      .map(withIsolatedCachePort)
+      .map(withTaskResultCacheSetup)
       .map((step) => withInstallCache(step, base))
       .map((step) => {
         if (

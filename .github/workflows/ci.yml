@@ -3985,7 +3985,13 @@ jobs:
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
         env:
           STELLA_VERIFY: check
-        run: bun test scripts/typecheck-cache.test.ts scripts/task-result-cache.test.ts
+        run: bun test scripts/typecheck-cache.test.ts
+
+      - name: Task result cache contract
+        if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
+        env:
+          STELLA_VERIFY: check
+        run: bun test scripts/task-result-cache.test.ts
 
       - name: Test CI check partition
         if: ${{ !cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
