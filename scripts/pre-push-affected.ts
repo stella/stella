@@ -17,6 +17,11 @@
 // scripts/pre-push-policy.test.ts). A host-level hook runs this only when the
 // machine has memory headroom, and CI still runs every check.
 //
+// Exit status: 0 the checks passed, 1 a check failed (block the push), 2 the
+// checks could not run: no base ref, or the 10-minute total time cap ran out.
+// A hook allows the push on 2, since CI runs the same checks. The last line
+// reports the elapsed time and the largest process's peak resident memory.
+//
 //   bun scripts/pre-push-affected.ts [--base origin/main] [--dry-run]
 
 import { existsSync } from "node:fs";
@@ -28,6 +33,14 @@ const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
 /** Matches CI's root script test timeout. */
 const SCRIPT_TEST_TIMEOUT_MS = "35000";
+/** Total wall-clock cap for every command together. */
+export const TOTAL_TIME_CAP_MS = 10 * 60_000;
+
+export const PRE_PUSH_EXIT = {
+  passed: 0,
+  failed: 1,
+  unavailable: 2,
+} as const;
 
 class PrePushAffectedError extends Error {
   readonly _tag = "PrePushAffectedError";
@@ -104,48 +117,46 @@ export const prePushCommands = ({
     : [["bun", "test", "--timeout", SCRIPT_TEST_TIMEOUT_MS, ...scriptTests]]),
 ];
 
-const changedPaths = (base: string): string[] => {
-  const git = (args: string[]) => {
+/** Changed paths against the merge base, or null when Git cannot answer. */
+const changedPaths = (base: string): string[] | null => {
+  const git = (args: string[]): string | null => {
     const result = Bun.spawnSync(["git", ...args], {
       cwd: REPO_ROOT,
       stdout: "pipe",
       stderr: "pipe",
     });
-    return result.exitCode === 0
-      ? result.stdout.toString()
-      : panic(
-          `git ${args.join(" ")} failed: ${result.stderr.toString().trim()}`,
-        );
+    if (result.exitCode === 0) {
+      return result.stdout.toString();
+    }
+    process.stderr.write(
+      `pre-push affected: git ${args.join(" ")} failed: ${result.stderr.toString().trim()}\n`,
+    );
+    return null;
   };
-  const mergeBase = git(["merge-base", base, "HEAD"]).trim();
-  return git([
+  const mergeBase = git(["merge-base", base, "HEAD"])?.trim();
+  if (mergeBase === undefined) {
+    return null;
+  }
+  const diff = git([
     "diff",
     "--name-only",
     "-z",
     "--diff-filter=d",
     mergeBase,
     "HEAD",
-  ])
-    .split("\0")
-    .filter((file) => file !== "");
+  ]);
+  return diff === null ? null : diff.split("\0").filter((file) => file !== "");
 };
 
-const main = (): number => {
-  const options = parsePrePushArgs(process.argv.slice(2));
-  const changed = changedPaths(options.base);
-  if (changed.length === 0) {
-    process.stdout.write("pre-push affected: no changes against the base\n");
-    return 0;
-  }
-  const commands = prePushCommands({
-    base: options.base,
-    scriptTests: rootScriptTests(changed, (file) =>
-      existsSync(path.join(REPO_ROOT, file)),
-    ),
-  });
+const run = (
+  commands: readonly string[][],
+  dryRun: boolean,
+): { status: number; peakRssBytes: number } => {
+  const deadline = Date.now() + TOTAL_TIME_CAP_MS;
+  let peakRssBytes = 0;
   for (const command of commands) {
     process.stdout.write(`pre-push affected: ${command.join(" ")}\n`);
-    if (options.dryRun) {
+    if (dryRun) {
       continue;
     }
     const result = Bun.spawnSync(command, {
@@ -153,16 +164,50 @@ const main = (): number => {
       stdout: "inherit",
       stderr: "inherit",
       env: { ...process.env, CODE_CHECK_CONCURRENCY: "1" },
+      timeout: Math.max(1, deadline - Date.now()),
+      killSignal: "SIGKILL",
     });
-    const status = childExitStatus(result);
-    if (status !== 0) {
+    peakRssBytes = Math.max(peakRssBytes, result.resourceUsage.maxRSS);
+    if (result.exitedDueToTimeout === true) {
+      process.stderr.write(
+        `pre-push affected: the ${TOTAL_TIME_CAP_MS / 60_000}-minute time cap ran out during: ${command.join(" ")}\nCI runs the same checks.\n`,
+      );
+      return { status: PRE_PUSH_EXIT.unavailable, peakRssBytes };
+    }
+    if (childExitStatus(result) !== 0) {
       process.stderr.write(
         `pre-push affected: failed: ${command.join(" ")}\nCI runs the same check; fix it before pushing.\n`,
       );
-      return status;
+      return { status: PRE_PUSH_EXIT.failed, peakRssBytes };
     }
   }
-  return 0;
+  return { status: PRE_PUSH_EXIT.passed, peakRssBytes };
+};
+
+const main = (): number => {
+  const startedAt = Date.now();
+  const options = parsePrePushArgs(process.argv.slice(2));
+  const changed = changedPaths(options.base);
+  if (changed === null) {
+    return PRE_PUSH_EXIT.unavailable;
+  }
+  if (changed.length === 0) {
+    process.stdout.write("pre-push affected: no changes against the base\n");
+    return PRE_PUSH_EXIT.passed;
+  }
+  const { status, peakRssBytes } = run(
+    prePushCommands({
+      base: options.base,
+      scriptTests: rootScriptTests(changed, (file) =>
+        existsSync(path.join(REPO_ROOT, file)),
+      ),
+    }),
+    options.dryRun,
+  );
+  process.stdout.write(
+    `pre-push affected: exit=${status} elapsed_s=${Math.round((Date.now() - startedAt) / 1000)} peak_rss_mib=${Math.round(peakRssBytes / 1024 ** 2)}\n`,
+  );
+  return status;
 };
 
 if (import.meta.main) {

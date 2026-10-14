@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
 
 import {
   parsePrePushArgs,
+  PRE_PUSH_EXIT,
   prePushCommands,
   rootScriptTests,
+  TOTAL_TIME_CAP_MS,
 } from "./pre-push-affected";
+
+const script = path.join(import.meta.dirname, "pre-push-affected.ts");
 
 describe("pre-push affected checks", () => {
   test("selects changed root script tests and the tests beside changed scripts", () => {
@@ -50,6 +55,30 @@ describe("pre-push affected checks", () => {
     expect(
       prePushCommands({ base: "origin/main", scriptTests: [] }),
     ).toHaveLength(2);
+  });
+
+  test("a missing base ref means the checks could not run, not that they failed", () => {
+    const result = Bun.spawnSync(
+      ["bun", script, "--base", "refs/missing/pre-push-base", "--dry-run"],
+      { stdout: "pipe", stderr: "pipe" },
+    );
+    expect(result.exitCode).toBe(PRE_PUSH_EXIT.unavailable);
+    expect(result.stderr.toString()).toContain("git merge-base");
+  });
+
+  test("a push with no changes against its base passes without running checks", () => {
+    const result = Bun.spawnSync(["bun", script, "--base", "HEAD"], {
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode).toBe(PRE_PUSH_EXIT.passed);
+    expect(result.stdout.toString()).toBe(
+      "pre-push affected: no changes against the base\n",
+    );
+  });
+
+  test("the total time cap is ten minutes", () => {
+    expect(TOTAL_TIME_CAP_MS).toBe(600_000);
   });
 
   test("parses the base and dry-run flags and rejects anything else", () => {
