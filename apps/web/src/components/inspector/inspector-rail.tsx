@@ -24,6 +24,7 @@ import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { DocumentIcon } from "@/components/document-icon";
+import { chatTabHeaderLabel } from "@/components/inspector/chat-context-label.logic";
 import { ExternalSourceLogo } from "@/components/inspector/external-reference-panel";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
@@ -93,7 +94,6 @@ export const InspectorRail = ({
     activeTab,
     activeSkillCatalogueData?.entries,
   );
-  const skillLabel = useSkillLabel();
   const railContextMenu = useRailContextMenu({ activeSkill, workspaceId });
   // The rail stands beside the main view, so a chat started here is about
   // whatever that view is showing.
@@ -126,16 +126,7 @@ export const InspectorRail = ({
   const collapsedGroupIds = useInspectorTabsStore((s) => s.collapsedGroupIds);
 
   const openContextChat = () => {
-    onOpenChat(
-      railChatOpenArgs({
-        activeSkill:
-          activeSkill === undefined
-            ? undefined
-            : { label: skillLabel(activeSkill), skill: activeSkill },
-        legalDocument,
-        workspaceId,
-      }),
-    );
+    onOpenChat(railChatOpenArgs({ activeSkill, legalDocument, workspaceId }));
   };
 
   const toggleLabel = (() => {
@@ -496,8 +487,27 @@ const flashTabElement = (el: HTMLElement) => {
   );
 };
 
+const ChatVerticalTab = ({
+  tab,
+  ...props
+}: VerticalTabProps & { tab: ChatTab }) => {
+  const t = useTranslations();
+  const skillLabel = useSkillLabel();
+  const label = chatTabHeaderLabel({
+    activeSkillName:
+      tab.activeSkill === undefined ? undefined : skillLabel(tab.activeSkill),
+    boundDocumentLabel: undefined,
+    newChatLabel: t("chat.newChat"),
+    tabLabel: tab.label,
+  });
+  return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
+};
+
 const VerticalTab = (props: VerticalTabProps) => {
   const { tab } = props;
+  if (tab.type === "chat") {
+    return <ChatVerticalTab {...props} tab={tab} />;
+  }
   if (tab.type !== "view") {
     return <VerticalTabCell {...props} />;
   }

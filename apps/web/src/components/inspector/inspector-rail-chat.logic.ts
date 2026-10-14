@@ -18,10 +18,7 @@ import type { ChatTab } from "@/components/inspector/inspector-store-types";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
 
 type RailChatOpenArgsOptions = {
-  /** The skill the rail's active tab runs, with its title as `useSkillLabel` gives it. */
-  activeSkill?:
-    | { label: string; skill: NonNullable<ChatTab["activeSkill"]> }
-    | undefined;
+  activeSkill?: ChatTab["activeSkill"];
   /** The corpus document the main view shows, when it shows one. */
   legalDocument?: ActiveLegalDocument | undefined;
   /** The matter the rail is mounted in, when it is mounted in one. */
@@ -45,12 +42,9 @@ export const railChatOpenArgs = ({
     legalDocument === undefined
       ? {}
       : { activeLegalKey: activeLegalDocumentRef(legalDocument).key };
-  // A skill open from the rail keeps naming its skill: the reader picked the
-  // skill, and the document is only where they happen to be standing.
-  const skillContext =
-    activeSkill === undefined
-      ? {}
-      : { activeSkill: activeSkill.skill, label: activeSkill.label };
+  // No label travels with the skill either: an untitled tab names its skill
+  // where it is drawn, so a built-in title follows the reader's language.
+  const skillContext = activeSkill === undefined ? {} : { activeSkill };
   const matterContext =
     workspaceId === undefined
       ? {}

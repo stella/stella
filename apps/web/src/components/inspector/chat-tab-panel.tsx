@@ -837,6 +837,7 @@ const ChatTabPanelChrome = ({
   children,
 }: ChatTabPanelChromeProps) => {
   const t = useTranslations();
+  const skillLabel = useSkillLabel();
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   // New-chat is not a header action: it lives in the composer's status
   // row (`ChatComposerDock`), uniform with every other chat surface.
@@ -862,6 +863,10 @@ const ChatTabPanelChrome = ({
       <InspectorTabHeader
         actions={actions}
         label={chatTabHeaderLabel({
+          activeSkillName:
+            tab.activeSkill === undefined
+              ? undefined
+              : skillLabel(tab.activeSkill),
           boundDocumentLabel,
           newChatLabel: t("chat.newChat"),
           tabLabel: tab.label,
