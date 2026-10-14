@@ -1462,14 +1462,18 @@
     },
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
+    "sendErrorConnectionFailed": "Nepavyko prisijungti prie pokalbio. Patikrinkite ryšį ir bandykite dar kartą.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
     "sendErrorLoopDetected": "DI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
     "sendErrorModelUnavailable": "Sukonfigūruotas DI modelis nebepasiekiamas. Paprašykite darbo srities administratoriaus atnaujinti modelį organizacijos nustatymuose.",
+    "sendErrorNotStarted": "Pokalbis vis dar užimtas. Šiek tiek palaukite ir bandykite dar kartą.",
+    "sendErrorPreparationFailed": "Nepavyko paruošti žinutės. Iš naujo atidarykite pokalbį ir bandykite dar kartą.",
     "sendErrorProviderBilling": "DI teikėjas pranešė apie atsiskaitymo problemą. Susisiekite su darbo srities administratoriumi.",
     "sendErrorProviderCredentialsRejected": "DI teikėjas atmetė sukonfigūruotus prisijungimo duomenis. Paprašykite darbo srities administratoriaus patikrinti API raktą organizacijos nustatymuose.",
     "sendErrorProviderUnavailable": "DI teikėjas laikinai nepasiekiamas. Pabandykite po akimirkos dar kartą.",
     "sendErrorQuotaExhausted": "DI teikėjo kvota išnaudota. Pabandykite dar kartą po minutės arba susisiekite su darbo srities administratoriumi.",
     "sendErrorStreamIncomplete": "DI atsakymas nutrūko nepasibaigęs. Bandykite dar kartą.",
+    "sendErrorTimedOut": "Pokalbio paslauga laiku neatsakė. Bandykite dar kartą.",
     "sendPrompt": "Siųsti pranešimą",
     "sendQueuedMessageNow": "Siųsti dabar",
     "sendWithoutAnonymization": "Siųsti be anonimizavimo",
@@ -2139,28 +2143,27 @@
     "showAllPermissions": "{count, plural, one {Rodyti # leidimą} few {Rodyti visus # leidimus} many {Rodyti visus # leidimo} other {Rodyti visus # leidimų}}",
     "signedInAs": "Prisijungta kaip <email>{accountEmail}</email>",
     "summaryAdminRead": "audito žurnalas",
-    "summaryAdminWrite": "organizacijos nariai ir nustatymai, įskaitant jų ištrynimą",
-    "summaryBillingWrite": "laiko įrašai, įskaitant jų ištrynimą",
-    "summaryChat": "pokalbiai, įskaitant jų ištrynimą",
-    "summaryContactsWrite": "kontaktai, įskaitant jų ištrynimą",
-    "summaryDocumentsWrite": "dokumentai, įskaitant jų ištrynimą",
+    "summaryAdminWrite": "organizacijos nariai ir nustatymai",
+    "summaryBillingWrite": "laiko įrašai",
+    "summaryChat": "pokalbiai",
+    "summaryContactsWrite": "kontaktai",
+    "summaryDocumentsWrite": "dokumentai",
     "summaryExternalMcps": "prijungti išoriniai įrankiai",
-    "summaryFeedback": "atsiliepimai",
-    "summaryKnowledgeWrite": "sąlygos ir peržiūros vadovai, įskaitant sąlygų ištrynimą",
+    "summaryKnowledgeWrite": "sąlygos ir peržiūros vadovai",
     "summaryLawRead": "viešus teisės aktus ir teismų praktiką",
-    "summaryLineChange": "<group>Gali keisti:</group> {items} ({count})",
+    "summaryLineChange": "<group>Kūrimas ir redagavimas:</group> {items}",
     "summaryLineOther": "<group>Taip pat:</group> {items}",
-    "summaryLineRead": "<group>Gali skaityti:</group> {items} ({count})",
-    "summaryMattersWrite": "bylos ir užduotys, įskaitant jų ištrynimą",
-    "summaryOfflineAccess": "nuolatinis prisijungimas",
-    "summaryOnboarding": "praktikos jurisdikcijos",
+    "summaryLineRead": "<group>Skaitymas:</group> {items}",
+    "summaryLineUse": "<group>Naudojimas:</group> {items}",
+    "summaryMattersWrite": "bylos ir užduotys",
     "summaryProfile": "profilis",
     "summaryRead": "dokumentai, bylos ir kontaktai",
     "summaryReadAnonymized": "anonimizuoti dokumentai ir bylos",
     "summarySearch": "paieška",
     "summarySearchAnonymized": "anonimizuota paieška",
-    "summarySkills": "įgūdžiai, įskaitant jų ištrynimą",
-    "summaryTemplates": "dokumentų šablonai, įskaitant jų ištrynimą",
+    "summarySkills": "įgūdžiai",
+    "summaryStaySignedIn": "Likti prisijungus",
+    "summaryTemplates": "dokumentų šablonai",
     "summaryTemplatesAnonymized": "anonimizuoti dokumentų šablonai",
     "title": "Suteikti prieigą",
     "unverifiedApp": "Nepatvirtinta programėlė",
@@ -3188,14 +3191,14 @@
         "steps": {
           "basics": {
             "body": "Pridėkite pavadinimą ir aprašą. Jei reikia, apribokite vienu dokumento tipu.",
-            "title": "Pavadinkite planą"
+            "title": "Pavadinkite peržiūros vadovą"
           },
           "create": {
-            "body": "Pradėkite nuo tuščio plano.",
-            "title": "Sukurkite planą"
+            "body": "Pradėkite nuo tuščio peržiūros vadovo.",
+            "title": "Sukurkite peržiūros vadovą"
           },
           "overview": {
-            "body": "Plane išsaugomi klausimai ir taisyklės kitiems dokumentams.",
+            "body": "Peržiūros vadove išsaugomi klausimai ir taisyklės kitiems dokumentams.",
             "title": "Išsaugokite peržiūros procesą"
           },
           "positions": {
@@ -3203,7 +3206,7 @@
             "title": "Pridėkite peržiūros taisykles"
           }
         },
-        "title": "Sukurkite planą"
+        "title": "Sukurkite peržiūros vadovą"
       },
       "tabularReview": {
         "description": "Išgaukite atsakymus iš daugelio failų vienu metu",
@@ -3636,6 +3639,12 @@
   },
   "knowledge": {
     "agentSkills": {
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Kurkite sutarčių peržiūros vadovą pozicija po pozicijos, remdamiesi anksčiau pasirašytomis sutartimis, trumpu pokalbiu ir įprastais rinkos standartais.",
+          "name": "Kurti peržiūros vadovą"
+        }
+      },
       "builtInSection": "Integruoti įgūdžiai",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
@@ -4464,7 +4473,7 @@
         "governingLaw": "Taikytina teisė",
         "liabilityCap": "Atsakomybės viršutinė riba",
         "missing": "Nepateikta",
-        "outsidePlaybook": "Neatitinka gairių",
+        "outsidePlaybook": "Neatitinka peržiūros vadovo",
         "termination": "Nutraukimas"
       },
       "searchPlaceholder": "Ką reikia daryti?",

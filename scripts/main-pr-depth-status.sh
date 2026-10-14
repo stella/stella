@@ -27,9 +27,13 @@ elif [[ -n "$SHA" ]] && jq -e \
   fi
 fi
 
+description="Main PR-depth checks: $state"
+if [[ -n "${PROOF_MAIN_BASE:-}" ]]; then
+  description="$description; main=$PROOF_MAIN_BASE"
+fi
 if [[ -n "$SHA" ]]; then
   bash "$gh_retry" api --method POST "repos/$REPOSITORY/statuses/$SHA" \
     -f context=main/pr-depth -f state="$state" \
-    -f description="Main PR-depth checks: $state" -f target_url="$RUN_URL"
+    -f description="$description" -f target_url="$RUN_URL"
 fi
 [[ "$state" == success ]]

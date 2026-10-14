@@ -295,8 +295,8 @@ test("the planner derives exactly prDepthJobs before any source checkout", () =>
 });
 
 test("the release gate requires heavy and PR-depth status provenance", () => {
-  expect(releaseHealth).toContain('validate_main_status "main/heavy"');
-  expect(releaseHealth).toContain('validate_main_status "main/pr-depth"');
+  expect(releaseHealth).toContain('validate_workflow_status "main/heavy"');
+  expect(releaseHealth).toContain('validate_workflow_status "main/pr-depth"');
 });
 
 test("the patch-id step leaves reuse off for an empty net change", () => {

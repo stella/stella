@@ -202,6 +202,10 @@ const context = ({
     CI_POSTGRES_PR_SELECTION: "",
   },
   inputs: { heavy_only: false, pr_depth_only: false },
+  steps: {
+    "completed-depth": { outputs: { normal_completion: "required" } },
+    "pilot-queue-plan": { outputs: { queue_jobs: "[]" } },
+  },
   needs: Object.fromEntries(
     needs.map((job) => {
       const outputs: Record<string, string> =
@@ -280,6 +284,32 @@ test("computed browser planning retains trust and suite scopes across queue dept
           }
         }
       }
+    }
+  }
+});
+
+test("fast merge-group browser admission follows the planned jobs until normal completion", () => {
+  for (const normalCompletion of ["required", "complete"]) {
+    for (const queuedBrowser of [false, true]) {
+      const value = context({
+        event: { event: "merge_group", message: "ordinary" },
+        variable: "thin",
+        queueDepth: "thin",
+      });
+      const planner = value.needs["ci-plan"];
+      if (!planner) {
+        panic("Missing browser planner context");
+      }
+      planner.outputs["suite_depth"] = "fast";
+      value.steps["completed-depth"].outputs.normal_completion =
+        normalCompletion;
+      value.steps["pilot-queue-plan"].outputs.queue_jobs = JSON.stringify(
+        queuedBrowser ? ["ci-browser"] : [],
+      );
+      expect(
+        selected(ci.jobs["ci-browser"]?.if, value),
+        JSON.stringify({ normalCompletion, queuedBrowser }),
+      ).toBe(queuedBrowser && normalCompletion !== "complete");
     }
   }
 });
@@ -693,7 +723,12 @@ const mainSelection = ({ workflow, event, variable }: MainSelectionOptions) => {
   }
   const dependentContext = {
     ...value,
-    needs: { validate: { result: validationResult, outputs: { run: "true" } } },
+    needs: {
+      validate: {
+        result: validationResult,
+        outputs: { run: "true", proof: "" },
+      },
+    },
   };
   const suites =
     mainTriggered(event.event) &&

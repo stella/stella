@@ -254,7 +254,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     );
     write(".gitignore", "node_modules/\n.turbo/\n**/.cache/\nruns.log\n");
     write(
-      "apps/api/src/mcp/apps/manifest.ts",
+      "apps/api/src/handlers/visual-sandbox/browser/manifest.ts",
       "export type Contract = string;\nconst internal = 1;\n",
     );
     write("apps/api/src/contract.test.ts", "// consumer input\n");
@@ -264,12 +264,12 @@ test("declaration consumers run after emission and invalidate with API source ch
         "import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';",
         "import path from 'node:path';",
         "const root = import.meta.dir;",
-        "const output = path.join(root, 'apps/api/.cache/typecheck-declarations/apps/api/src/mcp/apps/manifest.d.ts');",
+        "const output = path.join(root, 'apps/api/.cache/typecheck-declarations/apps/api/src/handlers/visual-sandbox/browser/manifest.d.ts');",
         "const prepared = path.join(root, 'apps/api/.cache/typecheck-declarations');",
         "const configs = ['roots.json', 'src.json', 'tests.json'];",
         "if (process.argv[2] === '@stll/api#generate:typecheck-declarations') {",
         "mkdirSync(path.dirname(output), { recursive: true });",
-        "writeFileSync(output, readFileSync(path.join(root, 'apps/api/src/mcp/apps/manifest.ts'), 'utf8').split('\\n')[0]);",
+        "writeFileSync(output, readFileSync(path.join(root, 'apps/api/src/handlers/visual-sandbox/browser/manifest.ts'), 'utf8').split('\\n')[0]);",
         `const shared = path.join(root, ${JSON.stringify(shared)});`,
         "if (existsSync(shared)) writeFileSync(output, readFileSync(shared, 'utf8'));",
         "for (const name of configs) writeFileSync(path.join(prepared, name), JSON.stringify({ files: [], prepared: true }));",
@@ -330,7 +330,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     expect(cold).toHaveLength(consumers.size + 1);
     const output = path.join(
       directory,
-      "apps/api/.cache/typecheck-declarations/apps/api/src/mcp/apps/manifest.d.ts",
+      "apps/api/.cache/typecheck-declarations/apps/api/src/handlers/visual-sandbox/browser/manifest.d.ts",
     );
     rmSync(path.join(directory, "apps/api/.cache/typecheck-declarations"), {
       recursive: true,
@@ -352,7 +352,7 @@ test("declaration consumers run after emission and invalidate with API source ch
       ).toBe(true);
     }
     write(
-      "apps/api/src/mcp/apps/manifest.ts",
+      "apps/api/src/handlers/visual-sandbox/browser/manifest.ts",
       "export type Contract = number;\nconst internal = 1;\n",
     );
     run(command);
@@ -363,7 +363,7 @@ test("declaration consumers run after emission and invalidate with API source ch
     // Turbo keys consumers on the producer's input hash, not declaration bytes:
     // internal changes deliberately invalidate consumers even with identical emit.
     write(
-      "apps/api/src/mcp/apps/manifest.ts",
+      "apps/api/src/handlers/visual-sandbox/browser/manifest.ts",
       "export type Contract = number;\nconst internal = 2;\n",
     );
     run(command);
@@ -381,13 +381,13 @@ test("declaration consumers run after emission and invalidate with API source ch
     const originalInputs = declarationTask["inputs"];
     declarationTask["inputs"] = [
       ...originalInputs,
-      "!src/mcp/apps/manifest.ts",
+      "!src/handlers/visual-sandbox/browser/manifest.ts",
     ];
     writeTasks();
     run(command);
     const beforeExcludedRoot = executions();
     write(
-      "apps/api/src/mcp/apps/manifest.ts",
+      "apps/api/src/handlers/visual-sandbox/browser/manifest.ts",
       "export type Contract = boolean;\nconst internal = 2;\n",
     );
     run(command);
@@ -660,7 +660,7 @@ test("each API test owner invalidates cached checking and rejects a newly introd
     }
     check(0);
     // A directory excluded from root discovery can still enter via imports.
-    const imported = "src/mcp/apps/manifest.ts";
+    const imported = "src/handlers/visual-sandbox/browser/manifest.ts";
     expect(sourceTask["inputs"]).toContain("**");
     write(`apps/api/${imported}`, valid);
     const relative = repoRelativePath(path.dirname(coupled), imported).replace(
@@ -677,7 +677,7 @@ test("each API test owner invalidates cached checking and rejects a newly introd
       JSON.stringify({
         compilerOptions: { strict: true, noEmit: true, types: [] },
         files: [coupled],
-        exclude: ["src/mcp/apps"],
+        exclude: ["src/handlers/visual-sandbox/browser"],
       }),
     );
     regenerateInputs();
