@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { rootDb } from "@/api/db/root";
 import { documentProcessingEnvInvariantViolation } from "@/api/env-document-processing-worker-schema";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
@@ -58,6 +60,21 @@ describe("createBullMqWorkerHost mode", () => {
   });
 });
 
+describe("owner-connection host admission", () => {
+  test("every queue host checks its login before starting workers", () => {
+    const hosts = sourceFiles(SRC_DIR).filter((file) =>
+      /\bcreateBullMqWorkerHost\s*\(/u.test(readFileSync(file, "utf-8")),
+    );
+    expect(hosts.length).toBeGreaterThan(0);
+    for (const file of hosts) {
+      const source = readFileSync(file, "utf-8");
+      const check = source.indexOf("await assertDatabaseLoginPosture(rootDb)");
+      expect(check).toBeGreaterThanOrEqual(0);
+      expect(check).toBeLessThan(source.indexOf("createBullMqWorkerHost("));
+    }
+  });
+});
+
 describe("background queue workers", () => {
   test("every queue worker is started by a host, so the mode switch covers it", () => {
     const hosted = new Set(
@@ -71,7 +88,7 @@ describe("background queue workers", () => {
     );
     const unhosted = sourceFiles(SRC_DIR)
       .filter((file) => /new BullMqWorker\b/u.test(readFileSync(file, "utf-8")))
-      .map((file) => path.relative(SRC_DIR, file))
+      .map((file) => repoRelativePath(SRC_DIR, file))
       .filter((file) => !hosted.has(file));
 
     expect(unhosted).toEqual([]);

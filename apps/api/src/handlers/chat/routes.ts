@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import createMessageExport from "@/api/handlers/chat/export/create";
 import forkThread from "@/api/handlers/chat/fork/create";
 import getModelOptions from "@/api/handlers/chat/get-model-options";
@@ -81,6 +82,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .get("/threads", getThreads.handler, {
     permissions: getThreads.config.permissions,
     query: getThreads.config.query,
+  })
+  .get("/decision-threads/:decisionId", getDecisionChatThread.handler, {
+    params: getDecisionChatThread.config.params,
+    permissions: getDecisionChatThread.config.permissions,
   })
   .get("/model-options", getModelOptions.handler, {
     permissions: getModelOptions.config.permissions,

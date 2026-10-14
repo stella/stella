@@ -26,6 +26,7 @@ import {
   DatabaseError,
   DatabaseRlsError,
 } from "@/api/lib/errors/tagged-errors";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   getPgDriverErrorCode,
   getPgErrorCode,
@@ -98,6 +99,7 @@ type RunScopedTransactionOptions<
   organizationId: SafeId<"organization">;
   userId: SafeId<"user"> | null;
   workspaceScope: WorkspaceScope;
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
 };
 
 type SetScopedTransactionSettingsOptions = {
@@ -234,13 +236,22 @@ const runScopedTransaction = async <
   organizationId,
   userId,
   workspaceScope,
+  featureAccessSnapshot,
 }: RunScopedTransactionOptions<TTransaction, T>): Promise<T> =>
   await database.transaction(async (tx: TTransaction) => {
-    const featureIds = await resolveScopedFeatureIds({
-      tx,
-      organizationId,
-      userId,
-    });
+    if (
+      featureAccessSnapshot !== undefined &&
+      (featureAccessSnapshot.organizationId !== organizationId ||
+        featureAccessSnapshot.userId !== userId)
+    ) {
+      panic("Feature snapshot must belong to the database scope");
+    }
+    const featureIds =
+      featureAccessSnapshot === undefined
+        ? await resolveScopedFeatureIds({ tx, organizationId, userId })
+        : [...featureAccessSnapshot.decisions]
+            .filter(([, decision]) => decision.status === "enabled")
+            .map(([featureId]) => featureId);
     await setScopedTransactionSettings({
       tx,
       organizationId,
@@ -290,6 +301,8 @@ export const createTenantlessDb =
     });
 
 type MembershipScopedDbOptions = {
+  /** Authenticated request decisions reused for that request only. */
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   organizationId: SafeId<"organization">;
   /**
    * Small, operation-bounded set whose access was already proved by trusted
@@ -312,6 +325,7 @@ export const createMembershipScopedDb =
       organizationId,
       serverValidatedWorkspaceIds,
       userId,
+      featureAccessSnapshot,
     }: MembershipScopedDbOptions,
   ) =>
   async <T>(fn: (tx: TTransaction) => Promise<T>): Promise<T> =>
@@ -323,6 +337,7 @@ export const createMembershipScopedDb =
       },
       organizationId,
       userId,
+      featureAccessSnapshot,
       fn,
     });
 
@@ -473,6 +488,7 @@ export const createMembershipSafeDb =
       organizationId,
       serverValidatedWorkspaceIds,
       userId,
+      featureAccessSnapshot,
     }: MembershipScopedDbOptions,
   ) =>
   async <T>(
@@ -490,6 +506,7 @@ export const createMembershipSafeDb =
             },
             organizationId,
             userId,
+            featureAccessSnapshot,
             fn,
           }),
         catch: toSafeDbError,

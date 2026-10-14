@@ -1,17 +1,19 @@
 import { Result } from "better-result";
 import {
   afterAll,
-  beforeAll,
   describe,
   expect,
   mock,
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import type { Context } from "elysia";
+import * as v from "valibot";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
+import { desktopTimeEntryBatchResponseSchema } from "@stll/api-contract/desktop-time-entries";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import {
   SIGNAL_KIND,
@@ -32,6 +34,7 @@ import {
   chatTurns,
   documentTranslationRuns,
   desktopPresence,
+  desktopTimeEntryBatches,
   entities,
   entityViews,
   entityVersions,
@@ -48,6 +51,7 @@ import {
   searchHistoryEntries,
   sellerProfiles,
   signals,
+  timeEntries,
   timeTimers,
   vatRates,
   WORK_OBLIGATION_STATUS,
@@ -55,9 +59,11 @@ import {
   featureEnrolments,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import readBilingualRun from "@/api/handlers/bilingual-translations/read-run";
 import readBillingCodes from "@/api/handlers/billing-codes/list";
 import lookupResearchAnswers from "@/api/handlers/case-law/research/answers-lookup";
+import getDecisionChatThread from "@/api/handlers/chat/decision-threads/get";
 import exportChatMessage from "@/api/handlers/chat/export/create";
 import forkChatThread from "@/api/handlers/chat/fork/create";
 import readSuggestedChatPrompts from "@/api/handlers/chat/get-suggested-prompts";
@@ -98,6 +104,14 @@ import { joinChatTurn, probeChatTurn } from "@/api/handlers/chat/turns/resume";
 import updateChatThreadModel from "@/api/handlers/chat/update-thread-model";
 import readContactById from "@/api/handlers/contacts/get";
 import readDesktopPresence from "@/api/handlers/desktop-presence/read";
+import {
+  createDesktopTimeEntryBatchEndpoint,
+  desktopBatchFingerprint,
+} from "@/api/handlers/desktop-time-entries/batch";
+import { createDesktopTimeEntryBatchStatusEndpoint } from "@/api/handlers/desktop-time-entries/batch-status";
+import { createDesktopMatterCandidatesEndpoint } from "@/api/handlers/desktop-time-entries/candidates";
+import { createDesktopTimeEntryEndpoint } from "@/api/handlers/desktop-time-entries/create";
+import { createDesktopMattersEndpoint } from "@/api/handlers/desktop-time-entries/matters";
 import listDocumentReviewSources from "@/api/handlers/document-reviews/list-sources";
 import readDocumentTranslationRun from "@/api/handlers/document-translations/runs/get";
 import { createDocumentCompareHandler } from "@/api/handlers/documents/compare";
@@ -161,8 +175,13 @@ import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -176,6 +195,8 @@ import type {
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 type TestHandlerContext = {
   createAuditRecorder: () => AuditRecorder;
@@ -196,6 +217,7 @@ type TestHandlerContext = {
   route: string;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
   scopedDb: ReturnType<typeof createScopedDb<TestDatabaseTransaction>>;
+  set: Context["set"];
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user"> };
   workspaceId: SafeId<"workspace">;
@@ -422,6 +444,14 @@ const chatDeleteThreadB = toSafeId<"chatThread">(
 const chatSendThreadB = toSafeId<"chatThread">(
   "22222222-2222-4222-8222-222222222267",
 );
+// The same user's conversation about a public decision, under organization
+// B: a reader in organization A asking about that decision must not find it.
+const chatDecisionThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222293",
+);
+const chatDecisionB = toSafeId<"caseLawDecision">(
+  "22222222-2222-4222-8222-222222222294",
+);
 const chatForkFromA = toSafeId<"chatThread">(
   "11111111-1111-4111-8111-111111111268",
 );
@@ -430,6 +460,12 @@ const chatForkFromB = toSafeId<"chatThread">(
 );
 const chatRevisionThreadB = toSafeId<"chatThread">(
   "22222222-2222-4222-8222-222222222290",
+);
+const chatMatterThreadB = toSafeId<"chatThread">(
+  "22222222-2222-4222-8222-222222222295",
+);
+const chatMatterMessageB = toSafeId<"chatMessage">(
+  "22222222-2222-4222-8222-222222222296",
 );
 const chatRevisionAcceptMessageB = toSafeId<"chatMessage">(
   "22222222-2222-4222-8222-222222222291",
@@ -589,6 +625,7 @@ const savedSearchCriteria = (
 
 const isolationCases: IsolationCase[] = [
   ...desktopPresenceIsolationCases(),
+  ...desktopTimeEntryIsolationCases(),
   ...readerAnswerIsolationCases(),
   {
     name: "user file content",
@@ -1424,6 +1461,39 @@ const isolationCases: IsolationCase[] = [
       expect(globalChatThreadIds(result)).toContain(chatThreadB),
   },
   {
+    name: "chat thread list filtered by matter",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(listChatThreads, workspaceA, {
+        query: { workspaceId: ids.wsB1 },
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(listChatThreads, sameUserWorkspaceB, {
+        query: { workspaceId: ids.wsB1 },
+      }),
+    expectDenied: (result) => {
+      expectStatus(404)(result);
+      expect(JSON.stringify(result)).not.toContain(chatMatterThreadB);
+    },
+    expectPositive: (result) =>
+      expect(matterChatThreadIds(result)).toEqual([chatMatterThreadB]),
+  },
+  {
+    name: "chat decision conversation lookup",
+    runAAgainstB: async ({ workspaceA }) =>
+      await runHandler(getDecisionChatThread, workspaceA, {
+        params: { decisionId: chatDecisionB },
+        query: {},
+      }),
+    runBPositive: async ({ sameUserWorkspaceB }) =>
+      await runHandler(getDecisionChatThread, sameUserWorkspaceB, {
+        params: { decisionId: chatDecisionB },
+        query: {},
+      }),
+    expectDenied: (result) => expect(result).toEqual({ threadId: null }),
+    expectPositive: (result) =>
+      expect(result).toEqual({ threadId: chatDecisionThreadB }),
+  },
+  {
     name: "chat messages list",
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listChatMessages, workspaceA, {
@@ -2126,10 +2196,29 @@ const chatSkillFileQuery = (testIds: TestIds) => ({
   webSearch: false,
 });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb
+    .update(authUser)
+    .set({ email: "desktop-review-a@example.test" })
+    .where(eq(authUser.id, ids.userA1));
+  await testDb
+    .update(authUser)
+    .set({ email: "desktop-review@example.test" })
+    .where(eq(authUser.id, ids.userB1));
+  testState.setConfig("FEATURE_TIME_BILLING", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    ...env.API_FEATURE_ACCESS_GRANTS,
+    "activity-timeline": [
+      {
+        type: "member",
+        organizationId: ids.orgB,
+        email: "desktop-review@example.test",
+      },
+    ],
+  });
   await testDb
     .update(authUser)
     .set({ emailVerified: true })
@@ -2171,6 +2260,17 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
+  await testDb.insert(desktopTimeEntryBatches).values({
+    organizationId: ids.orgB,
+    userId: ids.userB1,
+    idempotencyKey: "desktop-review-status",
+    status: "committed",
+    requestFingerprint: desktopBatchFingerprint({
+      idempotencyKey: "desktop-review-status",
+      entries: [{ matterId: ids.wsB1, ...desktopTimeEntryBody }],
+    }),
+    result: { entries: [{ id: ids.timeEntryB1, matterId: ids.wsB1 }] },
+  });
   await testDb.insert(desktopPresence).values({
     userId: ids.userA1,
     organizationId: ids.orgB,
@@ -2530,12 +2630,17 @@ beforeAll(async () => {
     chatThreadOfB(chatTurnThreadB),
     chatThreadOfB(chatDeleteThreadB),
     chatThreadOfB(chatSendThreadB),
+    { ...chatThreadOfB(chatDecisionThreadB), subjectDecisionId: chatDecisionB },
   ]);
   const chatText = (text: string) => ({
     version: 1 as const,
     data: [{ type: "text" as const, text }],
   });
   await testDb.insert(chatThreads).values(chatThreadOfB(chatRevisionThreadB));
+  await testDb.insert(chatThreads).values({
+    ...chatThreadOfB(chatMatterThreadB),
+    workspaceId: ids.wsB1,
+  });
   await testDb.insert(chatMessages).values(
     [chatRevisionAcceptMessageB, chatRevisionRevertMessageB].map((id) => ({
       id,
@@ -2557,6 +2662,15 @@ beforeAll(async () => {
     createdBy: ids.userA1,
   });
   const chatAskedAt = new Date("2026-09-01T09:00:00.000Z");
+  await testDb.insert(chatMessages).values({
+    id: chatMatterMessageB,
+    threadId: chatMatterThreadB,
+    userId: ids.userA1,
+    workspaceId: ids.wsB1,
+    role: "user",
+    content: chatText("Summarise the matter."),
+    createdAt: chatAskedAt,
+  });
   await testDb.insert(chatMessages).values([
     {
       id: chatUserMessageB,
@@ -2756,6 +2870,7 @@ const createWorkspaceContext = ({
     route: "/security/cross-tenant-handler",
     safeDb,
     scopedDb,
+    set: { headers: {} },
     session: { activeOrganizationId: organizationId },
     user: { id: userId },
     workspaceId,
@@ -2784,6 +2899,261 @@ const runHandler = async <TContext>(
     return error;
   }
 };
+
+const desktopTimeEntryBody = {
+  dateWorked: "2026-10-09",
+  timezoneId: "UTC",
+  durationMinutes: 6,
+  narrative: "Reviewed agreement",
+  billable: false,
+};
+
+const desktopAccountForContext = (context: TestHandlerContext) => {
+  const signer = createDesktopDeviceSigner();
+  return async (request: Request) => {
+    const device = await signer;
+    const keyId = `desktop-review-${context.session.activeOrganizationId}`;
+    const credential = "fixture-credential";
+    return Result.ok({
+      consumedProof: await claimFixtureDeviceProof({
+        request: await device.signRequest({ request, credential }),
+        deviceJkt: device.deviceJkt,
+        keyId,
+        credential,
+      }),
+      organizationId: context.session.activeOrganizationId,
+      userId: context.user.id,
+      keyId,
+      memberRole: context.memberRole,
+      scopedDb: asTestRaw<ScopedDb>(context.scopedDb),
+    });
+  };
+};
+
+const enableDesktopActivityForContext = ({ session }: TestHandlerContext) => {
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
+    ...env.API_FEATURE_ACCESS_GRANTS,
+    "activity-timeline": [
+      ...(env.API_FEATURE_ACCESS_GRANTS["activity-timeline"] ?? []),
+      {
+        type: "member",
+        organizationId: session.activeOrganizationId,
+        email: "desktop-review-a@example.test",
+      },
+    ],
+  });
+};
+
+const expectCreatedDesktopTimeEntry = async (
+  entryId: SafeId<"timeEntry">,
+  context: TestHandlerContext,
+) => {
+  const rows = await testDb
+    .select({
+      id: timeEntries.id,
+      workspaceId: timeEntries.workspaceId,
+      organizationId: timeEntries.organizationId,
+      userId: timeEntries.userId,
+    })
+    .from(timeEntries)
+    .where(
+      and(
+        eq(timeEntries.id, entryId),
+        eq(timeEntries.workspaceId, context.workspaceId),
+        eq(timeEntries.organizationId, context.session.activeOrganizationId),
+        eq(timeEntries.userId, context.user.id),
+      ),
+    );
+  expect(rows).toContainEqual({
+    id: entryId,
+    workspaceId: context.workspaceId,
+    organizationId: context.session.activeOrganizationId,
+    userId: context.user.id,
+  });
+};
+
+function desktopTimeEntryIsolationCases(): IsolationCase[] {
+  return [
+    {
+      name: "desktop matter candidates",
+      runAAgainstB: async ({ workspaceA }) => {
+        enableDesktopActivityForContext(workspaceA);
+        return await runHandler(
+          createDesktopMatterCandidatesEndpoint(
+            desktopAccountForContext(workspaceA),
+          ),
+          workspaceA,
+          {},
+        );
+      },
+      runBPositive: async ({ workspaceB }) =>
+        await runHandler(
+          createDesktopMatterCandidatesEndpoint(
+            desktopAccountForContext(workspaceB),
+          ),
+          workspaceB,
+          {},
+        ),
+      expectDenied: (result, { ids: testIds }) => {
+        const matters = recordField(result, "matters");
+        expect(matters).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: testIds.wsA1 }),
+          ]),
+        );
+        expect(matters).not.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: testIds.wsB1 }),
+          ]),
+        );
+      },
+      expectPositive: (result, { ids: testIds }) =>
+        expect(recordField(result, "matters")).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: testIds.wsB1 }),
+          ]),
+        ),
+    },
+    {
+      name: "desktop matters",
+      runAAgainstB: async ({ workspaceA }) => {
+        enableDesktopActivityForContext(workspaceA);
+        return await runHandler(
+          createDesktopMattersEndpoint(desktopAccountForContext(workspaceA)),
+          workspaceA,
+          { query: {} },
+        );
+      },
+      runBPositive: async ({ workspaceB }) =>
+        await runHandler(
+          createDesktopMattersEndpoint(desktopAccountForContext(workspaceB)),
+          workspaceB,
+          { query: {} },
+        ),
+      expectDenied: (result, { ids: testIds }) => {
+        const matters = recordField(result, "matters");
+        expect(matters).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: testIds.wsA1 }),
+          ]),
+        );
+        expect(matters).not.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: testIds.wsB1 }),
+          ]),
+        );
+      },
+      expectPositive: (result, { ids: testIds }) =>
+        expect(recordField(result, "matters")).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ id: testIds.wsB1 }),
+          ]),
+        ),
+    },
+    {
+      name: "desktop time entry batch",
+      runAAgainstB: async ({ ids: testIds, workspaceA }) => {
+        enableDesktopActivityForContext(workspaceA);
+        return await runHandler(
+          createDesktopTimeEntryBatchEndpoint(
+            desktopAccountForContext(workspaceA),
+          ),
+          workspaceA,
+          {
+            body: {
+              idempotencyKey: "desktop-review-batch",
+              entries: [{ matterId: testIds.wsB1, ...desktopTimeEntryBody }],
+            },
+          },
+        );
+      },
+      runBPositive: async ({ ids: testIds, workspaceB }) => {
+        const result = await runHandler(
+          createDesktopTimeEntryBatchEndpoint(
+            desktopAccountForContext(workspaceB),
+          ),
+          workspaceB,
+          {
+            body: {
+              idempotencyKey: "desktop-review-batch",
+              entries: [{ matterId: testIds.wsB1, ...desktopTimeEntryBody }],
+            },
+          },
+        );
+        const response = v.parse(desktopTimeEntryBatchResponseSchema, result);
+        expect(response.entries).toHaveLength(1);
+        for (const entry of response.entries) {
+          await expectCreatedDesktopTimeEntry(
+            toSafeId<"timeEntry">(entry.id),
+            workspaceB,
+          );
+        }
+        return result;
+      },
+      expectDenied: expectStatus(404),
+      expectPositive: (result, { ids: testIds }) =>
+        expect(recordField(result, "entries")).toEqual([
+          expect.objectContaining({
+            id: expect.any(String),
+            matterId: testIds.wsB1,
+          }),
+        ]),
+    },
+    {
+      name: "desktop time entry batch status",
+      runAAgainstB: async ({ workspaceA }) => {
+        enableDesktopActivityForContext(workspaceA);
+        return await runHandler(
+          createDesktopTimeEntryBatchStatusEndpoint(
+            desktopAccountForContext(workspaceA),
+          ),
+          workspaceA,
+          { body: { idempotencyKey: "desktop-review-status" } },
+        );
+      },
+      runBPositive: async ({ workspaceB }) =>
+        await runHandler(
+          createDesktopTimeEntryBatchStatusEndpoint(
+            desktopAccountForContext(workspaceB),
+          ),
+          workspaceB,
+          { body: { idempotencyKey: "desktop-review-status" } },
+        ),
+      expectDenied: (result) => expect(result).toEqual({ type: "cancelled" }),
+      expectPositive: (result, { ids: testIds }) =>
+        expect(result).toEqual({
+          type: "committed",
+          entries: [{ id: testIds.timeEntryB1, matterId: testIds.wsB1 }],
+        }),
+    },
+    {
+      name: "desktop time entry create",
+      runAAgainstB: async ({ ids: testIds, workspaceA }) => {
+        enableDesktopActivityForContext(workspaceA);
+        return await runHandler(
+          createDesktopTimeEntryEndpoint(desktopAccountForContext(workspaceA)),
+          workspaceA,
+          { params: { workspaceId: testIds.wsB1 }, body: desktopTimeEntryBody },
+        );
+      },
+      runBPositive: async ({ ids: testIds, workspaceB }) => {
+        const result = await runHandler(
+          createDesktopTimeEntryEndpoint(desktopAccountForContext(workspaceB)),
+          workspaceB,
+          { params: { workspaceId: testIds.wsB1 }, body: desktopTimeEntryBody },
+        );
+        await expectCreatedDesktopTimeEntry(
+          toSafeId<"timeEntry">(v.parse(v.string(), recordField(result, "id"))),
+          workspaceB,
+        );
+        return result;
+      },
+      expectDenied: expectStatus(404),
+      expectPositive: (result) =>
+        expect(result).toEqual({ id: expect.any(String) }),
+    },
+  ];
+}
 
 function desktopPresenceIsolationCases(): IsolationCase[] {
   return [
@@ -2973,6 +3343,21 @@ function globalChatThreadIds(result: unknown): unknown[] {
     throw new TypeError("Expected a chat thread list response");
   }
   return threads.map((thread) => recordField(thread, "id"));
+}
+
+function matterChatThreadIds(result: unknown): unknown[] {
+  expect(getStatusCode(result)).toBeNull();
+  const groups = recordField(result, "workspaces");
+  if (!Array.isArray(groups)) {
+    throw new TypeError("Expected a chat thread list response");
+  }
+  return groups.flatMap((group) => {
+    const threads = recordField(group, "threads");
+    if (!Array.isArray(threads)) {
+      throw new TypeError("Expected a chat thread group");
+    }
+    return threads.map((thread) => recordField(thread, "id"));
+  });
 }
 
 function chatMessageIds(result: unknown): unknown[] {

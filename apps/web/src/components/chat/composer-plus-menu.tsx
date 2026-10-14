@@ -1,11 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import type { ComponentProps, RefObject } from "react";
 
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import type { Editor } from "@tiptap/core";
 import { Result } from "better-result";
@@ -25,6 +21,7 @@ import {
   ServerIcon,
   SkillIcon,
 } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuCheckboxItem,
@@ -99,7 +96,6 @@ import {
 } from "@/components/chat/composer-submenu-search";
 import { slashItemChipAttrs } from "@/components/chat/prompt-slash-extension";
 import type { SlashItem } from "@/components/chat/prompt-slash-extension";
-import { MatterIcon } from "@/components/matter-icon";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useSetChatWebSearch } from "@/features/chat/components/chat-web-search-toggle";
 import { guideAnchor } from "@/features/guides/guide-anchor";
@@ -112,11 +108,11 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useSkillsPages } from "@/lib/knowledge/built-in-skills";
 import {
   knowledgeKeys,
   mcpConnectionsOptions,
   mcpConnectorsOptions,
-  skillsOptions,
 } from "@/lib/knowledge/queries";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import {
@@ -690,9 +686,10 @@ export const ComposerSkillsMenu = ({
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   useFocusSearchOnOpen(open, searchRef);
-  const skillsQuery = useInfiniteQuery({
-    ...skillsOptions(activeOrganizationId, userId),
+  const skillsQuery = useSkillsPages({
     enabled,
+    organizationId: activeOrganizationId,
+    userId,
   });
   const skillsView = useQueryView(skillsQuery, {
     isEmpty: (data) =>

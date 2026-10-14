@@ -1,8 +1,9 @@
 // Crawl-posture convention guard.
 //
 // Stella splits its web surfaces in two: public SSR pages (the landing site)
-// must be fully crawlable — indexed by search engines AND readable by LLM bots
-// — while the private authenticated app must be invisible to crawlers. This
+// must remain indexable by search engines and readable by search/answer
+// crawlers; training crawlers may be blocked. The private authenticated app
+// must be invisible to crawlers. This
 // guard makes that split structural: every app under apps/ declares a
 // `crawlPosture` in its package.json, and CI verifies the on-disk artifacts
 // (robots.txt, per-page robots meta tags, llms.txt) actually match the declared
@@ -10,8 +11,9 @@
 //
 // Postures:
 //   public   — an indexable SEO/LLM surface. robots.txt must invite crawlers
-//              (a Sitemap, no wildcard or bot-specific deny-all), an llms.txt
-//              must exist, and no source page may carry a `noindex` robots meta.
+//              (a Sitemap, no wildcard deny-all, and bot-specific deny-all
+//              only for known training crawlers), an llms.txt must exist, and
+//              no source page may carry a `noindex` robots meta.
 //   private  — an authenticated app that must stay invisible to crawlers.
 //              robots.txt must deny all (`User-agent: *` + `Disallow: /`) with
 //              no Sitemap and no `Allow:` rule (a more specific Allow can beat
@@ -46,6 +48,10 @@ import {
   createPublicCrawlRules,
   PUBLIC_CRAWL_ROUTES,
 } from "../apps/web/src/public-crawl-policy";
+import {
+  PUBLIC_ROBOTS_ALLOWED_SEARCH_USER_AGENTS,
+  PUBLIC_ROBOTS_DENIED_USER_AGENTS,
+} from "../packages/api-contract/src/public-crawl-rules";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -210,20 +216,20 @@ const hasPermissiveBotGroup = (robotsText: string): boolean =>
       ),
   );
 
-// A non-wildcard group (e.g. `User-agent: Googlebot`) that denies all itself.
-// Per the robots.txt spec, a crawler follows the MOST SPECIFIC group that names
-// it and ignores the wildcard fallback entirely — so a `User-agent: Googlebot`
-// group with `Disallow: /` blocks that bot even though the wildcard
-// `User-agent: *` group invites everyone else. `hasDenyAll` only inspects the
-// wildcard group, so it does not catch this. A group whose stacked agents
-// include `*` shares the wildcard's rules and is exempt. This mirrors
-// `hasPermissiveBotGroup` on the private side: there a bot-specific group can
-// carve an unwanted opening in a deny-all; here one can carve an unwanted
-// closure in an invite-all.
-const hasBotSpecificDenyAll = (robotsText: string): boolean =>
+// A non-wildcard group that denies all and names anything except a known
+// training crawler. Public search crawlers and unknown agents must retain the
+// wildcard group's invitation; known training crawlers may be opted out.
+const hasUnexpectedBotSpecificDenyAll = (robotsText: string): boolean =>
   parseRobotsGroups(robotsText).some(
     (group) =>
       !group.agents.includes("*") &&
+      group.agents.some(
+        (agent) =>
+          !PUBLIC_ROBOTS_DENIED_USER_AGENTS.some(
+            (knownTrainingAgent) =>
+              agent.toLowerCase() === knownTrainingAgent.toLowerCase(),
+          ),
+      ) &&
       group.rules.some(
         (rule) => rule.field === "disallow" && rule.value === "/",
       ),
@@ -463,13 +469,13 @@ const checkPublic = (appDir: string, app: string): Violation[] => {
         fix: "remove the deny-all; a public surface must invite crawlers.",
       });
     }
-    if (hasBotSpecificDenyAll(robots)) {
+    if (hasUnexpectedBotSpecificDenyAll(robots)) {
       violations.push({
         app,
         code: "public-robots-bot-specific-deny-all",
         message:
-          "public app public/robots.txt contains a bot-specific `User-agent` group that denies all.",
-        fix: "remove the bot-specific group, or its `Disallow: /`: a named bot follows only its own most-specific group and ignores the wildcard invite.",
+          "public app public/robots.txt denies a named crawler that is not classified as training-only.",
+        fix: "only deny known training crawlers; search, unknown and wildcard groups must remain allowed on a public surface.",
       });
     }
     if (!hasSitemapLine(robots)) {
@@ -826,8 +832,8 @@ const DENY_ALL_ROBOTS_WITH_BOT_CARVEOUT =
 const PUBLIC_ROBOTS =
   "User-agent: *\nAllow: /\n\nSitemap: https://example.com/sitemap.xml\n";
 const PUBLIC_ROBOTS_NO_SITEMAP = "User-agent: *\nAllow: /\n";
-const PUBLIC_ROBOTS_WITH_BOT_DENY_ALL =
-  "User-agent: *\nAllow: /\n\nUser-agent: Googlebot\nDisallow: /\n\nSitemap: https://example.com/sitemap.xml\n";
+const publicRobotsWithBotDenyAll = (userAgent: string): string =>
+  `User-agent: *\nAllow: /\n\nUser-agent: ${userAgent}\nDisallow: /\n\nSitemap: https://example.com/sitemap.xml\n`;
 const LLMS_TXT = "# Example\nA public surface for LLM readers.\n";
 
 const pkg = (posture: string): string =>
@@ -1071,10 +1077,8 @@ const runSelfTest = (): number => {
     "public-robots-deny-all",
   );
 
-  // 8a. public with a bot-specific group that denies all, even though the
-  //     wildcard group invites everyone. That bot follows only its own
-  //     most-specific group and ignores the wildcard invite, so it is silently
-  //     blocked from a supposedly public surface.
+  // 8a. A deny-all for an unknown bot is rejected, even though the wildcard
+  //     group invites everyone.
   expectCode(
     "public with bot-specific deny-all",
     reportForSingleApp((root, app) => {
@@ -1082,12 +1086,48 @@ const runSelfTest = (): number => {
       writeFixtureFile(
         root,
         path.join(app, "public", "robots.txt"),
-        PUBLIC_ROBOTS_WITH_BOT_DENY_ALL,
+        publicRobotsWithBotDenyAll("UnknownCrawler"),
       );
       writeFixtureFile(root, path.join(app, "public", "llms.txt"), LLMS_TXT);
     }),
     "public-robots-bot-specific-deny-all",
   );
+
+  for (const userAgent of PUBLIC_ROBOTS_DENIED_USER_AGENTS) {
+    const report = reportForSingleApp((root, app) => {
+      writeFixtureFile(root, path.join(app, "package.json"), pkg("public"));
+      writeFixtureFile(
+        root,
+        path.join(app, "public", "robots.txt"),
+        publicRobotsWithBotDenyAll(userAgent),
+      );
+      writeFixtureFile(root, path.join(app, "public", "llms.txt"), LLMS_TXT);
+    });
+    if (report.violations.length > 0) {
+      failures.push(
+        `public with ${userAgent} denied produced violations: [${codes(report).join(", ")}]`,
+      );
+    }
+  }
+
+  for (const userAgent of [
+    ...PUBLIC_ROBOTS_ALLOWED_SEARCH_USER_AGENTS,
+    "UnknownCrawler",
+  ]) {
+    expectCode(
+      `public with ${userAgent} denied`,
+      reportForSingleApp((root, app) => {
+        writeFixtureFile(root, path.join(app, "package.json"), pkg("public"));
+        writeFixtureFile(
+          root,
+          path.join(app, "public", "robots.txt"),
+          publicRobotsWithBotDenyAll(userAgent),
+        );
+        writeFixtureFile(root, path.join(app, "public", "llms.txt"), LLMS_TXT);
+      }),
+      "public-robots-bot-specific-deny-all",
+    );
+  }
 
   // 8b. public with no robots.txt at all.
   expectCode(

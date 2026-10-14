@@ -24,7 +24,7 @@ test("allows neutral glyphs and the owning matter component", async () => {
   expect(
     await lintSingleRule(
       "no-direct-matter-glyph",
-      'import { FileIcon, Link } from "@stll/ui/icons";\nimport { MatterIcon } from "@/components/matter-icon";',
+      'import { FileIcon, Link } from "@stll/ui/icons";\nimport { MatterIcon } from "@stll/ui/matter-icon";',
     ),
   ).toEqual([]);
 });
@@ -34,7 +34,10 @@ test("allows raw matter glyphs in their exact owner", async () => {
     await lintSingleRule(
       "no-direct-matter-glyph",
       'import { Layers, LucideLayers2 } from "lucide-react";',
-      { cwd: "scratch", sourcePath: "apps/web/src/components/matter-icon.tsx" },
+      {
+        cwd: "scratch",
+        sourcePath: "packages/ui/src/components/matter-icon.tsx",
+      },
     ),
   ).toEqual([]);
 });
@@ -67,6 +70,16 @@ test("keeps the owner basename restricted in another directory", async () => {
       "no-direct-matter-glyph",
       'import { Layers } from "lucide-react";',
       { cwd: "scratch", sourcePath: "apps/web/src/other/matter-icon.tsx" },
+    ),
+  ).toEqual([1]);
+});
+
+test("keeps the former web owner restricted", async () => {
+  expect(
+    await lintSingleRule(
+      "no-direct-matter-glyph",
+      'import { LayersIcon } from "@stll/ui/icons";',
+      { cwd: "scratch", sourcePath: "apps/web/src/components/matter-icon.tsx" },
     ),
   ).toEqual([1]);
 });

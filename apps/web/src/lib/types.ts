@@ -26,6 +26,7 @@ import {
   getNativeOfficeViewerFormat,
   isEmailFile,
   isMarkdownFile,
+  isPlainTextFile,
 } from "@/lib/consts";
 import type { FileRouteTypes } from "@/routeTree.gen";
 
@@ -75,6 +76,10 @@ export const isFileDisplayable = (file: {
   }
 
   if (!file.encrypted && isMarkdownFile(file)) {
+    return true;
+  }
+
+  if (!file.encrypted && isPlainTextFile(file)) {
     return true;
   }
 
@@ -335,6 +340,8 @@ type VerdictRationaleJustificationBlock = {
 type DecisionPassageJustificationBlock = {
   kind: "decision-passage";
   anchorId: string;
+  /** The number the court printed on the cited block; null when none. */
+  courtParagraphNumber: number | null;
   excerpt: string;
 };
 

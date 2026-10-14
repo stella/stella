@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -181,6 +182,11 @@ test.each([
       path.join(tmpdir(), "geometry-shard-phases-"),
     );
     try {
+      symlinkSync(
+        path.join(root, "scripts"),
+        path.join(workspace, "scripts"),
+        "dir",
+      );
       const runner = path.join(
         workspace,
         ".github/actions/setup-playwright/run-in-image.sh",

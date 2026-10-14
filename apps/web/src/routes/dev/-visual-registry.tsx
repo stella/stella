@@ -19,6 +19,13 @@ const visualLoaders = {
       return { default: TableChartPlayground };
     },
   },
+  "oauth-consent": {
+    load: async () => {
+      const { OAuthConsentPlayground } =
+        await import("./-components/oauth-consent-playground");
+      return { default: OAuthConsentPlayground };
+    },
+  },
   "page-crop": {
     load: async () => {
       const { PageCropPlayground } =

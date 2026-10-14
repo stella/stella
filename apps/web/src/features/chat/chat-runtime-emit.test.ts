@@ -7,13 +7,17 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import { getChatAssistantTurnError } from "@/components/chat/chat-ui-tools";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
+import { findChatRequestError } from "@/features/chat/chat-request-error";
 import {
   createChatRuntime,
+  isChatMessageStartError,
   resetChatRequestStateForTests,
   sendThreadChatMessage,
 } from "@/features/chat/chat-runtime";
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { chatRefusal } from "@/lib/errors/api";
 import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -120,13 +124,13 @@ type Page = {
   scheduler: ManualScheduler;
 };
 
-const openPage = (): Page => {
+const openPage = (context?: ChatThreadOptionsContext): Page => {
   const errors: Error[] = [];
   const heard: Snapshot[] = [];
   const scheduler = createManualScheduler();
   const runtime = createChatRuntime({
     activeTurnId: null,
-    context: undefined,
+    context,
     initialMessages: [],
     key: { scope: "global", threadId: THREAD_ID },
     onError: (error) => {
@@ -205,6 +209,219 @@ describe("chat runtime emits while a response streams", () => {
   });
   afterEach(() => {
     globalThis.fetch = previousFetch;
+  });
+
+  test("the real SDK keeps a refused first send's HTTP status and code in visible state", async () => {
+    globalThis.fetch = Object.assign(
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: "validation_error",
+            message: "Private parser details",
+          }),
+          {
+            status: 422,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      { preconnect: previousFetch.preconnect },
+    );
+    const page = openPage();
+    await send(page);
+
+    expect(page.runtime.getSnapshot().status).toBe("error");
+    expect(chatRefusal(page.runtime.getSnapshot().error)).toMatchObject({
+      status: 422,
+      code: "validation_error",
+    });
+    expect(chatRefusal(page.errors.at(0))).toMatchObject({
+      status: 422,
+      code: "validation_error",
+    });
+  });
+
+  test("reports the original SDK rejection before append instead of a busy error", async () => {
+    const failure = new TypeError("Message content could not be read");
+    const page = openPage();
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await sendThreadChatMessage(page.runtime, {
+          get content(): string {
+            throw failure;
+          },
+          id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000001"),
+        }),
+      catch: (error) => error,
+    });
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(findChatRequestError(outcome.error)?.kind).toBe(
+        "preparation_failed",
+      );
+      expect(findChatRequestError(outcome.error)?.cause).toBe(failure);
+    }
+    expect(page.runtime.getSnapshot().messages).toEqual([]);
+    expect(findChatRequestError(page.runtime.getSnapshot().error)?.cause).toBe(
+      failure,
+    );
+  });
+
+  test("preserves the original preparation rejection during a route handoff", async () => {
+    const failure = new TypeError("Message content could not be read");
+    const page = openPage();
+    const outcome = await Result.tryPromise({
+      try: async () =>
+        await page.runtime.startRouteHandoffMessage({
+          get content(): string {
+            throw failure;
+          },
+          id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000001"),
+        }),
+      catch: (error) => error,
+    });
+    expect(outcome.isErr()).toBe(true);
+    if (outcome.isErr()) {
+      expect(findChatRequestError(outcome.error)?.kind).toBe(
+        "preparation_failed",
+      );
+      expect(findChatRequestError(outcome.error)?.cause).toBe(failure);
+    }
+    expect(page.runtime.getSnapshot().messages).toEqual([]);
+    expect(findChatRequestError(page.runtime.getSnapshot().error)?.cause).toBe(
+      failure,
+    );
+  });
+
+  test("preserves a failed reader context before sending and recovers on the next send", async () => {
+    const failure = new TypeError("Reader context is unavailable");
+    let contextReady = false;
+    let requests = 0;
+    globalThis.fetch = Object.assign(
+      async () => {
+        requests += 1;
+        return new Response(null);
+      },
+      { preconnect: previousFetch.preconnect },
+    );
+    const page = openPage({
+      getActiveDecision: () => {
+        if (!contextReady) {
+          throw failure;
+        }
+        return { decisionId: "decision-reader" };
+      },
+    });
+
+    await send(page);
+    const error = findChatRequestError(page.runtime.getSnapshot().error);
+    expect(requests).toBe(0);
+    expect(error?.kind).toBe("preparation_failed");
+    expect(error?.cause).toBe(failure);
+    expect(answerText(page.runtime.getSnapshot())).toBe("");
+
+    contextReady = true;
+    const server = installStream();
+    const sent = send(page);
+    await tick();
+    server.push(
+      RUN_STARTED,
+      ANSWER_STARTED,
+      ...textDeltas(1),
+      { messageId: ANSWER_ID, type: "TEXT_MESSAGE_END" },
+      { runId: RUN_ID, threadId: THREAD_ID, type: "RUN_FINISHED" },
+    );
+    server.close();
+    expect(await sent).toEqual(Result.ok(undefined));
+    expect(page.runtime.getSnapshot().error).toBeUndefined();
+    expect(answerText(page.runtime.getSnapshot())).toBe("0 ");
+  });
+
+  test("retains a typed connection failure through SDK stream error replay", async () => {
+    const failure = new TypeError("Failed to fetch");
+    globalThis.fetch = Object.assign(
+      async () => {
+        throw failure;
+      },
+      {
+        preconnect: previousFetch.preconnect,
+      },
+    );
+    const page = openPage();
+    await send(page);
+    const error = findChatRequestError(page.runtime.getSnapshot().error);
+    expect(error?.kind).toBe("connection_failed");
+    expect(error?.cause).toBe(failure);
+    expect(
+      page.errors.some(
+        (reported) => findChatRequestError(reported)?.cause === failure,
+      ),
+    ).toBe(true);
+  });
+
+  test("classifies a timeout while the SDK reads the response body", async () => {
+    const failure = new DOMException("Stream deadline", "TimeoutError");
+    let failStream: (() => void) | undefined;
+    const body = new ReadableStream<Uint8Array>({
+      start: (controller) => {
+        failStream = () => controller.error(failure);
+      },
+    });
+    globalThis.fetch = Object.assign(
+      async () =>
+        new Response(body, {
+          headers: { "Content-Type": "text/event-stream" },
+        }),
+      { preconnect: previousFetch.preconnect },
+    );
+    const page = openPage();
+    const sent = send(page);
+    await tick();
+    failStream?.();
+    await sent;
+    expect(findChatRequestError(page.runtime.getSnapshot().error)?.kind).toBe(
+      "timed_out",
+    );
+    expect(findChatRequestError(page.runtime.getSnapshot().error)?.cause).toBe(
+      failure,
+    );
+  });
+
+  test("a concurrent dropped send remains recoverable by the send queue", async () => {
+    const { page, server, sent } = await openStreamingPage();
+    const dropped = await Result.tryPromise({
+      try: async () =>
+        await sendThreadChatMessage(page.runtime, {
+          content: "A second question",
+          id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000002"),
+        }),
+      catch: (error) => error,
+    });
+    expect(dropped.isErr()).toBe(true);
+    if (dropped.isErr()) {
+      expect(isChatMessageStartError(dropped.error)).toBe(true);
+      expect(findChatRequestError(dropped.error)?.kind).toBe("not_started");
+    }
+    server.close();
+    await sent;
+  });
+
+  test("a concurrent route handoff retains the busy-send classification", async () => {
+    const { page, server, sent } = await openStreamingPage();
+    const dropped = await Result.tryPromise({
+      try: async () =>
+        await page.runtime.startRouteHandoffMessage({
+          content: "A second question",
+          id: toSafeId<"chatMessage">("018f0000-0000-7000-8000-000000000002"),
+        }),
+      catch: (error) => error,
+    });
+    expect(dropped.isErr()).toBe(true);
+    if (dropped.isErr()) {
+      expect(isChatMessageStartError(dropped.error)).toBe(true);
+      expect(findChatRequestError(dropped.error)?.kind).toBe("not_started");
+    }
+    server.close();
+    await sent;
   });
 
   test("tells subscribers once about a burst of chunks", async () => {
