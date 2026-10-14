@@ -143,6 +143,12 @@ type CompiledResolver = {
   laterLetterContinuation: RegExp;
   /** An and-following marker anywhere (`a násl.`): an open range. */
   andFollowing: RegExp;
+  /**
+   * A sentence designator with its value (`věta 2`, `věta druhá`), global:
+   * it refines the provision wherever it stands, so its number never counts
+   * as a further provision.
+   */
+  sentenceDesignator: RegExp;
   sectionUnits: ReadonlyMap<string, SectionUnit>;
   subdivisions: readonly {
     pattern: RegExp;
@@ -186,6 +192,13 @@ const compile = (profile: JurisdictionProfile): CompiledResolver => {
     andFollowing: new RegExp(
       String.raw`(?<![\p{L}\p{N}])(?:${alternation(profile.andFollowingMarkers)})`,
       "iu",
+    ),
+    sentenceDesignator: new RegExp(
+      String.raw`(?<![\p{L}\p{N}])(?:${profile.subdivisionTerms
+        .filter(({ level }) => level === "sentence")
+        .map(({ text }) => termSource(text))
+        .join("|")})\s*${SUBDIVISION_VALUES.sentence}(?![\p{L}\p{N}])`,
+      "giu",
     ),
     laterLetterContinuation: new RegExp(
       String.raw`(?:[,;]|[-–—]|(?<![\p{L}\p{N}])(?:${connectorSource(profile)})(?=\s))\s*[a-z]\)`,
@@ -477,6 +490,7 @@ const namesFurtherProvision = (
     residual = blank(residual, start, end);
   }
   residual = residual
+    .replace(resolver.sentenceDesignator, (match) => " ".repeat(match.length))
     .replace(DATE_PATTERN, (match) => " ".repeat(match.length))
     .replace(YEAR_PATTERN, (match) => " ".repeat(match.length));
   return (

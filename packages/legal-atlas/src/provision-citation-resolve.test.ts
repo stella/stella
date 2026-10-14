@@ -238,6 +238,22 @@ describe("resolveProvisionCitation", () => {
       section: 316,
       subsection: "2",
     });
+    // A numbered sentence after the act is the same refinement, not a
+    // further provision.
+    expect(resolved("§ 316 odst. 2 ZP, věta 2")).toMatchObject({
+      section: 316,
+      subsection: "2",
+    });
+    expect(resolved("§ 316 odst. 2 ZP, větě 1")).toMatchObject({
+      section: 316,
+      subsection: "2",
+    });
+  });
+
+  test("a sentence designator does not hide a further provision after it", () => {
+    expect(resolve("§ 316 odst. 2 ZP, věta 2 a 3").status).toBe(
+      "multiple_provisions",
+    );
   });
 
   test("a lone letter after `a` is a preposition, not a second provision, unless a letter path continues", () => {
