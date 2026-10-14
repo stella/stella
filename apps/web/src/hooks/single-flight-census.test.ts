@@ -21,6 +21,8 @@ const CREATE_HOOK_DEFINITION =
   /^export const (use(?:Create|Add)[A-Z]\w*) = /gmu;
 const FORM_MARKER = /<(?:Dialog|Form)\b|onSubmit=/u;
 const GUARD = /\buseSingleFlight\(/u;
+// Declaring the hook is not enough: the submit has to run through it.
+const GUARDED_SUBMIT = /\.(?:run|runSettled)\(/u;
 
 const sourceFiles = () =>
   [...new Bun.Glob("**/*.{ts,tsx}").scanSync({ cwd: SRC })].filter(
@@ -50,7 +52,7 @@ const unguardedCreateForms = (
         file.endsWith(".tsx") &&
         hookCall.test(source) &&
         FORM_MARKER.test(source) &&
-        !GUARD.test(source),
+        !(GUARD.test(source) && GUARDED_SUBMIT.test(source)),
     )
     .map(([file]) => file)
     .toSorted();
@@ -85,11 +87,16 @@ describe("create forms submit once", () => {
         "const create = useCreateThing();\nreturn <Dialog onSubmit={() => create.mutate()} />;",
       ],
       [
+        "fixture/declared-only.tsx",
+        "const create = useCreateThing();\nconst once = useSingleFlight();\nreturn <Dialog onSubmit={() => create.mutate()} />;",
+      ],
+      [
         "fixture/guarded.tsx",
-        "const create = useCreateThing();\nconst once = useSingleFlight();\nreturn <Dialog />;",
+        "const create = useCreateThing();\nconst once = useSingleFlight();\nreturn <Dialog onSubmit={() => once.run(async () => await create.mutateAsync())} />;",
       ],
     ]);
     expect(unguardedCreateForms(sources, new Set(["useCreateThing"]))).toEqual([
+      "fixture/declared-only.tsx",
       "fixture/unguarded.tsx",
     ]);
   });

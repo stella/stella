@@ -64,3 +64,28 @@ test("a failed submit frees the form for the next attempt", async () => {
   });
   expect(retried).toBe(true);
 });
+
+test("a callback-style mutation settles through runSettled once", async () => {
+  const { result } = renderHook(() => useSingleFlight());
+  let settle: () => void = () => undefined;
+  let starts = 0;
+  const start = (settled: () => void) => {
+    starts += 1;
+    settle = settled;
+  };
+
+  let firstRun: Promise<void> = Promise.resolve();
+  let secondRun: Promise<void> = Promise.resolve();
+  act(() => {
+    firstRun = result.current.runSettled(start);
+    secondRun = result.current.runSettled(start);
+  });
+  expect(starts).toBe(1);
+  expect(result.current.pending).toBe(true);
+
+  await act(async () => {
+    settle();
+    await Promise.all([firstRun, secondRun]);
+  });
+  expect(result.current.pending).toBe(false);
+});
