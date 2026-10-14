@@ -146,6 +146,11 @@ const exerciseWorkflowReuse = async ({
   return { output, publishes, selectionOutputs };
 };
 
+type ReceiptOverrides = {
+  checkRun?: Record<string, unknown>;
+  run?: Record<string, unknown>;
+};
+
 const withRepository = async (
   run: (fixture: ReturnType<typeof createRepository>) => void | Promise<void>,
 ) => {
@@ -271,6 +276,18 @@ case "$endpoint" in
     sha="\${sha%%/*}"
     cat "$PROOF_TEST_RESPONSES/$sha-statuses"
     ;;
+  repos/stella/stella/commits/*/check-runs?*)
+    [[ "$endpoint" == *"/check-runs?check_name=ci-result&filter=all&per_page=100" ]] || {
+      echo "Unexpected check-run query: $endpoint" >&2; exit 1;
+    }
+    sha="\${endpoint#repos/stella/stella/commits/}"
+    sha="\${sha%%/*}"
+    if [[ -f "$PROOF_TEST_RESPONSES/$sha-check-runs" ]]; then
+      cat "$PROOF_TEST_RESPONSES/$sha-check-runs"
+    else
+      printf '[{"total_count":0,"check_runs":[]}]\\n'
+    fi
+    ;;
   repos/stella/stella/commits/*/pulls?per_page=100)
     sha="\${endpoint#repos/stella/stella/commits/}"
     sha="\${sha%%/*}"
@@ -373,6 +390,55 @@ esac
       JSON.stringify([[{ context, state }]]),
     );
   };
+  // One entry per ci-result check run on `sha`, each with its own workflow run.
+  const publishReceipts = (
+    sha: string,
+    receipts: readonly ReceiptOverrides[] = [{}],
+  ) => {
+    const checkRuns = receipts.map(({ checkRun = {}, run = {} }, index) => {
+      const runId = 500 + index;
+      const jobId = 900 + index;
+      const suiteId = 700 + index;
+      writeFileSync(
+        path.join(responses, `run-${String(runId)}`),
+        JSON.stringify({
+          id: runId,
+          html_url: `https://github.com/${repository}/actions/runs/${String(runId)}`,
+          repository: { full_name: repository },
+          path: ".github/workflows/ci.yml",
+          event: "merge_group",
+          head_sha: sha,
+          head_branch: `gh-readonly-queue/main/pr-1-${base}`,
+          status: "completed",
+          conclusion: "success",
+          check_suite_id: suiteId,
+          ...run,
+        }),
+      );
+      return {
+        id: jobId,
+        name: "ci-result",
+        head_sha: sha,
+        status: "completed",
+        conclusion: "success",
+        app: { slug: "github-actions" },
+        check_suite: { id: suiteId },
+        details_url: `https://github.com/${repository}/actions/runs/${String(runId)}/job/${String(jobId)}`,
+        ...checkRun,
+      };
+    });
+    writeFileSync(
+      path.join(responses, `${sha}-check-runs`),
+      JSON.stringify([
+        { total_count: checkRuns.length, check_runs: checkRuns },
+      ]),
+    );
+  };
+  const checkReceipt = (sha = target) =>
+    Bun.spawnSync(
+      ["bash", verifier, "--merge-group-receipt", repository, sha],
+      { cwd: directory, env: environment },
+    );
   const discoverProof = () =>
     Bun.spawnSync(["bash", verifier, "--find-proof", repository, target], {
       cwd: directory,
@@ -394,6 +460,7 @@ esac
   return {
     base,
     checkHealth,
+    checkReceipt,
     commit,
     directory,
     discoverProof,
@@ -404,6 +471,7 @@ esac
     proof,
     publishCommit,
     publishPullRequests,
+    publishReceipts,
     publishStatuses,
     publishTargetStatus,
     responses,
@@ -683,6 +751,197 @@ describe("release health with reused proof", () => {
         expect(discoveredResult.stderr.toString()).toContain("missing");
       }),
   );
+});
+
+describe("merge-group receipt in place of the heavy statuses", () => {
+  // staging/verified is green on the release commit; main/heavy is red there
+  // and main/pr-depth never ran, so only a receipt can satisfy the gate.
+  const publishDirectTargetEvidence = ({
+    responses,
+    target,
+  }: Pick<ReturnType<typeof createRepository>, "responses" | "target">) => {
+    writeFileSync(
+      path.join(responses, `${target}-statuses`),
+      JSON.stringify([
+        [
+          { context: "staging/verified", state: "success" },
+          { context: "main/heavy", state: "failure" },
+        ],
+      ]),
+    );
+  };
+
+  test("accepts a merge-group ci-result on the release commit", async () =>
+    withRepository((fixture) => {
+      const { checkHealth, checkReceipt, discoverProof, publishReceipts } =
+        fixture;
+      publishDirectTargetEvidence(fixture);
+      expect(checkReceipt().exitCode).not.toBe(0);
+      expect(checkHealth(true).exitCode).not.toBe(0);
+      publishReceipts(fixture.target);
+      const receipt = checkReceipt();
+      expect(receipt.exitCode, receipt.stderr.toString()).toBe(0);
+      expect(receipt.stdout.toString()).toBe("");
+      expect(discoverProof().stdout.toString().trim()).toBe(fixture.target);
+      const health = checkHealth(true);
+      expect(health.exitCode, health.stderr.toString()).toBe(0);
+      expect(health.stdout.toString()).toBe("");
+      const tag = fixture.prepareReleaseTag();
+      expect(tag.exitCode, tag.stderr.toString()).toBe(0);
+      expect(tag.stdout.toString()).toContain(`sha=${fixture.target}\n`);
+      expect(tag.stdout.toString()).not.toContain("proof-sha=");
+    }));
+
+  test("still requires staging/verified next to a receipt", async () =>
+    withRepository((fixture) => {
+      fixture.publishReceipts(fixture.target);
+      for (const state of ["failure", "pending"]) {
+        fixture.publishTargetStatus("staging/verified", state);
+        expect(fixture.checkReceipt().exitCode).toBe(0);
+        expect(fixture.checkHealth(true).exitCode).not.toBe(0);
+        const tag = fixture.prepareReleaseTag();
+        expect(tag.exitCode).not.toBe(0);
+      }
+    }));
+
+  test("ignores ci-result runs of other events beside the merge-group receipt", async () =>
+    withRepository((fixture) => {
+      publishDirectTargetEvidence(fixture);
+      fixture.publishReceipts(fixture.target, [
+        { run: { event: "pull_request", conclusion: "failure" } },
+        {},
+        { run: { event: "push" }, checkRun: { conclusion: "failure" } },
+      ]);
+      expect(fixture.checkReceipt().exitCode).toBe(0);
+      expect(fixture.checkHealth(true).exitCode).toBe(0);
+    }));
+
+  test.each<[string, readonly ReceiptOverrides[]]>([
+    ["no ci-result check run", []],
+    ["another app", [{ checkRun: { app: { slug: "outsider-ci" } } }]],
+    ["a pull_request run", [{ run: { event: "pull_request" } }]],
+    ["a push run", [{ run: { event: "push" } }]],
+    ["another workflow", [{ run: { path: ".github/workflows/other.yml" } }]],
+    ["a failed ci-result", [{ checkRun: { conclusion: "failure" } }]],
+    ["a neutral ci-result", [{ checkRun: { conclusion: "neutral" } }]],
+    ["a skipped ci-result", [{ checkRun: { conclusion: "skipped" } }]],
+    ["an unfinished ci-result", [{ checkRun: { status: "in_progress" } }]],
+    ["a failed merge-group run", [{ run: { conclusion: "failure" } }]],
+    ["a run outside main's queue", [{ run: { head_branch: "feature" } }]],
+    ["a run for another commit", [{ run: { head_sha: "f".repeat(40) } }]],
+    [
+      "a check run for another commit",
+      [{ checkRun: { head_sha: "f".repeat(40) } }],
+    ],
+    ["a run of another check suite", [{ run: { check_suite_id: 1 } }]],
+    [
+      "a run link to another repository",
+      [
+        {
+          checkRun: {
+            details_url:
+              "https://github.com/outsider/stella/actions/runs/500/job/900",
+          },
+        },
+      ],
+    ],
+    [
+      "a run link naming another job",
+      [
+        {
+          checkRun: {
+            details_url: `https://github.com/${repository}/actions/runs/500/job/901`,
+          },
+        },
+      ],
+    ],
+    ["an unresolvable run link", [{ checkRun: { details_url: null } }]],
+    [
+      "two merge-group runs with one failing",
+      [{}, { checkRun: { conclusion: "failure" } }],
+    ],
+    [
+      "an unbound ci-result next to a green receipt",
+      [{}, { checkRun: { details_url: "https://example.test/run" } }],
+    ],
+  ])("refuses the receipt for %s", async (_name, receipts) =>
+    withRepository((fixture) => {
+      publishDirectTargetEvidence(fixture);
+      fixture.publishReceipts(fixture.target, receipts);
+      const receipt = fixture.checkReceipt();
+      expect(receipt.exitCode).not.toBe(0);
+      expect(receipt.stderr.toString()).toContain(
+        "MERGE_GROUP_RECEIPT_REFUSED",
+      );
+      expect(fixture.checkHealth(true).exitCode).not.toBe(0);
+      expect(fixture.prepareReleaseTag().exitCode).not.toBe(0);
+    }),
+  );
+
+  test("refuses the receipt when the check-run API is unavailable", async () =>
+    withRepository((fixture) => {
+      publishDirectTargetEvidence(fixture);
+      writeFileSync(
+        path.join(fixture.responses, `${fixture.target}-check-runs`),
+        "not json",
+      );
+      expect(fixture.checkReceipt().exitCode).not.toBe(0);
+      expect(fixture.checkHealth(true).exitCode).not.toBe(0);
+    }));
+
+  test("a receipt lets a newer red heavy status on the release commit pass, never a red staging status", async () =>
+    withRepository((fixture) => {
+      fixture.publishStatuses();
+      fixture.publishReceipts(fixture.target);
+      for (const context of ["main/heavy", "main/pr-depth"]) {
+        fixture.publishTargetStatus(context, "failure");
+        const health = fixture.checkHealth();
+        expect(health.exitCode, health.stderr.toString()).toBe(0);
+      }
+      fixture.publishTargetStatus("staging/verified", "failure");
+      expect(fixture.checkHealth().exitCode).not.toBe(0);
+    }));
+
+  test("a squashed release head needs only its bound staging proof when the merged commit carries a receipt", async () =>
+    withRepository((fixture) => {
+      fixture.publishStatuses();
+      const statusesPath = path.join(
+        fixture.responses,
+        `${fixture.proof}-statuses`,
+      );
+      const [statuses] = JSON.parse(readFileSync(statusesPath, "utf-8")) as [
+        { context: string }[],
+      ];
+      writeFileSync(
+        statusesPath,
+        JSON.stringify([
+          statuses.filter(({ context }) => context === "staging/verified"),
+        ]),
+      );
+      expect(fixture.verify().exitCode).not.toBe(0);
+      expect(fixture.discoverProof().stdout.toString().trim()).toBe("");
+      fixture.publishReceipts(fixture.target);
+      const verified = fixture.verify();
+      expect(verified.exitCode, verified.stderr.toString()).toBe(0);
+      expect(fixture.discoverProof().stdout.toString().trim()).toBe(
+        fixture.proof,
+      );
+      expect(fixture.checkHealth(true).exitCode).toBe(0);
+      const tag = fixture.prepareReleaseTag();
+      expect(tag.exitCode, tag.stderr.toString()).toBe(0);
+      expect(tag.stdout.toString()).toContain(`proof-sha=${fixture.proof}\n`);
+      // The staging proof keeps its binding to the squash parent.
+      fixture.recordTestedBase(fixture.proof);
+      expect(fixture.verify().exitCode).not.toBe(0);
+    }));
+
+  test("a receipt on the release head instead of the merged commit is not accepted", async () =>
+    withRepository((fixture) => {
+      publishDirectTargetEvidence(fixture);
+      fixture.publishReceipts(fixture.proof);
+      expect(fixture.checkReceipt().exitCode).not.toBe(0);
+      expect(fixture.checkHealth(true).exitCode).not.toBe(0);
+    }));
 });
 
 describe("release tag selection with reused proof", () => {

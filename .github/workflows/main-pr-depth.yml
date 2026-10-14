@@ -30,6 +30,7 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      checks: read
       pull-requests: read
       issues: read
       actions: read

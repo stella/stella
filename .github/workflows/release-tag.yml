@@ -29,6 +29,7 @@ on:
 permissions:
   contents: read
   statuses: read
+  checks: read
   actions: read
   issues: read
   pull-requests: read
@@ -122,8 +123,9 @@ jobs:
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
 
-      # Re-checks staging/verified, main/heavy and main/pr-depth on the exact commit right
-      # before the push, so a status that turned red since selection stops it.
+      # Re-checks staging/verified plus the merge-group receipt (or main/heavy
+      # and main/pr-depth) on the exact commit right before the push, so
+      # evidence that turned red since selection stops it.
       - name: Push tag
         env:
           RELEASE_TREE_PROOF_VERIFIER: ${{ runner.temp }}/verify-release-tree-proof.sh

@@ -11,6 +11,8 @@ cat > "$fixture/bin/gh" <<'STUB'
 set -euo pipefail
 [[ "${TEST_API_ERROR:-}" != "$*" ]] || { echo "API unavailable" >&2; exit 1; }
 case "$*" in
+  *"/commits/$TEST_CANDIDATE/check-runs?check_name=ci-result&filter=all&per_page=100"*) printf '%s\n' "$TEST_CHECK_RUNS" ;;
+  *"/check-runs?"*) echo '[{"total_count":0,"check_runs":[]}]' ;;
   *"/commits/$TEST_CANDIDATE/statuses?per_page=100"*)
     jq --argjson heavy "$TEST_HEAVY_STATUS" --argjson depth "$TEST_PR_DEPTH_STATUS" '.[0] += [$heavy, $depth]' <<< "$TEST_STATUSES" ;;
   *"/commits/${TEST_LATER:-none}/statuses?per_page=100"*) printf '%s\n' "$TEST_LATER_STATUSES" ;;
@@ -23,6 +25,7 @@ case "$*" in
     jq -nc --arg sha "$commit" --arg tree "$tree" '{sha:$sha,commit:{tree:{sha:$tree}}}' ;;
   *"/actions/runs/7"*) printf '%s\n' "$TEST_HEAVY_RUN" ;;
   *"/actions/runs/9"*) printf '%s\n' "$TEST_PR_DEPTH_RUN" ;;
+  *"/actions/runs/5"*) printf '%s\n' "$TEST_MG_RUN" ;;
   *"/compare/$TEST_CANDIDATE...main"*) printf '%s\n' "$TEST_COMPARISON" ;;
   *"/issues?"*) printf '%s\n' "$TEST_INCIDENTS" ;;
   *) echo "unexpected API request: $*" >&2; exit 1 ;;
@@ -30,7 +33,7 @@ esac
 STUB
 chmod +x "$fixture/bin/gh"
 export PATH="$fixture/bin:$PATH"
-export TEST_CANDIDATE TEST_HEAVY_RUN TEST_COMPARISON TEST_HEAVY_STATUS TEST_PR_DEPTH_STATUS TEST_PR_DEPTH_RUN TEST_STATUSES TEST_REAL_GIT
+export TEST_CANDIDATE TEST_CHECK_RUNS TEST_MG_RUN TEST_HEAVY_RUN TEST_COMPARISON TEST_HEAVY_STATUS TEST_PR_DEPTH_STATUS TEST_PR_DEPTH_RUN TEST_STATUSES TEST_REAL_GIT
 export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 git init -q "$fixture/repo"
 cd "$fixture/repo"
@@ -53,6 +56,13 @@ reset_health() {
   TEST_PR_DEPTH_RUN=$(jq -nc --arg sha "$TEST_CANDIDATE" '{id:9,html_url:"https://github.com/stella/stella/actions/runs/9",repository:{full_name:"stella/stella"},path:".github/workflows/main-pr-depth.yml",head_branch:"main",event:"schedule",display_title:("Main PR-depth checks " + $sha),head_sha:$sha,status:"completed",conclusion:"success"}')
   TEST_COMPARISON=$(jq -nc --arg sha "$TEST_CANDIDATE" '{status:"ahead",merge_base_commit:{sha:$sha}}')
   export TEST_INCIDENTS='[[]]' TEST_API_ERROR=''
+  TEST_CHECK_RUNS='[{"total_count":0,"check_runs":[]}]'
+  TEST_MG_RUN='{}'
+}
+# A merge-group ci-result receipt on the candidate itself.
+use_receipt() {
+  TEST_MG_RUN=$(jq -nc --arg sha "$TEST_CANDIDATE" '{id:5,repository:{full_name:"stella/stella"},path:".github/workflows/ci.yml",event:"merge_group",head_sha:$sha,head_branch:"gh-readonly-queue/main/pr-1-base",status:"completed",conclusion:"success",check_suite_id:3}')
+  TEST_CHECK_RUNS=$(jq -nc --arg sha "$TEST_CANDIDATE" '[{total_count:1,check_runs:[{id:4,name:"ci-result",head_sha:$sha,status:"completed",conclusion:"success",app:{slug:"github-actions"},check_suite:{id:3},details_url:"https://github.com/stella/stella/actions/runs/5/job/4"}]}]')
 }
 reset_health
 git update-ref refs/remotes/origin/main "$main"
@@ -111,6 +121,30 @@ for expression in '.path=".github/workflows/main-heavy.yml"' '.display_title="Ma
   TEST_PR_DEPTH_RUN=$(jq "$expression" <<< "$TEST_PR_DEPTH_RUN")
   expect_failure "PR-depth run $expression" 'RELEASE_PR_DEPTH_NOT_GREEN' "$TEST_CANDIDATE"
 done
+# A merge-group receipt on the candidate stands in for main/heavy and
+# main/pr-depth; staging/verified stays required.
+reset_health
+TEST_HEAVY_STATUS=$(jq '.state="failure"' <<< "$TEST_HEAVY_STATUS")
+TEST_PR_DEPTH_STATUS=$(jq '.context="other"' <<< "$TEST_PR_DEPTH_STATUS")
+expect_failure 'red heavy without a receipt' 'main/heavy = failure, main/pr-depth = missing, merge-group receipt = missing' "$TEST_CANDIDATE"
+use_receipt
+bash "$subject" --repo stella/stella --sha "$TEST_CANDIDATE" > "$fixture/output"
+grep -qx "sha=$TEST_CANDIDATE" "$fixture/output"
+echo 'ok   merge-group receipt replaces both heavy statuses'
+for expression in '.[0].check_runs[0].conclusion="failure"' '.[0].check_runs[0].conclusion="neutral"' '.[0].check_runs[0].conclusion="skipped"' '.[0].check_runs[0].app.slug="other"' '.[0].check_runs = []' '.[0].check_runs += [.[0].check_runs[0] | .conclusion="failure"]'; do
+  use_receipt
+  TEST_CHECK_RUNS=$(jq -c "$expression" <<< "$TEST_CHECK_RUNS")
+  expect_failure "receipt $expression" 'merge-group receipt = missing' "$TEST_CANDIDATE"
+done
+for expression in '.event="pull_request"' '.event="push"' '.path=".github/workflows/other.yml"' '.conclusion="failure"' '.head_sha="0000000000000000000000000000000000000000"'; do
+  use_receipt
+  TEST_MG_RUN=$(jq -c "$expression" <<< "$TEST_MG_RUN")
+  expect_failure "receipt run $expression" 'merge-group receipt = missing' "$TEST_CANDIDATE"
+done
+use_receipt
+export TEST_STATUSES='[[{"context":"staging/verified","state":"failure"}]]'
+expect_failure 'receipt without staging' 'staging/verified = failure' "$TEST_CANDIDATE"
+export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 reset_health
 export TEST_COMPARISON='{"status":"diverged","merge_base_commit":{"sha":"other"}}'
 expect_failure 'heavy candidate ancestry' 'RELEASE_HEAVY_NOT_GREEN' "$TEST_CANDIDATE"
@@ -235,6 +269,15 @@ reset_health
 bash -e "$fixture/push.sh"
 [[ "$(git --git-dir="$fixture/remote" rev-parse 'refs/tags/v1.2.3^{}')" == "$TEST_CANDIDATE" ]]
 echo 'ok   workflow tags exactly the candidate rather than HEAD'
+git tag -d v1.2.3 >/dev/null
+git --git-dir="$fixture/remote" tag -d v1.2.3 >/dev/null
+# With a receipt on the candidate, a red main/heavy no longer stops the push.
+reset_health
+use_receipt
+TEST_HEAVY_STATUS=$(jq '.state="failure"' <<< "$TEST_HEAVY_STATUS")
+bash -e "$fixture/push.sh"
+[[ "$(git --git-dir="$fixture/remote" rev-parse 'refs/tags/v1.2.3^{}')" == "$TEST_CANDIDATE" ]]
+echo 'ok   push accepts the merge-group receipt'
 git tag -d v1.2.3 >/dev/null
 printf '%s\n' '---' '"@stll/example": patch' '---' 'Pending note' > .changeset/pending.md
 git add .changeset/pending.md

@@ -91,6 +91,21 @@ const policyProblems = ({
     if (!source.includes("RELEASE_TREE_PROOF_VERIFIER")) {
       problems.push(`${name} must support the trusted verifier path`);
     }
+    // The merge-group receipt has one owner: the shared verifier.
+    if (
+      !/bash\s+"\$tree_proof_verifier"\s+--merge-group-receipt\s+"\$repo"/u.test(
+        source,
+      ) ||
+      /check-runs/u.test(source)
+    ) {
+      problems.push(
+        `${name} must read the receipt through the shared verifier`,
+      );
+    }
+  }
+  const releaseWorkflow: unknown = Bun.YAML.parse(release);
+  if (field(field(releaseWorkflow, "permissions"), "checks") !== "read") {
+    problems.push("release must be able to read the merge-group receipt");
   }
   const steps = workflowSteps(release);
   if (
@@ -357,6 +372,25 @@ test("removing verifier delegation from any release gate violates policy", () =>
       `${name} must invoke the shared verifier`,
     );
   }
+});
+
+test("the merge-group receipt is read only through the shared verifier", () => {
+  for (const name of ["prepare", "health"] as const) {
+    for (const mutated of [
+      sources[name].replaceAll("--merge-group-receipt", "--unverified-receipt"),
+      `${sources[name]}\ngh api "repos/$repo/commits/$sha/check-runs"\n`,
+    ]) {
+      expect(mutated).not.toBe(sources[name]);
+      expect(policyProblems({ ...sources, [name]: mutated })).toContain(
+        `${name} must read the receipt through the shared verifier`,
+      );
+    }
+  }
+  const release = sources.release.replace("  checks: read\n", "");
+  expect(release).not.toBe(sources.release);
+  expect(policyProblems({ ...sources, release })).toContain(
+    "release must be able to read the merge-group receipt",
+  );
 });
 
 test("release checkout cannot replace the trusted pre-push verifier", () => {

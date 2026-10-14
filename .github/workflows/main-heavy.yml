@@ -44,6 +44,7 @@ jobs:
     permissions:
       contents: read
       statuses: read
+      checks: read
       actions: write
       pull-requests: read
       issues: read
