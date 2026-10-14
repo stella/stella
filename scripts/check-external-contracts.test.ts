@@ -633,3 +633,29 @@ test("unrelated executable edits in SDK importers also invalidate dated debt", (
     }),
   ).toBe(true);
 });
+
+test.each([
+  'import sdk = require("vendor"); sdk.send("new");',
+  'const sdk = await import(`vendor`); sdk.send("new");',
+  'const moduleName = "vendor"; const sdk = await import(moduleName); sdk.send("new");',
+])("introduced SDK module references invalidate dated debt: %s", (current) => {
+  expect(
+    hasChangedExecutableUsage({
+      sdks: ["vendor"],
+      file: "client.ts",
+      baseline: 'const receipt = { pin: "old" };',
+      current,
+    }),
+  ).toBe(true);
+});
+test("non-literal module references invalidate even unchanged pinned owners", () => {
+  const source = "const sdk = await import(moduleName);";
+  expect(
+    hasChangedExecutableUsage({
+      sdks: ["vendor"],
+      file: "client.ts",
+      baseline: source,
+      current: source,
+    }),
+  ).toBe(true);
+});

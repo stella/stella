@@ -9,7 +9,10 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { readFixtureEvidence } from "./external-contract-evidence";
+import {
+  readFixtureEvidence,
+  runtimeModuleReferences,
+} from "./external-contract-evidence";
 
 type ProjectOptions = {
   files: Record<string, string>;
@@ -329,6 +332,55 @@ test("optional foreign packages with workspace-like names do not become local ru
       });
       expect(evidence.problems).toEqual([]);
       expect([...evidence.sdks]).toEqual(["@example/sdk"]);
+    },
+  });
+});
+
+test.each([
+  'import sdk from "@example/sdk";',
+  'export { client } from "@example/sdk";',
+  'import sdk = require("@example/sdk");',
+  'const sdk = require("@example/sdk");',
+  "const sdk = require(`@example/sdk`);",
+  'const sdk = await import("@example/sdk");',
+  "const sdk = await import(`@example/sdk`);",
+])("runtime module references share literal syntax coverage: %s", (text) => {
+  expect(runtimeModuleReferences({ file: "client.ts", text })).toEqual([
+    { type: "literal", specifier: "@example/sdk" },
+  ]);
+  withProject({
+    files: { ...sdkFiles, "replay.ts": text },
+    run: (root) => {
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts"],
+        sdkNames: ["@example/sdk"],
+      });
+      expect([...evidence.sdks]).toEqual(["@example/sdk"]);
+      expect(evidence.problems).toEqual([]);
+    },
+  });
+});
+test("non-literal runtime module references remain explicit unresolved evidence", () => {
+  const text =
+    'import(moduleName); require(moduleName); type Client = typeof import("@example/sdk");';
+  expect(runtimeModuleReferences({ file: "client.ts", text })).toEqual([
+    { type: "dynamic" },
+    { type: "dynamic" },
+  ]);
+  withProject({
+    files: { "replay.ts": text },
+    run: (root) => {
+      const evidence = readFixtureEvidence({
+        root,
+        replayFiles: ["replay.ts"],
+        sdkNames: ["@example/sdk"],
+      });
+      expect([...evidence.sdks]).toEqual([]);
+      expect(evidence.problems).toEqual([
+        "Cannot resolve non-literal runtime module reference from replay.ts",
+        "Cannot resolve non-literal runtime module reference from replay.ts",
+      ]);
     },
   });
 });

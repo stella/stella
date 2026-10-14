@@ -27,7 +27,10 @@ import type {
   PinSource,
 } from "../packages/external-contracts/src/types";
 import { parseBunLockText } from "./bun-lock-text";
-import { readFixtureEvidence } from "./external-contract-evidence";
+import {
+  readFixtureEvidence,
+  runtimeModuleReferences,
+} from "./external-contract-evidence";
 import {
   EXTERNAL_CONTRACT_PIN_ALLOWANCES_PATH,
   readExternalContractPinAllowances,
@@ -797,46 +800,28 @@ export const hasChangedExecutableUsage = ({
   if (baseline === undefined) {
     return true;
   }
-  const importsPinnedSdk = (text: string) => {
-    const source = parseSource({ fileName: file, text });
-    const pinned = (specifier: string) =>
-      sdks.some((sdk) => specifier === sdk || specifier.startsWith(`${sdk}/`));
-    const importsSdk = (node: ts.Node): boolean => {
-      if (
-        ts.isImportDeclaration(node) &&
-        ts.isStringLiteral(node.moduleSpecifier)
-      ) {
-        return (
-          node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword &&
-          pinned(node.moduleSpecifier.text)
+  const previousReferences = runtimeModuleReferences({ file, text: baseline });
+  const currentReferences = runtimeModuleReferences({ file, text: current });
+  const references = [...previousReferences, ...currentReferences];
+  if (references.some((reference) => reference.type === "dynamic")) {
+    return true;
+  }
+  const importsPinnedSdk = references.some((reference) => {
+    switch (reference.type) {
+      case "literal":
+        return sdks.some(
+          (sdk) =>
+            reference.specifier === sdk ||
+            reference.specifier.startsWith(`${sdk}/`),
         );
-      }
-      if (
-        ts.isExportDeclaration(node) &&
-        !node.isTypeOnly &&
-        node.moduleSpecifier &&
-        ts.isStringLiteral(node.moduleSpecifier)
-      ) {
-        return pinned(node.moduleSpecifier.text);
-      }
-      if (
-        ts.isCallExpression(node) &&
-        (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-          (ts.isIdentifier(node.expression) &&
-            node.expression.text === "require"))
-      ) {
-        const specifier = node.arguments.at(0);
-        return (
-          specifier !== undefined &&
-          ts.isStringLiteral(specifier) &&
-          pinned(specifier.text)
-        );
-      }
-      return ts.forEachChild(node, importsSdk) ?? false;
-    };
-    return importsSdk(source);
-  };
-  if (!importsPinnedSdk(baseline) && !importsPinnedSdk(current)) {
+      case "dynamic":
+        return true;
+      default:
+        reference satisfies never;
+        return panic("Unhandled runtime module reference");
+    }
+  });
+  if (!importsPinnedSdk) {
     return false;
   }
   // Erase TypeScript syntax rather than trying to track SDK-derived values.

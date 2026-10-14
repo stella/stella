@@ -29,6 +29,7 @@ expiry no more than seven days after its checked date. An allowance applies only
 while those pins match the merge base and no executable code
 has changed in a registered owner that imports or re-exports the pinned SDK.
 This includes calls through derived clients, aliases and destructured bindings.
+A non-literal runtime module reference in a pinned owner invalidates its allowance.
 Comments and type-only changes keep the allowance; receipt bookkeeping in a file
 without a pinned SDK import does too. New unregistered SDK
 usage still fails the closed census. Removed patch pins use the explicit

@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   existsSync,
   readFileSync,
@@ -260,8 +260,24 @@ const typeOnlyExport = (node: ts.ExportDeclaration) => {
   );
 };
 
-const runtimeSpecifiers = (file: string, text: string) => {
-  const specifiers: string[] = [];
+type RuntimeModuleReference =
+  | { type: "literal"; specifier: string }
+  | { type: "dynamic" };
+
+type RuntimeModuleReferencesOptions = { file: string; text: string };
+
+export const runtimeModuleReferences = ({
+  file,
+  text,
+}: RuntimeModuleReferencesOptions) => {
+  const references: RuntimeModuleReference[] = [];
+  const record = (expression: ts.Expression | undefined) => {
+    if (expression !== undefined && ts.isStringLiteralLike(expression)) {
+      references.push({ type: "literal", specifier: expression.text });
+      return;
+    }
+    references.push({ type: "dynamic" });
+  };
   const visit = (node: ts.Node): void => {
     if (ts.isTypeNode(node)) {
       return;
@@ -272,7 +288,7 @@ const runtimeSpecifiers = (file: string, text: string) => {
     ) {
       const onlyTypes = typeOnlyImport(node.importClause);
       if (!onlyTypes) {
-        specifiers.push(node.moduleSpecifier.text);
+        record(node.moduleSpecifier);
       }
       return;
     }
@@ -283,17 +299,16 @@ const runtimeSpecifiers = (file: string, text: string) => {
         node.moduleSpecifier !== undefined &&
         ts.isStringLiteral(node.moduleSpecifier)
       ) {
-        specifiers.push(node.moduleSpecifier.text);
+        record(node.moduleSpecifier);
       }
       return;
     }
     if (ts.isImportEqualsDeclaration(node)) {
       if (
         !node.isTypeOnly &&
-        ts.isExternalModuleReference(node.moduleReference) &&
-        ts.isStringLiteral(node.moduleReference.expression)
+        ts.isExternalModuleReference(node.moduleReference)
       ) {
-        specifiers.push(node.moduleReference.expression.text);
+        record(node.moduleReference.expression);
       }
       return;
     }
@@ -303,16 +318,13 @@ const runtimeSpecifiers = (file: string, text: string) => {
         (ts.isIdentifier(node.expression) &&
           node.expression.text === "require"))
     ) {
-      const argument = node.arguments.at(0);
-      if (argument !== undefined && ts.isStringLiteralLike(argument)) {
-        specifiers.push(argument.text);
-      }
+      record(node.arguments.at(0));
     }
     ts.forEachChild(node, visit);
   };
   // parseSource selects JSX syntax from a .tsx suffix for both JS and TS sources.
   visit(parseSource({ fileName: file.replace(/\.jsx$/u, ".tsx"), text }));
-  return specifiers;
+  return references;
 };
 
 type FixtureEvidenceOptions = {
@@ -523,8 +535,20 @@ export const readFixtureEvidence = ({
       }
       pending.push({ file: resolved, depth: entry.depth + 1 });
     };
-    for (const specifier of runtimeSpecifiers(file, text)) {
-      follow(specifier);
+    for (const reference of runtimeModuleReferences({ file, text })) {
+      switch (reference.type) {
+        case "literal":
+          follow(reference.specifier);
+          break;
+        case "dynamic":
+          problems.push(
+            `Cannot resolve non-literal runtime module reference from ${label(file)}`,
+          );
+          break;
+        default:
+          reference satisfies never;
+          panic("Unhandled runtime module reference");
+      }
     }
     if (proved()) {
       return { owners, sdks, problems: rootProblems };
