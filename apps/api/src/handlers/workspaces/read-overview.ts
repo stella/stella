@@ -10,11 +10,14 @@ import { LIMITS } from "@/api/lib/limits";
 type ReadOverviewHandlerProps = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
+  /** The reader's local date for the agenda; the database's today if absent. */
+  agendaFrom?: string | undefined;
 };
 
 export const readOverviewHandler = async ({
   scopedDb,
   workspaceId,
+  agendaFrom,
 }: ReadOverviewHandlerProps) => {
   const [
     { entityCount, documentCount, taskCount, recentEntities },
@@ -112,7 +115,7 @@ export const readOverviewHandler = async ({
         recentEntities: recent,
       };
     }),
-    readOverviewAgenda({ scopedDb, workspaceId }),
+    readOverviewAgenda({ scopedDb, workspaceId, agendaFrom }),
   ]);
 
   const recent = recentEntities.map((e) => {

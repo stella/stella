@@ -27,8 +27,14 @@ export const openAgendaTask = () =>
 export const dueFromToday = () => gte(entities.dueDate, sql`CURRENT_DATE`);
 
 /**
- * Due yesterday or later in the database's calendar: wide enough for any
- * reader time zone, whose own today the client then applies exactly.
+ * Due on or after the reader's local date. A reader's date differs from the
+ * database's by at most a day either way, so a value outside that window is
+ * clamped to it; without one, the database's today applies.
  */
-export const dueFromYesterday = () =>
-  gte(entities.dueDate, sql`CURRENT_DATE - 1`);
+export const dueFromReaderDate = (readerDate: string | undefined) =>
+  readerDate === undefined
+    ? dueFromToday()
+    : gte(
+        entities.dueDate,
+        sql`GREATEST(LEAST(${readerDate}::date, CURRENT_DATE + 1), CURRENT_DATE - 1)`,
+      );
