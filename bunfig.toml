@@ -69,3 +69,9 @@ minimumReleaseAgeExcludes = [
   "@stll/stdnum-win32-x64-msvc", # quarantine-excluded-since: 2026-07-26T19:50:26.000Z
   "@stll/text-search-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
 ]
+
+[test]
+# Custom lint rule tests spend their time awaiting oxlint. Running each file's
+# tests concurrently lets .oxlint-plugins/__tests__/lint-single-rule.ts lint
+# every waiting case of one rule configuration in a single oxlint run.
+concurrentTestGlob = "**/.oxlint-plugins/__tests__/*.test.ts"
