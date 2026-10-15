@@ -661,7 +661,7 @@ test("a DOCX and a PDF verification both offer their original beside the reading
   expect(
     screen
       .getByRole("tablist", { name: views.label })
-      .textContent?.includes(views.original),
+      .textContent.includes(views.original),
   ).toBe(true);
   expect(
     screen
