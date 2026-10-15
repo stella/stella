@@ -449,17 +449,19 @@ describe.skipIf(!enabled)(
                 if (isResumePath(path)) {
                   const resume = async (userId: SafeId<"user">) => {
                     if (path === "feature-resume") {
-                      return await resumeFeatureAfterGrant({
+                      await resumeFeatureAfterGrant({
                         organizationId: a.organizationId,
                         userId,
                         featureId: "signals",
                       });
+                      return;
                     }
                     if (path === "signals-resume") {
-                      return await resumeSignalsAfterGrant(
+                      await resumeSignalsAfterGrant(
                         { organizationId: a.organizationId, userId },
                         { database: db },
                       );
+                      return;
                     }
                     await db.transaction(async (tx) => {
                       await lockFeatureRecoveryAdmission({

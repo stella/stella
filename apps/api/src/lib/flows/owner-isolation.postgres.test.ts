@@ -277,15 +277,18 @@ describe.skipIf(!enabled)(
             };
             const resume = async () => {
               switch (entry) {
-                case "resume owner":
-                  return await resumeOwner(principal, dependencies);
-                case "grant facade":
-                  return await resumeFacade(principal, dependencies);
-                case "worker recovery":
-                  return await reconcileOrphanedFlowRuns(
-                    { principal },
-                    dependencies,
-                  );
+                case "resume owner": {
+                  await resumeOwner(principal, dependencies);
+                  return;
+                }
+                case "grant facade": {
+                  await resumeFacade(principal, dependencies);
+                  return;
+                }
+                case "worker recovery": {
+                  await reconcileOrphanedFlowRuns({ principal }, dependencies);
+                  return;
+                }
                 default:
                   entry satisfies never;
               }
