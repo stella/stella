@@ -11,6 +11,7 @@ import { assignableRoles } from "@stll/permissions";
 import messages from "@/i18n/langs/en.json";
 import type { Role } from "@/lib/auth-client";
 import { inviteMemberSchema } from "@/lib/organization/role-assignment.logic";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/organization/members",
@@ -62,7 +63,7 @@ afterAll(async () => {
     cleanup();
   });
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mount = (actorRole: Role, children: ReactElement) => {

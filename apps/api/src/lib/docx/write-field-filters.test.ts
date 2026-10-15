@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import {
   arrayFiltersFromFieldConfig,
   filtersFromFieldConfig,
@@ -30,9 +31,9 @@ const makeDocx = async (
   extra: Readonly<Record<string, string>> = {},
 ): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", WRAP(paragraphs.join("")));
+  writeZipEntry(zip, "word/document.xml", WRAP(paragraphs.join("")));
   for (const [path, xml] of Object.entries(extra)) {
-    zip.file(path, xml);
+    writeZipEntry(zip, path, xml);
   }
   return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
