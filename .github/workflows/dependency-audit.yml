@@ -89,6 +89,59 @@ jobs:
         if: github.event_name != 'pull_request' && steps.full-audit.outcome == 'failure'
         run: exit 1
 
+  cargo-advisories:
+    name: cargo deny advisories (desktop)
+    # A newly published advisory is not caused by the change under review, so
+    # merges never wait on the advisory database; main and the schedule check it.
+    if: github.event_name != 'pull_request'
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cargo-deny
+        uses: ./.github/actions/cargo-deny
+
+      # The cache keeps each fetch incremental; the newest entry is restored and
+      # a fresh one saved, so the check still reads a current database.
+      - name: Restore advisory database
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/advisory-dbs
+            ~/.cargo/registry/index
+          key: cargo-advisory-db-${{ github.run_id }}
+          restore-keys: cargo-advisory-db-
+
+      # Offline metadata needs every dependency's manifest; the crate archives
+      # change only with the lockfile.
+      - name: Cache dependency crates
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cargo/registry/cache
+          key: cargo-desktop-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+
+      - name: Fetch dependencies and advisory database
+        env:
+          CARGO_NET_RETRY: "5"
+        run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml db index
+
+      - name: Save advisory database
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/advisory-dbs
+            ~/.cargo/registry/index
+          key: cargo-advisory-db-${{ github.run_id }}
+
+      - name: Desktop advisories
+        run: cargo deny --offline --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph advisories
+
   remediate:
     name: Open dependency audit remediation
     needs: audit
