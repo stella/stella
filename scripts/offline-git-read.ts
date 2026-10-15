@@ -227,7 +227,7 @@ export const createGitBaselineReader = ({
       return undefined;
     }
     const siblings = directories.get(file.slice(0, file.lastIndexOf("/") + 1));
-    if (siblings !== undefined && siblings.includes(file)) {
+    if (siblings?.includes(file)) {
       const selected = [
         file,
         ...siblings
