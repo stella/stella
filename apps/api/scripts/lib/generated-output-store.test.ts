@@ -4,7 +4,9 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  renameSync,
   rmSync,
+  symlinkSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
@@ -115,6 +117,23 @@ test("another checkout with the same inputs restores the stored output", async (
     path.join(other, "src/a.ts"),
   );
   expect(JSON.stringify(restored?.stamp)).not.toContain(checkout);
+});
+
+test("checkouts reached through a symbolic link restore each other's output", async () => {
+  const real = path.join(scratch, "real-a");
+  renameSync(checkout, real);
+  symlinkSync(real, checkout);
+  publishGeneratedOutput({
+    storeDir,
+    stamp: portableStamp(checkout),
+    output: "printed",
+  });
+  const otherReal = path.join(scratch, "real-b");
+  cpSync(real, otherReal, { recursive: true });
+  const other = path.join(scratch, "checkout-b");
+  symlinkSync(otherReal, other);
+
+  expect((await restore(other))?.output.toString()).toBe("printed");
 });
 
 test("a changed source or dependency misses", async () => {

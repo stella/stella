@@ -22,18 +22,15 @@ import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   type CompilerInputStamp,
-  ROOT_TOKEN,
   compilerInputStampSchema,
   isCompilerInputStampCurrent,
-  relocateStamp,
+  localizeStamp,
 } from "./compiler-input-stamp";
 
 const STAMP_FILE = "stamp.json";
 const OUTPUT_FILE = "output";
-// Entries tried per restore, newest first; each miss stops at its first
-// changed input.
-export const RESTORE_CANDIDATES = 8;
-// Entries kept per store; the oldest by last use go first.
+// Entries kept per store; the oldest by last use go first. A restore tries
+// every kept entry, newest first; each miss stops at its first changed input.
 export const KEEP_ENTRIES = 16;
 
 const entrySchema = v.strictObject({
@@ -126,10 +123,7 @@ export const restoreGeneratedOutput = async ({
 }): Promise<
   { output: Buffer; stamp: CompilerInputStamp; outputHash: string } | undefined
 > => {
-  for (const { name } of entriesNewestFirst(storeDir).slice(
-    0,
-    RESTORE_CANDIDATES,
-  )) {
+  for (const { name } of entriesNewestFirst(storeDir)) {
     const directory = path.join(storeDir, name);
     const stampBytes = readOptional(path.join(directory, STAMP_FILE));
     const output = readOptional(path.join(directory, OUTPUT_FILE));
@@ -146,7 +140,7 @@ export const restoreGeneratedOutput = async ({
     ) {
       continue;
     }
-    const stamp = relocateStamp(parsed.value.inputs, ROOT_TOKEN, root);
+    const stamp = localizeStamp(parsed.value.inputs, root);
     if (await isCompilerInputStampCurrent(stamp, context)) {
       const now = new Date();
       Result.try(() => utimesSync(directory, now, now));

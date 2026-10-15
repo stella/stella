@@ -5,7 +5,7 @@
 // from it is still current. Replaying costs some thousands of stat calls and
 // file hashes instead of a full parse and type check.
 import { Result } from "better-result";
-import { type Stats, readFileSync, statSync } from "node:fs";
+import { type Stats, readFileSync, realpathSync, statSync } from "node:fs";
 import { readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
@@ -101,13 +101,17 @@ export type CompilerInputRecorder = {
   /**
    * The same answers for another checkout or machine: installed files are
    * compared by content (another install writes them with other times) and
-   * paths under `root` are stored relative to it (see relocateStamp).
+   * paths under `root` are stored relative to it (see toPortableStamp).
    */
   portableStamp: (context: string, root: string) => CompilerInputStamp;
 };
 
 // Stands for the checkout root in a portable stamp.
-export const ROOT_TOKEN = "<root>";
+const ROOT_TOKEN = "<root>";
+// Stands for the checkout root's real path. Real paths leave the root's
+// spelling when it is reached through a symbolic link (macOS /var and /tmp
+// are), so they move with the real root, not the root.
+const REAL_ROOT_TOKEN = "<real-root>";
 
 const relocatePath = (value: string, from: string, to: string) => {
   if (value === from) {
@@ -119,7 +123,7 @@ const relocatePath = (value: string, from: string, to: string) => {
 };
 
 /** Rewrites every path in a stamp that lies under `from` to lie under `to`. */
-export const relocateStamp = (
+const relocateStamp = (
   stamp: CompilerInputStamp,
   from: string,
   to: string,
@@ -165,6 +169,22 @@ export const relocateStamp = (
     ),
   };
 };
+
+/** Stores the paths under a checkout `root` relative to it. */
+export const toPortableStamp = (stamp: CompilerInputStamp, root: string) =>
+  relocateStamp(
+    relocateStamp(stamp, root, ROOT_TOKEN),
+    realpathSync(root),
+    REAL_ROOT_TOKEN,
+  );
+
+/** Places a portable stamp's relative paths under the checkout `root`. */
+export const localizeStamp = (stamp: CompilerInputStamp, root: string) =>
+  relocateStamp(
+    relocateStamp(stamp, REAL_ROOT_TOKEN, realpathSync(root)),
+    ROOT_TOKEN,
+    root,
+  );
 
 // Paths and keys, not text: a stable code-unit order on every machine.
 const compareKeys = (left: string, right: string) =>
@@ -287,10 +307,9 @@ export const createCompilerInputRecorder = (): CompilerInputRecorder => {
     readFile: recordRead,
     stamp: (context) => stamp(context, contents, installed),
     portableStamp: (context, root) =>
-      relocateStamp(
+      toPortableStamp(
         stamp(context, new Map([...contents, ...installedContents]), new Map()),
         root,
-        ROOT_TOKEN,
       ),
   };
 };
