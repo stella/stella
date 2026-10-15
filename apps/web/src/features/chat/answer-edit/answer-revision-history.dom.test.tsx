@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import { createWebTestEnvironment } from "../../../../tests/environment.test-fixtures";
 
 GlobalRegistrator.register({ url: "https://app.example.test/chat/thread" });
@@ -105,7 +107,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   boundary.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 const mount = ({
   refresh,

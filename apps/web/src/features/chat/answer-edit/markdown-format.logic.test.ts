@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { fromMarkdown } from "mdast-util-from-markdown";
 import type { CompileContext } from "mdast-util-from-markdown";
@@ -805,112 +805,114 @@ const formattedParagraph = ({
   };
 };
 
-test.each(Object.values(allFormatActions).flat())(
-  "format action %j preserves document text and inline block structure",
+describe.each(Object.values(allFormatActions).flat())(
+  "format action %j",
   (action) => {
-    const bodies = fc.oneof(
-      fc
-        .string({
-          unit: "grapheme",
-          minLength: GENERATED_MIN_SCALARS,
-          maxLength: GENERATED_MAX_PARAGRAPH_SCALARS,
+    test("formatting preserves document text and inline block structure", () => {
+      const bodies = fc.oneof(
+        fc
+          .string({
+            unit: "grapheme",
+            minLength: GENERATED_MIN_SCALARS,
+            maxLength: GENERATED_MAX_PARAGRAPH_SCALARS,
+          })
+          .filter((body) => !/[\r\n]/u.test(body)),
+        fc.constantFrom(
+          "# Notice",
+          "> quote",
+          "- item",
+          "1. one",
+          "[label](https://example.test/)",
+          "[same](https://updated.test/)",
+          "https://example.test/",
+          "é **nested** 😀",
+          "text `code` &amp; more",
+        ),
+      );
+      const paragraphs = fc
+        .record({
+          body: bodies,
+          format: fc.constantFrom(...INLINE_FORMATS),
+          quoteDepth: fc.integer({ min: 0, max: GENERATED_MAX_QUOTE_DEPTH }),
         })
-        .filter((body) => !/[\r\n]/u.test(body)),
-      fc.constantFrom(
-        "# Notice",
-        "> quote",
-        "- item",
-        "1. one",
-        "[label](https://example.test/)",
-        "[same](https://updated.test/)",
-        "https://example.test/",
-        "é **nested** 😀",
-        "text `code` &amp; more",
-      ),
-    );
-    const paragraphs = fc
-      .record({
-        body: bodies,
-        format: fc.constantFrom(...INLINE_FORMATS),
-        quoteDepth: fc.integer({ min: 0, max: GENERATED_MAX_QUOTE_DEPTH }),
-      })
-      .map(formattedParagraph)
-      .filter((value) => value !== undefined);
-    let proposed = false;
-    assertProperty(
-      `format action ${JSON.stringify(action)} preserves document text and inline block structure`,
-      fc.property(paragraphs, (paragraph) => {
-        let firstBlock: BlockTree = { type: "paragraph" };
-        for (let level = 0; level < paragraph.quoteDepth; level++) {
-          firstBlock = { type: "blockquote", children: [firstBlock] };
-        }
-        const expectedBlocks = {
-          type: "root",
-          children: [firstBlock, { type: "paragraph" }],
-        };
-        expect(parsedBlockTree(paragraph.tree)).toEqual(expectedBlocks);
-        const spans =
-          action.format === CHAT_MESSAGE_EDIT_FORMAT.style
-            ? [paragraph.paragraphSpan]
-            : paragraph.inlineSpans;
-        for (const span of spans) {
-          const result = formatAnswerSpan({
-            source: paragraph.source,
-            ...span,
-            action,
-          });
-          switch (result.status) {
-            case "unsupported":
-              break;
-            case "unchanged":
-              expect(result).toEqual({ status: "unchanged" });
-              expect(renderedText(parsedMarkdown(paragraph.source))).toBe(
-                renderedText(paragraph.tree),
-              );
-              break;
-            case "proposal": {
-              proposed = true;
-              const candidate =
-                paragraph.source.slice(0, result.start) +
-                result.replacement +
-                paragraph.source.slice(result.end);
-              const parsed = parsedMarkdown(candidate);
-              expect(renderedText(parsed)).toBe(renderedText(paragraph.tree));
-              const expectedLinks = linkDestinations(paragraph.tree);
-              if (action.format === CHAT_MESSAGE_EDIT_FORMAT.link) {
-                const existing = selectedMarkdownLinkUrl({
-                  source: paragraph.source,
-                  ...span,
-                });
-                if (existing !== undefined) {
-                  const index = expectedLinks.indexOf(existing);
-                  if (index === -1) {
-                    panic(
-                      "Expected selected destination in the original document",
-                    );
-                  }
-                  expectedLinks.splice(index, 1);
-                }
-                if (action.intent === CHAT_MESSAGE_LINK_INTENT.set) {
-                  expectedLinks.push(action.url);
-                }
-              }
-              expect(linkDestinations(parsed)).toEqual(
-                expectedLinks.toSorted(),
-              );
-              if (action.format !== CHAT_MESSAGE_EDIT_FORMAT.style) {
-                expect(parsedBlockTree(parsed)).toEqual(expectedBlocks);
-              }
-              break;
-            }
-            default:
-              result satisfies never;
+        .map(formattedParagraph)
+        .filter((value) => value !== undefined);
+      let proposed = false;
+      assertProperty(
+        "formatting preserves document text and inline block structure",
+        fc.property(paragraphs, (paragraph) => {
+          let firstBlock: BlockTree = { type: "paragraph" };
+          for (let level = 0; level < paragraph.quoteDepth; level++) {
+            firstBlock = { type: "blockquote", children: [firstBlock] };
           }
-        }
-      }),
-      { numRuns: 300 },
-    );
-    expect(proposed).toBe(true);
+          const expectedBlocks = {
+            type: "root",
+            children: [firstBlock, { type: "paragraph" }],
+          };
+          expect(parsedBlockTree(paragraph.tree)).toEqual(expectedBlocks);
+          const spans =
+            action.format === CHAT_MESSAGE_EDIT_FORMAT.style
+              ? [paragraph.paragraphSpan]
+              : paragraph.inlineSpans;
+          for (const span of spans) {
+            const result = formatAnswerSpan({
+              source: paragraph.source,
+              ...span,
+              action,
+            });
+            switch (result.status) {
+              case "unsupported":
+                break;
+              case "unchanged":
+                expect(result).toEqual({ status: "unchanged" });
+                expect(renderedText(parsedMarkdown(paragraph.source))).toBe(
+                  renderedText(paragraph.tree),
+                );
+                break;
+              case "proposal": {
+                proposed = true;
+                const candidate =
+                  paragraph.source.slice(0, result.start) +
+                  result.replacement +
+                  paragraph.source.slice(result.end);
+                const parsed = parsedMarkdown(candidate);
+                expect(renderedText(parsed)).toBe(renderedText(paragraph.tree));
+                const expectedLinks = linkDestinations(paragraph.tree);
+                if (action.format === CHAT_MESSAGE_EDIT_FORMAT.link) {
+                  const existing = selectedMarkdownLinkUrl({
+                    source: paragraph.source,
+                    ...span,
+                  });
+                  if (existing !== undefined) {
+                    const index = expectedLinks.indexOf(existing);
+                    if (index === -1) {
+                      panic(
+                        "Expected selected destination in the original document",
+                      );
+                    }
+                    expectedLinks.splice(index, 1);
+                  }
+                  if (action.intent === CHAT_MESSAGE_LINK_INTENT.set) {
+                    expectedLinks.push(action.url);
+                  }
+                }
+                expect(linkDestinations(parsed)).toEqual(
+                  expectedLinks.toSorted(),
+                );
+                if (action.format !== CHAT_MESSAGE_EDIT_FORMAT.style) {
+                  expect(parsedBlockTree(parsed)).toEqual(expectedBlocks);
+                }
+                break;
+              }
+              default:
+                result satisfies never;
+            }
+          }
+        }),
+        { numRuns: 300 },
+      );
+      expect(proposed).toBe(true);
+    });
   },
 );
 
