@@ -388,6 +388,7 @@ const resume = async ({
   rerunFailure?: boolean;
 }) => {
   const reruns: number[] = [];
+  const routes: string[] = [];
   const statuses: { sha: string; state: string }[] = [];
   const events: string[] = [];
   const pulls = pages.flat();
@@ -436,7 +437,8 @@ const resume = async ({
             },
           };
         },
-        request: async (_route: string, { run_id }: { run_id: number }) => {
+        request: async (route: string, { run_id }: { run_id: number }) => {
+          routes.push(route);
           events.push(`rerun:${run_id}`);
           if (rerunFailure) {
             throw new Error("rerun refused");
@@ -485,7 +487,7 @@ const resume = async ({
     .catch((error: unknown) => {
       failure = error;
     });
-  return { reruns, statuses, events, failure };
+  return { reruns, routes, statuses, events, failure };
 };
 
 const deferred = (count: number, from = 1): DeferredPull[] =>
@@ -543,6 +545,13 @@ test("a deferred head far down the pull request list is still found", async () =
   expect(result.reruns).toEqual([90_010]);
 });
 
+test("a resume re-runs only the cancelled jobs, keeping finished ones", async () => {
+  const result = await resume({ pages: [deferred(1)] });
+  expect(result.routes).toEqual([
+    "POST /repos/{owner}/{repo}/actions/runs/{run_id}/rerun-failed-jobs",
+  ]);
+});
+
 test("a resumed head is marked before its re-run can defer again", async () => {
   const result = await resume({ pages: [deferred(1)] });
   expect(result.events).toEqual(["status:head-1:success", "rerun:10"]);
@@ -554,5 +563,139 @@ test("a refused re-run returns its head to the deferred state", async () => {
   expect(result.statuses).toEqual([
     { sha: "head-1", state: "success" },
     { sha: "head-1", state: "pending" },
+  ]);
+});
+
+const deferSource = workflow.jobs.cleanup.steps.at(2)?.with.script;
+if (!deferSource) {
+  throw new Error("Missing defer script");
+}
+const deferScript = new Script(`(async () => {\n${deferSource}\n})()`);
+
+type PullRun = {
+  id: number;
+  head: string;
+  attempt?: number;
+  fork?: boolean;
+  actor?: string;
+  jobs: string[];
+};
+const defer = async ({
+  waiting = true,
+  runs,
+  cancelFailure = false,
+}: {
+  waiting?: boolean;
+  runs: PullRun[];
+  cancelFailure?: boolean;
+}) => {
+  const cancelled: number[] = [];
+  const events: string[] = [];
+  await deferScript.runInNewContext({
+    context: {
+      repo: { owner: "test", repo: "test" },
+      serverUrl: "https://github.com",
+    },
+    core: { info: () => {}, warning: () => {} },
+    github: {
+      paginate: async (
+        method: { name: string },
+        { run_id }: { run_id?: number },
+      ) => {
+        if (method.name === "listJobsForWorkflowRun") {
+          const run = runs.find((candidate) => candidate.id === run_id);
+          return (run?.jobs ?? []).map((status) => ({ status }));
+        }
+        return runs.map((run) => ({
+          id: run.id,
+          head_sha: run.head,
+          run_attempt: run.attempt ?? 1,
+          head_repository: {
+            full_name: run.fork ? "fork/test" : "test/test",
+          },
+          triggering_actor: { login: run.actor ?? "octocat" },
+        }));
+      },
+      rest: {
+        actions: {
+          listJobsForWorkflowRun: function listJobsForWorkflowRun() {},
+          listWorkflowRuns: function listWorkflowRuns() {},
+          listWorkflowRunsForRepo: async ({ status }: { status: string }) => ({
+            data: {
+              total_count: waiting && status === "queued" ? 1 : 0,
+              workflow_runs: [],
+            },
+          }),
+          cancelWorkflowRun: async ({ run_id }: { run_id: number }) => {
+            events.push(`cancel:${run_id}`);
+            if (cancelFailure) {
+              throw new Error("cancel refused");
+            }
+            cancelled.push(run_id);
+          },
+        },
+        repos: {
+          createCommitStatus: async ({
+            sha,
+            state,
+          }: {
+            sha: string;
+            state: string;
+          }) => {
+            events.push(`status:${sha}:${state}`);
+          },
+        },
+      },
+    },
+  });
+  return { cancelled, events };
+};
+
+test("nothing is deferred while the merge queue has no waiting work", async () => {
+  const result = await defer({
+    waiting: false,
+    runs: [{ id: 1, head: "head-1", jobs: ["completed", "queued"] }],
+  });
+  expect(result.events).toEqual([]);
+});
+
+test("a run with only queued jobs left is marked deferred, then cancelled", async () => {
+  const result = await defer({
+    runs: [{ id: 1, head: "head-1", jobs: ["completed", "queued", "waiting"] }],
+  });
+  expect(result.events).toEqual(["status:head-1:pending", "cancel:1"]);
+});
+
+test("a run with work in progress, or nothing queued, keeps running", async () => {
+  const result = await defer({
+    runs: [
+      { id: 1, head: "head-1", jobs: ["completed", "in_progress", "queued"] },
+      { id: 2, head: "head-2", jobs: ["completed", "in_progress"] },
+    ],
+  });
+  expect(result.events).toEqual([]);
+});
+
+test("resumed, fork and Dependabot runs are never deferred", async () => {
+  const result = await defer({
+    runs: [
+      { id: 1, head: "head-1", attempt: 2, jobs: ["queued"] },
+      { id: 2, head: "head-2", fork: true, jobs: ["queued"] },
+      { id: 3, head: "head-3", actor: "dependabot[bot]", jobs: ["queued"] },
+      { id: 4, head: "head-4", jobs: ["queued"] },
+    ],
+  });
+  expect(result.cancelled).toEqual([4]);
+});
+
+test("a refused cancellation clears the deferral record", async () => {
+  const result = await defer({
+    runs: [{ id: 1, head: "head-1", jobs: ["queued"] }],
+    cancelFailure: true,
+  });
+  expect(result.events).toEqual([
+    "status:head-1:pending",
+    "cancel:1",
+    "status:head-1:success",
   ]);
 });
