@@ -46,6 +46,8 @@ const stepsOf = (workflow: unknown, job: string) =>
   workflowJobSteps(workflow, job).map((step) => v.parse(stepSchema, step));
 const workflowSource = read("marketing-screenshots-update.yml");
 const publishWorkflow = Bun.YAML.parse(workflowSource);
+const captureSource = read("marketing-screenshots-capture.yml");
+const captureWorkflow = Bun.YAML.parse(captureSource);
 const scriptOf = (job: string, name: string) =>
   v.parse(
     v.object({ script: v.string() }),
@@ -112,11 +114,14 @@ const commandsOf = (script: string): string[] =>
     );
 
 describe("pre-release screenshot workflow", () => {
-  test("capture and publication share one reusable manual workflow", () => {
+  test("one reusable manual workflow awaits the capture and publishes", () => {
     const names = readdirSync(
       new URL("../.github/workflows/", import.meta.url),
     ).filter((name) => name.startsWith("marketing-screenshots"));
-    expect(names).toEqual(["marketing-screenshots-update.yml"]);
+    expect(names.toSorted()).toEqual([
+      "marketing-screenshots-capture.yml",
+      "marketing-screenshots-update.yml",
+    ]);
     const workflows = readdirSync(
       new URL("../.github/workflows/", import.meta.url),
     ).filter((name) => name.endsWith(".yml"));
@@ -126,12 +131,12 @@ describe("pre-release screenshot workflow", () => {
           read(name).includes("/marketing-capture") ||
           read(name).includes("test:e2e:marketing"),
       ),
-    ).toEqual(["marketing-screenshots-update.yml"]);
+    ).toEqual(["marketing-screenshots-capture.yml"]);
     expect(
       workflows
         .filter(
           (name) =>
-            name !== "marketing-screenshots-update.yml" &&
+            !names.includes(name) &&
             read(name).includes("marketing-screenshots-update.yml"),
         )
         .toSorted(),
@@ -144,8 +149,8 @@ describe("pre-release screenshot workflow", () => {
       "workflow_call",
       "workflow_dispatch",
     ]);
-    expect(workflowSource).not.toContain("createWorkflowDispatch");
     expect(workflowSource).not.toContain("workflow_run:");
+    expect(captureSource).not.toContain("workflow_run:");
     expect(jobsOf(publishWorkflow)["publish"]?.needs).toEqual([
       "select",
       "capture",
@@ -167,47 +172,112 @@ describe("pre-release screenshot workflow", () => {
     );
   });
 
-  test("capture updates PNGs with trusted tooling and no push credential", () => {
-    const capture = jobsOf(publishWorkflow)["capture"];
-    expect(capture?.permissions).toEqual({ contents: "read" });
-    expect(capture?.environment).toBeUndefined();
-    expect(JSON.stringify(capture)).not.toContain(
-      "STELLA_RELEASE_APP_PRIVATE_KEY",
-    );
-    const steps = stepsOf(publishWorkflow, "capture");
+  // Runs of the update workflow use main's ref and therefore main's cache
+  // scope (the runtime credentials actions/cache uses). Branch install,
+  // build and spec code must never execute there: `save: false` only turns
+  // off one cooperative save step, not what the branch's code can do.
+  test("no job on main's ref executes code from a checked-out tree", () => {
+    const jobs = jobsOf(publishWorkflow);
+    for (const [name, job] of Object.entries(jobs)) {
+      const steps = stepsOf(publishWorkflow, name);
+      for (const step of steps) {
+        // A local action or a cache action would run or restore tree content.
+        expect(
+          step.uses?.startsWith("./") ?? false,
+          `${name}: ${step.uses}`,
+        ).toBe(false);
+        expect(step.uses?.startsWith("actions/cache") ?? false).toBe(false);
+        expect(step.uses?.includes("setup-bun") ?? false).toBe(false);
+      }
+      const checkouts = steps.filter((step) =>
+        step.uses?.startsWith("actions/checkout@"),
+      );
+      if (name !== "publish") {
+        // Only the publish job has a checkout, and it executes nothing from
+        // it (its shell commands are pinned below).
+        expect(checkouts, name).toEqual([]);
+        expect(
+          steps.filter((step) => step.run !== undefined),
+          name,
+        ).toEqual([]);
+      }
+      expect(JSON.stringify(job)).not.toContain("marketing-capture");
+      expect(JSON.stringify(job)).not.toContain("DOCKERHUB");
+    }
+    const publish = stepsOf(publishWorkflow, "publish");
+    for (const step of publish) {
+      if (step.run !== undefined) {
+        for (const command of commandsOf(step.run)) {
+          expect(PUBLISH_SHELL_COMMANDS.has(command), command).toBe(true);
+        }
+      }
+    }
+  });
+
+  test("branch code runs only in a capture dispatched on the branch's own ref", () => {
+    const triggers = v.parse(
+      v.looseObject({ on: v.record(v.string(), v.unknown()) }),
+      captureWorkflow,
+    ).on;
+    expect(Object.keys(triggers)).toEqual(["workflow_dispatch"]);
     expect(
-      steps.find((step) => step.name === "Checkout capture tooling")?.with,
+      v.parse(v.looseObject({ permissions: v.unknown() }), captureWorkflow)
+        .permissions,
+    ).toEqual({});
+    const jobs = jobsOf(captureWorkflow);
+    expect(Object.keys(jobs)).toEqual(["capture"]);
+    const capture = v.parse(
+      v.looseObject({ if: v.string(), permissions: v.unknown() }),
+      jobs["capture"],
+    );
+    // Never the default branch, whose cache scope main runs restore.
+    expect(capture.if.replaceAll(/\s+/gu, " ").trim()).toBe(
+      "startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)",
+    );
+    // The job that runs branch code holds no write permission, no
+    // deployment environment and no release key.
+    expect(capture.permissions).toEqual({ contents: "read" });
+    expect(jobs["capture"]?.environment).toBeUndefined();
+    expect(captureSource).not.toContain("RELEASE_APP");
+    expect(captureSource).not.toContain("github-token");
+    const steps = stepsOf(captureWorkflow, "capture");
+    expect(
+      steps.find((step) => step.name === "Checkout the release tree")?.with,
     ).toMatchObject({
-      path: ".capture-tooling",
+      ref: githubExpression("inputs.sha"),
       "persist-credentials": false,
     });
     expect(
-      steps.find((step) => step.name === "Checkout capture tooling")?.with?.[
-        "ref"
-      ],
-    ).toBeUndefined();
-    expect(
       steps.find((step) => step.name === "Capture marketing screenshots"),
     ).toMatchObject({
-      uses: "./.capture-tooling/.github/actions/marketing-capture",
+      uses: "./.github/actions/marketing-capture",
       with: { mode: "update" },
     });
-    const preserve = steps.findIndex(
-      (step) =>
-        step.name === "Preserve capture tooling outside the release checkout",
+    expect(
+      steps.find((step) => step.name === "Upload regenerated baselines")?.with,
+    ).toMatchObject({
+      name: "marketing-screenshots",
+      path: "apps/landing/public/media/products/*.png",
+    });
+
+    // The main-ref jobs that hold privileged writes never share a job with
+    // branch code: the capture job only dispatches and waits.
+    const updateJobs = jobsOf(publishWorkflow);
+    expect(updateJobs["capture"]?.permissions).toEqual({ actions: "write" });
+    expect(updateJobs["capture"]?.environment).toBeUndefined();
+    expect(JSON.stringify(updateJobs["capture"])).not.toContain(
+      "STELLA_RELEASE_APP_PRIVATE_KEY",
     );
-    const checkout = steps.findIndex(
-      (step) => step.name === "Checkout the release tree",
+    expect(updateJobs["capture"]?.needs).toEqual(["select", "prepare"]);
+    expect(updateJobs["prepare"]?.environment).toBe("release-app");
+    expect(updateJobs["prepare"]?.permissions).toEqual({});
+    const download = stepsOf(publishWorkflow, "publish").find(
+      (step) => step.name === "Download regenerated baselines",
     );
-    const restore = steps.findIndex(
-      (step) => step.name === "Restore trusted capture tooling",
-    );
-    expect(preserve).toBeGreaterThan(0);
-    expect(checkout).toBeGreaterThan(preserve);
-    expect(restore).toBeGreaterThan(checkout);
-    expect(steps[restore]?.run).toContain(
-      "-e .capture-tooling || -L .capture-tooling",
-    );
+    expect(download?.with).toMatchObject({
+      name: "marketing-screenshots",
+      "run-id": githubExpression("needs.capture.outputs.run-id"),
+    });
     const action = readFileSync(
       new URL(
         "../.github/actions/marketing-capture/action.yml",
@@ -222,7 +292,7 @@ describe("pre-release screenshot workflow", () => {
     const jobs = jobsOf(publishWorkflow);
     expect(jobs["publish"]?.environment).toBe("release-app");
     for (const [name, job] of Object.entries(jobs)) {
-      if (name !== "publish") {
+      if (name !== "publish" && name !== "prepare") {
         expect(JSON.stringify(job)).not.toContain(
           "STELLA_RELEASE_APP_PRIVATE_KEY",
         );
@@ -249,7 +319,9 @@ describe("pre-release screenshot workflow", () => {
     const download = steps.find(
       (step) => step.name === "Download regenerated baselines",
     );
-    expect(download?.with?.["run-id"]).toBeUndefined();
+    expect(download?.with?.["run-id"]).toBe(
+      githubExpression("needs.capture.outputs.run-id"),
+    );
     expect(download?.with?.["name"]).toBe("marketing-screenshots");
     const position = (name: string) =>
       steps.findIndex((step) => step.name === name);
@@ -287,63 +359,143 @@ describe("pre-release screenshot workflow", () => {
   });
 });
 
-test("release checkout cannot remove or replace the trusted capture tooling", () => {
-  const steps = stepsOf(publishWorkflow, "capture");
-  const preserve = v.parse(
-    v.string(),
-    steps.find(
-      (step) =>
-        step.name === "Preserve capture tooling outside the release checkout",
-    )?.run,
-  );
-  const restore = v.parse(
-    v.string(),
-    steps.find((step) => step.name === "Restore trusted capture tooling")?.run,
-  );
-  for (const releasePath of ["absent", "directory", "symlink"] as const) {
-    const root = mkdtempSync(path.join(tmpdir(), "marketing-tooling-"));
-    const checkout = path.join(root, "checkout");
-    const runnerTemp = path.join(root, "runner-temp");
-    try {
-      mkdirSync(path.join(checkout, ".capture-tooling"), { recursive: true });
-      mkdirSync(runnerTemp);
-      writeFileSync(
-        path.join(checkout, ".capture-tooling", "action.yml"),
-        "trusted",
-      );
-      const run = (command: string) =>
-        Bun.spawnSync(["bash", "-e", "-c", command], {
-          cwd: checkout,
-          env: { ...process.env, RUNNER_TEMP: runnerTemp },
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-      expect(run(preserve).exitCode).toBe(0);
-      rmSync(checkout, { recursive: true });
-      mkdirSync(checkout);
-      if (releasePath === "directory") {
-        mkdirSync(path.join(checkout, ".capture-tooling"));
-      }
-      if (releasePath === "symlink") {
-        symlinkSync(runnerTemp, path.join(checkout, ".capture-tooling"));
-      }
-      const result = run(restore);
-      expect(result.exitCode).toBe(releasePath === "absent" ? 0 : 1);
-      if (releasePath !== "absent") {
-        expect(result.stdout.toString()).toContain(
-          "occupies the capture tooling path",
-        );
-        continue;
-      }
-      expect(
-        readFileSync(
-          path.join(checkout, ".capture-tooling", "action.yml"),
-          "utf-8",
-        ),
-      ).toBe("trusted");
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+describe("capture dispatch on the release branch", () => {
+  const dispatch = executable("capture", "Capture on the release branch");
+  const BRANCH = "changeset-release/main";
+  const scenario = () => ({
+    branch: BRANCH,
+    head: HEAD,
+    runId: 42 as number | undefined,
+    run: {
+      id: 42,
+      status: "completed",
+      conclusion: "success",
+      path: ".github/workflows/marketing-screenshots-capture.yml",
+      event: "workflow_dispatch",
+      head_branch: BRANCH,
+      display_title: "Capture marketing screenshots 7-1",
+      head_repository: { full_name: "stella/stella" },
+      html_url: "https://github.com/stella/stella/actions/runs/42",
+    },
+  });
+  const dispatchFor = async (input: ReturnType<typeof scenario>) => {
+    const outputs: Record<string, string> = {};
+    const dispatches: unknown[] = [];
+    const builder = {
+      addHeading: () => builder,
+      addLink: () => builder,
+      write: async () => {},
+    };
+    await dispatch.runInNewContext({
+      context: { repo: { owner: "stella", repo: "stella" }, runId: 7 },
+      process: {
+        env: {
+          BRANCH: input.branch,
+          CAPTURE_HEAD: input.head,
+          GITHUB_RUN_ATTEMPT: "1",
+        },
+      },
+      setTimeout: (callback: () => void) => {
+        callback();
+      },
+      Date,
+      core: {
+        setOutput: (name: string, value: string) => {
+          outputs[name] = value;
+        },
+        summary: builder,
+      },
+      github: {
+        rest: {
+          actions: {
+            createWorkflowDispatch: async (params: unknown) => {
+              dispatches.push(params);
+              return input.runId === undefined
+                ? { status: 204, data: undefined }
+                : { status: 200, data: { workflow_run_id: input.runId } };
+            },
+            listWorkflowRuns: async (params: unknown) => {
+              expect(params).toMatchObject({
+                workflow_id: "marketing-screenshots-capture.yml",
+                branch: BRANCH,
+                event: "workflow_dispatch",
+              });
+              return { data: { workflow_runs: [input.run] } };
+            },
+            getWorkflowRun: async () => ({ data: input.run }),
+          },
+        },
+      },
+    });
+    return { outputs, dispatches };
+  };
+
+  test("dispatches the capture on the branch's ref and returns its run", async () => {
+    expect(await dispatchFor(scenario())).toEqual({
+      outputs: { "run-id": "42" },
+      dispatches: [
+        {
+          owner: "stella",
+          repo: "stella",
+          workflow_id: "marketing-screenshots-capture.yml",
+          ref: BRANCH,
+          inputs: { sha: HEAD, request: "7-1" },
+          return_run_details: true,
+        },
+      ],
+    });
+  });
+
+  test("finds the dispatched run by its request when no run id is returned", async () => {
+    const input = scenario();
+    input.runId = undefined;
+    expect((await dispatchFor(input)).outputs).toEqual({ "run-id": "42" });
+  });
+
+  for (const [name, change, message] of [
+    [
+      "main",
+      (input: ReturnType<typeof scenario>) => {
+        input.branch = "main";
+      },
+      "release branch",
+    ],
+    [
+      "a short commit",
+      (input: ReturnType<typeof scenario>) => {
+        input.head = "abc";
+      },
+      "full commit SHA",
+    ],
+    [
+      "a run on another branch",
+      (input: ReturnType<typeof scenario>) => {
+        input.run.head_branch = "main";
+      },
+      "is not this capture",
+    ],
+    [
+      "a run of another workflow",
+      (input: ReturnType<typeof scenario>) => {
+        input.run.path = ".github/workflows/ci.yml";
+      },
+      "is not this capture",
+    ],
+    [
+      "a failed capture",
+      (input: ReturnType<typeof scenario>) => {
+        input.run.conclusion = "failure";
+      },
+      "concluded failure",
+    ],
+  ] as const) {
+    test(`refuses ${name}`, async () => {
+      const input = scenario();
+      change(input);
+      expect(await rejectionOf(dispatchFor(input))).toMatchObject({
+        message: expect.stringContaining(message),
+      });
+    });
   }
 });
 

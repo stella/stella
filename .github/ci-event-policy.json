@@ -169,6 +169,8 @@
     "type-cost-measurement.yml/prepare": "main",
     "type-cost-measurement.yml/measure": "main",
     "marketing-screenshots-update.yml/select": "main",
+    "marketing-screenshots-update.yml/prepare": "main",
+    "marketing-screenshots-capture.yml/capture": "dispatch-only",
     "marketing-screenshots-update.yml/capture": "main",
     "marketing-screenshots-update.yml/publish": "main",
     "release-pr.yml/marketing-screenshots": "main",

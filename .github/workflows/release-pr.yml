@@ -120,5 +120,7 @@ jobs:
       branch: ${{ needs.screenshot-plan.outputs.branch }}
     secrets: inherit
     permissions:
+      # Dispatches the capture run on the release branch and reads its artifact.
+      actions: write
       contents: read
       pull-requests: read

@@ -26,9 +26,14 @@ capture a main commit instead, omit `branch` and optionally supply its full SHA:
 gh workflow run marketing-screenshots-update.yml --ref main -f ref=<main-commit-sha>
 ```
 
-Capture and publication are jobs in the same workflow. Capture runs the selected
-app and spec code without the release App key. Publication runs no code from
-that tree: it accepts only flat, regular PNG files with a PNG signature, then
+This workflow runs on main's ref and never executes the selected tree's code.
+It dispatches **Capture marketing screenshots**
+(`.github/workflows/marketing-screenshots-capture.yml`) on the captured
+branch's own ref and waits for it, so the app and spec code run in that
+branch's cache scope, read-only and without the release App key; the capture
+refuses to run on `main`. A main commit is first given its publication branch
+for this purpose, which is removed again when nothing changed. Publication runs
+no code from that tree: it accepts only flat, regular PNG files with a PNG signature, then
 uses the release App to append signed baseline commits. It verifies the remote
 commit and PNG hashes before reporting `published`; an absent commit, changed
 branch or mismatched PNG fails loudly. Identical PNGs report `no-change` without
@@ -39,7 +44,7 @@ branch and review PR. Conflicting publication content reports
 `BASELINE_PUBLICATION_CONFLICT` without rewriting the branch.
 
 The `marketing-screenshots` artifact and workflow summary retain the regenerated
-PNGs and review result. Capture uses the workflow revision's composite action
+PNGs and review result. Capture uses the captured branch's composite action
 `.github/actions/marketing-capture`, with cache saves disabled.
 
 Running `bun --filter @stll/web test:e2e:marketing:update` locally is for

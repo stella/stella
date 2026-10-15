@@ -65,6 +65,14 @@ const marketingUpdateWorkflow = readFileSync(
   "utf-8",
 );
 
+const marketingCaptureWorkflow = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/workflows/marketing-screenshots-capture.yml",
+  ),
+  "utf-8",
+);
+
 const marketingCapture = readFileSync(
   path.join(
     import.meta.dirname,
@@ -372,6 +380,7 @@ describe("detect-e2e-changes", () => {
       "packages/locales/src/en.ts",
       "apps/landing/public/media/products/editor.png",
       ".github/workflows/marketing-screenshots-update.yml",
+      ".github/workflows/marketing-screenshots-capture.yml",
       ".github/actions/marketing-capture/action.yml",
     ]) {
       expect(detects("marketing", [file])).toBe("true");
@@ -930,11 +939,17 @@ describe("detect-e2e-changes", () => {
     const jobs = contractWorkflow(update).jobs;
     const needs = jobs["publish"]?.needs;
     expect(Array.isArray(needs) ? needs : [needs]).toContain("capture");
+    // Branch code runs only in the capture workflow, dispatched on the
+    // release branch's own ref; the main-ref workflow waits for it.
+    expect(marketingUpdateWorkflow).not.toContain("marketing-capture");
     expect(jobOf(marketingUpdateWorkflow, "capture")).toContain(
-      "uses: ./.capture-tooling/.github/actions/marketing-capture",
+      "createWorkflowDispatch",
+    );
+    expect(jobOf(marketingCaptureWorkflow, "capture")).toContain(
+      "uses: ./.github/actions/marketing-capture",
     );
     expect(marketingUpdateWorkflow).not.toContain("workflow_run:");
-    expect(marketingUpdateWorkflow).not.toContain("createWorkflowDispatch");
+    expect(marketingCaptureWorkflow).not.toContain("workflow_run:");
   });
 
   test("checks out the validated tree for main-heavy suites", () => {
@@ -1211,12 +1226,13 @@ describe("detect-e2e-changes", () => {
     );
     expect(marketingCapture).not.toContain("outputs.status");
     expect(marketingUpdateWorkflow).not.toContain("steps.e2e-stack");
+    expect(marketingCaptureWorkflow).not.toContain("steps.e2e-stack");
   });
 
   test("keeps capture and cleanup in one composite action", () => {
     expect(
-      marketingUpdateWorkflow.match(
-        /uses: \.\/\.capture-tooling\/\.github\/actions\/marketing-capture/gu,
+      marketingCaptureWorkflow.match(
+        /uses: \.\/\.github\/actions\/marketing-capture/gu,
       ),
     ).toHaveLength(1);
     expect(marketingCapture).toContain("test:e2e:marketing:update");
@@ -1514,9 +1530,14 @@ describe("detect-e2e-changes", () => {
     expect(jobOf(marketingUpdateWorkflow, "publish")).toContain(
       "environment: release-app",
     );
+    expect(jobOf(marketingUpdateWorkflow, "prepare")).toContain(
+      "environment: release-app",
+    );
     expect(jobOf(marketingUpdateWorkflow, "capture")).not.toContain(
       "environment:",
     );
+    expect(marketingCaptureWorkflow).not.toContain("environment:");
+    expect(marketingCaptureWorkflow).not.toContain("RELEASE_APP");
 
     // A job that calls a reusable workflow cannot declare an environment:
     // GitHub allows only name, uses, with, secrets, strategy, needs, if,

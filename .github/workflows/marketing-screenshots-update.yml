@@ -4,9 +4,11 @@ defaults:
   run:
     shell: bash
 
-# Capture and publication share a run; neither relies on workflow_run delivery.
-# Branch code executes only in the read-only capture job. Publication treats
-# its artifact as data and runs no code from the captured tree.
+# Runs of this workflow use main's ref, so they never execute branch code: the
+# capture job dispatches marketing-screenshots-capture.yml on the captured
+# branch's own ref, whose cache scope is that branch, and waits for it.
+# Publication treats that run's artifact as data and runs no code from the
+# captured tree. No step relies on workflow_run delivery.
 on:
   workflow_dispatch:
     inputs:
@@ -30,10 +32,6 @@ on:
         type: string
     secrets:
       STELLA_RELEASE_APP_PRIVATE_KEY:
-        required: false
-      DOCKERHUB_USERNAME:
-        required: false
-      DOCKERHUB_TOKEN:
         required: false
     outputs:
       result:
@@ -101,65 +99,129 @@ jobs:
             core.setOutput('head', head);
             core.setOutput('target', 'new-pr');
 
-  capture:
+  # A main commit has no branch of its own yet: give it its publication branch
+  # so its capture can run in that branch's scope. Only the API runs here.
+  prepare:
     needs: select
+    if: needs.select.outputs.target == 'new-pr'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
+    timeout-minutes: 5
+    environment: release-app
+    permissions: {}
     steps:
-      - name: Checkout capture tooling
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Mint App token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          persist-credentials: false
-          path: .capture-tooling
-      - name: Preserve capture tooling outside the release checkout
-        run: mv .capture-tooling "$RUNNER_TEMP/capture-tooling"
-      - name: Checkout the release tree
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+          client-id: ${{ vars.STELLA_RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.STELLA_RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+
+      - name: Create the capture branch
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          BRANCH: ${{ needs.select.outputs.branch }}
+          CAPTURE_HEAD: ${{ needs.select.outputs.head }}
         with:
-          persist-credentials: false
-          ref: ${{ needs.select.outputs.head }}
-          submodules: true
-      - name: Restore trusted capture tooling
-        run: |
-          set -euo pipefail
-          if [[ -e .capture-tooling || -L .capture-tooling ]]; then
-            echo "::error::The release tree occupies the capture tooling path"
-            exit 1
-          fi
-          mv "$RUNNER_TEMP/capture-tooling" .capture-tooling
-      - name: Capture marketing screenshots
-        uses: ./.capture-tooling/.github/actions/marketing-capture
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = process.env.BRANCH;
+            const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+              owner, repo, ref: `heads/${branch}`, per_page: 100,
+            });
+            const matches = refs.filter(ref => ref.ref === `refs/heads/${branch}`);
+            if (matches.length > 1) throw new Error('Ambiguous baseline publication branch');
+            // An existing branch is an earlier publication of this tree; the
+            // publish job verifies it against the new capture.
+            if (matches.length === 1) return;
+            await github.rest.git.createRef({
+              owner, repo, ref: `refs/heads/${branch}`, sha: process.env.CAPTURE_HEAD,
+            });
+
+  # Branch code never runs in this workflow, whose runs use main's ref and
+  # cache scope. The capture runs as marketing-screenshots-capture.yml
+  # dispatched on the captured branch; this job only waits for that run.
+  capture:
+    needs: [select, prepare]
+    if: >-
+      !cancelled()
+      && needs.select.result == 'success'
+      && (needs.prepare.result == 'success' || needs.prepare.result == 'skipped')
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: write
+    outputs:
+      run-id: ${{ steps.capture.outputs.run-id }}
+    steps:
+      - name: Capture on the release branch
+        id: capture
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          BRANCH: ${{ needs.select.outputs.branch }}
+          CAPTURE_HEAD: ${{ needs.select.outputs.head }}
         with:
-          mode: update
-          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
-          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Upload regenerated baselines
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: marketing-screenshots
-          path: apps/landing/public/media/products/*.png
-          if-no-files-found: error
-          retention-days: 7
-      - name: Upload failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: marketing-screenshots-diagnostics
-          path: |
-            /tmp/api.log
-            /tmp/web.log
-            apps/web/test-results/
-          if-no-files-found: ignore
-          retention-days: 7
+          script: |
+            const { owner, repo } = context.repo;
+            const workflow = 'marketing-screenshots-capture.yml';
+            const branch = process.env.BRANCH || '';
+            const head = process.env.CAPTURE_HEAD || '';
+            if (!branch || branch === 'main' || !/^[0-9a-f]{40}$/u.test(head))
+              throw new Error('Capture needs a release branch and a full commit SHA');
+            const request = `${context.runId}-${process.env.GITHUB_RUN_ATTEMPT}`;
+            const title = `Capture marketing screenshots ${request}`;
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+            const deadline = Date.now() + 40 * 60 * 1000;
+            const dispatched = await github.rest.actions.createWorkflowDispatch({
+              owner, repo, workflow_id: workflow, ref: branch,
+              inputs: { sha: head, request }, return_run_details: true,
+            });
+            let id = dispatched.data?.workflow_run_id;
+            while (!id) {
+              if (Date.now() > deadline) throw new Error('Dispatched capture run did not appear');
+              await sleep(10000);
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner, repo, workflow_id: workflow, branch, event: 'workflow_dispatch', per_page: 50,
+              });
+              const runs = data.workflow_runs.filter(run => run.display_title === title);
+              if (runs.length > 1) throw new Error('Ambiguous dispatched capture run');
+              id = runs[0]?.id;
+            }
+            let run;
+            for (;;) {
+              ({ data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id: id }));
+              if (run.status === 'completed') break;
+              if (Date.now() > deadline) throw new Error(`Capture run ${run.html_url} did not finish in time`);
+              await sleep(30000);
+            }
+            // The awaited run must be this capture on the release branch's own
+            // ref, never on main, and it must have succeeded.
+            if (run.path !== `.github/workflows/${workflow}` || run.event !== 'workflow_dispatch'
+              || run.head_branch !== branch || run.display_title !== title
+              || run.head_repository?.full_name !== `${owner}/${repo}`)
+              throw new Error(`Run ${id} is not this capture on ${branch}`);
+            if (run.conclusion !== 'success')
+              throw new Error(`Capture run ${run.html_url} concluded ${run.conclusion}`);
+            core.setOutput('run-id', String(id));
+            await core.summary.addHeading('Marketing screenshots: captured')
+              .addLink(`Capture run on ${branch}`, run.html_url).write();
 
   publish:
     needs: [select, capture]
+    # The capture job runs after a skipped prepare job; require its success
+    # explicitly so that skip does not propagate here.
+    if: >-
+      !cancelled()
+      && needs.select.result == 'success'
+      && needs.capture.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment: release-app
     permissions:
+      actions: read
       contents: read
       pull-requests: read
     outputs:
@@ -176,6 +238,9 @@ jobs:
         with:
           name: marketing-screenshots
           path: ${{ runner.temp }}/regenerated-baselines
+          run-id: ${{ needs.capture.outputs.run-id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
       - name: Stage validated baselines
         env:
           SOURCE: ${{ runner.temp }}/regenerated-baselines
@@ -237,7 +302,7 @@ jobs:
           fi
 
       - name: Mint App token
-        if: steps.changes.outputs.result == 'changed'
+        if: steps.changes.outputs.result == 'changed' || needs.select.outputs.target == 'new-pr'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -288,6 +353,27 @@ jobs:
           branch: ${{ needs.select.outputs.branch }}
           paths: apps/landing/public/media/products/*.png
           commit-message: "chore(landing): regenerate marketing screenshots"
+
+      - name: Remove the unused capture branch
+        if: steps.changes.outputs.result == 'no-change' && needs.select.outputs.target == 'new-pr'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          BRANCH: ${{ needs.select.outputs.branch }}
+          CAPTURE_HEAD: ${{ needs.select.outputs.head }}
+        with:
+          github-token: ${{ steps.app-token.outputs.token }}
+          script: |
+            const { owner, repo } = context.repo;
+            const branch = process.env.BRANCH;
+            const refs = await github.paginate(github.rest.git.listMatchingRefs, {
+              owner, repo, ref: `heads/${branch}`, per_page: 100,
+            });
+            const match = refs.find(ref => ref.ref === `refs/heads/${branch}`);
+            // Only the branch the prepare job created at the captured head; a
+            // published baseline commit stays for its review.
+            if (match?.object.sha === process.env.CAPTURE_HEAD) {
+              await github.rest.git.deleteRef({ owner, repo, ref: `heads/${branch}` });
+            }
 
       - name: Verify publication and report review result
         id: verify
