@@ -1325,6 +1325,7 @@
       "loadError": "Einträge konnten nicht geladen werden"
     },
     "messageTimestampToday": "Heute, {time}",
+    "messageUnavailable": "Diese Nachricht kann nicht angezeigt werden.",
     "mockModel": {
       "description": "Vorgefertigte Antworten des lokalen Simulationsmodells",
       "label": "Simulierte KI"

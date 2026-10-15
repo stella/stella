@@ -1325,6 +1325,7 @@
       "loadError": "Nepodařilo se načíst položky"
     },
     "messageTimestampToday": "Dnes, {time}",
+    "messageUnavailable": "Tuto zprávu nelze zobrazit.",
     "mockModel": {
       "description": "Předpřipravené odpovědi místního simulovaného modelu",
       "label": "Simulovaná AI"

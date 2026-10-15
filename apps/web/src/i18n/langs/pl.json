@@ -1325,6 +1325,7 @@
       "loadError": "Nie udało się załadować elementów"
     },
     "messageTimestampToday": "Dzisiaj, {time}",
+    "messageUnavailable": "Nie można wyświetlić tej wiadomości.",
     "mockModel": {
       "description": "Gotowe odpowiedzi lokalnego modelu symulowanego",
       "label": "Symulowane AI"

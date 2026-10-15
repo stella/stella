@@ -1325,6 +1325,7 @@
       "loadError": "Falha ao carregar itens"
     },
     "messageTimestampToday": "Hoje, {time}",
+    "messageUnavailable": "Não é possível exibir esta mensagem.",
     "mockModel": {
       "description": "Respostas prontas do modelo simulado local",
       "label": "IA simulada"

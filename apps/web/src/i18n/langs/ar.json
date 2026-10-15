@@ -1325,6 +1325,7 @@
       "loadError": "تعذّر تحميل العناصر"
     },
     "messageTimestampToday": "اليوم، {time}",
+    "messageUnavailable": "لا يمكن عرض هذه الرسالة.",
     "mockModel": {
       "description": "ردود ثابتة من نموذج المحاكاة المحلي",
       "label": "ذكاء اصطناعي مُحاكى"

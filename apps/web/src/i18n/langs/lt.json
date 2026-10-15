@@ -1325,6 +1325,7 @@
       "loadError": "Nepavyko įkelti elementų"
     },
     "messageTimestampToday": "Šiandien, {time}",
+    "messageUnavailable": "Šio pranešimo negalima parodyti.",
     "mockModel": {
       "description": "Iš anksto paruošti vietinio imituojamo modelio atsakymai",
       "label": "Imituojamas DI"
