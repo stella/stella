@@ -100,10 +100,20 @@ describe.skipIf(!enabled)("favicon cache over Valkey", () => {
       expect(
         negativeExpiry - Math.floor(Date.now() / 1000),
       ).toBeLessThanOrEqual(3600);
-      // Even if eviction loses the expiry index, embedded expiry prevents stale hits.
+      // Losing the index discards its payloads, so old entries cannot strand budget.
       await raw.send("HSET", [entries, hostField(subject.hostname), "1:PAA=="]);
       await raw.send("DEL", [expiry]);
-      expect((await cache.readOrLease(subject)).type).toBe("lease");
+      expect(
+        (
+          await cache.readOrLease({
+            ...subject,
+            hostname: "replacement.example",
+          })
+        ).type,
+      ).toBe("lease");
+      expect(
+        await raw.send("HEXISTS", [entries, hostField(subject.hostname)]),
+      ).toBe(0);
     } finally {
       await fixture.dispose();
     }

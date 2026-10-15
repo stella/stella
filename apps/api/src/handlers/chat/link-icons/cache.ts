@@ -40,7 +40,11 @@ const COMMON = `
 local now = tonumber(redis.call('TIME')[1])
 local accounting = redis.call('HGET', KEYS[1], '__bytes')
 -- Eviction may remove one key independently. Accounting lives with payloads;
--- discard an orphan expiry index before accepting any new entries.
+-- discard either orphan so unreachable expiry records cannot strand budget.
+if accounting and redis.call('EXISTS', KEYS[2]) == 0 then
+  redis.call('DEL', KEYS[1])
+  accounting = nil
+end
 if not accounting then redis.call('DEL', KEYS[2]) end
 local used = tonumber(accounting or '1024')
 local function remove(field)
