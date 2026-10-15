@@ -19,6 +19,7 @@ import {
   createCompilerInputRecorder,
 } from "./compiler-input-stamp";
 import {
+  ABANDONED_TEMPORARY_MS,
   KEEP_ENTRIES,
   publishGeneratedOutput,
   restoreGeneratedOutput,
@@ -267,4 +268,47 @@ test("keeps at most KEEP_ENTRIES entries, dropping the least recently used", asy
   expect(entries).toHaveLength(KEEP_ENTRIES);
   // The restore marked it used, so an older unrestored entry went instead.
   expect(entries).toContain(kept);
+});
+
+test("an entry that cannot be inspected is skipped and pruned first", async () => {
+  publishGeneratedOutput({
+    storeDir,
+    stamp: portableStamp(checkout),
+    output: "printed",
+  });
+  // A self-referential link: inspecting it fails with ELOOP.
+  symlinkSync("looped", path.join(storeDir, "looped"));
+  expect((await restore(checkout))?.output.toString()).toBe("printed");
+
+  write(checkout, "src/a.ts", "export type A = number;\n");
+  const other = portableStamp(checkout);
+  for (let index = 1; index < KEEP_ENTRIES; index += 1) {
+    publishGeneratedOutput({
+      storeDir,
+      stamp: other,
+      output: `other ${index}`,
+    });
+  }
+  const entries = readdirSync(storeDir);
+  expect(entries).toHaveLength(KEEP_ENTRIES);
+  expect(entries).not.toContain("looped");
+});
+
+test("publishing removes temporaries abandoned by a dead process", () => {
+  mkdirSync(storeDir, { recursive: true });
+  const abandoned = path.join(storeDir, ".entry.4242.tmp");
+  const active = path.join(storeDir, ".entry.4343.tmp");
+  mkdirSync(abandoned);
+  mkdirSync(active);
+  const old = new Date(Date.now() - ABANDONED_TEMPORARY_MS - 60_000);
+  utimesSync(abandoned, old, old);
+
+  publishGeneratedOutput({
+    storeDir,
+    stamp: portableStamp(checkout),
+    output: "printed",
+  });
+  const entries = readdirSync(storeDir);
+  expect(entries).not.toContain(".entry.4242.tmp");
+  expect(entries).toContain(".entry.4343.tmp");
 });

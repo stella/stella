@@ -457,7 +457,11 @@ export const isCompilerInputStampCurrent = async (
 /** Hashes the relative and workspace import closure of a script. */
 export const scriptSourceHash = (entry: string): string => {
   const hash = createSha256();
-  const pending = [entry];
+  // Names relative to the entry: checkouts at other paths hash alike. Real
+  // paths, since resolution returns them for the imports.
+  const realEntry = realpathSync(entry);
+  const base = path.dirname(realEntry);
+  const pending = [realEntry];
   const seen = new Set<string>();
   while (pending.length > 0) {
     const file = pending.pop();
@@ -466,7 +470,9 @@ export const scriptSourceHash = (entry: string): string => {
     }
     seen.add(file);
     const source = readFileSync(file, "utf-8");
-    hash.update(JSON.stringify([file, sha256Hex(source)]));
+    hash.update(
+      JSON.stringify([repoRelativePath(base, file), sha256Hex(source)]),
+    );
     for (const { fileName } of ts.preProcessFile(source, true, true)
       .importedFiles) {
       if (fileName.startsWith(".") || fileName.startsWith("@stll/")) {

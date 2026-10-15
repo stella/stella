@@ -32,6 +32,10 @@ const OUTPUT_FILE = "output";
 // Entries kept per store; the oldest by last use go first. A restore tries
 // every kept entry, newest first; each miss stops at its first changed input.
 export const KEEP_ENTRIES = 16;
+// A publication's temporary directory older than this was abandoned by a
+// process that died before its cleanup ran.
+export const ABANDONED_TEMPORARY_MS = 60 * 60 * 1000;
+const TEMPORARY_PATTERN = /^\..+\.\d+\.tmp$/u;
 
 const entrySchema = v.strictObject({
   outputHash: v.string(),
@@ -59,11 +63,16 @@ const entriesNewestFirst = (storeDir: string) => {
   return listed.value
     .filter((name) => !name.startsWith("."))
     .flatMap((name) => {
-      const stats = statSync(path.join(storeDir, name), {
-        throwIfNoEntry: false,
-      });
-      return stats?.isDirectory() === true
-        ? [{ name, used: stats.mtimeMs }]
+      const stats = Result.try(() =>
+        statSync(path.join(storeDir, name), { throwIfNoEntry: false }),
+      );
+      // An entry that cannot be inspected sorts oldest: a restore skips it
+      // as unreadable and pruning removes it first.
+      if (stats.isErr()) {
+        return [{ name, used: 0 }];
+      }
+      return stats.value?.isDirectory() === true
+        ? [{ name, used: stats.value.mtimeMs }]
         : [];
     })
     .toSorted((left, right) => right.used - left.used);
@@ -111,6 +120,21 @@ export const publishGeneratedOutput = ({
   }
   for (const stale of entriesNewestFirst(storeDir).slice(KEEP_ENTRIES)) {
     rmSync(path.join(storeDir, stale.name), { recursive: true, force: true });
+  }
+  removeAbandonedTemporaries(storeDir);
+};
+
+const removeAbandonedTemporaries = (storeDir: string) => {
+  const cutoff = Date.now() - ABANDONED_TEMPORARY_MS;
+  for (const name of readdirSync(storeDir)) {
+    const temporary = path.join(storeDir, name);
+    if (
+      TEMPORARY_PATTERN.test(name) &&
+      (statSync(temporary, { throwIfNoEntry: false })?.mtimeMs ?? cutoff) <
+        cutoff
+    ) {
+      rmSync(temporary, { recursive: true, force: true });
+    }
   }
 };
 
