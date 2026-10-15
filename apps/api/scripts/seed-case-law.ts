@@ -18,7 +18,7 @@ import { panic, Result } from "better-result";
  * Usage:
  *   bun apps/api/scripts/seed-case-law.ts
  */
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, getColumns, sql } from "drizzle-orm";
 import { readdir } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
@@ -244,22 +244,60 @@ type RefreshFixtureDecisionOptions = FixtureDecisionRowOptions & {
 };
 
 /**
- * Brings a stored decision back to its fixture: the row is stored again,
- * under the id it already had, exactly as a fresh seed writes it, whatever an
- * earlier seed or a local run left there. Replaced rather than updated, so no
- * column the fixture records (the analysis included) is written behind its
- * lifecycle; rows that hang off the decision in a dev database go with it.
+ * Brings a stored decision back to its fixture: the row keeps the id it
+ * already had and every column the fixture records is written in place, only
+ * when one of them differs. The row is never deleted, so what hangs off the
+ * decision (matter links, citations, search documents) keeps its association.
  */
 export const refreshFixtureDecision = async (
   db: Pick<CaseLawWriteHandles["rootDb"], "transaction">,
   { decisionId, ...row }: RefreshFixtureDecisionOptions,
 ) => {
   const fixtureRow = { ...fixtureDecisionRow(row), id: decisionId };
+  // Spelled out so the lifecycle-write lint can see that no state column is
+  // among them; `satisfies` makes a column the fixture row gains a type error
+  // here until it is listed.
+  const set = {
+    sourceId: fixtureRow.sourceId,
+    caseNumber: fixtureRow.caseNumber,
+    slug: fixtureRow.slug,
+    ecli: fixtureRow.ecli,
+    court: fixtureRow.court,
+    country: fixtureRow.country,
+    language: fixtureRow.language,
+    languageGroupKey: fixtureRow.languageGroupKey,
+    decisionDate: fixtureRow.decisionDate,
+    decisionType: fixtureRow.decisionType,
+    fulltext: fixtureRow.fulltext,
+    sections: fixtureRow.sections,
+    documentAst: fixtureRow.documentAst,
+    analysis: fixtureRow.analysis,
+    parserVersion: fixtureRow.parserVersion,
+    sourceRaw: fixtureRow.sourceRaw,
+    sourceRawS3Key: fixtureRow.sourceRawS3Key,
+    sourceRawContentType: fixtureRow.sourceRawContentType,
+    sourceUrl: fixtureRow.sourceUrl,
+    documentUrl: fixtureRow.documentUrl,
+    metadata: fixtureRow.metadata,
+    sourceHash: fixtureRow.sourceHash,
+  } satisfies Omit<typeof fixtureRow, "id">;
+  // Derived from the update projection, so a column the fixture row gains
+  // takes part in the unchanged check without a second list to keep.
+  const changed = Object.entries(getColumns(caseLawDecisions))
+    .filter(([key]) => key in set)
+    .map(
+      ([, column]) =>
+        sql`${column} IS DISTINCT FROM excluded.${sql.identifier(column.name)}`,
+    );
   await withAggregateTransaction(db, async (tx) => {
     await tx
-      .delete(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, decisionId));
-    await tx.insert(caseLawDecisions).values(fixtureRow);
+      .insert(caseLawDecisions)
+      .values(fixtureRow)
+      .onConflictDoUpdate({
+        target: caseLawDecisions.id,
+        set,
+        setWhere: sql.join(changed, sql` OR `),
+      });
   });
 };
 
