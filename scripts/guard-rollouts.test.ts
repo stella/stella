@@ -13,7 +13,10 @@ test("diff scope excludes deletion hunks and includes every inserted line", () =
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const FIXTURES = ".oxlint-plugins/__fixtures__";
-const fixtures = readdirSync(path.join(ROOT, FIXTURES), { recursive: true })
+const fixtures = readdirSync(path.join(ROOT, FIXTURES), {
+  encoding: "utf-8",
+  recursive: true,
+})
   .filter((name) => name.endsWith(".fixture.ts"))
   .map((name) => {
     const file = `${FIXTURES}/${name}`;
