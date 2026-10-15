@@ -24,13 +24,49 @@ ALTER TABLE "workspaces"
     CHECK ("visibility" IN ('all_members', 'admins_and_assigned', 'assigned_only'));
 --> statement-breakpoint
 
--- Preserve today's behaviour: every matter without a client stays
--- assigned_only and every other matter admins_and_assigned, so nothing becomes
--- visible to anyone who could not already see it. all_members is never set
--- here; only an explicit, audited change opens a matter that wide. Bounded by
--- its WHERE clause to the clientless matters; workspaces scale with matters,
--- not with the corpus.
-UPDATE "workspaces" SET "visibility" = 'assigned_only' WHERE "client_id" IS NULL;
+-- An assigned-only matter is managed by its lead (owners and admins do not
+-- reach it), so every one needs a lead who can still act. A clientless matter
+-- created without a lead takes its earliest assigned member (by assignment
+-- time, then id) who is still an internal member of the matter's
+-- organization. External members are never chosen. Bounded to clientless
+-- matters without a lead.
+UPDATE "workspaces" AS w
+SET "lead_user_id" = steward.user_id
+FROM (
+  SELECT DISTINCT ON (wm.workspace_id) wm.workspace_id, wm.user_id
+  FROM "workspace_members" AS wm
+  JOIN "workspaces" AS matter ON matter.id = wm.workspace_id
+  JOIN "member" AS m
+    ON m.user_id = wm.user_id
+   AND m.organization_id = matter.organization_id
+  WHERE matter.client_id IS NULL
+    AND matter.lead_user_id IS NULL
+    AND m.role <> 'external'
+  ORDER BY wm.workspace_id, wm.created_at, wm.id
+) AS steward
+WHERE w.id = steward.workspace_id;
+--> statement-breakpoint
+
+-- Preserve today's behaviour: a matter without a client stays assigned_only
+-- and every other matter admins_and_assigned, so nothing becomes visible to
+-- anyone who could not already see it. The one exception is a clientless
+-- matter with no lead who is still an assigned internal member: nobody could
+-- manage it as assigned_only, so it stays admins_and_assigned and owners and
+-- admins can recover it. all_members is never set here; only an explicit,
+-- audited change opens a matter that wide. Bounded to the clientless matters.
+UPDATE "workspaces" AS w
+SET "visibility" = 'assigned_only'
+WHERE w.client_id IS NULL
+  AND EXISTS (
+    SELECT 1
+    FROM "workspace_members" AS wm
+    JOIN "member" AS m
+      ON m.user_id = wm.user_id
+     AND m.organization_id = w.organization_id
+    WHERE wm.workspace_id = w.id
+      AND wm.user_id = w.lead_user_id
+      AND m.role <> 'external'
+  );
 --> statement-breakpoint
 
 -- No database default: the application always states a visibility. A writer

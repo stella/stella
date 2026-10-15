@@ -57,12 +57,14 @@ CREATE TABLE workspaces (
   id uuid PRIMARY KEY,
   organization_id varchar(128) NOT NULL,
   client_id uuid,
+  lead_user_id text,
   status text NOT NULL DEFAULT 'active'
 );
 CREATE TABLE workspace_members (
   id text PRIMARY KEY,
   workspace_id uuid NOT NULL,
-  user_id text NOT NULL
+  user_id text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
 );
 `;
 
@@ -130,6 +132,65 @@ describe("matter visibility migration", () => {
       [MATTER.clientlessOfOther]: "assigned_only",
       [MATTER.otherOrgClientMatter]: "admins_and_assigned",
     });
+  });
+
+  test("every assigned-only matter keeps a lead who can manage it; a matter nobody could manage stays reachable by owners and admins", async () => {
+    const leadless = "00000000-0000-4000-8000-000000000011";
+    const keptLead = "00000000-0000-4000-8000-000000000012";
+    const memberless = "00000000-0000-4000-8000-000000000013";
+    const externalOnly = "00000000-0000-4000-8000-000000000014";
+    await using database = new PGlite();
+    await seed(database);
+    await database.exec(`
+      INSERT INTO workspaces (id, organization_id, client_id, lead_user_id) VALUES
+        ('${leadless}', '${ORG}', NULL, NULL),
+        ('${keptLead}', '${ORG}', NULL, '${OTHER_MEMBER}'),
+        ('${memberless}', '${ORG}', NULL, NULL),
+        ('${externalOnly}', '${ORG}', NULL, NULL);
+      INSERT INTO workspace_members (id, workspace_id, user_id, created_at) VALUES
+        ('wl1', '${leadless}', '${EXTERNAL}', '2026-01-01T00:00:00Z'),
+        ('wl2', '${leadless}', '${MEMBER}', '2026-01-02T00:00:00Z'),
+        ('wl3', '${leadless}', '${OTHER_MEMBER}', '2026-01-03T00:00:00Z'),
+        ('wk1', '${keptLead}', '${MEMBER}', '2026-01-01T00:00:00Z'),
+        ('wk2', '${keptLead}', '${OTHER_MEMBER}', '2026-01-02T00:00:00Z'),
+        ('we1', '${externalOnly}', '${EXTERNAL}', '2026-01-01T00:00:00Z');
+    `);
+    await database.exec(migrationSql);
+
+    const leads = Object.fromEntries(
+      (
+        await database.query<{ id: string; lead: string | null }>(
+          "SELECT id::text AS id, lead_user_id AS lead FROM workspaces",
+        )
+      ).rows.map(({ id, lead }) => [id, lead]),
+    );
+    // The earliest assigned internal member becomes the lead; an external
+    // member assigned earlier is passed over, and a stated lead is kept.
+    expect(leads[leadless]).toBe(MEMBER);
+    expect(leads[keptLead]).toBe(OTHER_MEMBER);
+    expect(leads[memberless]).toBeNull();
+    expect(leads[externalOnly]).toBeNull();
+
+    const visibility = await visibilityById(database);
+    expect(visibility[leadless]).toBe("assigned_only");
+    expect(visibility[keptLead]).toBe("assigned_only");
+    expect(visibility[memberless]).toBe("admins_and_assigned");
+    expect(visibility[externalOnly]).toBe("admins_and_assigned");
+
+    // The new lead is assigned, so they reach the matter they now manage.
+    expect(
+      await authorizedFor(database, { organizationId: ORG, userId: MEMBER }),
+    ).toContain(leadless);
+    // Owners and admins can recover the matters without a usable lead.
+    for (const userId of [OWNER, ADMIN]) {
+      const granted = await authorizedFor(database, {
+        organizationId: ORG,
+        userId,
+      });
+      expect(granted).toContain(memberless);
+      expect(granted).toContain(externalOnly);
+      expect(granted).not.toContain(leadless);
+    }
   });
 
   test("nothing becomes newly visible: each user's access set is the same before and after", async () => {
