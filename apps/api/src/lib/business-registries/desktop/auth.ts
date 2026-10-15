@@ -105,6 +105,9 @@ export const createDesktopCredentialAuthorizers = ({
   verifyApiKey,
   resolveMember,
 }: DesktopCredentialInfrastructure) => {
+  // Omitted for production, so each store keeps its own owner default.
+  const ownerDbOption = ownerDb === undefined ? {} : { db: ownerDb };
+
   const authorizeDesktopCredential = async (
     request: Request,
     permission: PermissionInput,
@@ -163,7 +166,7 @@ export const createDesktopCredentialAuthorizers = ({
     }
     const consumed = await ConsumedDesktopDeviceProof.claim({
       proof: proof.value,
-      db: ownerDb,
+      ...ownerDbOption,
     });
     if (consumed.isErr()) {
       return Result.err(consumed.error);
@@ -175,7 +178,7 @@ export const createDesktopCredentialAuthorizers = ({
     const currentKey = authorization.slice(7);
     const deadline = await probeDesktopCredential({
       keyId: key.id,
-      db: ownerDb,
+      ...ownerDbOption,
       ...identity,
       currentKey,
     });
@@ -187,7 +190,7 @@ export const createDesktopCredentialAuthorizers = ({
         try: async () =>
           await revokeDesktopRegistryCredential({
             keyId: key.id,
-            db: ownerDb,
+            ...ownerDbOption,
             ...identity,
             expectedKeyHash: await defaultKeyHasher(currentKey),
             recordAuditEvent: createAuditRecorder({
