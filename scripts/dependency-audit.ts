@@ -350,8 +350,8 @@ type CheckLapsedAcceptancesOptions = {
   advisories: Advisory[];
   baseline: Baseline;
   today: string;
-  latestVersion?: (pkg: string) => Promise<string | undefined>;
-  expiryScope?: ExpiryCheckScope;
+  latestVersion?: ((pkg: string) => Promise<string | undefined>) | undefined;
+  expiryScope?: ExpiryCheckScope | undefined;
 };
 const checkLapsedAcceptances = async ({
   advisories,
@@ -433,12 +433,12 @@ const warnBeforeExpiry = ({
 
 type CheckOptions = {
   baseline?: Baseline;
-  latestVersion?: (pkg: string) => Promise<string | undefined>;
+  latestVersion?: ((pkg: string) => Promise<string | undefined>) | undefined;
   now?: () => Date;
   packages?: ReadonlySet<string>;
   /** Defaults to GitHub annotations inside GitHub Actions. */
   warningFormat?: WarningFormat;
-  expiryScope?: ExpiryCheckScope;
+  expiryScope?: ExpiryCheckScope | undefined;
 };
 
 export const check = async (

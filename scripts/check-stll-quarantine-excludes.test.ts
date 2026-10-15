@@ -198,6 +198,47 @@ describe("expiry ownership", () => {
 });
 
 describe("quarantine exclude guard", () => {
+  test.each(["2099-01-01T00:00:00.000Z", "2099-02-01T00:00:00.000Z"])(
+    "rejects duplicate packages regardless of expiry or change scope: %s",
+    (expiresAt) => {
+      const bunfig =
+        createBunfig(`"better-result", # quarantine-expires: 2099-01-01T00:00:00.000Z
+  "better-result", # quarantine-expires: ${expiresAt}`);
+      for (const scope of [
+        { type: "all" } as const,
+        { type: "changes", changedFiles: new Set(["README.md"]) } as const,
+      ]) {
+        const result = checkQuarantineExcludes({
+          bunfig,
+          lockfile,
+          now: new Date("2026-08-01T00:00:00.000Z"),
+          scope,
+        });
+        expect(result.errors).toContain(
+          'bunfig.toml minimumReleaseAgeExcludes repeats package "better-result"; keep one annotated entry per package',
+        );
+        expect(result.warnings).toEqual([]);
+      }
+    },
+  );
+
+  test("permits one declaration of the same package in each bunfig", () => {
+    for (const bunfigFile of quarantineBunfigFiles([
+      "bunfig.toml",
+      ".claude/mcp/bunfig.toml",
+    ])) {
+      expect(
+        checkQuarantineExcludes({
+          bunfig: createBunfig(
+            '"better-result", # quarantine-expires: 2099-01-01T00:00:00.000Z',
+          ),
+          bunfigFile,
+          lockfile,
+          now: new Date("2026-08-01T00:00:00.000Z"),
+        }).errors,
+      ).toEqual([]);
+    }
+  });
   test("rejects every undated third-party exclusion", () => {
     const result = checkQuarantineExcludes({
       bunfig: createBunfig('"better-result",'),

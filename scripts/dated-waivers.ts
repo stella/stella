@@ -20,6 +20,7 @@ import {
   readTemporaryExcludes,
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
+import { waiverKey } from "./dated-waiver-fix-task";
 import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
 import {
@@ -235,12 +236,7 @@ export const collectWaivers = ({
   const identities = new Set<string>();
   for (const entry of entries) {
     expiryInstant(entry.expiresAt);
-    const identity = JSON.stringify([
-      entry.kind,
-      entry.source,
-      entry.id,
-      ...(entry.kind === "release-age-exclusion" ? [entry.expiresAt] : []),
-    ]);
+    const identity = JSON.stringify([entry.kind, entry.source, entry.id]);
     if (identities.has(identity)) {
       panic(`Duplicate dated waiver identity: ${entry.source}:${entry.id}`);
     }
@@ -389,7 +385,11 @@ const proposalSchema = v.object({
   kind: v.literal("extension"),
   entries: v.array(
     v.object({
-      kind: v.picklist(Object.keys(RECHECK_INSTRUCTIONS)),
+      kind: v.picklist(
+        Object.keys(RECHECK_INSTRUCTIONS).filter((kind): kind is ProbeKind =>
+          Object.hasOwn(RECHECK_INSTRUCTIONS, kind),
+        ),
+      ),
       source: v.string(),
       id: v.string(),
       expiresAt: v.string(),
@@ -397,21 +397,57 @@ const proposalSchema = v.object({
   ),
   ownerReason: v.string(),
 });
-export const extensionProposalFailures = (
-  proposals: Readonly<Record<string, string>>,
-  entries: readonly DatedWaiver[],
-  body?: string,
-): string[] =>
+type ExtensionProposalOptions = {
+  proposals: Readonly<Record<string, string>>;
+  entries: readonly DatedWaiver[];
+  body?: string | undefined;
+  scope?: ExpiryCheckScope;
+  baseProposals?: Readonly<Record<string, string>>;
+};
+export const extensionProposalFailures = ({
+  proposals,
+  entries,
+  body,
+  scope,
+  baseProposals = {},
+}: ExtensionProposalOptions): string[] =>
   Object.entries(proposals).flatMap(([file, contents]) => {
     const proposal = v.parse(proposalSchema, JSON.parse(contents));
+    const baseContents = baseProposals[file];
+    const base =
+      baseContents === undefined
+        ? undefined
+        : v.parse(proposalSchema, JSON.parse(baseContents));
     const reason = proposal.ownerReason.trim();
     const placeholder =
       /^(?:OWNER_REASON_REQUIRED|REQUIRED|TODO|TBD|placeholder)?$/iu;
     const errors: string[] = [];
+    const original = proposal.entries.at(0);
+    if (
+      proposal.entries.length !== 1 ||
+      !original ||
+      original.kind === "release-age-exclusion" ||
+      file !== `.github/dated-exception-proposals/${waiverKey(original)}.json`
+    ) {
+      errors.push(
+        `${file}: extension entries must match their generated proposal identity`,
+      );
+    }
+    if (
+      base &&
+      JSON.stringify(base.entries) !== JSON.stringify(proposal.entries)
+    ) {
+      errors.push(`${file}: original extension entries are immutable`);
+    }
     if (reason.length < 12 || placeholder.test(reason)) {
       errors.push(`${file}: owner-reason: requires an explicit owner reason`);
     }
-    if (body !== undefined) {
+    if (
+      body !== undefined &&
+      (scope === undefined ||
+        scope.type === "all" ||
+        scope.changedFiles.has(file))
+    ) {
       const bodyReason =
         /^owner-reason:[ \t]*(.+)$/mu.exec(body)?.at(1)?.trim() ?? "";
       if (bodyReason !== reason) {
@@ -420,19 +456,32 @@ export const extensionProposalFailures = (
         );
       }
     }
-    for (const original of proposal.entries) {
+    for (const reference of proposal.entries) {
       const current = entries.find(
         (entry) =>
-          entry.kind === original.kind &&
-          entry.source === original.source &&
-          entry.id === original.id,
+          entry.kind === reference.kind &&
+          entry.source === reference.source &&
+          entry.id === reference.id,
       );
       if (
         current &&
-        expiryInstant(current.expiresAt) === expiryInstant(original.expiresAt)
+        expiryInstant(current.expiresAt) === expiryInstant(reference.expiresAt)
       ) {
         errors.push(
           `${file}: owner must resolve the exception or explicitly change its expiry`,
+        );
+      }
+      const established =
+        base !== undefined &&
+        base.ownerReason.trim().length >= 12 &&
+        !placeholder.test(base.ownerReason.trim());
+      if (
+        scope?.type === "changes" &&
+        !scope.changedFiles.has(reference.source) &&
+        !established
+      ) {
+        errors.push(
+          `${file}: resolving an extension requires a change to its owning source`,
         );
       }
     }
@@ -669,6 +718,7 @@ const contextSchema = v.object({
   ]),
   baseBunfigs: v.record(v.string(), v.string()),
   basePackageManifests: v.record(v.string(), v.string()),
+  baseProposals: v.record(v.string(), v.string()),
 });
 const prepareCheck = (file: string): void => {
   const tracked = trackedPolicyFiles();
@@ -676,6 +726,7 @@ const prepareCheck = (file: string): void => {
   const scope = readExpiryCheckScope();
   const baseBunfigs = new Map<string, string>();
   const basePackageManifests = new Map<string, string>();
+  const baseProposals = new Map<string, string>();
   if (scope.type === "changes") {
     if (!scope.baseSha) {
       panic("Expiry scope base is required");
@@ -695,6 +746,7 @@ const prepareCheck = (file: string): void => {
     for (const source of baseFiles.filter(
       (candidate) =>
         quarantineBunfigFiles([candidate]).length > 0 ||
+        candidate.startsWith(".github/dated-exception-proposals/") ||
         (scope.changedFiles.has(candidate) &&
           (candidate === "package.json" ||
             candidate.endsWith("/package.json"))),
@@ -709,6 +761,8 @@ const prepareCheck = (file: string): void => {
       }
       if (source.endsWith("bunfig.toml")) {
         baseBunfigs.set(source, contents.stdout.toString());
+      } else if (source.startsWith(".github/dated-exception-proposals/")) {
+        baseProposals.set(source, contents.stdout.toString());
       } else {
         basePackageManifests.set(source, contents.stdout.toString());
       }
@@ -723,6 +777,7 @@ const prepareCheck = (file: string): void => {
           : { ...scope, changedFiles: [...scope.changedFiles] },
       baseBunfigs: Object.fromEntries(baseBunfigs),
       basePackageManifests: Object.fromEntries(basePackageManifests),
+      baseProposals: Object.fromEntries(baseProposals),
     }),
   );
 };
@@ -762,6 +817,7 @@ if (import.meta.main) {
           scope: { type: "all" as const },
           baseBunfigs: {},
           basePackageManifests: {},
+          baseProposals: {},
         };
     const read = (file: string) =>
       readFileSync(path.join(import.meta.dir, "..", file), "utf-8");
@@ -808,8 +864,8 @@ if (import.meta.main) {
         ),
         now,
       ),
-      ...extensionProposalFailures(
-        Object.fromEntries(
+      ...extensionProposalFailures({
+        proposals: Object.fromEntries(
           tracked
             .filter(
               (file) =>
@@ -819,22 +875,10 @@ if (import.meta.main) {
             .map((file) => [file, read(file)]),
         ),
         entries,
-      ),
-      ...extensionProposalFailures(
-        Object.fromEntries(
-          tracked
-            .filter(
-              (file) =>
-                file.startsWith(".github/dated-exception-proposals/") &&
-                file.endsWith(".json") &&
-                expiryContext.scope.type === "changes" &&
-                expiryContext.scope.changedFiles.has(file),
-            )
-            .map((file) => [file, read(file)]),
-        ),
-        entries,
-        event?.pull_request ? (event.pull_request.body ?? "") : undefined,
-      ),
+        scope: expiryContext.scope,
+        baseProposals: context.baseProposals,
+        body: event?.pull_request ? (event.pull_request.body ?? "") : undefined,
+      }),
     ];
     if (failures.length > 0) {
       console.error(failures.join("\n"));

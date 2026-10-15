@@ -347,6 +347,7 @@ test("check consumes validated tracked files without spawning under the offline 
         scope: { type: "all" },
         baseBunfigs: {},
         basePackageManifests: {},
+        baseProposals: {},
       }),
     );
 
@@ -457,25 +458,28 @@ test("radar selects exactly the inclusive hour horizon", () => {
   }
 });
 
-test("inventory retains distinct dated exclusions in every carrying file", () => {
+test("inventory rejects duplicate package exclusions regardless of deadline and retains cross-file owners", () => {
   const first = sources["bunfig.toml"];
   const twin = first.replace(
     "\n]\n",
     '\n "new-package", # quarantine-expires: 2026-10-03T01:02:03.000Z\n]\n',
   );
-  const entries = collectWaivers({
-    read: (file) => (file.endsWith("bunfig.toml") ? twin : read(file)),
+  const options = {
+    read: (file: string) => (file.endsWith("bunfig.toml") ? twin : read(file)),
     docs: [],
     audit: [],
     bunfigs: ["bunfig.toml", ".claude/mcp/bunfig.toml"],
     releaseAgeSources: {},
+  };
+  expect(() => collectWaivers(options)).toThrow(
+    "Duplicate dated waiver identity",
+  );
+  const entries = collectWaivers({
+    ...options,
+    read: (file) => (file.endsWith("bunfig.toml") ? first : read(file)),
   }).filter(({ kind }) => kind === "release-age-exclusion");
-  expect(entries).toHaveLength(4);
-  for (const source of ["bunfig.toml", ".claude/mcp/bunfig.toml"]) {
-    expect(
-      entries
-        .filter((entry) => entry.source === source)
-        .map(({ line }) => line),
-    ).toEqual([3, 4]);
-  }
+  expect(entries.map(({ source }) => source).toSorted()).toEqual([
+    ".claude/mcp/bunfig.toml",
+    "bunfig.toml",
+  ]);
 });

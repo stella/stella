@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { waiverKey } from "./dated-waiver-fix-task";
 import {
   extensionProposalFailures,
   prematureExclusionRemovals,
@@ -42,8 +43,9 @@ const entry = {
   line: 1,
   probe: { command: ["bun", "audit"], attempts: 3 },
 } satisfies DatedWaiver;
+const proposalFile = `.github/dated-exception-proposals/${waiverKey(entry)}.json`;
 const proposal = (ownerReason: string) => ({
-  "proposal.json": JSON.stringify({
+  [proposalFile]: JSON.stringify({
     schemaVersion: 1,
     kind: "extension",
     entries: [entry],
@@ -61,29 +63,96 @@ test("extension placeholders and unchanged deadlines cannot pass the required ch
     "placeholder",
   ]) {
     expect(
-      extensionProposalFailures(proposal(reason), [entry]).some((failure) =>
-        failure.includes("explicit owner reason"),
-      ),
+      extensionProposalFailures({
+        proposals: proposal(reason),
+        entries: [entry],
+      }).some((failure) => failure.includes("explicit owner reason")),
     ).toBe(true);
   }
   const reason = "The upstream correction is still under review.";
-  expect(extensionProposalFailures(proposal(reason), [entry])).toContain(
-    "proposal.json: owner must resolve the exception or explicitly change its expiry",
+  expect(
+    extensionProposalFailures({
+      proposals: proposal(reason),
+      entries: [entry],
+    }),
+  ).toContain(
+    `${proposalFile}: owner must resolve the exception or explicitly change its expiry`,
   );
   const renewed = [{ ...entry, expiresAt: "2026-10-20T12:00:00.000Z" }];
   expect(
-    extensionProposalFailures(
-      proposal(reason),
-      renewed,
-      `owner-reason: ${reason}`,
-    ),
+    extensionProposalFailures({
+      proposals: proposal(reason),
+      entries: renewed,
+      body: `owner-reason: ${reason}`,
+    }),
   ).toEqual([]);
   expect(
-    extensionProposalFailures(
-      proposal(reason),
-      renewed,
-      "owner-reason: OWNER_REASON_REQUIRED",
-    ),
+    extensionProposalFailures({
+      proposals: proposal(reason),
+      entries: renewed,
+      body: "owner-reason: OWNER_REASON_REQUIRED",
+    }),
   ).toHaveLength(1);
-  expect(extensionProposalFailures(proposal(reason), [])).toEqual([]);
+  expect(
+    extensionProposalFailures({ proposals: proposal(reason), entries: [] }),
+  ).toEqual([]);
+});
+
+test("extension references stay bound to their proposal and owning source", () => {
+  const reason = "The upstream correction is still under review.";
+  const proposals = proposal(reason);
+  const original = JSON.parse(proposals[proposalFile] ?? "");
+  const scope = {
+    type: "changes",
+    changedFiles: new Set([proposalFile]),
+  } as const;
+  for (const changes of [
+    { id: "another-entry" },
+    { source: "another.json" },
+    { kind: "suppression-waiver" },
+    { expiresAt: "2026-10-17T12:00:00.000Z" },
+  ]) {
+    const edited = {
+      [proposalFile]: JSON.stringify({
+        ...original,
+        entries: [{ ...entry, ...changes }],
+      }),
+    };
+    expect(
+      extensionProposalFailures({ proposals: edited, entries: [entry], scope }),
+    ).not.toEqual([]);
+    expect(
+      extensionProposalFailures({
+        proposals: edited,
+        entries: [],
+        scope,
+        baseProposals: proposals,
+      }),
+    ).not.toEqual([]);
+  }
+  expect(
+    extensionProposalFailures({ proposals, entries: [], scope }),
+  ).not.toEqual([]);
+  const resolved = {
+    type: "changes",
+    changedFiles: new Set([proposalFile, entry.source]),
+  } as const;
+  expect(
+    extensionProposalFailures({ proposals, entries: [], scope: resolved }),
+  ).toEqual([]);
+  expect(
+    extensionProposalFailures({
+      proposals,
+      entries: [],
+      scope,
+      baseProposals: proposals,
+    }),
+  ).toEqual([]);
+  const renewed = [{ ...entry, expiresAt: "2026-10-20T12:00:00.000Z" }];
+  expect(
+    extensionProposalFailures({ proposals, entries: renewed, scope }),
+  ).not.toEqual([]);
+  expect(
+    extensionProposalFailures({ proposals, entries: renewed, scope: resolved }),
+  ).toEqual([]);
 });

@@ -11,7 +11,9 @@ export const DATED_WAIVER_AUTOFIX_LABEL = "dated-waiver-failure";
 export const EXPIRY_ALERT_LABEL = "dated-waiver-expiry-alert";
 export const FIX_TASK_IDENTITY_LABEL = "dated-waiver:task";
 
-export const waiverKey = (entry: DatedWaiver): string =>
+export const waiverKey = (
+  entry: Pick<DatedWaiver, "kind" | "source" | "id">,
+): string =>
   sha256Hex(JSON.stringify([entry.kind, entry.source, entry.id])).slice(0, 24);
 
 export type FixEvidence = {

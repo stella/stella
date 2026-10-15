@@ -219,12 +219,18 @@ const exactUtcTimestampError = ({
 
 const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
   const lines = readExcludeBlock(bunfig).split("\n");
-  const declaredNames = new Set(
-    lines.flatMap((line) => {
-      const name = excludeDeclaration(line);
-      return name === undefined ? [] : [name];
-    }),
-  );
+  const declaredNames = new Set<string>();
+  const duplicateNames = new Set<string>();
+  for (const line of lines) {
+    const name = excludeDeclaration(line);
+    if (name === undefined) {
+      continue;
+    }
+    if (declaredNames.has(name)) {
+      duplicateNames.add(name);
+    }
+    declaredNames.add(name);
+  }
   const unrecognizedEntries = [...readExcludes(bunfig)].filter(
     (name) => !declaredNames.has(name),
   );
@@ -236,6 +242,10 @@ const readExcludeAnnotationErrors = (bunfig: string, now: Date): string[] => {
         ];
 
   errors.push(
+    ...[...duplicateNames].map(
+      (name) =>
+        `${BUNFIG} minimumReleaseAgeExcludes repeats package "${name}"; keep one annotated entry per package`,
+    ),
     ...lines.flatMap((line) => {
       const name = excludeDeclaration(line);
       if (name === undefined) {
@@ -433,8 +443,8 @@ export const quarantineOwningFiles = ({
 }: {
   bunfigFile: string;
   packageName: string;
-  packageManifests?: Readonly<Record<string, string>>;
-  basePackageManifests?: Readonly<Record<string, string>>;
+  packageManifests?: Readonly<Record<string, string>> | undefined;
+  basePackageManifests?: Readonly<Record<string, string>> | undefined;
 }): string[] => {
   const dir = path.posix.dirname(bunfigFile);
   const manifests = [
@@ -548,8 +558,8 @@ export const checkQuarantineExcludes = ({
   scope?: ExpiryCheckScope;
   bunfigFile?: string;
   owningFiles?: readonly string[];
-  packageManifests?: Readonly<Record<string, string>>;
-  basePackageManifests?: Readonly<Record<string, string>>;
+  packageManifests?: Readonly<Record<string, string>> | undefined;
+  basePackageManifests?: Readonly<Record<string, string>> | undefined;
   now?: Date;
   releaseAgeExceptionSources?: Readonly<Record<string, string>>;
 }): QuarantineExcludeCheckResult => {

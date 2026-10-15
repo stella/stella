@@ -268,8 +268,8 @@ type InspectionInput = {
   readonly evidenceExists: (file: string) => boolean;
   readonly evidenceContains: (file: string, symbol: string) => boolean;
   readonly today: string;
-  readonly expiryScope?: ExpiryCheckScope;
-  readonly onExpiryWarning?: (message: string) => void;
+  readonly expiryScope?: ExpiryCheckScope | undefined;
+  readonly onExpiryWarning?: ((message: string) => void) | undefined;
 };
 
 /** `path/to/file.ts#symbol` split into its two halves. */

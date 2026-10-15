@@ -281,7 +281,10 @@ const fixtureSource = (value: StaticValue): DocSource | null => {
   if (first === undefined || typeof url !== "string") {
     return null;
   }
-  return { dependencies: [first, ...strings.slice(1)], url };
+  return {
+    dependencies: [first, ...strings.slice(1)],
+    url,
+  } as const satisfies DocSource;
 };
 
 const fixtureExclusion = (value: StaticValue): NoLlmsTxtExclusion | null => {

@@ -52,8 +52,8 @@ type LapsedAcceptancesOptions = {
   today: string;
   /** The package's latest published version, or undefined when the lookup failed. */
   latestVersion: (pkg: string) => string | undefined;
-  expiryScope?: ExpiryCheckScope;
-  onExpiryWarning?: (message: string) => void;
+  expiryScope?: ExpiryCheckScope | undefined;
+  onExpiryWarning?: ((message: string) => void) | undefined;
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;

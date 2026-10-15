@@ -561,10 +561,9 @@ const main = async () => {
         branch: `chore/dated-waiver-${group.key}`,
         baseSha: report.sha,
         ...changes,
-        title:
-          kind === "extension"
-            ? "chore: request dated exception owner review"
-            : undefined,
+        ...(kind === "extension"
+          ? { title: "chore: request dated exception owner review" }
+          : {}),
         body,
         repo: process.env["GITHUB_REPOSITORY"],
         request: githubRequest,

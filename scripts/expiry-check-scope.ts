@@ -51,11 +51,11 @@ export const expiryScopeBase = (
 };
 
 export const readExpiryCheckScope = (): ExpiryCheckScope => {
-  const eventName = process.env.GITHUB_EVENT_NAME ?? "";
+  const eventName = process.env["GITHUB_EVENT_NAME"] ?? "";
   if (eventName !== "pull_request" && eventName !== "merge_group") {
     return { type: "all" };
   }
-  const eventPath = process.env.GITHUB_EVENT_PATH;
+  const eventPath = process.env["GITHUB_EVENT_PATH"];
   if (eventPath === undefined) {
     return panic("Expiry scope requires GITHUB_EVENT_PATH");
   }
