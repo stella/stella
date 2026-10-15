@@ -209,9 +209,16 @@ const failureOf = (result: Result<string, { cause: unknown }>) => {
 };
 
 describe("an answer cut at its output ceiling", () => {
-  // The provider labels the stop `length`, labels it otherwise, or ends the
-  // stream without a label; the usage it reports shows the ceiling spent.
-  const LABELS = ["length", "content_filter", "error", null] as const;
+  // The provider labels the stop `length`, labels it otherwise (with a
+  // reason no table lists, too), or ends the stream without a label; the
+  // usage it reports shows the ceiling spent.
+  const LABELS = [
+    "length",
+    "content_filter",
+    "error",
+    "provider_specific_stop",
+    null,
+  ] as const;
 
   for (const label of LABELS) {
     test(`reads as an incomplete answer on both key sources when labelled ${String(label)}`, async () => {
@@ -239,6 +246,22 @@ describe("an answer cut at its output ceiling", () => {
       finish: "length",
       providerStopReason: "content_filter",
     });
+  });
+
+  test("keeps an answer with an unlisted stop under the ceiling", async () => {
+    script.answer = () => ({
+      chunks: [
+        delta({ content: "## Done\n- Reviewed the lease" }),
+        delta({ content: "" }, "provider_specific_stop"),
+      ],
+      usage: { completionTokens: 12 },
+    });
+    for (const keySource of ["byok", "managed"] as const) {
+      const result = await generate(keySource, 64);
+      expect(Result.isOk(result) ? result.value : "").toContain(
+        "Reviewed the lease",
+      );
+    }
   });
 
   test("leaves a filtered answer under the ceiling a moderated one", async () => {
@@ -347,6 +370,21 @@ describe("compacting a long thread", () => {
       // The ceiling leaves the target room twice over, and more besides.
       expect(request.max_completion_tokens).toBeGreaterThan(
         2 * Math.ceil(words / 0.75),
+      );
+    }
+  });
+
+  test("does not checkpoint an answered summary whose unlisted stop spent the ceiling", async () => {
+    script.answer = reasoningSpendsTheCeiling("provider_specific_stop");
+    for (const keySource of ["byok", "managed"] as const) {
+      const { compacted, summaryErrors } = await compactThread(keySource);
+      expect(summaryErrors).toHaveLength(1);
+      expect(summaryErrors.at(0)?.cause).toBeInstanceOf(
+        ModelOutputIncompleteError,
+      );
+      expect(compacted.notice).toEqual(HISTORY_TRIMMED_NOTICE);
+      expect(JSON.stringify(compacted.messages)).not.toContain(
+        "Reviewed the lease",
       );
     }
   });

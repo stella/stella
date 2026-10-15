@@ -24,7 +24,9 @@ import {
   spentOutputCeiling,
 } from "@/api/lib/chat/output-ceiling";
 import {
+  recordedStopReasonOf,
   refuseTurnPausingRequest,
+  UNRECOGNIZED_STOP_REASON,
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
 import { reasoningProvenanceForSignature } from "@/api/lib/chat/reasoning-provenance";
@@ -117,11 +119,16 @@ type RunFinishReason = RunFinishedChunk["finishReason"];
  * Whether a finish keeps its own reading when the response also spent its
  * output ceiling. A clean stop is the provider saying the answer ended, and
  * a tool call is a turn the engine continues; every other finish (a
- * filtered response, none reported) is read as the ceiling that cut it.
+ * filtered response, none reported) is read as the ceiling that cut it. A
+ * `stop` stands only when the provider named it: an answered step whose
+ * reason no table lists is also finished as `stop`, and that one says
+ * nothing about where the answer ended.
  */
-const finishStandsAgainstCeiling = (reason: RunFinishReason): boolean => {
+const finishStandsAgainstCeiling = (chunk: RunFinishedChunk): boolean => {
+  const reason: RunFinishReason = chunk.finishReason;
   switch (reason) {
     case "stop":
+      return recordedStopReasonOf(chunk) !== UNRECOGNIZED_STOP_REASON;
     case "tool_calls":
     case "length":
       return true;
@@ -195,7 +202,7 @@ export const readOutputCeilingStopAsLength = async function* (
       case EventType.RUN_FINISHED: {
         if (held === undefined) {
           if (
-            !finishStandsAgainstCeiling(chunk.finishReason) &&
+            !finishStandsAgainstCeiling(chunk) &&
             spentOutputCeiling(chunk, ceiling)
           ) {
             yield { ...chunk, finishReason: "length" };
