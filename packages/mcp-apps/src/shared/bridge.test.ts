@@ -225,11 +225,7 @@ test("a filter the server refuses keeps paging on the arguments of the page stil
     host: {
       callServerTool: async ({ arguments: arguments_ }) => {
         calls.push(arguments_);
-        if (
-          typeof arguments_ === "object" &&
-          arguments_ !== null &&
-          "courts" in arguments_
-        ) {
+        if (typeof arguments_ === "object" && "courts" in arguments_) {
           return {
             content: [],
             isError: true,

@@ -32,7 +32,6 @@ export const getAppToolArrayLimit = (name: AppToolName, property: string) => {
     ?.at(1);
   if (
     typeof field !== "object" ||
-    field === null ||
     !("maxItems" in field) ||
     typeof field.maxItems !== "number"
   ) {
