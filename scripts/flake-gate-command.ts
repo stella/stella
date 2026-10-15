@@ -78,18 +78,9 @@ export const parseBunTestScript = (script: string): ParsedTestScript => {
   if (problem) {
     return { type: "unsupported", reason: problem };
   }
-  let expansion = false;
-  const parsed = Result.try(() =>
-    parse(script, () => {
-      expansion = true;
-      return "";
-    }),
-  );
+  const parsed = Result.try(() => parse(script));
   if (parsed.isErr()) {
     return { type: "unsupported", reason: "invalid-shell-quoting" };
-  }
-  if (expansion) {
-    return { type: "unsupported", reason: "shell-expansion" };
   }
   const words: string[] = [];
   for (const token of parsed.value) {

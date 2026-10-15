@@ -1,4 +1,5 @@
 import { panic, Result, TaggedError } from "better-result";
+import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -6,6 +7,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
+import type { ReadableStreamDefaultReader } from "node:stream/web";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -15,7 +17,12 @@ import { isDbTest } from "../apps/api/scripts/test-batch-plan";
 import { selectTestPaths } from "../apps/api/scripts/test-path-filters";
 import { analyzeModule, selectApiTestImpact } from "./api-test-impact";
 import { parseBunTestScript } from "./flake-gate-command";
-import { terminateFlakeProcessTree } from "./flake-gate-process";
+import {
+  cleanupCapability,
+  cleanupFlakeTrial,
+  FLAKE_GATE_TRIAL_ENV,
+  type FlakeCleanup,
+} from "./flake-gate-process";
 import { selectRustTargets } from "./flake-gate-rust";
 
 export const REPEATS = 20;
@@ -197,6 +204,7 @@ export type Measurement = {
   planned: number;
 };
 export type Report = {
+  cleanup: FlakeCleanup;
   results: Measurement[];
   skipped: Skipped[];
   errors: string[];
@@ -213,6 +221,7 @@ export const renderReport = (report: Report) =>
     "",
     `Target: ${REPEATS} runs (Bun: seeded shuffle; Rust: serial order). Budget: 60 test-minutes, including probes. Used: ${(report.elapsedMs / 60_000).toFixed(2)} minutes.`,
     "Failures include persistent failures and runner errors; they require investigation before being called flakes.",
+    report.cleanup.note,
     "",
     "| Test | Runs | Failures | Coverage |",
     "| --- | ---: | ---: | --- |",
@@ -270,9 +279,10 @@ export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
     target.runner === "bun"
       ? ["--rerun-each=1", "--randomize", `--seed=${seed}`]
       : [];
+  const token = randomUUID();
   const child = Bun.spawn([...target.command, ...args], {
     cwd: target.cwd,
-    env: { ...process.env, ...target.env },
+    env: { ...process.env, ...target.env, [FLAKE_GATE_TRIAL_ENV]: token },
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -281,18 +291,9 @@ export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
   const stdoutReader = child.stdout.getReader();
   const stderrReader = child.stderr.getReader();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  let terminationFailure: string | undefined;
   const deadline = new Promise<"timeout">((resolve) => {
     timer = setTimeout(
-      () => {
-        const terminated = Result.try(() =>
-          terminateFlakeProcessTree(child.pid),
-        );
-        if (terminated.isErr()) {
-          terminationFailure = terminated.error.message;
-        }
-        resolve("timeout");
-      },
+      () => resolve("timeout"),
       Math.max(1, Math.floor(timeoutMs)),
     );
   });
@@ -306,6 +307,9 @@ export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
   const captured = await Promise.race([completed, deadline]);
   clearTimeout(timer);
   if (captured === "timeout") {
+    const terminated = await Result.tryPromise(async () =>
+      cleanupFlakeTrial({ rootPid: child.pid, token }),
+    );
     // EOF confirms detached descendants have released their resources.
     let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
     const drained = await Promise.race([
@@ -321,8 +325,8 @@ export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
     if (cancelled.isErr()) {
       throw cancelled.error;
     }
-    if (terminationFailure) {
-      throw new FlakeGateError({ message: terminationFailure });
+    if (terminated.isErr()) {
+      throw terminated.error;
     }
     if (drained === "undrained") {
       throw new FlakeGateError({
@@ -331,6 +335,10 @@ export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
       });
     }
     return { passed: false, status: 124, ranTests: false };
+  }
+  // Detached descendants may close their pipes before the trial exits.
+  if (process.platform === "linux") {
+    await cleanupFlakeTrial({ rootPid: child.pid, token });
   }
   if (captured.isErr()) {
     throw captured.error;
@@ -360,6 +368,7 @@ export const executeGate = async ({
 }: ExecuteOptions): Promise<Report> => {
   const start = now();
   const report: Report = {
+    cleanup: cleanupCapability(),
     results: [],
     skipped: [...skipped],
     errors: [],
@@ -434,7 +443,13 @@ export const executeGate = async ({
 };
 
 if (import.meta.main) {
-  const report: Report = { results: [], skipped: [], errors: [], elapsedMs: 0 };
+  const report: Report = {
+    cleanup: cleanupCapability(),
+    results: [],
+    skipped: [],
+    errors: [],
+    elapsedMs: 0,
+  };
   const outcome = await Result.tryPromise(async () => {
     const base = process.env["BASE_SHA"] || "origin/main";
     // Match ci-plan: NUL-delimited paths, no rename inference, merge-base diff.

@@ -542,6 +542,7 @@ type ConcurrencyContext = {
   event_name: string;
   ref: string;
   run_id: number;
+  inputs?: { base_ref?: string };
   event: {
     action?: string;
     pull_request?: { number: number; head: { sha: string } };
@@ -569,7 +570,7 @@ const concurrencyValueFor = async (
     String(
       new Script(expression).runInNewContext({
         github,
-        inputs: {},
+        inputs: { base_ref: github.inputs?.base_ref ?? "" },
         format: (template: string, ...values: (string | number)[]) =>
           template.replace(/\{(\d+)\}/gu, (_placeholder, index: string) =>
             String(values.at(Number(index)) ?? ""),
@@ -635,6 +636,7 @@ test("unrelated flake-gate labels use an isolated non-cancelling group", async (
   const requested = {
     ...recording,
     workflow: "Changed-test flake report",
+    inputs: { base_ref: "" },
     event: {
       ...recording.event,
       action: "labeled",
@@ -660,6 +662,21 @@ test("unrelated flake-gate labels use an isolated non-cancelling group", async (
   expect(await concurrencyValueFor(file, "cancel-in-progress", requested)).toBe(
     "true",
   );
+
+  const reusableCall = {
+    ...requested,
+    run_id: 44,
+    event: { ...requested.event, action: "opened", label: undefined },
+    inputs: { base_ref: "origin/main" },
+  };
+  const reusableGroup = await groupFor(file, reusableCall);
+  expect(reusableGroup).not.toBe(reportGroup);
+  expect(
+    await groupFor(file, { ...reusableCall, run_id: reusableCall.run_id + 1 }),
+  ).not.toBe(reusableGroup);
+  expect(
+    await concurrencyValueFor(file, "cancel-in-progress", reusableCall),
+  ).toBe("false");
 });
 
 test("manual CI replaces the same branch while PRs and merge groups stay isolated", async () => {

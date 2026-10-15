@@ -320,6 +320,11 @@ test("actual elapsed budget includes probes and stops repeat execution", async (
 
 test("reports preserve reduced coverage and failures and only blocking mode fails", () => {
   const report: Report = {
+    cleanup: {
+      type: "best-effort",
+      platform: "darwin",
+      note: "cleanup: best-effort",
+    },
     results: [
       { file: "a|b.test.ts", runs: 3, failures: 1, durationMs: 10, planned: 3 },
     ],
@@ -331,6 +336,7 @@ test("reports preserve reduced coverage and failures and only blocking mode fail
   expect(markdown).toContain("a\\|b.test.ts");
   expect(markdown).toContain("reduced repeats (cost cap)");
   expect(markdown).toContain("not gated (needs DB)");
+  expect(markdown).toContain("cleanup: best-effort");
   expect(reportExitCode(report, false)).toBe(0);
   expect(reportExitCode(report, true)).toBe(1);
   expect(reportExitCode({ ...report, results: [] }, true)).toBe(0);

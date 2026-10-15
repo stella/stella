@@ -1,6 +1,5 @@
 {
   "jobs": {
-    "flake-gate.yml/report": "pr-fast",
     "audit-image.yml/build": "pr-fast",
     "ci.yml/api-test-durations": "main",
     "fetch-public-documents.yml/fetch": "main",

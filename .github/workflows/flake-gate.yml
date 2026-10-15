@@ -29,20 +29,22 @@ defaults:
 
 concurrency:
   group: >-
-    flake-gate-${{ github.event.pull_request.number || github.run_id }}-${{
+    flake-gate-${{ github.event_name == 'pull_request' && inputs.base_ref != ''
+    && format('reuse-{0}', github.run_id) || github.event.pull_request.number
+    || github.run_id }}-${{
     github.event.action == 'labeled' && github.event.label.name != 'flake-gate'
     && format('label-{0}', github.event.label.name) || 'report' }}
   cancel-in-progress: >-
-    ${{ github.event_name == 'pull_request'
+    ${{ github.event_name == 'pull_request' && inputs.base_ref == ''
     && (github.event.action != 'labeled' || github.event.label.name == 'flake-gate') }}
 
 jobs:
   report:
     if: >-
       github.event_name != 'pull_request'
+      || inputs.base_ref != ''
       || (contains(github.event.pull_request.labels.*.name, 'flake-gate')
-          && (github.event.action != 'labeled'
-              || github.event.label.name == 'flake-gate'))
+          && (github.event.action != 'labeled' || github.event.label.name == 'flake-gate'))
     runs-on: ubuntu-latest
     timeout-minutes: 75
     permissions:

@@ -250,30 +250,35 @@ const checkFlakeGatePrOptIn = ({
     );
   }
   const prEvents = [
-    { action: "opened", labels: [], run: false },
-    { action: "opened", labels: ["flake-gate"], run: true },
-    { action: "synchronize", labels: [], run: false },
-    { action: "synchronize", labels: ["flake-gate"], run: true },
+    { action: "opened", labels: [], baseRef: "", run: false },
+    { action: "opened", labels: ["flake-gate"], baseRef: "", run: true },
+    { action: "synchronize", labels: [], baseRef: "", run: false },
+    { action: "synchronize", labels: ["flake-gate"], baseRef: "", run: true },
+    { action: "opened", labels: [], baseRef: "origin/main", run: true },
+    { action: "synchronize", labels: [], baseRef: "origin/main", run: true },
     {
       action: "labeled",
       label: "flake-gate",
       labels: ["flake-gate"],
+      baseRef: "",
       run: true,
     },
     {
       action: "labeled",
       label: "other",
       labels: ["flake-gate", "other"],
+      baseRef: "",
       run: false,
     },
     {
       action: "labeled",
       label: "other",
       labels: ["other"],
+      baseRef: "",
       run: false,
     },
   ];
-  for (const { action, label = "", labels, run } of prEvents) {
+  for (const { action, label = "", labels, baseRef, run } of prEvents) {
     if (
       evaluate(condition, {
         values: {
@@ -281,6 +286,7 @@ const checkFlakeGatePrOptIn = ({
           "github.event.action": action,
           "github.event.label.name": label,
           "github.event.pull_request.labels.*.name": labels,
+          "inputs.base_ref": baseRef,
         },
       }) !== run
     ) {
@@ -290,7 +296,7 @@ const checkFlakeGatePrOptIn = ({
       break;
     }
   }
-  for (const event of ["workflow_call", "workflow_dispatch"]) {
+  for (const event of ["workflow_dispatch"]) {
     if (
       evaluate(condition, {
         values: { "github.event_name": event },
@@ -522,16 +528,76 @@ const checkCodeqlWorkflow = (
 type CheckCiEventPoliciesOptions = {
   workflows: Record<string, unknown>;
   policy: unknown;
+  policySource?: string;
+};
+
+const duplicatePolicyJobKeys = (source: string) => {
+  const match = /"jobs"\s*:\s*\{/u.exec(source);
+  if (!match) {
+    return [];
+  }
+  const opening = source.indexOf("{", match.index);
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  let depth = 1;
+  for (let index = opening + 1; index < source.length; index += 1) {
+    const character = source[index];
+    if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        break;
+      }
+      continue;
+    }
+    if (character === "{") {
+      depth += 1;
+      continue;
+    }
+    if (character !== '"') {
+      continue;
+    }
+    const start = index;
+    index += 1;
+    for (; index < source.length; index += 1) {
+      if (source[index] === "\\") {
+        index += 1;
+        continue;
+      }
+      if (source[index] === '"') {
+        break;
+      }
+    }
+    if (depth !== 1) {
+      continue;
+    }
+    let after = index + 1;
+    while (/\s/u.test(source[after] ?? "")) {
+      after += 1;
+    }
+    if (source[after] !== ":") {
+      continue;
+    }
+    const key = v.parse(v.string(), JSON.parse(source.slice(start, index + 1)));
+    if (seen.has(key)) {
+      duplicates.add(key);
+    }
+    seen.add(key);
+  }
+  return [...duplicates];
 };
 
 export const checkCiEventPolicies = ({
   workflows,
   policy,
+  policySource,
 }: CheckCiEventPoliciesOptions) => {
   const declared = v.parse(policySchema, policy);
   const seen = new Set<string>();
   const mainWorkflows = new Set<string>();
   const problems: string[] = [];
+  for (const key of policySource ? duplicatePolicyJobKeys(policySource) : []) {
+    problems.push(`CI event policy has duplicate job key: ${key}`);
+  }
   for (const [file, raw] of Object.entries(workflows)) {
     const workflow = v.parse(workflowSchema, raw);
     if (file === "codeql.yml") {
@@ -627,14 +693,14 @@ if (import.meta.main) {
         Bun.YAML.parse(readFileSync(new URL(file, directory), "utf-8")),
       ]),
   );
+  const policySource = readFileSync(
+    new URL("../.github/ci-event-policy.json", import.meta.url),
+    "utf-8",
+  );
   const problems = checkCiEventPolicies({
     workflows,
-    policy: JSON.parse(
-      readFileSync(
-        new URL("../.github/ci-event-policy.json", import.meta.url),
-        "utf-8",
-      ),
-    ),
+    policy: JSON.parse(policySource),
+    policySource,
   });
   for (const problem of problems) {
     console.error(problem);
