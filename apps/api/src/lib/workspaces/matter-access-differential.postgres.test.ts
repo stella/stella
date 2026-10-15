@@ -22,6 +22,7 @@ import {
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -181,7 +182,7 @@ const readLiveRows = async (
     .where(inArray(workspaces.id, seeded.matterIds));
 
 const readViewSet = async (
-  db: Parameters<typeof markRlsDatabase>[0],
+  db: GatedTestDb,
   seeded: SeededWorld,
   userId: SafeId<"user">,
   pinned: SafeId<"workspace">[],
@@ -217,10 +218,7 @@ const updatesEntities = (role: string | null) =>
 
 const withWorld = async (
   world: World,
-  check: (context: {
-    db: Parameters<typeof markRlsDatabase>[0];
-    seeded: SeededWorld;
-  }) => Promise<void>,
+  check: (context: { db: GatedTestDb; seeded: SeededWorld }) => Promise<void>,
 ) => {
   if (!databaseUrl) {
     panic("DATABASE_URL required");
