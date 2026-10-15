@@ -126,7 +126,7 @@ const mountGraph = async ({
 }: HostOptions): Promise<FrameLocator> => {
   const bundle = await readFile(
     new URL(
-      "../src/mcp/apps/citation-graph/generated/app.html.txt",
+      "../../../packages/mcp-apps/src/citation-graph/generated/app.html.txt",
       import.meta.url,
     ),
     "utf-8",

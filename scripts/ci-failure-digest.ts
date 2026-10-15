@@ -39,6 +39,7 @@ const MAX_TAIL_DETAIL = 12;
 const TAIL_WINDOW = 40;
 
 export type FailureKind =
+  | "infra"
   | "test"
   | "typecheck"
   | "lint"
@@ -543,6 +544,15 @@ const genericLines = (lines: readonly LogLine[]): FailureLine[] =>
   });
 
 const ERROR_COMMAND = "##[error]";
+// Typed infrastructure annotations: installer stalls and signals, and an E2E
+// stack whose image pulls were rate limited.
+const INSTALL_INFRA_FAILURE =
+  /^kind=infra\s+class=(?:install-(?:stall|signal)|e2e-stack-rate-limited)\b/u;
+const GENERIC_PROCESS_EXIT =
+  /^(?:Error:\s*)?Process completed with exit code \d+\.?$/u;
+// The installer prints this status after its typed signal/stall annotation.
+const INSTALL_SIGNAL_EXIT =
+  /^Install finished; exit [1-9]\d*; signal SIG(?:KILL|TERM|INT)(?:;.*)?$/u;
 
 // scripts/retry.sh: per-attempt lines and the final summary command. The
 // summary restates the wrapped command; the cause is the output above it.
@@ -651,6 +661,14 @@ export const failureLines = (
   const lines = logLines(rawLines).filter(
     ({ text }) => !EXIT_MARKER.test(text),
   );
+  const installFailures = dedupe(
+    lines.flatMap(({ text }) => {
+      const message = withoutErrorCommand(text);
+      return INSTALL_INFRA_FAILURE.test(message)
+        ? [{ message: truncate(message) }]
+        : [];
+    }),
+  );
   const extractors = [
     () =>
       testFailures(rawLines).flatMap((failure) => {
@@ -749,7 +767,21 @@ export const failureLines = (
   for (const extract of extractors) {
     const found = dedupe(extract());
     if (found.length > 0) {
-      return found.slice(0, limit);
+      if (installFailures.length === 0) {
+        return found.slice(0, limit);
+      }
+      // Specific compiler/test extraction must retain the installer evidence too.
+      // Reserve room for both, keeping code evidence first if the limit is small.
+      const independent = found.filter(
+        ({ message }) =>
+          !INSTALL_INFRA_FAILURE.test(message) &&
+          !GENERIC_PROCESS_EXIT.test(message) &&
+          !INSTALL_SIGNAL_EXIT.test(message),
+      );
+      return dedupe([
+        ...independent.slice(0, Math.max(1, limit - installFailures.length)),
+        ...installFailures,
+      ]).slice(0, limit);
     }
   }
   return [];
@@ -761,6 +793,21 @@ export const classify = (
 ): FailureKind => {
   const name = step.toLowerCase();
   const text = lines.map(({ message }) => message).join("\n");
+  const substantive = lines
+    .flatMap(({ message }) => message.split(/\r?\n/u))
+    .map((message) => withoutErrorCommand(message).trim())
+    .filter(
+      (message) =>
+        message !== "" &&
+        !GENERIC_PROCESS_EXIT.test(message) &&
+        !INSTALL_SIGNAL_EXIT.test(message),
+    );
+  if (
+    substantive.length > 0 &&
+    substantive.every((message) => INSTALL_INFRA_FAILURE.test(message))
+  ) {
+    return "infra";
+  }
   if (/ratchet/u.test(name) || /\bratchet\b/iu.test(text)) {
     return "ratchet";
   }

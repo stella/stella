@@ -23,7 +23,7 @@ const result = await Bun.build({
   entrypoints: [
     path.resolve(
       import.meta.dirname,
-      "../src/mcp/apps/case-law-results/app.html",
+      "../../../packages/mcp-apps/src/case-law-results/app.html",
     ),
   ],
   // As in build-mcp-apps.ts: an HTML entry with `compile` and a browser

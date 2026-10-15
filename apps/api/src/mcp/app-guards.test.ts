@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
+import { MCP_APPS } from "@stll/mcp-apps/manifest";
+
 import { inspectAppManifest } from "./app-guards";
-import { MCP_APPS } from "./apps/manifest";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "./static-tool-definitions";
 import type { McpToolDefinition } from "./tool-types";
 

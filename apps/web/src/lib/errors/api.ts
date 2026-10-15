@@ -265,27 +265,17 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
 };
 
 /**
- * API refusals of a chat request whose localized message says what the user
- * must change, so the chat shows it instead of the generic send failure.
- */
-const CHAT_REFUSAL_CODES: ReadonlySet<string> = new Set([
-  ENCRYPTED_CONTENT_ERROR_CODE,
-]);
-
-/**
  * The chat refusal an error carries, directly or as a cause: the API error
  * whose (already localized) message the chat should show, or `null`.
+ * HTTP refusals never expose raw diagnostics: `toAPIError` localizes their
+ * status/code before this boundary. Keep all of them through SDK wrappers.
  */
 export const chatRefusal = (error: unknown): APIError | null => {
   const seen = new Set<unknown>();
   let current = error;
   while (current instanceof Error && !seen.has(current)) {
     seen.add(current);
-    if (
-      APIError.is(current) &&
-      current.code !== undefined &&
-      CHAT_REFUSAL_CODES.has(current.code)
-    ) {
+    if (APIError.is(current)) {
       return current;
     }
     current = current.cause;

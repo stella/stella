@@ -2,7 +2,7 @@
 
 This guide documents the intended Railway shape for a self-hosted stella
 deployment. The goal is a template-friendly setup: separate web/API services,
-managed Postgres and Redis, a private Gotenberg service, and a Railway Storage
+source-built Postgres and managed Redis, a private Gotenberg service, and a Railway Storage
 Bucket for files. The same shape should be used for the public Railway
 template.
 
@@ -12,13 +12,15 @@ Create these services in one Railway project:
 
 - `web`: builds from `apps/web/Dockerfile`, public HTTP domain.
 - `api`: builds from `apps/api/Dockerfile`, public HTTP domain.
-- `Postgres`: Railway Postgres 18 or newer.
+- `Postgres`: builds from `docker/postgres/Dockerfile`, with a persistent volume
+  mounted at `/var/lib/postgresql` and private networking.
 - `Redis`: Railway Redis or Valkey.
 - `gotenberg`: image service using `gotenberg/gotenberg:8`, no public domain.
 - Storage bucket, for example `stella-files`.
 
 Point the `api` service config file at `railway/api.railway.json`. Point the
-`web` service config file at `railway/web.railway.json`. Both services use the
+`web` service config file at `railway/web.railway.json`, and `Postgres` at
+`railway/postgres.railway.json`. All three services use the
 repository root as Docker build context. Railway calls this
 [config as code](https://docs.railway.com/config-as-code); custom config files
 are selected in each service's settings.
@@ -26,13 +28,38 @@ are selected in each service's settings.
 The repository root must not contain a `railway.json` or `railway.toml` file.
 Railway auto-discovers a config file at the repository root and applies it to
 every GitHub-sourced service in a template, which would hijack each service's
-build (for example, forcing `web` to build the API Dockerfile). Keeping both
+build (for example, forcing `web` to build the API Dockerfile). Keeping the
 service configs under `railway/` avoids that root auto-discovery. Because
 serialized template config drops per-service config-file paths, the marketplace
 template instead carries explicit per-service `build` settings in
 `railway/template-manifest.json`. Those `build` settings must stay in sync with
 the `build` blocks in each service's config file; `check:railway-template-draft`
 enforces that the published template's per-service build matches the manifest.
+
+## Database Initialization
+
+Use the repository-backed Postgres service, built from
+`docker/postgres/Dockerfile`. The image runs `docker/postgres/init.sql` through
+the official Postgres entrypoint on an empty volume before accepting network
+connections. This creates the application owner login with `NOSUPERUSER
+NOBYPASSRLS`, retains the generated password, and sets up the `stella` role and
+its owner membership. The API uses this demoted login through
+`${{Postgres.DATABASE_URL}}` and requires it before serving requests.
+
+Attach the Postgres volume at `/var/lib/postgresql`; set
+`PGDATA=/var/lib/postgresql/18/docker`. The Postgres config requires that mount
+path. The manifest declares `Postgres.volumeMountPath`, and
+`check:railway-template-draft` verifies the exported service has a volume mount
+at that exact path before publication. Initialization belongs to the database image entrypoint; an API
+pre-deploy command does not initialize a database volume. Railway supports
+[source-built database services](https://docs.railway.com/databases/build-a-database-service)
+and [Dockerfile builds](https://docs.railway.com/builds/dockerfiles).
+
+For an existing database, provision a login with `NOSUPERUSER NOBYPASSRLS`,
+`CREATEROLE CREATEDB`, ownership of the application database and schemas, and
+`GRANT stella TO <owner> WITH ADMIN TRUE, INHERIT FALSE, SET TRUE` before setting
+`DATABASE_URL`. Run the committed migrations with that same login. The API
+reports a typed startup error when the login does not meet its requirements.
 
 ## API Variables
 
@@ -125,11 +152,10 @@ Template editor checklist for managed service variables:
 
 | Service     | Variable                              | Source                                                                    | Prompt user? |
 | ----------- | ------------------------------------- | ------------------------------------------------------------------------- | ------------ |
-| `Postgres`  | `PGDATA`                              | `/var/lib/postgresql/data/pgdata`                                         | No           |
+| `Postgres`  | `PGDATA`                              | `/var/lib/postgresql/18/docker`                                           | No           |
 | `Postgres`  | `PGPORT`                              | `5432`                                                                    | No           |
 | `Postgres`  | `POSTGRES_DB`                         | `railway`                                                                 | No           |
 | `Postgres`  | `POSTGRES_USER`                       | `postgres`                                                                | No           |
-| `Postgres`  | `SSL_CERT_DAYS`                       | `820`                                                                     | No           |
 | `Postgres`  | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `60`                                                                      | No           |
 | `Redis`     | `REDISPORT`                           | `6379`                                                                    | No           |
 | `Redis`     | `REDISUSER`                           | `default`                                                                 | No           |
@@ -198,6 +224,11 @@ publishing. Check these items before the first publish:
 - `api` source points at the same repository and branch.
 - `api` config path is `/railway/api.railway.json`.
 - `web` config path is `/railway/web.railway.json`.
+- `Postgres` source points at the same repository and branch; it builds
+  `docker/postgres/Dockerfile`, uses `/railway/postgres.railway.json`, and has a
+  persistent volume at `/var/lib/postgresql`.
+- Postgres initializes the demoted owner login and `stella` role before the API
+  migrations and readiness check.
 - No `railway.json` or `railway.toml` exists at the repository root, so Railway
   does not auto-apply a root config to every GitHub-sourced service.
 - `api`, `web`, Postgres, Redis, Gotenberg, and the storage bucket all deploy
@@ -337,6 +368,62 @@ migrations, so a fresh managed Postgres needs no manual role setup.
 
 If a migration fails, Railway should not promote the API deployment. Fix the
 database/config problem, then redeploy the API service.
+
+### One-time database owner cutover
+
+An existing template database initialized with `POSTGRES_USER=postgres` needs
+an application owner login before deploying the API. The initdb role cannot
+be demoted in place. Back up the database and stop the API during this cutover.
+
+1. Change the Postgres service to build `docker/postgres/Dockerfile` from this
+   repository, using `railway/postgres.railway.json`. Keep the **existing volume
+   mount and `PGDATA` unchanged**: changing the data path can initialize a
+   different, empty cluster. The fresh-template paths above apply to new volumes.
+   Keep `POSTGRES_USER=postgres` until the command below finishes, and redeploy
+   Postgres. Its entrypoint leaves an existing cluster intact.
+2. Run the bundled initialization script once against the application database.
+   It creates a demoted login, transfers application ownership, and configures
+   the `stella` role. Before running it, confirm the Postgres service secret
+   `POSTGRES_PASSWORD` contains the password from the API's existing
+   `DATABASE_URL` (decoded if URL-encoded). If they differ, update that secret
+   to the existing login password without printing it or putting it in a
+   command argument. The cutover names the login `stella_owner` and immediately
+   resets its password with `password_encryption = 'scram-sha-256'`, using the
+   secret through the process environment with statement logging disabled.
+   This keeps the same password even when the stored verifier is MD5: renaming
+   a role clears an MD5 verifier because it includes the role name. Any other
+   renamed login needs the same SCRAM password reset.
+
+   ```sh
+   railway ssh --service Postgres -- sh -ec '
+     test -n "$POSTGRES_PASSWORD"
+     psql -X -h /var/run/postgresql -U postgres -d "$POSTGRES_DB" \
+       -v ON_ERROR_STOP=1 -v owner=postgres -v renamed_owner=stella_owner \
+       -f /docker-entrypoint-initdb.d/init.sql
+   '
+   ```
+
+   Run this command only once. It preserves the initdb role as a passwordless
+   `NOLOGIN` maintenance role; do not use that role in `DATABASE_URL`.
+
+3. Set Postgres `POSTGRES_USER=stella_owner` (and `PGUSER=stella_owner` if it is
+   not a reference to `POSTGRES_USER`). Keep the password and database name.
+   With the manifest's references, this changes `Postgres.DATABASE_URL` and the
+   API's `DATABASE_URL` to use `stella_owner`. If the API has a literal URL,
+   change its username explicitly, retaining the password, host, port, and
+   database. Redeploy Postgres with its existing volume and data path.
+4. Check the new login through the private network, then redeploy the API. Its
+   pre-deploy command runs the committed migrations with that same login:
+
+   ```sh
+   railway ssh --service Postgres -- sh -ec '
+     psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c \
+       "SELECT current_user, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
+   '
+   ```
+
+   Expect `stella_owner`, `f`, `f`; confirm migrations finish and API `/health`
+   returns HTTP 200. A failed cutover must be repaired before restarting the API.
 
 ### One-time auth backfill (updating across v0.7.28)
 

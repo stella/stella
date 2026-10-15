@@ -21,6 +21,7 @@ import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { withActiveUpload } from "@/lib/files/active-uploads";
 import {
   ATTACHED_TEMPLATE_UPLOAD_PREFLIGHT,
   preflightAttachedTemplateUpload,
@@ -447,23 +448,25 @@ type BatchUploadOptions = {
 export const uploadFileEntitiesBatched = async (
   options: BatchUploadOptions,
 ): Promise<UploadResult[]> => {
-  const {
-    files,
-    workspaceId,
-    propertyId,
-    parentId,
-    parentIdForFile,
-    preparedUploadForFile,
-    onPreparedUploadFailed,
-    labels,
-    onError,
-  } = options;
-
-  if (files.length === 0) {
+  if (options.files.length === 0) {
     return [];
   }
 
-  return await new Promise<UploadResult[]>((resolve) => {
+  return await withActiveUpload(async () => await runUploadBatch(options));
+};
+
+const runUploadBatch = async ({
+  files,
+  workspaceId,
+  propertyId,
+  parentId,
+  parentIdForFile,
+  preparedUploadForFile,
+  onPreparedUploadFailed,
+  labels,
+  onError,
+}: BatchUploadOptions): Promise<UploadResult[]> =>
+  await new Promise<UploadResult[]>((resolve) => {
     const completedFiles = new Set<File>();
     const queue = new UploadQueue<UploadResult>(async (file, signal) => {
       const preparedUpload = preparedUploadForFile?.(file);
@@ -624,7 +627,6 @@ export const uploadFileEntitiesBatched = async (
 
     queue.enqueue(files);
   });
-};
 
 /**
  * Whether these files still owe the user the question "is this a new version
