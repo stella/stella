@@ -13,7 +13,7 @@ export const useQueryView = <TData, TError>(
 ): QueryView<TData, TError> => queryView(query, options);
 
 /** Optional reads keep their cached content and report failures without blocking it. */
-export const useQueryViewError = <TData, TError>(
+export const useQueryViewError = <TData, TError extends Error>(
   view: QueryView<TData, TError>,
 ) => {
   const analytics = useAnalytics();
@@ -26,7 +26,7 @@ export const useQueryViewError = <TData, TError>(
 };
 
 /** Dynamic query batches report each active failure once across renders. */
-export const useQueryViewErrors = <TData, TError>(
+export const useQueryViewErrors = <TData, TError extends Error>(
   views: readonly QueryView<TData, TError>[],
 ) => {
   const analytics = useAnalytics();
