@@ -4,8 +4,16 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import { env } from "@/api/env";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
+import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
+import {
+  imageToPdf,
+  isEmbeddableImageMimeType,
+} from "@/api/lib/files/image-pdf";
+import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { basicAuthorizationHeader } from "@/api/lib/http-basic-auth";
+import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 export {
   isConvertibleMimeType,
@@ -24,20 +32,6 @@ const XLSX_MIME_TYPES = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 ]);
 
-/**
- * Image MIME types that benefit from the Chromium HTML route
- * instead of LibreOffice (which adds A4 whitespace around the
- * image).
- */
-const IMAGE_MIME_TYPES = new Set([
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/tiff",
-  "image/bmp",
-  "image/webp",
-]);
-
 type ConvertToPdfResult = {
   buffer: ArrayBuffer;
   sizeBytes: number;
@@ -48,6 +42,16 @@ class GotenbergError extends TaggedError("GotenbergError")<{
   statusCode?: number;
   cause?: unknown;
 }> {}
+
+class ImagePdfError extends TaggedError("ImagePdfError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+type ConvertToPdfError =
+  | DerivativeAdmissionError
+  | GotenbergError
+  | ImagePdfError;
 
 const gotenbergAuth = (): string =>
   basicAuthorizationHeader(env.GOTENBERG_USERNAME, env.GOTENBERG_PASSWORD);
@@ -60,199 +64,81 @@ const GOTENBERG_RETRY = {
     error.statusCode === undefined || error.statusCode >= 500,
 } as const;
 
-/** Post an HTML document to Gotenberg's Chromium route. */
-const chromiumHtmlToPdf = async (
-  html: string,
-  formFields: Record<string, string>,
-): Promise<ConvertToPdfResult> => {
-  const formData = new FormData();
-  formData.append(
-    "files",
-    new Blob([html], { type: "text/html" }),
-    "index.html",
-  );
-  for (const [key, value] of Object.entries(formFields)) {
-    formData.append(key, value);
-  }
-
-  const response = await fetchWithTimeout(
-    `${env.GOTENBERG_URL}/forms/chromium/convert/html`,
-    {
-      method: "POST",
-      headers: { Authorization: gotenbergAuth() },
-      body: formData,
-      timeoutMs: 30_000,
-    },
-  );
-
-  if (!response.ok) {
-    throw new GotenbergError({
-      message: `Gotenberg returned ${response.status}`,
-      statusCode: response.status,
-    });
-  }
-
-  const result = await response.arrayBuffer();
-  return { buffer: result, sizeBytes: result.byteLength };
+type ConvertToPdfOptions = {
+  /**
+   * Who retries a failed converter call. `in-call` retries transient
+   * converter failures inside this call, for request paths where nothing
+   * else would. `caller` makes one call at most one conversion, for callers
+   * whose own retry policy (a queue's attempts) already bounds the total, so
+   * the two never multiply into repeated full-size conversions.
+   */
+  retry?: "in-call" | "caller";
 };
 
-// ── Image dimension parsing ──────────────────────────────
-
-type ImageSize = { width: number; height: number };
-
-/** Read width/height from a PNG IHDR chunk (bytes 16..23). */
-const parsePngSize = (buf: Uint8Array): ImageSize | null => {
-  // PNG signature: 137 80 78 71 13 10 26 10
-  // Need at least 24 bytes: 8-byte signature + 4-byte length
-  // + 4-byte IHDR tag + 4-byte width + 4-byte height
-  if (buf.length < 24 || buf[0] !== 0x89 || buf[1] !== 0x50) {
-    return null;
-  }
-  const view = new DataView(buf.buffer, buf.byteOffset);
-  return {
-    width: view.getUint32(16),
-    height: view.getUint32(20),
-  };
-};
-
-/** Read width/height from the first JPEG SOF marker. */
-const parseJpegSize = (buf: Uint8Array): ImageSize | null => {
-  if (buf[0] !== 0xff || buf[1] !== 0xd8) {
-    return null;
-  }
-  let offset = 2;
-  while (offset < buf.length - 1) {
-    if (buf[offset] !== 0xff) {
-      return null;
-    }
-    const marker = buf.at(offset + 1);
-    if (marker === undefined) {
-      return null;
-    }
-    // SOF0..SOF3 markers carry dimensions
-    if (marker >= 0xc0 && marker <= 0xc3) {
-      if (offset + 8 >= buf.length) {
-        return null;
-      }
-      const view = new DataView(buf.buffer, buf.byteOffset);
-      return {
-        height: view.getUint16(offset + 5),
-        width: view.getUint16(offset + 7),
-      };
-    }
-    // Skip to next marker
-    if (offset + 3 >= buf.length) {
-      return null;
-    }
-    const len = new DataView(buf.buffer, buf.byteOffset).getUint16(offset + 2);
-    offset += 2 + len;
-  }
-  return null;
-};
-
-/** Best-effort image dimension extraction from raw bytes. */
-const getImageSize = (buf: ArrayBuffer, mimeType: string): ImageSize | null => {
-  const bytes = new Uint8Array(buf);
-  if (mimeType === "image/png") {
-    return parsePngSize(bytes);
-  }
-  if (mimeType === "image/jpeg") {
-    return parseJpegSize(bytes);
-  }
-  return null;
-};
-
-// ── Image-to-PDF conversion ─────────────────────────────
-
-/** Pixels to inches at 96 DPI (Chromium's default). */
-const pxToIn = (px: number) => px / 96;
+/** The bytes of `view` as an `ArrayBuffer`, without a copy when they already are one. */
+const toArrayBuffer = (view: Uint8Array): ArrayBuffer =>
+  view.buffer instanceof ArrayBuffer &&
+  view.byteOffset === 0 &&
+  view.byteLength === view.buffer.byteLength
+    ? view.buffer
+    : view.slice().buffer;
 
 /**
- * Convert an image to PDF via Gotenberg's Chromium HTML route.
- * Reads the image dimensions, sets @page size to match, and
- * produces a PDF with no margins or whitespace.
- *
- * Falls back to the LibreOffice route for formats whose
- * dimensions we can't parse (GIF, TIFF, BMP, WebP).
+ * Convert a scanned file to PDF. Images are admitted by the pixel count
+ * their header declares before anything decodes them; JPEG and PNG are then
+ * embedded directly into a one-page PDF in-process, and every other type
+ * goes to Gotenberg's LibreOffice route.
  */
-const convertImageToPdf = async (
-  fileBuffer: ArrayBuffer,
-  mimeType: string,
-  size: ImageSize,
-): Promise<ConvertToPdfResult> => {
-  const base64 = Buffer.from(fileBuffer).toString("base64");
-  const dataUri = `data:${mimeType};base64,${base64}`;
+export const convertToPdf = async (
+  file: ScannedFile,
+  { retry = "in-call" }: ConvertToPdfOptions = {},
+): Promise<Result<ConvertToPdfResult, ConvertToPdfError>> => {
+  const { fileName, mimeType } = file;
+  const bytes = new Uint8Array(file.bytes);
+  const admission = admitDerivativeImage(bytes, mimeType);
+  if (admission.type === "refused") {
+    return Result.err(admission.error);
+  }
 
-  const html = `<!DOCTYPE html>
-<html>
-<head><style>
-@page {
-  size: ${size.width}px ${size.height}px;
-  margin: 0;
-}
-* { margin: 0; padding: 0; }
-img { display: block; width: ${size.width}px; height: ${size.height}px; }
-</style></head>
-<body><img src="${dataUri}"></body>
-</html>`;
-
-  return await chromiumHtmlToPdf(html, {
-    paperWidth: String(pxToIn(size.width)),
-    paperHeight: String(pxToIn(size.height)),
-    marginTop: "0",
-    marginBottom: "0",
-    marginLeft: "0",
-    marginRight: "0",
-    preferCssPageSize: "true",
-  });
-};
-
-export const convertToPdf = async ({
-  bytes: fileBuffer,
-  fileName,
-  mimeType,
-}: ScannedFile): Promise<Result<ConvertToPdfResult, GotenbergError>> => {
-  const imageSize = IMAGE_MIME_TYPES.has(mimeType)
-    ? getImageSize(fileBuffer, mimeType)
-    : null;
-
-  if (imageSize) {
-    return Result.tryPromise(
-      {
-        try: async () =>
-          await convertImageToPdf(fileBuffer, mimeType, imageSize),
-        catch: (cause) =>
-          cause instanceof GotenbergError
-            ? cause
-            : new GotenbergError({
-                message: "Failed to convert image",
-                cause,
-              }),
+  if (admission.header !== null && isEmbeddableImageMimeType(mimeType)) {
+    const header = admission.header;
+    return await Result.tryPromise({
+      try: async () => {
+        const pdf = await imageToPdf({ bytes, header, mimeType });
+        return { buffer: toArrayBuffer(pdf), sizeBytes: pdf.byteLength };
       },
-      { retry: GOTENBERG_RETRY },
-    );
+      catch: (cause) =>
+        new ImagePdfError({ message: "Failed to embed image", cause }),
+    });
   }
 
   return await Result.tryPromise(
     {
       try: async () => {
-        const buffer = XLSX_MIME_TYPES.has(mimeType)
-          ? await applyFitToPage(fileBuffer)
-          : fileBuffer;
-
-        const formData = new FormData();
-        formData.append("files", new Blob([buffer]), fileName);
-        formData.append("exportNotes", "true");
-        formData.append("exportNotesInMargin", "true");
-
+        const source = XLSX_MIME_TYPES.has(mimeType)
+          ? new Uint8Array(await applyFitToPage(file.bytes))
+          : bytes;
+        // Streamed from the caller's buffer, so the request holds no second
+        // copy of the source.
+        const form = streamMultipartForm({
+          file: {
+            fieldName: "files",
+            // The converter picks its import filter by extension.
+            fileName: sanitizeFilenamePreservingExtension(fileName),
+            bytes: source,
+          },
+          fields: { exportNotes: "true", exportNotesInMargin: "true" },
+        });
         const response = await fetchWithTimeout(
           `${env.GOTENBERG_URL}/forms/libreoffice/convert`,
           {
             method: "POST",
             headers: {
               Authorization: gotenbergAuth(),
+              "Content-Type": form.contentType,
+              "Content-Length": String(form.contentLength),
             },
-            body: formData,
+            body: form.body,
             timeoutMs: 30_000,
           },
         );
@@ -265,10 +151,7 @@ export const convertToPdf = async ({
         }
 
         const result = await response.arrayBuffer();
-        return {
-          buffer: result,
-          sizeBytes: result.byteLength,
-        };
+        return { buffer: result, sizeBytes: result.byteLength };
       },
       catch: (cause) => {
         if (cause instanceof GotenbergError) {
@@ -280,6 +163,6 @@ export const convertToPdf = async ({
         });
       },
     },
-    { retry: GOTENBERG_RETRY },
+    retry === "in-call" ? { retry: GOTENBERG_RETRY } : undefined,
   );
 };
