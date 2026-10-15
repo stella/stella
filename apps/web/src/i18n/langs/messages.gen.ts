@@ -2100,6 +2100,8 @@ type Messages = {
     "returnToAgent": "Return to your agent to continue.";
     "returnsLocally": "Returns you to {clientName} on this computer";
     "returnsTo": "Returns you to {clientName}";
+    "scopeAccountExportRead": "Read your personal data exports";
+    "scopeAccountExportWrite": "Request your personal data exports";
     "scopeAdminRead": "Read your organization's audit log";
     "scopeAdminWrite": "Manage organization members and settings";
     "scopeBillingWrite": "Create, edit, and delete your time entries";
@@ -4662,6 +4664,15 @@ type Messages = {
       "displayNameSaved": "Display name updated";
       "enterOtp": "Verification code";
       "otpSentSuccess": "Verification code sent to your email.";
+      "personalDataExportDescription": "Request a downloadable copy of the personal data held in your account. The download is available for one hour.";
+      "personalDataExportExpired": "This export has expired.";
+      "personalDataExportExpiresAt": "Available until {expiresAt}.";
+      "personalDataExportFailed": "Your export could not be prepared.";
+      "personalDataExportReady": "Your export is ready.";
+      "personalDataExportRequest": "Request export";
+      "personalDataExportRequestNew": "Request a new export";
+      "personalDataExportTitle": "Export my data";
+      "personalDataExportWorking": "Preparing your export…";
       "preferredName": "Preferred name";
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.";
       "preferredNamePlaceholder": "Your name";

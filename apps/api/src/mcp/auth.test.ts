@@ -1,9 +1,11 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import type { JWTPayload } from "jose";
+import type { JWTPayload, JWTVerifyOptions } from "jose";
 
 import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
+import { MACHINE_API_KEY_PREFIX } from "@/api/lib/machine-api-key-config";
 import {
+  authenticateAccountExportRequest,
   classifyMcpTokenVerificationError,
   extractMcpSession,
   getMcpAccessTokenVerificationOptions,
@@ -30,6 +32,44 @@ const rejectionOf = (payload: JWTPayload): string => {
 };
 
 describe("extractMcpSession", () => {
+  test("account export verification accepts only audiences offering account consent", async () => {
+    let verifications = 0;
+    const authenticated = await authenticateAccountExportRequest(
+      "oauth-token",
+      {
+        verifyToken: async (
+          _token: string | undefined,
+          options?: { verifyOptions?: JWTVerifyOptions },
+        ) => {
+          verifications += 1;
+          expect(options?.verifyOptions?.audience).toEqual([
+            getMcpResourceUrl("advanced"),
+            getMcpResourceUrl("default"),
+          ]);
+          expect(options?.verifyOptions?.issuer).toBe(getAuthIssuerUrl());
+          return {
+            sub: "user_one",
+            org_id: "org_one",
+            client_id: "client",
+            scope: "stella:account_export_read",
+          };
+        },
+      },
+    );
+    expect(Result.isOk(authenticated)).toBe(true);
+    expect(verifications).toBe(1);
+  });
+
+  test("account export verification rejects API keys before the JWT verifier", async () => {
+    const authenticated = await authenticateAccountExportRequest(
+      `${MACHINE_API_KEY_PREFIX}key`,
+      {
+        verifyToken: async () =>
+          panic("API keys must not reach the OAuth verifier"),
+      },
+    );
+    expect(Result.isError(authenticated)).toBe(true);
+  });
   test("requires a user principal on user-only MCP surfaces", () => {
     const result = extractMcpSession({
       sub: "synthetic-service-client",

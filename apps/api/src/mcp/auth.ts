@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { JWTPayload } from "jose";
 import * as v from "valibot";
 
+import { ACCOUNT_EXPORT_SCOPES } from "@stll/api-contract";
 import type { PermissionInput } from "@stll/permissions";
 
 import {
@@ -30,6 +31,10 @@ import {
   McpAuthenticationError,
   McpTokenVerificationError,
 } from "@/api/mcp/errors";
+import {
+  getMcpResourceScopes,
+  MCP_MODES,
+} from "@/api/mcp/resource-policy-contract";
 
 export type McpSession = {
   userId: string;
@@ -345,4 +350,36 @@ export const authenticateMcpRequest = async (
   return authenticated.map((session) =>
     narrowReviewOrganizationScopes(session, reviewAccount),
   );
+};
+
+/** Only resource audiences advertising account consent may deliver exports. */
+export const authenticateAccountExportRequest = async (
+  bearerToken: string,
+  {
+    verifyToken,
+  }: { verifyToken?: ReturnType<typeof getVerifyBearerToken> } = {},
+): Promise<Result<McpSession, McpAuthenticationFailure>> => {
+  if (isMachineApiKeyCredential(bearerToken)) {
+    return Result.err(
+      new McpAuthenticationError({
+        message: "Account exports require OAuth consent",
+      }),
+    );
+  }
+  const audiences = MCP_MODES.filter((mode) =>
+    getMcpResourceScopes(mode).some(
+      (scope) => scope === ACCOUNT_EXPORT_SCOPES.read,
+    ),
+  ).map((mode) => getMcpResourceUrl(mode));
+  const options = getMcpAccessTokenVerificationOptions();
+  return (
+    await Result.tryPromise({
+      try: async () =>
+        await (verifyToken ?? getVerifyBearerToken())(bearerToken, {
+          ...options,
+          verifyOptions: { ...options.verifyOptions, audience: audiences },
+        }),
+      catch: classifyMcpTokenVerificationError,
+    })
+  ).andThen(extractMcpSession);
 };

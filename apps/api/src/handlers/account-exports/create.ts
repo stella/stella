@@ -12,6 +12,7 @@ import {
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { noResourceSetUpdates } from "@/api/lib/resource-set-realtime";
 
 const ACCOUNT_EXPORT_ENQUEUE_FAILED = failureSink({
   event: "account_export.enqueue_failed",
@@ -23,7 +24,16 @@ const requestPersonalDataExport = createSafeSessionHandler(
     accountAccess: ACCOUNT_ACCESS.accountControl,
     contract: "patch",
     access: "write",
-    mcp: { type: "internal", reason: "auth_plumbing" },
+    realtime: noResourceSetUpdates(
+      "Account-scoped export state refreshes through the caller-owned query",
+    ),
+    mcp: {
+      type: "capability",
+      reason: "reporting_export",
+      consumesServices: false,
+    },
+    description:
+      "Request an asynchronous export of your own personal data across current organization memberships. Organization and matter content are excluded. One active export is reused. Poll account-exports.status.get with the returned id as exportId, then call account-exports.download.get when ready. Pass nextCall to read_capability. Downloads require your authenticated account and expire after one hour.",
   },
   async function* ({ user, request }) {
     const row = yield* Result.await(requestAccountExport(user.id));
@@ -39,7 +49,13 @@ const requestPersonalDataExport = createSafeSessionHandler(
         request,
       });
     }
-    return Result.ok(accountExportStatus(row));
+    return Result.ok({
+      ...accountExportStatus(row),
+      nextCall: {
+        capability: "account-exports.status.get",
+        input: { params: { exportId: row.id } },
+      },
+    });
   },
 );
 

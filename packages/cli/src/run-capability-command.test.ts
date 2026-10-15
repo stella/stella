@@ -1,8 +1,15 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { PassThrough } from "node:stream";
 
 import { respondToMcpLifecycle } from "../tests/mcp-test-lifecycle.js";
+import { readCapabilityCatalog } from "./capability-catalog-data.js";
+import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import type { Context } from "./context.js";
+import {
+  capabilityCommandPath,
+  deriveCapabilityLeaf,
+} from "./generate-capability-tree.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { CapabilityFlagSpec, CapabilityLeafSpec } from "./route-types.js";
 import { runCapabilityCommand } from "./run-capability-command.js";
@@ -13,6 +20,7 @@ type ServerResponse =
   | { kind: "echo" }
   | { kind: "confirm-gate" }
   | { kind: "receipt"; requestId: string }
+  | { kind: "download"; downloadUrl: string; expiresAt: string }
   | { kind: "pages"; pages: readonly Record<string, unknown>[] };
 
 /**
@@ -77,6 +85,14 @@ const startServer = (response: ServerResponse) => {
       }
       if (response.kind === "receipt") {
         return text({ ok: true, meta: { requestId: response.requestId } });
+      }
+      if (response.kind === "download") {
+        return text({
+          download: {
+            downloadUrl: response.downloadUrl,
+            expiresAt: response.expiresAt,
+          },
+        });
       }
       if (response.kind === "pages") {
         const page = response.pages[pageIndex] ?? {
@@ -723,6 +739,49 @@ describe("runCapabilityCommand: reserved flag values", () => {
 });
 
 describe("runCapabilityCommand: output contract", () => {
+  test("personal exports use the generated read command and return download metadata", async () => {
+    const catalog = parseCapabilityCatalog(readCapabilityCatalog());
+    if (catalog === null) {
+      panic("Expected the committed capability catalog");
+    }
+    const entry = catalog.find(
+      ({ id }) => id === "account-exports.download.get",
+    );
+    if (entry === undefined) {
+      panic("Expected the account download capability");
+    }
+    const { spec } = deriveCapabilityLeaf(entry);
+    expect(spec.commandPath).toEqual(capabilityCommandPath(entry.id));
+    expect(spec.access).toBe("read");
+    const download = {
+      downloadUrl:
+        "https://api.example.test/v1/me/data-exports/0199d851-071b-7000-8000-000000000001/download",
+      expiresAt: "2030-01-01T12:00:00Z",
+    };
+    const server = startServer({ kind: "download", ...download });
+    try {
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+        token: makeToken(["read", "account_export_read"]),
+      });
+      const exportId = "0199d851-071b-7000-8000-000000000001";
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { exportId, output: "json" },
+        spec,
+      });
+      expect(server.calls.at(-1)).toEqual({
+        name: "read_capability",
+        args: { capability: entry.id, input: { params: { exportId } } },
+      });
+      expect(JSON.parse(tty.stdoutText())).toEqual({ download });
+      expect(tty.exitCode()).toBeUndefined();
+    } finally {
+      server.stop();
+    }
+  });
   test("a page under `result` renders as a table with its resume cursor", async () => {
     const server = startServer({
       kind: "pages",

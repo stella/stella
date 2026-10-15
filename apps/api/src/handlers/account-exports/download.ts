@@ -26,9 +26,10 @@ const downloadPersonalDataExport = createSafeSessionHandler(
       type: "file-response",
       response: { mediaTypes: ["application/zip"] },
       alternative: {
-        type: "none",
-        reason:
-          "Account settings downloads use the authenticated HTTP endpoint.",
+        type: "partial",
+        via: ["account-exports.download.get"],
+        limitation:
+          "Returns an authenticated download URL; ZIP bytes require HTTP.",
       },
     },
   },
