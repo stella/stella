@@ -35,9 +35,12 @@ const TITLE_GENERATION_TIMEOUT_MS = 10_000;
 /**
  * A title runs on the standard tier: the reader sees it the moment the first
  * turn ends, and a deferred tier bounds no latency at all, so a title queued
- * there outlives its deadline and is never written.
+ * there outlives its deadline and is never written. Read by the
+ * structured-output request settings test.
+ *
+ * @public
  */
-const TITLE_SERVICE_TIER = "standard";
+export const TITLE_SERVICE_TIER = "standard";
 
 const SEND_MODE_READ_FAILED_SINK = failureSink({
   event: "chat.thread_title.send_mode_read_failed",

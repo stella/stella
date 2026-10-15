@@ -56,8 +56,15 @@ import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models"
  * search they typed, which is a search, rather than a slow one. It covers a
  * short structured answer from a fast model on every offered provider: a
  * deadline under that never sees an answer, yet still spends the usage.
+ * `maxOutputTokens` sizes the reply only; reasoning is reserved on top of it.
+ * Read by the structured-output request settings test.
+ *
+ * @public
  */
-const EXPANSION_DEADLINE_MS = 4000;
+export const EXPANSION_REQUEST = {
+  maxOutputTokens: 200,
+  deadlineMs: 4000,
+} as const;
 
 /** How long one answer is reused for the same query, language and org. */
 const EXPANSION_CACHE_TTL_MS = 60 * 60_000;
@@ -294,9 +301,8 @@ const expandCaseLawSearch = createSafeRootHandler(
             query: formatCorpusQueryTokens(required),
           }),
           outputSchema: expansionOutputSchema,
-          maxOutputTokens: 200,
+          ...EXPANSION_REQUEST,
           abortSignal: request.signal,
-          deadlineMs: EXPANSION_DEADLINE_MS,
         }),
       catch: (error: unknown) => error,
     });
