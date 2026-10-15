@@ -3,6 +3,7 @@ import { afterAll, afterEach, expect, jest, test } from "bun:test";
 
 import type { contactsOptions } from "@/lib/contacts/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts" });
 const originalFetch = globalThis.fetch;
@@ -102,7 +103,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mount = async (picker = false, locale: "en" | "ar" = "en") => {

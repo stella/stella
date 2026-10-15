@@ -2,6 +2,7 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import messages from "@/i18n/langs/ar.json" with { type: "json" };
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { cleanup, render, screen } = await import("@testing-library/react");
@@ -13,7 +14,7 @@ const { ToolCallCard } = await import("./tool-call-card");
 
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("tool duration respects the selected numbering system", () => {

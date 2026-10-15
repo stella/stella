@@ -46,6 +46,8 @@ mod relaunch;
 mod session_manager;
 mod session_store;
 mod sse;
+#[cfg(test)]
+mod test_child_processes;
 mod time_entry_commands;
 mod time_entry_submit;
 mod tray;

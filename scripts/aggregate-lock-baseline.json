@@ -2959,12 +2959,6 @@
   },
   {
     "file": "apps/api/src/lib/folio-collab-rooms.ts",
-    "fingerprint": "c94869504d79f2e3062cd497e1911f8b0403bcbe6c0c57abe37229eb73994f2d",
-    "count": 2,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/folio-collab-rooms.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/folio-collab-rooms.ts",
     "fingerprint": "d53a5c64637fa37ff3d4e55a897c12382cbe89c79b63bb0a2897797d33313c43",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/folio-collab-rooms.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
@@ -4123,9 +4117,9 @@
   },
   {
     "file": "apps/api/src/lib/time-entry-timer-access.ts",
-    "fingerprint": "28fa91a890b17b0ccbee5d5354c7f39e4ef340e472d6eec3df82b4a3850aba7f",
+    "fingerprint": "324510407a3f1e599055bcdf64c5fb3c275d2f9bbc36e6e468d0d37fa68ef46f",
     "count": 2,
-    "reason": "Same FOR SHARE on the matter and member rows; the unassigned branch now reads the matter's visibility instead of its client."
+    "reason": "Same FOR SHARE on the matter and member rows; the unassigned branch now asks the matter visibility rule instead of the client."
   },
   {
     "file": "apps/api/src/lib/time-entry-timer-access.ts",

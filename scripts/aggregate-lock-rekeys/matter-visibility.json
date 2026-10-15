@@ -2,8 +2,8 @@
   {
     "file": "apps/api/src/lib/time-entry-timer-access.ts",
     "from": "e9cc074ef434731dee1ca517f7b19023a7e5bfe15b7113cc7a02d9f4f83a581d",
-    "to": "28fa91a890b17b0ccbee5d5354c7f39e4ef340e472d6eec3df82b4a3850aba7f",
-    "reason": "Same FOR SHARE on the matter and member rows; the unassigned branch now reads the matter's visibility instead of its client."
+    "to": "324510407a3f1e599055bcdf64c5fb3c275d2f9bbc36e6e468d0d37fa68ef46f",
+    "reason": "Same FOR SHARE on the matter and member rows; the unassigned branch now asks the matter visibility rule instead of the client."
   },
   {
     "file": "apps/api/src/lib/db/member-access-hold.ts",

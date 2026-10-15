@@ -179,11 +179,13 @@ export const markDesktopEditHandoffOpened = async ({
 export const readDesktopEditHandoffAccess = async ({
   createdBy,
   workspaceId,
+  db = rootDb,
 }: {
   createdBy: string;
   workspaceId: SafeId<"workspace">;
+  db?: Pick<typeof rootDb, "select">;
 }) => {
-  const rows = await rootDb
+  const rows = await db
     .select({
       organizationId: workspaces.organizationId,
       organizationRole: member.role,

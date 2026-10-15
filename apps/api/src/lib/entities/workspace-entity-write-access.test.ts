@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract";
+import { roles } from "@stll/permissions";
+
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
+import { reachesMatterWithoutMembership } from "@/api/lib/workspaces/visibility";
 
 describe("canWriteWorkspaceEntities", () => {
   test("requires current workspace access for non-admin edit roles", () => {
@@ -86,6 +90,27 @@ describe("canWriteWorkspaceEntities", () => {
         workspaceVisibility: "all_members",
       }),
     ).toBe(false);
+  });
+
+  test("never reaches a matter the authorized workspace rule does not grant", () => {
+    for (const organizationRole of Object.keys(roles)) {
+      for (const workspaceVisibility of Object.values(MATTER_VISIBILITY)) {
+        for (const workspaceMemberId of [null, "workspace_member_test"]) {
+          const ruleGrantsMatter =
+            workspaceMemberId !== null ||
+            reachesMatterWithoutMembership({
+              role: organizationRole,
+              visibility: workspaceVisibility,
+            });
+          const canWrite = canWriteWorkspaceEntities({
+            organizationRole,
+            workspaceMemberId,
+            workspaceVisibility,
+          });
+          expect(canWrite && !ruleGrantsMatter).toBe(false);
+        }
+      }
+    }
   });
 
   test("rejects roles without entity update permission", () => {

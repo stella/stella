@@ -507,6 +507,18 @@ const CONTRACT_CORPUS = {
               assignedToDeletedAt: null,
             },
           ],
+          // The web agenda stays out of the matter detail projection.
+          upcomingAgenda: [
+            {
+              entityId: toSafeId<"entity">(uid(43)),
+              name: "File the response",
+              status: null,
+              dueDate: "2026-01-10",
+              assignedTo: "Petr",
+              assignedToImage: null,
+              assignedToDeletedAt: null,
+            },
+          ],
         } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
         readWorkspaceContactsHandlerMock.mockResolvedValue(
           Result.ok({

@@ -24,19 +24,21 @@ const ADMIN_REACHABLE_VISIBILITIES = [
  * stella_authorized_workspaces view: owners and admins reach
  * `admins_and_assigned` and `all_members` matters, every internal member
  * reaches `all_members` matters, and nobody reaches an `assigned_only` matter
- * this way.
+ * this way. A raw query over an aliased matter passes its own `visibility`
+ * expression; every SQL statement of the rule is built here.
  */
 export const reachesMatterWithoutAssignmentSql = (
   role: SQLWrapper,
+  visibility: SQLWrapper = workspaces.visibility,
 ): SQL | undefined =>
   or(
     and(
       inArray(role, ORGANIZATION_MATTER_ADMIN_ROLES),
-      inArray(workspaces.visibility, ADMIN_REACHABLE_VISIBILITIES),
+      inArray(visibility, ADMIN_REACHABLE_VISIBILITIES),
     ),
     and(
       inArray(role, INTERNAL_MEMBER_ROLES),
-      eq(workspaces.visibility, MATTER_VISIBILITY.allMembers),
+      eq(visibility, MATTER_VISIBILITY.allMembers),
     ),
   );
 
