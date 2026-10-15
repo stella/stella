@@ -1502,7 +1502,10 @@ for (const language of ["en", "ar"] as const) {
             ]);
             await expect(
               area.getByRole("button", {
-                name: messages.settings.reconnectToStella,
+                name:
+                  surface === "settings"
+                    ? messages.settings.reconnect
+                    : messages.settings.reconnectToStella,
                 exact: true,
               }),
             ).toBeVisible();
