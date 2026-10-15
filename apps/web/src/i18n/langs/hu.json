@@ -2074,6 +2074,7 @@
     "versionLabel": "{version}. verzió",
     "viewSource": "Forrás megtekintése",
     "website": "Webhely",
+    "whenToUse": "Mikor használja",
     "workflow": "Munkafolyamat",
     "workflows": "Munkafolyamatok",
     "zoomIn": "Nagyítás",
@@ -3648,6 +3649,10 @@
       "importTitle": "Készség importálása",
       "importedSkills": "{count, plural, one {# készség importálva} other {# készség importálva}}",
       "invalidPath": "Az útvonal csak kisbetűket, számjegyeket, pontokat, kötőjeleket vagy alulvonásokat tartalmazhat",
+      "invocationAuto": "Automatikusan",
+      "invocationAutoHelp": "Az AI magától is használhatja ezt a készséget, ha illik a kéréshez.",
+      "invocationManual": "Csak kérésre",
+      "invocationManualHelp": "Csak akkor kerül használatra, ha a / jellel meghívja, vagy hozzáadja az üzenetéhez.",
       "license": "Licenc: {license}",
       "newFile": "Új fájl",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4338,6 +4343,8 @@
         "yearMonthSequential": "Év-Hónap / Sorszámos (2026-02/001)",
         "yearSequential": "Év / Sorszámos (2026/001)"
       },
+      "showInTitle": "Szám megjelenítése az ügy neve mellett",
+      "showInTitleDescription": "Ha ki van kapcsolva, a cím pontosan a megadott név.",
       "title": "Ügyszámozás",
       "tokenHelp": "Elérhető tokenek: '{'SEQ'}' (sorszám), '{'YYYY'}' (év), '{'YY'}' (kétjegyű év), '{'MM'}' (hónap)"
     },
@@ -4971,17 +4978,22 @@
     "provisionAskSummarize": "Foglald össze, hogyan alkalmazzák a bíróságok ezt a rendelkezést",
     "provisionAskSummarizePrompt": "Foglald össze, hogyan alkalmazzák a bíróságok a következőt: {subject}, és hivatkozz a felhasznált határozatokra.",
     "provisionDetailsFor": "{provision} részletei",
+    "provisionEffectiveFrom": "{date} óta hatályos",
     "provisionHistoryEarliest": "A legkorábbi ismert szövegváltozat.",
     "provisionHistoryEmpty": "Ehhez a rendelkezéshez nincs nyilvántartott szövegváltozat.",
     "provisionHistoryLoadOlder": "Töltsön be korábbi változatokat az összehasonlításhoz.",
     "provisionHistoryUnavailable": "A rendelkezés története nem tölthető be.",
+    "provisionPartTextUnavailable": "A(z) {provisionLabel} szövege nem érhető el",
     "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
     "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
     "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
     "resolvedAlias": "Felismerve: {label}",
     "searchAskPrompt": "{query} ({country} jogszabályai)",
     "searchLabel": "Keresés a jogszabályok között",
     "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
+    "showCitedPartOnly": "Csak az idézett rész megjelenítése",
+    "showFullProvision": "A teljes rendelkezés megjelenítése",
     "showInText": "Megjelenítés a szövegben",
     "statedWindow": "A kiadó által megadott dátumok: {range}",
     "status": {
@@ -4997,7 +5009,6 @@
     "title": "Jogszabályok",
     "validity": "Hatályos {from} és {to} között",
     "versionAppliedInDecision": "A(z) <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> határozatban alkalmazott változat (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "A szöveg {date} óta hatályos",
     "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
   },
   "styleSets": {
@@ -5550,7 +5561,6 @@
     "viewVersion": "Megtekintés",
     "whenNotToUse": "Mikor ne használja",
     "whenNotToUsePlaceholder": "Mikor kerülendő ez a sablon?",
-    "whenToUse": "Mikor használja",
     "whenToUsePlaceholder": "Mikor használandó ez a sablon? (segíti az AI sablonválasztását)"
   },
   "timesheets": {
@@ -5671,7 +5681,7 @@
       "title": "Másolás ügyiratba"
     },
     "create": {
-      "ownerTypeToggle": "Ügy típusa",
+      "matterName": "Ügy neve",
       "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."
     },
     "createNewWorkspace": "Új ügy létrehozása",
@@ -6123,15 +6133,12 @@
       "upcomingTasks": "Közelgő agenda",
       "uploaded": "feltöltötte"
     },
-    "ownerType": {
-      "client": "Ügyfél",
-      "personal": "Személyes"
-    },
     "parties": {
       "addParty": "Fél hozzáadása",
       "changeClient": "Ügyfél módosítása",
       "client": "Ügyfél",
       "noClient": "Nincs ügyfél hozzárendelve",
+      "noClientOptional": "Nincs ügyfél (nem kötelező)",
       "noParties": "Ehhez az ügyhöz nincsenek felek hozzáadva.",
       "partyRoles": {
         "co_counsel": "Társügyvéd",

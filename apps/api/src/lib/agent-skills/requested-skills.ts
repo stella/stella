@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { ModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import {
   recordSkillReadAudit,
   SKILL_READ_OUTCOME,
@@ -33,7 +34,7 @@ export type RequestedSkills = {
 export type ResolveRequestedSkillsOptions = {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
   /** The skills the caller may use in this turn (the chat catalog). */
-  catalog: readonly SkillMetadata[];
+  catalog: ModelOfferedSkills<SkillMetadata>;
   messageText: string;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
