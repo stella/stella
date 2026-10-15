@@ -276,6 +276,21 @@ describe("network guard", () => {
       });
     });
 
+    test("a remote proxy is refused even for a loopback target", async () => {
+      uninstall = installNetworkGuard();
+      for (const proxy of [
+        "http://proxy.example:8080",
+        { url: "http://proxy.example:8080" },
+      ]) {
+        const init: RequestInit = {};
+        Reflect.set(init, "proxy", proxy);
+        // oxlint-disable-next-line no-await-in-loop -- each proxy form is checked in turn.
+        const error = await rejectionOf(fetch("http://127.0.0.1:1/", init));
+        expect(error).toBeInstanceOf(NetworkAccessError);
+        expect(error).toHaveProperty("host", "proxy.example");
+      }
+    });
+
     test("an undefined unix option is not a Unix socket", async () => {
       uninstall = installNetworkGuard();
       // Built at run time: the typed init does not admit an undefined unix.
@@ -307,6 +322,10 @@ describe("network guard", () => {
       NetworkAccessError,
     );
     expect(() => tls.connect({ host: "example.com", port: 443 })).toThrow(
+      NetworkAccessError,
+    );
+    // The (port, options) overload carries the host in the second argument.
+    expect(() => tls.connect(443, { host: "example.com" })).toThrow(
       NetworkAccessError,
     );
     expect(() => net.connect({ host: "203.0.113.7", port: 5432 })).toThrow(

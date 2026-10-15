@@ -71,6 +71,27 @@ const requestParts = (
   };
 };
 
+// Bun's `proxy` option (a URL string or `{ url }`) is where the connection
+// actually goes, so it is checked like the target. A proxy that is not a URL
+// is refused outright.
+const refuseProxy = (
+  init: Parameters<typeof fetch>[1],
+  refuse: FetchRefusal,
+): NetworkAccessError | undefined => {
+  const proxy: unknown =
+    init === undefined ? undefined : Reflect.get(init, "proxy");
+  const href: unknown =
+    typeof proxy === "object" && proxy !== null
+      ? Reflect.get(proxy, "url")
+      : proxy;
+  if (href === undefined || href === null || href === "") {
+    return undefined;
+  }
+  return typeof href === "string" && URL.canParse(href)
+    ? refuse(new URL(href))
+    : new NetworkAccessError(String(href), "fetch proxy");
+};
+
 // 303, and 301/302 after a POST, continue as a GET without the body.
 const dropsBody = (status: number, method: string) =>
   status === 303 || ((status === 301 || status === 302) && method === "POST");
@@ -110,7 +131,7 @@ const guardedFetch =
     if (LOCAL_URL_SCHEMES.has(url.protocol)) {
       return await original(input, init);
     }
-    const first = refuse(url);
+    const first = refuse(url) ?? refuseProxy(init, refuse);
     if (first !== undefined) {
       throw first;
     }
@@ -176,20 +197,34 @@ type SocketTarget = {
   unix?: unknown;
 };
 
-const socketHost = (args: readonly unknown[]): string | undefined => {
+// Every host a socket call could connect to, across the overloads
+// `(options)`, `(port, host?, options?)`, `(port, options)` and `(path)`.
+// The guard refuses the call if any of them is refused, so an overload that
+// places the host somewhere unexpected cannot slip past as "localhost".
+const socketHosts = (args: readonly unknown[]): string[] => {
   const [first, second] = args;
-  if (typeof first === "object" && first !== null) {
-    const target: SocketTarget = first;
-    if (typeof target.path === "string" || typeof target.unix === "string") {
-      return undefined;
-    }
-    const host = target.host ?? target.hostname;
-    return typeof host === "string" ? host : "localhost";
-  }
   if (typeof first === "string" && !/^\d+$/u.test(first)) {
-    return undefined; // a Unix socket path
+    return []; // a Unix socket path
   }
-  return typeof second === "string" ? second : "localhost";
+  const hosts: string[] = [];
+  let unixOnly = false;
+  if (typeof second === "string") {
+    hosts.push(second);
+  }
+  for (const arg of args) {
+    if (typeof arg !== "object" || arg === null) {
+      continue;
+    }
+    const target: SocketTarget = arg;
+    for (const host of [target.host, target.hostname]) {
+      if (typeof host === "string") {
+        hosts.push(host);
+      }
+    }
+    unixOnly ||=
+      typeof target.path === "string" || typeof target.unix === "string";
+  }
+  return hosts.length === 0 && !unixOnly ? ["localhost"] : hosts;
 };
 
 let installed: (() => void) | undefined;
@@ -242,7 +277,9 @@ export const installNetworkGuard = ({
   const refuseSocket =
     (via: string): Refusal =>
     (args) =>
-      refusal(socketHost(args), via);
+      socketHosts(args)
+        .map((host) => refusal(host, via))
+        .find((error) => error !== undefined);
   // Bun's module-level factories open sockets without going through
   // Socket.prototype.connect, so each entry point is guarded on its own.
   const restores = [
