@@ -222,7 +222,7 @@
     "@better-auth/cimd": "1.7.6",
     "@better-auth/core": "1.7.6",
     "@better-auth/oauth-provider": "1.7.6",
-    "@libpdf/core": "0.4.2",
+    "@libpdf/core": "0.5.2",
     "@mcp-ui/client": "7.1.1",
     "@oxlint/plugins": "1.87.0",
     "@shadcn/lint": "0.1.0",
@@ -314,7 +314,7 @@
     "@tanstack/ai-mistral@0.6.14": "patches/@tanstack%2Fai-mistral@0.6.14.patch",
     "@tanstack/ai-openrouter@0.21.1": "patches/@tanstack%2Fai-openrouter@0.21.1.patch",
     "@tanstack/ai-mcp@0.8.0": "patches/@tanstack%2Fai-mcp@0.8.0.patch",
-    "@libpdf/core@0.4.2": "patches/@libpdf%2Fcore@0.4.2.patch"
+    "@libpdf/core@0.5.2": "patches/@libpdf%2Fcore@0.5.2.patch"
   },
   "trustedDependencies": [
     "lefthook"
