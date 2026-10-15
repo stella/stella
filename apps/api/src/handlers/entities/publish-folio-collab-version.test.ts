@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import { envBase } from "@/api/env-base";
@@ -183,11 +184,13 @@ describe("publication validates the stored checkpoint identity", () => {
     "accepts the legacy digest of exact DOCX bytes: %j",
     async (text) => {
       const zip = new JSZip();
-      zip.file(
+      writeZipEntry(
+        zip,
         "[Content_Types].xml",
         `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`,
       );
-      zip.file(
+      writeZipEntry(
+        zip,
         "word/document.xml",
         `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:body></w:document>`,
       );

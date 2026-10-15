@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -70,7 +71,7 @@ const zipOf = async (
 ): Promise<Uint8Array> => {
   const zip = new JSZip();
   for (const { name, content } of entries) {
-    zip.file(name, content);
+    writeZipEntry(zip, name, content);
   }
   return await zip.generateAsync({ type: "uint8array", compression });
 };

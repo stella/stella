@@ -1207,6 +1207,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/test-kit/src/network.ts",
+    class: "package-owned-client",
+    reason:
+      "Test network guard wraps fetch and the socket factories to refuse non-loopback hosts; it opens no connection of its own.",
+    transports: ["global:fetch", "module:node:net", "module:node:tls"],
+  },
+  {
     path: "packages/fetch/src/index.ts",
     class: "package-owned-client",
     reason:

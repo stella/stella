@@ -2077,6 +2077,7 @@ type Messages = {
     "versionLabel": "Version {version}";
     "viewSource": "View source";
     "website": "Website";
+    "whenToUse": "When to use";
     "workflow": "Workflow";
     "workflows": "Workflows";
     "zoomIn": "Zoom in";
@@ -2926,6 +2927,7 @@ type Messages = {
     "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.";
     "checkingDocxEditTitle": "Checking document";
     "chooseEvidence": "Choose a file to insert a numbered evidence reference.";
+    "collaborationSnapshotRecovered": "The stored collaboration copy could not be reopened. The room was restored from the last saved document; changes that were not saved may have been lost.";
     "comment": "Comment";
     "comments": {
       "addPlaceholder": "Add a comment...";
@@ -3650,6 +3652,10 @@ type Messages = {
       "importTitle": "Import skill";
       "importedSkills": "{count, plural, one {Imported # skill} other {Imported # skills}}";
       "invalidPath": "Path must use lowercase letters, digits, dots, hyphens, or underscores";
+      "invocationAuto": "Automatically";
+      "invocationAutoHelp": "The AI can use this skill on its own when it fits the request.";
+      "invocationManual": "Only when invoked";
+      "invocationManualHelp": "Used only when you run it with / or add it to your message.";
       "license": "License: {license}";
       "newFile": "New file";
       "newFileFilenamePlaceholder": "notes.md";
@@ -4340,6 +4346,8 @@ type Messages = {
         "yearMonthSequential": "Year-Month / Sequential (2026-02/001)";
         "yearSequential": "Year / Sequential (2026/001)";
       };
+      "showInTitle": "Show the number next to the matter name";
+      "showInTitleDescription": "When this is off, the title is exactly the name you entered.";
       "title": "Matter numbering";
       "tokenHelp": "Available tokens: '{'SEQ'}' (sequence), '{'YYYY'}' (year), '{'YY'}' (2-digit year), '{'MM'}' (month)";
     };
@@ -4973,17 +4981,22 @@ type Messages = {
     "provisionAskSummarize": "Summarize how courts apply this provision";
     "provisionAskSummarizePrompt": "Summarize how courts apply {subject}, citing the decisions you rely on.";
     "provisionDetailsFor": "Details of {provision}";
+    "provisionEffectiveFrom": "in force since {date}";
     "provisionHistoryEarliest": "Earliest wording on record.";
     "provisionHistoryEmpty": "No wording of this provision is on record.";
     "provisionHistoryLoadOlder": "Load older versions to compare wordings.";
     "provisionHistoryUnavailable": "This provision's history could not be loaded.";
+    "provisionPartTextUnavailable": "Text of {provisionLabel} is not available";
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}";
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})";
+    "provisionTextUnavailable": "Text not available for this version";
     "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.";
     "resolvedAlias": "Recognized as {label}";
     "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
+    "showCitedPartOnly": "Show cited part only";
+    "showFullProvision": "Show full provision";
     "showInText": "Show in the text";
     "statedWindow": "Dates stated by the publisher: {range}";
     "status": {
@@ -4999,7 +5012,6 @@ type Messages = {
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";
     "versionAppliedInDecision": "Version applied in <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}";
-    "wordingValidFrom": "Wording in force since {date}";
     "wordingVersionUnknown": "Wording version date unavailable";
   };
   "styleSets": {
@@ -5552,7 +5564,6 @@ type Messages = {
     "viewVersion": "View";
     "whenNotToUse": "When not to use";
     "whenNotToUsePlaceholder": "When should this template be avoided?";
-    "whenToUse": "When to use";
     "whenToUsePlaceholder": "When should this template be used? (guides AI template selection)";
   };
   "timesheets": {
@@ -5673,7 +5684,7 @@ type Messages = {
       "title": "Copy to Matter";
     };
     "create": {
-      "ownerTypeToggle": "Matter type";
+      "matterName": "Matter name";
       "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team.";
     };
     "createNewWorkspace": "Create new matter";
@@ -6125,15 +6136,12 @@ type Messages = {
       "upcomingTasks": "Upcoming agenda";
       "uploaded": "uploaded";
     };
-    "ownerType": {
-      "client": "Client";
-      "personal": "Personal";
-    };
     "parties": {
       "addParty": "Add party";
       "changeClient": "Change client";
       "client": "Client";
       "noClient": "No client assigned";
+      "noClientOptional": "No client (optional)";
       "noParties": "No parties added to this matter.";
       "partyRoles": {
         "co_counsel": "Co-counsel";

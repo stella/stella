@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import { serializeChatSelection } from "./chat-transcript-copy.logic";
 
 GlobalRegistrator.register();
@@ -9,7 +11,7 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const fixture = (html: string) => {
