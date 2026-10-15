@@ -400,4 +400,34 @@ describe("matter visibility migration", () => {
     );
     expect(rows).toEqual([{ column_default: null }]);
   });
+
+  test("a member who leads an assigned-only matter keeps an internal role; anyone else may change", async () => {
+    await using database = await migrated();
+
+    // MEMBER leads the assigned-only clientlessOfMember matter.
+    expect(
+      String(
+        await rejectionOf(
+          database.exec(
+            `UPDATE member SET role = 'external' WHERE user_id = '${MEMBER}' AND organization_id = '${ORG}'`,
+          ),
+        ),
+      ),
+    ).toMatch(/member_role_keeps_matter_leads|leads a matter/u);
+    // Another internal role keeps the lead usable.
+    await database.exec(
+      `UPDATE member SET role = 'intern' WHERE user_id = '${MEMBER}' AND organization_id = '${ORG}'`,
+    );
+    // Once the matter is no longer assigned-only, the role is free.
+    await database.exec(
+      `UPDATE workspaces SET visibility = 'admins_and_assigned' WHERE id = '${MATTER.clientlessOfMember}'`,
+    );
+    await database.exec(
+      `UPDATE member SET role = 'external' WHERE user_id = '${MEMBER}' AND organization_id = '${ORG}'`,
+    );
+    const { rows } = await database.query<{ role: string }>(
+      `SELECT role FROM member WHERE user_id = '${MEMBER}' AND organization_id = '${ORG}'`,
+    );
+    expect(rows).toEqual([{ role: "external" }]);
+  });
 });
