@@ -78,6 +78,7 @@ import {
 import { TableSkeletonRows } from "@/components/table-skeleton-rows";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useCreateContact, useDeleteContact } from "@/lib/contacts/mutations";
@@ -894,6 +895,7 @@ const CreateContactDialog = ({
   const [aresBillingAddress, setAresBillingAddress] =
     useState<BillingAddress | null>(null);
   const createContact = useCreateContact();
+  const submitOnce = useSingleFlight();
   const extraction = useProcuracaoExtraction();
   const schema = createContactSchema(t("common.required"));
   const mcpCatalogQuery = useQuery(mcpConnectorsOptions(activeOrganizationId));
@@ -1055,7 +1057,10 @@ const CreateContactDialog = ({
           errors={formErrors}
           onSubmit={(e) => {
             e.preventDefault();
-            detached(form.handleSubmit(), "contacts.submit");
+            detached(
+              submitOnce.run(async () => await form.handleSubmit()),
+              "contacts.submit",
+            );
           }}
         >
           <DialogHeader>

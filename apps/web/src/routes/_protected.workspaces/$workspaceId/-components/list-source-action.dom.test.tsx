@@ -84,6 +84,7 @@ const settings = {
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",
   matterNumberPadding: 3,
+  matterNumberingEnabled: false,
   practiceJurisdictions: [],
   promptCachingEnabled: true,
   managedAIResidency: "eu",
