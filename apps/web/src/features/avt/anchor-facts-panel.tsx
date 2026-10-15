@@ -194,7 +194,8 @@ const FactRow = ({ workspaceId, listId, fact }: FactRowProps) => {
   const note = details?.interpretationNote ?? null;
   const { reference, statement } = factLabel(fact.name, {
     medium: details?.medium ?? null,
-    dated: details !== null && details.occurredOn !== null,
+    occurredOn: details?.occurredOn ?? null,
+    precision: details?.occurredOnPrecision ?? null,
   });
 
   const save = (changes: Partial<EditableFactDetails>) => {
