@@ -23,6 +23,8 @@ export const BASELINE_PATHS = {
   testState: "scripts/test-state-baseline.json",
   /** scripts/seed-test-determinism-baselines.ts */
   testAmbientTime: "scripts/test-ambient-time-baseline.json",
+  /** scripts/seed-test-determinism-baselines.ts */
+  testRealTimers: "scripts/test-real-timers-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
   /** scripts/check-write-contracts.ts */

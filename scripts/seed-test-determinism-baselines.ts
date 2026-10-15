@@ -10,6 +10,7 @@ import { isRecord } from "./oxlint-config-scopes.ts";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const RULES = {
+  "no-real-timers-in-tests": BASELINE_PATHS.testRealTimers,
   "no-ambient-time-in-tests": BASELINE_PATHS.testAmbientTime,
 } as const;
 const isRule = (value: string): value is keyof typeof RULES =>
