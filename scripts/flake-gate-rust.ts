@@ -1,3 +1,4 @@
+import { TaggedError } from "better-result";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -13,6 +14,128 @@ export type RustTarget = {
 export type RustSelection = {
   targets: RustTarget[];
   unsupported: { file: string; reason: string }[];
+};
+
+class RustListingError extends TaggedError("RustListingError")<{
+  message: string;
+}> {}
+
+const MAX_SELECTED_TEST_BYTES = 4 * 1024 * 1024;
+const MAX_TEST_BATCH_BYTES = 24 * 1024;
+const MAX_TEST_BATCH_COUNT = 128;
+const TEST_LIST_SUFFIX = ": test";
+
+export const rustTestBelongsToModule = ({
+  name,
+  module,
+}: {
+  name: string;
+  module: string;
+}) => module === "" || name === module || name.startsWith(`${module}::`);
+
+/** Discovery is streamed independently of the bounded diagnostic output tail. */
+export const createRustTestListing = (module: string) => {
+  const selected = new Set<string>();
+  let selectedBytes = 0;
+  return {
+    acceptLine: (line: string) => {
+      if (!line.endsWith(TEST_LIST_SUFFIX)) {
+        return;
+      }
+      const name = line.slice(0, -TEST_LIST_SUFFIX.length);
+      if (!rustTestBelongsToModule({ name, module }) || selected.has(name)) {
+        return;
+      }
+      const bytes = Buffer.byteLength(name, "utf-8") + 1;
+      if (bytes > MAX_TEST_BATCH_BYTES) {
+        throw new RustListingError({
+          message: "Rust test name exceeds the exact-test argument budget",
+        });
+      }
+      selectedBytes += bytes;
+      if (selectedBytes > MAX_SELECTED_TEST_BYTES) {
+        throw new RustListingError({
+          message: "Rust test listing exceeds the selected-name budget",
+        });
+      }
+      selected.add(name);
+    },
+    batches: () => {
+      const batches: string[][] = [];
+      let batch: string[] = [];
+      let bytes = 0;
+      for (const name of [...selected].toSorted()) {
+        const nameBytes = Buffer.byteLength(name, "utf-8") + 1;
+        if (
+          batch.length >= MAX_TEST_BATCH_COUNT ||
+          bytes + nameBytes > MAX_TEST_BATCH_BYTES
+        ) {
+          batches.push(batch);
+          batch = [];
+          bytes = 0;
+        }
+        batch.push(name);
+        bytes += nameBytes;
+      }
+      if (batch.length > 0) {
+        batches.push(batch);
+      }
+      return batches;
+    },
+  };
+};
+
+export const rustListCommand = ({ crate }: Pick<RustTarget, "crate">) => [
+  "cargo",
+  "test",
+  "-p",
+  crate,
+  "--lib",
+  "--color=never",
+  "--",
+  "--list",
+  "--format=terse",
+];
+
+export const rustExactCommand = ({
+  crate,
+  names,
+}: Pick<RustTarget, "crate"> & { names: readonly string[] }) => [
+  "cargo",
+  "test",
+  "-p",
+  crate,
+  "--lib",
+  "--color=never",
+  "--",
+  "--exact",
+  "--test-threads=1",
+  ...names,
+];
+
+const unsupportedLibrary = (manifest: Record<string, unknown>, cwd: string) => {
+  const library = manifest["lib"];
+  if (typeof library === "object" && library !== null) {
+    if ("harness" in library && library.harness === false) {
+      return "custom Rust test harnesses need an explicit runner";
+    }
+    if ("path" in library && library.path !== "src/lib.rs") {
+      return "custom Rust library roots need an explicit module mapping";
+    }
+  }
+  const pkg = manifest["package"];
+  if (
+    library === undefined &&
+    typeof pkg === "object" &&
+    pkg !== null &&
+    "autolib" in pkg &&
+    pkg.autolib === false
+  ) {
+    return "package has no automatic Rust library target";
+  }
+  return existsSync(path.join(cwd, "src/lib.rs"))
+    ? null
+    : "package has no src/lib.rs library target";
 };
 
 const moduleFor = (crateDir: string, file: string) => {
@@ -73,7 +196,10 @@ export const selectRustTargets = (
   const targets = new Map<string, RustTarget>();
   const unsupported: RustSelection["unsupported"] = [];
   const rootPath = path.resolve(root);
-  const packages = new Map<string, { cwd: string; crate: string } | null>();
+  const packages = new Map<
+    string,
+    { cwd: string; crate: string; unsupported: string | null } | null
+  >();
   const packageFor = (absolute: string) => {
     let directory = path.dirname(absolute);
     while (
@@ -96,7 +222,11 @@ export const selectRustTargets = (
           "name" in pkg &&
           typeof pkg.name === "string"
         ) {
-          const result = { cwd: directory, crate: pkg.name };
+          const result = {
+            cwd: directory,
+            crate: pkg.name,
+            unsupported: unsupportedLibrary(manifest, directory),
+          };
           packages.set(directory, result);
           return result;
         }
@@ -138,11 +268,22 @@ export const selectRustTargets = (
       });
       continue;
     }
+    if (relative === "src/main.rs") {
+      unsupported.push({
+        file: changedFile,
+        reason: "Rust main tests need an explicit Cargo binary target",
+      });
+      continue;
+    }
     if (!relative.startsWith("src/")) {
       unsupported.push({
         file: changedFile,
         reason: "non-src Rust targets need an explicit Cargo target selector",
       });
+      continue;
+    }
+    if (owner.unsupported) {
+      unsupported.push({ file: changedFile, reason: owner.unsupported });
       continue;
     }
     const module = moduleFor(owner.cwd, absolute);

@@ -1,6 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
+import { randomUUID } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import type { ReadableStreamDefaultReader } from "node:stream/web";
 
 export const FLAKE_GATE_TRIAL_ENV = "FLAKE_GATE_TRIAL";
 export type FlakeCleanup =
@@ -16,6 +18,177 @@ class FlakeProcessError extends TaggedError("FlakeProcessError")<{
   message: string;
   cause?: unknown;
 }> {}
+
+const OUTPUT_TAIL_CHARACTERS = 65_536;
+const OUTPUT_LINE_CHARACTERS = 65_536;
+
+type ReadOutputOptions = {
+  reader: Pick<ReadableStreamDefaultReader<Uint8Array>, "read">;
+  onLine?: ((line: string) => void) | undefined;
+};
+type OutputParserState = { pending: string; failure: FlakeProcessError | null };
+
+const readOutput = async ({ reader, onLine }: ReadOutputOptions) => {
+  const decoder = new TextDecoder();
+  let tail = "";
+  const parser: OutputParserState = { pending: "", failure: null };
+  const consume = (text: string) => {
+    tail = (tail + text).slice(-OUTPUT_TAIL_CHARACTERS);
+    if (!onLine || parser.failure) {
+      return;
+    }
+    parser.pending += text;
+    const lines = parser.pending.split("\n");
+    parser.pending = lines.pop() ?? "";
+    const parsed = Result.try({
+      try: () => {
+        for (const line of lines) {
+          if (line.length > OUTPUT_LINE_CHARACTERS) {
+            throw new FlakeProcessError({
+              message: "Flake listing contains an oversized line",
+            });
+          }
+          onLine(line.replace(/\r$/u, ""));
+        }
+        if (parser.pending.length > OUTPUT_LINE_CHARACTERS) {
+          throw new FlakeProcessError({
+            message: "Flake listing contains an oversized line",
+          });
+        }
+      },
+      catch: (cause) =>
+        new FlakeProcessError({
+          message:
+            cause instanceof Error
+              ? cause.message
+              : "Cannot parse flake process output",
+          cause,
+        }),
+    });
+    if (parsed.isErr()) {
+      parser.failure = parsed.error;
+      parser.pending = "";
+    }
+  };
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) {
+      break;
+    }
+    consume(decoder.decode(chunk.value, { stream: true }));
+  }
+  consume(decoder.decode());
+  if (onLine && !parser.failure && parser.pending !== "") {
+    consume("\n");
+  }
+  return { tail, failure: parser.failure };
+};
+
+type RunFlakeProcessOptions = {
+  command: readonly string[];
+  cwd: string;
+  env: Record<string, string>;
+  deadline: number;
+  onStdoutLine?: ((line: string) => void) | undefined;
+};
+export type FlakeProcessOutcome =
+  | { type: "completed"; status: number; stdout: string; stderr: string }
+  | { type: "timeout" };
+
+/** Every discovery and execution subprocess shares its caller's trial deadline. */
+export const runFlakeProcess = async ({
+  command,
+  cwd,
+  env,
+  deadline,
+  onStdoutLine,
+}: RunFlakeProcessOptions): Promise<FlakeProcessOutcome> => {
+  if (process.platform === "win32") {
+    throw new FlakeProcessError({
+      message: "Flake gate process deadlines require POSIX",
+    });
+  }
+  const remaining = deadline - performance.now();
+  if (remaining <= 0) {
+    return { type: "timeout" };
+  }
+  const token = randomUUID();
+  const child = Bun.spawn([...command], {
+    cwd,
+    env: { ...process.env, ...env, [FLAKE_GATE_TRIAL_ENV]: token },
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "pipe",
+    detached: true,
+  });
+  const stdoutReader = child.stdout.getReader();
+  const stderrReader = child.stderr.getReader();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(
+      () => resolve("timeout"),
+      Math.max(1, Math.floor(deadline - performance.now())),
+    );
+  });
+  const completed = Result.tryPromise(async () =>
+    Promise.all([
+      child.exited,
+      readOutput({ reader: stdoutReader, onLine: onStdoutLine }),
+      readOutput({ reader: stderrReader }),
+    ]),
+  );
+  const captured = await Promise.race([completed, timedOut]);
+  clearTimeout(timer);
+  if (captured === "timeout" || captured.isErr()) {
+    const terminated = await Result.tryPromise(async () =>
+      cleanupFlakeTrial({ rootPid: child.pid, token }),
+    );
+    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
+    const drained = await Promise.race([
+      completed,
+      new Promise<"undrained">((resolve) => {
+        cleanupTimer = setTimeout(() => resolve("undrained"), 1000);
+      }),
+    ]);
+    clearTimeout(cleanupTimer);
+    const cancelled = await Result.tryPromise(async () =>
+      Promise.all([stdoutReader.cancel(), stderrReader.cancel()]),
+    );
+    if (cancelled.isErr()) {
+      throw cancelled.error;
+    }
+    if (terminated.isErr()) {
+      throw terminated.error;
+    }
+    if (drained === "undrained") {
+      throw new FlakeProcessError({
+        message:
+          "Timed-out runner descendants retained output pipes after cleanup",
+      });
+    }
+    if (captured !== "timeout") {
+      throw captured.error;
+    }
+    return { type: "timeout" };
+  }
+  if (process.platform === "linux") {
+    await cleanupFlakeTrial({ rootPid: child.pid, token });
+  }
+  const [status, stdout, stderr] = captured.value;
+  // Parse errors are reported after EOF and process cleanup, never while a child owns pipes.
+  if (stdout.failure) {
+    throw stdout.failure;
+  }
+  if (stderr.failure) {
+    throw stderr.failure;
+  }
+  return {
+    type: "completed",
+    status,
+    stdout: stdout.tail,
+    stderr: stderr.tail,
+  };
+};
 
 const signalOwnedProcess = (pid: number, signal: NodeJS.Signals) => {
   const signalled = Result.try({

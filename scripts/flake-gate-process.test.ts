@@ -8,12 +8,65 @@ import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import { runOnce } from "./flake-gate";
 import {
   cleanupCapability,
   cleanupFlakeTrial,
   FLAKE_GATE_TRIAL_ENV,
+  runFlakeProcess,
 } from "./flake-gate-process";
+import { createRustTestListing } from "./flake-gate-rust";
+
+test("streamed Cargo discovery retains names older than the diagnostic output tail", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "flake-listing-stream-"));
+  try {
+    const listing = createRustTestListing("feature");
+    const outcome = await runFlakeProcess({
+      command: [
+        process.execPath,
+        "-e",
+        String.raw`process.stdout.write("feature::first: test\n"); for (let i=0;i<10000;i++) process.stdout.write("other_feature::name_" + i + ": test\n");`,
+      ],
+      cwd: directory,
+      env: {},
+      deadline: performance.now() + 5000,
+      onStdoutLine: listing.acceptLine,
+    });
+    expect(outcome.type).toBe("completed");
+    if (outcome.type !== "completed") {
+      throw new TypeError("Expected completed listing");
+    }
+    expect(outcome.status).toBe(0);
+    expect(outcome.stdout).not.toContain("feature::first");
+    expect(listing.batches()).toEqual([["feature::first"]]);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("a listing parser failure drains its process before reporting the explicit error", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "flake-listing-error-"));
+  try {
+    const failure = await rejectionOf(
+      runFlakeProcess({
+        command: [
+          process.execPath,
+          "-e",
+          'console.log("x".repeat(70000)); await Bun.sleep(20); await Bun.write("finished", "yes");',
+        ],
+        cwd: directory,
+        env: {},
+        deadline: performance.now() + 5000,
+        onStdoutLine: () => {},
+      }),
+    );
+    expect(failure).toMatchObject({
+      message: "Flake listing contains an oversized line",
+    });
+    expect(await Bun.file(path.join(directory, "finished")).text()).toBe("yes");
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
 
 type ChildRecord = { pid: number; port: number };
 
@@ -194,18 +247,13 @@ test.skipIf(process.platform !== "linux")(
     let record: ChildRecord | undefined;
     let cleanupFailure: unknown;
     try {
-      const outcome = await runOnce({
-        target: {
-          file: "detached fixture",
-          cwd: directory,
-          command: [process.execPath, "-e", runnerSource],
-          env: { FLAKE_CHILD_RECORD: recordFile },
-          runner: "rust",
-        },
-        seed: 1,
-        timeoutMs: 700,
+      const outcome = await runFlakeProcess({
+        cwd: directory,
+        command: [process.execPath, "-e", runnerSource],
+        env: { FLAKE_CHILD_RECORD: recordFile },
+        deadline: performance.now() + 700,
       });
-      expect(outcome.status).toBe(124);
+      expect(outcome).toEqual({ type: "timeout" });
       record = await readRecord(recordFile);
       expect(await processGoneOrZombie(record.pid)).toBe(true);
       await portCanBind(record.port);

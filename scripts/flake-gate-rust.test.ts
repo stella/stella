@@ -1,14 +1,41 @@
 import { expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { selectRustTargets } from "./flake-gate-rust";
+import { executeGate, runOnce, selectTargets, type Target } from "./flake-gate";
+import {
+  createRustTestListing,
+  rustExactCommand,
+  rustTestBelongsToModule,
+  selectRustTargets,
+} from "./flake-gate-rust";
 
 const withFixture = (run: (root: string) => void) => {
   const root = mkdtempSync(path.join(os.tmpdir(), "flake-gate-rust-"));
   try {
+    write(root, "src/lib.rs", "");
     run(root);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
+const withAsyncFixture = async (run: (root: string) => Promise<void>) => {
+  const root = mkdtempSync(path.join(os.tmpdir(), "flake-gate-rust-run-"));
+  try {
+    write(
+      root,
+      "Cargo.toml",
+      '[package]\nname = "fixture"\nversion = "0.1.0"\nedition = "2021"\n',
+    );
+    await run(root);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -34,6 +61,7 @@ test.each([
         "Cargo.toml",
         '[package]\nname = "fixture"\nversion = "0.1.0"\n',
       );
+      write(root, "src/lib.rs", "mod feature;\n");
       write(root, "src/feature.rs", `${attribute}\nasync fn works() {}\n`);
       expect(selectRustTargets(root, ["src/feature.rs"])).toEqual({
         targets: [
@@ -88,6 +116,7 @@ test("changed Rust modules with unit tests select one crate/module target", () =
       "src/feature.rs",
       "pub fn feature() {}\n#[cfg(test)]\nmod tests { #[test] fn inline_works() {} }\n",
     );
+    write(root, "src/lib.rs", "mod feature;\n");
     write(
       root,
       "src/feature/tests.rs",
@@ -214,6 +243,244 @@ test("non-Rust changes avoid Cargo manifest discovery", () => {
   expect(selectRustTargets("/missing/repository", ["README.md"])).toEqual({
     targets: [],
     unsupported: [],
+  });
+});
+
+test.each([
+  ["src/main.rs", "Rust main tests need an explicit Cargo binary target"],
+  ["src/lib.rs", "custom Rust test harnesses need an explicit runner"],
+] as const)("unsupported Rust target %s stays explicit", (file, reason) => {
+  withFixture((root) => {
+    write(
+      root,
+      "Cargo.toml",
+      `[package]\nname = "fixture"\nversion = "0.1.0"\n${file === "src/lib.rs" ? "[lib]\nharness = false\n" : ""}`,
+    );
+    write(root, file, "#[test] fn example() {}\n");
+    expect(selectRustTargets(root, [file])).toEqual({
+      targets: [],
+      unsupported: [{ file, reason }],
+    });
+  });
+});
+
+test("modules in a binary-only crate are not treated as library tests", () => {
+  withFixture((root) => {
+    write(
+      root,
+      "Cargo.toml",
+      '[package]\nname = "fixture"\nversion = "0.1.0"\nautolib = false\n',
+    );
+    write(root, "src/feature.rs", "#[test] fn example() {}\n");
+    expect(selectRustTargets(root, ["src/feature.rs"]).unsupported).toEqual([
+      {
+        file: "src/feature.rs",
+        reason: "package has no automatic Rust library target",
+      },
+    ]);
+  });
+});
+
+test("listing membership accepts only the exact module and descendants", () => {
+  const names = [
+    "feature",
+    "feature::works",
+    "feature::nested::works",
+    "other_feature::fails",
+    "feature_suffix::fails",
+    "nested::feature::fails",
+  ];
+  expect(
+    names.filter((name) =>
+      rustTestBelongsToModule({ name, module: "feature" }),
+    ),
+  ).toEqual(names.slice(0, 3));
+  const listing = createRustTestListing("feature");
+  for (const name of names) {
+    listing.acceptLine(`${name}: test`);
+  }
+  listing.acceptLine("feature::benchmark: benchmark");
+  expect(listing.batches().flat()).toEqual(names.slice(0, 3).toSorted());
+  expect(
+    rustExactCommand({ crate: "fixture", names: ["feature::works"] }),
+  ).toEqual([
+    "cargo",
+    "test",
+    "-p",
+    "fixture",
+    "--lib",
+    "--color=never",
+    "--",
+    "--exact",
+    "--test-threads=1",
+    "feature::works",
+  ]);
+});
+
+test("listing batches preserve every selected name within bounded arguments and fail explicitly on overflow", () => {
+  const names = Array.from(
+    { length: 500 },
+    (_, index) => `feature::test_${index}_${"x".repeat(300)}`,
+  );
+  const listing = createRustTestListing("feature");
+  for (const name of names) {
+    listing.acceptLine(`${name}: test`);
+  }
+  expect(listing.batches().length).toBeGreaterThan(1);
+  expect(listing.batches().flat()).toEqual(names.toSorted());
+  expect(() =>
+    listing.acceptLine(`feature::${"x".repeat(30_000)}: test`),
+  ).toThrow("exact-test argument budget");
+  const overflowing = createRustTestListing("feature");
+  expect(() => {
+    for (let index = 0; index < 300; index += 1) {
+      overflowing.acceptLine(
+        `feature::test_${index}_${"x".repeat(20_000)}: test`,
+      );
+    }
+  }).toThrow("selected-name budget");
+});
+
+test("a real Cargo module excludes failing substring siblings and unrelated binary tests", async () => {
+  await withAsyncFixture(async (root) => {
+    write(root, "src/lib.rs", "mod feature; mod other_feature;\n");
+    write(
+      root,
+      "src/feature.rs",
+      "#[test] fn works() {}\nmod nested { #[test] fn also_works() {} }\n",
+    );
+    write(
+      root,
+      "src/other_feature.rs",
+      '#[test] fn fails() { panic!("unrelated substring sibling"); }\n',
+    );
+    write(
+      root,
+      "src/main.rs",
+      'fn main() {}\n#[test] fn feature_binary_fails() { panic!("unrelated binary"); }\n',
+    );
+    const selected = selectTargets({
+      root,
+      changed: ["src/feature.rs"],
+      hasDb: false,
+    });
+    expect(selected.skipped).toEqual([]);
+    expect(selected.targets).toEqual([
+      {
+        file: "src/feature.rs",
+        cwd: root,
+        env: {},
+        crate: "fixture",
+        module: "feature",
+        runner: "rust",
+      },
+    ]);
+    const target = selected.targets.at(0);
+    if (!target) {
+      throw new TypeError("Expected real Rust module target");
+    }
+    expect(await runOnce({ target, seed: 1, timeoutMs: 20_000 })).toEqual({
+      type: "executed",
+      passed: true,
+      status: 0,
+      ranTests: true,
+    });
+  });
+}, 30_000);
+
+test("real Cargo modules absent on this target and ignored-only modules are reported as typed skips", async () => {
+  await withAsyncFixture(async (root) => {
+    write(root, "src/lib.rs", "mod feature; mod ignored_feature;\n");
+    write(
+      root,
+      "src/feature.rs",
+      '#[cfg(target_os = "none")] #[test] fn unavailable() {}\n',
+    );
+    write(
+      root,
+      "src/ignored_feature.rs",
+      '#[ignore] #[test] fn ignored() { panic!("must stay ignored"); }\n',
+    );
+    const report = await executeGate({
+      ...selectTargets({
+        root,
+        changed: ["src/feature.rs", "src/ignored_feature.rs"],
+        hasDb: false,
+      }),
+      budgetMs: 20_000,
+    });
+    expect(report.errors).toEqual([]);
+    expect(report.results).toEqual([]);
+    expect(report.skipped).toEqual([
+      {
+        file: "src/feature.rs",
+        reason: "not gated (no tests in module feature)",
+      },
+      {
+        file: "src/ignored_feature.rs",
+        reason: "not gated (all tests in module ignored_feature are ignored)",
+      },
+    ]);
+  });
+}, 30_000);
+
+const fakeCargoTarget = (root: string, source: string): Target => {
+  const executable = path.join(root, "bin/cargo");
+  write(root, "bin/cargo", `#!${process.execPath}\n${source}`);
+  chmodSync(executable, 0o755);
+  return {
+    file: "src/feature.rs",
+    cwd: root,
+    env: {
+      PATH: `${path.join(root, "bin")}${path.delimiter}${process.env["PATH"] ?? ""}`,
+    },
+    crate: "fixture",
+    module: "feature",
+    runner: "rust",
+  };
+};
+
+test("successful listing followed by zero exact executions fails rather than becoming a skip", async () => {
+  await withAsyncFixture(async (root) => {
+    const target = fakeCargoTarget(
+      root,
+      `console.log(Bun.argv.includes("--list") ? "feature::works: test" : "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out;");`,
+    );
+    expect(await runOnce({ target, seed: 1, timeoutMs: 5000 })).toEqual({
+      type: "executed",
+      passed: false,
+      status: 0,
+      ranTests: false,
+    });
+  });
+});
+
+test("listing and exact execution consume one shared deadline", async () => {
+  await withAsyncFixture(async (root) => {
+    const target = fakeCargoTarget(
+      root,
+      `await Bun.write(Bun.argv.includes("--list") ? "listed" : "executed", "yes"); await Bun.sleep(200); console.log(Bun.argv.includes("--list") ? "feature::works: test" : "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out;");`,
+    );
+    expect(await runOnce({ target, seed: 1, timeoutMs: 350 })).toEqual({
+      type: "executed",
+      passed: false,
+      status: 124,
+      ranTests: false,
+    });
+    expect(await Bun.file(path.join(root, "listed")).exists()).toBe(true);
+    expect(await Bun.file(path.join(root, "executed")).exists()).toBe(true);
+  });
+});
+
+test("a hanging Cargo listing is terminated by the trial deadline", async () => {
+  await withAsyncFixture(async (root) => {
+    const target = fakeCargoTarget(root, "setInterval(() => {}, 1000);");
+    expect(await runOnce({ target, seed: 1, timeoutMs: 150 })).toEqual({
+      type: "executed",
+      passed: false,
+      status: 124,
+      ranTests: false,
+    });
   });
 });
 

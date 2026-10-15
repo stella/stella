@@ -42,13 +42,14 @@ const write = (root: string, file: string, source: string) => {
   mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
   writeFileSync(path.join(root, file), source);
 };
-const targetFor = (root: string, file = "fixture.test.ts"): Target => ({
-  file,
-  cwd: root,
-  command: [process.execPath, "test", `./${file}`],
-  env: {},
-  runner: "bun",
-});
+const targetFor = (root: string, file = "fixture.test.ts") =>
+  ({
+    file,
+    cwd: root,
+    command: [process.execPath, "test", `./${file}`],
+    env: {},
+    runner: "bun",
+  }) satisfies Target;
 
 test("diff selection repeats changed tests only and preserves package runners and service gates", async () => {
   await withFixture((root) => {
@@ -100,7 +101,11 @@ test("diff selection repeats changed tests only and preserves package runners an
       "apps/api/src/unit.test.ts",
       "scripts/direct.spec.ts",
     ]);
-    expect(selected.targets.at(0)?.command).toEqual([
+    const selectedUnit = selected.targets.at(0);
+    if (!selectedUnit || selectedUnit.runner !== "api") {
+      throw new TypeError("Expected selected API unit runner");
+    }
+    expect(selectedUnit.command).toEqual([
       process.execPath,
       "scripts/run-tests.ts",
       "./src/unit.test.ts",
@@ -118,12 +123,15 @@ test("diff selection repeats changed tests only and preserves package runners an
     const withDb = selectTargets({ ...options, hasDb: true }).targets.find(
       ({ file }) => file.endsWith("db.test.ts"),
     );
-    expect(withDb?.command).toEqual([
+    if (!withDb || withDb.runner !== "api") {
+      throw new TypeError("Expected selected Postgres runner");
+    }
+    expect(withDb.command).toEqual([
       process.execPath,
       apiManifest.ciGateTestRunners["test:postgres"].runner,
       "./src/db.test.ts",
     ]);
-    expect(withDb?.env).toEqual({
+    expect(withDb.env).toEqual({
       STELLA_RUN_POSTGRES_TESTS: "true",
       CI_POSTGRES_TEST_SELECTION: JSON.stringify({
         mode: "selected",
@@ -161,6 +169,9 @@ test("the real API manifest selects unit and Postgres files through their exact 
     const relative = target.file.slice("apps/api/".length);
     const isPostgres = target.file === postgres;
     expect(target.runner).toBe("api");
+    if (target.runner !== "api") {
+      throw new TypeError("Expected API runner");
+    }
     expect(target.cwd).toBe(path.join(root, "apps/api"));
     expect(target.command).toEqual([
       process.execPath,
@@ -216,6 +227,9 @@ test("the web entry retains file scoping and its DOM isolation with seeded trial
       throw new TypeError("Expected explicit web file target");
     }
     expect(target.runner).toBe("web");
+    if (target.runner !== "web") {
+      throw new TypeError("Expected web runner");
+    }
     expect(target.command).toEqual([
       process.execPath,
       "scripts/run-tests.ts",
@@ -316,7 +330,7 @@ test("mixed runtime packages select their Bun-only command", async () => {
       changed: ["packages/mixed/unit.test.ts"],
       hasDb: false,
     }).targets.at(0);
-    if (!target) {
+    if (!target || target.runner !== "bun") {
       throw new TypeError("Expected Bun-only target");
     }
     expect(target.command).toEqual([
@@ -324,8 +338,8 @@ test("mixed runtime packages select their Bun-only command", async () => {
       "test",
       "./unit.test.ts",
     ]);
-    expect((await runOnce({ target, seed: 1, timeoutMs: 10_000 })).passed).toBe(
-      true,
+    expect(await runOnce({ target, seed: 1, timeoutMs: 10_000 })).toMatchObject(
+      { type: "executed", passed: true },
     );
   });
 });
@@ -355,24 +369,31 @@ test("selected files replace package directory filters and exclude failing sibli
     if (!target) {
       throw new TypeError("Expected selected target");
     }
-    expect((await runOnce({ target, seed: 1, timeoutMs: 10_000 })).passed).toBe(
-      true,
+    expect(await runOnce({ target, seed: 1, timeoutMs: 10_000 })).toMatchObject(
+      { type: "executed", passed: true },
     );
   });
 });
 
 test("Cargo target exclusions are reported once as not gated", async () => {
   const target = {
-    ...targetFor("/fixture", "src/windows/tests.rs"),
+    file: "src/windows/tests.rs",
+    cwd: "/fixture",
+    env: {},
+    crate: "fixture",
+    module: "windows::tests",
     runner: "rust",
-  } as const;
+  } as const satisfies Target;
   let calls = 0;
   const report = await executeGate({
     targets: [target],
     skipped: [],
     run: async () => {
       calls += 1;
-      return { passed: false, status: 0, ranTests: false };
+      return {
+        type: "no-tests",
+        reason: "not gated (no tests in module windows::tests)",
+      };
     },
   });
   expect(calls).toBe(1);
@@ -380,7 +401,7 @@ test("Cargo target exclusions are reported once as not gated", async () => {
   expect(report.skipped).toEqual([
     {
       file: target.file,
-      reason: "not gated (no runnable tests for this Cargo target)",
+      reason: "not gated (no tests in module windows::tests)",
     },
   ]);
   expect(reportExitCode(report, true)).toBe(0);
@@ -457,7 +478,7 @@ test("actual elapsed budget includes probes and stops repeat execution", async (
     run: async ({ timeoutMs }) => {
       timeouts.push(timeoutMs);
       elapsed += Math.min(60, timeoutMs);
-      return { passed: true, status: 0, ranTests: true };
+      return { type: "executed", passed: true, status: 0, ranTests: true };
     },
   });
   expect(timeouts).toEqual([100, 40]);
@@ -518,14 +539,12 @@ test("requires preparation", () => { expect(prepared).toBe(true); });
     expect(reportExitCode(report, true)).toBe(1);
     write(root, "empty.test.ts", "export {};\n");
     expect(
-      (
-        await runOnce({
-          target: targetFor(root, "empty.test.ts"),
-          seed: 1,
-          timeoutMs: 10_000,
-        })
-      ).passed,
-    ).toBe(false);
+      await runOnce({
+        target: targetFor(root, "empty.test.ts"),
+        seed: 1,
+        timeoutMs: 10_000,
+      }),
+    ).toMatchObject({ type: "executed", passed: false });
   });
 }, 30_000);
 
@@ -570,7 +589,10 @@ test("an exhausted subprocess deadline terminates a hanging test", async () => {
       seed: 1,
       timeoutMs: 50,
     });
-    expect(result.passed).toBe(false);
+    expect(result).toMatchObject({ type: "executed", passed: false });
+    if (result.type !== "executed") {
+      throw new TypeError("Expected executed Bun fixture");
+    }
     expect(result.status).not.toBe(0);
   });
 });
@@ -609,7 +631,7 @@ test("pending", async () => await new Promise(() => {}));
       throw new TypeError("Expected owning runner fixture");
     }
     const result = await runOnce({ target, seed: 1, timeoutMs: 500 });
-    expect(result.status).toBe(124);
+    expect(result).toMatchObject({ type: "executed", status: 124 });
     const port = Number(
       await Bun.file(path.join(root, "packages/runner/port.txt")).text(),
     );

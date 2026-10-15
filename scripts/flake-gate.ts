@@ -1,5 +1,4 @@
 import { panic, Result, TaggedError } from "better-result";
-import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
   existsSync,
@@ -7,7 +6,6 @@ import {
   writeFileSync,
 } from "node:fs";
 import path from "node:path";
-import type { ReadableStreamDefaultReader } from "node:stream/web";
 import * as v from "valibot";
 
 import { repoRelativePath } from "@stll/portable-path";
@@ -19,11 +17,17 @@ import { analyzeModule, selectApiTestImpact } from "./api-test-impact";
 import { parseBunTestScript } from "./flake-gate-command";
 import {
   cleanupCapability,
-  cleanupFlakeTrial,
-  FLAKE_GATE_TRIAL_ENV,
+  runFlakeProcess,
+  type FlakeProcessOutcome,
   type FlakeCleanup,
 } from "./flake-gate-process";
-import { selectRustTargets } from "./flake-gate-rust";
+import {
+  createRustTestListing,
+  rustExactCommand,
+  rustListCommand,
+  selectRustTargets,
+  type RustTarget,
+} from "./flake-gate-rust";
 
 export const REPEATS = 20;
 export const BUDGET_MS = 60 * 60 * 1000;
@@ -37,13 +41,14 @@ class FlakeGateError extends TaggedError("FlakeGateError")<{
   message: string;
 }> {}
 
-export type Target = {
+type TrialTarget = {
   file: string;
   cwd: string;
-  command: string[];
   env: Record<string, string>;
-  runner: "bun" | "api" | "web" | "rust";
 };
+export type Target =
+  | (TrialTarget & { runner: "bun" | "api" | "web"; command: string[] })
+  | (TrialTarget & RustTarget & { runner: "rust" });
 export type Skipped = { file: string; reason: string };
 type SelectOptions = {
   root: string;
@@ -194,15 +199,8 @@ export const selectTargets = ({
     targets.push({
       file: target.file,
       cwd: target.cwd,
-      command: [
-        "cargo",
-        "test",
-        "-p",
-        target.crate,
-        target.module,
-        "--",
-        "--test-threads=1",
-      ],
+      crate: target.crate,
+      module: target.module,
       env: {},
       runner: "rust",
     });
@@ -287,129 +285,124 @@ const annotation = (value: string) =>
     .replaceAll(":", "%3A");
 
 type RunOptions = { target: Target; seed: number; timeoutMs: number };
-const outputTail = async (
-  reader: Pick<ReadableStreamDefaultReader<Uint8Array>, "read">,
-) => {
-  const decoder = new TextDecoder();
-  let tail = "";
-  for (;;) {
-    const chunk = await reader.read();
-    if (chunk.done) {
-      break;
-    }
-    tail = (tail + decoder.decode(chunk.value, { stream: true })).slice(
-      -65_536,
-    );
+export type RunOutcome =
+  | { type: "executed"; passed: boolean; status: number; ranTests: boolean }
+  | { type: "no-tests"; reason: string };
+
+type BunTarget = Extract<Target, { runner: "bun" | "api" | "web" }>;
+
+export const trialCommand = (target: BunTarget, seed: number) => [
+  ...target.command,
+  "--rerun-each=1",
+  "--randomize",
+  `--seed=${seed}`,
+];
+
+const executionOutcome = (
+  runner: Target["runner"],
+  outcome: FlakeProcessOutcome,
+): Extract<RunOutcome, { type: "executed" }> => {
+  if (outcome.type === "timeout") {
+    return { type: "executed", passed: false, status: 124, ranTests: false };
   }
-  return tail + decoder.decode();
-};
-export const trialCommand = (target: Target, seed: number) => {
-  switch (target.runner) {
-    case "bun":
-    case "api":
-    case "web":
-      return [
-        ...target.command,
-        "--rerun-each=1",
-        "--randomize",
-        `--seed=${seed}`,
-      ];
-    case "rust":
-      return target.command;
-    default:
-      target.runner satisfies never;
-      return panic("Unknown flake trial runner");
-  }
-};
-const trialRanTests = (runner: Target["runner"], output: string) => {
+  const output = `${outcome.stdout}\n${outcome.stderr}`;
+  let ranTests: boolean;
   switch (runner) {
     case "bun":
     case "api":
     case "web":
-      return /\b[1-9]\d* (?:pass|fail)\b/u.test(output);
+      ranTests = /\b[1-9]\d* (?:pass|fail)\b/u.test(output);
+      break;
     case "rust":
-      return /test result:.*\b[1-9]\d* (?:passed|failed)/u.test(output);
+      ranTests = /test result:.*\b[1-9]\d* (?:passed|failed)/u.test(output);
+      break;
     default:
       runner satisfies never;
       return panic("Unknown flake trial output");
   }
+  return {
+    type: "executed",
+    passed: outcome.status === 0 && ranTests,
+    status: outcome.status,
+    ranTests,
+  };
 };
-export const runOnce = async ({ target, seed, timeoutMs }: RunOptions) => {
-  if (process.platform === "win32") {
-    throw new FlakeGateError({
-      message: "Flake gate process deadlines require POSIX",
-    });
-  }
-  // Native --rerun-each repeats cases in place. Fresh invocations reset shared setup
-  // and shuffle the whole file for each trial; fixed seeds reproduce each order.
-  const token = randomUUID();
-  const child = Bun.spawn(trialCommand(target, seed), {
-    cwd: target.cwd,
-    env: { ...process.env, ...target.env, [FLAKE_GATE_TRIAL_ENV]: token },
-    stdin: "ignore",
-    stdout: "pipe",
-    stderr: "pipe",
-    detached: true,
-  });
-  const stdoutReader = child.stdout.getReader();
-  const stderrReader = child.stderr.getReader();
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(
-      () => resolve("timeout"),
-      Math.max(1, Math.floor(timeoutMs)),
-    );
-  });
-  const completed = Result.tryPromise(async () =>
-    Promise.all([
-      child.exited,
-      outputTail(stdoutReader),
-      outputTail(stderrReader),
-    ]),
-  );
-  const captured = await Promise.race([completed, deadline]);
-  clearTimeout(timer);
-  if (captured === "timeout") {
-    const terminated = await Result.tryPromise(async () =>
-      cleanupFlakeTrial({ rootPid: child.pid, token }),
-    );
-    // EOF confirms detached descendants have released their resources.
-    let cleanupTimer: ReturnType<typeof setTimeout> | undefined;
-    const drained = await Promise.race([
-      completed,
-      new Promise<"undrained">((resolve) => {
-        cleanupTimer = setTimeout(() => resolve("undrained"), 1000);
-      }),
-    ]);
-    clearTimeout(cleanupTimer);
-    const cancelled = await Result.tryPromise(async () =>
-      Promise.all([stdoutReader.cancel(), stderrReader.cancel()]),
-    );
-    if (cancelled.isErr()) {
-      throw cancelled.error;
-    }
-    if (terminated.isErr()) {
-      throw terminated.error;
-    }
-    if (drained === "undrained") {
-      throw new FlakeGateError({
-        message:
-          "Timed-out runner descendants retained output pipes after cleanup",
+
+export const runOnce = async ({
+  target,
+  seed,
+  timeoutMs,
+}: RunOptions): Promise<RunOutcome> => {
+  const deadline = performance.now() + timeoutMs;
+  switch (target.runner) {
+    case "bun":
+    case "api":
+    case "web":
+      // Fresh invocations reset setup and shuffle the entire file for each trial.
+      return executionOutcome(
+        target.runner,
+        await runFlakeProcess({
+          command: trialCommand(target, seed),
+          cwd: target.cwd,
+          env: target.env,
+          deadline,
+        }),
+      );
+    case "rust": {
+      const listing = createRustTestListing(target.module);
+      const discovery = await runFlakeProcess({
+        command: rustListCommand(target),
+        cwd: target.cwd,
+        env: target.env,
+        deadline,
+        onStdoutLine: listing.acceptLine,
       });
+      if (discovery.type === "timeout" || discovery.status !== 0) {
+        return executionOutcome("rust", discovery);
+      }
+      const batches = listing.batches();
+      if (batches.length === 0) {
+        return {
+          type: "no-tests",
+          reason: `not gated (no tests in module ${target.module || "<crate>"})`,
+        };
+      }
+      let ranTests = false;
+      for (const names of batches) {
+        const completed = await runFlakeProcess({
+          command: rustExactCommand({ crate: target.crate, names }),
+          cwd: target.cwd,
+          env: target.env,
+          deadline,
+        });
+        const execution = executionOutcome("rust", completed);
+        if (completed.type === "completed" && completed.status === 0) {
+          const ignored =
+            /^test result: ok\. 0 passed; 0 failed; (?<count>[1-9]\d*) ignored;/mu.exec(
+              `${completed.stdout}\n${completed.stderr}`,
+            );
+          // Only a positive ignored count covering this entire exact batch proves a skip.
+          if (Number(ignored?.groups?.["count"]) === names.length) {
+            continue;
+          }
+        }
+        // Once listing selected names, zero execution without ignored evidence is a failure.
+        if (!execution.passed) {
+          return execution;
+        }
+        ranTests = true;
+      }
+      return ranTests
+        ? { type: "executed", passed: true, status: 0, ranTests: true }
+        : {
+            type: "no-tests",
+            reason: `not gated (all tests in module ${target.module || "<crate>"} are ignored)`,
+          };
     }
-    return { passed: false, status: 124, ranTests: false };
+    default:
+      target satisfies never;
+      return panic("Unknown flake trial runner");
   }
-  // Detached descendants may close their pipes before the trial exits.
-  if (process.platform === "linux") {
-    await cleanupFlakeTrial({ rootPid: child.pid, token });
-  }
-  if (captured.isErr()) {
-    throw captured.error;
-  }
-  const [status, stdout, stderr] = captured.value;
-  const output = `${stdout}\n${stderr}`;
-  const ranTests = trialRanTests(target.runner, output);
-  return { passed: status === 0 && ranTests, status, ranTests };
 };
 
 type ExecuteOptions = {
@@ -436,13 +429,13 @@ export const executeGate = async ({
   };
   const measured: Measured[] = [];
   const remaining = () => Math.max(0, budgetMs - (now() - start));
-  const attempt = async (options: RunOptions) => {
+  const attempt = async (options: RunOptions): Promise<RunOutcome> => {
     const outcome = await Result.tryPromise(async () => run(options));
     if (outcome.isOk()) {
       return outcome.value;
     }
     report.errors.push(`${options.target.file}: ${outcome.error.message}`);
-    return { passed: false, status: 1, ranTests: false };
+    return { type: "executed", passed: false, status: 1, ranTests: false };
   };
   for (const target of targets) {
     if (remaining() <= 0) {
@@ -455,10 +448,10 @@ export const executeGate = async ({
     const before = now();
     const outcome = await attempt({ target, seed: 1, timeoutMs: remaining() });
     const durationMs = Math.max(1, now() - before);
-    if (target.runner === "rust" && outcome.status === 0 && !outcome.ranTests) {
+    if (outcome.type === "no-tests") {
       report.skipped.push({
         file: target.file,
-        reason: "not gated (no runnable tests for this Cargo target)",
+        reason: outcome.reason,
       });
       continue;
     }
@@ -495,7 +488,7 @@ export const executeGate = async ({
         timeoutMs: remaining(),
       });
       result.runs += 1;
-      result.failures += Number(!outcome.passed);
+      result.failures += Number(outcome.type === "no-tests" || !outcome.passed);
     }
   }
   report.elapsedMs = now() - start;
