@@ -26,8 +26,11 @@ const canExecuteListVerificationInWorkspace = ({
   clientId,
 }: VerificationWorkspaceAccessOptions): boolean =>
   workspaceStatus === "active" &&
-  (workspaceMemberId !== null || clientId !== null) &&
-  canWriteWorkspaceEntities({ organizationRole, workspaceMemberId });
+  canWriteWorkspaceEntities({
+    organizationRole,
+    workspaceClientId: clientId,
+    workspaceMemberId,
+  });
 
 type ResolveListVerificationAccessArgs = {
   tx: Pick<Transaction, "select">;
