@@ -8,6 +8,7 @@ export class ResponseConformanceError extends TaggedError(
   route: string;
   status: number | "success";
   issuePath: string;
+  contentType?: string;
 }> {}
 
 /** Result and panic wrappers must not turn a test conformance defect into an expected error response. */

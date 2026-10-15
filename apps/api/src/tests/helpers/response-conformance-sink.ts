@@ -9,7 +9,7 @@ export class ResponseConformanceTestError extends TaggedError(
   message: string;
   violations: readonly Pick<
     ResponseConformanceError,
-    "route" | "status" | "issuePath"
+    "route" | "status" | "issuePath" | "contentType"
   >[];
 }> {}
 
@@ -52,7 +52,12 @@ export const recordResponseConformanceViolation = (error: unknown): void => {
   const sink =
     scope?.status === "capturing" ? scope.violations : defaultViolations;
   sink.set(
-    JSON.stringify([violation.route, violation.status, violation.issuePath]),
+    JSON.stringify([
+      violation.route,
+      violation.status,
+      violation.issuePath,
+      violation.contentType,
+    ]),
     violation,
   );
 };
@@ -79,7 +84,12 @@ const serialFailure = () =>
 
 const drainDefaultViolations = (): void => {
   const violations = [...defaultViolations.values()].map(
-    ({ route, status, issuePath }) => ({ route, status, issuePath }),
+    ({ route, status, issuePath, contentType }) => ({
+      route,
+      status,
+      issuePath,
+      ...(contentType === undefined ? {} : { contentType }),
+    }),
   );
   defaultViolations.clear();
   if (violations.length === 0) {
@@ -87,8 +97,10 @@ const drainDefaultViolations = (): void => {
   }
   const message = violations
     .map(
-      ({ route, status, issuePath }) =>
-        `Response conformance failed: ${route} status ${status} at ${issuePath}`,
+      ({ route, status, issuePath, contentType }) =>
+        `Response conformance failed: ${route} status ${status} at ${issuePath}${
+          contentType === undefined ? "" : ` (content-type: ${contentType})`
+        }`,
     )
     .join("\n");
   throw new ResponseConformanceTestError({ message, violations });

@@ -1,5 +1,6 @@
 import { describe, expect, spyOn, test } from "bun:test";
 import { Elysia, t } from "elysia";
+import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -216,8 +217,10 @@ describe("response conformance validation", () => {
       ),
     ).toMatchObject({
       issuePath: "(body)",
-      message: `Response conformance failed: ${route} status 200 at (body)`,
+      message: `Response conformance failed: ${route} status 200 at (body) (content-type: application/json)`,
     });
+    expect(response.bodyUsed).toBe(false);
+    expect(await response.text()).toBe("private-value");
   });
 
   test("validates statuses but omits protocol-forbidden response bodies", async () => {
@@ -266,7 +269,7 @@ describe("response conformance validation", () => {
   });
 
   test.each(["text/plain", "text/event-stream", "application/octet-stream"])(
-    "rejects undeclared %s representations without cloning their bodies",
+    "decodes finite %s representations and rejects incompatible bodies",
     async (contentType) => {
       const response = new Response("stream payload", {
         headers: { "content-type": contentType },
@@ -282,8 +285,14 @@ describe("response conformance validation", () => {
               schema: objectSchema,
             }),
           ),
-        ).toMatchObject({ issuePath: "(content-type)" });
-        expect(clone).toHaveBeenCalledTimes(0);
+        ).toMatchObject({
+          issuePath: "(body)",
+          contentType,
+          message: `Response conformance failed: ${route} status 200 at (body) (content-type: ${contentType})`,
+        });
+        expect(clone).toHaveBeenCalledTimes(
+          contentType === "text/event-stream" ? 0 : 1,
+        );
         expect(response.bodyUsed).toBe(false);
         expect(await response.text()).toBe("stream payload");
       } finally {
@@ -370,10 +379,10 @@ describe("response conformance validation", () => {
     expect(await wrongJson.json()).toEqual({ count: "wrong" });
   });
 
-  test("requires JSON for number and boolean contracts", async () => {
-    for (const [schema, text] of [
-      [t.Number(), "42"],
-      [t.Boolean(), "false"],
+  test("keeps non-JSON number and boolean representations as raw strings", async () => {
+    for (const [schema, text, value] of [
+      [t.Number(), "42", 42],
+      [t.Boolean(), "false", false],
     ] as const) {
       const response = new Response(text);
       const clone = spyOn(response, "clone");
@@ -387,9 +396,23 @@ describe("response conformance validation", () => {
               schema,
             }),
           ),
-        ).toMatchObject({ issuePath: "(content-type)" });
-        expect(clone).toHaveBeenCalledTimes(0);
+        ).toMatchObject({
+          issuePath: "(body)",
+          contentType: "text/plain",
+          message: `Response conformance failed: ${route} status 200 at (body) (content-type: text/plain)`,
+        });
+        expect(clone).toHaveBeenCalledTimes(1);
         expect(await response.text()).toBe(text);
+        const json = Response.json(value);
+        expect(
+          await assertHttpResponseConformance({
+            route,
+            response: json,
+            method: "GET",
+            schema,
+          }),
+        ).toBe("valid");
+        expect(await json.json()).toBe(value);
       } finally {
         clone.mockRestore();
       }
@@ -416,7 +439,8 @@ describe("response conformance validation", () => {
           expect(await checked).toBe("valid");
         } else {
           expect(await rejectionOf(checked)).toMatchObject({
-            issuePath: "(content-type)",
+            issuePath: "(body)",
+            contentType: "text/event-stream",
           });
         }
         expect(clone).toHaveBeenCalledTimes(0);
@@ -528,7 +552,8 @@ describe("response conformance validation", () => {
           expect(await checked).toBe("valid");
         } else {
           expect(await rejectionOf(checked)).toMatchObject({
-            issuePath: "/count",
+            issuePath: "(body)",
+            contentType: "application/json",
           });
         }
         expect(clone).toHaveBeenCalledTimes(1);
@@ -556,9 +581,86 @@ describe("response conformance validation", () => {
           schema: { 201: objectSchema },
         }),
       ),
-    ).toMatchObject({ status: 201, issuePath: "/count" });
+    ).toMatchObject({
+      status: 201,
+      issuePath: "(body)",
+      contentType: "application/problem+json",
+    });
     expect(response.bodyUsed).toBe(false);
     expect(await response.json()).toEqual({ count: "wrong" });
+  });
+
+  test("decodes Standard Schema HTTP bodies by their representation", async () => {
+    const stringResponse = new Response('{"count":1}', {
+      headers: { "content-type": "text/plain; charset=utf-8" },
+    });
+    expect(
+      await assertHttpResponseConformance({
+        route,
+        response: stringResponse,
+        method: "GET",
+        schema: v.string(),
+      }),
+    ).toBe("valid");
+    expect(await stringResponse.text()).toBe('{"count":1}');
+
+    const jsonString = Response.json("ready");
+    expect(
+      await assertHttpResponseConformance({
+        route,
+        response: jsonString,
+        method: "GET",
+        schema: v.string(),
+      }),
+    ).toBe("valid");
+    expect(await jsonString.json()).toBe("ready");
+
+    const objectForString = Response.json({ count: 1 });
+    expect(
+      await rejectionOf(
+        assertHttpResponseConformance({
+          route,
+          response: objectForString,
+          method: "GET",
+          schema: v.string(),
+        }),
+      ),
+    ).toMatchObject({
+      issuePath: "(body)",
+      contentType: "application/json",
+      message: `Response conformance failed: ${route} status 200 at (body) (content-type: application/json)`,
+    });
+    expect(await objectForString.json()).toEqual({ count: 1 });
+
+    const schema = v.object({ count: v.number() });
+    const jsonObject = Response.json({ count: 1 });
+    expect(
+      await assertHttpResponseConformance({
+        route,
+        response: jsonObject,
+        method: "GET",
+        schema,
+      }),
+    ).toBe("valid");
+    expect(await jsonObject.json()).toEqual({ count: 1 });
+
+    const textObject = new Response('{"count":1}');
+    expect(
+      await rejectionOf(
+        assertHttpResponseConformance({
+          route,
+          response: textObject,
+          method: "GET",
+          schema,
+        }),
+      ),
+    ).toMatchObject({
+      issuePath: "(body)",
+      contentType: "text/plain",
+      message: `Response conformance failed: ${route} status 200 at (body) (content-type: text/plain)`,
+    });
+    expect(textObject.bodyUsed).toBe(false);
+    expect(await textObject.text()).toBe('{"count":1}');
   });
 
   test("uses the dedicated error type", async () => {

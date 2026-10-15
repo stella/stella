@@ -72,6 +72,15 @@ install({ beforeEach: hook => hooks.beforeEach.push(hook), afterEach: hook => ho
 assert.deepEqual(Object.values(hooks).map(list => list.length), [1, 1, 1]);
 const before = hooks.beforeEach[0], after = hooks.afterEach[0], all = hooks.afterAll[0];
 before(); after();
+const bodyDefect = new ResponseConformanceError({ route: "GET /body", status: 200, issuePath: "(body)", contentType: "text/plain", message: "fixture body must not appear in lifecycle diagnostics" });
+before(); record(bodyDefect);
+assert.throws(after, error => {
+  assert(error instanceof ResponseConformanceTestError);
+  assert(error.message.includes("content-type: text/plain"));
+  assert.equal(error.violations[0].contentType, "text/plain");
+  assert(!JSON.stringify(error).includes("fixture body"));
+  return true;
+});
 record({ cause: { cause: defect } });
 before();
 record(defect);

@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { Elysia, status as httpStatus, t } from "elysia";
+import * as v from "valibot";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -58,7 +59,7 @@ describe("central HTTP response conformance", () => {
       },
     );
     expect(violations).toMatchObject([
-      { route: "GET /status", status: 404, issuePath: "(root)" },
+      { route: "GET /status", status: 404, issuePath: "(body)" },
     ]);
   });
 
@@ -132,44 +133,82 @@ describe("central HTTP response conformance", () => {
         ).toMatchObject({
           route: "GET /values/:id",
           status: 200,
-          issuePath: "(root)",
+          issuePath: "(body)",
         });
       },
     );
     expect(violations).toMatchObject([
-      { route: "GET /values/:id", status: 200, issuePath: "(root)" },
+      { route: "GET /values/:id", status: 200, issuePath: "(body)" },
     ]);
   });
 
-  test("rejects a text body under an object response declaration", async () => {
-    const { violations } = await captureResponseConformanceViolations(
-      async () => {
-        uninstall = installHttpResponseConformance();
-        const app = new Elysia().get("/object", () => new Response("wrong"), {
-          response: t.Object({ value: t.String() }),
-        });
-        expect(
-          await rejectionOf(app.handle(new Request("http://localhost/object"))),
-        ).toMatchObject({ route: "GET /object", status: 200 });
-      },
-    );
-    expect(violations).toMatchObject([
-      { route: "GET /object", status: 200, issuePath: "(body)" },
-    ]);
-  });
+  test.each([
+    { library: "TypeBox", schema: t.Object({ value: t.String() }) },
+    { library: "Valibot", schema: v.object({ value: v.string() }) },
+  ])(
+    "rejects a text body under a $library object declaration",
+    async ({ schema }) => {
+      const { violations } = await captureResponseConformanceViolations(
+        async () => {
+          uninstall = installHttpResponseConformance();
+          const app = new Elysia().get("/object", () => new Response("wrong"), {
+            response: schema,
+          });
+          expect(
+            await rejectionOf(
+              app.handle(new Request("http://localhost/object")),
+            ),
+          ).toMatchObject({
+            route: "GET /object",
+            status: 200,
+            issuePath: "(body)",
+            message: expect.stringContaining("content-type: text/plain"),
+          });
+        },
+      );
+      expect(violations).toMatchObject([
+        { route: "GET /object", status: 200, issuePath: "(body)" },
+      ]);
+    },
+  );
 
-  test.each(["ok", "wrong"])(
-    "validates a finite literal text response: %s",
-    async (text) => {
+  test.each([
+    {
+      library: "TypeBox literal",
+      schema: t.Literal("ok"),
+      text: "ok",
+      outcome: "valid",
+    },
+    {
+      library: "TypeBox literal",
+      schema: t.Literal("ok"),
+      text: "wrong",
+      outcome: "invalid",
+    },
+    {
+      library: "Valibot string",
+      schema: v.string(),
+      text: "ok",
+      outcome: "valid",
+    },
+    {
+      library: "Valibot string",
+      schema: v.string(),
+      text: "wrong",
+      outcome: "valid",
+    },
+  ])(
+    "validates a $library text response: $text",
+    async ({ schema, text, outcome }) => {
       const { violations } = await captureResponseConformanceViolations(
         async () => {
           uninstall = installHttpResponseConformance();
           const app = new Elysia().get("/literal", () => new Response(text), {
-            response: t.Literal("ok"),
+            response: schema,
           });
           const pending = app.handle(new Request("http://localhost/literal"));
-          if (text === "ok") {
-            expect(await (await pending).text()).toBe("ok");
+          if (outcome === "valid") {
+            expect(await (await pending).text()).toBe(text);
             return;
           }
           expect(await rejectionOf(pending)).toMatchObject({
@@ -179,9 +218,9 @@ describe("central HTTP response conformance", () => {
         },
       );
       expect(violations).toMatchObject(
-        text === "ok"
+        outcome === "valid"
           ? []
-          : [{ route: "GET /literal", status: 200, issuePath: "(root)" }],
+          : [{ route: "GET /literal", status: 200, issuePath: "(body)" }],
       );
     },
   );

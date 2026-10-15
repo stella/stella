@@ -7,14 +7,27 @@ import { ResponseConformanceError } from "@/api/lib/response-conformance-error";
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-type ResponseIdentity = { route: string; status: number };
-const failure = ({ route, status }: ResponseIdentity, issuePath: string) =>
-  new ResponseConformanceError({
+type ResponseIdentity = { route: string; status: number; contentType?: string };
+const failure = (
+  { route, status, contentType }: ResponseIdentity,
+  issuePath: string,
+) => {
+  const selectedPath =
+    contentType !== undefined &&
+    issuePath !== "(schema)" &&
+    issuePath !== "(status)"
+      ? "(body)"
+      : issuePath;
+  const representation =
+    contentType === undefined ? "" : ` (content-type: ${contentType})`;
+  return new ResponseConformanceError({
     route,
     status,
-    issuePath,
-    message: `Response conformance failed: ${route} status ${status} at ${issuePath}`,
+    issuePath: selectedPath,
+    ...(contentType === undefined ? {} : { contentType }),
+    message: `Response conformance failed: ${route} status ${status} at ${selectedPath}${representation}`,
   });
+};
 
 type SchemaReferences = {
   models?: Readonly<Record<string, unknown>> | undefined;
@@ -205,69 +218,6 @@ export const assertResponseConformance = async ({
   return "valid";
 };
 
-type ResponseBodyKind = "text" | "json" | "opaque" | "stream" | "unconstrained";
-type ResolveResponseBodyKindOptions = {
-  schema: unknown;
-  identity: ResponseIdentity;
-  references: SchemaReferences;
-  seen?: ReadonlySet<object>;
-};
-
-const resolveResponseBodyKind = ({
-  schema,
-  identity,
-  references,
-  seen = new Set<object>(),
-}: ResolveResponseBodyKindOptions): ResponseBodyKind => {
-  const resolved = resolveSchema(schema, identity, references);
-  if (
-    isRecord(resolved) &&
-    resolved["contentMediaType"] === "text/event-stream"
-  ) {
-    return "stream";
-  }
-  if (!TypeGuard.IsSchema(resolved)) {
-    return "json";
-  }
-  switch (resolved[Kind]) {
-    case "Any":
-    case "Unknown":
-      return "unconstrained";
-    case "File":
-    case "Files":
-    case "Uint8Array":
-    case "ArrayBuffer":
-      return "opaque";
-    case "String":
-      return "text";
-    case "Literal":
-      return typeof resolved["const"] === "string" ? "text" : "json";
-    case "Union": {
-      if (!TypeGuard.IsUnion(resolved) || seen.has(resolved)) {
-        return "json";
-      }
-      const nextSeen = new Set(seen);
-      nextSeen.add(resolved);
-      return resolved.anyOf.some((branch) => {
-        const kind = resolveResponseBodyKind({
-          schema: branch,
-          identity,
-          references: {
-            ...references,
-            references: [...(references.references ?? []), resolved],
-          },
-          seen: nextSeen,
-        });
-        return kind === "text" || kind === "unconstrained";
-      })
-        ? "text"
-        : "json";
-    }
-    default:
-      return "json";
-  }
-};
-
 /** Structural response surface shared by Bun and undici. */
 export type ConformanceHttpResponse = {
   status: number;
@@ -329,15 +279,18 @@ export const assertHttpResponseConformance = async ({
   ) {
     return "valid";
   }
-  const bodyKind = resolveResponseBodyKind({
-    schema: bodySchema,
-    identity,
-    references: { models, references: resolvedReferences },
-  });
+  const bodyKind = TypeGuard.IsSchema(bodySchema)
+    ? bodySchema[Kind]
+    : undefined;
   if (
-    bodyKind === "opaque" ||
-    bodyKind === "stream" ||
-    bodyKind === "unconstrained"
+    (isRecord(bodySchema) &&
+      bodySchema["contentMediaType"] === "text/event-stream") ||
+    bodyKind === "Any" ||
+    bodyKind === "Unknown" ||
+    bodyKind === "File" ||
+    bodyKind === "Files" ||
+    bodyKind === "Uint8Array" ||
+    bodyKind === "ArrayBuffer"
   ) {
     return "valid";
   }
@@ -350,16 +303,13 @@ export const assertHttpResponseConformance = async ({
   const jsonBody =
     contentType === "application/json" ||
     contentType?.endsWith("+json") === true;
-  const textBody =
-    bodyKind === "text" &&
-    contentType?.startsWith("text/") === true &&
-    contentType !== "text/event-stream";
-  if (!jsonBody && !textBody) {
-    throw failure(identity, "(content-type)");
+  const bodyIdentity = { ...identity, contentType: contentType ?? "(missing)" };
+  if (contentType === "text/event-stream") {
+    throw failure(bodyIdentity, "(body)");
   }
   const cloned = Result.try(() => response.clone());
   if (Result.isError(cloned)) {
-    throw failure(identity, "(body)");
+    throw failure(bodyIdentity, "(body)");
   }
   const clone = cloned.value;
   try {
@@ -368,12 +318,12 @@ export const assertHttpResponseConformance = async ({
       return value;
     });
     if (Result.isError(body)) {
-      throw failure(identity, "(body)");
+      throw failure(bodyIdentity, "(body)");
     }
     await validateValue({
       schema: bodySchema,
       value: body.value,
-      ...identity,
+      ...bodyIdentity,
       references: resolvedReferences,
     });
     return "valid";
