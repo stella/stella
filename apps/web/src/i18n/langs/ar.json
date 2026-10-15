@@ -363,6 +363,8 @@
       "chooseList": "اختيار قائمة",
       "createList": "إنشاء قائمة",
       "evidenceList": "الوقائع من",
+      "loadSample": "تحميل قضية نموذجية",
+      "loadSampleFailed": "تعذّر تحميل القضية النموذجية",
       "noLists": "لا توجد قوائم في هذا الملف القانوني.",
       "pickList": "اختر القائمة التي تُفحص مستندات هذا الملف القانوني في ضوء وقائعها."
     }
@@ -2072,6 +2074,7 @@
     "versionLabel": "الإصدار {version}",
     "viewSource": "عرض المصدر",
     "website": "موقع الويب",
+    "whenToUse": "متى يُستخدَم",
     "workflow": "سير العمل",
     "workflows": "مسارات العمل",
     "zoomIn": "تكبير",
@@ -2921,6 +2924,7 @@
     "checkingDocxEditDescription": "لا تزال stella تتحقق مما إذا كان يمكن تعديل ملف DOCX هذا بأمان. حاول مرة أخرى عند انتهاء تحميل المستند.",
     "checkingDocxEditTitle": "جارٍ فحص المستند",
     "chooseEvidence": "اختر ملفًا لإدراج مرجع مرقّم للدليل.",
+    "collaborationSnapshotRecovered": "تعذر إعادة فتح نسخة التعاون المخزنة. تمت استعادة الغرفة من آخر مستند محفوظ؛ وربما فُقدت التغييرات التي لم تُحفظ.",
     "comment": "تعليق",
     "comments": {
       "addPlaceholder": "أضف تعليقًا...",
@@ -3645,6 +3649,10 @@
       "importTitle": "استيراد مهارة",
       "importedSkills": "{count, plural, zero {لم يتم استيراد أي مهارات} one {تم استيراد مهارة واحدة} two {تم استيراد مهارتين} few {تم استيراد # مهارات} many {تم استيراد # مهارة} other {تم استيراد # مهارة}}",
       "invalidPath": "يجب أن يستخدم المسار حروفاً صغيرة وأرقاماً ونقاطاً وشرطات أو شرطات سفلية",
+      "invocationAuto": "تلقائيًا",
+      "invocationAutoHelp": "يمكن للذكاء الاصطناعي استخدام هذه المهارة من تلقاء نفسه عندما تناسب الطلب.",
+      "invocationManual": "عند الاستدعاء فقط",
+      "invocationManualHelp": "تُستخدم فقط عندما تستدعيها باستخدام / أو تضيفها إلى رسالتك.",
       "license": "الترخيص: {license}",
       "newFile": "ملف جديد",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4335,6 +4343,8 @@
         "yearMonthSequential": "السنة-الشهر / تسلسلي (2026-02/001)",
         "yearSequential": "السنة / تسلسلي (2026/001)"
       },
+      "showInTitle": "إظهار الرقم بجانب اسم الملف القانوني",
+      "showInTitleDescription": "عند إيقاف هذا الخيار، يكون العنوان هو الاسم الذي أدخلته بالضبط.",
       "title": "ترقيم الملفات القانونية",
       "tokenHelp": "الرموز المتاحة: '{'SEQ'}' (التسلسل)، '{'YYYY'}' (السنة)، '{'YY'}' (السنة بخانتين)، '{'MM'}' (الشهر)"
     },
@@ -4505,6 +4515,25 @@
     "tokenHelp": "كيفية الحصول على رمز وصول",
     "viewOnGithub": "العرض على GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "نفدت الميزانية المخصصة للإجابات.",
+    "citation": "¶{paragraph}",
+    "expand": "توسيع الإجابة",
+    "explain": "شرح",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "طرح سؤال متابعة",
+    "invalidCitations": "{count, plural, zero {تعذر التحقق من # إحالات.} one {تعذر التحقق من إحالة واحدة.} two {تعذر التحقق من إحالتين.} few {تعذر التحقق من # إحالات.} many {تعذر التحقق من # إحالة.} other {تعذر التحقق من # إحالة.}}",
+    "loading": "جارٍ توليد الإجابة…",
+    "minimise": "طي الإجابة",
+    "modelError": "لم يتمكن النموذج من إكمال هذه الإجابة.",
+    "networkError": "انقطع الاتصال. حاول مرة أخرى.",
+    "regenerate": "إعادة توليد الإجابة",
+    "selectionError": "حدد نصًا ضمن فقرة واحدة (حتى 2000 حرف).",
+    "send": "إرسال سؤال المتابعة",
+    "share": "مشاركة مع الفريق",
+    "timeoutError": "انتهت مهلة توليد الإجابة. حاول مرة أخرى.",
+    "title": "إجابة عن النص المحدد"
+  },
   "routeError": {
     "backToMatters": "العودة إلى الملفات القانونية",
     "copyReference": "نسخ مرجع الخطأ",
@@ -4517,6 +4546,8 @@
   },
   "search": {
     "aiRefine": "تحسين الاستعلام بالذكاء الاصطناعي",
+    "caseLawMatchingDecisions": "{count, plural, zero {# قرارات مطابقة} one {قرار مطابق واحد} two {قراران مطابقان} few {# قرارات مطابقة} many {# قرارًا مطابقًا} other {# قرار مطابق}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, zero {#+ قرارات مطابقة} one {#+ قرار مطابق} two {#+ قرار مطابق} few {#+ قرارات مطابقة} many {#+ قرارًا مطابقًا} other {#+ قرار مطابق}}",
     "continueInChat": "المتابعة في الدردشة",
     "dateFrom": "من",
     "dateTo": "إلى",
@@ -4966,17 +4997,22 @@
     "provisionAskSummarize": "لخّص كيف تطبّق المحاكم هذه المادة",
     "provisionAskSummarizePrompt": "لخّص كيف تطبّق المحاكم {subject}، مع الإشارة إلى الأحكام التي تستند إليها.",
     "provisionDetailsFor": "تفاصيل {provision}",
+    "provisionEffectiveFrom": "نافذ منذ {date}",
     "provisionHistoryEarliest": "أقدم صيغة متاحة.",
     "provisionHistoryEmpty": "لا توجد أي صيغة مسجَّلة لهذه المادة.",
     "provisionHistoryLoadOlder": "حمّل صيغًا أقدم للمقارنة.",
     "provisionHistoryUnavailable": "تعذّر تحميل سجل هذه المادة.",
+    "provisionPartTextUnavailable": "نص {provisionLabel} غير متاح",
     "provisionPromptSubject": "{provision} من {statute} ({eli}) بصيغتها النافذة منذ {date}",
     "provisionPromptSubjectUndated": "{provision} من {statute} ({eli})",
+    "provisionTextUnavailable": "النص غير متاح لهذه النسخة",
     "publisherWindowInconsistent": "لا يمكن تحديد النص النافذ في هذا التاريخ: بيانات الناشر متعارضة.",
     "resolvedAlias": "تم التعرف عليه باسم {label}",
     "searchAskPrompt": "{query} (تشريعات {country})",
     "searchLabel": "البحث في التشريعات",
     "searchPlaceholder": "الرقم أو الاسم أو العنوان، مثل 89/2012 Sb.",
+    "showCitedPartOnly": "عرض الجزء المستشهد به فقط",
+    "showFullProvision": "عرض الحكم كاملًا",
     "showInText": "عرض في النص",
     "statedWindow": "التواريخ التي ذكرها الناشر: {range}",
     "status": {
@@ -4992,7 +5028,6 @@
     "title": "التشريعات",
     "validity": "نافذ من {from} إلى {to}",
     "versionAppliedInDecision": "الصيغة المطبقة في قرار <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "الصياغة النافذة منذ {date}",
     "wordingVersionUnknown": "تاريخ نسخة الصياغة غير متاح"
   },
   "styleSets": {
@@ -5545,7 +5580,6 @@
     "viewVersion": "عرض",
     "whenNotToUse": "متى لا يُستخدَم",
     "whenNotToUsePlaceholder": "متى ينبغي تجنّب هذا القالب؟",
-    "whenToUse": "متى يُستخدَم",
     "whenToUsePlaceholder": "متى ينبغي استخدام هذا القالب؟ (يوجّه اختيار القالب بالذكاء الاصطناعي)"
   },
   "timesheets": {
@@ -5666,7 +5700,7 @@
       "title": "نسخ إلى ملف قانوني"
     },
     "create": {
-      "ownerTypeToggle": "نوع الملف القانوني",
+      "matterName": "اسم الملف القانوني",
       "personalDescription": "الملفات القانونية الشخصية خاصة بك ولا تحتاج إلى عميل. يمكنك ترقيتها لاحقًا لمشاركتها مع الفريق."
     },
     "createNewWorkspace": "إنشاء ملف قانوني جديد",
@@ -6118,15 +6152,12 @@
       "upcomingTasks": "جدول الأعمال القادم",
       "uploaded": "تم الرفع"
     },
-    "ownerType": {
-      "client": "عميل",
-      "personal": "شخصية"
-    },
     "parties": {
       "addParty": "إضافة طرف",
       "changeClient": "تغيير العميل",
       "client": "عميل",
       "noClient": "لم يُعيَّن أي عميل",
+      "noClientOptional": "بلا عميل (اختياري)",
       "noParties": "لم تتم إضافة أي أطراف إلى هذا الملف القانوني.",
       "partyRoles": {
         "co_counsel": "محامٍ مشارك",

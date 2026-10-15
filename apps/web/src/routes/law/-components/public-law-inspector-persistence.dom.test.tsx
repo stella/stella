@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { browserStorage } from "@/lib/account/browser-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const DECISION_HREF = "/law/cze/cases/ns/27-cdo-59-2022";
 
@@ -96,7 +97,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 /** What a member left behind: the decision's chat tab, with the pane folded. */

@@ -13,6 +13,7 @@ import czech from "@/i18n/langs/cs.json";
 import english from "@/i18n/langs/en.json";
 import slovak from "@/i18n/langs/sk.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
 let respondRequest: (request: Request) => Promise<Response> = async () => {
@@ -82,6 +83,7 @@ const settings = {
   documentProcessingMode: "off",
   matterNumberPattern: "{year}/{number}",
   matterNumberPadding: 3,
+  matterNumberingEnabled: false,
   practiceJurisdictions: [],
   promptCachingEnabled: true,
   managedAIResidency: "eu",
@@ -289,7 +291,7 @@ afterEach(() => {
 afterAll(async () => {
   await act(async () => await sleep(50));
   fetchBoundary.mockRestore();
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 for (const { locale, messages } of [
   { locale: "en", messages: english },

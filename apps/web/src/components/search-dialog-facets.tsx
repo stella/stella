@@ -185,7 +185,7 @@ const FacetBucketList = ({
             {bucket.label ?? bucket.value}
           </span>
           <span className="text-muted-foreground tabular-nums">
-            {format.number(bucket.count)}
+            {bucket.countLabel ?? format.number(bucket.count)}
           </span>
         </Button>
       ))}

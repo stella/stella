@@ -11,6 +11,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/contacts/a" });
 
@@ -145,7 +146,7 @@ afterEach(() => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const mountPage = async (children: () => ReactNode, client: Client) => {
