@@ -25,6 +25,11 @@ const patterns = [
 
 const scopes = [
   [
+    "whole-file inner cfg(test)",
+    (body: string) => `#![cfg(test)] fn helper() { ${body} }`,
+    false,
+  ],
+  [
     "cfg(test) module",
     (body: string) => `#[cfg(test)] mod tests { fn helper() { ${body} } }`,
     false,
@@ -412,4 +417,73 @@ test("baseline runner selection inputs include scanner and baseline owners", () 
       "$TURBO_ROOT$/scripts/check-rust-test-determinism.ts",
     ]),
   );
+});
+
+test("leading comments and other inner attributes preserve whole-file test scope", () => {
+  const source = `// File documentation: #[cfg(test)]
+/* outer /* nested */ comment */
+#![allow(dead_code)]
+#![doc = stringify!([ignored])]
+// Another leading comment
+#![cfg(test)]
+fn helper() { Instant::now(); }`;
+  expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual([
+    { line: 7, kind: "clock", escaped: false },
+  ]);
+});
+
+test.each([
+  "fn earlier() {}\n#![cfg(test)]\nfn production() { Instant::now(); }",
+  "mod nested { #![cfg(test)] fn helper() {} }\nfn production() { Instant::now(); }",
+  '#![doc = "#![cfg(test)]"]\nfn production() { Instant::now(); }',
+  "// #![cfg(test)]\nfn production() { Instant::now(); }",
+])(
+  "nonleading or inactive inner test markers do not activate whole-file scope: %s",
+  (source) => {
+    expect(scanRustTestDeterminism({ source, integrationTest: false })).toEqual(
+      [],
+    );
+  },
+);
+
+test("whole-file inner test scope discovers an isolated crate and propagates to external modules", () => {
+  const repoRoot = mkdtempSync(
+    path.join(tmpdir(), "rust-inner-test-discovery-"),
+  );
+  const crate = "crates/inner-test";
+  const helper = `${crate}/src/helper.rs`;
+  const nested = `${crate}/src/helper/nested.rs`;
+  const sources = {
+    [`${crate}/Cargo.toml`]:
+      '[package]\nname = "inner-test"\nversion = "0.1.0"',
+    [`${crate}/src/lib.rs`]: "mod helper;",
+    [helper]: "#![cfg(test)]\nmod nested;\nfn helper() { Instant::now(); }",
+    [nested]: "fn helper() { SystemTime::now(); }",
+  };
+  try {
+    for (const [file, source] of Object.entries(sources)) {
+      mkdirSync(path.dirname(path.join(repoRoot, file)), { recursive: true });
+      writeFileSync(path.join(repoRoot, file), source);
+    }
+    const files = discoverRustTestFiles(repoRoot, Object.keys(sources));
+    expect(files).toEqual([
+      { file: helper, crate, integrationTest: false },
+      { file: nested, crate, integrationTest: true },
+      { file: `${crate}/src/lib.rs`, crate, integrationTest: false },
+    ]);
+    for (const { file, integrationTest } of files) {
+      if (file === helper) {
+        expect(
+          scanRustTestDeterminism({ source: sources[helper], integrationTest }),
+        ).toEqual([{ line: 3, kind: "clock", escaped: false }]);
+      }
+      if (file === nested) {
+        expect(
+          scanRustTestDeterminism({ source: sources[nested], integrationTest }),
+        ).toEqual([{ line: 1, kind: "clock", escaped: false }]);
+      }
+    }
+  } finally {
+    rmSync(repoRoot, { recursive: true, force: true });
+  }
 });

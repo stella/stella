@@ -2,7 +2,8 @@
  * Lexical Rust test census: comments and literals are masked before scanning.
  * This does not expand macros, resolve imports/aliases or shadowed static names,
  * or evaluate arbitrary cfg expressions. Test items use cfg(test), test, or
- * tokio::test attributes; external test modules are selected by the caller.
+ * tokio::test attributes; a leading inner cfg(test) covers the entire file.
+ * External test modules are selected by the caller.
  * External modules with #[path] and statics declared in other files are not
  * resolved. Identifier touches count even when a local shadows a static.
  */
@@ -126,8 +127,36 @@ const closingBraces = (code: string): Map<number, number> => {
   return pairs;
 };
 
+const hasFileTestAttribute = (code: string): boolean => {
+  let cursor = 0;
+  while (cursor < code.length) {
+    const opening = /^\s*#\s*!\s*\[/u.exec(code.slice(cursor));
+    if (opening === null) {
+      return false;
+    }
+    const start = cursor + opening[0].length;
+    cursor = start;
+    let depth = 1;
+    while (cursor < code.length && depth > 0) {
+      if (code[cursor] === "[") {
+        depth += 1;
+      } else if (code[cursor] === "]") {
+        depth -= 1;
+      }
+      cursor += 1;
+    }
+    if (depth !== 0) {
+      return false;
+    }
+    if (/^\s*cfg\s*\(\s*test\s*\)\s*$/u.test(code.slice(start, cursor - 1))) {
+      return true;
+    }
+  }
+  return false;
+};
+
 const testSpans = (code: string, integrationTest: boolean): Span[] => {
-  if (integrationTest) {
+  if (integrationTest || hasFileTestAttribute(code)) {
     return [{ start: 0, end: code.length }];
   }
   const braces = closingBraces(code);
