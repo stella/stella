@@ -51,6 +51,7 @@ type JoinFolioCollabRoomResponse = {
   generation: number;
   roomId: SafeId<"folioCollabRoom">;
   roomName: string;
+  snapshotRecovery: "none" | "unsaved-changes-discarded";
   seedDownloadUrl: string;
   shouldSeed: boolean;
   token: string;
@@ -172,6 +173,24 @@ export const decideFolioCollabSeedClaim = ({
   return "claimable";
 };
 
+/**
+ * Whether the joining client seeds a room whose previous collaboration state
+ * was discarded: either recovery reset a refused snapshot, or the room still
+ * holds a snapshot it can no longer use.
+ */
+export const decideFolioCollabSnapshotRecovery = ({
+  shouldSeed,
+  snapshotRecovered,
+  yjsSnapshotRevision,
+}: {
+  shouldSeed: boolean;
+  snapshotRecovered: boolean;
+  yjsSnapshotRevision: number;
+}): JoinFolioCollabRoomResponse["snapshotRecovery"] =>
+  shouldSeed && (snapshotRecovered || yjsSnapshotRevision > 0)
+    ? "unsaved-changes-discarded"
+    : "none";
+
 const claimFolioCollabRoomSeed = async ({
   expectedGeneration,
   expectedSeedState,
@@ -281,6 +300,8 @@ const joinFolioCollabRoomHandler = async function* ({
           id: folioCollabRooms.id,
           seedClaimedAt: folioCollabRooms.seedClaimedAt,
           seedState: folioCollabRooms.seedState,
+          snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
+          yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
         })
         .from(folioCollabRooms)
         .where(
@@ -331,6 +352,8 @@ const joinFolioCollabRoomHandler = async function* ({
             id: folioCollabRooms.id,
             seedClaimedAt: folioCollabRooms.seedClaimedAt,
             seedState: folioCollabRooms.seedState,
+            snapshotRecoveredAt: folioCollabRooms.snapshotRecoveredAt,
+            yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
           });
 
         await recordAuditEvent(tx, {
@@ -457,6 +480,8 @@ const joinFolioCollabRoomHandler = async function* ({
         shouldSeed,
         token,
         tokenExpiresAt,
+        snapshotRecovered: room.snapshotRecoveredAt !== null,
+        yjsSnapshotRevision: room.yjsSnapshotRevision,
       } as const;
     }),
   );
@@ -482,6 +507,7 @@ const joinFolioCollabRoomHandler = async function* ({
     generation: joined.generation,
     roomId: joined.roomId,
     roomName: toFolioCollabRoomName(joined.roomId),
+    snapshotRecovery: decideFolioCollabSnapshotRecovery(joined),
     seedDownloadUrl,
     shouldSeed: joined.shouldSeed,
     token: joined.token,
