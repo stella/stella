@@ -265,6 +265,9 @@ for (const task of ["typecheck", "lint", "test"]) {
       TURBO_TOKEN: "fixture",
       TURBO_TELEMETRY_DISABLED: "1",
       DO_NOT_TRACK: "1",
+      // An inherited cache directory would replay results from earlier runs
+      // and leak fixture results into the machine's shared cache.
+      TURBO_CACHE_DIR: path.join(directory, ".turbo-cache"),
       TURBO_CACHE: "remote:rw",
       CI: "true",
       PROPERTY_TEST_SEED: "1",
