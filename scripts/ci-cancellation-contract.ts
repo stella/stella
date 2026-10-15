@@ -60,10 +60,11 @@ export const isCanonicalFailureCancellation = (step: unknown) =>
 // Lint and typecheck failures are the commonest reason a pull request run
 // fails, and every other job's result is moot once one is found. The code
 // quality jobs therefore stop the rest of a failed pull request run too,
-// freeing its runners, with the same failed-step evidence.
+// freeing its runners, with the same failed-step evidence. Fork pull
+// requests get a read-only token that cannot cancel the run, so they skip it.
 export const PR_CODE_QUALITY_CANCEL_STEP = {
   name: "Cancel pull request run after code quality failure",
-  if: "failure() && github.event_name == 'pull_request'",
+  if: "failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository",
   uses: CANONICAL_CANCEL_STEP.uses,
   with: {
     retries: 0,

@@ -5112,7 +5112,7 @@ jobs:
 
       - &pr_code_quality_cancel
         name: Cancel pull request run after code quality failure
-        if: failure() && github.event_name == 'pull_request'
+        if: failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           retries: 0
