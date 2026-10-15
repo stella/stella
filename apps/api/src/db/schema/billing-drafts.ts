@@ -7,7 +7,7 @@ import {
   organization,
   user,
   timestamptz,
-  userPolicies,
+  userOrganizationPolicies,
   sql,
 } from "./common";
 import { contacts } from "./contacts";
@@ -16,15 +16,21 @@ import { agentSkillResources } from "./skills";
 export const billingDraftUserSettings = p.pgTable(
   "billing_draft_user_settings",
   {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     userId: p
       .text("user_id")
-      .primaryKey()
+      .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     consentAt: timestamptz("consent_at"),
     preference: p.varchar("preference", { length: 2000 }),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
-  () => [...userPolicies()],
+  (table) => [
+    p.primaryKey({ columns: [table.organizationId, table.userId] }),
+    ...userOrganizationPolicies(),
+  ],
 );
 
 export const billingGuidelineFiles = p.pgTable(

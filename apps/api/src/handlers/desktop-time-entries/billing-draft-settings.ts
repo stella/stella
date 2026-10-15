@@ -1,6 +1,6 @@
 import { Type } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   desktopBillingDraftSettingsRequestSchema,
@@ -69,7 +69,15 @@ export const createDesktopBillingDraftSettingsEndpoints = (
               preference: billingDraftUserSettings.preference,
             })
             .from(billingDraftUserSettings)
-            .where(eq(billingDraftUserSettings.userId, account.userId))
+            .where(
+              and(
+                eq(
+                  billingDraftUserSettings.organizationId,
+                  account.organizationId,
+                ),
+                eq(billingDraftUserSettings.userId, account.userId),
+              ),
+            )
             .limit(1);
           return {
             organizationMode: org.at(0)?.mode ?? "disabled",
@@ -109,9 +117,16 @@ export const createDesktopBillingDraftSettingsEndpoints = (
           };
           const rows = await tx
             .insert(billingDraftUserSettings)
-            .values({ userId: account.userId, ...patch })
+            .values({
+              organizationId: account.organizationId,
+              userId: account.userId,
+              ...patch,
+            })
             .onConflictDoUpdate({
-              target: billingDraftUserSettings.userId,
+              target: [
+                billingDraftUserSettings.organizationId,
+                billingDraftUserSettings.userId,
+              ],
               set: patch,
             })
             .returning({

@@ -6,13 +6,15 @@ ALTER TABLE contacts ADD COLUMN time_billing_format text NOT NULL DEFAULT 'categ
 ALTER TABLE contacts ADD CONSTRAINT contacts_time_billing_format_check CHECK (time_billing_format IN ('categories', 'ledes'));--> statement-breakpoint
 ALTER TABLE workspaces ADD COLUMN billing_narrative_language varchar(64);--> statement-breakpoint
 CREATE TABLE billing_draft_user_settings (
-  user_id text PRIMARY KEY REFERENCES "user"(id) ON DELETE CASCADE,
+  organization_id varchar(128) NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  user_id text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
   consent_at timestamptz,
   preference varchar(2000),
-  updated_at timestamptz NOT NULL DEFAULT now()
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (organization_id, user_id)
 );--> statement-breakpoint
 CREATE TABLE billing_guideline_files (
-  organization_id text NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+  organization_id varchar(128) NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
   resource_id uuid NOT NULL REFERENCES agent_skill_resources(id) ON DELETE CASCADE,
   client_id uuid REFERENCES contacts(id) ON DELETE CASCADE
 );--> statement-breakpoint
@@ -20,10 +22,10 @@ CREATE UNIQUE INDEX billing_guideline_files_firm_uidx ON billing_guideline_files
 CREATE UNIQUE INDEX billing_guideline_files_client_resource_uidx ON billing_guideline_files(organization_id, client_id, resource_id) WHERE client_id IS NOT NULL;--> statement-breakpoint
 CREATE INDEX billing_guideline_files_org_client_idx ON billing_guideline_files(organization_id, client_id);--> statement-breakpoint
 ALTER TABLE billing_draft_user_settings ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
-CREATE POLICY "user_select" ON billing_draft_user_settings FOR SELECT TO stella USING (user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
-CREATE POLICY "user_insert" ON billing_draft_user_settings FOR INSERT TO stella WITH CHECK (user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
-CREATE POLICY "user_update" ON billing_draft_user_settings FOR UPDATE TO stella USING (user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
-CREATE POLICY "user_delete" ON billing_draft_user_settings FOR DELETE TO stella USING (user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
+CREATE POLICY "user_select" ON billing_draft_user_settings FOR SELECT TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
+CREATE POLICY "user_insert" ON billing_draft_user_settings FOR INSERT TO stella WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
+CREATE POLICY "user_update" ON billing_draft_user_settings FOR UPDATE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true))) WITH CHECK (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
+CREATE POLICY "user_delete" ON billing_draft_user_settings FOR DELETE TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)) AND user_id = (SELECT current_setting('app.user_id', true)));--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON billing_draft_user_settings TO stella;--> statement-breakpoint
 ALTER TABLE billing_guideline_files ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "organization_select" ON billing_guideline_files FOR SELECT TO stella USING (organization_id = (SELECT current_setting('app.organization_id', true)));--> statement-breakpoint

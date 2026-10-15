@@ -104,7 +104,7 @@ test("migrated guideline writes require current firm administration and personal
     [resourceId, clientId],
   );
   await db.exec(
-    "INSERT INTO billing_draft_user_settings (user_id, preference) VALUES ('user-admin', 'Concise'); SET app.user_id = 'user-member';",
+    "INSERT INTO billing_draft_user_settings (organization_id, user_id, preference) VALUES ('org-a', 'user-admin', 'Concise'); SET app.user_id = 'user-member';",
   );
   expect(
     (await db.query("SELECT * FROM billing_draft_user_settings")).rows,
@@ -135,7 +135,7 @@ test("migrated guideline writes require current firm administration and personal
   const foreignPreference = await Result.tryPromise(
     async () =>
       await db.exec(
-        "INSERT INTO billing_draft_user_settings (user_id, preference) VALUES ('user-other', 'Private')",
+        "INSERT INTO billing_draft_user_settings (organization_id, user_id, preference) VALUES ('org-a', 'user-other', 'Private')",
       ),
   );
   expect(foreignPreference.isErr()).toBe(true);

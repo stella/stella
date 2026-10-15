@@ -73,7 +73,9 @@ describe("billing draft configuration authorization", () => {
       if (!expression) {
         panic("Personal settings policy requires an expression");
       }
-      expect(dialect.sqlToQuery(expression).sql).toContain("app.user_id");
+      const sql = dialect.sqlToQuery(expression).sql;
+      expect(sql).toContain("app.user_id");
+      expect(sql).toContain("app.organization_id");
     }
   });
 

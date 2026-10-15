@@ -157,7 +157,12 @@ export const loadBillingDraftContext = async ({
             preference: billingDraftUserSettings.preference,
           })
           .from(billingDraftUserSettings)
-          .where(eq(billingDraftUserSettings.userId, userId))
+          .where(
+            and(
+              eq(billingDraftUserSettings.organizationId, organizationId),
+              eq(billingDraftUserSettings.userId, userId),
+            ),
+          )
           .limit(1);
         return { org: org.at(0), own: own.at(0) };
       }),

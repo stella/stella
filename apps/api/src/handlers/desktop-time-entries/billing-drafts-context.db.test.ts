@@ -52,14 +52,22 @@ beforeAll(async () => {
   await setupRlsTestData(db, ids);
   await db.insert(billingDraftUserSettings).values([
     {
+      organizationId: ids.orgA,
       userId: ids.userA1,
       consentAt: new Date("2026-10-01T12:00:00Z"),
       preference: "Use concise Czech narratives",
     },
     {
+      organizationId: ids.orgA,
       userId: ids.userA2,
       consentAt: new Date("2026-10-02T12:00:00Z"),
       preference: "Colleague preference",
+    },
+    {
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+      consentAt: new Date("2026-10-03T12:00:00Z"),
+      preference: "Other organization preference",
     },
   ]);
   await db
@@ -234,7 +242,12 @@ beforeEach(async () => {
       consentAt: new Date("2026-10-01T12:00:00Z"),
       preference: "Use concise Czech narratives",
     })
-    .where(eq(billingDraftUserSettings.userId, ids.userA1));
+    .where(
+      and(
+        eq(billingDraftUserSettings.organizationId, ids.orgA),
+        eq(billingDraftUserSettings.userId, ids.userA1),
+      ),
+    );
 });
 
 afterAll(async () => {
@@ -302,7 +315,12 @@ test("revoked personal consent prevents any AI continuation", async () => {
   await db
     .update(billingDraftUserSettings)
     .set({ consentAt: null })
-    .where(eq(billingDraftUserSettings.userId, ids.userA1));
+    .where(
+      and(
+        eq(billingDraftUserSettings.organizationId, ids.orgA),
+        eq(billingDraftUserSettings.userId, ids.userA1),
+      ),
+    );
   const result = await load();
   let modelCalled = false;
   result.map(() => {
@@ -368,7 +386,12 @@ test("personal consent and drafting preferences remain readable and editable onl
   const safeDb = createSafeDb(db, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1);
   const visible = (
     await safeDb(
-      async (tx) => await tx.select().from(billingDraftUserSettings).limit(10),
+      async (tx) =>
+        await tx
+          .select()
+          .from(billingDraftUserSettings)
+          .where(eq(billingDraftUserSettings.organizationId, ids.orgA))
+          .limit(10),
     )
   ).unwrap();
   expect(visible.map(({ userId }) => userId)).toEqual([ids.userA1]);
@@ -379,7 +402,12 @@ test("personal consent and drafting preferences remain readable and editable onl
         await tx
           .update(billingDraftUserSettings)
           .set({ preference: "Unauthorized change", consentAt: null })
-          .where(eq(billingDraftUserSettings.userId, ids.userA2))
+          .where(
+            and(
+              eq(billingDraftUserSettings.organizationId, ids.orgA),
+              eq(billingDraftUserSettings.userId, ids.userA2),
+            ),
+          )
           .returning(),
     )
   ).unwrap();
@@ -387,7 +415,12 @@ test("personal consent and drafting preferences remain readable and editable onl
   const colleague = await db
     .select()
     .from(billingDraftUserSettings)
-    .where(eq(billingDraftUserSettings.userId, ids.userA2))
+    .where(
+      and(
+        eq(billingDraftUserSettings.organizationId, ids.orgA),
+        eq(billingDraftUserSettings.userId, ids.userA2),
+      ),
+    )
     .limit(1);
   expect(colleague.at(0)?.preference).toBe("Colleague preference");
   expect(colleague.at(0)?.consentAt?.toISOString()).toBe(
@@ -403,7 +436,12 @@ test("the owner can revoke and grant consent and change a personal preference th
         await tx
           .update(billingDraftUserSettings)
           .set({ consentAt: null, preference: "Use shorter narratives" })
-          .where(eq(billingDraftUserSettings.userId, ids.userA1))
+          .where(
+            and(
+              eq(billingDraftUserSettings.organizationId, ids.orgA),
+              eq(billingDraftUserSettings.userId, ids.userA1),
+            ),
+          )
           .returning(),
     )
   ).unwrap();
@@ -415,7 +453,12 @@ test("the owner can revoke and grant consent and change a personal preference th
         await tx
           .update(billingDraftUserSettings)
           .set({ consentAt: new Date("2026-10-09T12:00:00Z") })
-          .where(eq(billingDraftUserSettings.userId, ids.userA1))
+          .where(
+            and(
+              eq(billingDraftUserSettings.organizationId, ids.orgA),
+              eq(billingDraftUserSettings.userId, ids.userA1),
+            ),
+          )
           .returning(),
     )
   ).unwrap();

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { DesktopBillingDraftRequest } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
@@ -88,6 +88,7 @@ if (!databaseUrl || !runPostgres) {
           aiBillingDraftsMode: "enabled",
         });
         await db.insert(billingDraftUserSettings).values({
+          organizationId,
           userId,
           consentAt: new Date("2026-10-01T12:00:00Z"),
           preference: "Concise narratives",
@@ -252,7 +253,11 @@ if (!databaseUrl || !runPostgres) {
         });
         await db
           .insert(billingDraftUserSettings)
-          .values({ userId, consentAt: new Date("2026-10-01T12:00:00Z") });
+          .values({
+            organizationId,
+            userId,
+            consentAt: new Date("2026-10-01T12:00:00Z"),
+          });
         const safeDb = createSafeDb(db, [], organizationId, userId);
         const disabled = await loadBillingDraftContext({
           safeDb,
@@ -284,7 +289,12 @@ if (!databaseUrl || !runPostgres) {
         await db
           .update(billingDraftUserSettings)
           .set({ consentAt: null })
-          .where(eq(billingDraftUserSettings.userId, userId));
+          .where(
+            and(
+              eq(billingDraftUserSettings.organizationId, organizationId),
+              eq(billingDraftUserSettings.userId, userId),
+            ),
+          );
         const revoked = await loadBillingDraftContext({
           safeDb,
           organizationId,
@@ -311,6 +321,171 @@ if (!databaseUrl || !runPostgres) {
         await db
           .delete(organization)
           .where(eq(organization.id, organizationId));
+        await db.delete(user).where(eq(user.id, userId));
+      }
+    });
+  });
+
+  test("consent granted in one organization does not authorize another organization", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db: rawDb } = openClient();
+      const db = markRlsDatabase(rawDb);
+      const organizationA = mintAuthProviderId<"organization">();
+      const organizationB = mintAuthProviderId<"organization">();
+      const userId = mintAuthProviderId<"user">();
+      try {
+        await db.insert(organization).values([
+          {
+            id: organizationA,
+            name: "Consent organization A",
+            slug: organizationA,
+            createdAt: new Date(),
+          },
+          {
+            id: organizationB,
+            name: "Consent organization B",
+            slug: organizationB,
+            createdAt: new Date(),
+          },
+        ]);
+        await db
+          .insert(user)
+          .values({
+            id: userId,
+            name: "Shared member",
+            email: `${userId}@example.test`,
+            emailVerified: true,
+          });
+        await db.insert(member).values([
+          {
+            id: mintAuthProviderIdValue(),
+            organizationId: organizationA,
+            userId,
+            role: "owner",
+            createdAt: new Date(),
+          },
+          {
+            id: mintAuthProviderIdValue(),
+            organizationId: organizationB,
+            userId,
+            role: "owner",
+            createdAt: new Date(),
+          },
+        ]);
+        await db.insert(organizationSettings).values([
+          {
+            id: createSafeId<"organizationSettings">(),
+            organizationId: organizationA,
+            aiBillingDraftsMode: "enabled",
+          },
+          {
+            id: createSafeId<"organizationSettings">(),
+            organizationId: organizationB,
+            aiBillingDraftsMode: "enabled",
+          },
+        ]);
+        await db.insert(billingDraftUserSettings).values([
+          {
+            organizationId: organizationA,
+            userId,
+            consentAt: new Date("2026-10-01T12:00:00Z"),
+            preference: "Organization A preference",
+          },
+          { organizationId: organizationB, userId, consentAt: null },
+        ]);
+
+        const result = await loadBillingDraftContext({
+          safeDb: createSafeDb(db, [], organizationB, userId),
+          organizationId: organizationB,
+          userId,
+          body: {
+            entries: [
+              {
+                matterId: createSafeId<"workspace">(),
+                date: today.toString(),
+                timezone: "Europe/Prague",
+                durationMinutes: 30,
+                appNames: [],
+              },
+            ],
+          },
+        });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.message).toContain(
+            "organization enablement and personal consent",
+          );
+        }
+        const settingsA = createSafeDb(db, [], organizationA, userId);
+        const settingsB = createSafeDb(db, [], organizationB, userId);
+        const initialB = (
+          await settingsB((tx) => tx.select().from(billingDraftUserSettings))
+        ).unwrap();
+        expect(initialB).toMatchObject([
+          { organizationId: organizationB, userId, consentAt: null },
+        ]);
+        await settingsB((tx) =>
+          tx
+            .update(billingDraftUserSettings)
+            .set({
+              consentAt: new Date("2026-10-02T12:00:00Z"),
+              preference: "Organization B preference",
+            })
+            .where(
+              and(
+                eq(billingDraftUserSettings.organizationId, organizationB),
+                eq(billingDraftUserSettings.userId, userId),
+              ),
+            ),
+        );
+        await settingsA((tx) =>
+          tx
+            .update(billingDraftUserSettings)
+            .set({ consentAt: null })
+            .where(
+              and(
+                eq(billingDraftUserSettings.organizationId, organizationA),
+                eq(billingDraftUserSettings.userId, userId),
+              ),
+            ),
+        );
+        const remainingB = (
+          await settingsB((tx) => tx.select().from(billingDraftUserSettings))
+        ).unwrap();
+        expect(remainingB).toMatchObject([
+          {
+            organizationId: organizationB,
+            userId,
+            consentAt: new Date("2026-10-02T12:00:00Z"),
+            preference: "Organization B preference",
+          },
+        ]);
+        const stillGranted = await loadBillingDraftContext({
+          safeDb: createSafeDb(db, [], organizationB, userId),
+          organizationId: organizationB,
+          userId,
+          body: {
+            entries: [
+              {
+                matterId: createSafeId<"workspace">(),
+                date: today.toString(),
+                timezone: "Europe/Prague",
+                durationMinutes: 30,
+                appNames: [],
+              },
+            ],
+          },
+        });
+        expect(stillGranted.isErr()).toBe(true);
+        if (stillGranted.isErr()) {
+          expect(stillGranted.error.message).toBe(
+            "Selected matter is unavailable",
+          );
+        }
+      } finally {
+        await db
+          .delete(organization)
+          .where(inArray(organization.id, [organizationA, organizationB]));
         await db.delete(user).where(eq(user.id, userId));
       }
     });
