@@ -375,25 +375,81 @@ const referencedFiles = (
   return rooted === undefined ? [] : [joined(cwd, rooted), rooted];
 };
 
+const ASSIGNMENT = /^\s*(?:(?:local|readonly|declare)\s+)?([A-Za-z_]\w*)=/u;
+
+/**
+ * Variables a script sets to its own directory, as in
+ * `here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"` or `$(dirname "$0")`.
+ */
+const scriptDirectoryVariables = (source: string): string[] =>
+  // Raw lines: logicalLines() replaces the `$(dirname ...)` body.
+  source.split("\n").flatMap((line) => {
+    const name = ASSIGNMENT.exec(line)?.[1];
+    return name !== undefined &&
+      line.includes("dirname") &&
+      (line.includes("BASH_SOURCE") || line.includes("$0"))
+      ? [name]
+      : [];
+  });
+
+const isPathCharacter = (character: string): boolean =>
+  /[\w./-]/u.test(character);
+
+/** `$here/x.sh` and `${here}/x.sh` for each script-directory variable. */
+const scriptDirectoryReferences = (
+  segment: string,
+  names: readonly string[],
+  dir: string,
+): string[] =>
+  names.flatMap((name) =>
+    [`$${name}/`, `\${${name}}/`].flatMap((prefix) => {
+      const files: string[] = [];
+      for (
+        let at = segment.indexOf(prefix);
+        at >= 0;
+        at = segment.indexOf(prefix, at + 1)
+      ) {
+        let end = at + prefix.length;
+        while (end < segment.length && isPathCharacter(segment[end] ?? "")) {
+          end += 1;
+        }
+        const file = segment.slice(at + prefix.length, end);
+        if (file.endsWith(".sh")) {
+          files.push(joined(dir, file));
+        }
+      }
+      return files;
+    }),
+  );
+
 /** Repository shell scripts a source invokes, resolved from the repo root. */
 const scriptReferences = (
   source: string,
   actionDir: string | null,
   cwd: string,
-): ScriptReference[] =>
-  logicalLines(source).flatMap((line) =>
+): ScriptReference[] => {
+  const directoryVariables =
+    actionDir === null ? [] : scriptDirectoryVariables(source);
+  return logicalLines(source).flatMap((line) =>
     segments(line).flatMap((segment) => {
       const wrapped = startsWithRetry(segment);
-      return [...segment.matchAll(SCRIPT_REFERENCE)].flatMap((match) =>
-        // Test scripts stub the network commands they exercise.
-        [...new Set(referencedFiles(match.groups ?? {}, actionDir, cwd))]
-          .filter(
-            (file) => !RETRY_SCRIPTS.has(file) && !file.endsWith(".test.sh"),
-          )
-          .map((file) => ({ file, wrapped })),
-      );
+      const files = [
+        ...[...segment.matchAll(SCRIPT_REFERENCE)].flatMap((match) =>
+          referencedFiles(match.groups ?? {}, actionDir, cwd),
+        ),
+        ...(actionDir === null
+          ? []
+          : scriptDirectoryReferences(segment, directoryVariables, actionDir)),
+      ];
+      // Test scripts stub the network commands they exercise.
+      return [...new Set(files)]
+        .filter(
+          (file) => !RETRY_SCRIPTS.has(file) && !file.endsWith(".test.sh"),
+        )
+        .map((file) => ({ file, wrapped }));
     }),
   );
+};
 
 type Repository = {
   read: (file: string) => string | null;

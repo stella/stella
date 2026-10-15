@@ -128,6 +128,7 @@ jobs:
           key: cargo-desktop-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
 
       - name: Fetch dependencies and advisory database
+        timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
         run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml db index

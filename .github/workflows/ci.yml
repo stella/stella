@@ -9301,6 +9301,7 @@ jobs:
       # schedule instead.
       - name: Fetch license audit inputs
         if: matrix.os == 'macos'
+        timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
         run: bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml

@@ -401,6 +401,34 @@ runs:
     ]);
   });
 
+  test("a script-directory variable resolves sibling scripts", () => {
+    const files = {
+      ".github/actions/tool/fetch.sh": `here="$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)"\nbash "$here/../../../scripts/retry.sh" bash "$here/fetch-once.sh" "$@"\n`,
+      ".github/actions/tool/fetch-once.sh":
+        "curl -fsSL https://example.com/tool -o tool\n",
+    };
+
+    expect(
+      check({
+        ...files,
+        [WORKFLOW]: workflow(`      - name: Fetch tool
+        run: bash .github/actions/tool/fetch.sh
+`),
+      }).errors,
+    ).toEqual([
+      `${WORKFLOW}: build: Fetch tool: curl (.github/actions/tool/fetch-once.sh) needs a step timeout-minutes`,
+    ]);
+    expect(
+      check({
+        ...files,
+        [WORKFLOW]: workflow(`      - name: Fetch tool
+        timeout-minutes: 5
+        run: bash .github/actions/tool/fetch.sh
+`),
+      }).errors,
+    ).toEqual([]);
+  });
+
   test("a composite step working-directory resolves relative scripts", () => {
     const report = check({
       ".github/actions/tool/action.yml": `name: Tool
