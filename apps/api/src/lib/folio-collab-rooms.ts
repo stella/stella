@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";
 import { CLIENT_MATTER_ADMIN_ROLES, roles } from "@stll/permissions";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
@@ -22,6 +23,11 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
+import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
+} from "@/api/lib/audit-log.constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -33,10 +39,18 @@ import {
   retirePublishedObjectCleanupIntentsInTransaction,
   settleObjectCleanupIntentsAfterWriterInTransaction,
 } from "@/api/lib/buffer-intent-reconciliation";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { FOLIO_COLLAB_SEED_TRANSITIONS } from "@/api/lib/db/transition-specs";
+import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import {
+  FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
+  loadPersistedFolioSnapshot,
+} from "@/api/lib/files/folio-collab-snapshot-loader";
 import { writeOrganizationFile } from "@/api/lib/files/organization-file-usage";
 import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -56,6 +70,7 @@ import {
 } from "@/api/lib/s3";
 import type { S3ObjectWriteCertainty } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { TENANT_SYSTEM_ACTOR } from "@/api/lib/system-audit/actors";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
@@ -517,9 +532,12 @@ export const touchFolioCollabRoom = async (
 ): Promise<TouchFolioCollabRoomResult> => {
   const touchedAt = new Date();
   return await value.scopedDb(async (tx) => {
-    await tx.execute(
-      sql`SELECT pg_advisory_xact_lock(hashtext(${value.workspaceId}))`,
-    );
+    await withAggregateLock({
+      aggregate: "workspace",
+      id: { id: value.workspaceId, organizationId: value.organizationId },
+      mode: "update",
+      tx,
+    });
     const workspaceRows = await tx
       .select({ status: workspaces.status })
       .from(workspaces)
@@ -590,6 +608,125 @@ export const touchFolioCollabRoom = async (
   });
 };
 
+type FolioCollabSnapshotLoadResult = Result<
+  FolioCollabSnapshotLoadResponse | null,
+  HandlerError
+>;
+
+type SnapshotRecoveryPointer = Pick<
+  typeof folioCollabRooms.$inferSelect,
+  "baseVersionId" | "generation" | "yjsSnapshotFileId" | "yjsSnapshotRevision"
+>;
+
+const recoverRefusedFolioSnapshot = async (
+  value: FolioCollabSnapshotTarget,
+  snapshotPointer: SnapshotRecoveryPointer,
+) => {
+  const recovered = await value.scopedDb(async (tx) => {
+    await withAggregateLock({
+      aggregate: "workspace",
+      id: { id: value.workspaceId, organizationId: value.organizationId },
+      mode: "update",
+      tx,
+    });
+    const generation = snapshotPointer.generation + 1;
+    const changed = await transitionScopedCount({
+      tx,
+      spec: FOLIO_COLLAB_SEED_TRANSITIONS,
+      where:
+        and(
+          eq(folioCollabRooms.id, value.roomId),
+          eq(folioCollabRooms.workspaceId, value.workspaceId),
+          eq(folioCollabRooms.generation, snapshotPointer.generation),
+          eq(
+            folioCollabRooms.yjsSnapshotFileId,
+            snapshotPointer.yjsSnapshotFileId,
+          ),
+          eq(
+            folioCollabRooms.yjsSnapshotRevision,
+            snapshotPointer.yjsSnapshotRevision,
+          ),
+        ) ?? panic("Snapshot recovery requires a room predicate"),
+      options: {
+        from: ["empty", "claimed", "seeded"],
+        to: "empty",
+        set: {
+          generation,
+          updatedAt: new Date(),
+          seedClaimedAt: null,
+          seedClaimedBy: null,
+          seededAt: null,
+          sourceVersionId: snapshotPointer.baseVersionId,
+          yjsSnapshotFileId: createSafeId<"userFile">(),
+          yjsSnapshotSizeBytes: null,
+          snapshotRecoveredAt: new Date(),
+          yjsSnapshotRevision: 0,
+          yjsSnapshotUpdatedAt: null,
+        },
+      },
+      recordTransitionAuditEvent: async (auditTx) => {
+        await auditTx.insert(bufferObjectCleanupIntents).values({
+          id: createSafeId<"pendingUpload">(),
+          nextAttemptAt: new Date(
+            Temporal.Now.instant().epochMilliseconds +
+              FOLIO_COLLAB_SNAPSHOT_CLEANUP_GRACE_MS,
+          ),
+          objectKey: createFileKey({
+            fileId: snapshotPointer.yjsSnapshotFileId,
+            mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+            organizationId: value.organizationId,
+            workspaceId: value.workspaceId,
+          }),
+          organizationId: value.organizationId,
+          status: BUFFER_OBJECT_CLEANUP_INTENT_STATUS.ORPHANED,
+          workspaceId: value.workspaceId,
+        });
+        const actor = TENANT_SYSTEM_ACTOR.folioCollaborationRecovery;
+        const recordAuditEvent = createBackgroundAuditRecorder({
+          organizationId: value.organizationId,
+          workspaceId: value.workspaceId,
+          userId: actor,
+          execution: {
+            performer: {
+              type: "service",
+              id: actor,
+              name: "Collaboration recovery",
+            },
+            trigger: { type: "system", source: actor },
+          },
+        });
+        await recordAuditEvent(auditTx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_ROOM,
+          resourceId: value.roomId,
+          changes: {
+            generation: {
+              old: snapshotPointer.generation,
+              new: generation,
+            },
+          },
+          metadata: {
+            kind: "snapshot-rematerialization",
+            snapshotRevision: snapshotPointer.yjsSnapshotRevision,
+          },
+        });
+      },
+    });
+    if (changed === 0) {
+      return null;
+    }
+    return { generation };
+  });
+  if (recovered !== null) {
+    return {
+      status: "reset",
+      generation: recovered.generation,
+      resetGeneration: snapshotPointer.generation,
+    } as const;
+  }
+  return { status: "replaced" } as const;
+};
+
 export const loadFolioCollabSnapshot = async (
   value: FolioCollabSnapshotTarget,
   readObject = readS3ObjectIfPresent,
@@ -598,6 +735,7 @@ export const loadFolioCollabSnapshot = async (
     const rooms = await value.scopedDb(async (tx) =>
       tx
         .select({
+          baseVersionId: folioCollabRooms.baseVersionId,
           generation: folioCollabRooms.generation,
           yjsSnapshotFileId: folioCollabRooms.yjsSnapshotFileId,
           yjsSnapshotRevision: folioCollabRooms.yjsSnapshotRevision,
@@ -615,57 +753,109 @@ export const loadFolioCollabSnapshot = async (
     return rooms.at(0) ?? null;
   };
 
-  let room = await readPointer();
-  if (!room) {
-    return null;
-  }
-  if (!room.yjsSnapshotUpdatedAt) {
-    return {
-      generation: room.generation,
-      snapshotBase64: null,
-      snapshotRevision: room.yjsSnapshotRevision,
-    };
-  }
-
-  const readSnapshot = async (fileId: SafeId<"userFile">) =>
-    await readObject(
-      createFileKey({
-        fileId,
-        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-        organizationId: value.organizationId,
-        workspaceId: value.workspaceId,
-      }),
-      AbortSignal.timeout(10_000),
-    );
-
-  let buffer = await readSnapshot(room.yjsSnapshotFileId);
-  if (buffer === null) {
-    const previousFileId = room.yjsSnapshotFileId;
-    room = await readPointer();
+  const loadCurrentSnapshot = async (
+    attempt: "initial" | "replacement",
+  ): Promise<FolioCollabSnapshotLoadResult> => {
+    let room = await readPointer();
     if (!room) {
-      return null;
+      return Result.ok(null);
     }
     if (!room.yjsSnapshotUpdatedAt) {
-      return {
+      return Result.ok({
         generation: room.generation,
+        loadOutcome: FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded,
         snapshotBase64: null,
         snapshotRevision: room.yjsSnapshotRevision,
-      };
+      });
     }
-    if (room.yjsSnapshotFileId === previousFileId) {
-      return panic("Current collaboration snapshot object is missing");
-    }
-    buffer = await readSnapshot(room.yjsSnapshotFileId);
-    if (buffer === null) {
-      return panic("Replacement collaboration snapshot object is missing");
-    }
-  }
 
-  return {
-    generation: room.generation,
-    snapshotBase64: Buffer.from(buffer).toString("base64"),
-    snapshotRevision: room.yjsSnapshotRevision,
+    const readSnapshot = async (fileId: SafeId<"userFile">) =>
+      await readObject(
+        createFileKey({
+          fileId,
+          mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+          organizationId: value.organizationId,
+          workspaceId: value.workspaceId,
+        }),
+        AbortSignal.timeout(10_000),
+      );
+
+    let buffer = await readSnapshot(room.yjsSnapshotFileId);
+    if (buffer === null) {
+      const previousFileId = room.yjsSnapshotFileId;
+      room = await readPointer();
+      if (!room) {
+        return Result.ok(null);
+      }
+      if (!room.yjsSnapshotUpdatedAt) {
+        return Result.ok({
+          generation: room.generation,
+          loadOutcome: FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded,
+          snapshotBase64: null,
+          snapshotRevision: room.yjsSnapshotRevision,
+        });
+      }
+      if (room.yjsSnapshotFileId === previousFileId) {
+        return panic("Current collaboration snapshot object is missing");
+      }
+      buffer = await readSnapshot(room.yjsSnapshotFileId);
+      if (buffer === null) {
+        return panic("Replacement collaboration snapshot object is missing");
+      }
+    }
+
+    const snapshotPointer = room;
+    const loadedResult = await loadPersistedFolioSnapshot({
+      snapshotBytes: new Uint8Array(buffer),
+      onRefused: async () =>
+        await recoverRefusedFolioSnapshot(value, snapshotPointer),
+    });
+
+    if (Result.isError(loadedResult)) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Collaborative snapshot could not be loaded.",
+          cause: loadedResult.error,
+        }),
+      );
+    }
+    const loaded = loadedResult.value;
+    switch (loaded.outcome) {
+      case FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded:
+        return Result.ok({
+          generation: room.generation,
+          loadOutcome: loaded.outcome,
+          snapshotBase64: Buffer.from(loaded.snapshotBytes).toString("base64"),
+          snapshotRevision: room.yjsSnapshotRevision,
+        });
+      case FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.rematerializeFromDocx:
+        return Result.ok({
+          generation: loaded.generation,
+          resetGeneration: loaded.resetGeneration,
+          loadOutcome: loaded.outcome,
+          snapshotBase64: null,
+          snapshotRevision: 0,
+        });
+      case "reload-current": {
+        if (attempt === "initial") {
+          return await loadCurrentSnapshot("replacement");
+        }
+        const error = new HandlerError({
+          status: 503,
+          code: "folio_collab_snapshot_recovery_conflict",
+          retryable: true,
+          message: "Collaborative snapshot changed during recovery.",
+        });
+        return Result.err(error);
+      }
+      default: {
+        loaded satisfies never;
+        return panic("Unhandled snapshot load outcome");
+      }
+    }
   };
+  return await loadCurrentSnapshot("initial");
 };
 
 export type StoreFolioCollabSnapshotResult =
@@ -869,9 +1059,12 @@ export const storeFolioCollabSnapshot = async ({
   const transactionResult = await Result.tryPromise({
     try: async () =>
       await value.scopedDb(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${value.workspaceId}))`,
-        );
+        await withAggregateLock({
+          aggregate: "workspace",
+          id: { id: value.workspaceId, organizationId: value.organizationId },
+          mode: "update",
+          tx,
+        });
         const workspaceRows = await tx
           .select({ status: workspaces.status })
           .from(workspaces)
@@ -927,6 +1120,7 @@ export const storeFolioCollabSnapshot = async ({
                   lastActivityAt: storedAt,
                   seededAt: storedAt,
                   seedState: "seeded",
+                  snapshotRecoveredAt: null,
                   yjsSnapshotFileId: nextSnapshotFileId,
                   yjsSnapshotRevision: room.yjsSnapshotRevision + 1,
                   yjsSnapshotSizeBytes: snapshotBytes.byteLength,
@@ -935,6 +1129,7 @@ export const storeFolioCollabSnapshot = async ({
               : {
                   lastActivityAt: storedAt,
                   seedState: "seeded",
+                  snapshotRecoveredAt: null,
                   yjsSnapshotFileId: nextSnapshotFileId,
                   yjsSnapshotRevision: room.yjsSnapshotRevision + 1,
                   yjsSnapshotSizeBytes: snapshotBytes.byteLength,
