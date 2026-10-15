@@ -39,6 +39,7 @@ describe("rewriting a search by itself", () => {
     query: "kdy je možné pro opilost vyhodit zaměstnance?",
     typedQuery: "kdy je možné pro opilost vyhodit zaměstnance? ",
     resultCount: 0,
+    isFirstPage: true,
     rowsAnswerQuery: true,
     rewrittenFrom: undefined,
     rewriteOff: false,
@@ -51,6 +52,7 @@ describe("rewriting a search by itself", () => {
 
   test.each([
     ["it found something", { resultCount: 3 }],
+    ["only a later page is empty", { isFirstPage: false }],
     ["the rows still answer the last search", { rowsAnswerQuery: false }],
     ["it is a browse or a lookup", { isTextSearch: false }],
     ["it is already a rewrite", { rewrittenFrom: "the original words" }],

@@ -70,7 +70,13 @@ type AutoRewriteInput = {
    * been searched yet.
    */
   typedQuery: string;
+  /** Rows on the page on screen. */
   resultCount: number;
+  /**
+   * The page on screen is the first. Only an empty first page says the
+   * search matched nothing; a later page can be empty while matches exist.
+   */
+  isFirstPage: boolean;
   /** The rows on screen answer this query, not an earlier one. */
   rowsAnswerQuery: boolean;
   /** The page already shows a rewrite: never rewrite a rewrite. */
@@ -94,6 +100,7 @@ export const shouldAutoRewrite = ({
   query,
   typedQuery,
   resultCount,
+  isFirstPage,
   rowsAnswerQuery,
   rewrittenFrom,
   rewriteOff,
@@ -102,6 +109,7 @@ export const shouldAutoRewrite = ({
   isTextSearch &&
   rowsAnswerQuery &&
   typedQuery.trim() === query.trim() &&
+  isFirstPage &&
   resultCount === 0 &&
   rewrittenFrom === undefined &&
   !rewriteOff &&

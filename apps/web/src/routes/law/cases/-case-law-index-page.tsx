@@ -651,6 +651,7 @@ export function PublicCaseLawIndex({
     isTextSearch: intent.type === "text",
     query: queryInput,
     resultCount: decisions.length,
+    isFirstPage: pager.currentPage === 1,
     rowsAnswerQuery: rows === "rows",
     search: { ...search, ...rewriteState },
     searchNavigation,
@@ -866,6 +867,7 @@ type CaseLawRewriteFlowOptions = {
   /** What the box holds now. */
   query: string;
   resultCount: number;
+  isFirstPage: boolean;
   rowsAnswerQuery: boolean;
   search: CaseLawIndexSearch;
   searchNavigation: (
@@ -886,6 +888,7 @@ const useCaseLawRewriteFlow = ({
   isTextSearch,
   query,
   resultCount,
+  isFirstPage,
   rowsAnswerQuery,
   search,
   searchNavigation,
@@ -922,6 +925,7 @@ const useCaseLawRewriteFlow = ({
     query: search.q ?? "",
     typedQuery: query,
     resultCount,
+    isFirstPage,
     rowsAnswerQuery,
     rewrittenFrom: search.rewrittenFrom,
     rewriteOff: search.rewrite === "off",
