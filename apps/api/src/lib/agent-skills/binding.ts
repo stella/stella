@@ -61,7 +61,6 @@ export const resolveSkillBindingScope = async ({
     return Result.ok(NO_SKILL_BINDING_SCOPE);
   }
   const matterIds = [...new Set([homeWorkspaceId, ...otherWorkspaceIds])];
-  const matterId = matterIds.length === 1 ? homeWorkspaceId : null;
 
   const rows = await safeDb((tx) =>
     tx
@@ -73,12 +72,14 @@ export const resolveSkillBindingScope = async ({
   if (Result.isError(rows)) {
     return Result.err(rows.error);
   }
+  // Both bindings hold only over matters the caller can read right now.
+  const everyMatterReadable = rows.value.length === matterIds.length;
+  const matterId =
+    everyMatterReadable && matterIds.length === 1 ? homeWorkspaceId : null;
   const clientIds = new Set(rows.value.map(({ clientId }) => clientId));
   const [onlyClientId] = [...clientIds];
   const clientId =
-    rows.value.length === matterIds.length &&
-    clientIds.size === 1 &&
-    onlyClientId !== undefined
+    everyMatterReadable && clientIds.size === 1 && onlyClientId !== undefined
       ? onlyClientId
       : null;
 

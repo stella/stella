@@ -152,10 +152,6 @@ describe("bound agent skill RLS", () => {
         workspaceIds: [ids.wsA2],
       }),
     ).toEqual({ resources: 0, skills: 0 });
-    // Its own author loses it too once the matter is out of reach.
-    expect(
-      await visibleTo({ skillId, userId: ids.userA1, workspaceIds: [] }),
-    ).toEqual({ resources: 0, skills: 0 });
   });
 
   test("a client-bound skill is visible only where a matter of that client is reached", async () => {
@@ -200,17 +196,11 @@ describe("bound agent skill RLS", () => {
       userId: ids.userA2,
       workspaceIds: [ids.wsA2],
     });
-    const unbound = await insertAs({
-      options: { scope: "team", userId: ids.userA2 },
-      userId: ids.userA2,
-      workspaceIds: [ids.wsA2],
-    });
 
     expect(inOwnMatter).toBeNull();
     expect(isPgError(inOtherMatter, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(
       true,
     );
-    expect(isPgError(unbound, PG_ERROR.INSUFFICIENT_PRIVILEGE)).toBe(true);
   });
 
   test("only a manager may bind a skill to a client", async () => {

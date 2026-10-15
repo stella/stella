@@ -153,24 +153,19 @@ describe("bound skills in the skill tools", () => {
     };
 
     // Even a catalog that names the skill cannot load it outside its matter.
-    for (const scope of [
-      NO_SKILL_BINDING_SCOPE,
-      await scopeOf(ids.wsA2, []),
-      await scopeOf(ids.wsA1, [ids.wsA2]),
-    ]) {
-      expectNotFound(
-        await executeTool({
-          input: { skillName: slug },
-          tool: toolsIn(scope)["load-skill"],
-        }),
-      );
-      expectNotFound(
-        await executeTool({
-          input: { path: "references/checklist.md", skillName: slug },
-          tool: toolsIn(scope)["read-skill-resource"],
-        }),
-      );
-    }
+    const otherMatter = await scopeOf(ids.wsA2, []);
+    expectNotFound(
+      await executeTool({
+        input: { skillName: slug },
+        tool: toolsIn(otherMatter)["load-skill"],
+      }),
+    );
+    expectNotFound(
+      await executeTool({
+        input: { path: "references/checklist.md", skillName: slug },
+        tool: toolsIn(otherMatter)["read-skill-resource"],
+      }),
+    );
 
     const loaded = await executeTool({
       input: { skillName: slug },

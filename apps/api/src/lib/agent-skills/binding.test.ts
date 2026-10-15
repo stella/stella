@@ -113,6 +113,13 @@ describe("resolveSkillBindingScope", () => {
     }
   });
 
+  test("a home matter the caller cannot read allows unbound skills only", async () => {
+    const scope = await scopeOf(matterA, [], []);
+    expect(skillBindingAllows(scope, boundTo.matterA)).toBe(false);
+    expect(skillBindingAllows(scope, boundTo.clientX)).toBe(false);
+    expect(skillBindingAllows(scope, UNBOUND)).toBe(true);
+  });
+
   test("a personal matter (no client) allows no client binding", async () => {
     const scope = await scopeOf(matterA, [], [{ clientId: null, id: matterA }]);
     expect(skillBindingAllows(scope, boundTo.matterA)).toBe(true);
