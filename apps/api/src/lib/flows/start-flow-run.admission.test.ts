@@ -75,7 +75,7 @@ const selectManualFixtureRows = (projection: Record<string, unknown>) => {
     for: resolveRows,
     limit: resolveRows,
   });
-  return { from: () => query };
+  return { from: async () => query };
 };
 
 // Organization-scoped writes open a savepoint on the caller transaction; the
