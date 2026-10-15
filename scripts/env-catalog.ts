@@ -1353,6 +1353,9 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // Invocation-local handoff values are removed before test/native entry points run.
+  "STELLA_TEST_PROCESS_STARTUP_GATE",
+  "STELLA_TEST_NATIVE_COMMAND",
   // Windows dry-run receipts bind the build profile and executed workflow revision.
   "WINDOWS_BUILD_PROFILE",
   "WINDOWS_WORKFLOW_SHA",
@@ -1637,6 +1640,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "ImageVersion",
   // Internal handoff between the code-quality supervisor and its process group.
   "CODE_QUALITY_PROCESS_GROUP",
+  // Lowers the code-check Turbo task count; the pre-push check sets it to 1.
+  "CODE_CHECK_CONCURRENCY",
   // CI installer budget selected from restored package-cache contents.
   "CI_INSTALL_CACHE_RESTORED",
   "CI_POSTGRES_TEST_SELECTION",

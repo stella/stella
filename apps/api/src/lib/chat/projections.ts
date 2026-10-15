@@ -2615,6 +2615,7 @@ export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
+  matterNumberingEnabled: v.optional(v.boolean()),
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),

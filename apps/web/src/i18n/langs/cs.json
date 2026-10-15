@@ -2935,6 +2935,7 @@
     "checkingDocxEditDescription": "stella ještě ověřuje, jestli lze tento DOCX bezpečně upravovat. Zkuste to znovu, až se dokument načte.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
     "chooseEvidence": "Vyberte soubor pro vložení číslovaného odkazu na důkaz.",
+    "collaborationSnapshotRecovered": "Uloženou kopii pro spolupráci se nepodařilo znovu otevřít. Místnost byla obnovena z posledního uloženého dokumentu; neuložené změny mohly být ztraceny.",
     "comment": "Komentář",
     "comments": {
       "addPlaceholder": "Přidat komentář...",
@@ -4349,6 +4350,8 @@
         "yearMonthSequential": "Rok-měsíc / průběžné (2026-02/001)",
         "yearSequential": "Rok / průběžné (2026/001)"
       },
+      "showInTitle": "Zobrazit číslo vedle názvu spisu",
+      "showInTitleDescription": "Když je vypnuté, název je přesně ten, který jste zadali.",
       "title": "Číslování spisů",
       "tokenHelp": "Dostupné tokeny: '{'SEQ'}' (pořadí), '{'YYYY'}' (rok), '{'YY'}' (dvouciferný rok), '{'MM'}' (měsíc)"
     },
@@ -4982,17 +4985,22 @@
     "provisionAskSummarize": "Shrnout, jak soudy toto ustanovení používají",
     "provisionAskSummarizePrompt": "Shrň, jak soudy používají {subject}, a cituj rozhodnutí, ze kterých vycházíš.",
     "provisionDetailsFor": "Podrobnosti k {provision}",
+    "provisionEffectiveFrom": "účinné od {date}",
     "provisionHistoryEarliest": "Nejstarší dochované znění.",
     "provisionHistoryEmpty": "K tomuto ustanovení není dochováno žádné znění.",
     "provisionHistoryLoadOlder": "Načtěte starší znění a porovnejte je.",
     "provisionHistoryUnavailable": "Historii tohoto ustanovení se nepodařilo načíst.",
+    "provisionPartTextUnavailable": "Znění {provisionLabel} není k dispozici",
     "provisionPromptSubject": "{provision} předpisu {statute} ({eli}) ve znění účinném od {date}",
     "provisionPromptSubjectUndated": "{provision} předpisu {statute} ({eli})",
+    "provisionTextUnavailable": "Text není pro toto znění k dispozici",
     "publisherWindowInconsistent": "K tomuto dni nelze určit účinné znění: údaje vydavatele si odporují.",
     "resolvedAlias": "Rozpoznáno jako {label}",
     "searchAskPrompt": "{query} (právní předpisy: {country})",
     "searchLabel": "Hledat v právních předpisech",
     "searchPlaceholder": "Číslo, zkratka nebo název, např. 89/2012 Sb.",
+    "showCitedPartOnly": "Zobrazit jen citovanou část",
+    "showFullProvision": "Zobrazit celé ustanovení",
     "showInText": "Zobrazit v textu",
     "statedWindow": "Data uvedená vydavatelem: {range}",
     "status": {
@@ -5008,7 +5016,6 @@
     "title": "Právní předpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znění použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Znění účinné od {date}",
     "wordingVersionUnknown": "Datum verze znění není k dispozici"
   },
   "styleSets": {
@@ -5682,7 +5689,7 @@
       "title": "Kopírovat do spisu"
     },
     "create": {
-      "ownerTypeToggle": "Typ spisu",
+      "matterName": "Název spisu",
       "personalDescription": "Osobní spisy jsou soukromé a nepotřebují klienta. Později je můžete povýšit a sdílet s týmem."
     },
     "createNewWorkspace": "Vytvořit nový spis",
@@ -6134,15 +6141,12 @@
       "upcomingTasks": "Nadcházející agenda",
       "uploaded": "nahrál(a)"
     },
-    "ownerType": {
-      "client": "Klient",
-      "personal": "Osobní"
-    },
     "parties": {
       "addParty": "Přidat stranu",
       "changeClient": "Změnit klienta",
       "client": "Klient",
       "noClient": "Žádný klient nepřiřazen",
+      "noClientOptional": "Bez klienta (volitelné)",
       "noParties": "K tomuto spisu nejsou přidány žádné strany.",
       "partyRoles": {
         "co_counsel": "Spolupracující advokát",
