@@ -11,6 +11,7 @@ type Run = {
   event: string;
   path: string;
   status: string;
+  conclusion?: string | null;
   head_sha: string;
   html_url: string;
   head_repository: { full_name: string } | null;
@@ -27,7 +28,14 @@ const prRun = (id: number, overrides: Partial<Run> = {}): Run => ({
   ...overrides,
 });
 
-const fake = (runs: Run[], { refuseCancel = false } = {}) => {
+const fake = (
+  runs: Run[],
+  {
+    refuseCancel = false,
+    afterFailedCancel,
+  }: { refuseCancel?: boolean; afterFailedCancel?: Partial<Run> } = {},
+) => {
+  let cancelFailed = false;
   const calls: string[] = [];
   const statuses: { sha: string; state: string; description: string }[] = [];
   const request = async (args: readonly string[], input?: unknown) => {
@@ -50,12 +58,14 @@ const fake = (runs: Run[], { refuseCancel = false } = {}) => {
     }
     if (endpoint?.endsWith("/cancel")) {
       if (refuseCancel) {
-        throw new Error("cancel refused");
+        cancelFailed = true;
+        throw new Error("cancel request failed");
       }
       return null;
     }
     const id = Number(endpoint?.split("/").at(-1));
-    return runs.find((run) => run.id === id);
+    const run = runs.find((candidate) => candidate.id === id);
+    return cancelFailed && run ? { ...run, ...afterFailedCancel } : run;
   };
   return { request, calls, statuses };
 };
@@ -74,11 +84,36 @@ test("a relief cancellation records the deferral before cancelling", async () =>
 });
 
 test("a refused cancellation clears the deferral record", async () => {
-  const { request, statuses } = fake([prRun(8)], { refuseCancel: true });
+  const { request, statuses } = fake([prRun(8)], {
+    refuseCancel: true,
+    afterFailedCancel: { status: "completed", conclusion: "success" },
+  });
   expect(await reliefCancel([8], request)).toEqual([
     { runId: 8, outcome: "skipped", reason: "cancel refused" },
   ]);
   expect(statuses.map(({ state }) => state)).toEqual(["pending", "success"]);
+});
+
+test("a cancellation that took effect despite a failed request keeps its record", async () => {
+  const { request, statuses } = fake([prRun(11)], {
+    refuseCancel: true,
+    afterFailedCancel: { status: "completed", conclusion: "cancelled" },
+  });
+  expect(await reliefCancel([11], request)).toEqual([
+    { runId: 11, outcome: "deferred", headSha: "head-11" },
+  ]);
+  expect(statuses.map(({ state }) => state)).toEqual(["pending"]);
+});
+
+test("a run still active after a failed request keeps its record and is reported", async () => {
+  const { request, statuses } = fake([prRun(12)], {
+    refuseCancel: true,
+    afterFailedCancel: { status: "in_progress" },
+  });
+  expect(await reliefCancel([12], request)).toEqual([
+    { runId: 12, outcome: "uncertain", headSha: "head-12" },
+  ]);
+  expect(statuses.map(({ state }) => state)).toEqual(["pending"]);
 });
 
 test.each([
