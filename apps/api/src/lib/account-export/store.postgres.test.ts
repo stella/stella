@@ -181,6 +181,47 @@ describe.skipIf(!enabled)("account export lifecycle", () => {
           "account.data_export.ready",
           "account.data_export.requested",
         ]);
+        // As the application role, another account sees no row for this
+        // export's id and cannot record a download of it.
+        const otherAccount = await db.transaction(async (tx) => {
+          await tx.execute(sql`SET LOCAL ROLE stella`);
+          await tx.execute(
+            sql`SELECT set_config('app.user_id', ${recoveryUserId}, true)`,
+          );
+          return await tx
+            .select({ id: accountExports.id })
+            .from(accountExports)
+            .where(eq(accountExports.id, requested.id));
+        });
+        expect(otherAccount).toEqual([]);
+        expect(
+          await readAccountExport({
+            id: requested.id,
+            userId: recoveryUserId,
+            db,
+          }),
+        ).toBeNull();
+        expect(
+          await recordAccountExportDownload({
+            id: requested.id,
+            userId: recoveryUserId,
+            db,
+          }),
+        ).toBeNull();
+        const downloadsAfter = await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.user_id', ${userId}, true)`,
+          );
+          return await tx
+            .select({ eventType: accountAuditLogs.eventType })
+            .from(accountAuditLogs)
+            .where(eq(accountAuditLogs.resourceId, requested.id));
+        });
+        expect(
+          downloadsAfter.filter(
+            ({ eventType }) => eventType === "account.data_export.downloaded",
+          ),
+        ).toHaveLength(2);
         await db.transaction(async (tx) => {
           await tx
             .update(accountExports)
