@@ -236,6 +236,34 @@ describe("contact import by external ref", () => {
     expect(await storedContacts(tenant.organizationId)).toHaveLength(1);
   });
 
+  test("a re-imported ref updates its own contact whatever id the row carries", async () => {
+    const tenant = await createTenant("Ref with another id");
+    const ref = { source: "address-book", id: "R-1" };
+    const [byRef, plain] = await runImport(tenant, [
+      person("By ref", ref),
+      person("Plain"),
+    ]);
+    if (byRef?.status !== "created" || plain?.status !== "created") {
+      return panic("Both seed contacts must be created");
+    }
+
+    const results = await runImport(tenant, [
+      { ...person("By ref, renamed", ref), id: plain.contactId },
+      person("New"),
+    ]);
+    expect(results.map(({ status }) => status)).toEqual(["updated", "created"]);
+    expect(results.at(0)).toMatchObject({ contactId: byRef.contactId });
+
+    const stored = await storedContacts(tenant.organizationId);
+    expect(stored).toHaveLength(3);
+    expect(stored.find(({ id }) => id === byRef.contactId)?.displayName).toBe(
+      "By ref, renamed",
+    );
+    expect(stored.find(({ id }) => id === plain.contactId)?.displayName).toBe(
+      "Plain",
+    );
+  });
+
   test("an updated contact's own tax id is not a duplicate", async () => {
     const tenant = await createTenant("Tax id");
     const ref = { source: "address-book", id: "T-1" };

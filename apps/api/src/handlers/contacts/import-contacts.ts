@@ -272,7 +272,16 @@ const planImportWrites = async ({
   for (const candidate of validatedRows) {
     const reason = skipReasonFor(candidate);
     if (reason === null) {
-      rowsToWrite.push(candidate);
+      // An update writes under the stored contact's id: the caller's id
+      // might belong to another contact, and the ref upsert can only absorb
+      // a conflict on the ref itself.
+      const existingId =
+        candidate.external === null
+          ? null
+          : (existingIdByRef.get(externalRefKey(candidate.external)) ?? null);
+      rowsToWrite.push(
+        existingId === null ? candidate : { ...candidate, id: existingId },
+      );
       continue;
     }
     resultByIndex.set(candidate.index, {
