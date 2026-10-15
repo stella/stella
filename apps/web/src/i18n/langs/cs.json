@@ -2074,6 +2074,7 @@
     "versionLabel": "Verze {version}",
     "viewSource": "Zobrazit zdroj",
     "website": "Web",
+    "whenToUse": "Kdy použít",
     "workflow": "Pracovní postup",
     "workflows": "Pracovní postupy",
     "zoomIn": "Přiblížit",
@@ -3649,9 +3650,7 @@
       "invalidPath": "Cesta smí obsahovat pouze malá písmena, číslice, tečky, pomlčky nebo podtržítka",
       "invocationAuto": "Automaticky",
       "invocationAutoHelp": "AI může tuto dovednost použít sama, když se hodí k požadavku.",
-      "invocationLabel": "Kdy použít",
       "invocationManual": "Jen na vyžádání",
-      "invocationManualBadge": "Ručně",
       "invocationManualHelp": "Použije se jen tehdy, když ji spustíte přes / nebo ji přidáte do zprávy.",
       "license": "Licence: {license}",
       "newFile": "Nový soubor",
@@ -5555,7 +5554,6 @@
     "viewVersion": "Zobrazit",
     "whenNotToUse": "Kdy nepoužívat",
     "whenNotToUsePlaceholder": "Kdy tento vzor nepoužít?",
-    "whenToUse": "Kdy použít",
     "whenToUsePlaceholder": "Kdy se má tento vzor použít? (pomáhá AI s výběrem vzoru)"
   },
   "timesheets": {

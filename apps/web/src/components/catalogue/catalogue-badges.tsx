@@ -75,7 +75,7 @@ export const ManualInvocationBadge = () => {
       content={t("knowledge.agentSkills.invocationManualHelp")}
       render={
         <span className="border-border text-muted-foreground inline-flex items-center rounded-md border px-1.5 py-0.5 text-xs font-medium">
-          {t("knowledge.agentSkills.invocationManualBadge")}
+          {t("flows.trigger.manual")}
         </span>
       }
     />

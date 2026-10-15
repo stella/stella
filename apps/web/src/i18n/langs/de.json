@@ -2074,6 +2074,7 @@
     "versionLabel": "Version {version}",
     "viewSource": "Quelle anzeigen",
     "website": "Webseite",
+    "whenToUse": "Wann verwenden",
     "workflow": "Arbeitsablauf",
     "workflows": "Workflows",
     "zoomIn": "Vergrößern",
@@ -3649,9 +3650,7 @@
       "invalidPath": "Der Pfad darf nur Kleinbuchstaben, Ziffern, Punkte, Bindestriche oder Unterstriche enthalten",
       "invocationAuto": "Automatisch",
       "invocationAutoHelp": "Die KI kann diesen Skill selbstständig verwenden, wenn er zur Anfrage passt.",
-      "invocationLabel": "Wann verwenden",
       "invocationManual": "Nur auf Abruf",
-      "invocationManualBadge": "Manuell",
       "invocationManualHelp": "Wird nur verwendet, wenn Sie ihn mit / aufrufen oder Ihrer Nachricht hinzufügen.",
       "license": "Lizenz: {license}",
       "newFile": "Neue Datei",
@@ -5555,7 +5554,6 @@
     "viewVersion": "Anzeigen",
     "whenNotToUse": "Wann nicht verwenden",
     "whenNotToUsePlaceholder": "Wann sollte diese Vorlage nicht verwendet werden?",
-    "whenToUse": "Wann verwenden",
     "whenToUsePlaceholder": "Wann sollte diese Vorlage verwendet werden? (hilft der KI bei der Vorlagenauswahl)"
   },
   "timesheets": {

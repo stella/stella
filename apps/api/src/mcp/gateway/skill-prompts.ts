@@ -1,9 +1,9 @@
-import { ProtocolError, ProtocolErrorCode } from "@modelcontextprotocol/server";
 import type {
   GetPromptResult,
   Prompt,
   PromptMessage,
 } from "@modelcontextprotocol/server";
+import { Result, TaggedError } from "better-result";
 
 import {
   recordSkillReadAudit,
@@ -74,6 +74,12 @@ export const listSkillPrompts = async ({
   );
 };
 
+export class UnknownSkillPromptError extends TaggedError(
+  "UnknownSkillPromptError",
+)<{
+  message: string;
+}> {}
+
 /**
  * One skill prompt: the skill's instructions, its resource files embedded up
  * to a budget, and the user's request. Every file read is audited like a
@@ -90,21 +96,25 @@ export const getSkillPrompt = async ({
   context: McpRequestContext;
   mode: McpMode;
   name: string;
-}): Promise<GetPromptResult> => {
+}): Promise<Result<GetPromptResult, UnknownSkillPromptError>> => {
   const skill = servesSkillPrompts({ mode, scopes: context.grantedScopes })
     ? ((
         await loadSkillPrompts({ context, mode, scopes: context.grantedScopes })
       ).find(({ exposedName }) => exposedName === name) ?? null)
     : null;
   if (skill === null) {
-    throw unknownPromptError(name);
+    return Result.err(
+      new UnknownSkillPromptError({ message: `Unknown prompt: ${name}` }),
+    );
   }
 
   const read = await readSkillTool({ context, resourcePath: undefined, skill });
   if (read?.type !== SKILL_TOOL_READ_TYPE.skill) {
     // Disabled or deleted between listing and this read.
     await auditReads({ context, paths: [null], skill, success: false });
-    throw unknownPromptError(name);
+    return Result.err(
+      new UnknownSkillPromptError({ message: `Unknown prompt: ${name}` }),
+    );
   }
 
   const embedded = await embedResources({
@@ -145,7 +155,7 @@ export const getSkillPrompt = async ({
       role: "user",
     })),
   ];
-  return { description: skill.description, messages };
+  return Result.ok({ description: skill.description, messages });
 };
 
 const servesSkillPrompts = ({
@@ -216,6 +226,3 @@ const auditReads = async ({
     recordAuditEvent: context.recordAuditEvent,
     safeDb: context.safeDb,
   });
-
-const unknownPromptError = (name: string) =>
-  new ProtocolError(ProtocolErrorCode.InvalidParams, `Unknown prompt: ${name}`);

@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 2,
+  "reason": "One assertion mints the model-offered skill brand after filtering. MCP prompt resource reads await sequentially because the remaining byte budget determines whether the next resource may be read. Both exceptions name their specific lint rule at the owning statement."
+}

@@ -2074,6 +2074,7 @@
     "versionLabel": "Wersja {version}",
     "viewSource": "Zobacz źródło",
     "website": "Witryna",
+    "whenToUse": "Kiedy używać",
     "workflow": "Przepływ pracy",
     "workflows": "Przepływy pracy",
     "zoomIn": "Powiększ",
@@ -3649,9 +3650,7 @@
       "invalidPath": "Ścieżka może zawierać tylko małe litery, cyfry, kropki, łączniki i podkreślenia",
       "invocationAuto": "Automatycznie",
       "invocationAutoHelp": "AI może sama użyć tej umiejętności, gdy pasuje do prośby.",
-      "invocationLabel": "Kiedy używać",
       "invocationManual": "Tylko na żądanie",
-      "invocationManualBadge": "Ręcznie",
       "invocationManualHelp": "Używana tylko wtedy, gdy wywołasz ją przez / lub dodasz do wiadomości.",
       "license": "Licencja: {license}",
       "newFile": "Nowy plik",
@@ -5555,7 +5554,6 @@
     "viewVersion": "Podgląd",
     "whenNotToUse": "Kiedy nie używać",
     "whenNotToUsePlaceholder": "Kiedy unikać tego szablonu?",
-    "whenToUse": "Kiedy używać",
     "whenToUsePlaceholder": "Kiedy należy używać tego szablonu? (pomaga AI w wyborze szablonu)"
   },
   "timesheets": {

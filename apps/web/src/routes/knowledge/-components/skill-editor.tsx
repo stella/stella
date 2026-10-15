@@ -926,13 +926,14 @@ function SkillInvocationField({
   value: SkillInvocation;
 }) {
   const tSkills = useTranslations("knowledge.agentSkills");
+  const tCommon = useTranslations("common");
   return (
     <>
       <label
         className="text-muted-foreground pt-1.5 text-xs"
         htmlFor="edit-skill-invocation"
       >
-        {tSkills("invocationLabel")}
+        {tCommon("whenToUse")}
       </label>
       <div className="flex flex-col gap-1">
         <Select

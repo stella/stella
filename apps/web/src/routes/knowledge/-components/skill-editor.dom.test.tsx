@@ -157,7 +157,7 @@ const mount = ({
 
 const invocationControl = () =>
   screen.getByRole("combobox", {
-    name: messages.knowledge.agentSkills.invocationLabel,
+    name: messages.common.whenToUse,
   });
 
 const choose = async (optionName: string) => {

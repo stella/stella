@@ -1,4 +1,6 @@
 import {
+  ProtocolError,
+  ProtocolErrorCode,
   createMcpHandler,
   isInitializeRequest,
   isLegacyRequest,
@@ -1042,16 +1044,21 @@ export const createMcpHttpRequestHandler = ({
       }),
     }));
 
-    server.setRequestHandler(
-      "prompts/get",
-      async (promptRequest) =>
-        await getSkillPrompt({
-          args: promptRequest.params.arguments,
-          context,
-          mode,
-          name: promptRequest.params.name,
-        }),
-    );
+    server.setRequestHandler("prompts/get", async (promptRequest) => {
+      const prompt = await getSkillPrompt({
+        args: promptRequest.params.arguments,
+        context,
+        mode,
+        name: promptRequest.params.name,
+      });
+      if (Result.isError(prompt)) {
+        throw new ProtocolError(
+          ProtocolErrorCode.InvalidParams,
+          prompt.error.message,
+        );
+      }
+      return prompt.value;
+    });
 
     server.setRequestHandler(
       "tools/call",

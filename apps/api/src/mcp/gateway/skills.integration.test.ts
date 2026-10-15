@@ -1,9 +1,6 @@
-import { ProtocolError } from "@modelcontextprotocol/server";
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
-
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -17,6 +14,7 @@ import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
   getSkillPrompt,
   listSkillPrompts,
+  UnknownSkillPromptError,
 } from "@/api/mcp/gateway/skill-prompts";
 import {
   loadVisibleSkillTools,
@@ -362,12 +360,14 @@ describe("MCP skill tools against the database", () => {
       await listSkillPrompts({ context, mode: "default", scopes: [] }),
     ).toEqual([]);
 
-    const prompt = await getSkillPrompt({
-      args: { request: "Check the lease." },
-      context,
-      mode: "default",
-      name,
-    });
+    const prompt = (
+      await getSkillPrompt({
+        args: { request: "Check the lease." },
+        context,
+        mode: "default",
+        name,
+      })
+    ).unwrap();
     const [instructions, resource] = prompt.messages;
     expect(instructions?.content).toMatchObject({ type: "text" });
     expect(
@@ -407,20 +407,23 @@ describe("MCP skill tools against the database", () => {
     );
   });
 
-  test("an unknown prompt name is an invalid-params error", async () => {
+  test("an unknown prompt name returns a typed error", async () => {
     const { context } = createRecordingContext(ids.userA1);
-    expect(
-      await rejectionOf(
-        getSkillPrompt({
-          args: undefined,
-          context: asTestRaw<McpRequestContext>({
-            ...context,
-            grantedScopes: ["stella:skills"],
-          }),
-          mode: "default",
-          name: "skill__does_not_exist",
-        }),
-      ),
-    ).toBeInstanceOf(ProtocolError);
+    const result = await getSkillPrompt({
+      args: undefined,
+      context: asTestRaw<McpRequestContext>({
+        ...context,
+        grantedScopes: ["stella:skills"],
+      }),
+      mode: "default",
+      name: "skill__does_not_exist",
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error).toBeInstanceOf(UnknownSkillPromptError);
+      expect(result.error.message).toBe(
+        "Unknown prompt: skill__does_not_exist",
+      );
+    }
   });
 });

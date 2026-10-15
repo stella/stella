@@ -2074,6 +2074,7 @@
     "versionLabel": "{version} versija",
     "viewSource": "Žiūrėti šaltinį",
     "website": "Svetainė",
+    "whenToUse": "Kada naudoti",
     "workflow": "Darbo eiga",
     "workflows": "Darbo eigos",
     "zoomIn": "Priartinti",
@@ -3649,9 +3650,7 @@
       "invalidPath": "Kelyje galima naudoti tik mažąsias raides, skaitmenis, taškus, brūkšnelius arba pabraukimus",
       "invocationAuto": "Automatiškai",
       "invocationAutoHelp": "DI gali pats naudoti šį įgūdį, kai jis tinka užklausai.",
-      "invocationLabel": "Kada naudoti",
       "invocationManual": "Tik iškvietus",
-      "invocationManualBadge": "Rankinis",
       "invocationManualHelp": "Naudojamas tik tada, kai iškviečiate jį su / arba pridedate prie savo žinutės.",
       "license": "Licencija: {license}",
       "newFile": "Naujas failas",
@@ -5555,7 +5554,6 @@
     "viewVersion": "Peržiūrėti",
     "whenNotToUse": "Kada nenaudoti",
     "whenNotToUsePlaceholder": "Kada šio šablono vengti?",
-    "whenToUse": "Kada naudoti",
     "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda DI pasirinkti šabloną)"
   },
   "timesheets": {

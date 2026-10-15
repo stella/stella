@@ -2074,6 +2074,7 @@
     "versionLabel": "Versioon {version}",
     "viewSource": "Vaata allikat",
     "website": "Veebisait",
+    "whenToUse": "Millal kasutada",
     "workflow": "Töövoog",
     "workflows": "Töövood",
     "zoomIn": "Suumi sisse",
@@ -3649,9 +3650,7 @@
       "invalidPath": "Tee tohib sisaldada ainult väiketähti, numbreid, punkte, sidekriipse või allkriipse",
       "invocationAuto": "Automaatselt",
       "invocationAutoHelp": "AI võib seda oskust ise kasutada, kui see päringuga sobib.",
-      "invocationLabel": "Millal kasutada",
       "invocationManual": "Ainult käivitamisel",
-      "invocationManualBadge": "Käsitsi",
       "invocationManualHelp": "Kasutatakse ainult siis, kui käivitate selle märgiga / või lisate selle oma sõnumisse.",
       "license": "Litsents: {license}",
       "newFile": "Uus fail",
@@ -5555,7 +5554,6 @@
     "viewVersion": "Vaata",
     "whenNotToUse": "Millal mitte kasutada",
     "whenNotToUsePlaceholder": "Millal tuleks seda malli vältida?",
-    "whenToUse": "Millal kasutada",
     "whenToUsePlaceholder": "Millal tuleks seda malli kasutada? (aitab AI-l malli valida)"
   },
   "timesheets": {
