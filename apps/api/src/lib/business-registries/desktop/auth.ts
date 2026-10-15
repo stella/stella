@@ -3,7 +3,7 @@ import { Result } from "better-result";
 
 import type { PermissionInput } from "@stll/permissions";
 
-import { rootDb, rlsDb } from "@/api/db/root";
+import { rlsDb } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -78,8 +78,14 @@ type DesktopRegistryAuthorization = {
   memberRole: ReturnType<typeof sessionMemberRole>;
 };
 
+// The credential stores take the owner connection as an optional `db` and
+// default to it, so production passes none and only the matrix substitutes.
+type DesktopCredentialOwnerDb = NonNullable<
+  Parameters<typeof probeDesktopCredential>[0]["db"]
+>;
+
 type DesktopCredentialInfrastructure = {
-  ownerDb: typeof rootDb;
+  ownerDb?: DesktopCredentialOwnerDb;
   membershipDb: typeof rlsDb;
   // A getter, so authentication starts only for a request that carries a
   // desktop credential, inside the step that maps its failure to 503.
@@ -239,7 +245,6 @@ export const createDesktopCredentialAuthorizers = ({
 
 const productionAuthorizers = () =>
   createDesktopCredentialAuthorizers({
-    ownerDb: rootDb,
     membershipDb: rlsDb,
     verifyApiKey: () => getAuth().api.verifyApiKey,
     resolveMember: resolveCredentialMemberAuthorization,
