@@ -128,6 +128,10 @@ def step_shapes(value)
   value.flat_map do |s|
     next step_shapes(s['parallel']) if s.key?('parallel')
     shape = {'uses'=>s['uses'], 'secrets'=>secret_refs(s)}
+    if s.key?('uses')
+      shape['with'] = s['with']
+      shape['env'] = s['env']
+    end
     if s.key?('uses') || s.fetch('run', '').match?(/publish|deploy|release|push/i)
       shape['if'] = s['if']
     end

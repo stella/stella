@@ -305,14 +305,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/autofix-generated-conflicts.yml",
-      "digest": "72b56007fe42edb262984d9eb0d308ba0be6bdc793974c738833273205206862",
+      "digest": "054d08e807a899ca7db92bbefe4fdd07790e6842c60e8f3ebb9bb3ecf47aa600",
       "references": [],
       "jobs": [
         {
           "id": "dispatch",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "f714111bcc8b7d9c1148d72afa7ce4b4a465732b726c58026e7d635f202aebf5"
+          "digest": "dac935a0927edf7d89ba03d5dcd78ecd09adb938f6c76a4b9e63606757a8b330"
         }
       ],
       "edges": {
@@ -327,14 +327,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/generated-conflicts-publish.yml",
-      "digest": "17d1923b1c33a075418c61fcca9140f631345a176ca76ac64e8f21346c2c6b88",
+      "digest": "148f9237249aca6d5f100de49d0f687dce327bcac1369ec643ad4382454245a4",
       "references": [],
       "jobs": [
         {
           "id": "publish",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "863587119ae694515bf4bf19e49e92423c44b6d068aab7a6c9759bee721421de"
+          "digest": "50742a69d1e9a8e33349c1c8a0cdfa23c43c4f0a3bd4584132c92e5bf232c399"
         }
       ],
       "edges": {
@@ -353,14 +353,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/generated-conflicts-resolve.yml",
-      "digest": "f3a098dcf690da78a3e30b763f0f200e9da09f48e51b007e5bee5b38a98c533e",
+      "digest": "8c661da35982e8d11258dd2cf6c62c4e7b1e5d179ef3dc44c3d9612309918bc0",
       "references": [],
       "jobs": [
         {
           "id": "resolve",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ecc3640a86efe1cf71fbfcb11f789ca0e85348a1d6dcb95bf31f405ae2db5192"
+          "digest": "4744ab64e7d38d0973925bb6671efe431847ceaba8e446c86b8ca87f4dc46758"
         }
       ],
       "edges": {
@@ -390,7 +390,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/build-web-image/action.yml",
-      "digest": "8213b9cb17d5e22aa70e1028c8b5c95a6d4a5c4af43513789f0050b2e58b8eb6",
+      "digest": "9e854b196c46303fa4f837651960ad0cb39c51c3e5b08ea5567dd0be0d7be40e",
       "references": [
         "./.github/actions/build-web-image",
         "./.workflow-source/.github/actions/build-web-image"
@@ -425,7 +425,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/ci-install/action.yml",
-      "digest": "719b84e72a5ca01065437a72eaa44c76c45541a32d1964a832c03e1a3050ed8e",
+      "digest": "4f731eb158eceaef5462544ad21a3429007bea23d3ee848b5681156dff5b37b7",
       "references": ["$/.github/actions/ci-install"],
       "jobs": [],
       "edges": {
@@ -442,7 +442,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/desktop-windows-build/action.yml",
-      "digest": "53e29694efb03cbf9bf15ebf35aed7f969d893e61568ce14e8911844e5bb598e",
+      "digest": "69fd10d585a14ea6347044fce59415b23ffec71f04c79e0439098f3c209ed92d",
       "references": [
         "./.github/actions/desktop-windows-build",
         "./.release-tooling/desktop-windows-build"
@@ -461,7 +461,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/marketing-capture/action.yml",
-      "digest": "22674589f9df57e3a9482858de640603dad13fff29a5c3394fb3f99e8887bb29",
+      "digest": "b1d22509b9c2f29826b42af7eab1e011a20b81fb10dfdd2af62afa8549b2cc96",
       "references": ["./.github/actions/marketing-capture"],
       "jobs": [],
       "edges": {
@@ -479,7 +479,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/osv-scanner/action.yml",
-      "digest": "293f257b050154da829eab50e0e89d0a7deb6d59e5c246a6572cbc696603aea1",
+      "digest": "dad2bb0500d30f41a929f5cd642e35650dc9ac601846cfe333ef5eeb9d8b5c63",
       "references": ["./.github/actions/osv-scanner"],
       "jobs": [],
       "edges": {
@@ -520,7 +520,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/provenance/action.yml",
-      "digest": "40cbd5895def7125a120cdf3f3291d5665ca7c73f3fa440d3409f06701ea67dd",
+      "digest": "61afcde34c4c5fe562627349aa0ba4323a62a09e1eee2a9a2db9baad0aef7226",
       "references": [
         "./.github/actions/provenance",
         "./.workflow-actions/.github/actions/provenance",
@@ -539,7 +539,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/safe-chain/action.yml",
-      "digest": "293f257b050154da829eab50e0e89d0a7deb6d59e5c246a6572cbc696603aea1",
+      "digest": "a672b11d7bc5bee5383d2bd0b90e9a03da7d41023f08afcb966ff7b16af7ea62",
       "references": ["./.github/actions/safe-chain"],
       "jobs": [],
       "edges": {
@@ -554,7 +554,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/setup-e2e-stack/action.yml",
-      "digest": "e158116ff22cd3ebc500863766dd8ab82252c65a603ed64e6750ed69e3b0836d",
+      "digest": "edf3e2c1d68399a5e5fb39be3d39471774d5bf85bdbe7553b0f958daabb6017e",
       "references": ["./.github/actions/setup-e2e-stack"],
       "jobs": [],
       "edges": {
@@ -582,7 +582,7 @@
         "type": "checkout"
       },
       "path": ".github/actions/setup-production-e2e/action.yml",
-      "digest": "472f129b5456aaf9e18795609935badfeecdbac0e2544a043c1ff3e29a6a66c9",
+      "digest": "9617e1f487aee3a2de02c54974feab99982a08f6cfaf2f886898c2f0c416f2b3",
       "references": ["./.github/actions/setup-production-e2e"],
       "jobs": [],
       "edges": {
@@ -599,14 +599,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/agent-sandbox-canary.yml",
-      "digest": "63e1d6df28215a7272b50e886303af249b65e59a628cc44d15e0078aefee22da",
+      "digest": "a750b2034ff5c07149860533e5cde73702c1c1940597da15c0ec0f387bcfba83",
       "references": [],
       "jobs": [
         {
           "id": "real-model-mcp-canary",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "aa2cad72588bc5b0233b16cb16843fc0a40b24f1d1fbb978dc08f9197da069b8"
+          "digest": "293ef30b38475af7a48f2ecec664c100d131ffd933e705ec2ecd305e111588e2"
         }
       ],
       "edges": {
@@ -623,20 +623,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ai-provider-canary.yml",
-      "digest": "896d62f5ec0c57eef243c34dc0f3c22f01cea2d7dd0c292f3fe3fab14e5e935e",
+      "digest": "205caef791ff28fd85139d549e159082ec5a2de0cd16e42219e78b4b828ecac2",
       "references": [],
       "jobs": [
         {
           "id": "provider-canary",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "535a0ad48d22328c046aa0db53c336cc402d497b397b35ad60316ca7ce27c23a"
+          "digest": "829f5a005ff3d25c4b73742534463457ddc8884ef8ccbb1e039130ab217ac3c0"
         },
         {
           "id": "require-provider-coverage",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "03a091a18fc6bba2ac08f34cf88dabbb158f3eac101b6859447eb77f921162d4"
+          "digest": "4da5fb2c35f57a54b3f0adb8fcd5ecee8a0e31cab7378843c8adaf785fa01df8"
         }
       ],
       "edges": {
@@ -654,20 +654,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/api-test-memory.yml",
-      "digest": "7155b0d05adf881d714f512c6de013e494efb3b3ef7dbbd60008bae996e74a54",
+      "digest": "db0a0915b45ffbd75975cae55c617ac410dd4dcaa2cedad19d26fdfa3d045100",
       "references": [],
       "jobs": [
         {
           "id": "measure",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "8ba9efb8350808540310ed209f687d62e982927c07a569ec9a11030388dbfbda"
+          "digest": "4f174b164053b1fb38f2db03fb83e077881f2cc8aaa45cda649094c125d42b55"
         },
         {
           "id": "refresh",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "367151ea5d6074d6885a5cd0a8c6222074128562f32a967335ea657fda8b7656"
+          "digest": "c09989cc72be94fd5fb620f523b7738bcfde517926488f61a1ee6658be69e2b9"
         }
       ],
       "edges": {
@@ -687,7 +687,7 @@
         "type": "checkout"
       },
       "path": ".github/workflows/audit-branch-protection.yml",
-      "digest": "694f3a54dffbe48a3577fa0f8bc9f7a3d3afe03bbb74040a8c7e643c1986d8c9",
+      "digest": "e6ca577c014bcee79eee588e28d67893b0347679a8b1de7e80bb3866e174832b",
       "references": [],
       "jobs": [
         {
@@ -706,7 +706,7 @@
           "id": "audit-fork-approval",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ef62cf005530d1571b671a5bdc54cca7fac558825b66a3ba1488b01527e55654"
+          "digest": "dddb4ae8eb1b5bc9ef223a81e384745ff4235b275a6506113b80992233488d9e"
         }
       ],
       "edges": {
@@ -723,14 +723,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/audit-image.yml",
-      "digest": "263db8a4f21596becf0efb013fabdf7407f18cc5b167992f2deeeeb9dbac12d8",
+      "digest": "f09ba8bce3a8098b0526a05aafcbfd3d3771ac134e69808e27297c408cacd92d",
       "references": [],
       "jobs": [
         {
           "id": "build",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "e098ebae9fd23196f7b2b1616e7b8fc1453c2998ee13af5a0b0ff3a938ed405a"
+          "digest": "de3f589e730b1aaeaee210cb7d5069bc196a3892512b2dc5d93251147385baca"
         }
       ],
       "edges": {
@@ -745,14 +745,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/auth-md-spec-check.yml",
-      "digest": "41237eae8a5cc416da48a5f4d8a3c30f703928371a859ce2a84a8b95962262ea",
+      "digest": "eeeb2018dbadb3dcf8ba64360ffb9f29e9121746c02e9da73ec3b80b0a8c57da",
       "references": [],
       "jobs": [
         {
           "id": "auth-md-spec-check",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "dc724e37dea4fc2424e1d40253cc1ff7c333f630f7963a3a6eea8120ed494944"
         }
       ],
       "edges": {
@@ -768,32 +768,32 @@
         "type": "checkout"
       },
       "path": ".github/workflows/autofix.yml",
-      "digest": "e9d6959ee778dc4e89ea365bea2694ca93f5cf93206b0da4f663be5d1ae231a2",
+      "digest": "76541aa0ac02e406bae5f8738c78c2683734e173f830df8f44b0674b046fa71a",
       "references": [],
       "jobs": [
         {
           "id": "regenerate-requested-files",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "e1f51f818d4a460d6e5723f796ada4c99dfed3880476fb0a8eaa6c2589f4074c"
+          "digest": "fc179079e5657642ca36dd40ce8111b9ebfdee07d76de6b883682ea999aea9cc"
         },
         {
           "id": "dependabot-bun-autofix",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "4b9b5943ef92b42035d2e2c4598a34a23ce8634c0ed8d4979f418ce56941f8cf"
+          "digest": "92b3fde6df2bfe0f268446b83079f90ab315638ee5c3f21c8db860b9b8981494"
         },
         {
           "id": "regenerate-scope",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "78ac6fbb34d0d86b1ee9cebe93786e344a6e9bff81f8a9cb704c7760b47a515a"
+          "digest": "4e1314b814fa57d06f6a40c3af940a42e789616f5e598e036d1415207e3a8bb0"
         },
         {
           "id": "regenerate-derived-files",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "42c6302a611365ebb6e23941c1f0e354d42e1a58fcda16a5cd61f7bf3459352b"
+          "digest": "0b1ce24258c5e90ab47ac5572d6f17c82295a522624373d0543595c153cb38c7"
         }
       ],
       "edges": {
@@ -811,14 +811,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/bot-refresh-auto-merge.yml",
-      "digest": "447a04512032a66ebc6c0a232611983bec0d7b196c2408d0dbd1808b16f7fdaf",
+      "digest": "ff7825c3060263dd4b1b11c7846ea21fd1a857430d0e1dec19ae64c3ba642879",
       "references": [],
       "jobs": [
         {
           "id": "arm",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "b8fd513a7fa32cb9839116eaa519ebb37d73016d20da1d3ad81587651108cb79"
+          "digest": "61f7995331079bcbf8ba93561e2e4f9a850c66790756b3c3cd0569040bf98ce8"
         }
       ],
       "edges": {
@@ -834,20 +834,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/build-api-image.yml",
-      "digest": "575eaea0531b11d0a0c939a5b8b2dcbf7de2d6ad5ca448e27f2836eb02199b72",
+      "digest": "8deff6d24cfa539bab205cb3d788155764c9ea586e4181b8c11b2edc9bd85039",
       "references": [],
       "jobs": [
         {
           "id": "resolve",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "24b35e5726b89d2346ecabddc2612abcb7a43a92daa452f0762c97924317b48f"
+          "digest": "1fa74d8a9a908deefddc4d8232e2d0724ad9ab082d7f20911b1337b56156d67e"
         },
         {
           "id": "build",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "683375c98c585737486b33d574480a8f4e3d22362bcdf354039ccf1ad1e4285e"
+          "digest": "120e6f7c64a3acde1e72e2967f02b6eb06c32a645c466e6a4d6f90a781b08275"
         }
       ],
       "edges": {
@@ -867,14 +867,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/bundle-size-nightly.yml",
-      "digest": "127d9ed19e0ba243c37b05e74473ded4df4ee2936bbab87ca5cf9f82277ae44b",
+      "digest": "c37c345ed8d0eda5f4f62e0f84e5073e162e6a960b8cfb48c8d5d02943b041a5",
       "references": [],
       "jobs": [
         {
           "id": "report",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "42d3912c543f0721f4560f60a86861dbf32da7ab85124b19cbbe37103bb82b0e"
+          "digest": "e9ae6bc911488227343475cccdf4b211076029183bca40a7faa5881f2cc8ab9f"
         }
       ],
       "edges": {
@@ -891,14 +891,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/cancel-stale-merge-groups.yml",
-      "digest": "24fe176559f9228e87a2b4fd3fd5d3a820b5064d899c3d87094bfd57e2f13ab9",
+      "digest": "67561b1b2f0d1948ac9758eb36f969a52dd996ba954a60a529c425c59f275904",
       "references": [],
       "jobs": [
         {
           "id": "cancel",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "bb8c9918205f32aa20e731724ae649088c8bfaa9e65b97af3fd6238ed34708b2"
+          "digest": "541ac115c88d035b3f55cabc1f26bf0354ef03d626fe7f661709a7cee322f24b"
         }
       ],
       "edges": {
@@ -913,14 +913,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/catalogue-upstream.yml",
-      "digest": "abb933ce540b943356c8d7c77bcfc0ddfb6717bd59e8e0b136f2de6bb7cb94b0",
+      "digest": "8f00876dfac1b1b58df11fabf01f435fcc55e6f801773e1701a901388125bc75",
       "references": [],
       "jobs": [
         {
           "id": "catalogue-upstream",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "889b1e6c2e76f5dea4c52b92bdc29c20e136482ab61742961a5d65a57c7df166"
+          "digest": "f3473426051ccba5182c4d869a764f53220706c77cbe14ff496759f603a08c85"
         }
       ],
       "edges": {
@@ -938,86 +938,86 @@
         "type": "checkout"
       },
       "path": ".github/workflows/ci.yml",
-      "digest": "d69d5b4ad79fc3a35054a72ce030b9e2a6b707cb85501b58f4dc1b9d717449ef",
+      "digest": "ed38be9a60826c8dd3324f4ecfa38688187de4843444700716c48e471e4bdfa2",
       "references": ["./.github/workflows/ci.yml"],
       "jobs": [
         {
           "id": "ci-plan",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "19c3bea87445014a9477a95b557a5a6feae6cee3015479c3b0cad2ac990f7835"
+          "digest": "e72aed68882e13c562cdbc6e6f884774b15c60d38d8195c23205052b1391446c"
         },
         {
           "id": "docker-checks",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7d4a6b8e12c94c9f1ac087cf7042ec1ca540f501dbae0f286b5521142c881881"
+          "digest": "205ece0daa8a2ee3fc07833a2b797afed93c6c95c09d1239ee2118e3c5439e93"
         },
         {
           "id": "parser-version-guard",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "649de701c908737a9421f08281c7dc87dcd3ce4928ed6113edf765c4b885c70c"
+          "digest": "ffba3b47e46e4873ca6df234fe8f465a7ab1fd402dbacdaaa25ba2971167e737"
         },
         {
           "id": "ci-generated-sources",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "40c2f794cb3b5acfea5e5693fdb5ffff086bf6da51c776a467bfacad25632da1"
+          "digest": "f271f0480c24b1de46bb7ef6650ca2182afe5928844c33ce621f040e108c3f6d"
         },
         {
           "id": "ci-checks-docs",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "e046b14e922b0448a16da819174ea8143bef3699e0bc9ab376d38de4e0321710"
+          "digest": "abb76a516f98d69b9b1296a8f7f29b2b9a2b8eb36cdb5bb2d2c504902811d21a"
         },
         {
           "id": "ci-checks-generated",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "1d2154a2c54f712509b072fcd115b2f17eba7cd74137c26a46c8c261afda5455"
+          "digest": "d1a50b10ee28da2a1b750721ffa7ac310af7dfadb5de469bfba22f33579bc745"
         },
         {
           "id": "ci-checks-policy",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "3d212309259db6a702b854ab51e3882237dd6ff9eae69a660da0217cba8e0e13"
+          "digest": "03c6398f3116eb49985dbe78676131d4d3b404ac828e6084833bbf30e1d82729"
         },
         {
           "id": "ci-checks-rest",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "e4f12d323ce23561bc2834b7332f1da6f1c6ace1a7a9e8a3739729e13fae3801"
+          "digest": "a376b864de768d39d5a368840f81ce513d1e05e630158f216ece7444045e7e97"
         },
         {
           "id": "ci-tests",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "b00f3bd6df76f2584a167b56bcc15f80a5aa0053032a26ee98debb17e52aea65"
+          "digest": "eca5216c3c7052a5056dac511117e54df53248c447f372b27fddd130868a0223"
         },
         {
           "id": "api-test-durations",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "abbb4cfac9611b5ba761f1b4b722b2ead84b35c3e7d7290d27265cbd05c0467f"
+          "digest": "8548d3376b2d3c3b38789dc7ace2dd70bbfb9265863a2457ab90943995e37f86"
         },
         {
           "id": "ci-browser",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "238ef894ebf95f165ae210472c67f8e5bf30a90bb68f7b4d0b9a5bed8bc5b7f8"
+          "digest": "2a9e24281ba73ab76034e78675adc728eda4776b20dac4bc690a962d3c7602f4"
         },
         {
           "id": "code-quality-api",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "def777636d756d8583c75b22ef3aab394ae71b1ae95645014d0fde855a0ad657"
+          "digest": "0ba245aa24cf207dbed96201df64a84d4c85532c5790d841cab4bceea877e4c0"
         },
         {
           "id": "code-quality-web-rest",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "def777636d756d8583c75b22ef3aab394ae71b1ae95645014d0fde855a0ad657"
+          "digest": "0ba245aa24cf207dbed96201df64a84d4c85532c5790d841cab4bceea877e4c0"
         },
         {
           "id": "query-perf",
@@ -1029,91 +1029,91 @@
           "id": "postgres-service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "dba694965d9d43e9f5cc4cacbcd1f227a4b11b5c77b5c76a397bb3fc3555d30d"
+          "digest": "a1d99928bcfa920c0fc4e2c051c3af043db50d4fdbb38a88443f4b9c22f160bd"
         },
         {
           "id": "service-suites",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "2ee243cf8dbe2dce0dc22a3063720c1d75813e4c2cca97cddbdb1a4bf0cd5230"
+          "digest": "39ef5d0216b265120dceaf46c2bc1bf62aef1969df10ea7ff932b39b60e8b923"
         },
         {
           "id": "migration-upgrade-rehearsal",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "570e782fd1b96995ee1dacdc5bccc10c13c85f93fc21802413a0a5a8b360680b"
+          "digest": "2b3b7f8e9ceecea28fe4447ce6b10ba541ea758a0f3396fa67f2e873de64d4a5"
         },
         {
           "id": "release-typecheck",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "388326c0e7fbb820af0908952c5631d4ba815de09fac7076632e9316b3de2c6a"
+          "digest": "cb0a1ee828e5d27bf420752a852307a8e6ab66e8095fbfb4bf48c4d130697766"
         },
         {
           "id": "fix-tests-on-base",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "c59e512061627411be9b2a36a218bc1656d12c124c292cf5a086d6f8de27e6e8"
+          "digest": "2e35604b807c066cd60e70c1dc76641da1e44ae424d17c9860d1eb63e4d344ae"
         },
         {
           "id": "web-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "e2184898cfeb3a809d76c829a21e6235174d5057b078c7f0746367cac639cc10"
+          "digest": "0ca4e684601c5e1a7a6e4a0d8fd1f6f116eabf10b3305d3b69e984a9fa6fe32d"
         },
         {
           "id": "web-image-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "c3da43831563996a915554d8002065c04e9bc77c6b64c7c6e92670ce7f5a7a8b"
+          "digest": "175fb1ec3ec22bc8bec0e124f778e8f48f7b34468f72f79a7dca7eab0216755e"
         },
         {
           "id": "mobile-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "6b46c9415638ee4b16f15a067b057dc1fb303f347f1a0e9f332f3bc4f4ec0810"
+          "digest": "fa5dd31e60381181531364d9b3ad093b99fcbaa19109eb2969f4fcae36e9c149"
         },
         {
           "id": "landing-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7fb327b005d04cb8fcce2640b9918eb308ff57f863ede9e1807304703cacd887"
+          "digest": "565630c28bee5617b22621a5cb290f27df21f0f0b17e88f74ae7f2c217a02c25"
         },
         {
           "id": "heavy-web-build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "6ccc58963357b29ef07af9204addd0b75653db6ad9b4b40c41a466ec5cae5efe"
+          "digest": "0826fdf7aa16e24df67f2cf3330f0f3882d0ecc107dbe43c3ee92ad57342dedb"
         },
         {
           "id": "route-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "b371d4e3b9b29cb8329c4f64dacf1222953ccb66db5536220232a611da6c4b60"
+          "digest": "5223d4f39983c06179d766750fa66aff723b8bc09cff46a43bae1e801356af47"
         },
         {
           "id": "e2e-production-shard",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "5b26faeb0450e6df859fbff290fd85f82f750853cd16097ce62cdc8800cc4dcc"
+          "digest": "1e1fd91d81b6abb45450cb8b59fa07c43be7859fcca037fe92a420876d39906e"
         },
         {
           "id": "stack-redaction-browsers",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "be05420bf3f0c16212aac628637c7ec8e914d74ea7f1adca1b3dc6d55ca79309"
+          "digest": "306606d34a61a29cbd9581724bf637791d04751b48d55fd1f9034245ec6b2a75"
         },
         {
           "id": "e2e-vite-canary",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7b6a62384082e228e3d1adc756e91ca2e8cc63f0d05ccc065b6db99d546dcaef"
+          "digest": "c8ce014f740f310994649c0992f72624737d3912cf3b7f0cb88c2a71c1b22fb2"
         },
         {
           "id": "e2e-landing",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "21993fe611eb23c56883d155d16ef9773c57ab5bc60b4e5ea297e4274e667263"
+          "digest": "fbbccbf4c860d46fc664fed4dd1831667a939bc10cc2eee5923efbef79974b29"
         },
         {
           "id": "marketing-screenshots",
@@ -1125,73 +1125,73 @@
           "id": "marketing-screenshots-cancel",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "570b504f7ef332ec85943caed3f316203c7668fda3f25d02a33aa86bb4489408"
+          "digest": "b3457a9f7b0a20bb8892f814f26d6c2a0d1126e743bbe77e5413c25ffd0278bd"
         },
         {
           "id": "e2e-report",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "4338ab8ca428a17567689bb7e7bf2c32f536b637fa948f0e314033f67b644a18"
+          "digest": "64823294cc46c1d9f48a8026e8f7edd9f8a35ab142f1aefd52f61f9bd415ddab"
         },
         {
           "id": "api-image-smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "a34fb8a1243b666f2287821d4a992e8445941c747507d3360da925b724de3c1a"
+          "digest": "723883ab8abe67ec55bee8c29bf0ecd29b3a185806c3ad475ab2d3fe3794318d"
         },
         {
           "id": "legal-atlas-image",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "1080842e89b9300c396b18d52b53a4a8d5c546dd6aac20dee77cff50ccdaea4b"
+          "digest": "7b396323ec2815060f1bdf495627910ab3a17ca5db1c84661c5ec11a9eee9cd3"
         },
         {
           "id": "desktop-windows-dry-run",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "777bc62f773e33c03a4aa08dee384c1809ecc2e7219e0053a4872471335f7ae2"
+          "digest": "65b68c050f996617595a7d71dd76cd6efc11e2e66d9c50eb9ab7c4c0b7e11a22"
         },
         {
           "id": "windows-scripts",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "64252c609761ca84021db59f5132f1eded2a9a9bb0db0d4733d56533e1f09d8a"
+          "digest": "474fb758539f5bdf508ba1209fb9a3960b9baac89b5cd3e74af5a04d86be81dc"
         },
         {
           "id": "scan-engine-wasm-drift",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "9c34ac489fd992f9664ecc9233b35d1f20654b968efc9b0efc825df5a0752f50"
+          "digest": "95d8e02abd666e80e901fe1f3bb9421bbdc285d3c8b29144044d1150e7c10612"
         },
         {
           "id": "desktop-rust-tests",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "b967773c9c27881cbfcfbbebe89636e17c2753366b15ec6db128147db0439764"
+          "digest": "9b64678cc0e37ae01a927a51dece922e63a92524d5657762dec5d4ebd56a0411"
         },
         {
           "id": "desktop-rust-lint",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "fc3977254dde1ad593f68006e06bb0eee039c4fc72631b78a57ca98ae71d3136"
+          "digest": "eb85348222c908f239ad8885180be7da324dc490006ace51bb05d3d900a89f1d"
         },
         {
           "id": "dependency-malware",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "5a3302b5974036a00b4ee152f06d1b766730477b60924d26fdd6669a9394ed74"
+          "digest": "ae21c8b1eb649a14b82bdd21c6ff143946f4c72439296c0194ac812ebd53d005"
         },
         {
           "id": "dated-waiver-expiry",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "6fad58cbf00934c66a5fe7283a843712b22c97832f3c9a5c526cfbae1a6cbd40"
+          "digest": "45d16f6f123dbd6f8cc02dfb9d8011bb4e9a7b03950452d7f2e5abe987dcb662"
         },
         {
           "id": "ci-result",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "365d85b82ba1323116d90adb2a38d4c26c251f731b145da5d7f4d69c22a84318"
+          "digest": "121b1a8854b5f1c4e53277fe6798717c239fb12695a67ce580d101e050348f87"
         }
       ],
       "edges": {
@@ -1251,14 +1251,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/cla.yml",
-      "digest": "0ad8d940885382eea309b8aa2e55137994b2e36ff06f22a35d4da6925652a7c9",
+      "digest": "1c02f2e3901f04eb13263a166c3a036d59f78051b863ab1b64ce721f0480265d",
       "references": [],
       "jobs": [
         {
           "id": "verify-signatures",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "6f02f0cad2dc5cc6b8579f4c118d00ee018249db4602bff6b43437ac2992a91f"
+          "digest": "b8fd47ac09a3207a57f6b497b3214b84466d4ac069e19acb3ab5e7689c3d382b"
         }
       ],
       "edges": {
@@ -1274,14 +1274,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/cleanup-queued-pr-runs.yml",
-      "digest": "cc67b247b6f43fd17507ce6b2066ee487cf29d5363d48021bc08399572b11041",
+      "digest": "60da54af0d3712c9767b2e789a025c7e5dd619310d6a234dce9d2f688c3ebd76",
       "references": [],
       "jobs": [
         {
           "id": "cleanup",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "af4926401c80a51240563ebef7b42344c9284a15b34df689c983e00082dfbdc6"
+          "digest": "b351084554ce27d4e54ae3857372985bd5089001c170d7859dad2145c4f16125"
         }
       ],
       "edges": {
@@ -1296,20 +1296,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/codeql.yml",
-      "digest": "a3377c652afd8749091d80ba6f4046f4878cf613170826708fc5263e3f5fb36f",
+      "digest": "97d3dcd4eef7ba367fcf6ae70538d2af6ba5f4c30eca81a71a57f7c724840be5",
       "references": [],
       "jobs": [
         {
           "id": "scope",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "f0c05d768ffc076c5f0640fe6d669342408e5b4452282a1430451446e2b418c9"
+          "digest": "3a6fb8b4ecff8f09436e9a90c535e60a641a5ebbdd079ac4f5330839a83d3f22"
         },
         {
           "id": "analyze",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ff5a679b34cb4cd5c6b0fa91c136f906fff1f13062978a49a89c1c03a3063636"
+          "digest": "7d3c31d5064580c8d1a5762ab3b06b70d65d5a51bc005b0bda825d9ed75da0ea"
         }
       ],
       "edges": {
@@ -1327,14 +1327,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/dated-waiver-healing.yml",
-      "digest": "8a08fbcc6a8eb4765a475d8b041dcdeab38d015ab1a68a748d943c5d637b1dc1",
+      "digest": "c3b567e1d1578360c5429e4d50dccee746ec1721094a2cdb92f69653cab461d9",
       "references": [],
       "jobs": [
         {
           "id": "heal",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "7c5732d9bef7142892f493d07180b51536d35cdcc35f1f299580e5667f299717"
+          "digest": "edf35a8813289e10631b3d650d5521f8a8753788f11474183eee7ddecf89d0a8"
         }
       ],
       "edges": {
@@ -1351,26 +1351,26 @@
         "type": "checkout"
       },
       "path": ".github/workflows/db-migrations.yml",
-      "digest": "6c323d187fb843856ebda8f3564d069714bb03e0a59228e49b2ccbe899665426",
+      "digest": "fe35096469c66841fc834821dd88a132dff434f4d5d67c5a7775f04e46fe8260",
       "references": [],
       "jobs": [
         {
           "id": "scope",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ff66c808b5c0c0d12d91f58bd4eeb8365b2612093fb1d3bcd7d8f1344b627d7a"
+          "digest": "2039634bfcccd5b7518d13251d56966b678d809aa3c4dc4fe3b7aaceb58048a2"
         },
         {
           "id": "check",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9993cd342da3f2b89d4264a08b81d1b9664a1af9c24965d4296155a7caec9df5"
+          "digest": "ae387357b0fdad59761abb003268b75775f4050304987d4fda10141c34023597"
         },
         {
           "id": "apply-fresh",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "041ba59fc8df6c9821d343603004036e8c40b02356b47bc2918cb632ac115d92"
+          "digest": "789c05582bef6be6a797db833e064c2ed05d39c20f08d8fad1a4e290edfd2e93"
         }
       ],
       "edges": {
@@ -1388,26 +1388,26 @@
         "type": "checkout"
       },
       "path": ".github/workflows/dependency-audit.yml",
-      "digest": "77b71dfe4e8cabecad7219b62e355ab76e993c8eeccc51802b983a4bc7fc106d",
+      "digest": "8ca626075f98debdbacf1732aca2bf115c7f1d21cb31ea93fe12d032a3c30545",
       "references": [],
       "jobs": [
         {
           "id": "audit",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9a55245972e05c20c83b3d4842759190ad4392f89d5bb9184e1244cbbfd478f9"
+          "digest": "2c6a297be6585eeaa44e63b442ff25a4d81a5fa8880ac957334329d48af51ed2"
         },
         {
           "id": "cargo-advisories",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "cd24d012e65383e410833df501d3f00eb00c734333ab1fe477562b616b220386"
+          "digest": "5e90e1334ae274a8a7f1877789a2bf506f627a2aa9e9ab38708958a0cc521c2a"
         },
         {
           "id": "remediate",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "994336fecaaec3f17a790d503cdc4ccc7451f665827af59103dd198bc89a009f"
+          "digest": "2c6b6a89ec221b28d9932ddf3f9a8ce2e5d25a4517e555ed0d002477fd94933c"
         }
       ],
       "edges": {
@@ -1428,20 +1428,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/dependency-malware-nightly.yml",
-      "digest": "cc7d9710a032e6ad55baff3115f2aa71e4bdd3119804a829bc975c9e1b0717ec",
+      "digest": "c14e50aae088e706c32961f45005f7d60a2cdfb493f2e3052ab2a5b260d1e2f9",
       "references": [],
       "jobs": [
         {
           "id": "dependency-malware-scan",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "bc29ea39976044475b6c2d0e643112dc62f28432ecd3cc3f66e48ee51c22d56d"
+          "digest": "b4d6d3a48eced4e290afcb766803cd923b8a6b6fd75aba64b94e7075ebb1427e"
         },
         {
           "id": "report-failure",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9b791d55d3f836d1c4601ff8071a36da5fdf24ae03e6faec5f3727f646641617"
+          "digest": "c3f28caf64b02b053394b70ff01783eebab873b780c4ecf6922f5c53c22b0c43"
         }
       ],
       "edges": {
@@ -1459,14 +1459,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/dependency-review.yml",
-      "digest": "83daca8a7a08f959bcf50e8ccccbdcd911db7c99509f9ad0c74a9c13fd7302f1",
+      "digest": "6b991f44099a0875122a5a878f3d0f142d1c81ea0fe8cc83eb4aa54273411152",
       "references": [],
       "jobs": [
         {
           "id": "dependency-review",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "784b53b2e0b78636a341c874dede42e577bb657cda2399b22624992a5fd977d5"
+          "digest": "61e3ab9e0b8b5f0fab6ca0091838e1bee09750372b1d0761e3e93284286591d8"
         }
       ],
       "edges": {
@@ -1484,26 +1484,26 @@
         "type": "checkout"
       },
       "path": ".github/workflows/deploy-landing.yml",
-      "digest": "e925308358962b05d2d33e20a2a80fd7a25c4fe7110aa52bcc8673de3c617c6d",
+      "digest": "8731ef67a04c857f128cf38aaaa472b8f9e1b886c2a21ab318cb7ce4fe7e8024",
       "references": [],
       "jobs": [
         {
           "id": "scope",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "3eb9def39d808a6bd09fa0f451e8a9a5efd680dccaf780ed3316b845b51343bb"
+          "digest": "5bfd0e95d44fa43064b5e311f92f9bcb80c605864e5f3a86f8327edfc94f5a1b"
         },
         {
           "id": "build",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "98c09cf3b2c01707be0845c3e021228792b33cb9b89f7992add9824344c28a92"
+          "digest": "1da543b7ee9d2c10c9d38e86f90550e619e20112771b939def1f51c3dc4ad6c9"
         },
         {
           "id": "deploy",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "703d17c93d4c2169c975fbf8fa733b7068e1d1d88041f04b8b49d2c58170ad4b"
+          "digest": "91089d331b84b54dfc43ad9785e800bcea5730f78f8adbf1be331f0e56d67267"
         }
       ],
       "edges": {
@@ -1521,38 +1521,38 @@
         "type": "checkout"
       },
       "path": ".github/workflows/deploy-staging.yml",
-      "digest": "744d1b2a06c6451a05fe41ddc5e019ef81ba3d4f09595e4c643b4788f2aa523d",
+      "digest": "1d54eb362db510dc655ca453261077f6bb8e47ee01744c3a55d07db270e81d6c",
       "references": [],
       "jobs": [
         {
           "id": "resolve",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "c62a17fcd368ded64edbe3160ea630a8e21cfef00e4b5f391253e3c4cfc6b5d3"
+          "digest": "b0630b0c45bb8ce781c987a3b48e5ab9f6873185b556ce2d321ce0d039f67d3a"
         },
         {
           "id": "staging-health",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "c2021f2b0853f3297626318cfebd3b9a81e387c0b1f0b90332d112a9edc58870"
+          "digest": "97fe4bca416e84fd45fc750fe44e18af6b27a3873086658c09da8394a0b8e92b"
         },
         {
           "id": "build-api",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "af4af46c44c79842043ffdf70c306de4f227b7e545b9736ed1408cefa7782042"
+          "digest": "d8c33ee3fda863256aa3f036dfbae50e0b1d19c66f7eac6e754c4e55be9887dd"
         },
         {
           "id": "build-web",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "cc1cc0b370c20a23e4241e5ce06215569efaa76bf7441a659fa9c2f90d29a67f"
+          "digest": "a81b33e7a0345469e25cef04cb04dd76883b99c5bb13b0b1686abd4498e11ff2"
         },
         {
           "id": "promote-staging",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "f4798fa3e05c5adb9603ecf9b74818908a1902d0896828419968cae588be873a"
+          "digest": "4c5cf8ad4ec44ee6ecc5ee7deb68957b7037a34fe12fb1d26f71e19bfd672f27"
         }
       ],
       "edges": {
@@ -1577,14 +1577,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/desktop-release-canary.yml",
-      "digest": "557dee9c1ea99a5d59a4977d921998f584564b7349d98ff72d3250c70094bec4",
+      "digest": "0cc64dc6a1d8b546c417164b4ebb03893e2d24c5e1406a156a9c557d6d0c1424",
       "references": [],
       "jobs": [
         {
           "id": "check-latest",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "215207578f2656056a8cc1e2d66fc53c7352ac1d8e34f3928b14c137d6d07451"
+          "digest": "692b9e69329ad44d8fa2e5986a3e300eeab77f25536cd83837a46a373e2e26a0"
         }
       ],
       "edges": {
@@ -1599,14 +1599,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/disarm-auto-merge.yml",
-      "digest": "335d75fed3326cf2b4c07b8a826b74e6ebfbf6d7da139616116b1888477bdd1d",
+      "digest": "9034dd7badb1e63cd196bdd503d9b09d143d98b998b03b164724d90234b556f7",
       "references": [],
       "jobs": [
         {
           "id": "disarm",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "13b56300f2a0b49339422c1dd98a3316d9c0a2ad777173086acc81eff85d88b1"
+          "digest": "befc29f1b089a0e0790859eb02fdecbd2497b3fe431a60a621ea8153e9ad27fc"
         }
       ],
       "edges": {
@@ -1621,14 +1621,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/docs-source-policy.yml",
-      "digest": "e011ccb6840023e366d106aa342f274c0d4dcfc54c9c4658534d2d6dc889583a",
+      "digest": "fed3893a8ead2ed1959592070999c9e62f849207dda729c05d9372a7860b6070",
       "references": [],
       "jobs": [
         {
           "id": "docs-source-policy",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "dc724e37dea4fc2424e1d40253cc1ff7c333f630f7963a3a6eea8120ed494944"
         }
       ],
       "edges": {
@@ -1644,14 +1644,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/fetch-public-documents.yml",
-      "digest": "819506ec917c805ff1349207390fa763e1891942c4c73afe24117677a0c31619",
+      "digest": "23f8807ed8fe2ae2423946fdf24f669a7dc5f85482205f52c98e07d31415c942",
       "references": [],
       "jobs": [
         {
           "id": "fetch",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "d17017001524777b9cfc039474f1dcc67777453ffd5432d5e11e1ca4e11ec3c2"
+          "digest": "24096299a407740a0a6de2ce5a72b933788f474ba8a398a7dc506e5ca063889b"
         }
       ],
       "edges": {
@@ -1667,14 +1667,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/journey-canary.yml",
-      "digest": "c57de1aa7b90e9daf8714be6e9c2d5c39242869c73d0276a3d3eb7165266b36b",
+      "digest": "5bce04f27b8ef3394410ea62e31ee6f3be7e1ca472f3f3f3d66dbe9107286726",
       "references": [],
       "jobs": [
         {
           "id": "journeys",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "bfc016f06076df94b5c8a346aba777824f70d3d9f1f8d755aed5e4d27016a63b"
+          "digest": "6537088e7a75b5d0a07f3e784ed7a600cac9b3bd55a72f2836d6647225245c0c"
         }
       ],
       "edges": {
@@ -1712,14 +1712,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/landing-canary.yml",
-      "digest": "d493e79ccc02260eb90724076ce262fcd34029e58b5c3a860a754c9c6bec4577",
+      "digest": "e920aeb99d93d23b78f3d4a7c058c1db179bf8c6f92c64149d966bab9fd7f837",
       "references": [],
       "jobs": [
         {
           "id": "served",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "24b35e5726b89d2346ecabddc2612abcb7a43a92daa452f0762c97924317b48f"
+          "digest": "a803e877e8d2106540219b90397f52ac718a0a2a1926d8fde4bbdafd78fdd517"
         }
       ],
       "edges": {
@@ -1734,14 +1734,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/main-heavy.yml",
-      "digest": "bfaa668b01b1fd83300be0c296a7074081dfbec1521a4ef8156a334e5fc28d6a",
+      "digest": "030e842b2dc93b007c204724acf61375e15c44de572e7b4ccfa6deddeef05a52",
       "references": [],
       "jobs": [
         {
           "id": "validate",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "2bd4378de88a01d07a31f5145a56f858618c2bffa8aa5f8b7e548cde8c19905f"
+          "digest": "1f116c70f340ed0724b15415831014a1bef2b7cf1b1d29ca646edb222d04929c"
         },
         {
           "id": "suites",
@@ -1753,7 +1753,7 @@
           "id": "status",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "1c1f024ff1cf42a589d89237501a155b7acd3e3f3ad7d8738b8eaf7ddd64b6c8"
+          "digest": "116efcffd88159ae92025d33d3b740a6c1d32039772a958c3d505ef894bc3ea7"
         }
       ],
       "edges": {
@@ -1771,14 +1771,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/main-pr-depth.yml",
-      "digest": "1583a0839e052e689cae522bfba3f23e3fb979fdc39e71e1fa08543866b9fde7",
+      "digest": "4bcf2d677d7bad08d357618fa95caf95981845be0df64217f7a87150746294f6",
       "references": [],
       "jobs": [
         {
           "id": "validate",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "8c26349548d10d4327ffb7f18eca0b3217c1e576a33f2b5f681f97514ad2af17"
+          "digest": "ed351ea78ebb908bdeed7fafa2c0fa6dfa03247d4a8c9d4d3ecfe00e65b79752"
         },
         {
           "id": "suites",
@@ -1790,7 +1790,7 @@
           "id": "status",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "a3391f411c8c553cb08ed0e0d74de4cb741a35d87077b17f53c5219d5c295d7a"
+          "digest": "cc27339101dfca469cfb6c8bb14718895c098e1e3f19f77ce8c34f91838c8535"
         }
       ],
       "edges": {
@@ -1808,26 +1808,26 @@
         "type": "checkout"
       },
       "path": ".github/workflows/manual-checks.yml",
-      "digest": "dd6c46874717dc05657c609fd4ccbcb6fd63886002c6ea081b89619050a9e9b0",
+      "digest": "209835be57257da95c4fb673f7fa23d68af86cd41451e6e957a9e7b67fce162b",
       "references": [],
       "jobs": [
         {
           "id": "check",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ed1f6034bdf2ef1a05c96a52862fbc090f8f7a2c714e4cc035e77538a08715e4"
+          "digest": "218ca7cf2ac20baba86922a3eeffca9af5cb457ea69565d1fe6d2682db17bd21"
         },
         {
           "id": "install-cache-windows",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "06caa5f476ecf0c7686c6f92f1054f87caa03139204df229c5e0d774f7ebd40b"
+          "digest": "9046abf16e8848fba2e178d1b806d9dde4c444e0bc80b136684bc8cea9f4ba02"
         },
         {
           "id": "install-cache-linux",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "e0e5a76a18139158efc860cc5ebee96fffe987df5416b885abf02d852e216911"
+          "digest": "05180cad6d99e917debdcb76e9732d70997a85c4be8c08bd19ea7a9e162cdde8"
         }
       ],
       "edges": {
@@ -1848,14 +1848,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/marketing-screenshots-capture.yml",
-      "digest": "c3f6b892810d525f504b1cf073762e5f60d1c83f1ca982679c510682482d3710",
+      "digest": "c1871dd2e03471ee941ed523d8c8cc61b8a964811b57e38b95dda519a205bcb7",
       "references": [],
       "jobs": [
         {
           "id": "capture",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ddebbb94f329185298a59615c8c729901a3aa9a9b1d9edb700881322020690d2"
+          "digest": "c4e7a6c5fd407ac6c157a2510fb3c7b9bd34da96971bdf9bbbe7f3203468adfb"
         }
       ],
       "edges": {
@@ -1872,14 +1872,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/marketing-screenshots-publish.yml",
-      "digest": "e6a39c8aeff3778b72b8f5bc31e1439058045835fcf7dc12308704e8e6fa6738",
+      "digest": "5d50fc948a5cb1bba09d70ccf7772544e7bd6cb304b2eaf8dfa66fc3ccdbec7c",
       "references": [],
       "jobs": [
         {
           "id": "publish",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ffeedca324330452051e8850583dc75c7b99f52042cf4cb36e7f2217e4405e06"
+          "digest": "17d80f44db025ca425a11590fe20771c6b5b94604f7efeeafe88d7afd2801902"
         }
       ],
       "edges": {
@@ -1898,14 +1898,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/marketing-screenshots-update.yml",
-      "digest": "623aca7b95ef566a0416303b65f1237717f2f215311237269059f69b0101939e",
+      "digest": "877e6298dfbce1b0ea0be40c6157da1204f312046334c5a364479b9228a27984",
       "references": [],
       "jobs": [
         {
           "id": "update",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9920951a66799e8b7bc306e9708c68b72948b470094245c8fe87458ce9f448bd"
+          "digest": "97be8d55ba7f45fdf76f64f89b405f40618738c126e7a848c570f329167f911d"
         }
       ],
       "edges": {
@@ -1920,14 +1920,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/marketing-screenshots.yml",
-      "digest": "7ada8ef6aa94fe117c4ee8506a2f4cd2cda15ae399f02611bd82486c6cd2033e",
+      "digest": "8868d030392105bd89412729c6e57827644379ffdc31301221860d7f4f5ee1c0",
       "references": ["./.github/workflows/marketing-screenshots.yml"],
       "jobs": [
         {
           "id": "check",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "50cad21e46378a547cba836d16b64b27d8814e43c4f864559b8f43976866d591"
+          "digest": "264d9f70ff7931ba8539229e3aefcb981c304b67bb2f8cb1826863ae642c9bb8"
         }
       ],
       "edges": {
@@ -1944,20 +1944,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/mcp-canary.yml",
-      "digest": "7ede7979de8fd9ad33b054df4ab43bfb9bf7edf25497c04b4b31ed7f85587391",
+      "digest": "689f8a676e0d9ffb3f77f347bd4a201d99d0f83bf29f6b6951df9761a6e48134",
       "references": [],
       "jobs": [
         {
           "id": "mcp-canary",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "62e3971a0d15d58a82ffb227b2db2842907f4ea23b59e4bc3db2e37584618b47"
+          "digest": "26ede6f8e74d28c0d66da2654dea6f685231d2a5281efb29cc9fd038bdf74238"
         },
         {
           "id": "desktop-transport-canary",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "984e0b6a98610f725cd827530768f54ecf2a20d152cd85c47c425f4d1221fd26"
+          "digest": "688d316e7793328c4ca0f5df172409b2e2e25257ecaf207d0a102186802caf82"
         }
       ],
       "edges": {
@@ -1974,14 +1974,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/mirror-ci-service-images.yml",
-      "digest": "630254dbc8e492bab6bfea38e9ce092aeb6321dd5e69c5ea8c8ef39d55a81d24",
+      "digest": "abbd9dfeb9a7675bdabf9a7ee5fae756da67942ac1f17f763578430ba73da3c0",
       "references": [],
       "jobs": [
         {
           "id": "mirror",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "51037d48d73498632dd2a18ec6a08d6430b3d10234bf09621b80b19c7fca8005"
+          "digest": "99ebba1d7757e8a409acdda19341cd3274abbf447e173dbf108fb39a76ba888d"
         }
       ],
       "edges": {
@@ -1998,14 +1998,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/model-catalog-check.yml",
-      "digest": "b8d735a0e2daef57cb9448d140ef32c0e71feaf301c2a413138bcaf29d37c6e0",
+      "digest": "e42766798985cd936114c31464682259135d3303743d86f745f082e8189ea214",
       "references": [],
       "jobs": [
         {
           "id": "model-catalog-check",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "963ccca883e3f2651118defa19b167da64dac7d2e34c18a397e3733ec21cffe1"
+          "digest": "c63b4c1796560ad03199d685b913771ebd796ecc3b5ad8dae946d39c83fa0d87"
         }
       ],
       "edges": {
@@ -2024,14 +2024,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/network-baseline-deliver.yml",
-      "digest": "c27e164cab37b1038272bc5e763aff90a6b877b3b7eded31c502192bddbf2f45",
+      "digest": "8e23602dd7dc0ecc2cef02adb77b958161a9b1d7758d766f459126eb0d3b4512",
       "references": ["./.github/workflows/network-baseline-deliver.yml"],
       "jobs": [
         {
           "id": "deliver",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "eeb990a0025d68111dca9b574cb6df0ede6d1066bdc8327071e3a0dce8a32ef4"
+          "digest": "050cff1327d24914fd6a90d352c551a4bc0a5b7c150129a8fec8bedd1bbd7cfd"
         }
       ],
       "edges": {
@@ -2048,20 +2048,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/network-baseline-record.yml",
-      "digest": "f4e5599494758d1388fffa84a5bfd35237e3915cc6a721d9d0f541ec026f4554",
+      "digest": "b1412cbce55b4fadda6c0fecde5aff6503db3bab22f14d880a71a441ffe778b2",
       "references": [],
       "jobs": [
         {
           "id": "build",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "b7c03a06866ac0773c0b4d4e7dfb111c80736a5cc23561716d90e8f86732e9d7"
+          "digest": "ca8143f0c2115ce255758d124e287cf99cc1e03c0c8690b9b5e64de5b5f1993a"
         },
         {
           "id": "record",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "d2c8f251995e743cbe13b6f7f54a2fcf6dcccaede9e93f4b2446562a5379b852"
+          "digest": "71617cdd95b9f1851f2b95c31277043fee378870438d48ae342a6197292b378f"
         },
         {
           "id": "deliver",
@@ -2089,14 +2089,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/network-baseline-request.yml",
-      "digest": "240e82446ed558a4fd5fff0888aa2c85cf191691d16533997cb86beb60c7aaf9",
+      "digest": "4dfd73eaa5497a640692c86d0ce2ea99b6114185e4c510fdf99c203171f62964",
       "references": [],
       "jobs": [
         {
           "id": "request",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "f9d69f6d1b4387484ed078e928b50cb3e1d52ea4f0b2d55296599ea0323c4164"
+          "digest": "a386cb60c92f1999ec326c52bf9d37f1bfd5aaec2268ded4aef35f475c4e8133"
         }
       ],
       "edges": {
@@ -2111,38 +2111,38 @@
         "type": "checkout"
       },
       "path": ".github/workflows/nightly-property-test.yml",
-      "digest": "e537277312a403618ea22689a7f60668393ae0971f918f72e7fafcefde931989",
+      "digest": "c7c3336282fe428109aac9f8a68bf3b84d82be674be508b860d60950cc9b1677",
       "references": [],
       "jobs": [
         {
           "id": "provider-request-three-wise",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "9aa2142523fb06dadfd8554e715c89c8e95c730d1b007879f2f6beb754a9ce8a"
         },
         {
           "id": "provider-request-combinations",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "9aa2142523fb06dadfd8554e715c89c8e95c730d1b007879f2f6beb754a9ce8a"
         },
         {
           "id": "turn-outcome-combinations",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "9aa2142523fb06dadfd8554e715c89c8e95c730d1b007879f2f6beb754a9ce8a"
         },
         {
           "id": "chat-mutation-matrix",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "9aa2142523fb06dadfd8554e715c89c8e95c730d1b007879f2f6beb754a9ce8a"
         },
         {
           "id": "tanstack-drift",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "9aa2142523fb06dadfd8554e715c89c8e95c730d1b007879f2f6beb754a9ce8a"
         }
       ],
       "edges": {
@@ -2158,32 +2158,32 @@
         "type": "checkout"
       },
       "path": ".github/workflows/nightly-test.yml",
-      "digest": "acd6d424d38e424dbb94a65f0b92a578359527b52376b3c38c837f6627b42bac",
+      "digest": "3cb153b706ec6910810c4150acd4b9aac0b8dd5056fbe2a6214a198278c9b008",
       "references": [],
       "jobs": [
         {
           "id": "workspace-replay",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "05b7e186881253841204324b4312263065cffc7f477d81eb8198e4ec09c8ab53"
+          "digest": "8b8053cc292e6af1d7dae5b1ce5f300b1539d0eafe08eeb5ba7065109b2f4984"
         },
         {
           "id": "full-test-plan",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "34b1d826b79f5c820760bd765ffa88050aa0341f0a64cc439b70b594deb936c3"
+          "digest": "3bf154144cef69876b89245e2f531612616b19178984f9593abbda91bad12dd6"
         },
         {
           "id": "full-test",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "9aa2142523fb06dadfd8554e715c89c8e95c730d1b007879f2f6beb754a9ce8a"
         },
         {
           "id": "web-build-profile",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "8ba9efb8350808540310ed209f687d62e982927c07a569ec9a11030388dbfbda"
+          "digest": "80ad8ca252000b9e6b31f1746e8a082470902393b830563c49d40335abcb327f"
         },
         {
           "id": "marketing-screenshots",
@@ -2195,31 +2195,31 @@
           "id": "postgres-suites",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9cf19e098b61ec4c0e76223973243759838ac3e10f70c7b71ec1fc258dabdc9f"
+          "digest": "d34fa5adde51d93266de971fc9abae62db4d6f8623038da881e64bff213bdb40"
         },
         {
           "id": "valkey-suites",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9cf19e098b61ec4c0e76223973243759838ac3e10f70c7b71ec1fc258dabdc9f"
+          "digest": "d34fa5adde51d93266de971fc9abae62db4d6f8623038da881e64bff213bdb40"
         },
         {
           "id": "smoke-suite",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "9aa2142523fb06dadfd8554e715c89c8e95c730d1b007879f2f6beb754a9ce8a"
         },
         {
           "id": "migration-exact-base-upgrade",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9cf19e098b61ec4c0e76223973243759838ac3e10f70c7b71ec1fc258dabdc9f"
+          "digest": "cc3edcfe62c1266069db6018f53ad579115a2b51b9e602b27f82103f78185c64"
         },
         {
           "id": "report-failure",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "55caf267ace186de576936a2c3c8d91d2a1e566fef469f493f1a53e392d94e12"
+          "digest": "d3175295ee500d48a9cf9fa68fea50e66599777d78c737b5a581adaa4847e291"
         }
       ],
       "edges": {
@@ -2240,26 +2240,26 @@
         "type": "checkout"
       },
       "path": ".github/workflows/nightly-typecheck.yml",
-      "digest": "9d62de2d732234317eb722d1fb0a737f7e416d9a0a510869d2a4dbe15d31aafc",
+      "digest": "47a8a325581aaa3c9bd5af95c3b7caab476dae766680c950e901dac378904c1b",
       "references": [],
       "jobs": [
         {
           "id": "full-typecheck",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "6918353cd75cfe16ac8869cc39123a90091301265aba964d1c3246c331eb995f"
+          "digest": "04f5f8d443be8620fa252f4cad0979d8ce1560c34cf94b174cc240e725c4ba7d"
         },
         {
           "id": "cumulative-type-cost",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "6918353cd75cfe16ac8869cc39123a90091301265aba964d1c3246c331eb995f"
+          "digest": "649421c9bdc1300455600fe26f326ecfe2364af05691728141eefc0eebcec8be"
         },
         {
           "id": "fresh-web-sources",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "2319c316fb2fa3dd9acb235bd75d1e2f4c5b3bc90b13042e8ff55e38bb63f0cb"
+          "digest": "dc0639d9052860b218a096e63013937021cd9e12bd0da031f326fe3a38b46935"
         }
       ],
       "edges": {
@@ -2319,14 +2319,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/provider-request-schemas-check.yml",
-      "digest": "bfbe8ab744bc3b738ac4db1665e45c9c05a9ab232851a45c7b1d3edcd423e068",
+      "digest": "0aae7ba032a3cc810550a81c7fe74443191264ab28e3e297e03c0a95e440718a",
       "references": [],
       "jobs": [
         {
           "id": "provider-request-schemas-check",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "d8ee1a7ff7bb8f3fac8f4a3d1b8129a5c3113ad4452ae47a4c401362faf6ef81"
+          "digest": "71bb6f28a9cba117ca8b4177ada5704fcc509f80af5ae04a5a09f45ced855e46"
         }
       ],
       "edges": {
@@ -2343,20 +2343,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/publish-npm.yml",
-      "digest": "1ef4f93f4d2fc724d7bc13b8ac9de747262867a2a3d9316943336537cffd0c5d",
+      "digest": "064cde986a7919fb6384a58f2477867f89ede28feb707dad9687de92ad04698a",
       "references": [],
       "jobs": [
         {
           "id": "release-trigger",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "76157b995976eaf6c50ea3b97c5b06872e4a14227fbd9067b515a5dc95c0b19b"
+          "digest": "39cacd3a8b5fac34e73333bcd8ad8c7f37614b663b723649fee04da64941b790"
         },
         {
           "id": "pack",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "e05451f3f0b8bb9d56f7e86f82b9b03660ee0ef7e891c2d3f73747ad00007001"
+          "digest": "3b2b692f181f4ed28bd4ea8b2975fa1d1a5ef8138f27f37ede23a80aa8cf6609"
         },
         {
           "id": "release",
@@ -2368,7 +2368,7 @@
           "id": "verify-npm",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "1d1f5eead0ca1a5c178ff85adafd4670caf9095208fd01f78797d6e91af1ce9f"
+          "digest": "482975232ab80f65cd3790477761e46f23debcbde84c0f64dfba1cc4bf0cc8a7"
         }
       ],
       "edges": {
@@ -2387,14 +2387,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/publish-product-media.yml",
-      "digest": "e36ba2927fc72088798ad2822a8b39b2ff36f40ad022864e1b36f13b6401d210",
+      "digest": "f7819c285a0fc61d035663dbad2a7d69fc2581d7f0d58b3d0a9579af4e75d527",
       "references": [],
       "jobs": [
         {
           "id": "publish",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "66df4437cadf0f280af6a24a988748bdbec9af2a8aed105364d1b72514dd1e73"
+          "digest": "5e2ea32be7588764c710c07e97bc8a75c87714bf0d03dc250825c904515ffa96"
         }
       ],
       "edges": {
@@ -2410,14 +2410,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/quarantine-prune.yml",
-      "digest": "8bfa3e711ba2facfc57d0ccd5d3909ae1fa541277d4346a9284b6d4c61553d88",
+      "digest": "e76309e2d0e73d5acb3337732e265806d4e90078b2004f04640d91beba7e4040",
       "references": [],
       "jobs": [
         {
           "id": "prune",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "1594e82bf77ec13690eba97617eebf111475758e186cd1785577b72ed1f1cdc7"
+          "digest": "185648542be91ee82d779e0e3206de2724c05ff5bf0e53b174dca99cdf79e878"
         }
       ],
       "edges": {
@@ -2435,14 +2435,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/query-perf.yml",
-      "digest": "012826efa702dd21714ab350baa7d3c0ee14446a97804d88c1b8d159900ff360",
+      "digest": "6cca43e31e3a49d2cb2e45ed8b50167c203e12bb1b232d5faf2ec6555350985f",
       "references": ["./.github/workflows/query-perf.yml"],
       "jobs": [
         {
           "id": "query-perf",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "7a16852fa6ddcf4e8cd06111e946f2d328cf9eb5b84b5388d9c1ff2a956bdada"
+          "digest": "75cb4c886db0e19ef99e02e47b615d87ebe9dd962369fbbd687d0eed4e00e9d4"
         }
       ],
       "edges": {
@@ -2459,14 +2459,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/railway-smoke.yml",
-      "digest": "ea1e12b8ecae5fb6884bd2a8c47570f9135ed18541b2453d82d4a2d48614086e",
+      "digest": "d062cb52b52d0686c5a07c704778c7f6bda2d348c77ce97c33e6f3211b570265",
       "references": [],
       "jobs": [
         {
           "id": "smoke",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "d876b79eed9a1cdb86354678c25e79db8a3c40ea1763f003a6d25b3c3313ff5b"
+          "digest": "2e0456fa0757db9a1db64c435c15e839e768396ec44b4a2eeefb3ca8becc59a2"
         }
       ],
       "edges": {
@@ -2482,14 +2482,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/railway-template-source.yml",
-      "digest": "dc4c6b8346a8ab7a07a7bf4c9820fc0321679215ef781f8ee08b2189eaff91d0",
+      "digest": "54691a2c876deb167edc2a036971850d7e6da3551ebeb8cbedbe83fd0ec11dc0",
       "references": [],
       "jobs": [
         {
           "id": "drift",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "5ead2c270ab1472f981c35aa7115d09266cdad30f30f7163caff4d66d4c4b266"
+          "digest": "2b4489d1d18996bd8461f088bf13eb5fd31cd8da125cbcf81e36937d115d15fb"
         }
       ],
       "edges": {
@@ -2505,44 +2505,44 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release-desktop.yml",
-      "digest": "074c9f23d71475bf8128458cf8e31cde757ddf9a0541329980a1d40714d6e434",
+      "digest": "006a1a4494da035dbd20c888c6d18a9756de80f846206b9fddf3483e12017b89",
       "references": [],
       "jobs": [
         {
           "id": "resolve",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "fcf520d1366527506386e57ac2e37d43648b69b9801803c2728fcba039a71a66"
+          "digest": "9bf0c6db4369c9a1e07392d81016802c456ac90fe58c585514c4131e65496207"
         },
         {
           "id": "build",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "53845e6649b21fd03e7272a60d75511972019a8b9aea29148a096c4033bf00bb"
+          "digest": "f06641e01dba6470ca4fa2303c225f0198af629cbeaca316b988d77ff9e367db"
         },
         {
           "id": "verify-production",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "17fa83f6e26bc215e3bd11593b7beabd5089f20fdcf8be380d7ddbe0af166d8a"
+          "digest": "d6ab4ee46d951290cbc49ac8ed8a04584943304fd5f4a2c515d8701fbd6851a3"
         },
         {
           "id": "manifest",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "073716a94ef5ade0a46bc4c240794d52577bbaeb535b3f3a878e7cd8e3d10ce7"
+          "digest": "328d1d064023deaab9f005f74d00851e3aded4c7f36c7bd57ee743055477dce1"
         },
         {
           "id": "promote-latest",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "9feeedc6e9265717970f48eea75516bc73040431d738715b62b1313ef71c5345"
+          "digest": "a7afeb1fee2ccc63137ef4a98f72ec19e8c3d682a1c4434b6856f2333c033713"
         },
         {
           "id": "carry-forward",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "b51a70f31efe1624e9272a1991bce1ff6e5eef9b185ad07f08b6a9ec371916b8"
+          "digest": "0972d7344a36e2f78293371754fbb5b23063e25b1df43944e5909d759b3d4ea3"
         }
       ],
       "edges": {
@@ -2562,14 +2562,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release-pr.yml",
-      "digest": "9d1c1a2d3b9771dadaa5bb2c32c58dea71917d0fa8ef93eb25a143893c8aa48a",
+      "digest": "7d3d3192a90bf33a2aa23125883613ade7627935f37ad407ecbd5002cbdb9b08",
       "references": [],
       "jobs": [
         {
           "id": "gate",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "5cbc5f1abf3d2cdd10e7b13e8f79874594796b0793719bbb163f916e9428002c"
+          "digest": "e81eb1be2bd3bf47a2654bf6d6e29eb9e059ca8c11a9c46ab6ad1e2a51c54ee0"
         },
         {
           "id": "version",
@@ -2591,14 +2591,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release-proof.yml",
-      "digest": "afe3acb24bccfc8afd77abcb23239e0b938f36d0950181af8b46ecb5a490ebe1",
+      "digest": "d94913900c530d3001f351c1b174269d2d33d122ff2c69a034ad7e6723b76fea",
       "references": [],
       "jobs": [
         {
           "id": "dispatch",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "e234f1879742fbf04db9055337ecc59d022047869670a61a9119602d8252b02d"
+          "digest": "02993c5d8d743f940245e7628f29db50684d26de0cab07b844d4b7ee0a66a6c3"
         }
       ],
       "edges": {
@@ -2613,20 +2613,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release-tag.yml",
-      "digest": "475a03a2aeb29440cc62d498890caad6de17f77937a13e333f32ebe026422b82",
+      "digest": "01f01a3be671677fce776acd8b1e819f4d0405fc16a993a35c5e4a7454ed5fcb",
       "references": [],
       "jobs": [
         {
           "id": "tag",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "98ee47c13930b95f3b53b851667b339a12d8535c96b9de5f68b853b87db5ea4f"
+          "digest": "29b9b8b38882dcb71ad73749a912bee78c6ade684672847eb6d46a6a11ae18b6"
         },
         {
           "id": "marketing-freshness",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "96caf16f4a40fb3c1eecd1cd49e02dea542b240823dfcf5d32f55636caa9aa01"
+          "digest": "07085f16354b2380d9d5a1e119546c05593e38a1e4aa3ef3dc742a45ffc79c52"
         }
       ],
       "edges": {
@@ -2643,50 +2643,50 @@
         "type": "checkout"
       },
       "path": ".github/workflows/release.yml",
-      "digest": "482fe766479a31ca182de38d597249f37c8c1092827a9c2337c1d53627401bc4",
+      "digest": "38c25e225aff6d7d74ffbda1e10743660a1de9c345351ceee163d732cdbb0a16",
       "references": [],
       "jobs": [
         {
           "id": "resolve",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "cafc1465c1a1b53fa5c5cee78ad2935b9d3924aa988c7c30f164c5339b53abed"
+          "digest": "30edbd20b566ce5a5580836002d94d665d250e73443d5a2942f52ce27e639a10"
         },
         {
           "id": "smoke",
           "kind": "support",
           "qualifier": "Prerequisites follow the workflow's execution conditions.",
-          "digest": "de72a9f8fc69de8ea72356febe64b408f662b3746b484ab19b4738f21ca63304"
+          "digest": "e747a03ac2b6dff3c3169de2013891d7f3acb80de730bc1d8fd84cd3338148e3"
         },
         {
           "id": "build",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "4387250fb605e2193605676495bac39e5936c4a35f74eebe1cdb1d8f4bfd4fee"
+          "digest": "cf1295a485dba391bfac25d565723803688e1a4638f876f43ecaa2c1a717b9dd"
         },
         {
           "id": "prepare-web-image",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "edaff7fe5d755bdeb892d031beec78d4cd4e34094f57b0cec76f39414197f5da"
+          "digest": "a66b79e4669e0188648d653bd29b29c1a23608af0f8ef7f5b1468b79b15f10e9"
         },
         {
           "id": "manifest",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "82b008ead575f0484a58b10103a64015f814e8a495ba989e94b9f11055418285"
+          "digest": "bbd7a542d02176f5f3aa0ef86d6e74bf2e33c08b55d7f758def41f42dbaa3c4b"
         },
         {
           "id": "promote",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "8b690f10e5995e32982e317de18661598e4d9c06ccb046ade9f8a84d3a007840"
+          "digest": "28016dfcc5f3edd5932d1c93154686b035988d37bfecbcabf7782138aac0ecb9"
         },
         {
           "id": "promote-staging",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "1552236e184650f39fbbef22a50b8bd5d04e55be2f42f7957f2fbc70cd57dfd0"
+          "digest": "18288b69a0ac55baedc7b6eae551242135daca29a8d824d50904caed6b406cf2"
         }
       ],
       "edges": {
@@ -2712,14 +2712,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/safe-chain-cache.yml",
-      "digest": "56d96d0fc0f591e8b18b641cb0e02c9bf81b33e03beb6a575abad993a0573c9f",
+      "digest": "dd53e4029da98f5c4736a859df0adf8f3acbfa9c7d4edd820e022a12b1a0e6c1",
       "references": [],
       "jobs": [
         {
           "id": "warm",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "4e0d6533831734f5fc4fdb90ea5a75c83df36db12a3844a4032bf78afa15c862"
+          "digest": "8ac898479ea696b3d624bf4918bf9809fee46da9454f193fc53462bab0b8fe83"
         }
       ],
       "edges": {
@@ -2735,14 +2735,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/scheduled-run-alerts.yml",
-      "digest": "cc6accbc259706d3d34bfd08f4a35a3a26a61d4066139bb06960e758d8db5332",
+      "digest": "7affbac14ac511d18d06bd8dc3e1b6ac7881cc2d6e43f9aaf150fb113a3c549c",
       "references": [],
       "jobs": [
         {
           "id": "notify",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "0167e471cac7a88b9a78e3bed467d1e293d37898d43258491894db5247cac9ca"
+          "digest": "8c6c37c9b9517671d3f7cb6fc78008b8227a314778db60104520978d6e4b4c9b"
         }
       ],
       "edges": {
@@ -2757,14 +2757,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/scorecard.yml",
-      "digest": "5333b1823f0b2dcc7ee9b7e73e8bda5b6027d01ef26e0341584f51ed2ed556fd",
+      "digest": "3493d08721ce3e1a2f3dac4c0b9063c9439bf524f7c75ed32068d20ab91bfefc",
       "references": [],
       "jobs": [
         {
           "id": "scorecard",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9e7f06a1299a6f81978f37d32fff667299b7ccace916043cf16bf80420ed3888"
+          "digest": "f637670969dc5aa63e3d328d6c435cbaf872b633501aad9569b98370838b6be9"
         }
       ],
       "edges": {
@@ -2781,14 +2781,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/security-txt-guard.yml",
-      "digest": "74365e8d8a9e7d7582533502d0b64d60c2f76db084d3dd8d59232de6995be9af",
+      "digest": "8e806d520b8c98571fffd64054a966ab88f9f21f5461b66c5dc1d555ef39a296",
       "references": [],
       "jobs": [
         {
           "id": "check",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "24b35e5726b89d2346ecabddc2612abcb7a43a92daa452f0762c97924317b48f"
+          "digest": "6c95340c018e7262064a09d0f02107f30141fdb32a33d3c68b2f181e47b99a2a"
         }
       ],
       "edges": {
@@ -2803,14 +2803,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/staging-response-policy.yml",
-      "digest": "2097ea0869b87f8e0f01ca44811ae8f6df41a8f04aa7674bbe33a35401253153",
+      "digest": "3a4604d2c235b096f534b1d5a60c3f114349439b61272ae6ff514d9f41fb1d6d",
       "references": [],
       "jobs": [
         {
           "id": "check",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "fd7325e0df8056b15e0e5dab4b4109e589fc86d4a017863072d87f78590874f1"
+          "digest": "30d367b7b46de0fae84a5aba8852c8a8a8783eed7e085bf4111c12bf7088e012"
         }
       ],
       "edges": {
@@ -2826,14 +2826,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/sync-branch-protection.yml",
-      "digest": "5e4db9122a32e87b6f8fc65b30232183bab460c7b243843cf050319ed3792d92",
+      "digest": "71755a67d422cc54d6a5d6f446092102c5f9ad620c73f2f0f51416237a2b7366",
       "references": [],
       "jobs": [
         {
           "id": "sync",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "ee1ef389164603be76b82583976d07740da003899d99c20bfd837a5e431e58a5"
+          "digest": "aca152727e965f3f4110b3759b48a72f70efa9b982ae1f0cb9f4bc9301a1ba18"
         }
       ],
       "edges": {
@@ -2849,20 +2849,20 @@
         "type": "checkout"
       },
       "path": ".github/workflows/type-cost-measurement.yml",
-      "digest": "a34307a3573a64d7e4d1e1bf892c6a2919dfc97ba23a558292769b8a800bb79f",
+      "digest": "ad067016566b419cbfd43985b2f26b814c9cdb414be881eae271d24012fdd00d",
       "references": [],
       "jobs": [
         {
           "id": "prepare",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "a5a8fbd10895026f190c9b8e628e2d009eb8ab80c3c6365149db05d5ec5109e5"
+          "digest": "0f1c3651b1858dfeaec4f78437b71fe9efc602cde707585957dfe7caed3fa0c6"
         },
         {
           "id": "measure",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "b8e7b63c8ad073d2dcb181a818dc7deac11e2c374977810e32475cd1f1f92ab1"
+          "digest": "3bf7a30465d181cfce0e9e4f8f39091519fdd808df6cfa40bcda990b64f67f2b"
         }
       ],
       "edges": {
@@ -2880,14 +2880,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/typecheck-base.yml",
-      "digest": "1c6c39434b399ebf373451decdef63804ef2255c00eced8d3a2252d8e166d0cf",
+      "digest": "706d6e734e53a2dd7e2cae7d234d88d54a5e1d97c344728edadd6504313af8d9",
       "references": [],
       "jobs": [
         {
           "id": "record",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "a5a8fbd10895026f190c9b8e628e2d009eb8ab80c3c6365149db05d5ec5109e5"
+          "digest": "d693f8920010b298b145eaaeeb9c2154f0ca8383690a0bbdc14ccd2eedebee63"
         }
       ],
       "edges": {
@@ -2904,14 +2904,14 @@
         "type": "checkout"
       },
       "path": ".github/workflows/visual-preview.yml",
-      "digest": "c8c8e245b0ac22c8ccf34e5707061d5e0038ae87bf322df5ba91e21ab490a9eb",
+      "digest": "fa92db230f166f10bead6c191c00950534ddf183872808e7d5508c7317c15ff3",
       "references": [],
       "jobs": [
         {
           "id": "preview",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "9ba1baf0e8d99c44a4fc3101ad78f3e49b9b6f9ca7b7e8a69499e19c56dd2502"
+          "digest": "98303071fabff874cb51eb04a10f7544d163793062eaaea3e765a34ffaba1fd7"
         }
       ],
       "edges": {
@@ -2949,7 +2949,7 @@
         "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       },
       "path": ".github/actions/npm-independent-release/action.yml",
-      "digest": "17a02f1780cd70e01bea4cf03e4b460b42d4e892da6213374740d743998e1628",
+      "digest": "95c6261d7eb465f0043af7ccbdca974c3f9e1cbc3972b427010e488a598d3945",
       "references": [
         "./.release-tooling/.github/actions/npm-independent-release"
       ],
@@ -2990,7 +2990,7 @@
         "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       },
       "path": ".github/workflows/audit-branch-protection.yml",
-      "digest": "1b5298faa4735829627072b32822f4a5079228888ca9381aa138747f2344e7c2",
+      "digest": "e83662d3ad939d9116e8bfbdff98bd47cda55d4edc7985cdd80eb596a41ed6fe",
       "references": [
         "stella/.github/.github/workflows/audit-branch-protection.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       ],
@@ -2999,7 +2999,7 @@
           "id": "audit",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "990edc13391f2f3ebfd80997780a5e930b2e1a1ed86853fe6ede5fd1ac0f83ff"
+          "digest": "5ac3a389ca0a4f5e64d56e550a38ebc6232a71ef3cba200ab7254d5b622ac5c0"
         }
       ],
       "edges": {
@@ -3019,7 +3019,7 @@
         "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       },
       "path": ".github/workflows/changeset-release-pr.yml",
-      "digest": "4ab607b0c4262640a4430f15b642335d19ee04ac0c0948221aaa16826b7267f5",
+      "digest": "e3ef180bd15f8e603e3bc25d2675f7179ec2de439fdff39d34936ecf969cb432",
       "references": [
         "stella/.github/.github/workflows/changeset-release-pr.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       ],
@@ -3028,7 +3028,7 @@
           "id": "version",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "79ce86026528052ad520d31ff43b6e70e49aee63add125f14c0849cd3c6c4013"
+          "digest": "f7e162f987ba0972440e763bc7a824500bf02b7a592ffb7b304d15cfc3e0e238"
         }
       ],
       "edges": {
@@ -3052,7 +3052,7 @@
         "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       },
       "path": ".github/workflows/label-sync.yml",
-      "digest": "b141011bce743ca1892097379d77c3979362337289302abce867d0de39adeaad",
+      "digest": "fb31b6c9e6eda510262606a37946185d166851c139a36b46230a42c67df44c1c",
       "references": [
         "stella/.github/.github/workflows/label-sync.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       ],
@@ -3061,7 +3061,7 @@
           "id": "sync",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "49f30070b8d87851b3a7d68bb056d470213c3aee168804854d5effc2e9048338"
+          "digest": "81ba25a88afbeb61aee08c73fabcf38e28fbc8f3c7da3af7e2000508ceaad9c8"
         }
       ],
       "edges": {
@@ -3079,7 +3079,7 @@
         "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       },
       "path": ".github/workflows/npm-independent-release.yml",
-      "digest": "5bd63081091502b6ca9cdc76ed0ec55fbd79e8fc7546fbb43ca7a8e6ca9ea45b",
+      "digest": "0fac9e3f1d9122c37ab4d0a136d2bd83cc82689667dc5307fd54991395502af3",
       "references": [
         "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       ],
@@ -3088,7 +3088,7 @@
           "id": "release",
           "kind": "priority",
           "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions.",
-          "digest": "5069de67bf15ce39f0aa8a6094ca9dfa1386aa7f4b259c0f189ed7b1cfdea4fa"
+          "digest": "0043e1958d18a9b95293c092653f8c20d3aa636a36348eaa63068c5e09cca921"
         }
       ],
       "edges": {
@@ -3108,7 +3108,7 @@
         "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       },
       "path": ".github/workflows/pr-lint.yml",
-      "digest": "568c649d3c95eda4be3feb6e048983f6c872fe0d2fa71a8a9c1ccfc01f10124b",
+      "digest": "aefa2ddf3dfc803c20388cf78e4396087142bdd320d690d0e352106b127cefbf",
       "references": [
         "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       ],
@@ -3117,7 +3117,7 @@
           "id": "pr-lint",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "f0336aaba4ea0c36d3e8e23af6ac921abf3c85b8db8d4c572e4338f597978f64"
+          "digest": "1395303d1bc7611ba2c73c13f0f183cf6e0a36da321fbd89a275e1c34f95adc7"
         }
       ],
       "edges": {
@@ -3138,7 +3138,7 @@
         "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       },
       "path": ".github/workflows/provenance-update.yml",
-      "digest": "2c6089f30423965c1a237829519dc63e7dbf0f51dd4b6d84b231e9d52efdd0a0",
+      "digest": "4b2f9c7282d8cf3f53f7ad34e3a3013e238e7eaf37ac5e1637d6fce9f4a65afe",
       "references": [
         "stella/.github/.github/workflows/provenance-update.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       ],
@@ -3147,7 +3147,7 @@
           "id": "update",
           "kind": "ordinary",
           "qualifier": "Checks; no publication, tag creation, or deployment.",
-          "digest": "8580f785c7810434344c5405e8845c49e32dede7de02087317849ef18976218f"
+          "digest": "73036e4e5dc0a3cbe03de836476c1acace2b5ea735fccc1df1de24dbad4c656a"
         }
       ],
       "edges": {
@@ -3170,7 +3170,7 @@
         "sha": "5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       },
       "path": "actions/setup-bun-cached/action.yml",
-      "digest": "e7c80590f1b780344c87f4d19ae9c16f4f7a1a1629c237abe3a9896acb9a6ca2",
+      "digest": "04303bc895a2f258c5cc983d260937396a7590611f07e6f21a29a9ecfbb9ae31",
       "references": [
         "stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8"
       ],

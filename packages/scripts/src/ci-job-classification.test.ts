@@ -787,7 +787,7 @@ test("classification generation reaches a fixed point and preserves human decisi
   expect(fixtureDecisions(second.value)).toEqual(decisions);
 });
 
-test("real ci.yml classification is stable across comments, timeouts, step names and cache keys", () => {
+test("real ci.yml classification is stable across comments, timeouts and step names", () => {
   const original = readFileSync(
     path.join(repositoryRoot, ".github/workflows/ci.yml"),
     "utf-8",
@@ -800,7 +800,6 @@ test("real ci.yml classification is stable across comments, timeouts, step names
     `# unrelated comment\n${original}`,
     original.replace(/timeout-minutes: \d+/u, "timeout-minutes: 123"),
     original.replace(/- name: [^\n]+/u, "- name: Renamed step"),
-    original.replace(/key: [^\n]+/u, "key: unrelated-cache-key"),
   ];
   for (const edited of edits) {
     expect(edited).not.toBe(original);
@@ -837,4 +836,80 @@ test("workflow permission defaults and publication gates enter classification di
     }
     expect(changed.value.digest).not.toBe(original.value.digest);
   }
+});
+
+for (const [before, after] of [
+  ["with: {push: false}", "with: {push: true}"],
+  ["with: {mode: check}", "with: {mode: write}"],
+  ["with: {source: value}", "with: {destination: value}"],
+  ["env: {MODE: check}", "env: {MODE: write}"],
+  ["env: {SOURCE: value}", "env: {DESTINATION: value}"],
+]) {
+  test(`action configuration changes require classification refresh: ${before}`, () => {
+    const f = fixture();
+    const workflow = `jobs:\n  caller:\n    steps:\n      - uses: docker/build-push-action@${"a".repeat(40)}\n        if: always()\n        ${before}\n      - run: echo initial\n`;
+    const key = "candidate:.github/workflows/ci.yml";
+    f.documents.set(key, workflow);
+    const options = {
+      ...f,
+      decisions: fixtureDecisions(f.manifest),
+      localActionPath: (directory: string) => `${directory}/action.yml`,
+    };
+    const baseline = generateClassification(options);
+    if (baseline.isErr()) {
+      throw baseline.error;
+    }
+    const changed = workflow.replace(before, () => after);
+    expect(changed).not.toBe(workflow);
+    f.documents.set(key, changed);
+    failure(
+      verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
+      ".github/workflows/ci.yml/caller",
+    );
+    failure(
+      verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
+      "bun scripts/check-ci-job-classification.ts --write",
+    );
+    const refreshed = generateClassification({
+      ...options,
+      manifest: baseline.value,
+    });
+    if (refreshed.isErr()) {
+      throw refreshed.error;
+    }
+    expect(
+      verifyPublicMetadata({
+        manifest: refreshed.value,
+        reader: f.reader,
+      }).isOk(),
+    ).toBe(true);
+    f.documents.set(
+      key,
+      changed.replace("run: echo initial", "run: echo unrelated"),
+    );
+    expect(
+      verifyPublicMetadata({
+        manifest: refreshed.value,
+        reader: f.reader,
+      }).isOk(),
+    ).toBe(true);
+  });
+}
+
+test("action input and environment mapping order does not change classification", () => {
+  const workflow =
+    "jobs: {check: {steps: [{uses: 'vendor/action@revision', with: {alpha: one, beta: two}, env: {FIRST: one, SECOND: two}}]}}";
+  const reordered = workflow
+    .replace("alpha: one, beta: two", "beta: two, alpha: one")
+    .replace("FIRST: one, SECOND: two", "SECOND: two, FIRST: one");
+  expect(reordered).not.toBe(workflow);
+  const original = parseDocument(workflow);
+  const changed = parseDocument(reordered);
+  if (original.isErr()) {
+    throw original.error;
+  }
+  if (changed.isErr()) {
+    throw changed.error;
+  }
+  expect(changed.value.digest).toBe(original.value.digest);
 });
