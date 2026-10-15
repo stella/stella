@@ -89,7 +89,10 @@ import {
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
 } from "@/api/lib/auth/auth-paths";
-import { describeAuthRefusal } from "@/api/lib/auth/auth-refusal-log";
+import {
+  createAuthRefusalLogPlugin,
+  markAuthRequestRoute,
+} from "@/api/lib/auth/auth-request-observability";
 import { forwardAuthResponseCookies } from "@/api/lib/auth/auth-response-cookies";
 import {
   checkConfiguredDemoAccountAccess,
@@ -109,7 +112,6 @@ import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
-import { buildFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import type {
   MemberAuthorization,
   MemberAuthorizationLookup,
@@ -205,6 +207,10 @@ import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-del
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  buildFeatureAccessSnapshot,
+  featureAccessReadPlan,
+} from "@/api/lib/feature-access/snapshot";
+import {
   AUTH_RATE_LIMITS,
   EMAIL_OTP_MIN_RESPONSE_DURATION_MS,
   LIMITS,
@@ -259,6 +265,7 @@ import {
   brandPersistedUserId,
   parseAuthProviderId,
 } from "@/api/lib/safe-id-boundaries";
+import { typedPgArray } from "@/api/lib/search/sql";
 import {
   assertSelfhostEmailOtpAllowed,
   assertSelfhostBootstrapSignUp,
@@ -1019,33 +1026,6 @@ const socialSignInOutcomePlugin = {
             ),
             provider: socialSignInProvider(ctx.params?.["id"]),
           });
-        }),
-      },
-    ],
-  },
-} satisfies BetterAuthPlugin;
-
-/**
- * Logs each 4xx answer of an auth endpoint by its route pattern and protocol
- * error code (`describeAuthRefusal`), so a failing token refresh is visible
- * apart from every other refused call behind the catch-all auth route.
- */
-const authRefusalLogPlugin = {
-  id: "stella-auth-refusal-log",
-  hooks: {
-    after: [
-      {
-        matcher: () => true,
-        handler: createAuthMiddleware(async (ctx) => {
-          const refusal = describeAuthRefusal({
-            path: ctx.path,
-            returned: ctx.context.returned,
-            body: ctx.body,
-          });
-          if (refusal.type === "refused") {
-            logger.warn("auth.request_refused", refusal.attributes);
-          }
-          await Promise.resolve();
         }),
       },
     ],
@@ -2185,10 +2165,11 @@ export const createAuth = (
       oauthUiFragmentBridgePlugin,
       createSocialLinkHintPlugin(getOAuthState),
       // Last, so it records the answer every other hook has settled on.
-      authRefusalLogPlugin,
+      createAuthRefusalLogPlugin(createAuthMiddleware),
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        markAuthRequestRoute(ctx);
         await signInRequestBudget(ctx);
         sessionLifetime.prepare(ctx.context);
         if (!ctx.path) {
@@ -2543,17 +2524,19 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
  */
 type MemberAuthorizationDb = Pick<typeof rootDb, "select">;
 
-// Bounded by the enrolment primary key (user, organization, feature) and the
-// feature registry. The caller is read as the table owner, which the
-// enrolment owner policy admits.
-const enrolledFeatureIdsOfMember = sql<
-  string[]
->`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId}), '{}')`;
-
-const featureAccessColumns = {
-  emailVerified: authUser.emailVerified,
-  userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
-  enrolledFeatureIds: enrolledFeatureIdsOfMember,
+const featureAccessColumns = (organizationId: SafeId<"organization">) => {
+  const { enrolmentFeatureIds } = featureAccessReadPlan({ organizationId });
+  return {
+    emailVerified: authUser.emailVerified,
+    userDeleted: sql<boolean>`${authUser.deletedAt} is not null`,
+    // Fold enrolments into the member read only when a self-serve decision needs them.
+    enrolledFeatureIds:
+      enrolmentFeatureIds.length === 0
+        ? sql<string[]>`'{}'::text[]`
+        : sql<
+            string[]
+          >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments} where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId} and ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`,
+  };
 };
 
 const ACTIVE_WORKSPACE_STATUS = "active";
@@ -2620,7 +2603,7 @@ export const resolveMemberAuthorization = async (
         memberId: member.id,
         role: member.role,
         email: authUser.email,
-        ...featureAccessColumns,
+        ...featureAccessColumns(organizationId),
         ...professionalUseColumns,
       })
       .from(member)
@@ -2659,7 +2642,7 @@ export const resolveMemberAuthorization = async (
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
-      ...featureAccessColumns,
+      ...featureAccessColumns(organizationId),
       ...professionalUseColumns,
     })
     .from(member)
@@ -2922,6 +2905,15 @@ type AuthSafeDb = ReturnType<
   typeof createMembershipSafeDb<TransactionOf<typeof rlsDb>>
 >;
 
+const createAuthDatabases = (
+  databaseIdentity: Parameters<
+    typeof createMembershipScopedDb<TransactionOf<typeof rlsDb>>
+  >[1],
+): { scopedDb: AuthScopedDb; safeDb: AuthSafeDb } => ({
+  scopedDb: createMembershipScopedDb(rlsDb, databaseIdentity),
+  safeDb: createMembershipSafeDb(rlsDb, databaseIdentity),
+});
+
 const resolveValidateAuth = async ({
   getSession,
   request,
@@ -3019,15 +3011,12 @@ const resolveValidateAuth = async ({
     return true;
   };
   const databaseIdentity = {
+    featureAccessSnapshot,
     organizationId: activeOrganizationId,
     serverValidatedWorkspaceIds,
     userId,
   };
-  const scopedDb: AuthScopedDb = createMembershipScopedDb(
-    rlsDb,
-    databaseIdentity,
-  );
-  const safeDb: AuthSafeDb = createMembershipSafeDb(rlsDb, databaseIdentity);
+  const { scopedDb, safeDb } = createAuthDatabases(databaseIdentity);
 
   let accessibleWorkspacesPromise: Promise<AccessibleWorkspace[]> | null = null;
   const getAccessibleWorkspaces = async (): Promise<AccessibleWorkspace[]> => {

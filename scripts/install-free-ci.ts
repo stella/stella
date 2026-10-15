@@ -1501,6 +1501,7 @@ type StepDefaults = {
 
 const POSIX_SHELL = /^(?:bash|sh)\b/u;
 const LOCAL_ACTION = "./.github/actions/";
+const SELF_ACTION = "$/.github/actions/";
 const LOCAL_WORKFLOW = "./.github/workflows/";
 
 const readYaml = ({ file, root }: RepoFile): unknown =>
@@ -1720,9 +1721,12 @@ const walkWorkflowStep = ({
     for (const dir of result.installs) {
       stepInstalls.push({ condition, dir });
     }
-  } else if (typeof uses === "string" && uses.startsWith(LOCAL_ACTION)) {
+  } else if (
+    typeof uses === "string" &&
+    (uses.startsWith(LOCAL_ACTION) || uses.startsWith(SELF_ACTION))
+  ) {
     const actionFile = ["action.yml", "action.yaml"]
-      .map((name) => path.posix.join(uses, name))
+      .map((name) => path.posix.join(uses.slice(2), name))
       .find((file) => existsSync(path.join(context.root, file)));
     if (actionFile === undefined) {
       invocations.push({

@@ -180,6 +180,9 @@ jobs:
           sparse-checkout: |
             scripts/retry.sh
             scripts/ci-install.ts
+            scripts/ci-install-store.ts
+            packages/sha256/src/bun.ts
+            packages/sha256/src/types.ts
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
@@ -187,7 +190,6 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Install smoke dependencies
-        timeout-minutes: 3
         run: bun .workflow-tooling/scripts/ci-install.ts "$RUNNER_TEMP/bun-install/smoke.log" --frozen-lockfile --ignore-scripts --filter @stll/scripts
         env:
           NPM_TOKEN: ""

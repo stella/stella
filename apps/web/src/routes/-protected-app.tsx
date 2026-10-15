@@ -13,6 +13,8 @@ import {
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
 } from "@stll/ui/inspector";
+import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
+import type { MatterChromeStyle } from "@stll/ui/matter-colors";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
@@ -70,8 +72,6 @@ import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
-import type { MatterChromeStyle } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
 import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
@@ -87,6 +87,7 @@ import {
   isSessionActivityCancelled,
   SESSION_ACTIVITY_INTERVAL_MS,
 } from "@/routes/-session-activity";
+import { UploadUnloadGuard } from "@/routes/-upload-unload-guard";
 
 const LazyInspectorPanel = lazy(
   async () =>
@@ -470,6 +471,7 @@ function ProtectedContent() {
   return (
     <>
       <ApiVersionMismatchReporter />
+      <UploadUnloadGuard />
       <SelfhostUpdateBanner />
       <PaymentRetryBanner />
       <header className="border-sidebar-border flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b bg-(--matter-sidebar-tint) px-4">

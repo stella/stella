@@ -3,6 +3,7 @@ import { afterAll, expect, test } from "bun:test";
 
 import { defaultPresentationPrefs } from "@/lib/presentation-prefs/preferences";
 import { PresentationPrefsProvider } from "@/lib/presentation-prefs/provider";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const { render } = await import("@testing-library/react");
 const { renderToString } = await import("react-dom/server");
@@ -53,5 +54,5 @@ test("provision mode is present in the host's first server and client render", (
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });

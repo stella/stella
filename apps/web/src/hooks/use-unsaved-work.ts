@@ -17,6 +17,7 @@ type UnsavedWorkSurface =
   | "chat-draft"
   | "docx-edit-session"
   | "document-docx-editor"
+  | "file-upload"
   | "pdf-page-organizer"
   | "playbook-editor"
   | "template-studio";
@@ -30,6 +31,7 @@ const useUnsavedWorkStore = create<
   "chat-draft": 0,
   "docx-edit-session": 0,
   "document-docx-editor": 0,
+  "file-upload": 0,
   "pdf-page-organizer": 0,
   "playbook-editor": 0,
   "template-studio": 0,
