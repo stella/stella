@@ -151,8 +151,10 @@ BEGIN
     v_user_id,
     p_workspace_id
   ) THEN
-    INSERT INTO public.workspace_members (workspace_id, user_id)
-    VALUES (p_workspace_id, v_user_id);
+    -- The application mints ids for its own inserts; the column has no
+    -- database default, so the function supplies one.
+    INSERT INTO public.workspace_members (id, workspace_id, user_id)
+    VALUES (pg_catalog.gen_random_uuid(), p_workspace_id, v_user_id);
   END IF;
 END;
 $$;--> statement-breakpoint
