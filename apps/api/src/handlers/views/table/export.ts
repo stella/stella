@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import type { JustificationContent } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -14,7 +16,6 @@ import {
 // oxlint-disable-next-line no-restricted-imports -- export boundary: brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { queryEntities } from "@/api/lib/entities/query-entities";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -39,6 +40,7 @@ import { DOCX_MIME_TYPE, XLSX_MIME_TYPE } from "@/api/mime-types";
 const JUSTIFICATION_FIELD_ID_BATCH = 1000;
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   description:
@@ -211,7 +213,7 @@ const exportTableView = createSafeHandler(
       const justificationRows = yield* Result.await(
         safeDb(async (tx) => {
           const rows: { fieldId: string; content: JustificationContent }[] = [];
-          for (const fieldIdBatch of chunked(
+          for (const fieldIdBatch of chunkItems(
             commentFieldIds,
             JUSTIFICATION_FIELD_ID_BATCH,
           )) {

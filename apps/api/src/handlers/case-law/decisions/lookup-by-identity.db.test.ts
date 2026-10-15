@@ -279,6 +279,17 @@ test("a decision with several parallel identifiers is one candidate", async () =
   expect(rows.map(({ id }) => id)).toEqual([supremeId]);
 });
 
+test("lookup draws the corpus court presentation independently of docket spelling", async () => {
+  const rows = await lookupDecisionsByIdentity({
+    caseLawDb,
+    country: "CZE",
+    locator: docketLocator("23 Cdo 1572/2012"),
+  });
+  expect(
+    rows.map(({ court, courtAbbreviation }) => ({ court, courtAbbreviation })),
+  ).toEqual([{ court: "Nejvyšší soud", courtAbbreviation: "NS" }]);
+});
+
 test("the publication and redistribution gates apply to an identifier match", async () => {
   const listingOnly = await lookupDecisionsByIdentity({
     caseLawDb,

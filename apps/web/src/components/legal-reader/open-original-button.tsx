@@ -1,11 +1,11 @@
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { ExternalLinkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import Tooltip from "@/components/tooltip";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 /** The scales the button is used at: a section row, and a tab header. */
 const GLYPH_SIZE = {

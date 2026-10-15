@@ -68,7 +68,7 @@ type ActiveExternalContext = {
   url: string;
 };
 
-export type ActiveSkillContext = {
+type ActiveSkillContext = {
   /** Absent for a built-in skill, which has no row: `skillName` names it. */
   skillId?: string | undefined;
   skillName: string;
@@ -88,6 +88,12 @@ export type TemplateChatThreadKey = {
   userId: string;
 };
 
+/** A reader's one conversation about a case-law decision. */
+export type DecisionChatThreadKey = {
+  decisionId: string;
+  userId: string;
+};
+
 export type ChatThreadTitleKey = {
   threadId: string;
   workspaceId?: string | undefined;
@@ -97,6 +103,8 @@ export type GroupedChatThreadsKey = {
   activeOrganizationId: string;
   search?: string | undefined;
   userId: string;
+  /** Only the threads that live in this matter. */
+  workspaceId?: string | undefined;
 };
 
 export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
@@ -130,7 +138,6 @@ export type ChatRuntimeContextKind =
   | "active-docx-edit"
   | "active-external"
   | "active-file"
-  | "active-skill"
   | "active-template"
   | "plain";
 
@@ -139,6 +146,12 @@ type ChatThreadQueryKey = ChatThreadRef & {
   contextKind?: ChatRuntimeContextKind | undefined;
 };
 
+/**
+ * A chat's skill never selects a kind: the thread response itself
+ * restores it (`activeSkill`), so a surface learns the skill only after
+ * reading the thread. Keying by it would read the thread under one key
+ * and run its runtime under another.
+ */
 export const getChatRuntimeContextKind = (
   context: ChatThreadOptionsContext | undefined,
 ): ChatRuntimeContextKind => {
@@ -153,9 +166,6 @@ export const getChatRuntimeContextKind = (
   }
   if (context?.getActiveExternal) {
     return "active-external";
-  }
-  if (context?.getActiveSkill) {
-    return "active-skill";
   }
   if (context?.getActiveTemplate) {
     return "active-template";
@@ -189,10 +199,21 @@ export const chatKeys = {
     "template-thread",
     key.templateId,
   ],
+  decisionThread: (
+    activeOrganizationId: string,
+    key: DecisionChatThreadKey,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    key.userId,
+    "decision-thread",
+    key.decisionId,
+  ],
   groupedThreads: ({
     activeOrganizationId,
     search,
     userId,
+    workspaceId,
   }: GroupedChatThreadsKey) => [
     ...chatKeys.all,
     activeOrganizationId,
@@ -200,6 +221,7 @@ export const chatKeys = {
     "threads",
     "grouped",
     search ?? "",
+    workspaceId ?? "",
   ],
   modelOptions: (activeOrganizationId: string) => [
     ...chatKeys.all,

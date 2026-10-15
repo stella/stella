@@ -1,327 +1,26 @@
-/**
- * Pinned-content checker for github-sourced catalogue skills.
- *
- * Nothing else validates the bytes a github skill actually pins: the
- * schema/loader only check the manifest, and the rev-bump automation
- * never fetches the upstream `SKILL.md`. So a pin whose upstream fails
- * the install path (bad frontmatter, an oversized body, too many/large
- * resource files) ships with green CI and only fails at a user's
- * install click. This script closes that gap: for every github entry it
- * fetches the pinned `SKILL.md` and enumerates the pinned directory, and
- * fails per-entry when any install-time limit would be violated.
- *
- * Usage:
- *   bun scripts/check-pinned-content.ts
- *
- * Set GITHUB_TOKEN to raise the GitHub API rate limit (Authorization
- * header on the contents API). Network is required; run in CI or with
- * connectivity, not on the offline verify path.
- */
-import { Result, TaggedError } from "better-result";
+/** Validate committed pinned-content facts offline; --refresh acquires and replaces facts. */
+import { panic, Result } from "better-result";
 
 import {
-  isAllowedResourcePath,
-  normalizeResourcePath,
-  parseSkillFile,
-} from "@stll/skills";
-import type { SkillMetadata } from "@stll/skills";
+  SKILL_FILE_NAME,
+  SKILL_RESOURCE_FOLDERS,
+  validateSkillPackage,
+  type SkillPackageDiagnostic,
+  type SkillPackageFile,
+} from "@stll/skills/format";
+
+import { catalogueLicensesMatch, type CatalogueLicense } from "../src/schema";
 import {
-  SKILL_NAME_PATTERN,
-  SKILL_PACKAGE_LIMITS,
-} from "@stll/skills/package-limits";
-import { readCappedBytes } from "@stll/skills/streaming";
-
-import { isGithubSkillEntry, loadCatalogue } from "../src/loader";
-import { catalogueLicensesMatch } from "../src/schema";
-import type { CatalogueLicense } from "../src/schema";
-
-/** Expected per-entry failure while fetching upstream content. */
-export class PinnedContentError extends TaggedError("PinnedContentError")<{
-  message: string;
-}> {}
-
-const FETCH_TIMEOUT_MS = 10_000;
-const FETCH_RETRY_DELAYS_MS = [200, 800] as const;
-const SKILL_FILE_NAME = "SKILL.md";
-const GITHUB_CONTENTS_LISTING_LIMIT = 1000;
-
-const RESOURCE_MAX_BYTES = SKILL_PACKAGE_LIMITS.resourceMaxChars * 4;
-const SKILL_RESOURCE_ROOTS: ReadonlySet<string> = new Set([
-  "assets",
-  "knowledge",
-  "prompts",
-  "reference",
-  "references",
-  "scripts",
-  "templates",
-]);
-const UTF8_DECODER = new TextDecoder("utf-8", { fatal: true });
-
-type GithubTarget = {
-  directory: string;
-  license: CatalogueLicense;
-  repo: string;
-  rev: string;
-  slug: string;
-};
-
-type GithubContentItem = {
-  path: string;
-  size: number | null;
-  type: string;
-};
-
-type Fetcher = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
-type RetrySleep = (delayMs: number) => Promise<void>;
-
-type FetchWithBoundedRetryOptions<T> = {
-  fetchValue: () => Promise<T>;
-  sleep?: RetrySleep;
-};
-
-const sleep = async (delayMs: number): Promise<void> => {
-  await Bun.sleep(delayMs);
-};
-
-/** Retry rejected transports twice; tagged response failures stay single-pass. */
-export const fetchWithBoundedRetry = async <T>({
-  fetchValue,
-  sleep: wait = sleep,
-}: FetchWithBoundedRetryOptions<T>): Promise<T> => {
-  const attempt = async (retryIndex: number): Promise<T> => {
-    const fetched = await Result.tryPromise({
-      try: fetchValue,
-      catch: (cause) => cause,
-    });
-    if (Result.isOk(fetched)) {
-      return fetched.value;
-    }
-
-    const delayMs = FETCH_RETRY_DELAYS_MS.at(retryIndex);
-    if (fetched.error instanceof PinnedContentError || delayMs === undefined) {
-      throw fetched.error;
-    }
-    await wait(delayMs);
-    return await attempt(retryIndex + 1);
-  };
-
-  return await attempt(0);
-};
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-const toContentItems = (payload: unknown): unknown[] => {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-  return isRecord(payload) ? [payload] : [];
-};
-
-const githubHeaders = (accept: string): Record<string, string> => {
-  const headers: Record<string, string> = {
-    Accept: accept,
-    "User-Agent": "stella-catalogue-pinned-check",
-    "X-GitHub-Api-Version": "2022-11-28",
-  };
-  const token = process.env["GITHUB_TOKEN"];
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-  return headers;
-};
-
-const joinRepoPath = (directory: string, relative: string): string =>
-  directory ? `${directory}/${relative}` : relative;
-
-const encodePath = (repoRelativePath: string): string =>
-  repoRelativePath
-    .split("/")
-    .filter((part) => part.length > 0)
-    .map(encodeURIComponent)
-    .join("/");
-
-const rawContentUrl = (
-  target: GithubTarget,
-  repoRelativePath: string,
-): string =>
-  `https://raw.githubusercontent.com/${target.repo}/${target.rev}/${encodePath(repoRelativePath)}`;
-
-const contentsApiUrl = (
-  target: GithubTarget,
-  repoRelativePath: string,
-): string => {
-  const encoded = encodePath(repoRelativePath);
-  const url = new URL(
-    encoded.length > 0
-      ? `https://api.github.com/repos/${target.repo}/contents/${encoded}`
-      : `https://api.github.com/repos/${target.repo}/contents`,
-  );
-  url.searchParams.set("ref", target.rev);
-  return url.toString();
-};
-
-type FetchPinnedTextFileOptions = {
-  allowNotFound?: boolean;
-  fetcher?: Fetcher;
-  label: string;
-  maxBytes: number;
-  repoRelativePath: string;
-  sleep?: RetrySleep;
-  target: GithubTarget;
-};
-
-type PinnedTextFile = {
-  byteLength: number;
-  content: string;
-};
-
-export const fetchPinnedTextFile = async ({
-  allowNotFound = false,
-  fetcher = fetch,
-  label,
-  maxBytes,
-  repoRelativePath,
-  sleep: wait = sleep,
-  target,
-}: FetchPinnedTextFileOptions): Promise<PinnedTextFile | null> => {
-  const fetchValue = async () => {
-    const response = await fetcher(rawContentUrl(target, repoRelativePath), {
-      headers: githubHeaders("text/plain"),
-      redirect: "error",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    if (response.status === 404 && allowNotFound) {
-      return null;
-    }
-    if (!response.ok) {
-      throw new PinnedContentError({
-        message: `${label} fetch returned HTTP ${response.status}`,
-      });
-    }
-    if (!response.body) {
-      throw new PinnedContentError({
-        message: `${label} response has no body`,
-      });
-    }
-    const declaredLength = Number(response.headers.get("content-length"));
-    if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
-      throw new PinnedContentError({
-        message: `${label} is larger than ${maxBytes} bytes`,
-      });
-    }
-    const bytes = await readCappedBytes(response.body, maxBytes);
-    if (bytes === null) {
-      throw new PinnedContentError({
-        message: `${label} is larger than ${maxBytes} bytes`,
-      });
-    }
-    return bytes;
-  };
-  const file = await fetchWithBoundedRetry({
-    fetchValue,
-    sleep: wait,
-  });
-  if (file === null) {
-    return null;
-  }
-  return { byteLength: file.byteLength, content: UTF8_DECODER.decode(file) };
-};
-
-/**
- * Fetch the pinned `SKILL.md` as text. Returns null on a 404 so the
- * caller can report the specific "not found at pinned rev" failure;
- * every other non-2xx response and any redirect throws.
- */
-const fetchSkillFile = async (
-  target: GithubTarget,
-): Promise<PinnedTextFile | null> =>
-  await fetchPinnedTextFile({
-    allowNotFound: true,
-    label: SKILL_FILE_NAME,
-    maxBytes: RESOURCE_MAX_BYTES,
-    repoRelativePath: joinRepoPath(target.directory, SKILL_FILE_NAME),
-    target,
-  });
-
-type FetchDirectoryContentsOptions = {
-  fetcher?: Fetcher;
-  repoRelativePath: string;
-  sleep?: RetrySleep;
-  target: GithubTarget;
-};
-
-export const fetchDirectoryContents = async ({
-  fetcher = fetch,
-  repoRelativePath,
-  sleep: wait = sleep,
-  target,
-}: FetchDirectoryContentsOptions): Promise<GithubContentItem[]> => {
-  const fetchValue = async () => {
-    const response = await fetcher(contentsApiUrl(target, repoRelativePath), {
-      headers: githubHeaders("application/vnd.github+json"),
-      redirect: "error",
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-    });
-    // A missing resource directory is not an error: the skill simply has
-    // no files under that root.
-    if (response.status === 404) {
-      return null;
-    }
-    if (!response.ok) {
-      throw new PinnedContentError({
-        message: `GitHub contents API returned HTTP ${response.status} for ${repoRelativePath || "<root>"}`,
-      });
-    }
-    return await response.text();
-  };
-  const body = await fetchWithBoundedRetry({
-    fetchValue,
-    sleep: wait,
-  });
-  if (body === null) {
-    return [];
-  }
-
-  const payload: unknown = JSON.parse(body);
-  const items = toContentItems(payload);
-  const parsed: GithubContentItem[] = [];
-  for (const item of items) {
-    if (!isRecord(item)) {
-      continue;
-    }
-    const path = item["path"];
-    const size = item["size"];
-    const type = item["type"];
-    if (typeof path === "string" && typeof type === "string") {
-      parsed.push({
-        path,
-        size: typeof size === "number" && Number.isFinite(size) ? size : null,
-        type,
-      });
-    }
-  }
-  assertCompleteGithubContentsListing({
-    itemCount: items.length,
-    repoRelativePath,
-  });
-  return parsed;
-};
-
-export const assertCompleteGithubContentsListing = ({
-  itemCount,
-  repoRelativePath,
-}: {
-  itemCount: number;
-  repoRelativePath: string;
-}): void => {
-  if (itemCount < GITHUB_CONTENTS_LISTING_LIMIT) {
-    return;
-  }
-  throw new PinnedContentError({
-    message: `GitHub contents listing may be truncated at ${GITHUB_CONTENTS_LISTING_LIMIT} entries for ${repoRelativePath || "<root>"}`,
-  });
-};
+  PinnedContentError,
+  assertCompleteGithubContentsListing,
+  collectGithubTargets,
+  readPinnedSnapshot,
+  recordingPinnedSource,
+  syntheticSkillSource,
+  writePinnedSnapshot,
+  type GithubTarget,
+  type PinnedSource,
+} from "./pinned-content-facts";
 
 /** Path of `repoRelativePath` relative to the skill directory, or null. */
 const relativeToSkillRoot = (
@@ -340,85 +39,6 @@ const relativeToSkillRoot = (
     : null;
 };
 
-const safeNormalize = (path: string): string | null => {
-  try {
-    return normalizeResourcePath(path);
-  } catch {
-    return null;
-  }
-};
-
-type FrontmatterFieldLimit = {
-  field: string;
-  limit: number;
-  value: string | null | undefined;
-};
-
-const frontmatterFieldLimitError = (
-  slug: string,
-  { field, limit, value }: FrontmatterFieldLimit,
-): string | null => {
-  if (!value || value.length <= limit) {
-    return null;
-  }
-  return `${slug}: frontmatter ${field} is ${value.length} chars, exceeds the ${limit} install limit`;
-};
-
-export const checkFrontmatterLimits = (
-  slug: string,
-  metadata: SkillMetadata,
-): string[] => {
-  const errors: string[] = [];
-  const fields: FrontmatterFieldLimit[] = [
-    {
-      field: "description",
-      limit: SKILL_PACKAGE_LIMITS.descriptionMaxChars,
-      value: metadata.description,
-    },
-    {
-      field: "version",
-      limit: SKILL_PACKAGE_LIMITS.versionMaxChars,
-      value: metadata.version,
-    },
-    {
-      field: "license",
-      limit: SKILL_PACKAGE_LIMITS.licenseMaxChars,
-      value: metadata.license,
-    },
-    {
-      field: "compatibility",
-      limit: SKILL_PACKAGE_LIMITS.compatibilityMaxChars,
-      value: metadata.compatibility,
-    },
-  ];
-  for (const field of fields) {
-    const error = frontmatterFieldLimitError(slug, field);
-    if (error) {
-      errors.push(error);
-    }
-  }
-
-  const entries = Object.entries(metadata.metadata ?? {});
-  if (entries.length > SKILL_PACKAGE_LIMITS.metadataEntriesMax) {
-    errors.push(
-      `${slug}: frontmatter metadata has ${entries.length} entries, exceeds the ${SKILL_PACKAGE_LIMITS.metadataEntriesMax} install limit`,
-    );
-  }
-  for (const [key, value] of entries) {
-    if (key.length > SKILL_PACKAGE_LIMITS.metadataKeyMaxChars) {
-      errors.push(
-        `${slug}: frontmatter metadata key "${key}" is ${key.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.metadataKeyMaxChars} install limit`,
-      );
-    }
-    if (value.length > SKILL_PACKAGE_LIMITS.metadataValueMaxChars) {
-      errors.push(
-        `${slug}: frontmatter metadata value for "${key}" is ${value.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.metadataValueMaxChars} install limit`,
-      );
-    }
-  }
-  return errors;
-};
-
 type PinnedLicenseMismatchInput = {
   catalogueLicense: CatalogueLicense;
   slug: string;
@@ -430,341 +50,193 @@ export const pinnedLicenseMismatchError = ({
   slug,
   upstreamLicense,
 }: PinnedLicenseMismatchInput): string | null => {
-  if (
-    catalogueLicensesMatch({
-      catalogueLicense,
-      upstreamLicense,
-    })
-  ) {
+  if (catalogueLicensesMatch({ catalogueLicense, upstreamLicense })) {
     return null;
   }
   return `${slug}: frontmatter license does not match the reviewed catalogue manifest`;
 };
 
-type ResourceContentLimitInput = {
-  content: string;
-  path: string;
-  slug: string;
-};
-
-export const resourceContentLimitError = ({
-  content,
-  path,
-  slug,
-}: ResourceContentLimitInput): string | null => {
-  if (content.length <= SKILL_PACKAGE_LIMITS.resourceMaxChars) {
-    return null;
+const diagnosticMessage = (
+  slug: string,
+  diagnostic: SkillPackageDiagnostic,
+): string => {
+  switch (diagnostic.type) {
+    case "entrypoint_missing":
+      return `${slug}: SKILL.md not found at pinned rev`;
+    case "frontmatter_invalid":
+      return `${slug}: SKILL.md frontmatter is invalid (${diagnostic.message})`;
+    case "limit_exceeded":
+      return `${slug}: ${diagnostic.field} exceeds the ${diagnostic.limit} install limit`;
+    case "bidi_control":
+      return `${slug}: ${diagnostic.field} contains a bidirectional control character`;
+    case "name_invalid":
+      return `${slug}: frontmatter name "${diagnostic.name}" fails the skill name pattern`;
+    case "metadata_key_unknown":
+      return `${slug}: unknown stella metadata key "${diagnostic.key}"`;
+    case "metadata_value_invalid":
+      return `${slug}: invalid value for metadata key "${diagnostic.key}"`;
+    case "required_tool_unknown":
+      return `${slug}: unknown required tool "${diagnostic.tool}"`;
+    case "resource_path_invalid":
+      return `${slug}: invalid resource path ${diagnostic.path}`;
+    case "resource_duplicate":
+      return `${slug}: duplicate normalized resource path ${diagnostic.path}`;
+    case "resource_reference_missing":
+      return `${slug}: referenced resource ${diagnostic.path} is missing`;
+    default: {
+      diagnostic satisfies never;
+      return panic("Unknown skill package diagnostic");
+    }
   }
-  return `${slug}: resource ${path} is ${content.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.resourceMaxChars} install limit`;
 };
 
-type ResourcePathLimitInput = {
-  path: string;
-  slug: string;
-};
-
-export const resourcePathLimitError = ({
-  path,
-  slug,
-}: ResourcePathLimitInput): string | null => {
-  if (path.length <= SKILL_PACKAGE_LIMITS.resourcePathMaxChars) {
-    return null;
-  }
-  return `${slug}: resource path ${path} is ${path.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.resourcePathMaxChars} install limit`;
-};
-
-type DuplicateResourcePathInput = {
-  path: string;
-  slug: string;
-};
-
-const duplicateResourcePathError = ({
-  path,
-  slug,
-}: DuplicateResourcePathInput): string =>
-  `${slug}: duplicate normalized resource path ${path}`;
-
-type RegisterResourcePathInput = {
-  path: string;
-  seenPaths: Set<string>;
-  slug: string;
-};
-
-export const registerResourcePath = ({
-  path,
-  seenPaths,
-  slug,
-}: RegisterResourcePathInput): string | null => {
-  const pathLimitError = resourcePathLimitError({ path, slug });
-  if (pathLimitError) {
-    return pathLimitError;
-  }
-  if (seenPaths.has(path)) {
-    return duplicateResourcePathError({ path, slug });
-  }
-  seenPaths.add(path);
-  return null;
-};
-
-type ArchiveSizeLimitInput = {
-  resourceBytes: number;
-  skillFileBytes: number;
-  slug: string;
-};
-
-export const archiveSizeLimitError = ({
-  resourceBytes,
-  skillFileBytes,
-  slug,
-}: ArchiveSizeLimitInput): string | null => {
-  if (
-    resourceBytes + skillFileBytes <=
-    SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes
-  ) {
-    return null;
-  }
-  return `${slug}: skill package exceeds ${SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes} bytes in total`;
-};
-
-/**
- * Check the pinned `SKILL.md`: fetch it, parse it with the real skill
- * parser (which requires name + description), and enforce the install
- * name pattern and body length. Returns collected error strings.
- */
-type SkillFileCheckResult = {
-  byteLength: number;
-  errors: string[];
-};
-
-const checkSkillFile = async (
+const collectPinnedFiles = async (
   target: GithubTarget,
-): Promise<SkillFileCheckResult> => {
-  const file = await fetchSkillFile(target);
-  if (file === null) {
-    return {
-      byteLength: 0,
-      errors: [`${target.slug}: SKILL.md not found at pinned rev`],
-    };
+  source: PinnedSource,
+): Promise<SkillPackageFile[]> => {
+  const skill = await source.skill(target);
+  if (skill === null) {
+    return [];
   }
-
-  const parsedFile = parseSkillFile(file.content);
-  if (parsedFile.isErr()) {
-    return {
-      byteLength: file.byteLength,
-      errors: [
-        `${target.slug}: SKILL.md frontmatter is invalid (${parsedFile.error.message})`,
-      ],
-    };
-  }
-  const parsed = parsedFile.value;
-
-  const errors: string[] = [];
-  if (!SKILL_NAME_PATTERN.test(parsed.metadata.name)) {
-    errors.push(
-      `${target.slug}: frontmatter name "${parsed.metadata.name}" fails the skill name pattern`,
-    );
-  }
-  if (parsed.body.length > SKILL_PACKAGE_LIMITS.bodyMaxChars) {
-    errors.push(
-      `${target.slug}: SKILL.md body is ${parsed.body.length} chars, exceeds the ${SKILL_PACKAGE_LIMITS.bodyMaxChars} install limit`,
-    );
-  }
-  const licenseError = pinnedLicenseMismatchError({
-    catalogueLicense: target.license,
-    slug: target.slug,
-    upstreamLicense: parsed.metadata.license,
-  });
-  if (licenseError) {
-    errors.push(licenseError);
-  }
-  errors.push(...checkFrontmatterLimits(target.slug, parsed.metadata));
-  return { byteLength: file.byteLength, errors };
-};
-
-/**
- * Enumerate the pinned directory's resource files (breadth-first over
- * the allowed resource roots) and enforce the install path's resource
- * count, per-file size, cumulative size, and directory-count limits.
- */
-const checkResources = async (
-  target: GithubTarget,
-  skillFileBytes: number,
-): Promise<string[]> => {
-  const errors: string[] = [];
-  const rootPath = target.directory;
-  const pending: string[] = [rootPath];
+  const files: SkillPackageFile[] = [
+    {
+      content: syntheticSkillSource(
+        skill.frontmatter,
+        skill.bodyUtf16Length,
+        skill.referencedResourcePaths,
+      ),
+      path: `${target.directory ? `${target.directory}/` : ""}${SKILL_FILE_NAME}`,
+      sizeBytes: skill.byteLength,
+    },
+  ];
+  const pending = [target.directory];
   const queued = new Set(pending);
-  let resourceCount = 0;
-  let resourceBytes = 0;
-  const resourcePaths = new Set<string>();
+  const resourceFolders = SKILL_RESOURCE_FOLDERS;
 
-  const processItems = async (
-    items: readonly GithubContentItem[],
-    index: number,
-  ): Promise<boolean> => {
-    const item = items.at(index);
-    if (!item) {
-      return true;
-    }
-
-    const relative = relativeToSkillRoot(rootPath, item.path);
-    if (relative === null) {
-      return processItems(items, index + 1);
-    }
-
-    if (item.type === "dir") {
-      const root = relative.split("/").at(0);
-      if (root && SKILL_RESOURCE_ROOTS.has(root) && !queued.has(item.path)) {
-        if (queued.size + 1 > SKILL_PACKAGE_LIMITS.githubDirectoriesMax) {
-          errors.push(
-            `${target.slug}: more than ${SKILL_PACKAGE_LIMITS.githubDirectoriesMax} resource directories`,
-          );
-          return false;
-        }
-        queued.add(item.path);
-        pending.push(item.path);
-      }
-      return processItems(items, index + 1);
-    }
-    if (item.type !== "file") {
-      return processItems(items, index + 1);
-    }
-
-    const normalized = safeNormalize(relative);
-    if (
-      !normalized ||
-      normalized === SKILL_FILE_NAME ||
-      !isAllowedResourcePath(normalized)
-    ) {
-      return processItems(items, index + 1);
-    }
-
-    const pathError = registerResourcePath({
-      path: normalized,
-      seenPaths: resourcePaths,
-      slug: target.slug,
-    });
-    if (pathError) {
-      errors.push(pathError);
-      return processItems(items, index + 1);
-    }
-
-    resourceCount += 1;
-    if (resourceCount > SKILL_PACKAGE_LIMITS.resourcesPerSkillMax) {
-      errors.push(
-        `${target.slug}: more than ${SKILL_PACKAGE_LIMITS.resourcesPerSkillMax} resource files`,
-      );
-      return false;
-    }
-    if (item.size !== null && item.size > RESOURCE_MAX_BYTES) {
-      errors.push(
-        `${target.slug}: resource ${normalized} is ${item.size} bytes, exceeds the ${RESOURCE_MAX_BYTES} install limit`,
-      );
-      return processItems(items, index + 1);
-    }
-
-    const resource = await fetchPinnedTextFile({
-      label: `resource ${normalized}`,
-      maxBytes: RESOURCE_MAX_BYTES,
-      repoRelativePath: item.path,
-      target,
-    });
-    if (resource === null) {
-      throw new PinnedContentError({
-        message: `resource ${normalized} disappeared during validation`,
-      });
-    }
-    const contentLimitError = resourceContentLimitError({
-      content: resource.content,
-      path: normalized,
-      slug: target.slug,
-    });
-    if (contentLimitError) {
-      errors.push(contentLimitError);
-    }
-    resourceBytes += resource.byteLength;
-    const archiveLimitError = archiveSizeLimitError({
-      resourceBytes,
-      skillFileBytes,
-      slug: target.slug,
-    });
-    if (archiveLimitError) {
-      errors.push(archiveLimitError);
-      return false;
-    }
-    return processItems(items, index + 1);
-  };
-
-  const visitNextDirectory = async (): Promise<void> => {
+  while (pending.length > 0) {
     const directory = pending.shift();
     if (directory === undefined) {
-      return;
+      break;
     }
-    const items = await fetchDirectoryContents({
+    const listing = await source.directory({ directory, target });
+    assertCompleteGithubContentsListing({
+      itemCount: listing.itemCount,
       repoRelativePath: directory,
-      target,
     });
-    const shouldContinue = await processItems(items, 0);
-    if (!shouldContinue) {
-      return;
+    for (const item of listing.items) {
+      const relative = relativeToSkillRoot(target.directory, item.path);
+      if (relative === null) {
+        continue;
+      }
+      if (item.type === "dir") {
+        const root = relative.split("/").at(0);
+        if (root && resourceFolders.has(root) && !queued.has(item.path)) {
+          queued.add(item.path);
+          pending.push(item.path);
+        }
+        continue;
+      }
+      if (item.type !== "file" || relative === SKILL_FILE_NAME) {
+        continue;
+      }
+      const root = relative.split("/").at(0);
+      if (!root || !resourceFolders.has(root)) {
+        continue;
+      }
+      const resource = await source.resource({ path: item.path, target });
+      if (resource === null) {
+        throw new PinnedContentError({
+          message: `resource ${relative} disappeared during validation`,
+        });
+      }
+      files.push({
+        content: "x".repeat(resource.utf16Length),
+        path: item.path,
+        sizeBytes: resource.byteLength,
+      });
     }
-    return visitNextDirectory();
-  };
-
-  await visitNextDirectory();
-  return errors;
+  }
+  return files;
 };
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-const collectGithubTargets = (): GithubTarget[] =>
-  loadCatalogue()
-    .filter(isGithubSkillEntry)
-    .map((entry) => ({
-      directory: entry.directory ?? "",
-      license: entry.license,
-      repo: entry.repo,
-      rev: entry.rev,
-      slug: entry.slug,
-    }));
-
-const run = async (): Promise<string[]> => {
-  const targets = collectGithubTargets();
+export const validatePinnedSource = async (
+  source: PinnedSource,
+): Promise<string[]> => {
   const errors: string[] = [];
-
-  const checkTarget = async (target: GithubTarget): Promise<void> => {
-    try {
-      const skillFile = await checkSkillFile(target);
-      // Skip the resource enumeration when SKILL.md itself is broken:
-      // the entry already fails, and the extra API calls add nothing.
-      let resourceErrors: string[] = [];
-      if (skillFile.errors.length === 0) {
-        resourceErrors = await checkResources(target, skillFile.byteLength);
-      }
-      errors.push(...skillFile.errors, ...resourceErrors);
-    } catch (error) {
+  for (const target of collectGithubTargets()) {
+    const checked = await Result.tryPromise({
+      try: async () => {
+        const files = await collectPinnedFiles(target, source);
+        const validated = validateSkillPackage({
+          files,
+          tools: { type: "deferred" },
+        });
+        if (validated.isErr()) {
+          return validated.error.map((diagnostic) =>
+            diagnosticMessage(target.slug, diagnostic),
+          );
+        }
+        const packageErrors: string[] = [];
+        if (validated.value.metadata.name !== target.slug) {
+          packageErrors.push(
+            `${target.slug}: frontmatter name "${validated.value.metadata.name}" must match the catalogue id`,
+          );
+        }
+        const licenseError = pinnedLicenseMismatchError({
+          catalogueLicense: target.license,
+          slug: target.slug,
+          upstreamLicense: validated.value.metadata.license,
+        });
+        if (licenseError) {
+          packageErrors.push(licenseError);
+        }
+        return packageErrors;
+      },
+      catch: (error) => error,
+    });
+    if (checked.isErr()) {
       errors.push(
-        `${target.slug}: pinned-content check failed (${errorMessage(error)})`,
+        `${target.slug}: pinned-content check failed (${errorMessage(checked.error)})`,
       );
+    } else {
+      errors.push(...checked.value);
     }
-  };
-
-  const checkNextTarget = async (index: number): Promise<void> => {
-    const target = targets.at(index);
-    if (!target) {
-      return;
-    }
-    await checkTarget(target);
-    return checkNextTarget(index + 1);
-  };
-
-  await checkNextTarget(0);
+  }
   return errors;
 };
 
 if (import.meta.main) {
-  const errors = await run();
+  const refresh = Bun.argv.includes("--refresh");
+  const result = await Result.tryPromise({
+    try: async () => {
+      if (
+        refresh &&
+        (Bun.argv.includes("--check") || Bun.argv.includes("--from-snapshot"))
+      ) {
+        throw new PinnedContentError({
+          message: "--refresh cannot be combined with offline check modes",
+        });
+      }
+      if (!refresh) {
+        return await validatePinnedSource(
+          await readPinnedSnapshot(collectGithubTargets()),
+        );
+      }
+      const { upstreamPinnedSource } =
+        await import("./pinned-content-upstream");
+      const recording = recordingPinnedSource(upstreamPinnedSource);
+      const errors = await validatePinnedSource(recording.source);
+      if (errors.length === 0) {
+        await writePinnedSnapshot(recording.entries());
+      }
+      return errors;
+    },
+    catch: (error) => error,
+  });
+  const errors = result.isErr() ? [errorMessage(result.error)] : result.value;
   if (errors.length > 0) {
     for (const error of errors) {
       console.error(`✗ ${error}`);

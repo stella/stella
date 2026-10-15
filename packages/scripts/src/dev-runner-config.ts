@@ -22,7 +22,7 @@ export const MAX_INFRA_OFFSET =
 export const MAX_PORT_OFFSET =
   MAX_PORT - Math.max(...Object.values(DEFAULT_PORTS));
 
-export type DevRunnerEnvironment = Readonly<Record<string, string | undefined>>;
+type DevRunnerEnvironment = Readonly<Record<string, string | undefined>>;
 
 const AUTO_INFRA_OFFSET = "auto";
 

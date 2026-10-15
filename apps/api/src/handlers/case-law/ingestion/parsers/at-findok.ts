@@ -3,7 +3,9 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
-import type { Block, DocumentAst } from "@/api/handlers/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
+
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
 import {
   buildValidationHtml,

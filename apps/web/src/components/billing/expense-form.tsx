@@ -48,6 +48,7 @@ type ExpenseFormProps = {
   onSubmit: (values: ExpenseFormValues) => void | Promise<void>;
   onCancel?: () => void;
   submitLabel?: string;
+  contextState?: "available" | "unavailable";
 };
 
 export const ExpenseForm = ({
@@ -56,6 +57,7 @@ export const ExpenseForm = ({
   onSubmit,
   onCancel,
   submitLabel,
+  contextState = "available",
 }: ExpenseFormProps) => {
   const t = useTranslations();
   const initialCurrency = defaultValues?.currency ?? DEFAULT_CURRENCY;
@@ -66,7 +68,10 @@ export const ExpenseForm = ({
     v.strictObject({
       matterId: v.pipe(
         v.string(),
-        v.check((matterId) => matterId.length > 0, t("billing.matterRequired")),
+        v.check(
+          (matterId) => matterId.length > 0 || contextState === "unavailable",
+          t("billing.matterRequired"),
+        ),
       ),
       dateIncurred: v.string(),
       // One message per field: stop at the first failing currency check.
@@ -155,11 +160,15 @@ export const ExpenseForm = ({
         {(field) => (
           <Field name={field.name}>
             <FieldLabel>{t("common.matter")}</FieldLabel>
-            <MatterCombobox
-              onChange={field.handleChange}
-              value={field.state.value}
-              workspaceId={workspaceId}
-            />
+            {contextState === "unavailable" ? (
+              <span>{t("common.unavailable")}</span>
+            ) : (
+              <MatterCombobox
+                onChange={field.handleChange}
+                value={field.state.value}
+                workspaceId={workspaceId}
+              />
+            )}
             <FieldError />
           </Field>
         )}

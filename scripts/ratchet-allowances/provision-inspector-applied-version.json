@@ -1,0 +1,5 @@
+{
+  "metric": "cross-feature-imports",
+  "delta": 1,
+  "reason": "The provision inspector opened from a decision must resolve the version that decision applied with the same picker the decision reader uses (case-law statute-version owns version selection and is exempt from the legislation-window rule at that path); a second copy in statutes would let the two readers disagree about which version applied."
+}

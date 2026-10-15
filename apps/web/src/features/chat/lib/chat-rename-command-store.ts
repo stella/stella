@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type ChatRenameRequest = {
+type ChatRenameRequest = {
   threadId: string;
   /**
    * Title to commit directly (`/rename-chat <title>`); null means open the

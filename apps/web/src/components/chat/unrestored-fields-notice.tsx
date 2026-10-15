@@ -8,7 +8,7 @@ const isUnknownList = (value: unknown): value is readonly unknown[] =>
  * mode it reports each field whose value kept a placeholder that could not be
  * mapped back (`unrestoredFields` on its output).
  */
-export const unrestoredFieldsOf = (output: unknown): string[] => {
+const unrestoredFieldsOf = (output: unknown): string[] => {
   if (typeof output !== "object" || output === null) {
     return [];
   }

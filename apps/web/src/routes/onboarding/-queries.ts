@@ -9,7 +9,7 @@ type NativeToolDeployAvailabilityKey = readonly [
   "native-tool-deploy-availability",
 ];
 
-export const onboardingKeys = {
+const onboardingKeys = {
   nativeToolDeployAvailability: (): NativeToolDeployAvailabilityKey =>
     ["onboarding", "native-tool-deploy-availability"] as const,
 };

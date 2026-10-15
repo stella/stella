@@ -1,6 +1,8 @@
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 
+import { Temporal } from "@stll/time";
+
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import { stringCursorSeed } from "@/lib/infinite-query";
@@ -8,12 +10,12 @@ import {
   fetchWorkspaceNavigationPage,
   WORKSPACE_NAVIGATION_STATUS_SCOPE,
 } from "@/lib/memory-api";
-import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import {
   type MatterActivityFilters,
   toMatterActivityQuery,
   type WorkspaceActivityKey,
+  type WorkspaceNavigationCaller,
   workspacesKeys,
 } from "@/lib/workspaces/queries.logic";
 
@@ -167,20 +169,18 @@ export const workspacesRouteOptions = (activeOrganizationId: string) =>
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-type WorkspaceNavigationData = {
-  workspaces: WorkspaceNavigationItem[];
-};
-
-export const workspacesNavigationOptions = (activeOrganizationId: string) =>
+export const workspacesNavigationOptions = (
+  caller: WorkspaceNavigationCaller,
+) =>
   queryOptions({
-    queryKey: workspacesKeys.navigation(activeOrganizationId),
+    queryKey: workspacesKeys.navigation(caller),
     queryFn: async ({ signal }) => {
       const page = await fetchWorkspaceNavigationPage({
         signal,
         statusScope: WORKSPACE_NAVIGATION_STATUS_SCOPE.ACTIVE,
       });
 
-      return { workspaces: page.workspaces } satisfies WorkspaceNavigationData;
+      return { workspaces: page.workspaces, features: page.features };
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
@@ -240,9 +240,15 @@ export const overviewOptions = (workspaceId: string) =>
   queryOptions({
     queryKey: workspacesKeys.overview(workspaceId),
     queryFn: async ({ signal }) => {
+      // The agenda starts at the reader's own date, read at fetch time; the
+      // overview drops deadlines that pass before the next fetch.
+      const agendaFrom = Temporal.Now.instant()
+        .toZonedDateTimeISO(Temporal.Now.timeZoneId())
+        .toPlainDate()
+        .toString();
       const response = await api
         .workspaces({ workspaceId })
-        .overview.get({ fetch: { signal } });
+        .overview.get({ query: { agendaFrom }, fetch: { signal } });
 
       return unwrapEden(response);
     },
@@ -250,20 +256,23 @@ export const overviewOptions = (workspaceId: string) =>
   });
 
 export const overviewActivityOptions = ({
-  activeOrganizationId,
+  viewer,
   filters,
   workspaceId,
 }: {
-  activeOrganizationId: string;
+  viewer: { userId: string; organizationId: string };
   filters: MatterActivityFilters;
   workspaceId: string;
 }) =>
   infiniteQueryOptions({
-    queryKey: workspacesKeys.overviewActivity(
-      activeOrganizationId,
-      workspaceId,
-      filters,
-    ),
+    queryKey: [
+      ...workspacesKeys.overviewActivity(
+        viewer.organizationId,
+        workspaceId,
+        filters,
+      ),
+      viewer.userId,
+    ],
     queryFn: async ({ pageParam, signal }) =>
       await readOverviewActivity({
         ...(pageParam ? { cursor: pageParam } : {}),

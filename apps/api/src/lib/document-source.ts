@@ -64,7 +64,6 @@ export const documentSourceSchema = v.variant("kind", [
 ]);
 
 export type DocumentSource = v.InferOutput<typeof documentSourceSchema>;
-export type DocumentSourceKind = DocumentSource["kind"];
 
 /** Constant upload provenance — the only branch produced by upload paths. */
 export const UPLOAD_DOCUMENT_SOURCE: DocumentSource = { kind: "upload" };

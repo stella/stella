@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import {
   afterAll,
   afterEach,

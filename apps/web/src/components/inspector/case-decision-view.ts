@@ -11,9 +11,18 @@ import type {
   InspectorTab,
 } from "@/components/inspector/inspector-store-types";
 import { decisionTitle } from "@/features/case-law/decision-title";
+import { createUuid } from "@/lib/uuid";
 
 /** Registered inspector view kind for one public case-law decision. */
 export const CASE_DECISION_VIEW = "case-law-decision";
+
+export const CASE_DECISION_PLACEMENT = {
+  mainIfOpen: "main-if-open",
+  side: "side",
+} as const;
+
+export type CaseDecisionPlacement =
+  (typeof CASE_DECISION_PLACEMENT)[keyof typeof CASE_DECISION_PLACEMENT];
 
 /**
  * One decision in an inspector tab. The top-level fields are the decision
@@ -29,7 +38,7 @@ export type CaseDecisionViewPayload = {
   country: string;
   court: string;
   decisionId: string;
-  /** A fresh search opening resets a reused tab, even when the terms repeat. */
+  /** A fresh passage or search resets a reused tab, even when the target repeats. */
   findSessionId?: string | undefined;
   route: CaseLawDecisionRouteParams;
   /** The words that found the decision, so the reader opens on them marked. */
@@ -183,7 +192,10 @@ export const createCaseDecisionViewTab = ({
       ...(anchorId === undefined ? {} : { anchorId }),
       ...(searchQuery === undefined || searchQuery === ""
         ? {}
-        : { searchQuery, findSessionId: crypto.randomUUID() }),
+        : { searchQuery }),
+      ...(anchorId === undefined && !searchQuery
+        ? {}
+        : { findSessionId: createUuid() }),
     },
   };
 };

@@ -13,7 +13,7 @@ import { toSafeId } from "@/lib/safe-id";
 export const CITATION_DIRECTIONS = ["incoming", "outgoing"] as const;
 export type CitationDirection = (typeof CITATION_DIRECTIONS)[number];
 
-export const decisionCitationKeys = {
+const decisionCitationKeys = {
   all: ["case-law-decisions", "citations"],
   forDecision: (decisionId: string, direction: CitationDirection) => [
     ...decisionCitationKeys.all,

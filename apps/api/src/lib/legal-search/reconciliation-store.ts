@@ -14,6 +14,7 @@ import { panic } from "better-result";
  */
 import { and, count, eq, gt, inArray, lte, sql } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -27,7 +28,6 @@ import {
 import type { ReconciliationItemStatus } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -90,7 +90,7 @@ export const RECONCILIATION_TERMINAL_ATTEMPTS =
  * than a nullable date: "no next attempt" is a disposition the caller has to
  * record, not a missing value it may ignore.
  */
-export type ReconciliationSchedule =
+type ReconciliationSchedule =
   | { type: "parked"; nextAttemptAt: Date }
   | { type: "terminal" };
 
@@ -100,7 +100,7 @@ type ReconciliationScheduleInput = {
   now: Date;
 };
 
-export const reconciliationSchedule = ({
+const reconciliationSchedule = ({
   attempts,
   now,
 }: ReconciliationScheduleInput): ReconciliationSchedule => {
@@ -446,7 +446,7 @@ export const resolveReconciliationItems = async (
   scopedDb: ScopedDb,
   { sourceId, leaseToken, items }: ResolveReconciliationItemsInput,
 ): Promise<ReconciliationMutationOutcome> => {
-  for (const page of chunked(items, LISTING_REVISION_BATCH_SIZE)) {
+  for (const page of chunkItems(items, LISTING_REVISION_BATCH_SIZE)) {
     const result = await scopedDb(async (tx) => {
       if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
         return { outcome: "superseded" as const };
@@ -593,7 +593,7 @@ export const refreshTrackedReconciliationItems = async (
 ): Promise<RefreshTrackedReconciliationItemsResult> => {
   const trackedIdentityKeys = new Set<string>();
   const refreshedIdentityKeys = new Set<string>();
-  for (const page of chunked(items, LISTING_REVISION_BATCH_SIZE)) {
+  for (const page of chunkItems(items, LISTING_REVISION_BATCH_SIZE)) {
     const result = await scopedDb(async (tx) => {
       if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
         return { outcome: "superseded" as const };

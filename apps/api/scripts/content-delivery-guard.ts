@@ -3,6 +3,8 @@ import { readFileSync, existsSync, statSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   discoverSafeHandlers,
   HANDLERS_GLOB,
@@ -297,6 +299,16 @@ class ContentDeliveryInspector {
     if (
       !ts.isImportDeclaration(current) ||
       !ts.isStringLiteralLike(current.moduleSpecifier)
+    ) {
+      return;
+    }
+    if (
+      current.attributes?.elements.some(
+        (attribute) =>
+          propertyName(attribute.name) === "type" &&
+          ts.isStringLiteralLike(attribute.value) &&
+          attribute.value.text === "text",
+      )
     ) {
       return;
     }
@@ -878,12 +890,12 @@ if (import.meta.main && Bun.argv.includes("--self-test")) {
       .filter(({ declared }) => !declared)
       .map(
         ({ file, line, binding }) =>
-          `Missing contentDelivery: ${path.relative(REPO_ROOT, file)}:${line} (${binding})`,
+          `Missing contentDelivery: ${repoRelativePath(REPO_ROOT, file)}:${line} (${binding})`,
       ),
   ];
   for (const { file, line, binding, terminals } of result.candidates) {
     console.log(
-      `${path.relative(REPO_ROOT, file)}:${line} (${binding}): ${terminals.join(", ")}`,
+      `${repoRelativePath(REPO_ROOT, file)}:${line} (${binding}): ${terminals.join(", ")}`,
     );
   }
   for (const failure of failures) {

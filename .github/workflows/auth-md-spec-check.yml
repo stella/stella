@@ -1,5 +1,9 @@
 name: auth.md Spec Drift Check
 
+defaults:
+  run:
+    shell: bash
+
 # We implement the auth.md agent-registration protocol against a pinned
 # version. It is a fast-moving pre-1.0 open protocol, so this nightly job
 # diffs our pin against upstream (workos/auth.md) and fails when the spec
@@ -29,7 +33,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
           bun-version-file: "package.json"

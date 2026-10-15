@@ -15,6 +15,7 @@ import {
   ShieldAlertIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -575,27 +576,22 @@ const TaskDetailPanelContent = ({
         {/* Editable task name */}
         <div className="px-4 pt-3 pb-2">
           {isEditingName ? (
-            <Input
-              autoFocus
-              className="text-base font-semibold"
-              onBlur={commitName}
-              onChange={(e) => setEditNameValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.currentTarget.blur();
-                }
-                if (e.key === "Escape") {
+            <span className="block min-w-0 text-base font-semibold">
+              <InlineRenameInput
+                onCommit={commitName}
+                onValueChange={setEditNameValue}
+                onCancel={() => {
                   setIsEditingName(false);
                   setEditNameValue(task.name);
-                }
-              }}
-              placeholder={t("untitled")}
-              ref={nameInputRef}
-              value={editNameValue}
-            />
+                }}
+                placeholder={t("untitled")}
+                ref={nameInputRef}
+                value={editNameValue}
+              />
+            </span>
           ) : (
             <button
-              className="hover:text-foreground-strong-muted w-full text-start text-base font-semibold"
+              className="hover:text-foreground-strong-muted w-full overflow-hidden text-start text-base font-semibold text-ellipsis whitespace-pre"
               onClick={startEditingName}
               type="button"
             >

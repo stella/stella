@@ -47,7 +47,7 @@ const loadPageFixtures = async (): Promise<
 
   for await (const filename of glob.scan(fixturePath)) {
     const path = new URL(filename, FIXTURES_DIR);
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed fixture JSON; the assertions below are the shape validation
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- committed fixture JSON; the assertions below are the shape validation
     const data = (await readGzipJson(path)) as FixtureRecord;
     results.push({ filename, data });
   }

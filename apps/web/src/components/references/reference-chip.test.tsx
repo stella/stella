@@ -154,7 +154,7 @@ describe("a mention chip across a message's life", () => {
         {LABEL}
       </StreamdownMentionLink>,
     );
-    expect(chipContent(html)).toContain("lucide-circle-dashed");
+    expect(chipContent(html)).toContain('data-slot="loader"');
   });
 
   test("an unresolvable mention renders as its plain label", () => {

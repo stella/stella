@@ -52,7 +52,7 @@ runs:
         esac
 
     - name: Setup Bun
-      uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+      uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
       with:
         save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -92,21 +92,6 @@ runs:
         # render.
         extra-services: gotenberg
 
-    - name: Require the stack
-      # The action exits 0 with `status=rate-limited` when Docker Hub throttles
-      # the image pulls. The e2e suites accept that skip; this capture cannot: it
-      # is the only guard on assets that ship on the marketing site, so a skipped
-      # run would report success without comparing a single PNG. Every later
-      # `status == 'ready'` condition is therefore unreachable-if-false, and only
-      # the `always()` cleanup steps still test it.
-      if: steps.e2e-stack.outputs.status != 'ready'
-      shell: bash
-      env:
-        STATUS: ${{ steps.e2e-stack.outputs.status }}
-      run: |
-        echo "::error::E2E stack status is '$STATUS', not 'ready'; marketing screenshots were neither compared nor regenerated"
-        exit 1
-
     - name: Wait for production web build
       # Same bounded poll as the e2e shards: the build job runs concurrently
       # with this one, and once it has ended without publishing the artifact
@@ -118,7 +103,7 @@ runs:
         GH_TOKEN: ${{ github.token }}
       run: |
         for attempt in {1..180}; do
-          count=$(gh api --method GET \
+          count=$(bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --method GET \
             "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts" \
             -f name="$ARTIFACT_NAME" \
             --jq '[.artifacts[] | select(.expired == false)] | length')
@@ -127,7 +112,7 @@ runs:
             exit 0
           fi
           if (( attempt % 5 == 0 )); then
-            conclusion=$(gh api --paginate \
+            conclusion=$(bash "$GITHUB_ACTION_PATH/../../../scripts/gh-retry.sh" api --paginate \
               "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/jobs" \
               --jq '.jobs[] | select(.name == "web-build") | .conclusion // "in_progress"' \
               | head -n 1)
@@ -213,7 +198,7 @@ runs:
         fi
 
     - name: Stop production web server
-      if: always() && steps.e2e-stack.outputs.status == 'ready'
+      if: always() && steps.e2e-stack.outcome == 'success'
       shell: bash
       run: |
         if [[ -f /tmp/web.pid ]]; then

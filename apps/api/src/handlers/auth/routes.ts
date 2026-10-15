@@ -8,6 +8,7 @@ import {
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
 } from "@/api/lib/auth/auth-paths";
+import { isReviewAccountConfigured } from "@/api/lib/auth/review-account";
 import { isTransactionalEmailConfigured } from "@/api/lib/email/email";
 import { setSecurityHeaders } from "@/api/lib/security-headers";
 import {
@@ -76,6 +77,9 @@ export const authCapabilitiesRoute = new Elysia({
   return {
     emailOtp: isTransactionalEmailConfigured() && !firstUserRequired,
     localPassword: isSelfhostLocalPasswordAuthEnabled(),
+    // One restricted account signs in with a password; the sign-in page
+    // offers the form quietly instead of as a primary option.
+    reviewPasswordSignIn: isReviewAccountConfigured(),
     bootstrap,
     social: getSocialAuthCapabilities(),
     // Whether this deployment can deliver a confirmation code at all. Separate

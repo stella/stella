@@ -12,9 +12,10 @@ import {
   DownloadIcon,
   ExternalLinkIcon,
   FilePlusIcon,
-  LoaderIcon,
   SearchIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -30,7 +31,6 @@ import {
 } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { MarkdownPreview } from "@/components/markdown-preview";
-import { MatterIcon } from "@/components/matter-icon";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -185,7 +185,11 @@ export const NeedsMatterCard = ({
           </Button>
         )}
         {isStreaming && (
-          <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
+          <Loader
+            className="ms-auto size-3.5 shrink-0"
+            label={t("common.loading")}
+            size="sm"
+          />
         )}
       </div>
 

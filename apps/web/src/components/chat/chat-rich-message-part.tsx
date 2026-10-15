@@ -19,9 +19,11 @@ import {
 } from "@stll/api-contract";
 
 import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { mcpAppSandboxUrl } from "@/lib/api-url";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { getUserFileContentUrl } from "@/lib/user-files";
 
@@ -35,6 +37,12 @@ type UiResourcePart = Extract<RichChatPart, { type: "ui-resource" }>;
 const LazyMcpAppResource = lazy(async () => {
   const { MCPAppResource } = await import("@tanstack/ai-react/mcp-apps");
   return { default: MCPAppResource };
+});
+
+const LazyGeneratedVisual = lazy(async () => {
+  const { GeneratedVisual } =
+    await import("@/components/chat/generated-visual");
+  return { default: GeneratedVisual };
 });
 
 const CHAT_RICH_CONTENT_AREA = "chat-rich-content";
@@ -337,13 +345,48 @@ const UiResource = ({ part }: { part: UiResourcePart }) => {
   );
 };
 
-export const ChatRichMessagePart = ({ part }: { part: RichChatPart }) => {
+type ChatRichMessagePartProps = {
+  part: RichChatPart;
+  organizationId?: string | undefined;
+  threadRef?: ChatThreadRef | undefined;
+};
+
+export const ChatRichMessagePart = ({
+  part,
+  organizationId,
+  threadRef,
+}: ChatRichMessagePartProps) => {
   switch (part.type) {
     case "audio":
     case "video":
       return <MediaPart part={part} />;
-    case "ui-resource":
-      return <UiResource part={part} />;
+    case "ui-resource": {
+      const renderer = uiResourceRenderer(part.resource.mimeType);
+      switch (renderer) {
+        case "mcp-app":
+          return <UiResource part={part} />;
+        case "generated-visual":
+          if (organizationId === undefined || threadRef === undefined) {
+            return <RichContentStatus />;
+          }
+          return (
+            <RichContentErrorBoundary fallback={<RichContentStatus />}>
+              <Suspense fallback={<RichContentStatus loading />}>
+                <LazyGeneratedVisual
+                  part={part}
+                  organizationId={organizationId}
+                  threadRef={threadRef}
+                />
+              </Suspense>
+            </RichContentErrorBoundary>
+          );
+        case null:
+          return <RichContentStatus />;
+        default:
+          renderer satisfies never;
+          return panic("Unhandled UI resource renderer");
+      }
+    }
     default: {
       part satisfies never;
       return panic(`Unhandled part: ${String(part)}`);

@@ -67,7 +67,7 @@ export const usePDFFitToWidth = ({
       const observeTarget = viewport ?? container;
 
       const observer = new ResizeObserver((entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry) {
           return;
         }

@@ -1,8 +1,15 @@
-import type { Block } from "@/api/handlers/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Block } from "@stll/legal-ast/document-ast";
+
 import { validateAndLog } from "@/api/lib/legal-search/parsers/validate-ast";
 
 import { parseHeadmatter } from "./html";
 import type { TextBudget } from "./outcome";
+import {
+  publishedTextDefects,
+  type PublishedTextDefect,
+} from "./source-defects";
+import { courtListenerValidationPolicy } from "./validation-policy";
 
 export type CourtListenerFrontMatter = {
   readonly headmatter?: string;
@@ -15,6 +22,7 @@ type FrontMatterOutcome =
   | {
       status: "parsed";
       blocks: Block[];
+      sourceDefects: PublishedTextDefect[];
       textFields: { headnotes: string; syllabus: string; summary: string };
     }
   | {
@@ -55,6 +63,7 @@ export const composeFrontMatter = ({
   readonly source: CourtListenerFrontMatter;
 }): FrontMatterOutcome => {
   const blocks: Block[] = [];
+  const sourceDefects: PublishedTextDefect[] = [];
   const textFields = { headnotes: "", syllabus: "", summary: "" };
   for (const field of ["headmatter", ...APPARATUS] as const) {
     const value = source[field] ?? "";
@@ -91,8 +100,10 @@ export const composeFrontMatter = ({
       { parser: "courtlistener", caseNumber: `cl-${field}`, language: "en" },
       parsed.text.validationHtml,
       added,
+      { sourcePolicy: courtListenerValidationPolicy },
     );
-    if (!validation.ok) {
+    const defects = publishedTextDefects(parsed.text, validation);
+    if (defects === null) {
       return { status: "held", reason: "no-usable-text" };
     }
     if (field !== "headmatter") {
@@ -102,8 +113,9 @@ export const composeFrontMatter = ({
         continue;
       }
     }
+    sourceDefects.push(...defects);
     blocks.push(...added);
     budget.blocks += added.length;
   }
-  return { status: "parsed", blocks, textFields };
+  return { status: "parsed", blocks, textFields, sourceDefects };
 };

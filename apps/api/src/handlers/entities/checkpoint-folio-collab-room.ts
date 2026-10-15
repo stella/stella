@@ -1,10 +1,11 @@
 import { Result, UnhandledException } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
-import type { Static } from "elysia";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
@@ -41,13 +42,12 @@ import {
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
-import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import {
   FOLIO_COLLAB_CHECKPOINT_MAX_BYTES,
   FOLIO_COLLAB_SNAPSHOT_MAX_BYTES,
 } from "@/api/lib/folio-collab-room-contract";
+import { loadFolioCollabSnapshot } from "@/api/lib/folio-collab-rooms";
 import {
-  readS3ArrayBuffer,
   S3_OBJECT_WRITE_CERTAINTY,
   writeS3ObjectWithRetry,
 } from "@/api/lib/s3";
@@ -57,6 +57,10 @@ import type {
 } from "@/api/lib/s3";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
+export const hashFolioCollabCheckpoint = (
+  checkpointBytes: Uint8Array,
+): string => hashSha256Hex(checkpointBytes);
+
 const CHECKPOINT_CLEANUP_GRACE_MS = 60_000;
 
 const checkpointFolioCollabRoomBodySchema = t.Object({
@@ -64,10 +68,6 @@ const checkpointFolioCollabRoomBodySchema = t.Object({
   expectedSnapshotRevision: t.Integer({ minimum: 0 }),
   roomId: tSafeId("folioCollabRoom"),
 });
-
-type CheckpointFolioCollabRoomBody = Static<
-  typeof checkpointFolioCollabRoomBodySchema
->;
 
 type FolioCollabSnapshotCut = {
   baseVersionId: SafeId<"entityVersion">;
@@ -131,12 +131,13 @@ export const writeFolioCollabCheckpointObject = async ({
           organizationId,
           objectKey: checkpointKey,
           sizeBytes: checkpointBytes.byteLength,
-          write: async () =>
+          content: checkpointBytes,
+          write: async ({ content, objectKey }) =>
             await writeS3ObjectWithRetry(
               {
                 contentType: DOCX_MIME_TYPE,
-                data: checkpointBytes,
-                key: checkpointKey,
+                data: content,
+                key: objectKey,
               },
               ownership,
             ),
@@ -147,6 +148,7 @@ export const writeFolioCollabCheckpointObject = async ({
 
 const checkpointFolioCollabRoom = createSafeHandler(
   {
+    contract: "patch",
     contentDelivery: {
       type: "none",
       reason: "Processes collaboration content without returning stored files.",
@@ -263,23 +265,43 @@ const checkpointFolioCollabRoom = createSafeHandler(
       organizationId: session.activeOrganizationId,
       workspaceId,
     });
-    const snapshotKey = createFileKey({
-      fileId: target.room.snapshotFileId,
-      mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-      organizationId: session.activeOrganizationId,
-      workspaceId,
-    });
-    const [sourceDocx, yjsUpdate] = await Promise.all([
+    const snapshotScopedDb: ScopedDb = async (operation) => {
+      const result = await safeDb(operation);
+      return result.unwrap("Folio collaboration snapshot read failed");
+    };
+    const [sourceDocx, snapshotResult] = await Promise.all([
       readStoredFile({
         key: sourceKey,
         mimeType: DOCX_MIME_TYPE,
         signal: request.signal,
       }),
-      readS3ArrayBuffer(snapshotKey, request.signal),
+      loadFolioCollabSnapshot({
+        organizationId: session.activeOrganizationId,
+        roomId,
+        scopedDb: snapshotScopedDb,
+        workspaceId,
+      }),
     ]);
+    if (Result.isError(snapshotResult)) {
+      return Result.err(snapshotResult.error);
+    }
+    const persistedSnapshot = snapshotResult.value;
+    if (
+      persistedSnapshot === null ||
+      persistedSnapshot.loadOutcome === "rematerialize-from-docx" ||
+      persistedSnapshot.snapshotBase64 === null
+    ) {
+      return Result.err(
+        new HandlerError({
+          code: "folio_collab_generation_changed",
+          status: 409,
+          message: "Collaborative room is reopening from its saved document.",
+        }),
+      );
+    }
     const materialized = await materializeYjsOverScannedDocx({
       source: sourceDocx,
-      yjsUpdate: new Uint8Array(yjsUpdate),
+      yjsUpdate: Buffer.from(persistedSnapshot.snapshotBase64, "base64"),
     });
     if (materialized.byteLength > FOLIO_COLLAB_CHECKPOINT_MAX_BYTES) {
       return Result.err(
@@ -330,9 +352,7 @@ const checkpointFolioCollabRoom = createSafeHandler(
             .map(({ message }) => message)
         : null;
     const checkpointBytes = new Uint8Array(materialized);
-    const sha256Hex = new Bun.CryptoHasher("sha256")
-      .update(checkpointBytes)
-      .digest("hex");
+    const sha256Hex = hashFolioCollabCheckpoint(checkpointBytes);
     const nextFileId = createSafeId<"userFile">();
     const checkpointKey = createFileKey({
       fileId: nextFileId,
@@ -393,7 +413,11 @@ const checkpointFolioCollabRoom = createSafeHandler(
 
     const checkpointedAt = new Date();
     const storedResult = await safeDb(async (tx) => {
-      await lockActiveWorkspaceForBufferIntent(tx, workspaceId);
+      await lockActiveWorkspaceForBufferIntent({
+        tx,
+        workspaceId,
+        mode: "share",
+      });
       const rooms = await tx
         .select({
           baseVersionId: folioCollabRooms.baseVersionId,
@@ -512,4 +536,3 @@ const checkpointFolioCollabRoom = createSafeHandler(
 );
 
 export default checkpointFolioCollabRoom;
-export type { CheckpointFolioCollabRoomBody };

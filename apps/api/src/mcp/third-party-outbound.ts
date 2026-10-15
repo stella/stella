@@ -1,9 +1,6 @@
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { McpRequestContext } from "@/api/mcp/context";
-import type {
-  TypedMcpToolHandler,
-  TypedMcpToolResponse,
-} from "@/api/mcp/tool-types";
+import type { TypedMcpToolResponse } from "@/api/mcp/tool-types";
 import { structuredErrorResult } from "@/api/mcp/tool-utils";
 
 const REQUIRES_THIRD_PARTY_OUTBOUND: unique symbol = Symbol(
@@ -26,24 +23,37 @@ type ThirdPartyOutboundHandlerOptions = {
   permit: ThirdPartyOutboundPermit;
 };
 
+type ThirdPartyOutboundHandler<TData, TDependencies extends unknown[]> = ((
+  request: { args: Record<string, unknown>; context: McpRequestContext },
+  ...dependencies: TDependencies
+) => Promise<TypedMcpToolResponse<TData>>) &
+  RequiresThirdPartyOutbound;
+
 /**
  * Declare a handler that reaches a third-party service. The handler receives
  * the context's permit; a context without one (the chat script runner) is
  * refused before the handler runs, so nothing is sent.
  */
-export const withThirdPartyOutbound = <TData>(
+export const withThirdPartyOutbound = <
+  TData,
+  TDependencies extends unknown[] = [],
+>(
   handler: (
     options: ThirdPartyOutboundHandlerOptions,
+    ...dependencies: TDependencies
   ) => Promise<TypedMcpToolResponse<TData>>,
-): TypedMcpToolHandler<TData> & RequiresThirdPartyOutbound =>
+): ThirdPartyOutboundHandler<TData, TDependencies> =>
   Object.assign(
-    async ({
-      args,
-      context,
-    }: {
-      args: Record<string, unknown>;
-      context: McpRequestContext;
-    }): Promise<TypedMcpToolResponse<TData>> => {
+    async (
+      {
+        args,
+        context,
+      }: {
+        args: Record<string, unknown>;
+        context: McpRequestContext;
+      },
+      ...dependencies: TDependencies
+    ): Promise<TypedMcpToolResponse<TData>> => {
       const permit = context.thirdPartyOutboundPermit;
       if (permit === undefined) {
         return structuredErrorResult({
@@ -53,7 +63,7 @@ export const withThirdPartyOutbound = <TData>(
           hint: "Call the tool directly instead of from a script.",
         });
       }
-      return await handler({ args, context, permit });
+      return await handler({ args, context, permit }, ...dependencies);
     },
     { [REQUIRES_THIRD_PARTY_OUTBOUND]: true } as const,
   );

@@ -30,6 +30,7 @@ export {
   ScreeningQueryError,
   ScreeningWorkLimitError,
   buildScreeningIndex,
+  buildScreeningIndexCooperatively,
   screen,
 } from "./screening";
 export type {
@@ -47,3 +48,5 @@ export { parseUkList, readUkListVersion } from "./uk";
 export { parseSecoList, readSecoListVersion } from "./seco";
 
 export { MAX_QUERY_TOKENS, hasExcessQueryTokens } from "./normalise";
+
+export { MAX_SCREENING_WORK } from "./name-match";

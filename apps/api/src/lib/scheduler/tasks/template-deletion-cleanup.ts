@@ -1,6 +1,8 @@
 import { Result, UnhandledException } from "better-result";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+
 import { templateDeletionCleanupRequests } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { deleteS3Keys } from "@/api/lib/files/utils";
@@ -29,10 +31,10 @@ export const getTemplateDeletionCleanupRetryAt = ({
   now: Date;
 }): Date => {
   const exponent = Math.min(Math.max(attemptCount - 1, 0), 30);
-  const delaySeconds = Math.min(
-    RETRY_BASE_SECONDS * 2 ** exponent,
-    RETRY_MAX_SECONDS,
-  );
+  const delaySeconds = backoffDelay(exponent, {
+    baseMs: RETRY_BASE_SECONDS,
+    maxMs: RETRY_MAX_SECONDS,
+  });
   return new Date(now.getTime() + delaySeconds * 1000);
 };
 

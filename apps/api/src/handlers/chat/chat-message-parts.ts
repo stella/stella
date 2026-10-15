@@ -1,15 +1,29 @@
+import { isToolResultOutcome } from "@tanstack/ai";
 import type { ContentPartSource } from "@tanstack/ai";
 import type { ToolCallPart as TanStackToolCallPart } from "@tanstack/ai-client";
 import { panic, Result } from "better-result";
 import { deepEquals } from "bun";
 import { Buffer } from "node:buffer";
+import * as v from "valibot";
 
 import {
   isBoundedBase64Content,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import {
+  CHAT_TOOL_EXECUTOR_METADATA_KEY,
+  chatToolExecutor,
+  isServerChatToolCall,
+} from "@stll/api-contract/chat";
+import {
+  GENERATED_VISUAL_MIME_TYPE,
+  generatedVisualPartSchema,
+} from "@stll/api-contract/generated-visual";
 
-import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import {
+  legacyChatToolExecutor,
+  normalizeLegacyRawToolInputs,
+} from "@/api/handlers/chat/legacy-tool-compat";
 import {
   TANSTACK_TOOL_CALL_STATE_LIFECYCLE,
   TANSTACK_TOOL_RESULT_STATE_LIFECYCLE,
@@ -32,6 +46,7 @@ import type {
   PersistedChatMessageContent,
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
+import type { VisualResourceOrigin } from "@/api/handlers/visual-sandbox/resource-origin";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -40,12 +55,15 @@ import {
   proveParsedToolOutput,
   provePersistedChatMessageContentV3,
   provePersistedJsonArray,
-  provePersistedJsonValue,
+  provePersistedToolCallMetadata,
 } from "@/api/lib/chat/persisted-message-content";
 import type {
+  PersistedJsonValue,
   PersistedToolInput,
   PersistedToolResultContent,
 } from "@/api/lib/chat/persisted-message-content";
+import { isReasoningProvenance } from "@/api/lib/chat/reasoning-provenance";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { isUserFileUrl, parseUserFileId } from "@/api/lib/user-files/types";
@@ -66,9 +84,16 @@ export const attachTerminalTurnOutcome = ({
   message: PersistableChatMessage;
   turnOutcome: NonNullable<ChatMessageMetadata["turnOutcome"]>;
 }): PersistableTerminalAssistantMessage => {
+  const { resumeSnapshot, ...metadata } = message.metadata ?? {};
   const terminalMessage = toPersistableChatMessage({
     ...message,
-    metadata: { ...message.metadata, turnOutcome },
+    metadata: {
+      ...metadata,
+      ...(turnOutcome.type === "awaiting-user" && resumeSnapshot !== undefined
+        ? { resumeSnapshot }
+        : {}),
+      turnOutcome,
+    },
   });
   if (!isPersistableTerminalAssistantMessage(terminalMessage)) {
     panic("Terminal chat turn must be an assistant message with an outcome");
@@ -100,7 +125,7 @@ export type NormalizedLegacyMessageParts = {
 };
 
 type PersistedChatMessageRow = {
-  content: PersistedChatMessageContent;
+  content: StoredChatMessageContent;
   id: SafeId<"chatMessage">;
   role: ChatMessageRole;
 };
@@ -259,26 +284,79 @@ const normalizeLegacyMessagePartsToTanStack = (
   return { metadata, parts: normalized };
 };
 
-export const normalizePersistedChatMessageContent = (
-  content: PersistedChatMessageContent,
-): NormalizedLegacyMessageParts => {
-  if (content.version === 3) {
-    return normalizePersistedV3ChatMessageContent(content);
-  }
+// Stored rows may predate executor metadata; the writer output remains strict.
+type StoredChatMessageContentV3 = Omit<
+  PersistedChatMessageContentV3,
+  "data"
+> & {
+  data: (
+    | Exclude<PersistedV3Part, { type: "tool-call" }>
+    | (Omit<Extract<PersistedV3Part, { type: "tool-call" }>, "metadata"> & {
+        metadata?: PersistedJsonValue | undefined;
+      })
+  )[];
+};
+type StoredChatMessageContent =
+  | Exclude<PersistedChatMessageContent, { version: 3 }>
+  | StoredChatMessageContentV3;
 
-  if (content.version === 2) {
-    return {
+export const normalizePersistedChatMessageContent = (
+  content: StoredChatMessageContent,
+): NormalizedLegacyMessageParts => {
+  let normalized: NormalizedLegacyMessageParts;
+  if (content.version === 3) {
+    normalized = normalizePersistedV3ChatMessageContent(content);
+  } else if (content.version === 2) {
+    normalized = {
       metadata: content.metadata ?? {},
       parts: normalizeLegacyPersistedToolInputs(content.data),
     };
+  } else {
+    const legacy = normalizeLegacyMessagePartsToTanStack(
+      normalizeLegacyRawToolInputs(content.data),
+    );
+    normalized = {
+      metadata: legacy.metadata,
+      parts: normalizeLegacyPersistedToolInputs(legacy.parts),
+    };
   }
-
-  const normalized = normalizeLegacyMessagePartsToTanStack(
-    normalizeLegacyRawToolInputs(content.data),
-  );
   return {
-    metadata: normalized.metadata,
-    parts: normalizeLegacyPersistedToolInputs(normalized.parts),
+    ...normalized,
+    parts: normalized.parts.map((part) => {
+      if (part.type !== "tool-call" || chatToolExecutor(part) !== null) {
+        return part;
+      }
+      const metadata = part.metadata;
+      if (
+        metadata !== undefined &&
+        (!isRecord(metadata) || Array.isArray(metadata))
+      ) {
+        throw new HandlerError({
+          status: 422,
+          code: "CHAT_STORED_TOOL_METADATA_INVALID",
+          message: "Stored tool call has invalid metadata",
+        });
+      }
+      const provider = isRecord(metadata) ? metadata : {};
+      if (provider[CHAT_TOOL_EXECUTOR_METADATA_KEY] !== undefined) {
+        throw new HandlerError({
+          status: 422,
+          code: "CHAT_STORED_TOOL_EXECUTOR_INVALID",
+          message: "Stored tool call has invalid executor ownership",
+        });
+      }
+      // Legacy rows predate recorded ownership and deferred server calls.
+      // Preserve every historically client-executed name, including tools
+      // that now have server variants. All readers use this fixed catalog;
+      // a request registry must never change ownership of a stored call.
+      return {
+        ...part,
+        metadata: {
+          ...provider,
+          [CHAT_TOOL_EXECUTOR_METADATA_KEY]: legacyChatToolExecutor(part.name),
+        },
+      } satisfies ChatPart;
+    }),
   };
 };
 
@@ -314,7 +392,7 @@ const normalizeLegacyPersistedToolInput = (part: ChatPart): ChatPart => {
 type PersistedV3Part = PersistedChatMessageContentV3["data"][number];
 
 const normalizePersistedV3ChatMessageContent = (
-  content: PersistedChatMessageContentV3,
+  content: StoredChatMessageContentV3,
 ): NormalizedLegacyMessageParts => {
   if (!Array.isArray(content.data)) {
     panic("Stored v3 chat content has invalid data");
@@ -347,7 +425,7 @@ const persistedV3PartToChatPart = ({
   part,
 }: {
   outputByToolCallId: ReadonlyMap<string, unknown>;
-  part: PersistedV3Part;
+  part: StoredChatMessageContentV3["data"][number];
 }): ChatPart => {
   if (part.type === "tool-call") {
     const persistedInput = decodePersistedToolInput(part.input);
@@ -384,6 +462,7 @@ const persistedV3PartToChatPart = ({
     const candidate: unknown = {
       content,
       ...(part.error === undefined ? {} : { error: part.error }),
+      ...(part.outcome === undefined ? {} : { outcome: part.outcome }),
       state: part.state,
       toolCallId: part.toolCallId,
       type: "tool-result",
@@ -539,6 +618,11 @@ type ChatPartPolicy = {
 // explicit here also prevents audio/video replay into a model that may not
 // support those modalities on the next turn.
 const CHAT_PART_POLICY = {
+  activity: {
+    clientAcceptance: "server-only",
+    invalidHandling: "panic",
+    providerVisibility: "ui-only",
+  },
   audio: {
     clientAcceptance: "server-only",
     invalidHandling: "drop",
@@ -570,7 +654,7 @@ const CHAT_PART_POLICY = {
     providerVisibility: "model",
   },
   thinking: {
-    clientAcceptance: "accept",
+    clientAcceptance: "server-only",
     invalidHandling: "panic",
     providerVisibility: "model",
   },
@@ -600,11 +684,9 @@ export const isProviderVisibleChatPart = (part: ChatPart): boolean =>
   CHAT_PART_POLICY[part.type].providerVisibility === "model";
 
 /**
- * Whether a client-executed tool call (ask-user, or any tool without a server
- * `execute`) still awaits its client resolution. A server-executed call never
- * ends a run in `input-complete`: the agent loop executes every tool of a
- * model turn before it decides whether to call the model again, so at run end
- * an `input-complete` call is by construction one the client must resolve.
+ * Whether a client-executed tool call still awaits its client resolution.
+ * Input readiness alone cannot identify its executor: sequential server calls
+ * can remain input-complete behind an unanswered approval.
  */
 const CLIENT_TOOL_STATE_AWAITS_RESOLUTION = {
   "approval-requested": false,
@@ -745,7 +827,10 @@ export const getAwaitingUserInteractions = (
       interactions.push({ type: "approval", toolCallId: part.id });
       continue;
     }
-    if (CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state]) {
+    if (
+      CLIENT_TOOL_STATE_AWAITS_RESOLUTION[part.state] &&
+      !isServerChatToolCall(part)
+    ) {
       interactions.push({
         type: clientToolInteractionType(part.name),
         toolCallId: part.id,
@@ -940,6 +1025,9 @@ const isUiResourcePart = (part: Record<string, unknown>): boolean => {
   }
 
   const resource = part["resource"];
+  if (resource["mimeType"] === GENERATED_VISUAL_MIME_TYPE) {
+    return v.is(generatedVisualPartSchema, part);
+  }
   if (
     typeof resource["uri"] !== "string" ||
     !resource["uri"].startsWith("ui://") ||
@@ -971,6 +1059,7 @@ type ChatPartPersistence = "drop" | "persist";
 // Every TanStack part must receive an explicit persistence policy. A future SDK
 // variant fails typecheck here until it is deliberately persisted or dropped.
 const CHAT_PART_PERSISTENCE = {
+  activity: "persist",
   audio: "persist",
   document: "persist",
   image: "persist",
@@ -1031,13 +1120,22 @@ const isStructuredOutputPart = (part: Record<string, unknown>): boolean => {
 // Validators are independently exhaustive over the persistable subset, so a
 // part cannot enter the persistence boundary without structural validation.
 const CHAT_PART_VALIDATORS = {
+  activity: (part) =>
+    typeof part["activityType"] === "string" &&
+    isRecord(part["content"]) &&
+    isPersistedJsonValue(part["content"]) &&
+    (part["subagentRunId"] === undefined ||
+      typeof part["subagentRunId"] === "string"),
   audio: (part) => isMediaPart(part, "audio/"),
   document: isContentPartWithSource,
   image: isContentPartWithSource,
   "structured-output": isStructuredOutputPart,
   subagent: () => false,
   text: (part) => typeof part["content"] === "string",
-  thinking: (part) => typeof part["content"] === "string",
+  thinking: (part) =>
+    typeof part["content"] === "string" &&
+    (part["provenance"] === undefined ||
+      isReasoningProvenance(part["provenance"])),
   "tool-call": (part) =>
     typeof part["id"] === "string" &&
     typeof part["name"] === "string" &&
@@ -1047,7 +1145,8 @@ const CHAT_PART_VALIDATORS = {
     typeof part["toolCallId"] === "string" &&
     isTanStackToolResultContent(part["content"]) &&
     isTanStackToolResultState(part["state"]) &&
-    (!("error" in part) || typeof part["error"] === "string"),
+    (!("error" in part) || typeof part["error"] === "string") &&
+    (part["outcome"] === undefined || isToolResultOutcome(part["outcome"])),
   "ui-resource": isUiResourcePart,
   video: (part) => isMediaPart(part, "video/"),
 } satisfies Record<PersistableChatPartType, ChatPartValidator>;
@@ -1114,7 +1213,7 @@ export const applyChatPartPersistenceBudget = (parts: readonly ChatPart[]) => {
   let richPartCount = 0;
 
   for (const part of parts) {
-    if (!isServerOwnedChatPart(part)) {
+    if (!isServerOwnedChatPart(part) || isProviderVisibleChatPart(part)) {
       acceptedParts.push(part);
       continue;
     }
@@ -1199,6 +1298,9 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
       };
     case "ui-resource": {
       const { resource } = part;
+      if (resource.mimeType === GENERATED_VISUAL_MIME_TYPE) {
+        return part;
+      }
       const normalizedResource =
         resource.text === undefined
           ? {
@@ -1230,8 +1332,10 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
     case "tool-call":
     case "tool-result":
       return part;
+    case "activity":
+      return part;
     case "subagent":
-      return panic("A subagent part is never persisted");
+      return panic(`A ${part.type} part is never persisted`);
     default: {
       part satisfies never;
       return panic(`Unhandled part: ${String(part)}`);
@@ -1239,17 +1343,29 @@ const normalizeChatPartForPersistence = (part: ChatPart): ChatPart => {
   }
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 type ChatPartPersistenceDecision =
   | { type: "drop"; partType: string }
   | { type: "persist"; part: ChatPart };
 
 export const classifyChatPartForPersistence = (
   part: unknown,
+  visualOrigin?: Pick<VisualResourceOrigin, "accepts">,
 ): ChatPartPersistenceDecision => {
   if (!isRecord(part) || typeof part["type"] !== "string") {
     panic("Cannot classify a malformed chat part for persistence");
   }
   const type = part["type"];
+  if (
+    type === "ui-resource" &&
+    isRecord(part["resource"]) &&
+    part["resource"]["mimeType"] === GENERATED_VISUAL_MIME_TYPE &&
+    !visualOrigin?.accepts(part)
+  ) {
+    return { type: "drop", partType: type };
+  }
   if (!isChatPartPersistenceType(type)) {
     panic(`Cannot classify unknown chat part type: ${type}`);
   }
@@ -1379,14 +1495,15 @@ const chatPartToPersistedV3Part = ({
   if (part.type === "tool-call") {
     const approval = "approval" in part ? part.approval : undefined;
     const metadata = "metadata" in part ? part.metadata : undefined;
+    if (chatToolExecutor(part) === null) {
+      panic("Cannot persist a tool call without executor ownership");
+    }
     const input = persistedToolInputFromChatPart(part);
     return {
       ...(approval === undefined ? {} : { approval }),
       id: part.id,
       input,
-      ...(metadata === undefined
-        ? {}
-        : { metadata: provePersistedJsonValue(metadata) }),
+      metadata: provePersistedToolCallMetadata(metadata),
       name: part.name,
       ...(part.output === undefined
         ? {}
@@ -1402,16 +1519,16 @@ const chatPartToPersistedV3Part = ({
     if (!hasPairedOutput) {
       content = persistedToolResultContentFromChatContent(part.content);
     } else if (Array.isArray(part.content)) {
-      if (!deepEquals(part.content, output)) {
-        panic(`Tool result ${part.toolCallId} disagrees with canonical output`);
-      }
-      content = { type: "paired-output-parts" };
+      content = deepEquals(part.content, output)
+        ? { type: "paired-output-parts" }
+        : persistedToolResultContentFromChatContent(part.content);
     } else if (part.content !== stringifyPersistedJsonValue(output)) {
       content = { type: "text", value: part.content };
     }
     return {
       ...(content === undefined ? {} : { content }),
       ...(part.error === undefined ? {} : { error: part.error }),
+      ...(part.outcome === undefined ? {} : { outcome: part.outcome }),
       state: part.state,
       toolCallId: part.toolCallId,
       type: "tool-result",
@@ -1443,10 +1560,17 @@ const persistedToolResultContentFromChatContent = (
 
 const isPersistedV3Part = (part: PersistedV3Part): boolean => {
   if (part.type === "tool-call") {
-    return part.id.length > 0 && part.name.length > 0;
+    return (
+      part.id.length > 0 &&
+      part.name.length > 0 &&
+      chatToolExecutor(part) !== null
+    );
   }
   if (part.type === "tool-result") {
-    return part.toolCallId.length > 0;
+    return (
+      part.toolCallId.length > 0 &&
+      (part.outcome === undefined || isToolResultOutcome(part.outcome))
+    );
   }
   return isChatPart(part);
 };
@@ -1514,6 +1638,7 @@ const legacyToolPartToTanStack = (
     state: legacyToolStateToTanStack(part["state"]),
     ...("input" in part ? { input } : {}),
     ...("output" in part ? { output: Reflect.get(part, "output") } : {}),
+    ...("metadata" in part ? { metadata: part["metadata"] } : {}),
     ...legacyToolApprovalToTanStack(part["approval"]),
   };
 
@@ -1653,9 +1778,11 @@ const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
   metadata.mentions === undefined &&
   metadata.refContext === undefined &&
   metadata.refEncoding === undefined &&
+  metadata.resumeSnapshot === undefined &&
   metadata.serverProvenance === undefined &&
   metadata.sourceDocuments === undefined &&
   metadata.turnOutcome === undefined &&
+  metadata.turnModel === undefined &&
   metadata.usage === undefined;
 
 const safeStringifyToolArguments = (value: unknown): string => {
@@ -1674,6 +1801,3 @@ const getStringProperty = (
   const property = value[key];
   return typeof property === "string" ? property : null;
 };
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;

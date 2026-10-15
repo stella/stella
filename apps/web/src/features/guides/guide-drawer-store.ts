@@ -7,7 +7,7 @@ export const GUIDE_DRAWER_STATES = {
   closed: "closed",
 } as const;
 
-export type GuideDrawerState =
+type GuideDrawerState =
   (typeof GUIDE_DRAWER_STATES)[keyof typeof GUIDE_DRAWER_STATES];
 
 export const GUIDE_DRAWER_OPEN_SOURCES = {

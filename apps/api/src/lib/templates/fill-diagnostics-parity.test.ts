@@ -21,6 +21,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { DECISION_UNDECIDED_REASONS } from "@stll/api-contract/ai-decision-provider";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -58,6 +59,7 @@ import type {
 } from "@/api/lib/templates/template-fill-service";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -197,7 +199,7 @@ const conditionDecision: fc.Arbitrary<ResolvedAiCondition> = fc.oneof(
     path: word,
     label: word,
     state: fc.constant("undecided"),
-    reason: fc.constantFrom("no-backend", "below-floor", "failed"),
+    reason: fc.constantFrom(...DECISION_UNDECIDED_REASONS),
   }),
 );
 
@@ -341,6 +343,7 @@ const chatVerdict = async (
       throw new Error("no metered step runs in this test");
     }),
     organizationId,
+    modelAdmission: testModelAdmission(organizationId),
     userId,
     thirdPartyBoundary: anonymizedBoundary(),
     dependencies: {

@@ -46,7 +46,7 @@ export const CAPTURED_FIXTURE_ROOTS = [
  * both, and a capture that cannot name where it came from is not a
  * recorded capture.
  */
-export type RecordedProvenance = {
+type RecordedProvenance = {
   capture: "recorded";
   sha256: string;
   sourceUrl: string;
@@ -63,16 +63,13 @@ export type RecordedProvenance = {
  * forever after. The hash still pins the bytes, so the file cannot drift
  * unnoticed; only its origin is unknown.
  */
-export type LegacyProvenance = {
+type LegacyProvenance = {
   capture: "legacy";
   sha256: string;
   note: string;
 };
 
 export type FixtureProvenance = RecordedProvenance | LegacyProvenance;
-
-export const LEGACY_NOTE =
-  "legacy capture, provenance unknown; recapture on next touch";
 
 /**
  * Every captured fixture still lacking a recorded origin.
@@ -131,9 +128,6 @@ export const isCapturedFixture = (relativePath: string): boolean => {
 
 export const provenancePathOf = (fixturePath: string): string =>
   `${fixturePath}${PROVENANCE_SUFFIX}`;
-
-export const sha256Of = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
 
 /**
  * Serialize a sidecar.

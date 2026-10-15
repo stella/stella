@@ -1,16 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  MCP_TOOL_NAME_MAX_LENGTH,
+  MCP_TOOL_NAME_PATTERN,
+} from "@stll/api-contract/mcp-tool-name";
 import { propertyConfig } from "@stll/property-testing";
 import { listSkillMetadata } from "@stll/skills";
 
+import { SKILL_SLUG_MAX_LENGTH } from "@/api/handlers/skills/slug";
 import { DEFAULT_SKILL_BODY_BY_SLUG } from "@/api/lib/agent-skills/default-skills";
 import {
   collisionSafeToolName,
   namespaceMcpToolName,
   namespaceSkillToolName,
-  TOOL_NAME_MAX_LENGTH,
-  TOOL_NAME_PATTERN,
 } from "@/api/lib/mcp-upstream/namespace";
 
 import { validateFetchedToolsList } from "../../../../../packages/cli/src/registry-trust";
@@ -25,7 +28,9 @@ import { validateFetchedToolsList } from "../../../../../packages/cli/src/regist
 // The skill slug schema: lowercase words joined by hyphens, at most 64 chars.
 const slugArbitrary = fc
   .array(fc.stringMatching(/^[a-z0-9]{1,12}$/u), { minLength: 1, maxLength: 8 })
-  .map((words) => words.join("-").slice(0, 64).replace(/-+$/u, ""))
+  .map((words) =>
+    words.join("-").slice(0, SKILL_SLUG_MAX_LENGTH).replace(/-+$/u, ""),
+  )
   .filter((slug) => slug.length > 0);
 
 // Upstream MCP servers name tools freely; the gateway bounds only length.
@@ -65,7 +70,7 @@ describe("exposed tool names", () => {
     );
 
     for (const name of names) {
-      expect(name).toMatch(TOOL_NAME_PATTERN);
+      expect(name).toMatch(MCP_TOOL_NAME_PATTERN);
     }
     expect(validateFetchedToolsList(listingOf(names))).toMatchObject({
       ok: true,
@@ -76,8 +81,11 @@ describe("exposed tool names", () => {
     fc.assert(
       fc.property(slugArbitrary, (slug) => {
         const name = namespaceSkillToolName(slug);
-        expect(name).toMatch(TOOL_NAME_PATTERN);
-        expect(name.length).toBeLessThanOrEqual(TOOL_NAME_MAX_LENGTH);
+        expect(name).toMatch(MCP_TOOL_NAME_PATTERN);
+        expect(name.length).toBeLessThanOrEqual(MCP_TOOL_NAME_MAX_LENGTH);
+        expect(validateFetchedToolsList(listingOf([name]))).toMatchObject({
+          ok: true,
+        });
       }),
       propertyConfig(),
     );
@@ -89,9 +97,12 @@ describe("exposed tool names", () => {
         upstreamNameArbitrary,
         upstreamNameArbitrary,
         (connectorSlug, toolName) => {
-          expect(namespaceMcpToolName({ connectorSlug, toolName })).toMatch(
-            TOOL_NAME_PATTERN,
-          );
+          const name = namespaceMcpToolName({ connectorSlug, toolName });
+          expect(name).toMatch(MCP_TOOL_NAME_PATTERN);
+          expect(name.length).toBeLessThanOrEqual(MCP_TOOL_NAME_MAX_LENGTH);
+          expect(validateFetchedToolsList(listingOf([name]))).toMatchObject({
+            ok: true,
+          });
         },
       ),
       propertyConfig(),
@@ -131,17 +142,18 @@ describe("exposed tool names", () => {
     );
     expect(new Set(names).size).toBe(names.length);
     for (const name of names) {
-      expect(name).toMatch(TOOL_NAME_PATTERN);
+      expect(name).toMatch(MCP_TOOL_NAME_PATTERN);
     }
   });
 
   test("long slugs sharing a prefix keep distinct names", () => {
-    const prefix = "a".repeat(60);
+    const prefix = "a".repeat(MCP_TOOL_NAME_MAX_LENGTH);
     const first = namespaceSkillToolName(`${prefix}-one`);
     const second = namespaceSkillToolName(`${prefix}-two`);
     expect(first).not.toBe(second);
-    expect(first.length).toBe(TOOL_NAME_MAX_LENGTH);
-    expect(second.length).toBe(TOOL_NAME_MAX_LENGTH);
+    // Published CLI clients still bound emitted names to 64 characters.
+    expect(first.length).toBe(64);
+    expect(second.length).toBe(64);
   });
 
   test("a hyphenated default skill maps to underscores", () => {

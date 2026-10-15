@@ -288,15 +288,5 @@ export const nextDocxEditorSweepAt = (
   return earliest;
 };
 
-/**
- * The error surface each slot gets. Total over the slot vocabulary: one
- * instance serves both places, so the fallback follows the slot it is shown
- * in rather than the site that happened to mount it.
- */
-export const DOCX_EDITOR_ERROR_SURFACE_BY_SLOT = {
-  [DOCX_EDITOR_SLOT.main]: "route",
-  [DOCX_EDITOR_SLOT.inspector]: "inspector",
-} as const satisfies Record<DocxEditorSlotName, "route" | "inspector">;
-
 export const docxEditorSlotForPane = (pane: DocumentPane): DocxEditorSlotName =>
   DOCX_EDITOR_SLOT_BY_PANE[pane];

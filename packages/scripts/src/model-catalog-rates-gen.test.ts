@@ -4,7 +4,9 @@ import { MODEL_RATES } from "@stll/ai-catalog";
 
 import type { GeneratedModelRateRow } from "./model-catalog-rates-gen";
 import {
+  applyModelRateCorrections,
   findDroppedRatedModelIds,
+  findUnusedModelRateCorrections,
   listModelRateTargetIds,
   modelRateFromModelsDev,
   renderModelRatesModule,
@@ -221,6 +223,7 @@ describe("model rate module rendering", () => {
           inputPerMTok: 875,
           outputPerMTok: 3125,
         },
+        corrections: [],
         source: "openai:gpt-test",
         sourceReason: null,
         sourceUrl: null,
@@ -232,6 +235,7 @@ describe("model rate module rendering", () => {
           inputPerMTok: 25_000,
           outputPerMTok: 100_000,
         },
+        corrections: ["cost.cache_read 0.1 -> 0.2 (dated reason; url)"],
         source: "anthropic:claude-source",
         sourceReason: "2026-09-03: provider alias",
         sourceUrl: "https://example.com/provider-alias",
@@ -248,6 +252,9 @@ describe("model rate module rendering", () => {
     );
     expect(rendered).toContain(
       "// reviewed source: https://example.com/provider-alias",
+    );
+    expect(rendered).toContain(
+      "// reviewed rate correction: cost.cache_read 0.1 -> 0.2 (dated reason; url)",
     );
     expect(rendered).toContain("inputPerMTok: 875,");
     expect(rendered).toContain("outputPerMTok: 3125,");
@@ -274,5 +281,65 @@ describe("rated model retention", () => {
         new Set(["gpt-kept", "gpt-new"]),
       ),
     ).toEqual(["gpt-withdrawn"]);
+  });
+});
+
+describe("reviewed rate corrections", () => {
+  const corrections = {
+    "anthropic:claude-test": [
+      {
+        field: "cache_read",
+        upstreamUsd: 0.1,
+        correctedUsd: 0.2,
+        reason: "2026-10-07: upstream lists half the provider price",
+        sourceUrl: "https://example.com/pricing",
+      },
+    ],
+  } as const;
+
+  test("replaces only the pinned upstream value", () => {
+    const corrected = applyModelRateCorrections(
+      model({ input: 2, output: 10, cache_read: 0.1, cache_write: 2.5 }),
+      "anthropic:claude-test",
+      corrections,
+    );
+
+    expect(
+      modelRateFromModelsDev(corrected.modelValue, "anthropic:claude-test"),
+    ).toEqual({
+      kind: "flat",
+      inputPerMTok: 200_000,
+      outputPerMTok: 1_000_000,
+      cachedInputPerMTok: 20_000,
+      cachedWriteInputPerMTok: 250_000,
+    });
+    expect(corrected.corrections).toEqual([
+      "cost.cache_read 0.1 -> 0.2 (2026-10-07: upstream lists half the " +
+        "provider price; https://example.com/pricing)",
+    ]);
+  });
+
+  test("leaves sources without a correction untouched", () => {
+    const value = model({ input: 1, output: 2 });
+
+    expect(
+      applyModelRateCorrections(value, "openai:gpt-test", corrections),
+    ).toEqual({ corrections: [], modelValue: value });
+  });
+
+  test("fails once upstream no longer publishes the pinned value", () => {
+    expect(() =>
+      applyModelRateCorrections(
+        model({ input: 2, output: 10, cache_read: 0.2 }),
+        "anthropic:claude-test",
+        corrections,
+      ),
+    ).toThrow("delete or re-review");
+  });
+
+  test("reports a correction whose source no rated model reads", () => {
+    expect(
+      findUnusedModelRateCorrections(new Set(["openai:gpt-test"]), corrections),
+    ).toEqual(["anthropic:claude-test"]);
   });
 });

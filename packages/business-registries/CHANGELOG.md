@@ -1,5 +1,16 @@
 # @stll/business-registries
 
+## 0.13.0
+
+### Minor Changes
+
+- [#5538](https://github.com/stella/stella/pull/5538) [`d532682`](https://github.com/stella/stella/commit/d5326822357958276e9fbfae7eabf009a9a3a5e3) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Centralize Unicode normalization and mark stripping in `@stll/text-normalize` and use the shared behavior in dependent packages.
+
+### Patch Changes
+
+- Updated dependencies [[`d532682`](https://github.com/stella/stella/commit/d5326822357958276e9fbfae7eabf009a9a3a5e3)]:
+  - @stll/text-normalize@0.2.0
+
 ## 0.12.1
 
 ### Patch Changes

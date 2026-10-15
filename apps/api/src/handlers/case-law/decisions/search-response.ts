@@ -6,6 +6,7 @@ import { DECISION_TYPE_KINDS } from "@stll/api-contract/case-law-decision-types"
 import { CASE_LAW_SEARCH_WARNING_CODES } from "@stll/api-contract/search";
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
+import type { DecisionHeadnoteMaxChars } from "@/api/lib/case-law/decision-headnote";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -19,17 +20,29 @@ import type { searchDecisionsSuccessResponseSchema } from "./search-schema";
 
 type SearchResponse = Static<typeof searchDecisionsSuccessResponseSchema>;
 type SearchHit = SearchResponse["hits"][number];
+// The headnote's keywords branch is the readonly contract type; the
+// standalone field reads the same shape mutably, so accept the wider one.
+const projectKeywords = (
+  keywords: Extract<SearchHit["headnote"], { type: "keywords" }>,
+) => ({
+  type: keywords.type,
+  items: keywords.items
+    .slice(0, LIMITS.caseLawHeadnoteKeywords)
+    .map((text) => truncateTextBytes(text, LIMITS.caseLawHeadnoteMaxChars * 4)),
+  omitted:
+    keywords.omitted +
+    Math.max(0, keywords.items.length - LIMITS.caseLawHeadnoteKeywords),
+});
+
 const projectHeadnote = (
   headnote: SearchHit["headnote"],
+  maxChars: number,
 ): SearchHit["headnote"] => {
   switch (headnote.type) {
     case "absent":
       return headnote;
     case "present": {
-      const text = truncateTextBytes(
-        headnote.text,
-        LIMITS.caseLawHeadnoteMaxChars * 4,
-      );
+      const text = truncateTextBytes(headnote.text, maxChars * 4);
       return {
         type: "present",
         text,
@@ -37,17 +50,7 @@ const projectHeadnote = (
       };
     }
     case "keywords":
-      return {
-        type: "keywords",
-        items: headnote.items
-          .slice(0, LIMITS.caseLawHeadnoteKeywords)
-          .map((text) =>
-            truncateTextBytes(text, LIMITS.caseLawHeadnoteMaxChars * 4),
-          ),
-        omitted:
-          headnote.omitted +
-          Math.max(0, headnote.items.length - LIMITS.caseLawHeadnoteKeywords),
-      };
+      return projectKeywords(headnote);
     default: {
       headnote satisfies never;
       return panic(`Unhandled headnote: ${String(headnote)}`);
@@ -68,7 +71,7 @@ const projectIdentifiers = ([
     })),
 ];
 
-const projectHit = (hit: SearchHit): SearchHit => ({
+const projectHit = (hit: SearchHit, headnoteMaxChars: number): SearchHit => ({
   decisionId: truncateTextBytes(hit.decisionId, bytes.id),
   caseNumber: truncateTextBytes(hit.caseNumber, bytes.caseNumber),
   caseNumberType: hit.caseNumberType,
@@ -97,7 +100,9 @@ const projectHit = (hit: SearchHit): SearchHit => ({
   decisionDate: nullableText(hit.decisionDate, bytes.date),
   decisionType: nullableText(hit.decisionType, bytes.decisionType),
   sourceUrl: nullableText(hit.sourceUrl, bytes.sourceUrl),
-  headnote: projectHeadnote(hit.headnote),
+  headnote: projectHeadnote(hit.headnote, headnoteMaxChars),
+  keywords: hit.keywords === null ? null : projectKeywords(hit.keywords),
+  textWithheldReason: hit.textWithheldReason,
   headline:
     hit.headline === null
       ? null
@@ -119,12 +124,16 @@ const projectBucket = (bucket: FacetBucket) => ({
 // Both backends pass their entire successful envelope through this boundary.
 export const projectCaseLawSearchResponse = (
   response: SearchResponse,
+  headnoteMaxChars: DecisionHeadnoteMaxChars = LIMITS.caseLawHeadnoteMaxChars,
 ): SearchResponse => ({
-  hits: response.hits.slice(0, LIMITS.caseLawSearchPageSizeMax).map(projectHit),
+  hits: response.hits
+    .slice(0, LIMITS.caseLawSearchPageSizeMax)
+    .map((hit) => projectHit(hit, headnoteMaxChars)),
   facets:
     response.facets === null
       ? null
       : {
+          courtYear: response.facets.courtYear,
           court: response.facets.court
             .slice(0, COURT_TIER_LABELS.length)
             .map((tier) => ({
@@ -161,6 +170,7 @@ export const projectCaseLawSearchResponse = (
     CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
   ),
   paginationOutcome: response.paginationOutcome,
+  pageReach: response.pageReach,
   queryUsed: truncateTextBytes(response.queryUsed, bytes.queryUsed),
   warnings: response.warnings
     .slice(0, CASE_LAW_SEARCH_WARNING_CODES.length)

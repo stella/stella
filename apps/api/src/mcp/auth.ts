@@ -9,6 +9,13 @@ import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
 } from "@/api/lib/auth/auth-paths";
+import { getReviewAccountConfig } from "@/api/lib/auth/review-account";
+import { narrowReviewOrganizationScopes } from "@/api/lib/auth/review-account-policy";
+import type { ReviewAccountConfig } from "@/api/lib/auth/review-account-policy";
+import {
+  SERVICE_CLIENT_PRINCIPAL,
+  SERVICE_CLIENT_PRINCIPAL_CLAIM,
+} from "@/api/lib/db/service-client-contract";
 import {
   isMachineApiKeyCredential,
   machineApiKeyPermissionsSchema,
@@ -61,7 +68,7 @@ export type McpCredentialType = NonNullable<McpSession["credential"]>["type"];
 
 let verifyBearerToken:
   | ReturnType<
-      ReturnType<typeof oauthProviderResourceClient>["getActions"]
+      ReturnType<typeof oauthProviderResourceClient<undefined>>["getActions"]
     >["verifyBearerToken"]
   | undefined;
 
@@ -144,6 +151,11 @@ export const isMcpSession = (value: unknown): value is McpSession =>
 export const extractMcpSession = (
   payload: JWTPayload,
 ): Result<McpSession, McpAuthenticationError> => {
+  if (payload[SERVICE_CLIENT_PRINCIPAL_CLAIM] === SERVICE_CLIENT_PRINCIPAL) {
+    return Result.err(
+      new McpAuthenticationError({ message: "A user token is required" }),
+    );
+  }
   const userId = payload.sub;
   if (!userId) {
     return Result.err(
@@ -285,14 +297,34 @@ export type McpAuthenticationFailure =
   | McpAuthenticationError
   | McpTokenVerificationError;
 
+type VerifyMcpAccessTokenOptions = {
+  mode: McpMode;
+  verifyToken?: ReturnType<typeof getVerifyBearerToken>;
+};
+
+export const verifyMcpAccessToken = async (
+  bearerToken: string,
+  { mode, verifyToken }: VerifyMcpAccessTokenOptions,
+) =>
+  await Result.tryPromise({
+    try: async () =>
+      await (verifyToken ?? getVerifyBearerToken())(
+        bearerToken,
+        getMcpAccessTokenVerificationOptions(mode),
+      ),
+    catch: classifyMcpTokenVerificationError,
+  });
+
 export const authenticateMcpRequest = async (
   bearerToken: string,
   {
     mode = "default",
     resolveApiKeySession = defaultResolveMachineApiKeySession,
+    reviewAccount = getReviewAccountConfig(),
     verifyToken,
   }: {
     mode?: McpMode | undefined;
+    reviewAccount?: Pick<ReviewAccountConfig, "organizationId"> | undefined;
     resolveApiKeySession?:
       | typeof defaultResolveMachineApiKeySession
       | undefined;
@@ -305,14 +337,12 @@ export const authenticateMcpRequest = async (
         catch: classifyMcpTokenVerificationError,
       })
     : (
-        await Result.tryPromise({
-          try: async () =>
-            await (verifyToken ?? getVerifyBearerToken())(
-              bearerToken,
-              getMcpAccessTokenVerificationOptions(mode),
-            ),
-          catch: classifyMcpTokenVerificationError,
+        await verifyMcpAccessToken(bearerToken, {
+          mode,
+          ...(verifyToken === undefined ? {} : { verifyToken }),
         })
       ).andThen(extractMcpSession);
-  return authenticated;
+  return authenticated.map((session) =>
+    narrowReviewOrganizationScopes(session, reviewAccount),
+  );
 };

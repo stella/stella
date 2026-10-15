@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 import JSZip from "jszip";
-import { createHash } from "node:crypto";
 import { readdir } from "node:fs/promises";
+
+import { writeZipEntry } from "@stll/docx-utils";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -45,11 +47,13 @@ export const engineParityCases = async () => {
     `<w:tbl><w:tr><w:tc>${p("{% for row in rows %}") + p("{{ row.name }}") + p("{% endfor %}")}</w:tc></w:tr></w:tbl>`,
   ].join("");
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
   );
@@ -81,9 +85,7 @@ export const engineParityXmlDigests = async (file: ScannedFile) => {
     if (!entry) {
       panic(`Missing XML part ${path}`);
     }
-    parts[path] = createHash("sha256")
-      .update(await entry.async("string"))
-      .digest("hex");
+    parts[path] = hashSha256Hex(await entry.async("string"));
   }
   return `${JSON.stringify(parts, null, 2)}\n`;
 };

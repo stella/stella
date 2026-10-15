@@ -2,7 +2,10 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 import * as v from "valibot";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/organization",
@@ -91,7 +94,7 @@ afterEach(() => {
 
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const CZ: PracticeJurisdiction = { countryCode: "CZ", isPrimary: true };
@@ -99,13 +102,7 @@ const SK: PracticeJurisdiction = { countryCode: "SK", isPrimary: false };
 
 // Lets queued work (a scoped mutation continuing, a refetch) reach the
 // transport before asserting what was sent.
-const drain = async () =>
-  await testing.act(
-    async () =>
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      }),
-  );
+const drain = async () => await testing.act(async () => await sleep(0));
 
 const mountCard = async () => {
   const client = new query.QueryClient({

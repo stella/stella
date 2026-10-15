@@ -14,6 +14,7 @@ import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-r
 import {
   FACET_COUNT_TYPE,
   SEARCH_PAGINATION_COMPLETE,
+  SEARCH_PAGE_REACH,
   countedSearchTotal,
   LEGISLATION_SEARCH_MATCH_TYPES,
   SEARCH_TOTAL_TYPE,
@@ -28,7 +29,6 @@ import { env } from "@/api/env";
 import type { readGatedDecisionCitationDigest } from "@/api/handlers/case-law/decisions/citation-digest";
 import type { readGatedDecisionCitations } from "@/api/handlers/case-law/decisions/citation-passages";
 import type { readGatedDecisionWithDocument } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { CHAT_READ_SCRIPT_POLICY } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
@@ -104,7 +104,6 @@ const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
 const describeStoredTemplateMock = mock();
 const searchProviderSearchMock = mock();
-const lookupDecisionsByIdentityMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readCaseLawCoverageHandlerMock = mock();
 const readGatedDecisionWithDocumentMock = mock();
@@ -231,7 +230,6 @@ const buildContext = (tx: unknown): McpRequestContext => {
       readWorkspaceMembersHandler: readWorkspaceMembersHandlerMock,
       describeStoredTemplate: describeStoredTemplateMock,
       getSearchReader: () => asTestRaw({ search: searchProviderSearchMock }),
-      lookupDecisionsByIdentity: lookupDecisionsByIdentityMock,
       searchDecisionsHandler: searchDecisionsHandlerMock,
       readCaseLawCoverageHandler: readCaseLawCoverageHandlerMock,
       readGatedDecisionWithDocument: readGatedDecisionWithDocumentMock,
@@ -502,6 +500,18 @@ const CONTRACT_CORPUS = {
               createdBy: "Jana",
               createdByImage: null,
               createdByDeletedAt: null,
+              assignedTo: "Petr",
+              assignedToImage: null,
+              assignedToDeletedAt: null,
+            },
+          ],
+          // The web agenda stays out of the matter detail projection.
+          upcomingAgenda: [
+            {
+              entityId: toSafeId<"entity">(uid(43)),
+              name: "File the response",
+              status: null,
+              dueDate: "2026-01-10",
               assignedTo: "Petr",
               assignedToImage: null,
               assignedToDeletedAt: null,
@@ -1199,6 +1209,7 @@ const CONTRACT_CORPUS = {
               id: uid(40),
               activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
               entityId: uid(41),
+              entityReference: { type: "available", id: uid(41) },
               userId: uid(42),
               dateWorked: "2026-01-01",
               durationMinutes: 60,
@@ -1216,7 +1227,7 @@ const CONTRACT_CORPUS = {
           [{ id: uid(42), name: "Member One" }],
         ]),
       }),
-      expectRefPaths: ["entries[].entityId"],
+      expectRefPaths: ["entries[].entityId", "entries[].entityReference.id"],
     },
     {
       mode: "list",
@@ -1228,6 +1239,7 @@ const CONTRACT_CORPUS = {
               id: uid(44),
               activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
               entityId: null,
+              entityReference: null,
               userId: null,
               dateWorked: "2026-01-02",
               durationMinutes: 30,
@@ -1260,6 +1272,7 @@ const CONTRACT_CORPUS = {
               id: uid(40),
               activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
               entityId: uid(41),
+              entityReference: { type: "available", id: uid(41) },
               userId: uid(42),
               dateWorked: "2026-01-01",
               durationMinutes: 60,
@@ -1277,7 +1290,11 @@ const CONTRACT_CORPUS = {
           [{ id: uid(42), name: "Member One" }],
         ]),
       }),
-      expectRefPaths: ["entry.entityId", "entry.workspaceId"],
+      expectRefPaths: [
+        "entry.entityId",
+        "entry.entityReference.id",
+        "entry.workspaceId",
+      ],
     },
   ],
   list_invoices: [
@@ -1343,6 +1360,7 @@ const CONTRACT_CORPUS = {
                 {
                   id: uid(47),
                   workItemId: uid(48),
+                  workItemReference: { type: "available", id: uid(48) },
                   dateWorked: "2026-02-01",
                   billedMinutes: 60,
                   rateAtEntry: 100,
@@ -1359,6 +1377,7 @@ const CONTRACT_CORPUS = {
                 {
                   id: uid(49),
                   matterId: uid(50),
+                  matterReference: { type: "available", id: uid(50) },
                   dateIncurred: "2026-02-01",
                   amount: 100,
                   currency: "EUR",
@@ -1397,8 +1416,10 @@ const CONTRACT_CORPUS = {
       expectRefPaths: [
         "invoice.workspaceId",
         "invoice.timeEntries[].entityId",
+        "invoice.timeEntries[].entityReference.id",
         "invoice.timeEntries[].entity.id",
         "invoice.expenses[].entityId",
+        "invoice.expenses[].entityReference.id",
         "invoice.expenses[].entity.id",
       ],
     },
@@ -1450,6 +1471,7 @@ const CONTRACT_CORPUS = {
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          pageReach: SEARCH_PAGE_REACH.REACHED,
           facets: null,
           hits: [
             {
@@ -1479,8 +1501,10 @@ const CONTRACT_CORPUS = {
               ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
+              textWithheldReason: null,
               matchingPassages: 3,
               headnote: { type: "absent", reason: "not_published" },
+              keywords: null,
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
               // GUID-bearing publisher URL; see the statute fixture above.
@@ -1504,7 +1528,9 @@ const CONTRACT_CORPUS = {
       setup: () => {
         searchDecisionsHandlerMock.mockResolvedValue({
           paginationOutcome: SEARCH_PAGINATION_COMPLETE,
+          pageReach: SEARCH_PAGE_REACH.REACHED,
           facets: {
+            courtYear: null,
             court: [
               {
                 tierLabel: "supreme",
@@ -1551,8 +1577,10 @@ const CONTRACT_CORPUS = {
               ],
               headline: "…dobré <em>mravy</em>…",
               language: "cs",
+              textWithheldReason: null,
               matchingPassages: 3,
               headnote: { type: "absent", reason: "not_published" },
+              keywords: null,
               languageAlternates: [],
               slug: "ns-22-cdo-1000-2020",
               // GUID-bearing publisher URL; see the statute fixture above.
@@ -1564,40 +1592,6 @@ const CONTRACT_CORPUS = {
           queryUsed: "dobré mravy",
           warnings: [],
         } satisfies Awaited<ReturnType<typeof searchDecisionsHandler>>);
-      },
-      expectRefPaths: [],
-    },
-  ],
-  lookup_case_law: [
-    {
-      mode: "search",
-      buildArgs: () => ({
-        country: "CZE",
-        identifiers: ["22 Cdo 1000/2020"],
-      }),
-      setup: () => {
-        // The identity read, not the ranked search: this tool resolves a
-        // reference off the identity columns and never consults a provider.
-        lookupDecisionsByIdentityMock.mockResolvedValue([
-          {
-            caseNumber: "22 Cdo 1000/2020",
-            caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-            country: "CZ",
-            court: "Nejvyšší soud",
-            decisionDate: "2020-05-01",
-            ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
-            id: toSafeId<"caseLawDecision">(uid(53)),
-            identifiers: [
-              {
-                type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
-                value: "22 Cdo 1000/2020",
-              },
-            ],
-            language: "cs",
-            languageAlternates: [],
-            slug: "ns-22-cdo-1000-2020",
-          },
-        ] satisfies Awaited<ReturnType<typeof lookupDecisionsByIdentity>>);
       },
       expectRefPaths: [],
     },
@@ -1635,6 +1629,7 @@ const CONTRACT_CORPUS = {
           citationsNextCursor: null,
           country: "CZ",
           court: "Nejvyšší soud",
+          courtId: null,
           courtAbbreviation: "NS",
           courtTier: "supreme",
           // `decisionDate` is a plain `date`-mode column (a "YYYY-MM-DD"
@@ -1694,6 +1689,8 @@ const CONTRACT_CORPUS = {
           citationAuthority: 1.5,
           country: "CZ",
           court: "Nejvyšší soud",
+          courtAbbreviation: "NS",
+          sourceUrl: null,
           decisionDate: "2021-03-04",
           decisionType: "judgment",
           ecli: null,
@@ -1713,14 +1710,21 @@ const CONTRACT_CORPUS = {
           summary: {
             incoming: { ...noCitations, positive: 1, unclassified: 49 },
             outgoing: { ...noCitations, neutral: 2 },
-            capped: { incoming: false, outgoing: false },
+            precision: {
+              status: "bounded",
+              capped: { incoming: false, outgoing: false },
+            },
             incomingByYear: [],
           },
-          topCiting: [relatedDecision(58, "23 Cdo 200/2021")],
+          topCiting: {
+            precision: "exact",
+            items: [relatedDecision(58, "23 Cdo 200/2021")],
+          },
           cites: [
             {
               id: toSafeId<"caseLawCitation">(uid(55)),
               citationText: "21 Cdo 500/2019",
+              textWithheldReason: null,
               sectionIndex: 0,
               treatment: "neutral",
               decision: relatedDecision(56, "21 Cdo 500/2019"),
@@ -1728,6 +1732,7 @@ const CONTRACT_CORPUS = {
             {
               id: toSafeId<"caseLawCitation">(uid(60)),
               citationText: "sp. zn. 20 Cdo 1/2001",
+              textWithheldReason: null,
               sectionIndex: 1,
               treatment: "neutral",
               decision: null,
@@ -1753,6 +1758,7 @@ const CONTRACT_CORPUS = {
               {
                 id: toSafeId<"caseLawCitation">(uid(57)),
                 citationText: "22 Cdo 1000/2020",
+                textWithheldReason: null,
                 sectionIndex: 1,
                 treatment: "positive",
                 decision: {
@@ -1762,6 +1768,8 @@ const CONTRACT_CORPUS = {
                   citationAuthority: 2.5,
                   country: "CZ",
                   court: "Nejvyšší soud",
+                  courtAbbreviation: "NS",
+                  sourceUrl: null,
                   decisionDate: "2021-03-04",
                   decisionType: "judgment",
                   ecli: "ECLI:CZ:NS:2021:23.CDO.200.2021.1",
@@ -1861,6 +1869,7 @@ const CONTRACT_CORPUS = {
             id: toSafeId<"legislationDocument">(uid(72)),
             astS3Key: null,
             documentAst: null,
+            eli: "/eli/cz/sb/2012/89",
             versionValidFrom: "2014-01-01",
             versionValidTo: null,
             expressionKind: "consolidation" as const,
@@ -2105,7 +2114,6 @@ const ALL_MOCKS = [
   readWorkspaceMembersHandlerMock,
   describeStoredTemplateMock,
   searchProviderSearchMock,
-  lookupDecisionsByIdentityMock,
   searchDecisionsHandlerMock,
   readCaseLawCoverageHandlerMock,
   readGatedDecisionWithDocumentMock,
@@ -2395,4 +2403,137 @@ describe("third-party outbound permit", () => {
       });
     }
   }
+});
+
+describe("decision text in chat projection", () => {
+  test("decision read preserves its text through the chat projection", async () => {
+    const text = "[23] Žaloba se zamítá. Náklady řízení nese žalobce.";
+    readGatedDecisionWithDocumentMock.mockResolvedValue({
+      hasDocument: true,
+      documentPending: false,
+      documentReadFailed: false,
+      documentUnavailable: false,
+      id: toSafeId<"caseLawDecision">(uid(54)),
+      resolution: { type: DECISION_READ_RESOLUTION.DIRECT },
+      caseNumber: "22 Cdo 1000/2020",
+      caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+      citationsFrom: [],
+      citationsTo: [],
+      citationsNextCursor: null,
+      country: "CZ",
+      court: "Nejvyšší soud",
+      courtId: null,
+      courtAbbreviation: "NS",
+      courtTier: "supreme",
+      decisionDate: "2020-05-01",
+      decisionType: "judgment",
+      documentAst: null,
+      documentAstSource: null,
+      projectionDigest: null,
+      documentUrl: "https://example.test/decision/document",
+      ecli: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+      identifiers: [
+        {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: "22 Cdo 1000/2020",
+        },
+        {
+          type: DECISION_IDENTIFIER_TYPES.ECLI,
+          value: "ECLI:CZ:NS:2020:22.CDO.1000.2020.1",
+        },
+      ],
+      fulltext: text,
+      judges: [],
+      headnote: { type: "absent", reason: "not_published" },
+      sections: null,
+      language: "cs",
+      languageGroupKey: null,
+      languageAlternates: [],
+      metadata: {},
+      textFields: {
+        abstract: { type: "absent", reason: "not_published" },
+        headnote: { type: "absent", reason: "not_published" },
+        legalSentence: { type: "absent", reason: "not_published" },
+        summary: { type: "absent", reason: "not_published" },
+      },
+      slug: "ns-22-cdo-1000-2020",
+      source: {
+        id: toSafeId<"caseLawSource">(uid(59)),
+        name: "NS ČR",
+        adapterKey: "cz-ns",
+        allowsDerivedAi: true,
+      },
+      sourceUrl: "https://example.test/decision/source",
+      sourceAttributionUrl: "https://example.test/decision/attribution",
+      createdAt: new Date("2020-05-01T00:00:00.000Z"),
+      updatedAt: new Date("2020-05-01T00:00:00.000Z"),
+    } satisfies Awaited<ReturnType<typeof readGatedDecisionWithDocument>>);
+    const noCitations = {
+      negative: 0,
+      neutral: 0,
+      positive: 0,
+      supportive: 0,
+      mixed: 0,
+      unclassified: 0,
+    };
+    readGatedDecisionCitationDigestMock.mockResolvedValue({
+      summary: {
+        incoming: noCitations,
+        outgoing: noCitations,
+        precision: { status: "exact" },
+        incomingByYear: [],
+      },
+      topCiting: { precision: "exact", items: [] },
+      cites: [],
+      citesMore: false,
+    } satisfies Awaited<ReturnType<typeof readGatedDecisionCitationDigest>>);
+    const toolName = "read_case_law_decision";
+    const refRegistry = createChatRefRegistry();
+    const { result, fetched } = await recordOutboundFetches(async () =>
+      runRegistryReadTool({
+        args: { decision_ids: [uid(54)] },
+        context: contextFor(toolName, {}),
+        refRegistry,
+        toolName,
+      }),
+    );
+    expect(fetched).toEqual([]);
+    if (Result.isError(result)) {
+      panic("Decision read projection failed", result.error);
+    }
+    expect(readPathValues(result.value, "items[].decision.text")).toEqual([
+      text,
+    ]);
+    const queryResult = await runRegistryReadTool({
+      args: { decision_ids: [uid(54)], query: "Žaloba" },
+      context: contextFor(toolName, {}),
+      refRegistry,
+      toolName,
+    });
+    if (Result.isError(queryResult)) {
+      panic("Decision query projection failed", queryResult.error);
+    }
+    expect(
+      readPathValues(queryResult.value, "items[].decision.textSource"),
+    ).toEqual(["fulltext"]);
+    expect(
+      readPathValues(
+        queryResult.value,
+        "items[].decision.matches.paragraphs[].position",
+      ),
+    ).toEqual([1]);
+    expect(
+      readPathValues(
+        queryResult.value,
+        "items[].decision.matches.paragraphs[].label",
+      ),
+    ).toEqual(["23"]);
+    expect(
+      readPathValues(
+        queryResult.value,
+        "items[].decision.matches.paragraphs[].headingPath",
+      ),
+    ).toEqual([[]]);
+    expect(recordedExceptions()).toEqual([]);
+  });
 });

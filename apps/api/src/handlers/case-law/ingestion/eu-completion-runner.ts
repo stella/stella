@@ -2,6 +2,8 @@ import { panic, Result, TaggedError, type InferOk } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import { TransformStream } from "node:stream/web";
 
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -89,7 +91,7 @@ class CompletionStageFailure extends TaggedError("CompletionStageFailure")<{
 const MAX_COMPLETION_JUDGES = 1000;
 const COMPLETION_DEFER_MS = 60_000;
 const digest = (payload: string) =>
-  new Bun.CryptoHasher("sha256").update(payload).digest("hex");
+  createSha256().update(payload).digest("hex");
 
 /** The canonical writer and storage APIs still reject promises; this is their typed boundary. */
 const legacyOperation = async <T>(operation: () => Promise<T>) =>
@@ -798,6 +800,7 @@ const createGuardedLease = ({
 }: GuardedLeaseOptions): CaseLawSourceIngestionLease => ({
   source: lease.source,
   leaseToken: lease.leaseToken,
+  purpose: lease.purpose,
   release: lease.release,
   beforeDatabaseMark: async () => {
     const admitted = await ensure();

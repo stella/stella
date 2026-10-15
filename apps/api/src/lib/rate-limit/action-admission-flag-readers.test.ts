@@ -23,9 +23,6 @@ const ALLOWED_FLAG_READS = {
   "lib/rate-limit/tenant-action-boundary.ts": 1,
   // The size-bound wrapper and the admission store warmup.
   "server.ts": 2,
-  // Resolving each step's tenant and actor costs three queries; while
-  // admission is off the step skips them, its run already counted at kickoff.
-  "lib/flows/flow-run-worker.ts": 1,
   // A run without an actor has no caller to admit or count.
   "lib/flows/start-flow-run.ts": 1,
   // Cost-record storage and its retention, not admission.

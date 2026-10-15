@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 2,
+  "reason": "Use the pinned upstream proof runtime in the API and its lint plugin in root tooling, replacing copied implementations."
+}

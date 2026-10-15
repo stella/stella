@@ -8,38 +8,15 @@ import { ClientTelemetryError } from "@/lib/errors/telemetry";
 
 type QuerySuspenseBoundaryProps = PropsWithChildren<{
   area: string;
-  errorFallback: (props: { reset: () => void }) => ReactNode;
+  errorFallback: (props: { reset: () => void; error: Error }) => ReactNode;
   suspenseFallback: ReactNode;
   onError?: ((error: Error) => void) | undefined;
   resetKeys?: readonly unknown[] | undefined;
 }>;
 
-export const QuerySuspenseBoundary = ({
-  area,
-  children,
-  errorFallback,
-  onError,
-  resetKeys,
-  suspenseFallback,
-}: QuerySuspenseBoundaryProps) => (
-  <QueryErrorResetBoundary>
-    {({ reset }) => (
-      <QueryErrorBoundary
-        area={area}
-        fallback={errorFallback}
-        onError={onError}
-        onReset={reset}
-        resetKeys={resetKeys}
-      >
-        <Suspense fallback={suspenseFallback}>{children}</Suspense>
-      </QueryErrorBoundary>
-    )}
-  </QueryErrorResetBoundary>
-);
-
 type QueryErrorBoundaryProps = PropsWithChildren<{
   area: string;
-  fallback: (props: { reset: () => void }) => ReactNode;
+  fallback: (props: { reset: () => void; error: Error }) => ReactNode;
   onError?: ((error: Error) => void) | undefined;
   onReset: () => void;
   resetKeys?: readonly unknown[] | undefined;
@@ -98,12 +75,38 @@ class QueryErrorBoundary extends Component<
     }
 
     if (this.state.error !== null) {
-      return this.props.fallback({ reset: this.reset });
+      return this.props.fallback({
+        reset: this.reset,
+        error: this.state.error,
+      });
     }
 
     return this.props.children;
   }
 }
+
+export const QuerySuspenseBoundary = ({
+  area,
+  children,
+  errorFallback,
+  onError,
+  resetKeys,
+  suspenseFallback,
+}: QuerySuspenseBoundaryProps) => (
+  <QueryErrorResetBoundary>
+    {({ reset }) => (
+      <QueryErrorBoundary
+        area={area}
+        fallback={errorFallback}
+        onError={onError}
+        onReset={reset}
+        resetKeys={resetKeys}
+      >
+        <Suspense fallback={suspenseFallback}>{children}</Suspense>
+      </QueryErrorBoundary>
+    )}
+  </QueryErrorResetBoundary>
+);
 
 const resetKeysChanged = (
   prev: readonly unknown[] | undefined,

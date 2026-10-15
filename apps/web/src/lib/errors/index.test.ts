@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CLAUSE_DIRECTIVES_INVALID_CODE,
+} from "@stll/api-contract";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 
@@ -78,6 +81,22 @@ describe("toAPIError", () => {
     expect(error.message).toBe(
       "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
     );
+    expect(userErrorFromThrown(error, "Fallback")).toBe(error.message);
+    expect(shouldRetryAPIRequest(0, error)).toBe(false);
+  });
+
+  test("explains a file the upload scan refused", () => {
+    const error = toAPIError({
+      status: 422,
+      value: {
+        code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
+        hint: "Raw hint",
+        issues: [],
+        message: "Raw scan refusal",
+      },
+    });
+
+    expect(error.message).toBe(messages.errors.apiCodes.fileSecurityRejected);
     expect(userErrorFromThrown(error, "Fallback")).toBe(error.message);
     expect(shouldRetryAPIRequest(0, error)).toBe(false);
   });

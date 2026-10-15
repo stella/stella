@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import type { MarkdownEditorComment } from "@/components/markdown/markdown-hybrid-editor";
 import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { toEditorMarkdown } from "@/components/skill-body-markdown";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -17,7 +18,7 @@ import {
   skillRevisionsOptions,
 } from "@/lib/knowledge/queries";
 import { organizationOptions } from "@/lib/organization/queries";
-import { useQueryView } from "@/lib/use-query-view";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 import { CommentList } from "./comment-list";
 import { ProposalReview } from "./proposal-review";
@@ -94,14 +95,24 @@ export const SkillBodyWorkspace = ({
   const [editorGeneration, setEditorGeneration] = useState(0);
 
   const detail = useQuery(skillDetailOptions(organizationId, user.id, skillId));
+  const detailView = useQueryView(detail);
+  useQueryViewError(detailView);
   const role = useQuery(roleOptions);
+  const roleView = useQueryView(role);
+  useQueryViewError(roleView);
   const organization = useQuery(organizationOptions(organizationId));
+  const organizationView = useQueryView(organization);
+  useQueryViewError(organizationView);
   const revisions = useQuery(
     skillRevisionsOptions(organizationId, user.id, skillId),
   );
+  const revisionsView = useQueryView(revisions);
+  useQueryViewError(revisionsView);
   const proposals = useQuery(
     skillProposalsOptions(organizationId, user.id, skillId),
   );
+  const proposalsView = useQueryView(proposals);
+  useQueryViewError(proposalsView);
 
   const compareRevisionId =
     mode.type === "live" ? mode.compareRevisionId : null;
@@ -118,6 +129,8 @@ export const SkillBodyWorkspace = ({
     ...skillCommentsOptions(organizationId, user.id, skillId),
     enabled: commenting,
   });
+  const commentsView = useQueryView(comments);
+  useQueryViewError(commentsView);
 
   const actions = useSkillHistoryActions({
     organizationId,
@@ -132,7 +145,8 @@ export const SkillBodyWorkspace = ({
   const isProposable =
     detail.data !== undefined && isProposableOrigin(detail.data.origin);
   const canManage =
-    detail.data !== undefined &&
+    detail.status === "success" &&
+    role.status === "success" &&
     canManageSkill({
       scope: detail.data.scope,
       ownerUserId: detail.data.userId,
@@ -253,6 +267,12 @@ export const SkillBodyWorkspace = ({
 
   return (
     <>
+      <QueryViewFeedback view={detailView} />
+      <QueryViewFeedback view={roleView} />
+      <QueryViewFeedback view={organizationView} />
+      <QueryViewFeedback view={revisionsView} />
+      <QueryViewFeedback view={proposalsView} />
+      {commenting && <QueryViewFeedback view={commentsView} />}
       <SkillBodyToolbar
         authorName={authorName}
         canManage={canManage}

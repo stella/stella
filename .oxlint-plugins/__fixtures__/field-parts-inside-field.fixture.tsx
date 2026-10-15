@@ -121,3 +121,14 @@ export const HeldInVariable = () => {
   const label = <FieldLabel>{t("common.name")}</FieldLabel>;
   return <Field>{label}</Field>;
 };
+
+// Local unrooted mounts make the missing-context cases readable in this file.
+export const UnrootedFieldParts = () => (
+  <main>
+    <ReferenceRow />
+    <NameRow />
+    <StandaloneItem />
+    <ErrorBesideField />
+    <ValidityRow />
+  </main>
+);

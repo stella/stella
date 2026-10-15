@@ -13,7 +13,7 @@
 
 import { panic } from "better-result";
 
-import { diffWords } from "@/components/ai-suggestions/review-word-diff";
+import { diffWords } from "@stll/ui/review-word-diff";
 
 export const KEY_TERM_KIND = {
   /** A run the word diff says the other side words differently. */
@@ -56,7 +56,7 @@ const KIND_PRECEDENCE = {
  * Above this share of changed tokens the diff has stopped discriminating:
  * marking it would wash the whole passage, so key terms carry the pair alone.
  */
-export const DIFF_SATURATION_LIMIT = 0.6;
+const DIFF_SATURATION_LIMIT = 0.6;
 
 /**
  * The word diff is quadratic in tokens. Past this many characters on either

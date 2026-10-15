@@ -156,6 +156,8 @@ const readEntries = async (
     queryAuditLogPage({
       safeDb: reader,
       organizationId: ids.orgA,
+      userId: ids.userA1,
+      featureAccessSnapshot: undefined,
       recordAuditEvent: unwrittenAuditRecorder,
       query: {
         limit: 50,

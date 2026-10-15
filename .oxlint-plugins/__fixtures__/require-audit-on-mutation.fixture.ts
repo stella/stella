@@ -8,9 +8,9 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { auditedPresignDownload as presign } from "@/api/lib/audited-download";
 
 type Writer = {
-  insert: (value: unknown) => void;
-  update: (value: unknown) => void;
-  delete: (value: unknown) => void;
+  insert: (value: unknown) => unknown;
+  update: (value: unknown) => unknown;
+  delete: (value: unknown) => unknown;
   execute: (query: unknown) => void;
   transaction: (run: (handle: Writer) => void) => void;
 };
@@ -157,3 +157,31 @@ export const mapDelete = (entries: Map<string, number>) => {
   // expect-clean: require-audit-on-mutation/require-audit-on-mutation
   entries.delete("key");
 };
+
+// expect-clean: require-audit-on-mutation/require-audit-on-mutation
+export const expressionSkippedMutation = () =>
+  // audit: skip - scheduler reconciliation has its own durable event
+  tx.update({ id: "expression" });
+
+export const expressionDirectiveWithGap = () =>
+  // audit: skip - scheduler reconciliation has its own durable event
+
+  tx.update({ id: "gap" }); // oxlint-disable-line require-audit-on-mutation/require-audit-on-mutation -- fixture: a blank line separates the directive from the call
+
+export const expressionDirectiveOnRead = () => [
+  // audit: skip - scheduler reconciliation has its own durable event
+  getDb(),
+  tx.update({ id: "read" }), // oxlint-disable-line require-audit-on-mutation/require-audit-on-mutation -- fixture: the directive belongs to the preceding read
+];
+
+export const expressionDirectiveOnValue = () => [
+  // audit: skip - scheduler reconciliation has its own durable event
+  1,
+  tx.update({ id: "value" }), // oxlint-disable-line require-audit-on-mutation/require-audit-on-mutation -- fixture: the directive precedes a value expression
+];
+
+export const expressionWithTwoMutations = () => [
+  // audit: skip - scheduler reconciliation has its own durable event
+  tx.update({ id: "first" }),
+  tx.delete({ id: "second" }), // oxlint-disable-line require-audit-on-mutation/require-audit-on-mutation -- fixture: each call has its own directive
+];

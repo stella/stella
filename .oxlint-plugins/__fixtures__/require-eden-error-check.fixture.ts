@@ -92,7 +92,7 @@ export const escapedToOpaqueConsumer = async () => {
 // MUST flag: reassigning the binding discards the first response. The second
 // response is inspected so the fixture isolates the overwritten value.
 export const reassignedBeforeInspection = async () => {
-  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check, eslint/no-useless-assignment -- fixture: reassignment discards the first error channel
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check, no-useless-assignment -- fixture: reassignment discards the first error channel
   let response = await api.tasks.get();
   response = await api.tasks.get();
   consume(response.error);
@@ -128,7 +128,7 @@ export const inspectedOnOnlyOneBranch = async () => {
 export const inspectedOnOnlyOneLogicalBranch = async () => {
   // oxlint-disable-next-line require-eden-error-check/require-eden-error-check -- fixture: a short-circuited error read is not guaranteed
   const response = await api.tasks.get();
-  // oxlint-disable-next-line eslint/no-unused-expressions -- fixture: short-circuiting is the control-flow shape under test
+  // oxlint-disable-next-line no-unused-expressions -- fixture: short-circuiting is the control-flow shape under test
   condition && consume(response.error);
   return response.data;
 };
@@ -226,9 +226,9 @@ export const destructuredAfterAssignment = async () => {
 
 export const destructuredByAssignment = async () => {
   const response = await api.tasks.get();
-  // oxlint-disable-next-line eslint/prefer-const -- fixture: assignment destructuring requires a mutable target
+  // oxlint-disable-next-line prefer-const -- fixture: assignment destructuring requires a mutable target
   let data: unknown;
-  // oxlint-disable-next-line eslint/prefer-const -- fixture: assignment destructuring requires a mutable target
+  // oxlint-disable-next-line prefer-const -- fixture: assignment destructuring requires a mutable target
   let error: unknown;
   ({ data, error } = response);
   consume(error);
@@ -267,7 +267,7 @@ export const checkedEndpointAlias = async () => {
 };
 
 export const unrelatedApi = async (
-  // oxlint-disable-next-line eslint/no-shadow -- fixture: proves Eden import matching is binding-aware
+  // oxlint-disable-next-line no-shadow -- fixture: proves Eden import matching is binding-aware
   api: {
     tasks: { get: () => Promise<void> };
   },
@@ -276,7 +276,7 @@ export const unrelatedApi = async (
 // Allowed: an assigned response from a locally shadowed API-shaped object is
 // unrelated to the imported Eden client.
 export const assignedLocalApi = async (
-  // oxlint-disable-next-line eslint/no-shadow -- fixture: local API provenance must remain distinct
+  // oxlint-disable-next-line no-shadow -- fixture: local API provenance must remain distinct
   api: {
     tasks: {
       get: () => Promise<{ data: string; error: null }>;
@@ -354,7 +354,7 @@ export const checkedInFinallyBeforeReturn = async () => {
     return null;
   } finally {
     if (response.error) {
-      // oxlint-disable-next-line eslint/no-unsafe-finally -- fixture: finally-before-return error propagation is the control-flow shape under test
+      // oxlint-disable-next-line no-unsafe-finally -- fixture: finally-before-return error propagation is the control-flow shape under test
       throw toAPIError(response.error);
     }
   }
@@ -383,7 +383,7 @@ export const uncheckedConditionalResponse = async () => {
 
 // MUST flag: a sibling declarator consumes data before the later error check.
 export const siblingDeclaratorConsumesDataFirst = async () => {
-  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check, eslint/one-var -- fixture: the sibling declarator shape must remain intact so the custom rule sees data consumed before error inspection
+  // oxlint-disable-next-line require-eden-error-check/require-eden-error-check, one-var -- fixture: the sibling declarator shape must remain intact so the custom rule sees data consumed before error inspection
   const response = await api.tasks.get(),
     selectedData = response.data;
   consume(response.error);

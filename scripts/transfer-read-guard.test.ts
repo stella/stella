@@ -540,3 +540,32 @@ test("baseline rejects missing reasons and duplicate function budgets", () => {
     parseTransferBaseline(JSON.stringify([row, row]), "fixture"),
   ).toThrow("duplicate file/function");
 });
+
+test("a relocated contributor read retains its original budget without permitting growth", () => {
+  const original = {
+    file: "apps/api/src/handlers/entities/publish-folio-collab-version.ts",
+    function: "module/loadRoomContributors",
+    kind: "constant-limit",
+    count: 1,
+    reason: "Existing contributor cap",
+  };
+  const moved = {
+    ...original,
+    file: "apps/api/src/lib/entity-versions/publish-folio-collab-checkpoint.ts",
+  };
+  const base = transferMembership(JSON.stringify([original]), "base");
+  const current = transferMembership(JSON.stringify([moved]), "head");
+  expect(current).toEqual(base);
+  for (const rows of [[{ ...moved, count: 2 }], [original, moved]]) {
+    expect(
+      addedEntries(transferMembership(JSON.stringify(rows), "head"), base),
+    ).toHaveLength(1);
+  }
+  const otherFunction = { ...moved, function: "module/anotherRead" };
+  expect(
+    addedEntries(
+      transferMembership(JSON.stringify([otherFunction]), "head"),
+      base,
+    ),
+  ).toHaveLength(1);
+});

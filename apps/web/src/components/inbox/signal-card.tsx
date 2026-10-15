@@ -39,6 +39,7 @@ import {
 } from "@/components/inbox/signal-actions";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterRefLink } from "@/components/matter-ref-link";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
 import {
   INBOX_SIGNAL_VIEW,
@@ -60,8 +61,10 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { snoozeUntil } from "@/lib/inbox/inbox.logic";
 import { inboxKeys } from "@/lib/inbox/queries";
 import type { InboxSignal } from "@/lib/inbox/queries";
+import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 import { organizationOptions } from "@/lib/organization/queries";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
@@ -217,10 +220,19 @@ export const SignalCard = ({
         ))}
       <span className="flex-1" />
       {canChat && (
-        <Button onClick={askAboutThis} size="sm" variant="muted">
-          <MessageSquareIcon />
-          {t("inbox.ask")}
-        </Button>
+        <CapabilityAction action={{ capability: "ai" }} surface="control">
+          {(capabilityProps) => (
+            <Button
+              onClick={askAboutThis}
+              size="sm"
+              variant="muted"
+              {...capabilityProps}
+            >
+              <MessageSquareIcon />
+              {t("inbox.ask")}
+            </Button>
+          )}
+        </CapabilityAction>
       )}
       {canResolve && (
         <>
@@ -393,10 +405,14 @@ const OriginChip = ({
   createdByUserId,
   organizationId,
 }: OriginChipProps) => {
-  const { data: organization } = useQuery({
+  const organizationQuery = useQuery({
     ...organizationOptions(organizationId),
     enabled: origin === "manual" && createdByUserId !== null,
   });
+  const organizationView = useQueryView(organizationQuery);
+  useQueryViewError(organizationView);
+  const organization =
+    organizationView.type === "items" ? organizationView.items : undefined;
   const author =
     origin === "manual" && createdByUserId !== null
       ? organization?.members.find((m) => m.userId === createdByUserId)?.user
@@ -425,7 +441,13 @@ const WorkspaceName = ({
   workspaceId: string;
   organizationId: string;
 }) => {
-  const { data } = useQuery(workspacesNavigationOptions(organizationId));
+  const { id: userId } = useAuthenticatedUser();
+  const dataQuery = useQuery(
+    workspacesNavigationOptions({ organizationId, userId }),
+  );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const name = data?.workspaces.find((w) => w.id === workspaceId)?.name;
   return (
     <MatterRefLink
@@ -505,17 +527,22 @@ const SuggestionButton = ({
       );
     case SUGGESTION_KIND.OPEN_CHAT:
       return (
-        <Button
-          disabled={disabled}
-          onClick={() => {
-            onOpenChat(suggestion.prompt);
-            detached(onAccept(suggestion.kind), "inbox.accept");
-          }}
-          size="sm"
-          variant="outline"
-        >
-          {label}
-        </Button>
+        <CapabilityAction action={{ capability: "ai" }} surface="control">
+          {(capabilityProps) => (
+            <Button
+              disabled={disabled}
+              onClick={() => {
+                onOpenChat(suggestion.prompt);
+                detached(onAccept(suggestion.kind), "inbox.accept");
+              }}
+              size="sm"
+              variant="outline"
+              {...capabilityProps}
+            >
+              {label}
+            </Button>
+          )}
+        </CapabilityAction>
       );
     default: {
       suggestion satisfies never;
@@ -538,7 +565,11 @@ const AssignMenu = ({
   onAssign,
 }: AssignMenuProps) => {
   const t = useTranslations();
-  const { data: organization } = useQuery(organizationOptions(organizationId));
+  const organizationQuery = useQuery(organizationOptions(organizationId));
+  const organizationView = useQueryView(organizationQuery);
+  useQueryViewError(organizationView);
+  const organization =
+    organizationView.type === "items" ? organizationView.items : undefined;
   const members = organization ? organization.members : [];
   return (
     <Menu>
@@ -548,6 +579,7 @@ const AssignMenu = ({
         {label}
       </MenuTrigger>
       <MenuPopup>
+        <QueryViewFeedback view={organizationView} />
         <MenuGroup>
           <MenuGroupLabel>{t("inbox.assignTo")}</MenuGroupLabel>
           {members.map((member) => (

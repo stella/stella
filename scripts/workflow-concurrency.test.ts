@@ -253,6 +253,13 @@ const concurrencyModes: Record<
 };
 
 describe("pull request workflow concurrency", () => {
+  const supersedingEventsFor = (file: string) => {
+    if (file === "ci.yml") {
+      return ["workflow_dispatch", "push"];
+    }
+    return [];
+  };
+
   test("every pull request workflow cancels its superseded runs", async () => {
     const workflows = await repositoryWorkflows();
     const pullRequestWorkflows = workflows.filter(({ workflow }) =>
@@ -265,8 +272,7 @@ describe("pull request workflow concurrency", () => {
     expect(
       pullRequestWorkflows.flatMap(({ file, workflow }) =>
         concurrencyProblems(workflow, {
-          supersedingEvents:
-            file === "ci.yml" ? ["workflow_dispatch", "push"] : [],
+          supersedingEvents: supersedingEventsFor(file),
           mode: concurrencyModes[file] ?? "supersede",
         }).map((problem) => `${file}: ${problem}`),
       ),
@@ -342,7 +348,9 @@ describe("pull request workflow concurrency", () => {
               `staging-web-build-\${{ needs.resolve.outputs.sha }}`,
             ].includes(String(group))) ||
           (file === "deploy-landing.yml" &&
-            group === `deploy-landing-\${{ github.ref }}`);
+            group === `deploy-landing-\${{ github.ref }}`) ||
+          (file === "manual-checks.yml" &&
+            group === `manual-check-\${{ github.ref }}-\${{ inputs.check }}`);
         if (deliberate) {
           return [];
         }

@@ -99,7 +99,7 @@ const selectionText = cheerioSelection.text();
 
 // Provenance follows bindings: a shadowing parameter is not the response,
 // and neither is a reassigned local.
-// oxlint-disable-next-line eslint/no-shadow -- the shadow is the regression shape
+// oxlint-disable-next-line no-shadow -- the shadow is the regression shape
 const shadowed = async (response: { text: () => Promise<string> }) =>
   await response.text();
 declare const useLocalCopy: boolean;

@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { summarizeVersionChange } from "@/api/lib/entity-versions/version-change-summary";
@@ -15,6 +19,8 @@ const templateVersionSummarizeParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "versions.summarize" },
   contentDelivery: {
     type: "none",
     reason:
@@ -46,6 +52,7 @@ const config = {
 const templateVersionSummarize = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     scopedDb,
     session,
     params,
@@ -85,6 +92,7 @@ const templateVersionSummarize = createSafeRootHandler(
 
     const summary = yield* Result.await(
       summarizeVersionChange({
+        admission: configuredModelAdmission({ modelAdmission }),
         prevText: sources.prevText,
         currentText: sources.currentText,
         feature: "templates.version_summary",

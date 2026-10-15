@@ -17,7 +17,7 @@ type ServerResponse =
 
 /**
  * In-process MCP endpoint. `echo` returns the received args as the result so a
- * test can assert the exact `invoke_capability` payload; `confirm-gate` answers
+ * test can assert the exact capability executor payload; `confirm-gate` answers
  * `confirmation_required` until `confirm: true`; `pages` walks a cursor list.
  */
 const startServer = (response: ServerResponse) => {
@@ -133,7 +133,7 @@ const makeTtyContext = ({
   const proc = { stdin, stdout, stderr, exitCode: undefined, env: {} };
   const context: Context = {
     // SAFETY: the executor only reads stdin/stdout/stderr/exitCode off process.
-    // oxlint-disable-next-line no-unsafe-type-assertion -- test double for the process slice
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double for the process slice
     process: proc as unknown as NodeJS.Process,
     configDir: "/tmp/stella-test",
     serverUrl,
@@ -190,11 +190,35 @@ const capSpec = (
 const lastInvoke = (calls: readonly RecordedCall[]): Record<string, unknown> =>
   calls.at(-1)?.args ?? {};
 
-describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
-  test("routes flags into input parts and calls invoke_capability", async () => {
+describe("runCapabilityCommand: flag -> capability executor payload", () => {
+  for (const access of ["read", "write"] as const) {
+    test(`${access} capability dispatches through its executor, including dry runs`, async () => {
+      const server = startServer({ kind: "echo" });
+      const tty = makeTtyContext({
+        serverUrl: server.url,
+        stdinData: "",
+        isTTY: false,
+      });
+      await runCapabilityCommand({
+        context: tty.context,
+        flags: { dryRun: true },
+        spec: capSpec({ capabilityId: "a.operation", access }),
+      });
+      server.stop();
+      expect(server.calls).toEqual([
+        {
+          name: `${access}_capability`,
+          args: { capability: "a.operation", input: {}, validate_only: true },
+        },
+      ]);
+    });
+  }
+
+  test("routes flags into input parts and calls the write executor", async () => {
     const server = startServer({ kind: "echo" });
     const spec = capSpec({
       capabilityId: "billing-codes.create",
+      access: "write",
       commandPath: ["billing-codes", "create"],
       flags: [
         stringFlag("--matter-id", "params", "matterId", true),
@@ -213,7 +237,7 @@ describe("runCapabilityCommand: flag -> invoke_capability payload", () => {
     });
     server.stop();
     const call = server.calls.at(0);
-    expect(call?.name).toBe("invoke_capability");
+    expect(call?.name).toBe("write_capability");
     expect(call?.args).toEqual({
       capability: "billing-codes.create",
       input: { params: { matterId: "ws-1" }, body: { code: "A1" } },
@@ -491,9 +515,53 @@ describe("runCapabilityCommand: compound scope preflight", () => {
 });
 
 describe("runCapabilityCommand: confirm gates", () => {
+  test("a read with --yes never sends confirmation arguments", async () => {
+    const server = startServer({ kind: "echo" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "",
+      isTTY: false,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: { yes: true },
+      spec: capSpec({ capabilityId: "a.get", access: "read" }),
+    });
+    server.stop();
+    expect(server.calls).toEqual([
+      { name: "read_capability", args: { capability: "a.get", input: {} } },
+    ]);
+    expect(tty.exitCode()).toBeUndefined();
+  });
+
+  test("a read confirmation error is surfaced without prompting or retrying", async () => {
+    const server = startServer({ kind: "confirm-gate" });
+    const tty = makeTtyContext({
+      serverUrl: server.url,
+      stdinData: "y\n",
+      isTTY: true,
+    });
+    await runCapabilityCommand({
+      context: tty.context,
+      flags: {},
+      spec: capSpec({ capabilityId: "a.get", access: "read" }),
+    });
+    server.stop();
+    expect(server.calls).toEqual([
+      { name: "read_capability", args: { capability: "a.get", input: {} } },
+    ]);
+    expect(tty.exitCode()).toBe(EXIT_CODES.aborted);
+    expect(tty.stderrText()).toContain("irreversible; retry with confirm");
+    expect(tty.stderrText()).not.toContain("Confirm [y/N]");
+  });
+
   test("a destructive capability off a TTY without --yes aborts (exit 7)", async () => {
     const server = startServer({ kind: "echo" });
-    const spec = capSpec({ capabilityId: "a.delete", destructive: true });
+    const spec = capSpec({
+      capabilityId: "a.delete",
+      access: "write",
+      destructive: true,
+    });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "",
@@ -507,7 +575,11 @@ describe("runCapabilityCommand: confirm gates", () => {
 
   test("--yes on a destructive capability sends confirm: true", async () => {
     const server = startServer({ kind: "echo" });
-    const spec = capSpec({ capabilityId: "a.delete", destructive: true });
+    const spec = capSpec({
+      capabilityId: "a.delete",
+      access: "write",
+      destructive: true,
+    });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "",
@@ -524,7 +596,7 @@ describe("runCapabilityCommand: confirm gates", () => {
 
   test("confirmation_required prompt-and-retry on a TTY confirms and retries once", async () => {
     const server = startServer({ kind: "confirm-gate" });
-    const spec = capSpec({ capabilityId: "a.risky" });
+    const spec = capSpec({ capabilityId: "a.risky", access: "write" });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "y\n",
@@ -532,7 +604,10 @@ describe("runCapabilityCommand: confirm gates", () => {
     });
     await runCapabilityCommand({ context: tty.context, flags: {}, spec });
     server.stop();
-    expect(server.calls).toHaveLength(2);
+    expect(server.calls.map(({ name }) => name)).toEqual([
+      "write_capability",
+      "write_capability",
+    ]);
     expect(server.calls[0]?.args["confirm"]).toBeUndefined();
     expect(server.calls[1]?.args["confirm"]).toBe(true);
     expect(tty.stdoutText()).toContain("done");
@@ -540,7 +615,7 @@ describe("runCapabilityCommand: confirm gates", () => {
 
   test("--no-input on a confirmation_required TTY fails closed (exit 7, --yes required)", async () => {
     const server = startServer({ kind: "confirm-gate" });
-    const spec = capSpec({ capabilityId: "a.risky" });
+    const spec = capSpec({ capabilityId: "a.risky", access: "write" });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "y\n",
@@ -560,7 +635,7 @@ describe("runCapabilityCommand: confirm gates", () => {
 
   test("a declined confirm-retry prompt is terminal: exit 7, aborted line, no envelope", async () => {
     const server = startServer({ kind: "confirm-gate" });
-    const spec = capSpec({ capabilityId: "a.risky" });
+    const spec = capSpec({ capabilityId: "a.risky", access: "write" });
     const tty = makeTtyContext({
       serverUrl: server.url,
       stdinData: "n\n",
@@ -731,6 +806,10 @@ describe("runCapabilityCommand: output contract", () => {
     });
     server.stop();
     expect(tty.stdoutText()).toBe('{"a":1}\n{"a":2}\n');
+    expect(server.calls.map(({ name }) => name)).toEqual([
+      "read_capability",
+      "read_capability",
+    ]);
     // Second page threads the first page's cursor into input.query.cursor.
     const secondInput = server.calls[1]?.args["input"];
     expect(secondInput).toEqual({ query: { cursor: "c1" } });

@@ -3,6 +3,8 @@ import * as v from "valibot";
 import { DAY_IN_MS } from "@stll/time";
 
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
+import type { VerifyApiKey } from "@/api/lib/auth/api-key-endpoints";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
 import {
   API_KEY_KIND,
   API_KEY_POLICY,
@@ -21,18 +23,22 @@ import {
 } from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 import type { McpSession } from "@/api/mcp/auth";
-import type { McpMode } from "@/api/mcp/constants";
+import { getMcpResourceModeConfig, type McpMode } from "@/api/mcp/constants";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
 /**
- * Every rejection reports the same thing. Whether a credential was unknown,
- * expired, disabled, pointed at a former member, or carried permissions its
- * owner's role no longer grants is exactly the information an attacker probing
- * with a stolen or guessed key wants back, and none of it helps a legitimate
- * caller more than "this credential is not usable" does.
+ * Credential failures do not disclose server-side state. Audience mismatches
+ * are the exception: they echo only the binding stored on the credential the
+ * caller already presented, which gives a legitimate caller a corrective path
+ * without revealing whether the owning member is still active.
  */
 const rejectCredential = (): McpAuthenticationError =>
   new McpAuthenticationError({ message: "Invalid or expired API key" });
+
+const rejectAudienceMismatch = (audience: McpMode): McpAuthenticationError =>
+  new McpAuthenticationError({
+    message: `This API key is bound to the ${audience} audience. Use ${getMcpResourceModeConfig(audience).httpPath}.`,
+  });
 
 /**
  * Resolve a machine API key into the same authorization identity the JWT
@@ -63,21 +69,29 @@ const rejectCredential = (): McpAuthenticationError =>
  */
 type MachineApiKeyCredential = { session: McpSession; expiresAt: Date | null };
 
-export const resolveMachineApiKeyCredential = async (
+/**
+ * Where a key is presented to read its own expiry rather than to reach a
+ * resource. An audience binding limits what a key can reach; it never hides
+ * the key's own lifetime from its holder, so every audience is accepted here.
+ * Only `resolveOwnMachineApiKeyCredential` presents a key this way; no MCP
+ * transport mode can.
+ */
+const KEY_SELF_INSPECTION = "self_inspection";
+
+type MachineApiKeyDependencies = {
+  verifyApiKey?: VerifyApiKey;
+  resolveAuthorization?: ResolveCredentialMemberAuthorization;
+  resolvePersonalPolicy?: typeof readPersonalApiKeyPolicy;
+};
+
+const resolvePresentedMachineApiKey = async (
   credential: string,
+  mode: McpMode | typeof KEY_SELF_INSPECTION,
   {
-    mode = "default",
     verifyApiKey = getAuth().api.verifyApiKey,
     resolveAuthorization = resolveCredentialMemberAuthorization,
     resolvePersonalPolicy = readPersonalApiKeyPolicy,
-  }: {
-    mode?: McpMode | undefined;
-    verifyApiKey?: (
-      ...args: Parameters<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>
-    ) => ReturnType<ReturnType<typeof getAuth>["api"]["verifyApiKey"]>;
-    resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
-    resolvePersonalPolicy?: typeof readPersonalApiKeyPolicy;
-  } = {},
+  }: MachineApiKeyDependencies,
 ): Promise<MachineApiKeyCredential> => {
   const verification = await verifyApiKey({
     body: {
@@ -100,20 +114,21 @@ export const resolveMachineApiKeyCredential = async (
     throw rejectCredential();
   }
 
-  // Two independent reasons to refuse, sharing one branch because they share
-  // one answer: metadata this code path did not write, and a key bound to a
-  // different audience than the one it was presented on. Both are decided
-  // before the owner is looked up, so a mismatched key cannot be used to probe
-  // whether its owner is still a member.
+  // Both metadata validity and audience binding are decided before the owner
+  // lookup. A mismatch names only the binding already carried by the presented
+  // credential and cannot probe whether its owner is still a member.
   const metadata = v.safeParse(machineApiKeyMetadataSchema, key.metadata);
+  if (!metadata.success) {
+    throw rejectCredential();
+  }
   if (
-    !metadata.success ||
+    mode !== KEY_SELF_INSPECTION &&
     !isMachineApiKeyAudienceAllowed({
       audience: metadata.output.audience,
       mode,
     })
   ) {
-    throw rejectCredential();
+    throw rejectAudienceMismatch(metadata.output.audience ?? mode);
   }
 
   const storedPermissions = v.safeParse(
@@ -199,6 +214,26 @@ export const resolveMachineApiKeyCredential = async (
     },
   };
 };
+
+export const resolveMachineApiKeyCredential = async (
+  credential: string,
+  {
+    mode = "default",
+    ...dependencies
+  }: MachineApiKeyDependencies & { mode?: McpMode | undefined } = {},
+): Promise<MachineApiKeyCredential> =>
+  await resolvePresentedMachineApiKey(credential, mode, dependencies);
+
+/** The key's own record, for its holder; any audience binding is accepted. */
+export const resolveOwnMachineApiKeyCredential = async (
+  credential: string,
+  dependencies: MachineApiKeyDependencies = {},
+): Promise<MachineApiKeyCredential> =>
+  await resolvePresentedMachineApiKey(
+    credential,
+    KEY_SELF_INSPECTION,
+    dependencies,
+  );
 
 /** MCP consumers need only the session; lifecycle observers also need expiry. */
 export const resolveMachineApiKeySession = async (

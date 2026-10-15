@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
@@ -22,12 +24,7 @@ export const deleteOrganizationFilesWithSignal = async (
   const failures: unknown[] = [];
   const { removeOrganizationFilesBytes } =
     await import("@/api/lib/files/organization-file-usage");
-  for (
-    let offset = 0;
-    offset < uniqueKeys.length;
-    offset += DELETE_CONCURRENCY
-  ) {
-    const chunk = uniqueKeys.slice(offset, offset + DELETE_CONCURRENCY);
+  for (const chunk of chunkItems(uniqueKeys, DELETE_CONCURRENCY)) {
     const deletedKeys: string[] = [];
     const chunkSignal = AbortSignal.any([
       signal,

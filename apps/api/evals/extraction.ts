@@ -55,6 +55,8 @@ import { env } from "@/api/env";
 import type { OrgAIConfig, OrgAIModelSelection } from "@/api/lib/ai-config";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { admitFixtureModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
 import type { Answer } from "@/api/lib/workflow/ai-answer-schema";
 import { generateWorkflowData } from "@/api/lib/workflow/ai-generate-batch";
 import { validateAIOutput } from "@/api/lib/workflow/ai-validators";
@@ -925,6 +927,12 @@ const runTask = async ({
     abortSignal: AbortSignal.timeout(MODEL_REQUEST_TIMEOUT_MS),
     entityVersionId: `${task.id}-${modelId}-${String(repeat)}`,
     organizationId: EVAL_ORGANIZATION_ID,
+    // An offline evaluation runs no admission: it mints the proof itself.
+    admission: admitFixtureModelDispatch({
+      organizationId: EVAL_ORGANIZATION_ID,
+      actionKind: "workflow.background",
+      modelTier: MANAGED_MODEL_TIER.standard,
+    }),
     workspaceId: EVAL_WORKSPACE_ID,
     orgAIConfig,
     managedAIResidency: "eu",

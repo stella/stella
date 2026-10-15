@@ -1,6 +1,7 @@
 // Passive regression fixture for public-law-read-boundary.
 
-declare const readPublicDecisionLanguageAlternatesByGroup: () => Promise<void>;
+import { readPublicDecisionLanguageAlternatesByGroup } from "@/api/lib/case-law/language-alternates";
+
 declare const configureExternalReadTransaction: (
   tx: unknown,
   isolation: string,

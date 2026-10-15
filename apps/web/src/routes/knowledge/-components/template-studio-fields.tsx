@@ -27,7 +27,6 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LandmarkIcon,
-  Loader2Icon,
   PencilIcon,
   PlusIcon,
   PlayIcon,
@@ -41,12 +40,13 @@ import {
   UserIcon,
   AiActionIcon,
 } from "@stll/ui/icons";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { stellaToast } from "@stll/ui/toast";
-import { cn } from "@stll/ui/utils";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { SKILL_CHIP_CATALOG } from "@/components/chat-editor-slash-items";
@@ -381,7 +381,11 @@ const SlotSyncButton = ({
       size="sm"
       variant="ghost"
     >
-      <RefreshCwIcon className={cn("size-3.5", syncing && "animate-spin")} />
+      {syncing ? (
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
+      ) : (
+        <RefreshCwIcon className="size-3.5" />
+      )}
       {t("clauses.syncVersion")}
     </Button>
   );
@@ -467,7 +471,7 @@ export const FieldNavigator = ({
 /** Shown in the overview when the template has no fields, conditions, or clause
  *  slots yet: three plain-language steps pointing at the selection popover, the
  *  `/` menu, and the Fill tab. Disappears as soon as the first marker exists. */
-export const StudioGettingStarted = () => {
+const StudioGettingStarted = () => {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-3 px-4 py-4">
@@ -1667,7 +1671,7 @@ const SaveRecipeDialog = ({
             onClick={() => detached(save(), "template-studio-fields.save")}
           >
             {saving ? (
-              <Loader2Icon className="animate-spin" />
+              <Loader label={t("common.loading")} size="sm" />
             ) : (
               <BookmarkPlusIcon />
             )}
@@ -1704,7 +1708,11 @@ const ClauseSlotEditor = ({
     // Non-interactive presentation: same slot-name display, no edit affordance.
     return (
       <div className="text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 px-1 py-0.5">
-        <code className="truncate text-xs" dir="auto" title={slotName}>
+        <code
+          className="overflow-hidden text-xs text-ellipsis whitespace-pre"
+          dir="auto"
+          title={slotName}
+        >
           {slotName}
         </code>
       </div>
@@ -1735,7 +1743,11 @@ const ClauseSlotEditor = ({
           />
         }
       >
-        <code className="truncate text-xs" dir="auto" title={slotName}>
+        <code
+          className="overflow-hidden text-xs text-ellipsis whitespace-pre"
+          dir="auto"
+          title={slotName}
+        >
           {slotName}
         </code>
         <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -1743,22 +1755,17 @@ const ClauseSlotEditor = ({
     );
   }
   return (
-    <Input
-      autoFocus
-      className="h-7 font-mono text-xs"
-      onBlur={() => detached(commit(), "template-studio-fields.commit")}
-      onChange={(e) => setValue(e.currentTarget.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          detached(commit(), "template-studio-fields.commit");
-        }
-        if (e.key === "Escape") {
+    <span className="text-muted-foreground -ms-1 block min-w-0 px-1 py-0.5 font-mono text-xs">
+      <InlineRenameInput
+        onCommit={() => detached(commit(), "template-studio-fields.commit")}
+        onValueChange={setValue}
+        onCancel={() => {
           setValue(slotName);
           setEditing(false);
-        }
-      }}
-      value={value}
-    />
+        }}
+        value={value}
+      />
+    </span>
   );
 };
 
@@ -1798,7 +1805,10 @@ const FieldPathEditor = ({
           />
         }
       >
-        <code className="truncate text-xs" title={path}>
+        <code
+          className="overflow-hidden text-xs text-ellipsis whitespace-pre"
+          title={path}
+        >
           {path}
         </code>
         <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
@@ -1806,21 +1816,16 @@ const FieldPathEditor = ({
     );
   }
   return (
-    <Input
-      autoFocus
-      className="h-7 font-mono text-xs"
-      onBlur={commit}
-      onChange={(e) => setValue(e.currentTarget.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          commit();
-        }
-        if (e.key === "Escape") {
+    <span className="text-muted-foreground -ms-1 block min-w-0 px-1 py-0.5 font-mono text-xs">
+      <InlineRenameInput
+        onCommit={commit}
+        onValueChange={setValue}
+        onCancel={() => {
           setValue(path);
           setEditing(false);
-        }
-      }}
-      value={value}
-    />
+        }}
+        value={value}
+      />
+    </span>
   );
 };

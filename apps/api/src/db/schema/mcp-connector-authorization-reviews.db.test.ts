@@ -15,6 +15,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { createApproveMcpAuthorizationHandler } from "@/api/handlers/mcp-connectors/approve-authorization";
 import { createConnectMcpConnectorHandler } from "@/api/handlers/mcp-connectors/connect";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { recordMcpAuthorizationReview } from "@/api/lib/mcp-upstream/authorization-review";
@@ -44,6 +45,7 @@ const connectorId = createSafeId<"mcpConnector">();
 const connectionId = createSafeId<"mcpUserConnection">();
 const otherOrganizationId = mintAuthProviderId<"organization">();
 const catalogueConnectorId = createSafeId<"mcpConnector">();
+const outboundPermit = grantThirdPartyOutboundPermit();
 
 let testDb: TestDatabase;
 
@@ -178,8 +180,9 @@ const approveAuthorization = async ({
   confirmedIssuer,
   activeOrganizationId,
 }: ApprovalRequestOptions) => {
-  const approval = createApproveMcpAuthorizationHandler(async (connectorUrl) =>
-    discoveredIssuerMetadata({ connectorUrl, issuer: discoveredIssuer }),
+  const approval = createApproveMcpAuthorizationHandler(
+    async ({ rawMcpUrl: connectorUrl }) =>
+      discoveredIssuerMetadata({ connectorUrl, issuer: discoveredIssuer }),
   );
   return await approval.handler(
     asTestRaw<Parameters<typeof approval.handler>[0]>({
@@ -216,7 +219,7 @@ const connectAsMember = async ({
   audits = [],
 }: MemberConnectOptions) => {
   const connect = createConnectMcpConnectorHandler({
-    discoverMetadata: async (connectorUrl) =>
+    discoverMetadata: async ({ rawMcpUrl: connectorUrl }) =>
       discoveredIssuerMetadata({ connectorUrl, issuer }),
     curatedOAuthApproval: () => curatedApproval ?? null,
   });
@@ -423,7 +426,7 @@ describe("MCP connector authorization reviews", () => {
       );
     const audits: unknown[] = [];
     const approval = createApproveMcpAuthorizationHandler(
-      async (connectorUrl) =>
+      async ({ rawMcpUrl: connectorUrl }) =>
         Result.ok({
           protectedResource: {
             resource: connectorUrl,
@@ -510,6 +513,7 @@ describe("MCP connector authorization reviews", () => {
     expect(
       await createMcpClientForConnection({
         organizationId,
+        permit: outboundPermit,
         row: previousConnection,
         safeDb,
         userId: memberId,
@@ -649,7 +653,11 @@ describe("MCP connector authorization reviews", () => {
       resourceUrl: legacyUrl,
       authorizationServerUrl: legacyIssuer,
     });
-    const discoverLegacyMetadata = async (url: string) =>
+    const discoverLegacyMetadata = async ({
+      rawMcpUrl: url,
+    }: {
+      rawMcpUrl: string;
+    }) =>
       Result.ok({
         protectedResource: {
           resource: url,
@@ -700,6 +708,7 @@ describe("MCP connector authorization reviews", () => {
         ? null
         : await createMcpClientForConnection({
             organizationId,
+            permit: outboundPermit,
             row,
             safeDb: ownerDb,
             userId: ownerId,

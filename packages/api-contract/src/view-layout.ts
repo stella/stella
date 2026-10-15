@@ -34,9 +34,10 @@ const VIEW_LAYOUT_POLICY = {
     creation: "template-only",
     perMatter: "many",
   },
+  // Offered directly only to callers with the verification feature.
   avt: {
     provisioning: "optional",
-    creation: "template-only",
+    creation: "direct",
     perMatter: "many",
   },
   // The matter's inbound mail. New matters get one, but it can be removed and
@@ -127,6 +128,5 @@ export const DIRECTLY_CREATABLE_VIEW_LAYOUTS = VIEW_LAYOUT_TYPES.filter(
 /** Retains list identity for reconciliation without disclosing layout details. */
 export type UnavailableWorkspaceView = {
   id: string;
-  layout: { type: "avt" };
   eligibility: "unavailable";
 };

@@ -12,8 +12,9 @@ import {
 
 // permissions-exempt: Members rotate only their own keys, bounded by their live role.
 const config = {
+  contract: "patch",
   permissions: { workspace: ["read"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: t.Intersect([
     personalApiKeyIdBodySchema,

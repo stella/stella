@@ -18,10 +18,11 @@ const paramsSchema = t.Object({
 });
 const MAX_MATTER_SCOPE_SIZE = 200;
 const config = {
+  contract: "patch",
   description:
     "Allow an approved shared mailbox to file correspondence for one matter.",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: {
     type: "capability",
     reason: "correspondence",

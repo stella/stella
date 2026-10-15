@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
+
 const workflow = readFileSync(
   new URL("../.github/workflows/autofix.yml", import.meta.url),
   "utf-8",
@@ -69,21 +71,27 @@ test("source changes disable human autofix while the independent CI guard remain
   expect(humanJob).toContain(
     "Alignment fixer sources changed; CI enforces alignment without automatic edits.",
   );
-  const ci = readFileSync(
-    new URL("../.github/workflows/ci.yml", import.meta.url),
-    "utf-8",
+  const ci = Bun.YAML.parse(
+    readFileSync(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+      "utf-8",
+    ),
   );
-  const alignment = ci.slice(
-    ci.indexOf("- name: Tauri package alignment"),
-    ci.indexOf("- name: Tauri counterpart autofix tests"),
+  const ciSteps = workflowJobSteps(ci, "ci-checks-rest");
+  const alignment = workflowStepByName(ciSteps, "Tauri package alignment");
+  const autofixTests = workflowStepByName(
+    ciSteps,
+    "Tauri counterpart autofix tests",
   );
-  expect(alignment).toContain("bun scripts/check-tauri-package-alignment.ts");
-  const autofixTests = ci.slice(
-    ci.indexOf("- name: Tauri counterpart autofix tests"),
-    ci.indexOf("- name: Lockfile release-age guard"),
+  expect(alignment["run"]).toContain(
+    "bun scripts/check-tauri-package-alignment.ts",
   );
-  expect(autofixTests).toContain("scripts/fix-tauri-package-alignment.test.ts");
-  expect(autofixTests).toContain("scripts/tauri-autofix-workflow.test.ts");
+  expect(autofixTests["run"]).toContain(
+    "scripts/fix-tauri-package-alignment.test.ts",
+  );
+  expect(autofixTests["run"]).toContain(
+    "scripts/tauri-autofix-workflow.test.ts",
+  );
 });
 
 test("npm Tauri updates form their own group without changing the existing cadence", () => {
@@ -97,6 +105,13 @@ test("npm Tauri updates form their own group without changing the existing caden
     'tauri:\n        patterns:\n          - "@tauri-apps/*"\n        update-types:\n          - "major"\n          - "minor"\n          - "patch"',
   );
   expect(bun).toContain("default-days: 5");
-  expect(bun).toContain('cronjob: "0 3 * * *"');
-  expect(bun).toContain('timezone: "Europe/Prague"');
+  const schedules = config.match(/^ {4}schedule:\n(?: {6}[^\n]+\n)+/gmu) ?? [];
+  const ecosystems = config.match(/^ {2}- package-ecosystem:/gmu) ?? [];
+  expect(schedules).toHaveLength(ecosystems.length);
+  expect(schedules.length).toBeGreaterThan(0);
+  for (const schedule of schedules) {
+    expect(schedule).toBe(
+      '    schedule:\n      interval: "weekly"\n      day: "monday"\n      time: "03:00"\n      timezone: "Europe/Prague"\n',
+    );
+  }
 });

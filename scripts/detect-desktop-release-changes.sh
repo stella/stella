@@ -65,6 +65,8 @@
 #   previous_tag=<tag>     (empty when no comparable predecessor found)
 set -euo pipefail
 
+gh_retry_script="${GH_RETRY_SCRIPT:-$(dirname "${BASH_SOURCE[0]}")/gh-retry.sh}"
+
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 <current-tag>" >&2
   exit 1
@@ -141,7 +143,7 @@ while IFS= read -r tag; do
   # Only consider a tag whose GitHub Release actually carries a
   # latest.json asset: that is the marker of a release a desktop
   # client on this channel would have received (built or carried).
-  if gh release view "$tag" --json assets --jq '.assets[].name' 2>/dev/null \
+  if bash "$gh_retry_script" release view "$tag" --json assets --jq '.assets[].name' \
     | grep -qx 'latest.json'; then
     previous_tag="$tag"
     break

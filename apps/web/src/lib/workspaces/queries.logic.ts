@@ -26,6 +26,11 @@ export const toMatterActivityQuery = (filters: MatterActivityFilters) => ({
   ...(filters.toExclusive === null ? {} : { toExclusive: filters.toExclusive }),
 });
 
+export type WorkspaceNavigationCaller = {
+  organizationId: string;
+  userId: string;
+};
+
 export const workspacesKeys = {
   all: ["workspaces"],
   list: (activeOrganizationId: string) => [
@@ -34,9 +39,10 @@ export const workspacesKeys = {
     activeOrganizationId,
   ],
   navigationAll: () => [...workspacesKeys.all, "navigation"],
-  navigation: (activeOrganizationId: string) => [
+  navigation: ({ organizationId, userId }: WorkspaceNavigationCaller) => [
     ...workspacesKeys.navigationAll(),
-    activeOrganizationId,
+    organizationId,
+    userId,
   ],
   byId: (workspaceId: string) => [...workspacesKeys.all, workspaceId],
   overview: (workspaceId: string) => [

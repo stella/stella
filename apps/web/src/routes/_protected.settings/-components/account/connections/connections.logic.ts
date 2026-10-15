@@ -1,3 +1,4 @@
+import { stripUnicodeMarks } from "@stll/text-normalize";
 import type { StatusTone } from "@stll/ui/list";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -8,7 +9,10 @@ import type {
 
 /** Case- and accent-insensitive folding, so "cesky" finds "Český". */
 const fold = (value: string): string =>
-  value.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+  stripUnicodeMarks(value, {
+    form: "NFD",
+    markClass: "combining",
+  }).toLocaleLowerCase();
 
 /**
  * True when every word of the query appears in one of the fields. An empty
@@ -28,7 +32,7 @@ export const matchesConnectionQuery = (
 
 export type IntegrationConnection = Pick<
   McpConnectionsResponse["connections"][number],
-  "enabled" | "status"
+  "enabled" | "responseDisposition" | "status"
 >;
 export type IntegrationAuthorizationStatus =
   McpConnectorsResponse["connectors"][number]["authorizationStatus"];
@@ -90,6 +94,12 @@ export const integrationStatus = ({
     return {
       tone: "neutral",
       labelKey: "settings.connections.turnedOff",
+    } as const satisfies IntegrationStatus;
+  }
+  if (connection.responseDisposition === "receipt-only") {
+    return {
+      tone: "neutral",
+      labelKey: "settings.connections.privateCredentialOnly",
     } as const satisfies IntegrationStatus;
   }
   return {

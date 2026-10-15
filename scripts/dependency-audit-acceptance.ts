@@ -32,6 +32,12 @@ export type LapsedAcceptance = {
   reason: string;
 };
 
+export type ExpiringAcceptance = {
+  id: string;
+  package: string;
+  expiresOn: string;
+};
+
 type LapsedAcceptancesOptions = {
   accepted: readonly AcceptanceTerms[];
   current: readonly CurrentAdvisory[];
@@ -42,6 +48,7 @@ type LapsedAcceptancesOptions = {
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+export const ACCEPTANCE_WARNING_DAYS = 7;
 
 // The shape alone admits "2026-13-45", which would compare as a later date
 // and extend the acceptance; a real day survives a UTC round trip unchanged.
@@ -53,6 +60,40 @@ const isCalendarDate = (value: string): boolean => {
   return (
     !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value
   );
+};
+
+type ExpiringAcceptancesOptions = {
+  accepted: readonly AcceptanceTerms[];
+  current: readonly CurrentAdvisory[];
+  /** Today's date as YYYY-MM-DD. */
+  today: string;
+};
+
+export const expiringAcceptances = ({
+  accepted,
+  current,
+  today,
+}: ExpiringAcceptancesOptions): ExpiringAcceptance[] => {
+  if (!isCalendarDate(today)) {
+    return [];
+  }
+  const currentIds = new Set(current.map(({ id }) => id));
+  const todayTime = Date.parse(`${today}T00:00:00Z`);
+  return accepted.flatMap(({ id, package: pkg, expiresOn }) => {
+    if (
+      expiresOn === undefined ||
+      !isCalendarDate(expiresOn) ||
+      !currentIds.has(id)
+    ) {
+      return [];
+    }
+    const daysRemaining =
+      (Date.parse(`${expiresOn}T00:00:00Z`) - todayTime) / 86_400_000;
+    if (daysRemaining < 0 || daysRemaining > ACCEPTANCE_WARNING_DAYS) {
+      return [];
+    }
+    return [{ id, package: pkg, expiresOn }];
+  });
 };
 
 export const lapsedAcceptances = ({

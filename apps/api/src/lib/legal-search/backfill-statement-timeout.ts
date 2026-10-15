@@ -17,7 +17,7 @@ import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
  * DB-level `idle_in_transaction_session_timeout`, which only fires on a
  * transaction sitting idle between statements, never on a running one.
  */
-export const CORPUS_BACKFILL_STATEMENT_TIMEOUT_MS = 100_000;
+const CORPUS_BACKFILL_STATEMENT_TIMEOUT_MS = 100_000;
 
 type StatementTimeoutTx = {
   execute: (query: SQL) => Promise<unknown>;

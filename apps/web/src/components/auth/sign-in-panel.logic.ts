@@ -1,6 +1,8 @@
 export type AuthCapabilities = {
   emailOtp: boolean;
   localPassword: boolean;
+  /** Password sign-in for one configured account only: offered quietly. */
+  reviewPasswordSignIn: boolean;
   bootstrap: boolean;
   social: {
     google: boolean;
@@ -26,11 +28,24 @@ export const resolveSignInOptions = ({
     socialProviderFlags.microsoft && authCapabilities.social.microsoft;
   const showSocialProviders = showGoogle || showMicrosoft;
   const showLocalPassword = authCapabilities.localPassword;
+  // Email OTP, social sign-in and the first-user bootstrap create an account
+  // for a new address; a local password only signs an existing one in.
+  const accountCreation =
+    authCapabilities.emailOtp ||
+    showSocialProviders ||
+    authCapabilities.bootstrap
+      ? "offered"
+      : "not_offered";
 
   return {
+    accountCreation,
     showEmailOtp: authCapabilities.emailOtp,
     showLocalPassword,
     showBootstrap: authCapabilities.bootstrap,
+    showReviewPasswordSignIn:
+      authCapabilities.reviewPasswordSignIn &&
+      !showLocalPassword &&
+      !authCapabilities.bootstrap,
     showGoogle,
     showMicrosoft,
     showSocialProviders,
@@ -66,10 +81,17 @@ const isMethodShown: Record<SignInMethod, (options: SignInOptions) => boolean> =
 const isSignInMethod = (value: string): value is SignInMethod =>
   Object.hasOwn(isMethodShown, value);
 
+const SIGN_IN_METHODS = Object.values(SIGN_IN_METHOD);
+
+/** The quiet password option is a choice too, though it carries no badge. */
+const offeredMethodCount = (options: SignInOptions) =>
+  SIGN_IN_METHODS.filter((method) => isMethodShown[method](options)).length +
+  (options.showReviewPasswordSignIn ? 1 : 0);
+
 /**
- * The method this browser last signed in with, when this page offers it.
- * An unknown value, or a method the deployment no longer offers, gets no
- * emphasis.
+ * The method this browser last signed in with, when this page offers it
+ * among other methods. An unknown value, a method the deployment no longer
+ * offers, or the only method on the page gets no emphasis.
  */
 export const resolveLastUsedSignInMethod = ({
   stored,
@@ -78,7 +100,10 @@ export const resolveLastUsedSignInMethod = ({
   stored: string | null;
   options: SignInOptions;
 }): SignInMethod | null =>
-  stored !== null && isSignInMethod(stored) && isMethodShown[stored](options)
+  stored !== null &&
+  isSignInMethod(stored) &&
+  isMethodShown[stored](options) &&
+  offeredMethodCount(options) > 1
     ? stored
     : null;
 

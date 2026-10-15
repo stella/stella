@@ -20,6 +20,7 @@ import {
   type ContactType,
 } from "@stll/api-contract";
 import { isCountryCode } from "@stll/country-codes";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import type {
   ContactAddress,
@@ -64,7 +65,7 @@ const CONTACT_IMPORT_DELIMITER_TYPE = {
   "\t": "tab",
 } as const satisfies Record<CSVDelimiter, string>;
 
-export type ContactImportDelimiter =
+type ContactImportDelimiter =
   | (typeof CONTACT_IMPORT_DELIMITER_TYPE)[CSVDelimiter]
   | typeof CONTACT_IMPORT_LABELED_SOURCE;
 
@@ -137,8 +138,7 @@ type ContactImportDocument = {
 const emailSchema = v.pipe(v.string(), v.email(), v.maxLength(320));
 
 const normalizeToken = (value: string): string =>
-  value
-    .normalize("NFD")
+  normalizeUnicode(value, "NFD")
     .replace(/\p{Mark}/gu, "")
     .toLowerCase()
     .replace(/[^\p{Letter}\p{Number}]+/gu, "");

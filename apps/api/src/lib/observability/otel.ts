@@ -1,3 +1,4 @@
+// parser-output-unchanged: an unused log-export flag was removed; no parser output depends on it.
 import { logs } from "@opentelemetry/api-logs";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
@@ -16,9 +17,6 @@ import { envBase } from "@/api/env-base";
  * `sanitizeLogAttributes`; the stderr JSON mirror in `logger.ts` stays the
  * operational sink regardless of this setting.
  */
-export const isExternalLogExportEnabled =
-  envBase.LOGS_OTLP_URL !== undefined && envBase.LOGS_OTLP_TOKEN !== undefined;
-
 if (
   envBase.LOGS_OTLP_URL !== undefined &&
   envBase.LOGS_OTLP_TOKEN !== undefined

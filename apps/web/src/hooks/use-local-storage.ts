@@ -1,11 +1,10 @@
 import { useSyncExternalStore } from "react";
 
-import { Result } from "better-result";
+import { browserStorage } from "@/lib/account/browser-storage";
 
 const noopSubscribe = (_onStoreChange: () => void) => () => undefined;
 
-const browserLocalStorage = (): Storage | null =>
-  Result.try(() => localStorage).unwrapOr(null);
+const browserLocalStorage = (): Storage | null => browserStorage("local");
 
 /**
  * The browser's storage after hydration, or null where there is none: the

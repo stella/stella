@@ -7,6 +7,7 @@ import {
 
 type ReconcilePlaybookSaveToolCallsOptions = {
   handledToolCallIds: Set<string>;
+  historicalToolCallIds?: ReadonlySet<string>;
   messages: readonly PlaybookSaveMessage[];
   organizationId: string;
   playbookKeys: {
@@ -14,9 +15,22 @@ type ReconcilePlaybookSaveToolCallsOptions = {
     isDetail: (queryKey: readonly unknown[]) => boolean;
   };
   queryClient: QueryClient;
+  source: "history" | "live";
+};
+
+type PlaybookSaveReconciliation = {
+  playbookId: string | null;
+  /** Settles when the playbook queries have refetched. */
+  refetched: Promise<void>;
+  source: "history" | "live";
 };
 
 /**
+ * Refetches for every newly handled save, including an older call that
+ * completes after a newer one. Only a new latest save names a pane target.
+ * The caller follows that target once `refetched` settles,
+ * so the pane's label can read the fresh name.
+ *
  * A chat save runs outside the playbooks page's own mutations, so every
  * playbook query is refetched: an open list, and a detail the editor or the
  * inspector is watching. The editor keeps its concurrency token with its
@@ -27,22 +41,97 @@ type ReconcilePlaybookSaveToolCallsOptions = {
  * its form from whatever the cache holds at mount, and an invalidated entry
  * is still served while it refetches.
  */
-export const reconcilePlaybookSaveToolCalls = async ({
+export const reconcilePlaybookSaveToolCalls = ({
   handledToolCallIds,
+  historicalToolCallIds,
   messages,
   organizationId,
   playbookKeys,
   queryClient,
-}: ReconcilePlaybookSaveToolCallsOptions): Promise<void> => {
-  if (!consumePlaybookSaveToolCalls({ handledToolCallIds, messages })) {
-    return;
+  source,
+}: ReconcilePlaybookSaveToolCallsOptions): PlaybookSaveReconciliation | null => {
+  const consumed = consumePlaybookSaveToolCalls({
+    handledToolCallIds,
+    ...(historicalToolCallIds === undefined ? {} : { historicalToolCallIds }),
+    messages,
+  });
+  if (consumed === null) {
+    return null;
   }
   queryClient.removeQueries({
     queryKey: playbookKeys.all(organizationId),
     predicate: (query) =>
       playbookKeys.isDetail(query.queryKey) && !query.isActive(),
   });
-  await queryClient.invalidateQueries({
-    queryKey: playbookKeys.all(organizationId),
-  });
+  return {
+    playbookId: consumed.playbookId,
+    source,
+    refetched: queryClient.invalidateQueries({
+      queryKey: playbookKeys.all(organizationId),
+    }),
+  };
+};
+
+/**
+ * Whether a chat surface opens the playbook pane by itself. Only a main-area
+ * chat does: there the pane opens beside the conversation. In an inspector
+ * chat tab or beside a file, the pane would cover the interview the user is
+ * answering, so it opens only from the row's "Open playbook".
+ */
+export type PlaybookPaneMode = "auto-open" | "on-request";
+
+type PlaybookPaneReactionArgs = {
+  mode: PlaybookPaneMode;
+  /** Below `md` the inspector is a sheet over the whole chat. */
+  isMobile: boolean;
+  /** This thread's pane was already shown once while the session was mounted. */
+  openedThisSession: boolean;
+  /** The playbook the thread's pane shows; null while the pane is closed. */
+  shownPlaybookId: string | null;
+  savedPlaybookId: string;
+};
+
+/**
+ * What a newly saved playbook does to the thread's pane. An open pane on
+ * another playbook moves to the saved one without taking focus; one already
+ * showing it is left as it is. A closed pane opens once per thread while the
+ * session is mounted, and never again after the user closed it. Historical
+ * saves reconcile caches without moving or opening the pane.
+ */
+export const playbookPaneReaction = ({
+  mode,
+  isMobile,
+  openedThisSession,
+  shownPlaybookId,
+  savedPlaybookId,
+}: PlaybookPaneReactionArgs): "update" | "open" | "none" => {
+  if (shownPlaybookId !== null) {
+    return shownPlaybookId === savedPlaybookId ? "none" : "update";
+  }
+  return mode === "auto-open" && !isMobile && !openedThisSession
+    ? "open"
+    : "none";
+};
+
+type FollowReconciledPlaybookSaveOptions = {
+  reconciliation: PlaybookSaveReconciliation;
+  isCurrent: () => boolean;
+  follow: (playbookId: string) => void;
+};
+
+/** Refetch completion cannot move a pane after its runtime or save changed. */
+export const followReconciledPlaybookSave = async ({
+  reconciliation,
+  isCurrent,
+  follow,
+}: FollowReconciledPlaybookSaveOptions): Promise<void> => {
+  await reconciliation.refetched;
+  if (
+    reconciliation.source === "history" ||
+    reconciliation.playbookId === null ||
+    !isCurrent()
+  ) {
+    return;
+  }
+  follow(reconciliation.playbookId);
 };

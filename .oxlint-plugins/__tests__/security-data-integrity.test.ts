@@ -1,8 +1,6 @@
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 
 import { lintSingleRule } from "./lint-single-rule.ts";
-
-setDefaultTimeout(30_000);
 
 const lines = (...source: readonly string[]) => [...source, ""].join("\n");
 const handlerPath = "apps/api/src/handlers/example.ts";
@@ -90,9 +88,22 @@ describe.serial("security and data-integrity lint boundaries", () => {
           'import { auditLogs } from "@/api/db/schema";',
           "tx.insert(auditLogs).values(input);",
         ),
-        { sourcePath: "apps/api/src/lib/audit-log.ts" },
+        { sourcePath: "apps/api/src/lib/db/audit-recording.ts" },
       ),
     ).toEqual([]);
+  });
+
+  test("HTTP audit metadata wrapper cannot insert audit rows directly", async () => {
+    expect(
+      await lintSingleRule(
+        "no-direct-audit-log-insert",
+        lines(
+          'import { auditLogs } from "@/api/db/schema";',
+          "tx.insert(auditLogs).values(input);",
+        ),
+        { sourcePath: "apps/api/src/lib/audit-log.ts" },
+      ),
+    ).toEqual([2]);
   });
 
   test("reports direct property insertion and update through a schema alias", async () => {

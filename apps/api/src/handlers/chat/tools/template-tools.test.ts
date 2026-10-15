@@ -3,6 +3,7 @@ import { describe, expect, spyOn, test } from "bun:test";
 import JSZip from "jszip";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -14,6 +15,7 @@ import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import * as tanstackModels from "@/api/lib/tanstack-ai-models";
 import * as decisionModel from "@/api/lib/workflow/decisions/decision-model";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -70,6 +72,7 @@ describe("createTemplateTools", () => {
       scopedDb: stubScopedDb([]),
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary: { type: "raw" },
     });
@@ -88,6 +91,7 @@ describe("createTemplateTools", () => {
       scopedDb: stubScopedDb([]),
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary: { type: "raw" },
     });
@@ -108,6 +112,7 @@ describe("createTemplateTools", () => {
       }),
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary: { type: "raw" },
     });
@@ -145,11 +150,13 @@ describe("fill_template grades the fill", () => {
       .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
       .join("");
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/document.xml",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
     );
-    zip.file(
+    writeZipEntry(
+      zip,
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
@@ -224,6 +231,7 @@ describe("fill_template grades the fill", () => {
         scopedDb,
         safeDb: stubSafeDb,
         organizationId: orgId,
+        modelAdmission: testModelAdmission(orgId),
         userId,
         thirdPartyBoundary,
       });
@@ -274,11 +282,13 @@ describe("fill_template grades the fill", () => {
 
   test("a value still holding an anonymization placeholder records and returns the fill as partial", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/document.xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Signed by {{party_name}}.</w:t></w:r></w:p></w:body></w:document>',
     );
-    zip.file(
+    writeZipEntry(
+      zip,
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
@@ -324,6 +334,7 @@ describe("createTemplateAuthoringTools", () => {
       managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary: { type: "raw" },
     });
@@ -360,6 +371,7 @@ describe("createTemplateAuthoringTools", () => {
       managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,
       organizationId: orgId,
+      modelAdmission: testModelAdmission(orgId),
       userId,
       thirdPartyBoundary,
       dependencies: {

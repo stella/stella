@@ -1,5 +1,69 @@
 # @stll/ui
 
+## 0.45.0
+
+### Minor Changes
+
+- [#5033](https://github.com/stella/stella/pull/5033) [`9da3cbb`](https://github.com/stella/stella/commit/9da3cbb84db47b67b93fcd3b6f327ba3eb739baf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a compact size option to accordion triggers and panels for dense inspector lists.
+
+- [#5347](https://github.com/stella/stella/pull/5347) [`c7f973a`](https://github.com/stella/stella/commit/c7f973adced14ab6250f4a0edfa553303998bc27) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an `inline` size to `CourtBadge` for a chip that sits inside a line of small text without making it taller.
+
+- [#5404](https://github.com/stella/stella/pull/5404) [`4e86d4d`](https://github.com/stella/stella/commit/4e86d4deb48c5f0d9a2bcb6e454afdd34e78a788) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared date-range filter with inclusive calendar bounds, inline typed-date validation, and focus handoff from the start date to the end date. Date pickers support controlled opening and an optional future-date limit while retaining immediate single-date selection.
+
+- [#5402](https://github.com/stella/stella/pull/5402) [`70a05b2`](https://github.com/stella/stella/commit/70a05b2dabd5bc7bb2422b2d0ae21e1c718c6974) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared document identity badge for responsive statute numbers, court chips and unknown documents.
+
+- [#5593](https://github.com/stella/stella/pull/5593) [`fb4de95`](https://github.com/stella/stella/commit/fb4de9573ae022e1c006c81fff9022aa97e45ec1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the shared word diff helper through `@stll/ui/review-word-diff` for review and provision history views.
+
+### Patch Changes
+
+- [#5475](https://github.com/stella/stella/pull/5475) [`3000990`](https://github.com/stella/stella/commit/3000990a7130ed52723e5fb1b4ece25bf5f42427) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the shared Switch primitive for desktop and web settings.
+
+- [#5494](https://github.com/stella/stella/pull/5494) [`15e1b82`](https://github.com/stella/stella/commit/15e1b82218dd6447eaba4df106f7d3585e9b6775) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Honor embedded outline panels and rails, keep disclosure targets separate from ticks, and reserve measured docked-composer space.
+
+- [#5648](https://github.com/stella/stella/pull/5648) [`a8c77be`](https://github.com/stella/stella/commit/a8c77be4ed683ad5d91d843220ddd1eb51486370) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Landing section headings read as headings above their rows.
+
+- [#5647](https://github.com/stella/stella/pull/5647) [`ebfe05e`](https://github.com/stella/stella/commit/ebfe05e6b528df99966f4a8e3ac1bec9be1eb778) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Menu popups accept `viewportClassName` for the scrolling list inside them, and a `header` pinned above that list.
+
+- [#5695](https://github.com/stella/stella/pull/5695) [`0c55af7`](https://github.com/stella/stella/commit/0c55af71de6f04e11217bad1706b149736a8639b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Sheets sit on the shared dialog overlay layer, so an open sheet covers floating pane chrome such as a docked composer.
+
+- [#5379](https://github.com/stella/stella/pull/5379) [`f01d3ab`](https://github.com/stella/stella/commit/f01d3ab91b22613acfd563e5df9ffa6129b19bd5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the duplicate magnifier from SearchField, retaining the search icon supplied by Input.
+
+## 0.44.1
+
+### Patch Changes
+
+- [#5244](https://github.com/stella/stella/pull/5244) [`b225fd8`](https://github.com/stella/stella/commit/b225fd8575d7896a11ae2c644201f7920e03cd9b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared chart palette tokens for theme-aware generated views.
+
+## 0.44.0
+
+### Minor Changes
+
+- [#5201](https://github.com/stella/stella/pull/5201) [`2718337`](https://github.com/stella/stella/commit/2718337304469b3c4e0d0304a15b9864c70a2aa9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a decorative Loader variant for labelled controls and use the shared Loader in Button and Toast loading states.
+
+- [#5318](https://github.com/stella/stella/pull/5318) [`f5e1e2b`](https://github.com/stella/stella/commit/f5e1e2bf6a143f0556647d5ac6f5a5f71c1f931a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/inline-reorder` and `@stll/ui/inline-drop-indicator` for reordering a horizontal row of items by closest edge. `@stll/workspace-ui` now uses them for view tabs and no longer exports `reorderWorkspaceViewIds`, `toWorkspaceViewDropPosition` or the `./view-switcher-logic` entry point.
+
+- [#5175](https://github.com/stella/stella/pull/5175) [`84d35ae`](https://github.com/stella/stella/commit/84d35ae3c652403524ea11ebba22e40d8949c929) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use updated Pragmatic drag and drop dependencies and public entry points.
+
+## 0.43.0
+
+### Minor Changes
+
+- [#4940](https://github.com/stella/stella/pull/4940) [`83b4487`](https://github.com/stella/stella/commit/83b44876fe05b865329a622176ee8fd8fc51a4d8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add form dirtiness signals and a shared dialog Escape policy: unchanged dialogs close immediately; changed dialogs show a localized discard hint before a second Escape closes them.
+
+- [#4905](https://github.com/stella/stella/pull/4905) [`bf6a6a3`](https://github.com/stella/stella/commit/bf6a6a3e2f27df61169ddaabf85d3392dde5d222) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add semantic DetailsGrid and DetailsItem primitives with container-responsive columns, aligned labels, and full-width facts.
+
+- [#5038](https://github.com/stella/stella/pull/5038) [`598f3c4`](https://github.com/stella/stella/commit/598f3c44be0666ebca901a214e4fbf5bed547d3d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared split button with independent actions, accessible menu navigation, and quiet hover chrome.
+
+- [#4907](https://github.com/stella/stella/pull/4907) [`b982f7f`](https://github.com/stella/stella/commit/b982f7fbbc86741e6d9df68a7da46bfaa5be669e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `ToolbarIconAction`, an icon-only toolbar button whose label is its tooltip and accessible name.
+
+### Patch Changes
+
+- [#5066](https://github.com/stella/stella/pull/5066) [`e571295`](https://github.com/stella/stella/commit/e57129541729f01b92c5c64fbb2e3451507a4e7a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an inline rename field that keeps the surrounding title typography and sizes to its text.
+
+- [#5123](https://github.com/stella/stella/pull/5123) [`684f296`](https://github.com/stella/stella/commit/684f2963fdfab360198780bfcc0b188c5692b913) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Let an inline rename field fill its row instead of sizing to its text.
+
+- [#5006](https://github.com/stella/stella/pull/5006) [`7bb8e47`](https://github.com/stella/stella/commit/7bb8e47bc85fad689ff939399eb5f553e65b1f54) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Focus the selected or current day when opening a date picker and keep field trigger text on one line.
+
 ## 0.42.1
 
 ### Patch Changes

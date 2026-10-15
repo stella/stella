@@ -14,8 +14,9 @@ const routeParams = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { integration: ["delete"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
   mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
@@ -25,10 +26,9 @@ const deleteMcpConnection = createSafeRootHandler(
   config,
   async function* ({ params: requestParams, safeDb, session, user }) {
     const deleted = yield* Result.await(
-      // oxlint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
-      safeDb((tx) => {
+      safeDb((tx) =>
         // audit: skip — per-user MCP connection removal; the connector itself is SOC 2-audited at create-connector / delete-connector.
-        return tx
+        tx
           .delete(mcpUserConnections)
           .where(
             and(
@@ -40,8 +40,8 @@ const deleteMcpConnection = createSafeRootHandler(
               eq(mcpUserConnections.userId, user.id),
             ),
           )
-          .returning({ id: mcpUserConnections.id });
-      }),
+          .returning({ id: mcpUserConnections.id }),
+      ),
     );
 
     const connection = deleted.at(0);

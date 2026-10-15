@@ -21,9 +21,10 @@ export const createListPersonalApiKeysHandler = (
   access: keyof typeof listPermissions,
 ) => {
   const config = {
+    contract: "patch",
     access: "read",
     permissions: listPermissions[access],
-    accountAccess: ACCOUNT_ACCESS.standard,
+    accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "provider_secret" },
     query: personalApiKeyListQuerySchema,
   } satisfies HandlerConfig;

@@ -112,16 +112,16 @@ test("prompt improvement menu uses task strategies", async ({ page }) => {
     .getByRole("button", { name: "Prompt improvement options" })
     .click();
   await expect(
-    page.getByRole("button", { name: /Structure the request/iu }),
+    page.getByRole("menuitem", { name: /Structure the request/iu }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Specify the output/iu }),
+    page.getByRole("menuitem", { name: /Specify the output/iu }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Break into steps/iu }),
+    page.getByRole("menuitem", { name: /Break into steps/iu }),
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: /Add verification criteria/iu }),
+    page.getByRole("menuitem", { name: /Add verification criteria/iu }),
   ).toBeVisible();
   await expect(page.getByText("Use a more formal tone")).toHaveCount(0);
 });

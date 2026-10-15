@@ -17,16 +17,17 @@ import { Result } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isCDATA, isTag, isText } from "domhandler";
 
-import type { ParagraphListDepth } from "@stll/legal-ast/document-ast";
-
+// parser-output-unchanged: imports the document AST from its package owner
 import type {
   Block,
   DocumentAst,
   HeadingLevel,
   Inline,
   ParagraphBlock,
+  ParagraphListDepth,
   ParagraphRole,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import { ParseXmlError } from "@/api/lib/errors/tagged-errors";
 import {
   buildValidationHtml,

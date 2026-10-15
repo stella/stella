@@ -83,7 +83,7 @@ test("unavailable verification rows project identity before parsing or enrichmen
         projectAvailable: () =>
           panic("Unavailable layouts must not be enriched"),
       }),
-    ).toEqual({ id, layout: { type: "avt" }, eligibility: "unavailable" });
+    ).toEqual({ id, eligibility: "unavailable" });
     expect(
       projectViewEligibility({
         view,

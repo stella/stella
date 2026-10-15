@@ -1,14 +1,110 @@
 use tauri::{
-  AppHandle, Wry,
+  AppHandle, Manager, Wry,
   menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
 };
 
-use crate::i18n::{t, t_plural};
+use crate::activity::{ActivityRecordingStatus, TrayActivitySnapshot};
+use crate::i18n::{active_locale, t, t_fmt, t_plural};
 use crate::types::{AppSnapshot, SessionSnapshot};
+
+#[cfg(target_os = "macos")]
+use objc2::MainThreadMarker as TrayMainThread;
+
+#[cfg(not(target_os = "macos"))]
+struct TrayMainThread;
 
 const QUIT_ACTION: &str = "quit";
 const OPEN_PREFERENCES_ACTION: &str = "open-preferences";
 const OPEN_CLIPBOARD_ACTION: &str = "open-clipboard";
+const OPEN_ACTIVITY_ACTION: &str = "open-activity";
+const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
+const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
+const ACTIVITY_STATUS_ITEM: &str = "activity-status";
+const ACTIVITY_NOW_ITEM: &str = "activity-now";
+const MILLIS_PER_TENTH_HOUR: u64 = 360_000;
+const TRAY_ICON_BYTES: &[u8] = include_bytes!("../icons/tray-icon-32-template.png");
+
+fn format_activity_hours(total_ms: u64, locale: &str) -> String {
+  let tenths =
+    total_ms.saturating_add(MILLIS_PER_TENTH_HOUR / 2) / MILLIS_PER_TENTH_HOUR;
+  let separator = match locale {
+    "en" => '.',
+    "ar" => '٫',
+    "cs" | "de" | "es" | "et" | "fr" | "hu" | "lt" | "lv" | "pl" | "pt-BR" | "sk" => {
+      ','
+    }
+    _ => panic!("activity tray requires a shipped locale"),
+  };
+  let number = format!("{}{separator}{}", tenths / 10, tenths % 10);
+  if locale != "ar" {
+    return number;
+  }
+  number
+    .chars()
+    .map(|character| match character {
+      '0' => '٠',
+      '1' => '١',
+      '2' => '٢',
+      '3' => '٣',
+      '4' => '٤',
+      '5' => '٥',
+      '6' => '٦',
+      '7' => '٧',
+      '8' => '٨',
+      '9' => '٩',
+      other => other,
+    })
+    .collect()
+}
+
+fn activity_status_label(snapshot: &TrayActivitySnapshot) -> String {
+  let key = match snapshot.status {
+    ActivityRecordingStatus::Recording => "tray.activityRecording",
+    ActivityRecordingStatus::Paused => "tray.activityPaused",
+    ActivityRecordingStatus::Off => return t("tray.activityOff").to_string(),
+  };
+  let hours = format_activity_hours(snapshot.total_ms, active_locale());
+  t_fmt(key, &[("hours", &hours)])
+}
+
+fn activity_action(
+  status: ActivityRecordingStatus,
+) -> Option<(&'static str, &'static str)> {
+  match status {
+    ActivityRecordingStatus::Recording => {
+      Some((PAUSE_ACTIVITY_ACTION, "tray.activityPause"))
+    }
+    ActivityRecordingStatus::Paused => {
+      Some((RESUME_ACTIVITY_ACTION, "tray.activityResume"))
+    }
+    ActivityRecordingStatus::Off => None,
+  }
+}
+
+fn recording_icon(recording: bool) -> image::ImageResult<tauri::image::Image<'static>> {
+  let mut image = image::load_from_memory(TRAY_ICON_BYTES)?.to_rgba8();
+  if recording {
+    // A monochrome dot remains visible when macOS tints the template icon.
+    let radius = image.width().min(image.height()) / 10;
+    let center_x = image.width().saturating_sub(radius + 2);
+    let center_y = image.height().saturating_sub(radius + 2);
+    for (x, y, pixel) in image.enumerate_pixels_mut() {
+      let distance =
+        u64::from(x.abs_diff(center_x)).pow(2) + u64::from(y.abs_diff(center_y)).pow(2);
+      if distance <= u64::from(radius).pow(2) {
+        *pixel = image::Rgba([0, 0, 0, 255]);
+      } else if distance <= u64::from(radius + 1).pow(2) {
+        *pixel = image::Rgba([0, 0, 0, 0]);
+      }
+    }
+  }
+  let (width, height) = image.dimensions();
+  Ok(tauri::image::Image::new_owned(
+    image.into_raw(),
+    width,
+    height,
+  ))
+}
 const OPEN_ABOUT_ACTION: &str = "open-about";
 const CHECK_FOR_UPDATES_ACTION: &str = "check-for-updates";
 const OPEN_EDIT_ROOT_ACTION: &str = "open-edit-root";
@@ -89,17 +185,76 @@ fn get_tray_status_label(snapshot: &AppSnapshot) -> String {
 /// Rebuilds the tray menu from `snapshot`. The menu is the one native string
 /// the app caches, so both state changes and a language change come through
 /// here. A failed rebuild leaves the previous menu in place.
+///
+/// Callers run on async workers, but AppKit status items may only be touched
+/// on the main thread: dropping the last tray handle elsewhere removes the
+/// status item off the main thread and aborts the process. The work hops to
+/// the main thread instead.
 pub fn refresh(app: &AppHandle, snapshot: &AppSnapshot) {
-  if let Ok(menu) = build_tray_menu(app, snapshot)
-    && let Some(tray) = app.tray_by_id("main")
+  let handle = app.clone();
+  let snapshot = snapshot.clone();
+  if app
+    .run_on_main_thread(move || {
+      #[cfg(target_os = "macos")]
+      let main_thread =
+        TrayMainThread::new().expect("tray work must run on the main thread");
+      #[cfg(not(target_os = "macos"))]
+      let main_thread = TrayMainThread;
+      refresh_on_main_thread(&handle, &snapshot, &main_thread);
+    })
+    .is_err()
   {
-    let _ = tray.set_menu(Some(menu));
+    tracing::warn!("tray refresh skipped: the event loop is gone");
   }
 }
 
-pub fn build_tray_menu(
+#[allow(
+  clippy::disallowed_methods,
+  reason = "the tray owner: the main-thread proof keeps every native handle local"
+)]
+fn refresh_on_main_thread(
   app: &AppHandle,
   snapshot: &AppSnapshot,
+  main_thread: &TrayMainThread,
+) {
+  let binding = activity_binding(app);
+  let activity = crate::activity::tray_snapshot(app);
+  let menu =
+    build_tray_menu_with_activity(app, snapshot, activity.as_ref(), main_thread);
+  let Some(tray) = app.tray_by_id("main") else {
+    return;
+  };
+  // Building native menu items can hop threads. Never install a projection
+  // copied from the account that was unlinked while those items were built.
+  let current = binding == activity_binding(app);
+  let menu = if current {
+    menu
+  } else {
+    build_tray_menu_with_activity(app, snapshot, None, main_thread)
+  };
+  if let Ok(menu) = menu {
+    let _ = tray.set_menu(Some(menu));
+  }
+  let recording = current
+    && activity
+      .as_ref()
+      .is_some_and(|activity| activity.status == ActivityRecordingStatus::Recording);
+  if let Ok(icon) = recording_icon(recording) {
+    let _ = tray.set_icon(Some(icon));
+  }
+}
+
+fn activity_binding(app: &AppHandle) -> Option<(u64, String)> {
+  app
+    .try_state::<crate::feature_gate::FeatureGates>()?
+    .account_binding(crate::feature_gate::DesktopFeature::ActivityTimeline)
+}
+
+fn build_tray_menu_with_activity(
+  app: &AppHandle,
+  snapshot: &AppSnapshot,
+  activity: Option<&TrayActivitySnapshot>,
+  _main_thread: &TrayMainThread,
 ) -> tauri::Result<Menu<Wry>> {
   let mut builder = MenuBuilder::new(app);
 
@@ -114,6 +269,33 @@ pub fn build_tray_menu(
   builder = builder.item(
     &MenuItemBuilder::with_id(OPEN_CLIPBOARD_ACTION, t("tray.clipboard")).build(app)?,
   );
+  if let Some(activity) = activity {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(ACTIVITY_STATUS_ITEM, activity_status_label(activity))
+        .enabled(false)
+        .build(app)?,
+    );
+    if activity.status == ActivityRecordingStatus::Recording
+      && let Some(name) = &activity.now
+    {
+      builder = builder.item(
+        &MenuItemBuilder::with_id(
+          ACTIVITY_NOW_ITEM,
+          t_fmt("tray.activityNow", &[("name", name)]),
+        )
+        .enabled(false)
+        .build(app)?,
+      );
+    }
+    if let Some((action, label)) = activity_action(activity.status) {
+      builder = builder.item(&MenuItemBuilder::with_id(action, t(label)).build(app)?);
+    }
+  }
+  if crate::activity::is_enabled(app) {
+    builder = builder.item(
+      &MenuItemBuilder::with_id(OPEN_ACTIVITY_ACTION, t("tray.activity")).build(app)?,
+    );
+  }
 
   // Settings
   builder = builder.item(
@@ -243,6 +425,15 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == OPEN_CLIPBOARD_ACTION {
     return MenuAction::OpenClipboard;
   }
+  if action == OPEN_ACTIVITY_ACTION {
+    return MenuAction::OpenActivity;
+  }
+  if action == PAUSE_ACTIVITY_ACTION {
+    return MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused);
+  }
+  if action == RESUME_ACTIVITY_ACTION {
+    return MenuAction::SetActivityRecording(ActivityRecordingStatus::Recording);
+  }
   if action == OPEN_ABOUT_ACTION {
     return MenuAction::OpenPreferences("about");
   }
@@ -282,6 +473,8 @@ pub enum MenuAction {
   Quit,
   OpenPreferences(&'static str),
   OpenClipboard,
+  OpenActivity,
+  SetActivityRecording(ActivityRecordingStatus),
   CheckForUpdates,
   OpenEditRoot,
   CopyDiagnostics,
@@ -303,6 +496,73 @@ mod tests {
 
   fn init_i18n() {
     crate::i18n::init_en();
+  }
+
+  #[test]
+  fn activity_hours_round_and_follow_the_shipped_locale() {
+    assert_eq!(format_activity_hours(0, "en"), "0.0");
+    assert_eq!(format_activity_hours(18_720_000, "en"), "5.2");
+    assert_eq!(format_activity_hours(179_999, "en"), "0.0");
+    assert_eq!(format_activity_hours(180_000, "en"), "0.1");
+    for locale in [
+      "cs", "de", "es", "et", "fr", "hu", "lt", "lv", "pl", "pt-BR", "sk",
+    ] {
+      assert_eq!(format_activity_hours(18_720_000, locale), "5,2");
+    }
+    assert_eq!(format_activity_hours(18_720_000, "ar"), "٥٫٢");
+    for locale in crate::i18n::shipped_locales() {
+      assert!(!format_activity_hours(18_720_000, locale).is_empty());
+    }
+  }
+
+  #[test]
+  fn activity_menu_actions_pause_and_resume_without_starting_an_off_recorder() {
+    assert!(matches!(
+      handle_menu_action(PAUSE_ACTIVITY_ACTION),
+      MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused)
+    ));
+    assert!(matches!(
+      handle_menu_action(RESUME_ACTIVITY_ACTION),
+      MenuAction::SetActivityRecording(ActivityRecordingStatus::Recording)
+    ));
+    assert_eq!(activity_action(ActivityRecordingStatus::Off), None);
+    assert_eq!(
+      activity_action(ActivityRecordingStatus::Recording),
+      Some((PAUSE_ACTIVITY_ACTION, "tray.activityPause"))
+    );
+    assert_eq!(
+      activity_action(ActivityRecordingStatus::Paused),
+      Some((RESUME_ACTIVITY_ACTION, "tray.activityResume"))
+    );
+  }
+
+  #[test]
+  fn recording_icon_adds_a_dot_without_changing_dimensions_and_restores_the_base() {
+    let base = recording_icon(false).unwrap();
+    let recording = recording_icon(true).unwrap();
+    assert_eq!(
+      (recording.width(), recording.height()),
+      (base.width(), base.height())
+    );
+    assert_ne!(recording.rgba(), base.rgba());
+    assert_eq!(recording_icon(false).unwrap().rgba(), base.rgba());
+  }
+
+  #[test]
+  fn activity_statuses_and_actions_have_translations_in_every_locale() {
+    for key in [
+      "tray.activityRecording",
+      "tray.activityPaused",
+      "tray.activityOff",
+      "tray.activityNow",
+      "tray.activityPause",
+      "tray.activityResume",
+    ] {
+      assert!(
+        crate::i18n::locales_missing(key).is_empty(),
+        "missing {key}"
+      );
+    }
   }
 
   fn make_session(status: SessionStatus) -> SessionSnapshot {

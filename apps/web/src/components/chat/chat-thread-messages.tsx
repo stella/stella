@@ -1,21 +1,34 @@
-import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  Fragment,
+  use,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 
+import { panic } from "better-result";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
+import { isChatPastedTextPart } from "@stll/api-contract/chat";
+import type { ChatPastedTextPart } from "@stll/api-contract/chat";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
+  ArrowUpIcon,
   ChevronRightIcon,
   ClockIcon,
   FileTextIcon,
-  Loader2Icon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
@@ -32,6 +45,8 @@ import {
   resolveChatActivityIndicatorState,
 } from "@/components/chat/chat-activity.logic";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
+import { ChatAnswerDecisionProvider } from "@/components/chat/chat-decision-citation";
+import { ChatAttachmentChip } from "@/components/chat/chat-draft-attachment-chips";
 import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import { ChatMessageActionsMenu } from "@/components/chat/chat-message-actions-menu";
 import {
@@ -43,6 +58,7 @@ import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.l
 import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import {
   assistantMessageFallbackText,
+  CHAT_MESSAGE_RENDER_POLICY,
   buildMessageTurns,
   collectAnonRestorations,
   DATA_URL_PREFIX,
@@ -50,6 +66,7 @@ import {
   EMPTY_RESTORATION_PAIRS,
   getFollowingAssistantRestorations,
   getMentionTagAttr,
+  sentinelIsAboveRoot,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
@@ -62,6 +79,7 @@ import type {
   ChatUIPart,
   ChatUITools,
   PersistedChatMessage,
+  RegisteredChatUIToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import {
   getAwaitedAssistantMessageId,
@@ -69,6 +87,8 @@ import {
   hasRunningToolCallInLatestAssistantMessage,
   isApprovalPart,
   isOpaquePersistedChatToolCallPart,
+  isPendingApprovalPart,
+  savedPlaybookId,
 } from "@/components/chat/chat-ui-tools";
 import {
   canForkAssistantMessage,
@@ -79,31 +99,43 @@ import { findCreateDocumentArtifactForMessage } from "@/components/chat/message-
 import { NeedsMatterCard } from "@/components/chat/needs-matter-card";
 import type { CreateDocumentDestination } from "@/components/chat/needs-matter-card";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
+import { RequestSecretCard } from "@/components/chat/request-secret-card";
 import { SourceChips } from "@/components/chat/source-chips";
 import { SpawnSubagentsCard } from "@/components/chat/spawn-subagents-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
-import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
+import {
+  PendingToolApprovalCard,
+  ToolApprovalCard,
+} from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
+import { uiResourceRenderer } from "@/components/chat/ui-resource-renderer";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { CopyActionButton } from "@/components/copy-action-button";
+import { ProviderDiagnosticMessage } from "@/components/provider-diagnostic-message";
 import { ReferenceRenderScope } from "@/components/references/reference-chip";
 import {
   mentionAttrsToHref,
   mentionTagAttrs,
 } from "@/components/references/reference.logic";
+import {
+  findChatRequestError,
+  type ChatRequestError,
+} from "@/features/chat/chat-request-error";
+import type { ChatActivitySession } from "@/features/chat/chat-runtime";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
-import { getAnalytics } from "@/lib/analytics/provider";
+import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { chatRefusal } from "@/lib/errors/api";
+import { chatRefusal, isDisplayableAPIError } from "@/lib/errors/api";
+import { providerDiagnosticFromThrown } from "@/lib/errors/provider-diagnostic";
+import { ClientTelemetryError } from "@/lib/errors/telemetry";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -111,6 +143,7 @@ import {
 import { downloadFile } from "@/lib/utils";
 
 export const ChatThreadMessages = ({
+  activitySession,
   activeFileName,
   assistantTextDensity = "default",
   approvalPendingMessageId,
@@ -122,6 +155,8 @@ export const ChatThreadMessages = ({
   loadOlderError = false,
   messages: rawMessages,
   onLoadOlder,
+  onAnswerEdited,
+  answerRewriteAvailability = "unknown",
   scrollContainerRef,
   onResend,
   onSendWithoutAnonymization,
@@ -131,12 +166,13 @@ export const ChatThreadMessages = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   showThinkingIndicator = false,
   showToolCallDetails,
   showToolCalls,
   stickyUserMessages = false,
   queuedMessages,
-  onRemoveQueuedMessage,
+  queuedMessageActions,
   streamdownComponents,
   threadRef,
   workspaceId,
@@ -211,7 +247,7 @@ export const ChatThreadMessages = ({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry?.isIntersecting) {
           return;
         }
@@ -273,90 +309,96 @@ export const ChatThreadMessages = ({
       key={message.id}
       data-chat-message-id={message.id}
     >
-      <MessageContent>
-        {message.role === "assistant" ? (
-          <>
-            <AssistantMessageParts
-              activeFileName={activeFileName}
-              activeOrganizationId={activeOrganizationId}
-              assistantTextDensity={assistantTextDensity}
-              isAwaitingUser={awaitedAssistantMessageId === message.id}
-              isGenerating={generationActive}
-              isLatestAssistantMessage={
-                message.id === retryableAssistantMessageId
-              }
-              message={message}
-              onAskUserEditAndRerun={onAskUserEditAndRerun}
-              onAskUserEditingChange={onAskUserEditingChange}
-              onAskUserSubmit={onAskUserSubmit}
-              onCreateDocumentResolve={onCreateDocumentResolve}
-              onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
-              onOpenCreatedDocument={onOpenCreatedDocument}
-              shouldShowToolCalls={shouldShowToolCalls}
-              streamdownComponents={streamdownComponents}
-              workspaceId={workspaceId}
-            />
-            <div
-              className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
-              data-chat-answer-footer
-              data-chat-copy-exclude
-            >
-              <AssistantMessageActions
-                exportArtifact={findCreateDocumentArtifactForMessage(
-                  messages,
-                  index,
-                )}
-                canFork={canForkAssistantMessage({
-                  isGenerating: generationActive,
-                  messageId: message.id,
-                  messages,
-                })}
-                canRetry={canRetryAssistantMessage({
-                  isGenerating: generationActive,
-                  messageId: message.id,
-                  messages,
-                })}
-                contextMatterIds={branchSource?.contextMatterIds}
-                message={message}
-                onResend={onResend}
-                threadRef={threadRef}
-              />
-              <SourceChips
-                activeOrganizationId={activeOrganizationId}
-                messageId={message.id}
-                parts={message.parts}
-                sourceDocuments={message.metadata?.sourceDocuments}
-                workspaceId={workspaceId}
-              />
-            </div>
-          </>
-        ) : (
-          <>
-            {(() => {
-              const fileParts: ChatAttachmentPart[] = [];
-              for (const part of message.parts) {
-                if (isChatAttachmentPart(part)) {
-                  fileParts.push(part);
-                }
-              }
-
-              return <UserAttachments parts={fileParts} />;
-            })()}
-            {message.parts.map((part, partIndex) =>
-              part.type === "text" ? (
-                <UserMessageText
-                  // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
-                  key={`${message.id}-user-text-${partIndex}`}
-                  restorationPairs={getFollowingAssistantRestorations(
-                    messages,
-                    index,
-                  )}
-                  text={normalizeUserMessageTextForDisplay(part.content)}
-                />
-              ) : null,
-            )}
-          </>
+      <MessageContent
+        className={cn(
+          message.parts.some(
+            (part) =>
+              part.type === "ui-resource" &&
+              uiResourceRenderer(part.resource.mimeType) === "generated-visual",
+          ) && "w-full",
         )}
+      >
+        {(() => {
+          const policy = CHAT_MESSAGE_RENDER_POLICY[message.role];
+          switch (policy) {
+            case "activity":
+              return renderActivityMessage(message.parts);
+            case "assistant":
+              return (
+                <ChatAnswerDecisionProvider
+                  message={message}
+                  isAwaitingUser={awaitedAssistantMessageId === message.id}
+                >
+                  <AssistantMessageParts
+                    activeFileName={activeFileName}
+                    activeOrganizationId={activeOrganizationId}
+                    assistantTextDensity={assistantTextDensity}
+                    isAwaitingUser={awaitedAssistantMessageId === message.id}
+                    isGenerating={generationActive}
+                    isLatestAssistantMessage={
+                      message.id === retryableAssistantMessageId
+                    }
+                    message={message}
+                    onAskUserEditAndRerun={onAskUserEditAndRerun}
+                    onAskUserEditingChange={onAskUserEditingChange}
+                    onAskUserSubmit={onAskUserSubmit}
+                    onCreateDocumentResolve={onCreateDocumentResolve}
+                    onOpenCreateDocumentDraft={onOpenCreateDocumentDraft}
+                    onOpenCreatedDocument={onOpenCreatedDocument}
+                    onOpenPlaybook={onOpenPlaybook}
+                    shouldShowToolCalls={shouldShowToolCalls}
+                    streamdownComponents={streamdownComponents}
+                    workspaceId={workspaceId}
+                    threadRef={threadRef}
+                  />
+                  <div
+                    className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1"
+                    data-chat-answer-footer
+                    data-chat-copy-exclude
+                  >
+                    <AssistantMessageActions
+                      exportArtifact={findCreateDocumentArtifactForMessage(
+                        messages,
+                        index,
+                      )}
+                      canFork={canForkAssistantMessage({
+                        isGenerating: generationActive,
+                        messageId: message.id,
+                        messages,
+                      })}
+                      canRetry={canRetryAssistantMessage({
+                        isGenerating: generationActive,
+                        messageId: message.id,
+                        messages,
+                      })}
+                      contextMatterIds={branchSource?.contextMatterIds}
+                      message={message}
+                      onResend={onResend}
+                      threadRef={threadRef}
+                    />
+                    <SourceChips
+                      activeOrganizationId={activeOrganizationId}
+                      messageId={message.id}
+                      parts={message.parts}
+                      sourceDocuments={message.metadata?.sourceDocuments}
+                      workspaceId={workspaceId}
+                    />
+                  </div>
+                </ChatAnswerDecisionProvider>
+              );
+            case "text":
+              return (
+                <TextMessageParts
+                  message={message}
+                  messages={messages}
+                  index={index}
+                />
+              );
+            default:
+              policy satisfies never;
+              return panic("Unhandled chat message render policy");
+          }
+        })()}
       </MessageContent>
     </Message>
   );
@@ -364,66 +406,78 @@ export const ChatThreadMessages = ({
   return (
     // Sent messages persist a same-matter mention without its matter; the
     // scope gives every reference chip below the thread's matter.
-    <ReferenceRenderScope workspaceId={workspaceId}>
-      {scrollRef !== null && <ChatTranscriptCopy rootRef={scrollRef} />}
-      {branchSource !== undefined && scrollRef !== null && (
-        <ChatSelectionToolbar rootRef={scrollRef} source={branchSource} />
-      )}
-      {canLoadOlder && (
-        <LoadOlderSentinel
-          isLoadingOlder={isLoadingOlder}
-          onLoadOlder={triggerLoadOlder}
-          ref={sentinelRef}
-        />
-      )}
-      {stickyUserMessages
-        ? buildMessageTurns(messages).map((turn, turnIndex) => {
-            if (turn.type === "orphan") {
-              const orphanFirstMessageId = turn.body.at(0)?.message.id;
+    <ChatActivitySessionContext value={activitySession}>
+      <ReferenceRenderScope workspaceId={workspaceId}>
+        {scrollRef !== null && <ChatTranscriptCopy rootRef={scrollRef} />}
+        {branchSource !== undefined && scrollRef !== null && (
+          <ChatSelectionToolbar
+            key={branchSource.threadRef.threadId}
+            rootRef={scrollRef}
+            source={branchSource}
+            messages={messages}
+            isGenerating={generationActive}
+            onAnswerEdited={onAnswerEdited}
+            answerRewriteAvailability={answerRewriteAvailability}
+          />
+        )}
+        {canLoadOlder && (
+          <LoadOlderSentinel
+            isLoadingOlder={isLoadingOlder}
+            onLoadOlder={triggerLoadOlder}
+            ref={sentinelRef}
+          />
+        )}
+        {stickyUserMessages
+          ? buildMessageTurns(messages).map((turn, turnIndex) => {
+              if (turn.type === "orphan") {
+                const orphanFirstMessageId = turn.body.at(0)?.message.id;
+                return (
+                  <Fragment key={orphanFirstMessageId ?? `orphan-${turnIndex}`}>
+                    {turn.body.map((item) =>
+                      renderMessageNode(item.message, item.index),
+                    )}
+                  </Fragment>
+                );
+              }
               return (
-                <Fragment key={orphanFirstMessageId ?? `orphan-${turnIndex}`}>
+                <StickyUserTurn
+                  approvalPendingMessageId={approvalPendingMessageId}
+                  headerIndex={turn.index}
+                  headerMessage={turn.header}
+                  key={turn.header.id}
+                  messages={messages}
+                  scrollRef={scrollRef}
+                >
                   {turn.body.map((item) =>
                     renderMessageNode(item.message, item.index),
                   )}
-                </Fragment>
+                </StickyUserTurn>
               );
-            }
-            return (
-              <StickyUserTurn
-                approvalPendingMessageId={approvalPendingMessageId}
-                headerIndex={turn.index}
-                headerMessage={turn.header}
-                key={turn.header.id}
-                messages={messages}
-                scrollRef={scrollRef}
-              >
-                {turn.body.map((item) =>
-                  renderMessageNode(item.message, item.index),
-                )}
-              </StickyUserTurn>
-            );
-          })
-        : messages.map((message, index) => renderMessageNode(message, index))}
-      {error && (
-        <ChatErrorMessage
-          error={error}
-          isGenerating={generationActive}
-          onResend={onResend}
-          onSendWithoutAnonymization={onSendWithoutAnonymization}
-        />
-      )}
-      {showThinkingIndicator && generationActive && activityIndicatorState && (
-        <ThinkingIndicator state={activityIndicatorState} />
-      )}
-      {onRemoveQueuedMessage &&
-        queuedMessages !== undefined &&
-        queuedMessages.length > 0 && (
-          <QueuedUserMessages
-            messages={queuedMessages}
-            onRemove={onRemoveQueuedMessage}
+            })
+          : messages.map((message, index) => renderMessageNode(message, index))}
+        {error && (
+          <ChatErrorMessage
+            error={error}
+            isGenerating={generationActive}
+            onResend={onResend}
+            onSendWithoutAnonymization={onSendWithoutAnonymization}
           />
         )}
-    </ReferenceRenderScope>
+        {showThinkingIndicator &&
+          generationActive &&
+          activityIndicatorState && (
+            <ThinkingIndicator state={activityIndicatorState} />
+          )}
+        {queuedMessageActions &&
+          queuedMessages !== undefined &&
+          queuedMessages.length > 0 && (
+            <QueuedUserMessages
+              actions={queuedMessageActions}
+              messages={queuedMessages}
+            />
+          )}
+      </ReferenceRenderScope>
+    </ChatActivitySessionContext>
   );
 };
 
@@ -461,9 +515,9 @@ const StickyUserTurn = ({
     messages,
     headerIndex,
   );
-  const fileParts: ChatAttachmentPart[] = [];
+  const fileParts: UserAttachmentPart[] = [];
   for (const part of headerMessage.parts) {
-    if (isChatAttachmentPart(part)) {
+    if (isChatAttachmentPart(part) || isChatPastedTextPart(part)) {
       fileParts.push(part);
     }
   }
@@ -473,7 +527,10 @@ const StickyUserTurn = ({
   // case so the pinned context is never blank; turns that have text keep the
   // current behavior (attachments hidden, text clamped).
   const hasVisibleText = headerMessage.parts.some(
-    (part) => part.type === "text" && part.content.trim().length > 0,
+    (part) =>
+      part.type === "text" &&
+      !isChatPastedTextPart(part) &&
+      part.content.trim().length > 0,
   );
 
   // The compact pinned header must be a visual change only. If collapsing
@@ -523,14 +580,10 @@ const StickyUserTurn = ({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        const entry = entries.at(0);
-        if (!entry) {
-          return;
+        const stuck = sentinelIsAboveRoot(entries);
+        if (stuck !== undefined) {
+          setIsStuck(stuck);
         }
-        const rootTop = entry.rootBounds?.top ?? 0;
-        setIsStuck(
-          !entry.isIntersecting && entry.boundingClientRect.top <= rootTop,
-        );
       },
       { root, rootMargin: "0px", threshold: [0] },
     );
@@ -639,7 +692,7 @@ const StickyUserTurn = ({
                 )}
               >
                 {headerMessage.parts.map((part, partIndex) =>
-                  part.type === "text" ? (
+                  part.type === "text" && !isChatPastedTextPart(part) ? (
                     <UserMessageText
                       // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
                       key={`${headerMessage.id}-user-text-${partIndex}`}
@@ -668,7 +721,7 @@ type LoadOlderSentinelProps = {
  * Top-of-list paging affordance. The `div` is the IntersectionObserver
  * target that auto-loads when scrolled near; the button is the manual,
  * keyboard-accessible fallback. While a page is in flight it shows a
- * spinner instead so the observer (re-armed only when idle) cannot
+ * loader instead so the observer (re-armed only when idle) cannot
  * stack requests.
  */
 const LoadOlderSentinel = ({
@@ -681,8 +734,12 @@ const LoadOlderSentinel = ({
   return (
     <div className="flex justify-center py-1" ref={ref}>
       {isLoadingOlder ? (
-        <span className="text-muted-foreground flex items-center gap-2 text-xs">
-          <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <span
+          aria-busy="true"
+          className="text-muted-foreground flex items-center gap-2 text-xs"
+          role="status"
+        >
+          <Loader className="size-3.5" size="sm" variant="decorative" />
           {t("chat.loadingEarlierMessages")}
         </span>
       ) : (
@@ -799,10 +856,12 @@ const downloadDataAttachment = ({
   downloadFile(new Blob([decoded.value], { type: mimeType }), fileName);
 };
 
+type UserAttachmentPart = ChatAttachmentPart | ChatPastedTextPart;
+
 const UserAttachments = ({
   parts,
 }: {
-  parts: readonly ChatAttachmentPart[];
+  parts: readonly UserAttachmentPart[];
 }) => {
   const t = useTranslations();
 
@@ -813,6 +872,20 @@ const UserAttachments = ({
   return (
     <div className="flex flex-wrap gap-1.5">
       {parts.map((part, index) => {
+        if (isChatPastedTextPart(part)) {
+          const pastedTextKey = `pasted-text-${index}`;
+          return (
+            <ChatAttachmentChip
+              behavior={{ type: "sent" }}
+              item={{
+                type: "pasted_text",
+                id: pastedTextKey,
+                text: part.content,
+              }}
+              key={pastedTextKey}
+            />
+          );
+        }
         const url = getAttachmentUrl(part);
         const filename = getAttachmentFilename(part);
         const mimeType = getAttachmentMimeType(part);
@@ -922,6 +995,12 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
   model_unavailable: "chat.sendErrorModelUnavailable",
   provider_credentials_rejected: "chat.sendErrorProviderCredentialsRejected",
   provider_stream_incomplete: "chat.sendErrorStreamIncomplete",
+  // A chat turn keeps a `length` answer and carries no schema or deadline of
+  // its own, so these reach it only through a structured side call; each
+  // reads as its nearest chat outcome.
+  output_incomplete: "chat.sendErrorStreamIncomplete",
+  output_invalid: "chat.sendError",
+  deadline_exceeded: "chat.sendErrorProviderUnavailable",
   provider_unavailable: "chat.sendErrorProviderUnavailable",
   quota_exhausted: "chat.sendErrorQuotaExhausted",
 } as const satisfies Record<MappedChatErrorKind, TranslationKey>;
@@ -929,7 +1008,15 @@ const CHAT_ERROR_TRANSLATION_KEYS = {
 type ChatErrorTranslationKey =
   | (typeof CHAT_ERROR_TRANSLATION_KEYS)[keyof typeof CHAT_ERROR_TRANSLATION_KEYS]
   | "chat.sendErrorAnonymizationBlocked"
-  | "chat.sendError";
+  | "chat.sendError"
+  | (typeof CHAT_REQUEST_ERROR_TRANSLATION_KEYS)[ChatRequestError["kind"]];
+
+const CHAT_REQUEST_ERROR_TRANSLATION_KEYS = {
+  preparation_failed: "chat.sendErrorPreparationFailed",
+  connection_failed: "chat.sendErrorConnectionFailed",
+  timed_out: "chat.sendErrorTimedOut",
+  not_started: "chat.sendErrorNotStarted",
+} as const satisfies Record<ChatRequestError["kind"], TranslationKey>;
 
 const isMappedChatErrorKind = (
   message: string,
@@ -937,6 +1024,10 @@ const isMappedChatErrorKind = (
   message in CHAT_ERROR_TRANSLATION_KEYS;
 
 const chatErrorTranslationKey = (error: Error): ChatErrorTranslationKey => {
+  const requestError = findChatRequestError(error);
+  if (requestError !== undefined) {
+    return CHAT_REQUEST_ERROR_TRANSLATION_KEYS[requestError.kind];
+  }
   if (isThirdPartyBoundaryRefusalError(error)) {
     return "chat.sendErrorAnonymizationBlocked";
   }
@@ -964,6 +1055,14 @@ export const ChatErrorMessage = ({
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
   const refusal = chatRefusal(error);
+  const diagnostic = providerDiagnosticFromThrown(error);
+  const rejectedInput =
+    refusal !== null &&
+    (refusal.status === 400 || refusal.status === 422) &&
+    !isDisplayableAPIError(refusal);
+  const errorMessage = rejectedInput
+    ? t("errors.api.validation")
+    : (refusal?.message ?? t(chatErrorTranslationKey(error)));
 
   if (actionAdmissionOutcome(error)) {
     return (
@@ -988,9 +1087,11 @@ export const ChatErrorMessage = ({
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
-        <p className="text-sm">
-          {refusal ? refusal.message : t(chatErrorTranslationKey(error))}
-        </p>
+        {diagnostic !== undefined ? (
+          <ProviderDiagnosticMessage diagnostic={diagnostic} />
+        ) : (
+          <p className="text-sm">{errorMessage}</p>
+        )}
         <div className="flex flex-wrap gap-2">
           {canSendWithoutAnonymization && (
             <Button
@@ -1114,13 +1215,21 @@ const AssistantMessageActions = ({
   const text = useMemo(() => getMessageText(message), [message]);
   const canRetry = Boolean(onResend) && retryOffered;
   const canFork = Boolean(threadRef) && forkOffered;
+  const outcome = message.metadata?.turnOutcome;
+  const stoppedByUser =
+    outcome?.type === "cancelled" && outcome.reason === "user-stop";
 
-  if (!text && !canRetry && !canFork) {
+  if (!text && !canRetry && !canFork && !stoppedByUser) {
     return null;
   }
 
   return (
     <div className="flex shrink-0 items-center gap-1" data-chat-answer-actions>
+      {stoppedByUser && (
+        <span className="text-muted-foreground px-1.5 text-xs" role="status">
+          {t("chat.stopped")}
+        </span>
+      )}
       {text && (
         <CopyActionButton
           className="text-muted-foreground h-6 px-1.5"
@@ -1172,6 +1281,7 @@ const getRetryableAssistantMessageId = (
 };
 
 type ChatThreadMessagesProps = {
+  activitySession: ChatActivitySession;
   /**
    * The active file's display name, when one is open (the DOCX/PDF file
    * overlay). Threaded down to `ToolApprovalCard` so a `suggest_changes`
@@ -1200,6 +1310,12 @@ type ChatThreadMessagesProps = {
    *  sentinel cannot loop the request (the manual button still retries). */
   loadOlderError?: boolean | undefined;
   messages: ChatUIMessage[];
+  onAnswerEdited?: ((messageId: string) => Promise<void>) | undefined;
+  answerRewriteAvailability?:
+    | "available"
+    | "anonymized"
+    | "unknown"
+    | undefined;
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
    *  falls back to the StickToBottom context when omitted. */
@@ -1234,6 +1350,8 @@ type ChatThreadMessagesProps = {
     input: ChatUITools["create-document"]["input"],
   ) => Promise<void> | void;
   onOpenCreateDocumentDraft?: ((toolCallId: string) => void) | undefined;
+  /** Opens the thread's playbook pane on the playbook a save wrote. */
+  onOpenPlaybook?: ((playbookId: string) => void) | undefined;
   onOpenCreatedDocument: (
     output: Extract<
       ChatUITools["create-document"]["output"],
@@ -1256,7 +1374,9 @@ type ChatThreadMessagesProps = {
    * `useChatSession` dispatches them once the turn finishes.
    */
   queuedMessages?: readonly QueuedChatMessage[] | undefined;
-  onRemoveQueuedMessage?: ((id: string) => void) | undefined;
+  /** What the user can do with a queued message: cancel it, or send it now
+   *  (stops the running turn and sends it next). */
+  queuedMessageActions?: QueuedMessageActions | undefined;
   streamdownComponents: {
     a: (props: ComponentProps<"a">) => React.ReactNode;
     "stll-anon"?: (
@@ -1273,9 +1393,14 @@ type ChatResendOptions = {
   messageId?: string | undefined;
 };
 
+export type QueuedMessageActions = {
+  remove: (id: string) => void;
+  sendNow: (id: string) => void;
+};
+
 type QueuedUserMessagesProps = {
+  actions: QueuedMessageActions;
   messages: readonly QueuedChatMessage[];
-  onRemove: (id: string) => void;
 };
 
 /**
@@ -1283,10 +1408,7 @@ type QueuedUserMessagesProps = {
  * turn. Rendered below the live transcript as dimmed bubbles so the
  * user can see what is queued and cancel any of it before it sends.
  */
-const QueuedUserMessages = ({
-  messages,
-  onRemove,
-}: QueuedUserMessagesProps) => {
+const QueuedUserMessages = ({ actions, messages }: QueuedUserMessagesProps) => {
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-2">
@@ -1318,9 +1440,19 @@ const QueuedUserMessages = ({
                 )}
               </MessageContent>
               <Button
+                aria-label={t("chat.sendQueuedMessageNow")}
+                className="mt-0.5 shrink-0"
+                onClick={() => actions.sendNow(queued.id)}
+                size="icon-xs"
+                title={t("chat.sendQueuedMessageNow")}
+                variant="ghost"
+              >
+                <ArrowUpIcon className="size-3.5" />
+              </Button>
+              <Button
                 aria-label={t("chat.cancelQueuedMessage")}
                 className="mt-0.5 shrink-0"
-                onClick={() => onRemove(queued.id)}
+                onClick={() => actions.remove(queued.id)}
                 size="icon-xs"
                 variant="ghost"
               >
@@ -1343,7 +1475,9 @@ type AssistantMessagePartsProps = Pick<
   | "onCreateDocumentResolve"
   | "onOpenCreateDocumentDraft"
   | "onOpenCreatedDocument"
+  | "onOpenPlaybook"
   | "streamdownComponents"
+  | "threadRef"
   | "workspaceId"
 > & {
   activeOrganizationId: string;
@@ -1363,6 +1497,116 @@ type AssistantPartRenderEntry =
       type: "standard";
       part: Exclude<ChatUIPart, RichChatPart>;
     };
+
+type TextMessagePartsProps = {
+  message: ChatUIMessage;
+  messages: ChatUIMessage[];
+  index: number;
+};
+
+const TextMessageParts = ({
+  message,
+  messages,
+  index,
+}: TextMessagePartsProps) => (
+  <>
+    {(() => {
+      const fileParts: UserAttachmentPart[] = [];
+      for (const part of message.parts) {
+        if (isChatAttachmentPart(part) || isChatPastedTextPart(part)) {
+          fileParts.push(part);
+        }
+      }
+
+      return <UserAttachments parts={fileParts} />;
+    })()}
+    {message.parts.map((part, partIndex) =>
+      part.type === "text" && !isChatPastedTextPart(part) ? (
+        <UserMessageText
+          // oxlint-disable-next-line react/no-array-index-key -- message.parts is append-only during streaming (never reordered/removed); index only disambiguates parts within this single message.
+          key={`${message.id}-user-text-${partIndex}`}
+          restorationPairs={getFollowingAssistantRestorations(messages, index)}
+          text={normalizeUserMessageTextForDisplay(part.content)}
+        />
+      ) : null,
+    )}
+  </>
+);
+
+const ChatActivitySessionContext = createContext<ChatActivitySession | null>(
+  null,
+);
+
+const UnknownChatActivity = ({ activityType }: { activityType: string }) => {
+  const analytics = useAnalytics();
+  const activitySession =
+    use(ChatActivitySessionContext) ??
+    panic("Chat activities require a session owner");
+  useExternalSyncEffect(() => {
+    const reportedTypes = activitySession.reportedUnknownActivityTypes;
+    if (reportedTypes.has(activityType)) {
+      return;
+    }
+    reportedTypes.add(activityType);
+    analytics.captureError(
+      new ClientTelemetryError({
+        area: "chat-unknown-activity",
+        message: "A chat activity has no registered renderer",
+      }),
+    );
+  }, [activitySession, activityType, analytics]);
+  return null;
+};
+
+type ChatActivityPartProps = {
+  part: Extract<ChatUIPart, { type: "activity" }>;
+};
+
+const ChatActivityPart = ({ part }: ChatActivityPartProps) => {
+  const t = useTranslations();
+  let labelKey: TranslationKey;
+  switch (part.activityType) {
+    case "progress":
+      labelKey = "chat.thinking";
+      break;
+    case "review":
+      labelKey = "chat.activity.review";
+      break;
+    default:
+      return (
+        <UnknownChatActivity
+          key={part.activityType}
+          activityType={part.activityType}
+        />
+      );
+  }
+
+  return (
+    <figure className="border-border bg-muted/30 rounded-md border p-3">
+      <figcaption className="text-muted-foreground text-sm">
+        {t(labelKey)}
+      </figcaption>
+    </figure>
+  );
+};
+
+const renderActivityMessage = (parts: readonly ChatUIPart[]) => {
+  const part = parts.at(0);
+  if (parts.length !== 1 || part?.type !== "activity") {
+    return null;
+  }
+  return <ChatActivityPart part={part} />;
+};
+
+type RequestSecretToolCallPart = Extract<
+  RegisteredChatUIToolCallPart,
+  { name: "request_secret" }
+>;
+
+const isRequestSecretToolCallPart = (
+  part: ChatPart,
+): part is RequestSecretToolCallPart =>
+  part.type === "tool-call" && part.name === "request_secret";
 
 const richPartRenderIdentity = (part: RichChatPart): string => {
   if (part.type === "ui-resource") {
@@ -1411,7 +1655,8 @@ const toAssistantPartRenderEntries = (
 // transport companions, so they stay inside a process run without becoming
 // visible steps or splitting the run. Interactive tool cards (ask-user,
 // create-document, approvals, subagent runs) read as answer content, so
-// they stay outside the folded process disclosure.
+// they stay outside the folded process disclosure; an approval-gated call
+// is one of them from its first input byte, before the request arrives.
 const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
   if (entry.type === "rich") {
     return false;
@@ -1428,7 +1673,8 @@ const isProcessRenderEntry = (entry: AssistantPartRenderEntry): boolean => {
     part.name !== "ask-user" &&
     part.name !== "create-document" &&
     part.name !== "spawn_subagents" &&
-    !isApprovalPart(part)
+    !isApprovalPart(part) &&
+    !isPendingApprovalPart(part)
   );
 };
 
@@ -1519,7 +1765,27 @@ const toAssistantPartRenderGroups = (
  * and the resulting array identity churns, forcing Streamdown to
  * remount on every streaming text delta.
  */
+type OpenPlaybookActionArgs = {
+  part: Parameters<typeof savedPlaybookId>[0];
+  onOpenPlaybook: ((playbookId: string) => void) | undefined;
+  label: string;
+};
+
+/** The "Open playbook" action of a `save_playbook` card, when a pane can take it. */
+const openPlaybookAction = ({
+  part,
+  onOpenPlaybook,
+  label,
+}: OpenPlaybookActionArgs) => {
+  const playbookId = savedPlaybookId(part);
+  if (playbookId === null || onOpenPlaybook === undefined) {
+    return undefined;
+  }
+  return { label, onClick: () => onOpenPlaybook(playbookId) };
+};
+
 const AssistantMessageParts = ({
+  threadRef,
   activeFileName,
   activeOrganizationId,
   assistantTextDensity,
@@ -1533,10 +1799,12 @@ const AssistantMessageParts = ({
   onCreateDocumentResolve,
   onOpenCreateDocumentDraft,
   onOpenCreatedDocument,
+  onOpenPlaybook,
   shouldShowToolCalls,
   streamdownComponents,
   workspaceId,
 }: AssistantMessagePartsProps) => {
+  const label = useTranslations()("knowledge.playbooks.openInPane");
   const restorationPairs = collectAnonRestorations(message);
   const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
   const reasoningTokenCount = getReasoningTokenCount(message);
@@ -1544,30 +1812,36 @@ const AssistantMessageParts = ({
   const renderEntries = toAssistantPartRenderEntries(message.parts);
   const isTurnActive = isGenerating && isLatestAssistantMessage;
   const renderGroups = toAssistantPartRenderGroups(renderEntries);
+  // Start open while this message is actively streaming its reasoning (no
+  // answer text yet), but always render the same disclosure so the user can
+  // collapse it immediately. Once the stream settles it folds unless the user
+  // already did so.
+  const thinkingDisplayState =
+    !hasAnswerContent && isTurnActive ? "expanded" : "folded";
   const renderEntry = (entry: AssistantPartRenderEntry, index: number) => {
     if (entry.type === "rich") {
       return (
         <ChatRichMessagePart
           key={`${message.id}-${entry.key}`}
           part={entry.part}
+          organizationId={activeOrganizationId}
+          threadRef={threadRef}
         />
       );
     }
 
     const { part } = entry;
+    if (part.type === "activity") {
+      return (
+        <ChatActivityPart key={`${message.id}-activity-${index}`} part={part} />
+      );
+    }
+
     if (part.type === "thinking") {
       return (
         <AssistantThinkingPart
           components={streamdownComponents}
-          displayState={
-            // Start open while this message is actively streaming its
-            // reasoning (no answer text yet), but always render the same
-            // disclosure so the user can collapse it immediately. Once
-            // the stream settles it folds unless the user already did so.
-            !hasAnswerContent && isGenerating && isLatestAssistantMessage
-              ? "expanded"
-              : "folded"
-          }
+          displayState={thinkingDisplayState}
           key={`${message.id}-thinking-${index}`}
           reasoningTokenCount={
             index === firstThinkingPartIndex ? reasoningTokenCount : null
@@ -1591,6 +1865,8 @@ const AssistantMessageParts = ({
           components={streamdownComponents}
           key={`${message.id}-text-${index}`}
           restorationPairs={restorationPairs}
+          partIndex={index}
+          sourceOffsets={!isTurnActive}
           text={part.content}
         />
       );
@@ -1635,6 +1911,16 @@ const AssistantMessageParts = ({
       );
     }
 
+    if (isRequestSecretToolCallPart(part)) {
+      return (
+        <RequestSecretCard
+          isAwaitingUser={isAwaitingUser}
+          key={part.id}
+          part={part}
+        />
+      );
+    }
+
     if (part.type === "tool-call" && part.name === "create-document") {
       return (
         <NeedsMatterCard
@@ -1671,13 +1957,22 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "tool-call" && part.name === "spawn_subagents") {
-      return <SpawnSubagentsCard key={part.id} part={part} />;
+      return (
+        <SpawnSubagentsCard
+          key={part.id}
+          part={part}
+          streamdownComponents={streamdownComponents}
+        />
+      );
     }
 
     if (part.type === "tool-call") {
+      const action = openPlaybookAction({ part, onOpenPlaybook, label });
+
       if (isApprovalPart(part)) {
         return (
           <ToolApprovalCard
+            action={action}
             activeFileName={activeFileName}
             isAwaitingUser={isAwaitingUser}
             isTurnActive={isTurnActive}
@@ -1687,8 +1982,13 @@ const AssistantMessageParts = ({
         );
       }
 
+      if (isPendingApprovalPart(part)) {
+        return <PendingToolApprovalCard key={part.id} part={part} />;
+      }
+
       return (
         <ToolCallCard
+          action={action}
           activeOrganizationId={activeOrganizationId}
           key={part.id}
           part={part}
@@ -1962,11 +2262,15 @@ const AssistantTextPart = ({
   className,
   components,
   restorationPairs,
+  partIndex,
+  sourceOffsets = false,
   text,
 }: {
   className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
   restorationPairs: readonly ChatAnonRestoration[];
+  partIndex?: number;
+  sourceOffsets?: boolean;
   text: string;
 }) => {
   // Stable identity so MessageResponse memo can short-circuit when
@@ -1985,6 +2289,8 @@ const AssistantTextPart = ({
     return (
       <MessageResponse
         components={components}
+        data-text-part-index={partIndex}
+        sourceOffsets={sourceOffsets}
         fallbackChildren={assistantMessageFallbackText(text)}
         {...classNamePatch}
       >
@@ -1995,6 +2301,8 @@ const AssistantTextPart = ({
   return (
     <MessageResponse
       components={components}
+      data-text-part-index={partIndex}
+      sourceOffsets={sourceOffsets}
       fallbackChildren={assistantMessageFallbackText(text)}
       rehypePlugins={rehypePlugins}
       {...classNamePatch}

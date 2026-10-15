@@ -27,6 +27,11 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
+import {
+  requireChatToolModelAdmission,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 import { recordTemplateExecution } from "@/api/lib/templates/record-use";
 import { suggestTemplateFields } from "@/api/lib/templates/suggest-template-fields";
@@ -40,6 +45,7 @@ import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/lib/templates/template-fill-service";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 const LIST_TEMPLATES_TOOL_NAME = "list_templates" as const;
 const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;
@@ -95,6 +101,8 @@ export const FILL_TEMPLATE_DESCRIPTION =
   "with real values; ask the user to review those.";
 
 type CreateTemplateToolsArgs = {
+  /** The turn's admission; the nested AI-field steps are steps of the turn. */
+  modelAdmission: ModelDispatchAdmission | undefined;
   scopedDb: ScopedDb;
   /** Org-scoped DB used to meter the nested AI-field generation steps. */
   safeDb: SafeDb;
@@ -124,6 +132,7 @@ const defaultTemplateToolDependencies = {
 } satisfies TemplateToolDependencies;
 
 type TemplateAiAnalyticsArgs = {
+  modelTier: ManagedModelTier;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
@@ -135,6 +144,7 @@ type TemplateAiAnalyticsArgs = {
 // workspaceId is null: a chat-driven template action is org-scoped, not bound to
 // a matter.
 const buildTemplateAiAnalytics = ({
+  modelTier,
   safeDb,
   organizationId,
   userId,
@@ -154,6 +164,7 @@ const buildTemplateAiAnalytics = ({
     feature,
     modelRole: "fast",
     orgAIConfig: orgAIConfig ?? null,
+    modelTier,
     properties: { organization_id: organizationId },
     traceId: Bun.randomUUIDv7(),
   });
@@ -166,17 +177,19 @@ const buildTemplateAiAnalytics = ({
  * grant; the authoring-only `suggest_template_fields` tool lives in
  * `createTemplateAuthoringTools`.
  */
-export const createTemplateTools = ({
-  scopedDb,
-  safeDb,
-  organizationId,
-  userId,
-  orgAIConfig,
-  managedAIResidency,
-  recordAuditEvent,
-  thirdPartyBoundary,
-  dependencies = defaultTemplateToolDependencies,
-}: CreateTemplateToolsArgs) => {
+export const createTemplateTools = (options: CreateTemplateToolsArgs) => {
+  const {
+    modelAdmission,
+    scopedDb,
+    safeDb,
+    organizationId,
+    userId,
+    orgAIConfig,
+    managedAIResidency,
+    recordAuditEvent,
+    thirdPartyBoundary,
+    dependencies = defaultTemplateToolDependencies,
+  } = snapshotOperationInput(options);
   // Model-backed collaborators for the manifest's AI fields, shared with the
   // web fill routes so AI placeholders behave identically: a generator for
   // AI-fillable fields (FieldMeta.aiPrompt), a decider for AI-decided boolean
@@ -186,11 +199,14 @@ export const createTemplateTools = ({
   // tenantWorkspaceIds is empty: a chat-driven template action is org-scoped,
   // not bound to a matter (see buildTemplateAiAnalytics below).
   const aiCollaborators = (unrestoredFields: Set<string>) => {
+    const admission = requireChatToolModelAdmission(modelAdmission);
     const shared = {
+      admission,
       orgAIConfig: orgAIConfig ?? null,
       managedAIResidency,
       organizationId,
       aiAnalytics: buildTemplateAiAnalytics({
+        modelTier: admission.modelTier,
         safeDb,
         organizationId,
         userId,
@@ -287,8 +303,21 @@ export const createTemplateTools = ({
         thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         requiredFields: "enforce",
         useRecording: "caller",
-        aiCollaborators: () => aiCollaborators(unrestoredFields),
+        // The turn's admission already holds this tool call's model work.
+        aiFill: async (fill) => ({
+          type: "admitted",
+          value: await fill(aiCollaborators(unrestoredFields)),
+        }),
       });
+      if ("usageRejection" in result) {
+        return raiseChatToolError(
+          new ChatToolError({
+            kind: "limit",
+            message: "Template filling was refused by usage admission.",
+            cause: result.usageRejection,
+          }),
+        );
+      }
       if ("requiredFieldsRejection" in result) {
         // A required, non-AI-fillable field was omitted or empty: reject
         // instead of inventing a value or leaving a raw {{marker}} in the
@@ -350,6 +379,8 @@ export const createTemplateTools = ({
 };
 
 type CreateTemplateAuthoringToolsArgs = {
+  /** The turn's admission; the suggestion request is a step of the turn. */
+  modelAdmission: ModelDispatchAdmission | undefined;
   /** Org-scoped DB used to meter the AI suggestion step. */
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -407,6 +438,7 @@ const restoreSuggestion = (
 };
 
 export const createTemplateAuthoringTools = ({
+  modelAdmission,
   safeDb,
   organizationId,
   userId,
@@ -414,111 +446,111 @@ export const createTemplateAuthoringTools = ({
   managedAIResidency,
   thirdPartyBoundary,
   dependencies = defaultTemplateAuthoringToolDependencies,
-}: CreateTemplateAuthoringToolsArgs) => {
-  const aiAnalytics = buildTemplateAiAnalytics({
-    safeDb,
-    organizationId,
-    userId,
-    orgAIConfig,
-    feature: "templates.suggest_fields",
-  });
-
-  return {
-    [SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]: toolDefinition({
-      name: SUGGEST_TEMPLATE_FIELDS_TOOL_NAME,
-      description:
-        "Suggest which literal values in a template document being authored " +
-        "should become {{field}} placeholders (party names, addresses, " +
-        "registration numbers, amounts, dates, signatories). Pass the " +
-        "document text (or the part the user asked about). Returns suggested " +
-        "fields: the exact literalText, a dotted fieldPath, an inputType and " +
-        "an optional AI-draft prompt. After reviewing the suggestions, apply " +
-        "the ones that make sense with suggest_changes, replacing " +
-        "each literalText occurrence with its {{fieldPath}} marker verbatim. " +
-        "In bilingual or multi-column documents apply the marker in EVERY " +
-        "language column (one edit per parallel occurrence), so the same " +
-        "value is never a field in one language and hardcoded in the other.",
-      inputSchema: toTanStackToolSchema(
-        v.strictObject({
-          text: v.pipe(
+}: CreateTemplateAuthoringToolsArgs) => ({
+  [SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]: toolDefinition({
+    name: SUGGEST_TEMPLATE_FIELDS_TOOL_NAME,
+    description:
+      "Suggest which literal values in a template document being authored " +
+      "should become {{field}} placeholders (party names, addresses, " +
+      "registration numbers, amounts, dates, signatories). Pass the " +
+      "document text (or the part the user asked about). Returns suggested " +
+      "fields: the exact literalText, a dotted fieldPath, an inputType and " +
+      "an optional AI-draft prompt. After reviewing the suggestions, apply " +
+      "the ones that make sense with suggest_changes, replacing " +
+      "each literalText occurrence with its {{fieldPath}} marker verbatim. " +
+      "In bilingual or multi-column documents apply the marker in EVERY " +
+      "language column (one edit per parallel occurrence), so the same " +
+      "value is never a field in one language and hardcoded in the other.",
+    inputSchema: toTanStackToolSchema(
+      v.strictObject({
+        text: v.pipe(
+          v.string(),
+          v.maxLength(200_000),
+          v.description("The document text to analyze, copied verbatim."),
+        ),
+        instructions: v.nullable(
+          v.pipe(
             v.string(),
-            v.maxLength(200_000),
-            v.description("The document text to analyze, copied verbatim."),
-          ),
-          instructions: v.nullable(
-            v.pipe(
-              v.string(),
-              v.description(
-                "Extra user guidance, e.g. which kinds of values to focus on.",
-              ),
+            v.description(
+              "Extra user guidance, e.g. which kinds of values to focus on.",
             ),
           ),
-        }),
-      ),
-    }).server(async ({ text, instructions }) => {
-      // The tool receives the turn's real values. Its nested request is
-      // prepared by the turn's boundary like the turn itself, and the
-      // suggestions come back with those values restored, so the boundary
-      // prepares them once more on their way back to the model.
-      const documentText = await prepareTextForThirdParty({
-        boundary: thirdPartyBoundary,
-        text,
-      });
-      const preparedInstructions = await prepareTextForThirdParty({
-        boundary: thirdPartyBoundary,
-        text: instructions ?? "",
-      });
-      // The tool runtime reports a failed call by the error its execute
-      // function throws.
-      if (Result.isError(documentText)) {
-        throw documentText.error;
-      }
-      if (Result.isError(preparedInstructions)) {
-        throw preparedInstructions.error;
-      }
+        ),
+      }),
+    ),
+  }).server(async ({ text, instructions }) => {
+    // The tool receives the turn's real values. Its nested request is
+    // prepared by the turn's boundary like the turn itself, and the
+    // suggestions come back with those values restored, so the boundary
+    // prepares them once more on their way back to the model.
+    const documentText = await prepareTextForThirdParty({
+      boundary: thirdPartyBoundary,
+      text,
+    });
+    const preparedInstructions = await prepareTextForThirdParty({
+      boundary: thirdPartyBoundary,
+      text: instructions ?? "",
+    });
+    // The tool runtime reports a failed call by the error its execute
+    // function throws.
+    if (Result.isError(documentText)) {
+      throw documentText.error;
+    }
+    if (Result.isError(preparedInstructions)) {
+      throw preparedInstructions.error;
+    }
 
-      // suggestTemplateFields rejects on a call failure (BYOK
-      // misconfiguration, provider outage, timeout); capture the original
-      // for telemetry, then throw a sanitized, stable message instead of
-      // rethrowing it — the raw provider error can carry internals (key
-      // names, quota details) that must not reach the model verbatim.
-      try {
-        const suggestions = await dependencies.suggestTemplateFields({
-          documentText: documentText.value,
-          instructions:
-            instructions === null ? undefined : preparedInstructions.value,
-          orgAIConfig: orgAIConfig ?? null,
-          managedAIResidency,
-          organizationId,
-          aiAnalytics,
-        });
-        const restored = suggestions.map((suggestion) =>
-          restoreSuggestion(thirdPartyBoundary, suggestion),
-        );
-        // A suggestion whose literal text keeps a placeholder the boundary
-        // cannot restore matches nothing in the document: it is withheld and
-        // named instead.
-        const unrestoredFields = restored
-          .filter(({ complete }) => !complete)
-          .map(({ suggestion }) => suggestion.fieldPath);
-        return {
-          suggestions: restored
-            .filter(({ complete }) => complete)
-            .map(({ suggestion }) => suggestion),
-          ...(unrestoredFields.length === 0 ? {} : { unrestoredFields }),
-        };
-      } catch (error) {
-        aiAnalytics.captureError(error);
-        throw new ChatToolError({
-          kind: "transient",
-          message:
-            "Template field suggestion failed; the workspace's AI provider returned an error.",
-          cause: error,
-        });
-      }
-    }),
-  };
-};
+    // suggestTemplateFields rejects on a call failure (BYOK
+    // misconfiguration, provider outage, timeout); capture the original
+    // for telemetry, then throw a sanitized, stable message instead of
+    // rethrowing it — the raw provider error can carry internals (key
+    // names, quota details) that must not reach the model verbatim.
+    const admission = requireChatToolModelAdmission(modelAdmission);
+    const aiAnalytics = buildTemplateAiAnalytics({
+      modelTier: admission.modelTier,
+      safeDb,
+      organizationId,
+      userId,
+      orgAIConfig,
+      feature: "templates.suggest_fields",
+    });
+    try {
+      const suggestions = await dependencies.suggestTemplateFields({
+        admission,
+        documentText: documentText.value,
+        instructions:
+          instructions === null ? undefined : preparedInstructions.value,
+        orgAIConfig: orgAIConfig ?? null,
+        managedAIResidency,
+        organizationId,
+        aiAnalytics,
+      });
+      const restored = suggestions.map((suggestion) =>
+        restoreSuggestion(thirdPartyBoundary, suggestion),
+      );
+      // A suggestion whose literal text keeps a placeholder the boundary
+      // cannot restore matches nothing in the document: it is withheld and
+      // named instead.
+      const unrestoredFields = restored
+        .filter(({ complete }) => !complete)
+        .map(({ suggestion }) => suggestion.fieldPath);
+      return {
+        suggestions: restored
+          .filter(({ complete }) => complete)
+          .map(({ suggestion }) => suggestion),
+        ...(unrestoredFields.length === 0 ? {} : { unrestoredFields }),
+      };
+    } catch (error) {
+      aiAnalytics.captureError(error);
+      throw new ChatToolError({
+        kind: "transient",
+        message:
+          "Template field suggestion failed; the workspace's AI provider returned an error.",
+        cause: error,
+      });
+    }
+  }),
+});
 
 export {
   DESCRIBE_TEMPLATE_TOOL_NAME,

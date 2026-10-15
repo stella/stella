@@ -1,15 +1,12 @@
+import { DECISION_TITLE_SEPARATOR } from "@stll/decision-reader/decision-identity";
+
+export { DECISION_TITLE_SEPARATOR };
+
 type DecisionTitleSource = {
   caseNumber: string;
   /** Court display name as the decision record carries it, not the route slug. */
   court?: string | null | undefined;
 };
-
-/**
- * Separator between a decision's name and the facts that qualify it. The
- * breadcrumb draws each qualifier as its own span (muted, and dropped on a
- * narrow screen), so it composes the parts itself and shares only this.
- */
-export const DECISION_TITLE_SEPARATOR = "·";
 
 /**
  * How a decision is named wherever it is shown among other things: the case

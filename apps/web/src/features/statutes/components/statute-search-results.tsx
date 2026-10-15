@@ -3,10 +3,12 @@ import type { ReactNode } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Loader } from "@stll/ui/loader";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 
+import { DefaultPendingComponent } from "@/components/route-components";
 import type { StatuteSearchHit } from "@/features/statutes/queries/statutes";
+import { statuteDocumentIdentity } from "@/lib/legal/statute-act-number";
 
 const decodeSearchText = (text: string): string =>
   text.replace(/&(amp|lt|gt|quot|#x27);/gu, (entity) => {
@@ -89,7 +91,8 @@ export const StatuteSearchResults = ({
   if (isLoading) {
     return (
       <div role="status">
-        <Loader label={t("common.loading")} />
+        <span className="sr-only">{t("common.loading")}</span>
+        <DefaultPendingComponent announce={false} />
       </div>
     );
   }
@@ -105,7 +108,13 @@ export const StatuteSearchResults = ({
       <ul className="flex flex-col gap-5">
         {hits.map((hit) => (
           <li className="flex flex-col gap-2" key={hit.documentId}>
-            <h2 className="text-sm font-medium">{titleLink(hit)}</h2>
+            <h2 className="flex min-w-0 items-center gap-2 text-sm font-medium">
+              <DocumentIdentityBadge
+                identity={statuteDocumentIdentity(hit.eli)}
+                title={hit.title}
+              />
+              {titleLink(hit)}
+            </h2>
             {hit.headline !== null && (
               <StatuteSearchSnippet headline={hit.headline} />
             )}

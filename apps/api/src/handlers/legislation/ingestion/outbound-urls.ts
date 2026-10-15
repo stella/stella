@@ -37,7 +37,7 @@ export const LEGISLATION_URL_FIELDS = [
 export type LegislationUrlField = (typeof LEGISLATION_URL_FIELDS)[number];
 
 /** Why a URL was refused, to the extent this boundary observes it itself. */
-export const URL_REFUSAL_REASON = {
+const URL_REFUSAL_REASON = {
   /** Not a URL. */
   UNPARSEABLE: "unparseable",
   /** Carries userinfo. */
@@ -56,7 +56,7 @@ export type UrlRefusalReason =
  * this module: a publisher can hand back userinfo or a signed query, and a
  * refusal must not turn a credential into a log entry.
  */
-export type LegislationUrlRefusal = {
+type LegislationUrlRefusal = {
   field: LegislationUrlField;
   /** Hostname, `none` for a scheme without one, `unparseable` for a non-URL. */
   host: string;

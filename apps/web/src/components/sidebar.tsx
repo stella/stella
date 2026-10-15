@@ -8,24 +8,19 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarInput,
-  SidebarInset,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   sidebarIdentityTriggerClassName,
   SidebarMenuItem,
-  SidebarMenuSkeleton,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarProvider as SidebarProviderShell,
-  SidebarRail as SidebarRailShell,
   SidebarSeparator,
   SidebarTrigger as SidebarTriggerShell,
   useSidebar,
@@ -112,35 +107,24 @@ const SidebarTrigger = (
   );
 };
 
-const SidebarRail = (props: React.ComponentProps<typeof SidebarRailShell>) => {
-  const t = useTranslations();
-
-  return <SidebarRailShell label={t("navigation.toggleSidebar")} {...props} />;
-};
-
 export {
   Sidebar,
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
-  SidebarInput,
-  SidebarInset,
   SidebarMenu,
   SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   sidebarIdentityTriggerClassName,
   SidebarMenuItem,
-  SidebarMenuSkeleton,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
   SidebarProvider,
-  SidebarRail,
   SidebarSeparator,
   SidebarToggleHotkey,
   SidebarTrigger,

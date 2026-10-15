@@ -7,8 +7,9 @@ import { PERSONAL_API_KEY_POLICIES } from "@/api/lib/machine-api-key-config";
 import { updatePersonalApiKeyPolicy } from "@/api/lib/machine-api-keys/personal-lifecycle";
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: t.Object({ policy: t.UnionEnum([...PERSONAL_API_KEY_POLICIES]) }),
 } satisfies HandlerConfig;

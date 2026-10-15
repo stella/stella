@@ -169,8 +169,8 @@ export const KanbanColumn = ({
       return undefined;
     }
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
+      (entries) => {
+        if (entries.at(-1)?.isIntersecting) {
           onLoadMore();
         }
       },
@@ -588,7 +588,6 @@ export const KanbanColumnTitle = ({
     return (
       <InlineEdit
         className="flex-1"
-        inputClassName="flex-1 font-medium"
         onCancel={onCancel}
         onChange={onChange}
         onCommit={onCommit}
@@ -598,12 +597,16 @@ export const KanbanColumnTitle = ({
   }
 
   if (!onStartEditing) {
-    return <span className="truncate text-sm font-medium">{title}</span>;
+    return (
+      <span className="overflow-hidden text-sm font-medium text-ellipsis whitespace-pre">
+        {title}
+      </span>
+    );
   }
 
   return (
     <button
-      className="truncate text-start text-sm font-medium"
+      className="overflow-hidden text-start text-sm font-medium text-ellipsis whitespace-pre"
       onClick={onStartEditing}
       type="button"
     >

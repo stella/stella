@@ -93,7 +93,7 @@ or change deployed feature flags.
 1. Ensure CI is green on `main`.
 2. Generate and review any required migration files.
 3. Run `bun run marketing:stale`; if anything is stale, `bun run
-marketing:reshoot` re-records only the stale captures (see
+   marketing:reshoot` re-records only the stale captures (see
    `apps/landing/public/media/products/README.md`, "Reshooting on release").
 4. In one commit, bump `VERSION` and add the matching changelog note. A
    release other than a maintenance release (`bun run release:maintenance`)
@@ -135,26 +135,53 @@ marketing:reshoot` re-records only the stale captures (see
 6. Deploy that exact commit to staging:
 
    ```bash
-   gh workflow run deploy-staging.yml --ref main -f sha=<release-sha>
+   gh workflow run deploy-staging.yml --ref main -f sha=<release-sha> -F release_candidate=true
+   gh workflow run main-heavy.yml --ref main -f sha=<release-sha> -F release_candidate=true
    ```
 
-   The run refuses a SHA that `main` does not contain. When its smokes pass,
+   Both gates first refuse a candidate whose VERSION is already tagged or differs
+   from the pending VERSION on main. Ordinary pinned dispatches leave
+   `release_candidate` false and skip this check. The release-candidate heavy run dispatches
+   `main-pr-depth.yml` for the same SHA. The staging run also refuses a
+   SHA that `main` does not contain. When its smokes pass,
    the commit carries `staging/verified` = `success`. `main-heavy.yml`
-   records `main/heavy` on the same commit. If the run is cancelled because
+   records `main/heavy`, while `main-pr-depth.yml` records `main/pr-depth`, on the same commit. If the run is cancelled because
    a newer staging dispatch replaced it while it waited, dispatch it again
    with the same `sha`; tagging refuses until `staging/verified` is green.
 
-7. Tag the commit once both statuses are green:
+   A commit that landed through the merge queue usually needs neither heavy
+   status. The queue fast-forwards `main` to the merge-group commit, so the
+   `ci-result` check of that merge group's CI run sits on the release commit
+   itself. That check is the merge-group receipt: a `ci-result` check run on
+   the release commit, created by GitHub Actions, concluded `success`, in a
+   `merge_group` run of `.github/workflows/ci.yml` from `main`'s queue that
+   also completed successfully. It stands in for both `main/heavy` and
+   `main/pr-depth`. If any merge-group `ci-result` on the commit is not a
+   success, or a `ci-result` check run cannot be tied to its workflow run, the
+   receipt is refused and the two statuses are required. `staging/verified` is
+   required either way.
+
+   A merge-group run validates only its own group's diff, so the receipt also
+   needs every commit since the previous release tag to have reached `main`
+   through a validated merge group. The gate runs
+   `bun scripts/check-release-queue-history.ts --require` over that range; an
+   admin merge, a direct push, or history that cannot be read keeps
+   `main/heavy` and `main/pr-depth` required, and the log names the commits
+   the receipt does not cover.
+
+7. Tag the commit once `staging/verified` is green and it carries either the
+   merge-group receipt or green `main/heavy` and `main/pr-depth`:
 
    ```bash
    gh workflow run release-tag.yml --ref main -f sha=<release-sha>
    ```
 
-   `release-tag.yml` tags exactly that commit, and refuses unless both
-   `staging/verified` and `main/heavy` are `success` on it; the refusal names
-   each status that is missing or not green. It checks both again right
+   `release-tag.yml` tags exactly that commit, and refuses unless
+   `staging/verified` is `success` on it and it carries the merge-group
+   receipt or `success` on both `main/heavy` and `main/pr-depth`; the refusal
+   names each gate that is missing or not green. It checks them again right
    before pushing the tag. Leaving `sha` blank selects the
-   newest commit on `main` that carries both. The workflow also runs the CLI
+   newest commit on `main` that passes these gates. The workflow also runs the CLI
    coupling check; if it fails (a CLI changeset merged after the release
    commit), apply it with `bun run changeset:version` plus
    `bun run changeset --empty` and release from the commit that merges it.

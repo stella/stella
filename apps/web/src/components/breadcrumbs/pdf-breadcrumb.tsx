@@ -12,16 +12,19 @@ import {
 import {
   canRenameDocumentCrumb,
   resolveCrumbRenameShortcut,
-  resolveDocumentRenameSubmission,
-  splitFileName,
 } from "@/components/breadcrumbs/pdf-breadcrumb.logic";
 import { BreadcrumbQueryContent } from "@/components/breadcrumbs/query-content";
+import { fileExtensionSuffix } from "@/components/file-extension-suffix";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { detached } from "@/lib/detached";
 import { fileMetadataOptions } from "@/lib/files/file-metadata-query";
+import {
+  resolveFileRenameSubmission,
+  splitFileName,
+} from "@/lib/files/file-name-edit";
 import { useQueryView } from "@/lib/use-query-view";
 import { useRenameEntity } from "@/lib/workspaces/mutations/entities";
 
@@ -58,12 +61,12 @@ export const PdfBreadcrumb = () => {
   const renameEntity = useRenameEntity();
 
   const storedName = fileName ?? fieldId;
-  const { baseName, extension } = splitFileName(storedName);
+  const { baseName } = splitFileName(storedName);
 
   const rename = useInlineRename({
     initial: baseName,
     onCommit: (value) => {
-      const submission = resolveDocumentRenameSubmission({
+      const submission = resolveFileRenameSubmission({
         draft: value,
         currentName: storedName,
       });
@@ -108,19 +111,12 @@ export const PdfBreadcrumb = () => {
             return (
               <InlineEdit
                 inputAriaLabel={tCommon("documentName")}
-                inputClassName="h-5 w-48 text-xs"
                 onCancel={rename.cancel}
                 onChange={rename.setDraft}
                 onCommit={() => {
                   detached(rename.commit(), "pdf-breadcrumb.commit");
                 }}
-                suffix={
-                  extension ? (
-                    <span className="text-muted-foreground text-xs">
-                      {extension}
-                    </span>
-                  ) : undefined
-                }
+                suffix={fileExtensionSuffix(storedName)}
                 value={rename.state.draft}
               />
             );
@@ -129,7 +125,10 @@ export const PdfBreadcrumb = () => {
           if (pendingName !== null) {
             return (
               <BreadcrumbPage>
-                <BidiText as="span" className="max-w-64 truncate">
+                <BidiText
+                  as="span"
+                  className="max-w-64 overflow-hidden text-ellipsis whitespace-pre"
+                >
                   {pendingName}
                 </BidiText>
               </BreadcrumbPage>
@@ -144,7 +143,7 @@ export const PdfBreadcrumb = () => {
                 explicitUndefined: true,
               }}
               activeProps={{ className: "text-foreground font-semibold" }}
-              className="hover:text-foreground max-w-64 truncate"
+              className="hover:text-foreground max-w-64 overflow-hidden text-ellipsis whitespace-pre"
               params={{ workspaceId, viewId }}
               onDoubleClick={(event) => {
                 if (!isRenameable) {

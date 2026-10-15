@@ -10,7 +10,6 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
-import { compareCodeUnit } from "@stll/collation";
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
 import { openFilePicker } from "@stll/ui/file-picker";
@@ -50,6 +49,7 @@ import { EmptyScreen } from "@/components/empty-screen";
 import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { PersonMentionLabel } from "@/components/person-mention-label";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { getWeekStart, toISODate } from "@/components/workspaces/entity-utils";
@@ -184,16 +184,21 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
       },
     });
   // Views — find view IDs by layout type for stat card navigation
-  const { data: views } = useQuery(viewsOptions(workspaceId));
+  const viewsQuery = useQuery(viewsOptions(workspaceId));
+  const viewsView = useQueryView(viewsQuery);
+  const views = viewsView.type === "items" ? viewsView.items : undefined;
   // The Workflows tab owns the runs fetch; this matter-overview entry point only
   // reads that cache (`enabled: false`) so the general matter shell never fires
   // GET /flows/runs for a feature most matters never open. The count reflects
   // active runs once the Workflows surface has populated the cache, and stays 0
   // (never a loading variant) until then.
-  const { data: flowRunsData } = useQuery({
+  const flowRunsDataQuery = useQuery({
     ...flowRunsOptions({ workspaceId }),
     enabled: false,
   });
+  const flowRunsDataView = useQueryView(flowRunsDataQuery);
+  const flowRunsData =
+    flowRunsDataView.type === "items" ? flowRunsDataView.items : undefined;
   const activeFlowRunCount =
     flowRunsData && "items" in flowRunsData
       ? flowRunsData.items.filter((run) => !isTerminalFlowRunStatus(run.status))
@@ -300,12 +305,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
   const hasActivity = recentEntities.length > 0;
 
-  // Tasks from recent entities (kind === "task")
-  const tasks = useMemo(
-    () => data.recentEntities.filter((e) => e.kind === "task"),
-    [data.recentEntities],
-  );
-
   // Re-compute the current date when the user returns to the
   // tab so the heatmap refreshes across day/week boundaries.
   const [today, setToday] = useState(() =>
@@ -328,6 +327,17 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
   });
+
+  // The API reads the agenda on its own: open tasks due today or later,
+  // nearest first, undated last. The local date also applies here, so a
+  // cached response drops yesterday's deadlines once the day rolls over.
+  const tasks = useMemo(
+    () =>
+      data.upcomingAgenda.filter(
+        (task) => task.dueDate === null || task.dueDate >= today,
+      ),
+    [data.upcomingAgenda, today],
+  );
 
   // Anchor the calculation to the tracked local date so visibility-driven day
   // rollover updates are explicit dependencies rather than cache invalidators.
@@ -426,22 +436,18 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
   const totalTeamHoursThisWeek = (teamTimeSummary?.totalTeamMinutes ?? 0) / 60;
 
-  // Tasks with due dates, sorted by nearest deadline first
+  // The agenda is already ordered by nearest deadline.
   const tasksWithDue = useMemo(
-    () =>
-      tasks
-        .filter(
-          (task) =>
-            task.dueDate !== null &&
-            task.status !== "done" &&
-            task.status !== "cancelled",
-        )
-        .toSorted((a, b) => compareCodeUnit(a.dueDate ?? "", b.dueDate ?? "")),
+    () => tasks.filter((task) => task.dueDate !== null),
     [tasks],
   );
 
   return (
     <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
+      <OverviewQueryFeedback
+        flowRunsView={flowRunsDataView}
+        viewsView={viewsView}
+      />
       {/* Stats grid */}
       <div className="grid gap-3 @sm:grid-cols-2 @3xl:grid-cols-4">
         <StatCard
@@ -612,16 +618,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           status={task.status}
                         />
                         <div className="min-w-0 flex-1">
-                          <p
-                            className={cn(
-                              "truncate text-sm",
-                              (task.status === "done" ||
-                                task.status === "cancelled") &&
-                                "text-muted-foreground line-through",
-                            )}
-                          >
-                            {task.name}
-                          </p>
+                          <p className="truncate text-sm">{task.name}</p>
                           <span className="text-muted-foreground flex items-center gap-1 text-xs">
                             {task.assignedTo !== null && (
                               <PersonMentionLabel
@@ -995,6 +992,25 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     </div>
   );
 };
+
+type OverviewQueryView = React.ComponentProps<typeof QueryViewFeedback>["view"];
+
+type OverviewQueryFeedbackProps = {
+  flowRunsView: OverviewQueryView;
+  viewsView: OverviewQueryView;
+};
+
+const OverviewQueryFeedback = ({
+  flowRunsView,
+  viewsView,
+}: OverviewQueryFeedbackProps) => (
+  <>
+    <QueryViewFeedback view={viewsView} />
+    {flowRunsView.type !== "pending" && (
+      <QueryViewFeedback view={flowRunsView} />
+    )}
+  </>
+);
 
 type OverviewSectionHeaderProps = {
   icon: React.ReactNode;

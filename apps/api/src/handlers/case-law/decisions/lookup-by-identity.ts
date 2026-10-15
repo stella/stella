@@ -54,8 +54,13 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import {
+  courtPresentation,
+  readCourtRegistry,
+} from "@/api/lib/case-law/court-presentation";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
+import { loadPublicCourtWeightsWithin } from "@/api/lib/case-law/public-case-law-config";
 import { publishedCaseLawDecision } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import { LIMITS } from "@/api/lib/limits";
@@ -167,6 +172,7 @@ export type DecisionIdentityRow = {
   caseNumberType: DecisionPrimaryReferenceType;
   country: string;
   court: string;
+  courtAbbreviation: string | null;
   decisionDate: string | null;
   ecli: string | null;
   id: SafeId<"caseLawDecision">;
@@ -481,6 +487,7 @@ export const lookupDecisionsByIdentity = async ({
         caseNumberType: caseLawDecisions.caseNumberType,
         country: caseLawDecisions.country,
         court: caseLawDecisions.court,
+        courtId: caseLawDecisions.courtId,
         decisionDate: caseLawDecisions.decisionDate,
         ecli: caseLawDecisions.ecli,
         id: caseLawDecisions.id,
@@ -529,9 +536,16 @@ export const lookupDecisionsByIdentity = async ({
       decisions.map((decision) => decision.languageGroupKey),
     );
 
+    const registry = await readCourtRegistry(
+      async () => await loadPublicCourtWeightsWithin(tx),
+    );
     return decisions.map(
-      ({ languageGroupKey, ...decision }): DecisionIdentityRow =>
+      ({ languageGroupKey, courtId, ...decision }): DecisionIdentityRow =>
         Object.assign(decision, {
+          courtAbbreviation: courtPresentation(registry, {
+            ...decision,
+            courtId,
+          }).courtAbbreviation,
           identifiers:
             identifiersByDecision.get(String(decision.id)) ??
             panic("Lost a decision's identifier list"),

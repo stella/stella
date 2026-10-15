@@ -18,18 +18,23 @@ import { panic, Result, TaggedError } from "better-result";
 
 import {
   canonicalUsReporterCitation,
+  isUsReporterReferenceStart,
   parseUsReporterReference,
+  US_REPORTER_NOMINATIVE_SOURCE,
+  US_REPORTER_PAGE_END_SOURCE,
+  US_REPORTER_PAGE_LEAD_SOURCE,
+  US_REPORTER_SPELLING_SOURCE,
 } from "@stll/api-contract/us-reporter-citation";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { ReporterCitationIdentifier } from "@stll/legal-ast/decision-identifier";
+// parser-output-unchanged: imports the document AST from its package owner
+import { plainTextOf } from "@stll/legal-ast/document-ast";
+import type { Inline } from "@stll/legal-ast/document-ast";
 import {
   CITATION_PIN_MAX_PARTS,
   CITATION_PIN_RAW_MAX_LENGTH,
 } from "@stll/legal-ast/inline";
 import type { InlineCitationPinPart } from "@stll/legal-ast/inline";
-
-import { plainTextOf } from "@/api/lib/case-law/document-ast";
-import type { Inline } from "@/api/lib/case-law/document-ast";
 
 // ---------------------------------------------------------------------------
 // Work budget
@@ -146,15 +151,15 @@ const NOTE_ITEM = String.raw`nn?\.\s?\d{1,4}(?:\s?${DASH}\s?\d{1,4})?`;
 const PIN_ITEM = String.raw`(?:¶¶?\s?\d{1,5}(?:\s?${DASH}\s?\d{1,5})?|${NOTE_ITEM}|\*?\d{1,5}(?:\s?${DASH}\s?\*?\d{1,5})?(?:\s?,?\s?(?:&\s?|and\s)?${NOTE_ITEM})?)`;
 // A pin never ends where a reporter abbreviation begins: in
 // `495, 74 S. Ct. 686` the 74 opens the next reference.
-const PIN_ITEM_END = String.raw`(?![\p{L}\p{N}])(?!\s{1,2}\p{L}[\p{L}'&]*\.)`;
-const FIRST_PIN_RE = new RegExp(`${PIN_ITEM}${PIN_ITEM_END}`, "yu");
+const PIN_ITEM_END = String.raw`${US_REPORTER_PAGE_END_SOURCE}(?!\s{1,2}\p{L}[\p{L}'&]*\.)`;
+const FIRST_PIN_RE = new RegExp(`${PIN_ITEM}${PIN_ITEM_END}`, "iyu");
 const NEXT_PIN_RE = new RegExp(
-  String.raw`(?:\s?[,&]\s?|\sand\s)${PIN_ITEM}${PIN_ITEM_END}`,
-  "yu",
+  String.raw`(?:\s?[,&]\s?|\sand\s)(?<item>${PIN_ITEM})${PIN_ITEM_END}`,
+  "iyu",
 );
 const PIN_PART_RE = new RegExp(
   String.raw`nn?\.\s*(?<note>\d+)(?:\s*${DASH}\s*(?<noteEnd>\d+))?|¶¶?\s*(?<paragraph>\d+)(?:\s*${DASH}\s*(?<paragraphEnd>\d+))?|(?<page>\*?\d+)(?:\s*${DASH}\s*(?<pageEnd>\*?\d+))?`,
-  "gu",
+  "giu",
 );
 
 const pinPartOf = (
@@ -200,6 +205,9 @@ const readPinList = (
   from: number,
   budget: CitationWorkBudget,
 ): PinRead | null => {
+  if (isUsReporterReferenceStart(text, from)) {
+    return null;
+  }
   FIRST_PIN_RE.lastIndex = from;
   const first = FIRST_PIN_RE.exec(text);
   if (first === null) {
@@ -210,6 +218,13 @@ const readPinList = (
     NEXT_PIN_RE.lastIndex = end;
     const next = NEXT_PIN_RE.exec(text);
     if (next === null || !chargeWork(budget, 1)) {
+      break;
+    }
+    const item = next.groups?.["item"];
+    if (item === undefined) {
+      return panic("Next pin grammar matched without an item");
+    }
+    if (isUsReporterReferenceStart(text, end + next[0].length - item.length)) {
       break;
     }
     end += next[0].length;
@@ -276,15 +291,18 @@ type BarrierToken = Span & { kind: "barrier"; barrier: BarrierKind };
 
 export type Token = FullToken | VolumeShortToken | ShortToken | BarrierToken;
 
-// Supported grammar. Every quantifier is bounded, and a reporter word without
-// a closing period must be followed by whitespace, so a word never splits
-// into tokens more than one way.
+// Supported spellings come from the identity parser's reporter table. The
+// separate broad grammar only detects unsupported short-form barriers.
 const VOLUME_START = String.raw`(?<![\p{L}\p{N}§])`;
 const REPORTER_WORD = String.raw`(?!at\s)\p{L}[\p{L}'&]*\.?`;
 const REPORTER_PART = String.raw`(?:${REPORTER_WORD}|\d{1,2}(?:d|nd|rd|th|st)\.?|\(\d{1,3}\s{1,2}[^()\d]{1,24}\))`;
 const REPORTER_RUN = String.raw`${REPORTER_WORD}(?:(?:(?<=\.)\s{0,2}|\s{1,2})${REPORTER_PART}){0,5}`;
 const CANDIDATE_RE = new RegExp(
-  String.raw`${VOLUME_START}(?<head>(?<volume>\d{1,4})\s{1,2}(?<run>${REPORTER_RUN}))(?:\s{1,2}(?<page>\d{1,5})(?![\p{L}\p{N}])|(?<short>\s{0,2},?\s{1,2}at\s{1,2}))`,
+  String.raw`${VOLUME_START}(?<head>(?<volume>\d{1,4})\s{1,16}(?:${US_REPORTER_SPELLING_SOURCE}))${US_REPORTER_NOMINATIVE_SOURCE}(?:${US_REPORTER_PAGE_LEAD_SOURCE}(?<page>\d{1,5})${US_REPORTER_PAGE_END_SOURCE}|(?<short>\s{0,16},?\s{1,16}at\s{1,16}))`,
+  "giu",
+);
+const UNSUPPORTED_SHORT_RE = new RegExp(
+  String.raw`${VOLUME_START}(?<head>(?<volume>\d{1,4})\s{1,2}(?<run>${REPORTER_RUN}))\s{0,2},?\s{1,2}at\s{1,2}`,
   "gu",
 );
 const ID_RE = /(?<![\p{L}\p{N}])[Ii]d\./gu;
@@ -372,6 +390,9 @@ const reporterToken = (
   const head = match.groups?.["head"] ?? "";
   const page = match.groups?.["page"];
   if (page !== undefined) {
+    if (isUsReporterReferenceStart(text, matchEnd - page.length)) {
+      return null;
+    }
     const base = readFullCitation(match[0], identityKey);
     if (base !== undefined) {
       const pin = readLedPin(text, matchEnd, FULL_PIN_LEAD_RE, budget);
@@ -595,6 +616,12 @@ export const scanRun = (
   const complete =
     produce(
       CANDIDATE_RE,
+      context,
+      (match) => reporterToken(context, match),
+      true,
+    ) &&
+    produce(
+      UNSUPPORTED_SHORT_RE,
       context,
       (match) => reporterToken(context, match),
       true,

@@ -27,7 +27,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
+
+import { hashArtifactBytes as sha256Hex } from "./artifact-content-hash";
 
 /** A google/fonts commit, so the bytes behind each URL cannot move. */
 const SOURCE_COMMIT = "23e54b51ddffbc7713c583748e3bd86f62b1fa4a";
@@ -84,11 +88,17 @@ const CJK_DROPPED_TABLES = "GSUB,GPOS,GDEF,vhea,vmtx,VORG,BASE,DSIG,STAT";
 
 const PRINTABLE_ASCII = "20-7e";
 
-const sha256Hex = (bytes: ArrayBuffer) =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
-
-const download = async (relative: string, sha256: string) => {
+const download = async ({
+  permit,
+  relative,
+  sha256,
+}: {
+  permit: ThirdPartyOutboundPermit;
+  relative: string;
+  sha256: string;
+}) => {
   const response = await safeOutboundFetchBytes({
+    permit,
     maxBytes: DOWNLOAD_MAX_BYTES,
     redirect: "error",
     timeoutMs: DOWNLOAD_TIMEOUT_MS,
@@ -211,6 +221,7 @@ const targets = (workDir: string): readonly Target[] => [
 ];
 
 const workDir = await mkdtemp(path.join(tmpdir(), "stamp-fonts-"));
+const permit = grantThirdPartyOutboundPermit();
 try {
   await Bun.write(
     path.join(workDir, "cjk.txt"),
@@ -222,8 +233,12 @@ try {
   );
   for (const [key, source] of Object.entries(SOURCES)) {
     const [font, license] = await Promise.all([
-      download(source.font, source.fontSha256),
-      download(source.license, source.licenseSha256),
+      download({ permit, relative: source.font, sha256: source.fontSha256 }),
+      download({
+        permit,
+        relative: source.license,
+        sha256: source.licenseSha256,
+      }),
     ]);
     await Bun.write(path.join(workDir, `${key}.ttf`), font);
     await Bun.write(path.join(FONTS_DIR, source.licenseOutput), license);

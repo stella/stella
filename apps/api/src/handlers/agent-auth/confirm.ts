@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
  * exchange. Ownership comes from the validated session — never the body.
  */
 const config = {
+  contract: "patch",
   body: t.Object({
     user_code: t.String({ minLength: 1, maxLength: 32 }),
   }),
@@ -21,7 +22,7 @@ const config = {
   // the agent inherits the confirming user's least-privilege scopes, not
   // the organization's. External collaborators hold no integration grant.
   permissions: { integration: ["create"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "auth_plumbing" },
 } satisfies HandlerConfig;
 

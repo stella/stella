@@ -4,7 +4,7 @@ import type { ComponentProps, ReactNode } from "react";
 import { Button } from "@stll/ui/button";
 import { cn } from "@stll/ui/utils";
 
-export type SuggestedAction = {
+type SuggestedAction = {
   id: string;
   label: string;
   icon?: ReactNode;
@@ -50,7 +50,7 @@ type SuggestedActionSurfaceProps = ComponentProps<"span"> & {
   surface: SuggestedActionSurfaceName;
 };
 
-export const SuggestedActionSurface = ({
+const SuggestedActionSurface = ({
   className,
   surface,
   ...props

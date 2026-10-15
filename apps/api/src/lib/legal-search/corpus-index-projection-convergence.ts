@@ -18,7 +18,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRecord } from "@/api/lib/type-guards";
 
-export const CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS = {
+const CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS = {
   empty: "empty",
   knownBlocked: "known_blocked",
   pending: "pending",

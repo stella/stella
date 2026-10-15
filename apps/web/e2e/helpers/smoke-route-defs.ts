@@ -45,8 +45,8 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: () => `/chat/${randomUUID()}`,
   },
   staticRoute("/chat/new", { expectation: { kind: "settles" } }),
+  staticRoute("/chat/history"),
   staticRoute("/contacts"),
-  staticRoute("/dev/autocomplete", { expectation: { kind: "settles" } }),
   staticRoute("/knowledge"),
   staticRoute("/knowledge/clauses"),
   // Reachable in dev/staging (playbooks preview gate is open there); redirects
@@ -107,8 +107,12 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: (world) => `/workspaces/${world.workspace.id}/invoices`,
   },
   {
+    // Lists is shown only to callers with list access; the smoke caller has
+    // none, so the route leaves before its loader. Granted rendering is covered
+    // by the route gate tests.
     template: "/workspaces/$workspaceId/lists",
     path: (world) => `/workspaces/${world.workspace.id}/lists`,
+    expectation: { kind: "redirectsTo", to: "/workspaces" },
   },
   {
     template: "/workspaces/$workspaceId/timesheets",

@@ -3,23 +3,45 @@ export type { Blueprint, BlueprintId } from "./blueprints";
 export {
   CHAT_DOCUMENTED_READS_METADATA_KEY,
   CHAT_EXCLUDED_TOOLS_METADATA_KEY,
+  parseSkillFile,
+  readDocumentedChatReads,
+  readExcludedChatTools,
+  readSkillDisplayName,
+  SKILL_DISPLAY_NAME_METADATA_KEY,
+} from "./frontmatter";
+export type { SkillMetadata } from "./frontmatter";
+export {
   isAllowedResourcePath,
   listSkillMetadata,
   listSkillResources,
   loadSkill,
   normalizeResourcePath,
-  parseSkillFile,
-  readDocumentedChatReads,
-  readExcludedChatTools,
-  readSkillDisplayName,
   readSkillResource,
-  SKILL_DISPLAY_NAME_METADATA_KEY,
 } from "./loader";
-export type { SkillMetadata, SkillResource, StellaSkill } from "./loader";
+export type { BuiltInSkillId, SkillResource, StellaSkill } from "./loader";
+export {
+  hashSkillEntrypoint,
+  hashSkillPackage,
+  isAllowedFirstPartySkillPackageSkip,
+  SKILL_FILE_NAME,
+  SKILL_METADATA_REGISTRY,
+  SKILL_NAME_PATTERN,
+  SKILL_PACKAGE_LIMITS,
+  SKILL_RESOURCE_EXTENSIONS,
+  SKILL_RESOURCE_FOLDERS,
+  isSkillResourceFolder,
+  validateSkillPackage,
+} from "./format";
+export type {
+  SkillPackageDiagnostic,
+  SkillPackageFile,
+  SkillPackageSkipReason,
+  SkippedSkillPackageFile,
+  ValidatedSkillPackage,
+  ValidatedSkillResource,
+} from "./format";
 export {
   readSkillRequiredTools,
   SKILL_REQUIRED_TOOLS_MAX,
   SKILL_REQUIRED_TOOLS_METADATA_KEY,
 } from "./required-tools";
-export { getSkillResourceKind } from "./resource-kinds";
-export type { SkillResourceKind } from "./resource-kinds";

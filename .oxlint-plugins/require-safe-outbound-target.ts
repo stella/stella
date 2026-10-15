@@ -75,8 +75,7 @@ import {
 // canonical id of a module that exports or re-exports them.
 const FETCH_SOURCES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
   ["@stll/fetch", new Set(["fetchWithTimeout"])],
-  ["apps/api/src/lib/fetch", new Set(["fetchWithTimeout"])],
-  ["apps/web/src/lib/fetch", new Set(["fetchWithTimeout"])],
+  ["packages/fetch/src", new Set(["fetchWithTimeout"])],
   [
     "apps/api/src/handlers/case-law/ingestion/adapters/retry",
     new Set(["fetchPublisher", "fetchWithRetry"]),

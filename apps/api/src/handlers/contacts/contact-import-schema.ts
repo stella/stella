@@ -125,10 +125,6 @@ export const contactImportCandidateSchema = t.Object({
   ),
 });
 
-export type ContactImportCandidateInput = Static<
-  typeof contactImportCandidateSchema
->;
-
 // The draft sub-shapes relax constraints but must keep the persisted key
 // sets, so a valid draft is assignable to what the insert expects and a new
 // persisted key cannot silently go un-importable.

@@ -17,6 +17,7 @@ import {
   parseStoredAnswerContent,
   selectPassagesWithinBudget,
 } from "@/api/lib/case-law/research-answers";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
 const passage = fc.record({
   anchorId: fc.stringMatching(/^[a-z0-9-]{0,12}$/u),
@@ -73,6 +74,58 @@ describe("selecting passages within a budget", () => {
       { budgetChars: 130, passageChars: 100 },
     );
     expect(selected.map((entry) => entry.anchorId)).toEqual(["p-1"]);
+  });
+
+  test("a long passage rejected by the remaining budget counts only against the budget", () => {
+    const recording = installRecordingLogger();
+    try {
+      expect(
+        selectPassagesWithinBudget(
+          [
+            { anchorId: "p-1", excerpt: "kept" },
+            { anchorId: "p-2", excerpt: "x".repeat(20) },
+          ],
+          { budgetChars: 10, passageChars: 15 },
+        ),
+      ).toEqual([{ anchorId: "p-1", excerpt: "kept" }]);
+      expect(recording.records).toEqual([
+        {
+          severityText: "INFO",
+          message: "case_law.answer.incomplete",
+          attributes: {
+            surface: "research",
+            reason: "passage_budget",
+            count: 1,
+          },
+        },
+      ]);
+    } finally {
+      recording.restore();
+    }
+  });
+
+  test("classifies every passage after a budget rejection by its own reason", () => {
+    const recording = installRecordingLogger();
+    try {
+      expect(
+        selectPassagesWithinBudget(
+          [
+            { anchorId: "p-1", excerpt: "kept" },
+            { anchorId: "p-2", excerpt: "x".repeat(20) },
+            { anchorId: "p-3", excerpt: "   " },
+            { anchorId: "p-1", excerpt: "duplicate" },
+          ],
+          { budgetChars: 10, passageChars: 15 },
+        ),
+      ).toEqual([{ anchorId: "p-1", excerpt: "kept" }]);
+      expect(recording.records.map(({ attributes }) => attributes)).toEqual([
+        { surface: "research", reason: "passage_invalid", count: 1 },
+        { surface: "research", reason: "passage_duplicate", count: 1 },
+        { surface: "research", reason: "passage_budget", count: 1 },
+      ]);
+    } finally {
+      recording.restore();
+    }
   });
 });
 
@@ -365,14 +418,48 @@ describe("the cited passages", () => {
         ["p-1", "first"],
         ["p-2", "second"],
       ]),
+      new Map(),
     );
     expect(justification).toEqual({
       version: 1,
       blocks: [
-        { kind: "decision-passage", anchorId: "p-2", excerpt: "second" },
-        { kind: "decision-passage", anchorId: "p-1", excerpt: "first" },
+        {
+          kind: "decision-passage",
+          anchorId: "p-2",
+          courtParagraphNumber: null,
+          excerpt: "second",
+        },
+        {
+          kind: "decision-passage",
+          anchorId: "p-1",
+          courtParagraphNumber: null,
+          excerpt: "first",
+        },
       ],
     });
+  });
+
+  test("name the court's number for a numbered block, never the anchor's counter", () => {
+    // `p-8` is the eighth block; the court numbered it 6. `p-3` is unnumbered.
+    const justification = buildAnswerJustification(
+      ["p-8", "p-3", "p-99"],
+      new Map([
+        ["p-8", "The appeal is dismissed."],
+        ["p-3", "Facts."],
+      ]),
+      new Map([["p-8", 6]]),
+    );
+    expect(
+      justification.blocks.map((block) =>
+        block.kind === "decision-passage"
+          ? [block.anchorId, block.courtParagraphNumber]
+          : null,
+      ),
+    ).toEqual([
+      ["p-8", 6],
+      ["p-3", null],
+      ["p-99", null],
+    ]);
   });
 });
 

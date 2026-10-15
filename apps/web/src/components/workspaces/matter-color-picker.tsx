@@ -8,15 +8,15 @@ import {
   ColorPickerContent,
   DEFAULT_PRESETS,
 } from "@stll/ui/color-picker";
-import { Popover, PopoverPopup } from "@stll/ui/popover";
-import { cn } from "@stll/ui/utils";
-
-import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   getMatterPickerColor,
   resolveMatterColor,
   toStoredMatterColor,
-} from "@/lib/matter-colors";
+} from "@stll/ui/matter-colors";
+import { Popover, PopoverPopup } from "@stll/ui/popover";
+import { cn } from "@stll/ui/utils";
+
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 
 type MatterColorIdentity = {
@@ -177,8 +177,4 @@ const useMatterColorPicker = (matter: MatterColorIdentity) => {
   };
 };
 
-export {
-  MatterColorContextPicker,
-  MatterColorPicker,
-  MatterColorPickerContent,
-};
+export { MatterColorContextPicker, MatterColorPicker };

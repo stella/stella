@@ -10,6 +10,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 /**
@@ -310,6 +311,7 @@ type SuggestColumnPromptOptions = {
   draft: ColumnPromptDraft;
   context: SuggestPromptContext;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   userId: SafeId<"user">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -329,6 +331,7 @@ export const suggestColumnPrompt = async ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   promptCachingEnabled,
   safeDb,
   userId,
@@ -358,6 +361,7 @@ export const suggestColumnPrompt = async ({
     feature: scope.feature,
     modelRole: "fast",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       organization_id: organizationId,
       content_type: draft.contentType,
@@ -376,6 +380,7 @@ export const suggestColumnPrompt = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: scope.tenantWorkspaceIds,
         analytics: aiAnalytics,
         caching: resolveCaching({

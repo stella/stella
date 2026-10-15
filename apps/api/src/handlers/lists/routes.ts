@@ -11,22 +11,15 @@ import readGenerations from "@/api/handlers/lists/generations/list";
 import readListById from "@/api/handlers/lists/get";
 import readItemActivity from "@/api/handlers/lists/items/activity/list";
 import createItemComment from "@/api/handlers/lists/items/comments/create";
-import updateFactDetails from "@/api/handlers/lists/items/fact-details/update";
 import readListItems from "@/api/handlers/lists/items/list";
 import reviewItem from "@/api/handlers/lists/items/reviews/update";
 import createItemSource from "@/api/handlers/lists/items/sources/create";
 import readItemSources from "@/api/handlers/lists/items/sources/list";
-import verifyItemSource from "@/api/handlers/lists/items/sources/verification/update";
 import updateItem from "@/api/handlers/lists/items/update";
 import readLists from "@/api/handlers/lists/list";
 import createSection from "@/api/handlers/lists/sections/create";
 import updateList from "@/api/handlers/lists/update";
-import createBulkClaimReviews from "@/api/handlers/lists/verifications/claim-reviews/bulk/create";
-import createClaimReview from "@/api/handlers/lists/verifications/claim-reviews/create";
-import createVerification from "@/api/handlers/lists/verifications/create";
-import readVerification from "@/api/handlers/lists/verifications/get";
-import readLatestVerifications from "@/api/handlers/lists/verifications/latest/list";
-import readVerifications from "@/api/handlers/lists/verifications/list";
+import { createListVerificationRoutes } from "@/api/handlers/lists/verification-routes";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
@@ -40,6 +33,7 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateWorkspaceAccess: true })
+  .use(createListVerificationRoutes())
   .get("/", readLists.handler, {
     permissions: readLists.config.permissions,
     query: readLists.config.query,
@@ -88,42 +82,9 @@ export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
     body: reviewItem.config.body,
     permissions: reviewItem.config.permissions,
   })
-  .patch("/item-sources", verifyItemSource.handler, {
-    body: verifyItemSource.config.body,
-    permissions: verifyItemSource.config.permissions,
-  })
   .patch("/items", updateItem.handler, {
     body: updateItem.config.body,
     permissions: updateItem.config.permissions,
-  })
-  .put("/item-fact-details", updateFactDetails.handler, {
-    body: updateFactDetails.config.body,
-    permissions: updateFactDetails.config.permissions,
-  })
-  .post("/claim-reviews", createClaimReview.handler, {
-    body: createClaimReview.config.body,
-    permissions: createClaimReview.config.permissions,
-  })
-  .post("/claim-reviews/bulk", createBulkClaimReviews.handler, {
-    body: createBulkClaimReviews.config.body,
-    permissions: createBulkClaimReviews.config.permissions,
-  })
-  .post("/verifications", createVerification.handler, {
-    body: createVerification.config.body,
-    permissions: createVerification.config.permissions,
-  })
-  .post("/verifications/latest", readLatestVerifications.handler, {
-    body: readLatestVerifications.config.body,
-    permissions: readLatestVerifications.config.permissions,
-  })
-  .get("/verifications", readVerifications.handler, {
-    params: readVerifications.config.params,
-    permissions: readVerifications.config.permissions,
-    query: readVerifications.config.query,
-  })
-  .get("/verifications/:runId", readVerification.handler, {
-    params: readVerification.config.params,
-    permissions: readVerification.config.permissions,
   })
   .get(
     "/:listId/generations/:runId/candidates",

@@ -2,7 +2,9 @@ import {
   type APIRequestContext,
   request as playwrightRequest,
 } from "@playwright/test";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
 
 import { expect, test } from "../helpers/test";
 
@@ -49,7 +51,7 @@ test("the real OAuth authorization redirect keeps its signed query in the fragme
 }) => {
   const token = randomUUID().replaceAll("-", "");
   const verifier = `oauth-browser-${token}`;
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const challenge = hashSha256Base64Url(verifier);
   const apiRequest = await playwrightRequest.newContext({
     extraHTTPHeaders: { origin: new URL(WEB_BASE_URL).origin },
   });

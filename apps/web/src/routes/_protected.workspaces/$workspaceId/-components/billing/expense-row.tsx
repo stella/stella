@@ -10,7 +10,6 @@ import { usePermissions } from "@/hooks/use-permissions";
 
 type Expense = {
   id: string;
-  matterId: string;
   dateIncurred: string;
   amount: number;
   currency: string;

@@ -1,4 +1,6 @@
-import type { Block } from "@/api/handlers/case-law/document-ast";
+// parser-output-unchanged: document-tail callers retain their section behavior; HU explicitly opts into anchored notes
+import type { Block } from "@stll/legal-ast/document-ast";
+
 import type {
   DecisionSection,
   DecisionSectionType,
@@ -20,6 +22,7 @@ import type {
  */
 export const sectionsFromAst = (
   blocks: readonly Block[],
+  notePlacement: "document-tail" | "paragraph-anchor" = "document-tail",
 ): DecisionSection[] => {
   const groups: { title: string | null; blocks: Block[] }[] = [];
   let openKind: BlockKind = "body";
@@ -36,7 +39,14 @@ export const sectionsFromAst = (
     // rules:"), so a heading-only split leaves the ruling buried at the
     // end of whichever section preceded it — for CJEU judgments that is
     // "Costs", which then reads as the section holding the ruling.
-    const kind = blockKind(block);
+    // Notes inherit their anchor's group; apparatus is membership, not a
+    // boundary out of a holding or signature region.
+    const kind: BlockKind =
+      notePlacement === "paragraph-anchor" &&
+      (block.type === "paragraph" || block.type === "table") &&
+      block.note !== undefined
+        ? openKind
+        : blockKind(block);
     const current = groups.at(-1);
     if (!current || kind !== openKind) {
       groups.push({ title: null, blocks: [block] });

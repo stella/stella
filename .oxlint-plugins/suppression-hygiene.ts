@@ -57,6 +57,71 @@ const collectComments = (node) =>
 export default eslintCompatPlugin({
   meta: { name: "suppression-hygiene" },
   rules: {
+    "canonical-rule-id": {
+      meta: {
+        type: "problem",
+        fixable: "code",
+        messages: {
+          noncanonical:
+            "Use the configured rule ID `{{canonical}}` instead of `{{rule}}`.",
+          unknown: "Suppression names an unregistered rule ID `{{rule}}`.",
+        },
+      },
+      createOnce(context) {
+        return {
+          Program() {
+            const aliases =
+              context.settings["stella/canonical-disable-rule-ids"];
+            for (const comment of context.sourceCode.getAllComments()) {
+              const directive =
+                /^\s*(?:oxlint|eslint)-(?:disable(?:-next-line|-line)?|enable)(?=\s|$)/u.exec(
+                  comment.value,
+                );
+              if (directive === null) {
+                continue;
+              }
+              const start = directive[0].length;
+              const trailer = comment.value.indexOf("--", start);
+              const rules = comment.value.slice(
+                start,
+                trailer === -1 ? undefined : trailer,
+              );
+              for (const match of rules.matchAll(/[^\s,]+/gu)) {
+                const rule = match[0];
+                const canonical =
+                  typeof aliases === "object" &&
+                  aliases !== null &&
+                  Object.hasOwn(aliases, rule)
+                    ? Reflect.get(aliases, rule)
+                    : undefined;
+                if (typeof canonical !== "string") {
+                  context.report({
+                    node: comment,
+                    messageId: "unknown",
+                    data: { rule },
+                  });
+                  continue;
+                }
+                if (canonical === rule) {
+                  continue;
+                }
+                const offset = comment.range[0] + 2 + start + match.index;
+                context.report({
+                  node: comment,
+                  messageId: "noncanonical",
+                  data: { rule, canonical },
+                  fix: (fixer) =>
+                    fixer.replaceTextRange(
+                      [offset, offset + rule.length],
+                      canonical,
+                    ),
+                });
+              }
+            }
+          },
+        };
+      },
+    },
     "require-description": {
       meta: {
         type: "suggestion",

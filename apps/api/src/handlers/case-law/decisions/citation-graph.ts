@@ -1,16 +1,22 @@
+import { panic } from "better-result";
 import { and, asc, desc, eq, gt, inArray, lte, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import { alias, unionAll } from "drizzle-orm/pg-core";
 import { status, t } from "elysia";
 import type { Static } from "elysia";
 
-import { CASE_LAW_CITATION_TIMELINE_MAX_YEARS } from "@stll/api-contract";
+import {
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT as CITATION_SUMMARY_SCAN_LIMIT,
+  CASE_LAW_CITATION_TIMELINE_MAX_YEARS,
+} from "@stll/api-contract";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
 import {
   caseLawCitations,
+  caseLawDecisionCitationStats,
+  caseLawDecisionCitationStatsState,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
@@ -26,19 +32,23 @@ import type {
   CitationDirection,
   CitationTreatment,
 } from "@/api/lib/case-law/citation-vocabulary";
+import { decisionCourtAbbreviation } from "@/api/lib/case-law/court-presentation";
 import { readPublicDecisionLanguageAlternatesInTx } from "@/api/lib/case-law/language-alternates";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { publishedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
+import { boundedAll } from "@/api/lib/db/bounded-all";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
   isUuidPaginationCursorPart,
   type Page,
 } from "@/api/lib/pagination";
+import { PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relations";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
@@ -72,6 +82,8 @@ type RelatedDecision = {
   caseNumberType: DecisionPrimaryReferenceType;
   country: string;
   court: string;
+  courtAbbreviation: string | null;
+  sourceUrl: string | null;
   decisionDate: string | null;
   /**
    * Type and ECLI distinguish the documents that share one docket number
@@ -100,8 +112,8 @@ export type RankedRelatedDecision = RelatedDecision & {
 /** The far decision as a graph query selects it, before its versions are read. */
 type RankedRelatedDecisionRow = Omit<
   RankedRelatedDecision,
-  "languageAlternates"
-> & { languageGroupKey: string | null };
+  "languageAlternates" | "courtAbbreviation"
+> & { languageGroupKey: string | null; courtId: string | null };
 
 /**
  * The far decisions' language versions, one read for the whole page, so a
@@ -115,8 +127,9 @@ const withLanguageAlternates = async (
     tx,
     decisions.map((decision) => decision?.languageGroupKey ?? null),
   );
-  return ({ languageGroupKey, ...decision }) =>
+  return ({ languageGroupKey, courtId, ...decision }) =>
     Object.assign(decision, {
+      courtAbbreviation: decisionCourtAbbreviation({ ...decision, courtId }),
       languageAlternates: alternates.alternatesFor(languageGroupKey),
     });
 };
@@ -244,16 +257,36 @@ const DIRECTION_SPECS = {
 const visibleFor = ({
   keepsUnresolved,
   related,
+  farEnd,
 }: {
   keepsUnresolved: boolean;
+  farEnd: "decision" | "projection";
   /** The far-end id as the enclosing query can see it. */
   related: SQLWrapper;
 }): SQL<boolean> => {
+  const visibility = (() => {
+    switch (farEnd) {
+      case "decision":
+        return {
+          country: relatedDecision.country,
+          published: publishedCaseLawDecisionFor(relatedDecision.metadata),
+        };
+      case "projection":
+        // The trigger projection contains only published far endpoints.
+        return {
+          country: caseLawDecisionCitationStats.relatedCountry,
+          published: sql`true`,
+        };
+      default:
+        farEnd satisfies never;
+        return panic("Unhandled citation visibility input");
+    }
+  })();
   const resolvedAndOpen = sql`(
     ${relatedSource.id} IS NOT NULL
     AND ${redistributableCaseLawSourceFor(relatedSource.descriptor)}
-    AND ${publishedCaseLawDecisionFor(relatedDecision.metadata)}
-    AND ${inArray(relatedDecision.country, [...PUBLIC_CASE_LAW_COUNTRIES])}
+    AND ${visibility.published}
+    AND ${inArray(visibility.country, [...PUBLIC_CASE_LAW_COUNTRIES])}
   )`;
   return keepsUnresolved
     ? sql<boolean>`(${related} IS NULL OR ${resolvedAndOpen})`
@@ -351,6 +384,7 @@ export const decisionCitationPageQuery = ({
       sectionIndex: candidates.sectionIndex,
       polarity: candidates.polarity,
       visible: visibleFor({
+        farEnd: "decision",
         keepsUnresolved: spec.keepsUnresolved,
         related: candidates.relatedId,
       }),
@@ -360,6 +394,8 @@ export const decisionCitationPageQuery = ({
         caseNumberType: relatedDecision.caseNumberType,
         country: relatedDecision.country,
         court: relatedDecision.court,
+        courtId: relatedDecision.courtId,
+        sourceUrl: relatedDecision.sourceUrl,
         decisionDate: relatedDecision.decisionDate,
         decisionType: relatedDecision.decisionType,
         ecli: relatedDecision.ecli,
@@ -380,25 +416,10 @@ export type CitationTreatmentCounts = Record<CitationTreatment, number>;
 
 export type CitationYearCounts = CitationTreatmentCounts & { year: number };
 
-export type DecisionCitationSummary = Record<
-  CitationDirection,
-  CitationTreatmentCounts
-> & {
-  /** Counts and timeline entries are lower bounds in a capped direction. */
-  capped: Record<CitationDirection, boolean>;
-  /**
-   * Incoming citations by the citing decision's year, oldest first; a year
-   * with no citations is absent. Spans at most `CITATION_TIMELINE_MAX_YEARS`
-   * ending this year, so the payload stays bounded however old the decision.
-   */
-  incomingByYear: CitationYearCounts[];
-};
-
 /** How far back the per-year rollup reaches, counted to the current year. */
 export const CITATION_TIMELINE_MAX_YEARS = CASE_LAW_CITATION_TIMELINE_MAX_YEARS;
 
-/** One extra row distinguishes a complete rollup from a lower bound. */
-export const CITATION_SUMMARY_SCAN_LIMIT = 2048;
+export { CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT as CITATION_SUMMARY_SCAN_LIMIT } from "@stll/api-contract";
 
 const emptyTreatmentCounts = (): CitationTreatmentCounts => ({
   negative: 0,
@@ -434,25 +455,136 @@ type SummaryRow = {
   capped: boolean;
 };
 
+type DecisionCitationSummaryQueryOptions = {
+  currentYear: number;
+  decisionId: SafeId<"caseLawDecision">;
+  tx: CaseLawPublicReadTransaction;
+};
+
+export const decisionCitationStatsStateQuery = ({
+  tx,
+  decisionId,
+}: Pick<DecisionCitationSummaryQueryOptions, "tx" | "decisionId">) =>
+  tx
+    .select({ status: caseLawDecisionCitationStatsState.status })
+    .from(caseLawDecisionCitationStatsState)
+    .where(eq(caseLawDecisionCitationStatsState.decisionId, decisionId))
+    .limit(1);
+
+/**
+ * Deploy safety: older API releases attest against their own column maps and
+ * reject grants on these new relations as excess privilege. Keep the migration
+ * grant-free until #4962 is deployed. Remove this probe in the following
+ * citation-stats-reader-grant release, together with its column-grant migration.
+ */
+const canReadDecisionCitationStats = async (
+  tx: CaseLawPublicReadTransaction,
+) => {
+  const permissions = [
+    [
+      "case_law_decision_citation_stats",
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_decision_citation_stats,
+    ],
+    [
+      "case_law_decision_citation_stats_state",
+      PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.case_law_decision_citation_stats_state,
+    ],
+  ] as const;
+  const predicates = permissions.flatMap(([relation, columns]) =>
+    Object.keys(columns).map(
+      (column) =>
+        sql`has_column_privilege(current_user, ${`public.${relation}`}, ${column}, 'SELECT')`,
+    ),
+  );
+  const rows = await tx
+    .select({ available: sql<boolean>`${sql.join(predicates, sql` AND `)}` })
+    .from(sql`(SELECT 1) AS citation_stats_permission_probe`);
+  return (
+    rows.at(0) ?? panic("Citation stats permission query returned no result")
+  ).available;
+};
+
+/** Incoming years plus undated incoming/outgoing, each with a stored polarity. */
+export const EXACT_CITATION_SUMMARY_MAX_ROWS =
+  (CITATION_TIMELINE_MAX_YEARS + 2) * POLARITIES.length;
+
+/** A SUM over projection buckets, independent of the decision's edge count. */
+export const exactDecisionCitationSummaryQuery = ({
+  limit,
+  currentYear,
+  decisionId,
+  tx,
+}: DecisionCitationSummaryQueryOptions & { limit: number }) => {
+  const stats = caseLawDecisionCitationStats;
+  const firstYear = currentYear - (CITATION_TIMELINE_MAX_YEARS - 1);
+  const year = sql<number | null>`CASE WHEN ${stats.direction} = 'incoming'
+    AND ${stats.relatedYear} BETWEEN ${firstYear} AND ${currentYear}
+    THEN ${stats.relatedYear} END`;
+  return tx
+    .select({
+      direction: stats.direction,
+      year: year.as("year"),
+      polarity: stats.polarity,
+      count: sql<number>`coalesce(sum(${stats.count}), 0)::double precision`.as(
+        "count",
+      ),
+      capped: sql<boolean>`false`.as("capped"),
+    })
+    .from(stats)
+    .leftJoin(relatedSource, eq(relatedSource.id, stats.relatedSourceId))
+    .where(
+      and(
+        eq(stats.decisionId, decisionId),
+        visibleFor({
+          farEnd: "projection",
+          keepsUnresolved: true,
+          related: stats.relatedSourceId,
+        }),
+      ),
+    )
+    .groupBy(stats.direction, sql`2`, stats.polarity)
+    .limit(limit);
+};
+
 /**
  * How many precedent citations each direction holds, by treatment, and the
  * incoming ones by year.
  *
  * Counts only what the list would show, so the rollup and the rows agree:
  * a citation whose far end may not be redistributed is absent from both.
- * One statement serves all three figures. Each direction reads at most one
- * more indexed citation than the summary counts; the extra row marks a
- * lower bound without making the joins or rollup unbounded.
+ * Exact projections serve totals and the timeline after per-decision backfill.
+ * Pending projections keep the bounded edge scan and advertise lower bounds.
  */
 export const summarizeDecisionCitationsHandler = async ({
   subject: { id: decisionId, tx },
   currentYear = Temporal.Now.plainDateISO("UTC").year,
 }: SummarizeDecisionCitationsOptions) => {
-  const rows = await decisionCitationSummaryQuery({
-    currentYear,
-    decisionId,
-    tx,
-  }).summary;
+  const canReadStats = await canReadDecisionCitationStats(tx);
+  if (!canReadStats) {
+    logger.warn("case_law.citation_stats.bounded_fallback", {
+      reason: "reader_grant_pending",
+    });
+  }
+  const state = canReadStats
+    ? await decisionCitationStatsStateQuery({ tx, decisionId })
+    : [];
+  const isExact = state.at(0)?.status === "exact";
+  const rows = isExact
+    ? await boundedAll({
+        invariant:
+          "citation direction/year grouping and stored polarity domain",
+        max: EXACT_CITATION_SUMMARY_MAX_ROWS,
+        table: "case_law_decision_citation_stats",
+        query: (limit) =>
+          exactDecisionCitationSummaryQuery({
+            currentYear,
+            decisionId,
+            tx,
+            limit,
+          }),
+      })
+    : await decisionCitationSummaryQuery({ currentYear, decisionId, tx })
+        .summary;
 
   const totals: Record<CitationDirection, CitationTreatmentCounts> = {
     incoming: emptyTreatmentCounts(),
@@ -481,25 +613,28 @@ export const summarizeDecisionCitationsHandler = async ({
     byYear.set(row.year, counts);
   }
 
-  return {
+  const summary = {
     incoming: totals.incoming,
     outgoing: totals.outgoing,
-    capped,
     incomingByYear: [...byYear.values()].toSorted((a, b) => a.year - b.year),
+  };
+  const precision = isExact
+    ? { status: "exact" as const }
+    : { status: "bounded" as const, capped };
+  return {
+    ...summary,
+    precision,
   };
 };
 
-type DecisionCitationSummaryQueryOptions = {
-  currentYear: number;
-  decisionId: SafeId<"caseLawDecision">;
-  tx: CaseLawPublicReadTransaction;
-};
+export type DecisionCitationSummary = Awaited<
+  ReturnType<typeof summarizeDecisionCitationsHandler>
+>;
 
 /**
- * The summary's statement, and the top citing decisions read from the same
- * candidates: the same capped window of this decision's citations, so the
- * summary's `capped` flag says when the top citers, like the counts, come
- * from part of the citations rather than all of them.
+ * The bounded summary and top-citer ranking share the raw incoming window.
+ * Ranking precision is independent of the summary's projection precision:
+ * non-precedent and hidden edges still occupy places in this window.
  */
 export const decisionCitationSummaryQuery = ({
   currentYear,
@@ -541,6 +676,7 @@ export const decisionCitationSummaryQuery = ({
   END`;
   const incomingCandidates = candidatesFor("incoming");
   const incomingVisible = visibleFor({
+    farEnd: "decision",
     keepsUnresolved: false,
     related: incomingCandidates.relatedId,
   });
@@ -571,6 +707,7 @@ export const decisionCitationSummaryQuery = ({
 
   const outgoingCandidates = candidatesFor("outgoing");
   const outgoingVisible = visibleFor({
+    farEnd: "decision",
     keepsUnresolved: true,
     related: outgoingCandidates.relatedId,
   });
@@ -615,6 +752,8 @@ export const decisionCitationSummaryQuery = ({
           caseNumberType: relatedDecision.caseNumberType,
           country: relatedDecision.country,
           court: relatedDecision.court,
+          courtId: relatedDecision.courtId,
+          sourceUrl: relatedDecision.sourceUrl,
           decisionDate: relatedDecision.decisionDate,
           decisionType: relatedDecision.decisionType,
           ecli: relatedDecision.ecli,
@@ -631,6 +770,7 @@ export const decisionCitationSummaryQuery = ({
             lte(candidates.ordinal, CITATION_SUMMARY_SCAN_LIMIT),
             eq(candidates.kind, CITATION_KIND.PRECEDENT),
             visibleFor({
+              farEnd: "decision",
               keepsUnresolved: false,
               related: candidates.relatedId,
             }),
@@ -655,11 +795,18 @@ export const decisionCitationSummaryQuery = ({
       (CITATION_TIMELINE_MAX_YEARS + 2) * (POLARITIES.length + 1),
     ),
     topCiting,
+    incomingWindowOverflow: tx
+      .select({ ordinal: incomingCandidates.ordinal })
+      .from(incomingCandidates)
+      .where(gt(incomingCandidates.ordinal, CITATION_SUMMARY_SCAN_LIMIT))
+      .limit(1),
   };
 };
 
 type TopCitingDecisionsOptions = {
   subject: RedistributableDecisionSubject;
+  /** Read in the subject's transaction; reused by the digest. */
+  summary: DecisionCitationSummary;
   /** Distinct citing decisions to return. */
   limit: number;
 };
@@ -671,22 +818,57 @@ type TopCitingDecisionsOptions = {
  */
 const TOP_CITING_TIMELINE_YEAR = 0;
 
+export type TopCitingDecisionsResult = { items: RankedRelatedDecision[] } & (
+  | { precision: "exact" }
+  | {
+      precision: "bounded";
+      candidateWindow: typeof CITATION_SUMMARY_SCAN_LIMIT;
+    }
+);
+
 /**
- * The top citing decisions, read from the summary's own capped candidates.
+ * The top citing decisions, ranked within the raw incoming candidate window.
  * Unlike `listLeadingCitationsHandler` it is not split by treatment, so a
  * decision cited mostly one way still names `limit` citing decisions.
  */
 export const listTopCitingDecisionsHandler = async ({
   subject: { id: decisionId, tx },
+  summary,
   limit,
-}: TopCitingDecisionsOptions): Promise<RankedRelatedDecision[]> => {
-  const rows = await decisionCitationSummaryQuery({
+}: TopCitingDecisionsOptions): Promise<TopCitingDecisionsResult> => {
+  const query = decisionCitationSummaryQuery({
     currentYear: TOP_CITING_TIMELINE_YEAR,
     decisionId,
     tx,
-  }).topCiting(limit);
+  });
+  const rows = await query.topCiting(limit);
   const toRelatedDecision = await withLanguageAlternates(tx, rows);
-  return rows.map((row) => toRelatedDecision(row));
+  const items = rows.map((row) => toRelatedDecision(row));
+  const incomingTotal = Object.values(summary.incoming).reduce(
+    (total, count) => total + count,
+    0,
+  );
+  if (
+    summary.precision.status !== "exact" ||
+    incomingTotal > CITATION_SUMMARY_SCAN_LIMIT
+  ) {
+    return {
+      items,
+      precision: "bounded",
+      candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
+    };
+  }
+  // A filtered projection total cannot account for hidden or procedural edges
+  // occupying the raw window. A sentinel keeps those cases bounded too.
+  const overflow = await query.incomingWindowOverflow;
+  if (overflow.length > 0) {
+    return {
+      items,
+      precision: "bounded",
+      candidateWindow: CITATION_SUMMARY_SCAN_LIMIT,
+    };
+  }
+  return { items, precision: "exact" };
 };
 
 /** How many decisions each treatment shows before the reader asks for all. */
@@ -762,7 +944,11 @@ export const listLeadingCitationsHandler = async ({
         precedentOnly,
         // Before ranking, so a hidden decision cannot take a leader's place.
         // Only a held decision can lead, whatever the direction keeps.
-        visibleFor({ keepsUnresolved: false, related: spec.related }),
+        visibleFor({
+          farEnd: "decision",
+          keepsUnresolved: false,
+          related: spec.related,
+        }),
       ),
     )
     .as("leading_mentions");
@@ -795,6 +981,8 @@ export const listLeadingCitationsHandler = async ({
         caseNumberType: relatedDecision.caseNumberType,
         country: relatedDecision.country,
         court: relatedDecision.court,
+        courtId: relatedDecision.courtId,
+        sourceUrl: relatedDecision.sourceUrl,
         decisionDate: relatedDecision.decisionDate,
         decisionType: relatedDecision.decisionType,
         ecli: relatedDecision.ecli,

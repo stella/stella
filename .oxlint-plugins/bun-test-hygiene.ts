@@ -50,6 +50,7 @@
 //   opens; the lint config exempts that module.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
+import { panic } from "better-result";
 
 import {
   getPropertyName,
@@ -57,7 +58,7 @@ import {
   isIdentifierReference,
   isStringLiteral,
   memberPropertyName,
-  resolveImportedExpression,
+  resolveImportedExpressionForEnforcement,
   resolveVariable,
   unwrapExpression,
 } from "./utils.ts";
@@ -65,6 +66,150 @@ import type { AstNode, ScopeContext } from "./utils.ts";
 
 const BUN_TEST_MODULE = "bun:test";
 const EXPECT_EXPORT = "expect";
+
+const FORCED_DATABASE_DROP =
+  /(?:^|;)\s*DROP\s+DATABASE\b[^;]*(?:\bWITH\s*)?\(\s*FORCE\b/iu;
+const SQL_IDENTIFIER_CHARACTER = /[A-Za-z0-9_$\u0080-\u{10ffff}]/u;
+const SQL_DOLLAR_QUOTE =
+  /\$(?:[A-Za-z_\u0080-\u{10ffff}][A-Za-z0-9_\u0080-\u{10ffff}]*)?\$/uy;
+
+type SqlMaskState =
+  | { type: "code" }
+  | { type: "line-comment" }
+  | { type: "block-comment"; depth: number }
+  | { type: "quoted-identifier" }
+  | { type: "quoted-string"; syntax: "standard" | "escaped" }
+  | { type: "dollar-quoted"; delimiter: string };
+
+// A quote inside a comment belongs to that comment, and vice versa.
+const maskSqlValuesAndComments = (text: string) => {
+  const masked: string[] = [];
+  let state: SqlMaskState = { type: "code" };
+  for (let index = 0; index < text.length; index++) {
+    const character = text.charAt(index);
+    const next = text.charAt(index + 1);
+    switch (state.type) {
+      case "line-comment":
+        if (character === "\n" || character === "\r") {
+          masked.push(character);
+          state = { type: "code" };
+        }
+        continue;
+      case "block-comment":
+        if (character === "/" && next === "*") {
+          state.depth++;
+          index++;
+        } else if (character === "*" && next === "/") {
+          state.depth--;
+          index++;
+          if (state.depth === 0) {
+            state = { type: "code" };
+          }
+        }
+        continue;
+      case "quoted-identifier":
+        if (character === '"') {
+          if (next === '"') {
+            index++;
+          } else {
+            state = { type: "code" };
+          }
+        }
+        continue;
+      case "quoted-string":
+        if (state.syntax === "escaped" && character === "\\") {
+          index++;
+        } else if (character === "'") {
+          if (next === "'") {
+            index++;
+          } else {
+            state = { type: "code" };
+          }
+        }
+        continue;
+      case "dollar-quoted":
+        if (text.startsWith(state.delimiter, index)) {
+          index += state.delimiter.length - 1;
+          state = { type: "code" };
+        }
+        continue;
+      case "code":
+        if (character === "-" && next === "-") {
+          masked.push(" ");
+          state = { type: "line-comment" };
+          index++;
+          continue;
+        }
+        if (character === "/" && next === "*") {
+          masked.push(" ");
+          state = { type: "block-comment", depth: 1 };
+          index++;
+          continue;
+        }
+        if (character === '"') {
+          masked.push(" __value__ ");
+          state = { type: "quoted-identifier" };
+          continue;
+        }
+        if (character === "'") {
+          masked.push(" __value__ ");
+          state = {
+            type: "quoted-string",
+            syntax:
+              /[eE]/u.test(text.charAt(index - 1)) &&
+              !SQL_IDENTIFIER_CHARACTER.test(text.charAt(index - 2))
+                ? "escaped"
+                : "standard",
+          };
+          continue;
+        }
+        if (
+          character === "$" &&
+          !SQL_IDENTIFIER_CHARACTER.test(text.charAt(index - 1))
+        ) {
+          SQL_DOLLAR_QUOTE.lastIndex = index;
+          const delimiter = SQL_DOLLAR_QUOTE.exec(text)?.at(0);
+          if (delimiter !== undefined) {
+            masked.push(" __value__ ");
+            state = { type: "dollar-quoted", delimiter };
+            index += delimiter.length - 1;
+            continue;
+          }
+        }
+        masked.push(character);
+        continue;
+      default: {
+        state satisfies never;
+        panic("Unhandled SQL masking state");
+      }
+    }
+  }
+  return masked.join("");
+};
+
+const databaseDropText = (node: unknown) => {
+  if (isStringLiteral(node)) {
+    return node.value;
+  }
+  if (
+    !isAstNode(node) ||
+    node.type !== "TemplateLiteral" ||
+    !Array.isArray(node.quasis)
+  ) {
+    return null;
+  }
+  return node.quasis
+    .map((quasi: unknown) => {
+      const value = isAstNode(quasi) ? quasi.value : null;
+      return typeof value === "object" &&
+        value !== null &&
+        "cooked" in value &&
+        typeof value.cooked === "string"
+        ? value.cooked
+        : "";
+    })
+    .join(" __identifier__ ");
+};
 
 const TEST_KIND = { describe: "describe", test: "test" } as const;
 type TestKind = (typeof TEST_KIND)[keyof typeof TEST_KIND];
@@ -142,7 +287,7 @@ const testRegistration = (
   const modifiers: string[] = [];
   let current = unwrapExpression(call.callee);
   while (current !== null) {
-    const binding = resolveImportedExpression(context, current);
+    const binding = resolveImportedExpressionForEnforcement(context, current);
     const kind =
       binding?.source === BUN_TEST_MODULE
         ? TEST_FUNCTIONS.get(binding.imported)
@@ -380,7 +525,7 @@ const constructedClient = (
   if (isGlobalBunSql(context, callee)) {
     return "Bun.SQL";
   }
-  const binding = resolveImportedExpression(context, callee);
+  const binding = resolveImportedExpressionForEnforcement(context, callee);
   if (binding === null) {
     return null;
   }
@@ -405,6 +550,35 @@ const constructedClient = (
 export default eslintCompatPlugin({
   meta: { name: "bun-test-hygiene" },
   rules: {
+    "no-forced-database-drop": {
+      meta: {
+        type: "problem",
+        messages: {
+          forcedDrop:
+            "Close fixture-owned database clients before a normal DROP DATABASE. FORCE requires backend-termination privileges and can terminate another fixture's sessions.",
+        },
+      },
+      createOnce(context) {
+        const report = (
+          node: NonNullable<Parameters<typeof context.report>[0]["node"]>,
+        ) => {
+          const text = databaseDropText(node);
+          if (
+            text !== null &&
+            FORCED_DATABASE_DROP.test(maskSqlValuesAndComments(text))
+          ) {
+            context.report({ node, messageId: "forcedDrop" });
+          }
+        };
+        return {
+          before() {
+            return /\bFORCE\b|\\[ux]/iu.test(context.sourceCode.text);
+          },
+          Literal: report,
+          TemplateLiteral: report,
+        };
+      },
+    },
     "no-focused-tests": {
       meta: {
         type: "problem",
@@ -531,7 +705,10 @@ export default eslintCompatPlugin({
             if (!isAstNode(subject) || subject.type !== "CallExpression") {
               return;
             }
-            const binding = resolveImportedExpression(context, subject.callee);
+            const binding = resolveImportedExpressionForEnforcement(
+              context,
+              subject.callee,
+            );
             if (
               binding?.source !== BUN_TEST_MODULE ||
               binding.imported !== EXPECT_EXPORT

@@ -4,6 +4,10 @@ import { posthog } from "posthog-js";
 import type { CaptureResult, SupportedWebVitalsMetrics } from "posthog-js";
 
 import { POSTHOG_ORGANIZATION_GROUP_TYPE } from "@stll/analytics-config";
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+} from "@stll/api-contract";
 
 import { env } from "@/env";
 import { normalizeTelemetryErrorTypeName } from "@/lib/analytics/error-diagnostics";
@@ -143,8 +147,8 @@ const ENVIRONMENT_NOISE_PATTERNS: readonly RegExp[] = [
 const EXTENSION_FRAME = /^(?:chrome|moz|safari(?:-web)?)-extension:\/\//u;
 
 // API answers the UI already turns into a state (sign in, no access, not
-// found, a rejected provider key or continuation). Other 4xx and every 5xx
-// stay reported.
+// found, a rejected provider key or continuation, a file the upload scan
+// refused). Other 4xx and every 5xx stay reported.
 const API_ERROR_TYPES: ReadonlySet<string> = new Set([
   "ApiError",
   "StreamReadError",
@@ -152,7 +156,8 @@ const API_ERROR_TYPES: ReadonlySet<string> = new Set([
 const EXPECTED_API_STATUSES: ReadonlySet<number> = new Set([401, 403, 404]);
 const EXPECTED_API_CODES: ReadonlySet<string> = new Set([
   "ai_config_provider_validation_failed",
-  "chat_continuation_rejected",
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
 ]);
 
 const hasExtensionFrame = (entry: unknown): boolean => {

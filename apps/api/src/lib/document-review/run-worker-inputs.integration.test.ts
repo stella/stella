@@ -39,6 +39,7 @@ import {
 import { brandPersistedDocumentReviewRunId } from "@/api/lib/safe-id-boundaries";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -215,7 +216,10 @@ const readRun = async () =>
   ).at(0);
 
 const expectStoppedBeforeReading = async () => {
-  await processDocumentReviewRun(actor);
+  await processDocumentReviewRun(
+    actor,
+    testModelAdmission(actor.organizationId),
+  );
   const run = await readRun();
   expect(run).toMatchObject({
     status: "failed",
@@ -241,7 +245,10 @@ describe("document review run revocation", () => {
   // or storage call.
   test("a run resolves its inputs while its requester keeps access", async () => {
     preparationSpy.mockImplementation(async () => []);
-    await processDocumentReviewRun(actor);
+    await processDocumentReviewRun(
+      actor,
+      testModelAdmission(actor.organizationId),
+    );
     expect(
       preparationSpy.mock.calls.map(([files]) =>
         files.map(({ workspaceId }) => workspaceId),
@@ -273,7 +280,10 @@ describe("document review input readiness", () => {
     await testDb
       .delete(workspaceMembers)
       .where(eq(workspaceMembers.id, ids.memberA1wsA2));
-    await processDocumentReviewRun(actor);
+    await processDocumentReviewRun(
+      actor,
+      testModelAdmission(actor.organizationId),
+    );
     const run = (
       await testDb
         .select()
@@ -300,13 +310,16 @@ describe("document review input readiness", () => {
         throw failure;
       },
     });
-    await processDocumentReviewRun({
-      ...actor,
-      inputDb: createRootMembershipScopedDb(
-        scope,
-        asTestRaw<RlsDatabase<Transaction>>(failingDatabase),
-      ),
-    });
+    await processDocumentReviewRun(
+      {
+        ...actor,
+        inputDb: createRootMembershipScopedDb(
+          scope,
+          asTestRaw<RlsDatabase<Transaction>>(failingDatabase),
+        ),
+      },
+      testModelAdmission(actor.organizationId),
+    );
     const run = (
       await testDb
         .select()

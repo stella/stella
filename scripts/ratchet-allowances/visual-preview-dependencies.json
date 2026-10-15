@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 6,
+  "reason": "The API invokes the isolated renderer through @aws-sdk/client-lambda. The visual-preview application owns Chromium (@sparticuz/chromium-min), its browser driver (playwright-core), typed failures (better-result), shared-boundary validation (valibot), and Bun test/runtime types (bun-types); each declaration belongs to its executing application."
+}

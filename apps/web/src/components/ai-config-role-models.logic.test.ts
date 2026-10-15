@@ -1,7 +1,13 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { DECISION_MODEL_PROVIDERS } from "@stll/ai-catalog";
+
 import {
+  DECISION_PROVIDER_KEYS,
   createDecisionModelState,
+  haveSameRoleModelSelections,
+  ROLE_KEYS,
   createDefaultRoleModels,
   createProviderCredentialDraft,
   decisionModelDraft,
@@ -13,16 +19,20 @@ import {
   getModelOptionsForRole,
   getProviderValues,
   getRolePickerRows,
+  hasProviderCredentialChanges,
   hasUsableDecisionModel,
   hasUsableProviderDrafts,
   isKnownModelSelection,
   isKnownModelSelectionForRole,
   isProviderRoleSupported,
   providerDraftsFromStoredProviders,
+  PROVIDER_KEYS,
   roleModelsFromOverrideModels,
   serializeDecisionModel,
   serializeOverrideModels,
   serializeProviderDrafts,
+  serializeRoleOverrides,
+  roleOverridesFromStoredModels,
 } from "@/components/ai-config-role-models.logic";
 import type {
   RoleModelSelections,
@@ -331,6 +341,89 @@ describe("BYOK provider and model configuration", () => {
     ]);
   });
 
+  test("serializes trimmed Anthropic credentials and workspace IDs", () => {
+    expect(
+      serializeProviderDrafts([
+        {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKey: "  sk-ant-api03-fixture  ",
+          anthropicWorkspaceId: "  wrkspc_fixture  ",
+        },
+      ]),
+    ).toEqual([
+      {
+        provider: "anthropic",
+        apiKey: "sk-ant-api03-fixture",
+        anthropicWorkspaceId: "wrkspc_fixture",
+        region: "global",
+      },
+    ]);
+  });
+
+  test("an empty workspace ID explicitly clears Anthropic workspace scope while keeping the saved key", () => {
+    expect(
+      serializeProviderDrafts([
+        {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKey: "  ",
+          apiKeyMasked: "sk-ant-api03****1234",
+          replacingKey: false,
+          anthropicWorkspaceId: "  ",
+        },
+      ]),
+    ).toEqual([
+      {
+        provider: "anthropic",
+        anthropicWorkspaceId: "",
+        region: "global",
+      },
+    ]);
+  });
+
+  test.each(PROVIDER_KEYS)(
+    "workspace scope serialization is provider-specific for %s",
+    (provider) => {
+      expect(
+        serializeProviderDrafts([
+          {
+            ...createProviderCredentialDraft(provider),
+            anthropicWorkspaceId: "  wrkspc_fixture  ",
+          },
+        ]),
+      ).toEqual([
+        {
+          provider,
+          ...(provider === "anthropic"
+            ? { anthropicWorkspaceId: "wrkspc_fixture" }
+            : {}),
+          region: "global",
+        },
+      ]);
+      expect(
+        serializeProviderDrafts([
+          {
+            ...createProviderCredentialDraft(provider),
+            anthropicWorkspaceId: "  ",
+          },
+        ]),
+      ).toEqual([
+        {
+          provider,
+          ...(provider === "anthropic" ? { anthropicWorkspaceId: "" } : {}),
+          region: "global",
+        },
+      ]);
+      expect(
+        serializeProviderDrafts([createProviderCredentialDraft(provider)]),
+      ).toEqual([
+        {
+          provider,
+          region: "global",
+        },
+      ]);
+    },
+  );
+
   test("accepts saved provider drafts without requiring key replacement", () => {
     expect(
       hasUsableProviderDrafts([
@@ -564,4 +657,197 @@ describe("decision model configuration", () => {
       }),
     ).toBe(false);
   });
+});
+
+describe("OpenAI decision settings", () => {
+  test("offers every decision provider the API accepts", () => {
+    expect(DECISION_PROVIDER_KEYS).toEqual(DECISION_MODEL_PROVIDERS);
+  });
+  test("provider switch resets to the provider's default model and reused OpenAI key", () => {
+    const state = createDecisionModelState("openai");
+    expect(state).toEqual({
+      kind: "set",
+      provider: "openai",
+      apiKey: "",
+      modelId: "gpt-6-luna",
+      region: "eu",
+      keyMode: "reuse",
+    });
+    expect(serializeDecisionModel(state)).toEqual({
+      provider: "openai",
+      apiKey: null,
+      modelId: "gpt-6-luna",
+      region: "eu",
+    });
+    expect(
+      hasUsableDecisionModel({ state, stored: null, hasOpenAIKey: true }),
+    ).toBe(true);
+    expect(
+      hasUsableDecisionModel({ state, stored: null, hasOpenAIKey: false }),
+    ).toBe(false);
+  });
+  test("a separate override is required when no OpenAI key is configured", () => {
+    expect(createDecisionModelState("openai", false)).toEqual({
+      kind: "set",
+      provider: "openai",
+      apiKey: "",
+      modelId: "gpt-6-luna",
+      region: "eu",
+      keyMode: "override",
+    });
+    expect(
+      serializeDecisionModel({
+        kind: "set",
+        provider: "openai",
+        apiKey: " override ",
+        modelId: "gpt-6-luna",
+        region: "global",
+        keyMode: "override",
+      }),
+    ).toEqual({
+      provider: "openai",
+      apiKey: "override",
+      modelId: "gpt-6-luna",
+      region: "global",
+    });
+  });
+  test("read-back keeps key mode and region without borrowing another provider's key", () => {
+    const stored = {
+      provider: "openai",
+      modelId: "gpt-6-luna",
+      region: "global",
+      apiKeyMasked: undefined,
+    } as const satisfies StoredDecisionModel;
+    expect(
+      decisionModelDraft({ state: { kind: "untouched" }, stored }),
+    ).toEqual({
+      provider: "openai",
+      apiKey: "",
+      apiKeyMasked: undefined,
+      modelId: "gpt-6-luna",
+      region: "global",
+      keyMode: "reuse",
+    });
+    const state = createDecisionModelState("openai", false);
+    expect(hasUsableDecisionModel({ state, stored, hasOpenAIKey: true })).toBe(
+      false,
+    );
+  });
+});
+describe("provider credential changes", () => {
+  test.each([
+    { draftId: undefined, storedId: undefined, changed: false },
+    { draftId: "", storedId: undefined, changed: false },
+    { draftId: "  ", storedId: undefined, changed: false },
+    { draftId: undefined, storedId: "  ", changed: false },
+    { draftId: " wrkspc_fixture ", storedId: "wrkspc_fixture", changed: false },
+    { draftId: "", storedId: "wrkspc_fixture", changed: true },
+    { draftId: "wrkspc_fixture", storedId: undefined, changed: true },
+  ])(
+    "normalizes workspace scope $draftId against $storedId",
+    ({ draftId, storedId, changed }) => {
+      expect(
+        hasProviderCredentialChanges({
+          draft: {
+            ...createProviderCredentialDraft("anthropic"),
+            anthropicWorkspaceId: draftId,
+          },
+          stored: {
+            ...createProviderCredentialDraft("anthropic"),
+            anthropicWorkspaceId: storedId,
+          },
+        }),
+      ).toBe(changed);
+    },
+  );
+  test("a key still needs saving when workspace scope is unchanged", () => {
+    expect(
+      hasProviderCredentialChanges({
+        draft: {
+          ...createProviderCredentialDraft("anthropic"),
+          apiKey: "sk-ant-usr-fixture",
+          anthropicWorkspaceId: "",
+        },
+        stored: undefined,
+      }),
+    ).toBe(true);
+  });
+});
+
+test("only explicit role overrides are serialized, even when equal to a default", () => {
+  const defaults = createDefaultRoleModels(["google"]);
+  const chat = defaults.chat;
+  if (chat === null) {
+    panic("Google chat fixture requires a default");
+  }
+  expect(
+    serializeRoleOverrides({ providers: ["google"], overrides: {} }),
+  ).toEqual({ kind: "valid", overrides: null });
+  expect(
+    serializeRoleOverrides({ providers: ["google"], overrides: { chat } }),
+  ).toEqual({ kind: "valid", overrides: { chat } });
+  expect(
+    roleOverridesFromStoredModels({
+      providers: ["google"],
+      overrideModels: { chat },
+    }),
+  ).toEqual({ chat });
+  expect(
+    serializeRoleOverrides({
+      providers: ["google"],
+      overrides: { chat: null },
+    }),
+  ).toEqual({ kind: "invalid" });
+});
+
+test("role comparison ignores insertion order while preserving default and explicit selection states", () => {
+  const baseline = createDefaultRoleModels(["google"]);
+  for (const [offset, role] of ROLE_KEYS.entries()) {
+    const order = [
+      ...ROLE_KEYS.slice(offset),
+      ...ROLE_KEYS.slice(0, offset),
+    ].toReversed();
+    const current = Object.fromEntries(
+      order.map((key) => [key, baseline[key]]),
+    );
+    expect(haveSameRoleModelSelections({ current, baseline })).toBe(true);
+    expect(
+      haveSameRoleModelSelections({
+        current: { ...current, [role]: null },
+        baseline,
+      }),
+    ).toBe(false);
+    const selection = baseline[role];
+    if (selection === null) {
+      panic("Google supports every role");
+    }
+    expect(
+      haveSameRoleModelSelections({
+        current: {
+          ...current,
+          [role]: { ...selection, modelId: `${selection.modelId}-different` },
+        },
+        baseline,
+      }),
+    ).toBe(false);
+    expect(
+      haveSameRoleModelSelections({
+        current: {
+          ...current,
+          [role]: { ...selection, provider: "anthropic" },
+        },
+        baseline,
+      }),
+    ).toBe(false);
+    expect(
+      haveSameRoleModelSelections({
+        current: { [role]: selection },
+        baseline: {},
+      }),
+    ).toBe(false);
+  }
+  expect(haveSameRoleModelSelections({ current: {}, baseline: {} })).toBe(true);
+  expect(
+    haveSameRoleModelSelections({ current: {}, baseline: { chat: null } }),
+  ).toBe(false);
 });

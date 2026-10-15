@@ -1,22 +1,20 @@
 import { TaggedError } from "better-result";
 
 import type { documentProcessingRuns } from "@/api/db/schema";
+import { DOCUMENT_PROCESSING_MAX_ATTEMPTS } from "@/api/lib/document-processing-contract";
 import {
-  AUTOMATIC_OCR_MAX_ATTEMPTS,
   SEARCHABLE_PDF_FAILURE_CODE,
   SEARCH_INDEX_FAILURE_CODE,
 } from "@/api/lib/document-processing-queue-policy";
 import { isTransientRedisConnectionError } from "@/api/lib/redis-error-classification";
 
-const AUTOMATIC_OCR_RETRY_BASE_DELAY_MS = 30_000;
-const AUTOMATIC_OCR_RETRY_MAX_DELAY_MS = 30 * 60 * 1000;
 const RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES = [
   "not_configured",
   "processing_failed",
   "request_failed",
 ] as const;
 
-export const isLifecycleInterruptionError = ({
+const isLifecycleInterruptionError = ({
   error,
   lifecycleSignal,
 }: {
@@ -106,12 +104,6 @@ export const documentProcessingFailureReport = (error: unknown) => {
   return DOCUMENT_PROCESSING_FAILURE_REPORT.MACHINERY;
 };
 
-export const automaticOcrRetryDelayMs = (attemptCount: number): number =>
-  Math.min(
-    AUTOMATIC_OCR_RETRY_BASE_DELAY_MS * 2 ** Math.max(0, attemptCount - 1),
-    AUTOMATIC_OCR_RETRY_MAX_DELAY_MS,
-  );
-
 export const isRetryableAutomaticOcrFailure = ({
   attemptCount,
   errorCode,
@@ -122,7 +114,7 @@ export const isRetryableAutomaticOcrFailure = ({
   requestSource: (typeof documentProcessingRuns.$inferSelect)["requestSource"];
 }): boolean =>
   requestSource !== "manual" &&
-  attemptCount < AUTOMATIC_OCR_MAX_ATTEMPTS &&
+  attemptCount < DOCUMENT_PROCESSING_MAX_ATTEMPTS &&
   (errorCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[0] ||
     errorCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[1] ||
     errorCode === RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES[2]);
@@ -138,6 +130,4 @@ export const isRetryableOcrDerivativeFailure = ({
   errorCode: string;
 }): boolean =>
   errorCode === SEARCHABLE_PDF_FAILURE_CODE &&
-  attemptCount < AUTOMATIC_OCR_MAX_ATTEMPTS;
-
-export const retryableOcrFailureCodes = RETRYABLE_AUTOMATIC_OCR_FAILURE_CODES;
+  attemptCount < DOCUMENT_PROCESSING_MAX_ATTEMPTS;

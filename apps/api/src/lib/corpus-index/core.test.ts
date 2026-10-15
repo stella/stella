@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   settleBoth,
   splitIngestRequests,
@@ -149,11 +151,9 @@ describe("splitIngestRequests", () => {
 describe("settleBoth", () => {
   test("a fast failure waits for its sibling before surfacing", async () => {
     let siblingFinished = false;
-    const sibling = new Promise<string>((resolve) => {
-      setTimeout(() => {
-        siblingFinished = true;
-        resolve("loaded");
-      }, 25);
+    const sibling = sleep(25).then(() => {
+      siblingFinished = true;
+      return "loaded";
     });
 
     const caught = await settleBoth(

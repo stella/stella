@@ -4,6 +4,8 @@ import path from "node:path";
 
 import { DEFAULT_MODELS } from "@stll/ai-catalog";
 
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
+
 import { createCassetteFetch } from "./ai-provider-cassette";
 
 // This entry point records only this synthetic probe, never application traffic.
@@ -59,6 +61,7 @@ const run = async () => {
     finishPolicy: "require-complete",
     maxOutputTokens: 32,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: {
       overrideModels: {
         fast: selection,

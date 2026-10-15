@@ -49,11 +49,13 @@ import {
   type FlowTriggerType,
 } from "@/components/flows/flow-meta";
 import { FlowSwitch } from "@/components/flows/flow-switch";
+import { MatterOptionLabel } from "@/components/matter-option-label";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
@@ -61,6 +63,7 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { flowDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { WEEKDAY_NAME_FORMAT } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import {
   buildFlowExample,
@@ -285,7 +288,7 @@ type EditableStep = FlowStep & { _id: string };
 
 const withStepId = (step: FlowStep): EditableStep => ({
   ...step,
-  _id: crypto.randomUUID(),
+  _id: createUuid(),
 });
 
 // ── Editor form ───────────────────────────────────────
@@ -333,7 +336,10 @@ const FlowEditorForm = ({
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
-  const workspacesQuery = useQuery(workspacesNavigationOptions(organizationId));
+  const { id: userId } = useAuthenticatedUser();
+  const workspacesQuery = useQuery(
+    workspacesNavigationOptions({ organizationId, userId }),
+  );
   const workspaces = toWorkspaceOptions(workspacesQuery);
 
   const updateStep = (index: number, next: FlowStep) => {
@@ -601,7 +607,7 @@ const FlowEditorForm = ({
 
 // ── Trigger section ───────────────────────────────────
 
-type WorkspaceOption = { id: string; name: string };
+type WorkspaceOption = { color: string | null; id: string; name: string };
 
 type WorkspaceOptions =
   | { status: "loading" }
@@ -774,7 +780,7 @@ const ScheduleConfig = ({
             {workspaces.status === "ready" &&
               workspaces.items.map((workspace) => (
                 <SelectItem key={workspace.id} value={workspace.id}>
-                  {workspace.name}
+                  <MatterOptionLabel matter={workspace} />
                 </SelectItem>
               ))}
           </SelectPopup>

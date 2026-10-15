@@ -6,10 +6,7 @@ import { Temporal } from "@stll/time";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
-import type {
-  SearchFilters,
-  TimeFilter,
-} from "@/components/search-filters.logic";
+import type { SearchFilters } from "@/components/search-filters.logic";
 import type { TranslationKey } from "@/i18n/types";
 import type { EntityKind, GlobalSearchHit } from "@/lib/api-contract";
 import type { TimePreset } from "@/lib/search";
@@ -40,7 +37,13 @@ export const TIME_PRESET_TRANSLATION_KEYS = {
   year: "search.updatedWithinOptions.year",
 } as const satisfies Record<TimePreset, TranslationKey>;
 
-export type FacetBucket = { value: string; label?: string; count: number };
+export type FacetBucket = {
+  value: string;
+  label?: string;
+  count: number;
+  /** Replaces the bare count when the number needs words to read right. */
+  countLabel?: string;
+};
 
 export const EMPTY_FACET_BUCKETS: readonly FacetBucket[] = [];
 export const EMPTY_SEARCH_HITS: readonly GlobalSearchHit[] = [];
@@ -146,5 +149,3 @@ export type SearchFacetParams = {
   updatedFrom?: string | undefined;
   updatedTo?: string | undefined;
 };
-
-export type SearchTimeFilter = TimeFilter;

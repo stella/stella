@@ -10,7 +10,6 @@ import type { TaskStatus } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import { getFirstWeekday } from "@/i18n/week";
-import type { WorkspaceFieldContent } from "@/lib/types";
 import { includesValue } from "@/lib/utils";
 
 export type CalendarDay = {
@@ -169,52 +168,10 @@ export const appendToMapArray = <K, V>(map: Map<K, V[]>, key: K, value: V) => {
 };
 
 /**
- * Extract a date string from an entity for a given property ID.
- * Handles both custom date properties and internal properties.
- */
-/** The YYYY-MM-DD part of an ISO date or instant. */
-const toDateString = (value: string): string => value.slice(0, 10);
-
-export const getEntityDate = (
-  entity: {
-    fields: Record<string, { content: WorkspaceFieldContent }>;
-    createdAt: string;
-    updatedAt: string | null;
-    dueDate?: string | null;
-    startAt?: string | null;
-    occurredAt?: string | null;
-  },
-  propertyId: string,
-): string | null => {
-  if (propertyId === INTERNAL_DATE_IDS[0]) {
-    return toDateString(entity.createdAt);
-  }
-  if (propertyId === INTERNAL_DATE_IDS[1]) {
-    return entity.updatedAt !== null ? toDateString(entity.updatedAt) : null;
-  }
-  if (propertyId === TASK_DATE_IDS[0]) {
-    return entity.dueDate !== null && entity.dueDate !== undefined
-      ? toDateString(entity.dueDate)
-      : null;
-  }
-  if (propertyId === TASK_DATE_IDS[1]) {
-    const value = entity.startAt ?? entity.occurredAt ?? entity.dueDate;
-    return value !== null && value !== undefined ? toDateString(value) : null;
-  }
-
-  const field = entity.fields[propertyId];
-  if (field?.content.type === "date" && field.content.value) {
-    return toDateString(field.content.value);
-  }
-
-  return null;
-};
-
-/**
  * Internal date pseudo-properties (`_created-at`, `_updated-at`)
  * are read-only metadata; drag/resize/create should be disabled.
  */
-export const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
+const INTERNAL_DATE_IDS = ["_created-at", "_updated-at"] as const;
 
 export const isInternalDateProperty = (id: string) =>
   includesValue(INTERNAL_DATE_IDS, id);

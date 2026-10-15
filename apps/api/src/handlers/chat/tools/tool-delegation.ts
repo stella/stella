@@ -41,6 +41,16 @@ export type ChatToolDelegation =
 
 /** Every native internal or mutation registration makes an authority decision. */
 export const NATIVE_CHAT_TOOL_DELEGATIONS = {
+  request_secret: {
+    type: "waiver",
+    reason:
+      "The client submits private input through a dedicated authenticated endpoint.",
+  },
+  show_visual: {
+    type: "waiver",
+    reason:
+      "Publishes a private view for the owning chat turn; no standalone MCP or CLI execution context exists.",
+  },
   "ask-user": {
     type: "waiver",
     reason:

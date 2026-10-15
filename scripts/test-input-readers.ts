@@ -110,6 +110,29 @@ const readQuoted = (
   return undefined;
 };
 
+const skipRegex = (source: string, state: ScanState): void => {
+  state.index += 1;
+  let inClass = false;
+  while (state.index < source.length) {
+    const regexChar = source.charAt(state.index);
+    if (regexChar === "\\") {
+      state.index += 2;
+      continue;
+    }
+    if (regexChar === "[") {
+      inClass = true;
+    } else if (regexChar === "]") {
+      inClass = false;
+    } else if (regexChar === "/" && !inClass) {
+      state.index += 1;
+      break;
+    } else if (regexChar === "\n") {
+      break;
+    }
+    state.index += 1;
+  }
+};
+
 /**
  * Every static string literal in a TypeScript source, tagged with the callee of
  * the innermost call that encloses it. Comments and regular expressions are
@@ -117,7 +140,8 @@ const readQuoted = (
  */
 export const readStringLiterals = (
   source: string,
-  onCall?: (callee: string | undefined, source: string) => void,
+  onCall?: (callee: string | undefined, source: string, start: number) => void,
+  onIgnored?: (start: number, end: number) => void,
 ): readonly SourceLiteral[] => {
   const literals: SourceLiteral[] = [];
   const calls: { callee: string | undefined; start: number }[] = [];
@@ -139,43 +163,31 @@ export const readStringLiterals = (
     }
     if (char === "/" && next === "/") {
       const end = source.indexOf("\n", state.index);
+      const start = state.index;
       state.index = end === -1 ? source.length : end;
+      onIgnored?.(start, state.index);
       continue;
     }
     if (char === "/" && next === "*") {
       const end = source.indexOf("*/", state.index + 2);
       const stop = end === -1 ? source.length : end + 2;
+      onIgnored?.(state.index, stop);
       state.line += source.slice(state.index, stop).split("\n").length - 1;
       state.index = stop;
       continue;
     }
     if (char === "/" && REGEX_PRECEDING.has(previousSignificant)) {
-      state.index += 1;
-      let inClass = false;
-      while (state.index < source.length) {
-        const regexChar = source.charAt(state.index);
-        if (regexChar === "\\") {
-          state.index += 2;
-          continue;
-        }
-        if (regexChar === "[") {
-          inClass = true;
-        } else if (regexChar === "]") {
-          inClass = false;
-        } else if (regexChar === "/" && !inClass) {
-          state.index += 1;
-          break;
-        } else if (regexChar === "\n") {
-          break;
-        }
-        state.index += 1;
-      }
+      const start = state.index;
+      skipRegex(source, state);
+      onIgnored?.(start, state.index);
       previousSignificant = "/";
       continue;
     }
     if (char === '"' || char === "'" || char === "`") {
       const line = state.line;
+      const start = state.index;
       const value = readQuoted(source, state, char);
+      onIgnored?.(start, state.index);
       if (value !== undefined) {
         literals.push({ callee: calls.at(-1)?.callee, line, value });
       }
@@ -190,7 +202,11 @@ export const readStringLiterals = (
     } else if (char === ")") {
       const call = calls.pop();
       if (call) {
-        onCall?.(call.callee, source.slice(call.start, state.index + 1));
+        onCall?.(
+          call.callee,
+          source.slice(call.start, state.index + 1),
+          call.start,
+        );
       }
     }
     previousSignificant = char;
@@ -304,4 +320,55 @@ export const readTestInputs = (
     );
   }
   return inputs;
+};
+
+// Split call arguments without treating commas inside literals or nested calls
+// as separators. Unknown/computed expressions remain source for the caller.
+export const readCallArguments = (source: string): readonly string[] => {
+  const args: string[] = [];
+  const state = { index: 1, line: 1 };
+  let start = 1;
+  let depth = 0;
+  while (state.index < source.length) {
+    const char = source.charAt(state.index);
+    if (char === '"' || char === "'" || char === "`") {
+      readQuoted(source, state, char);
+      continue;
+    }
+    if (char === ")" && depth === 0) {
+      break;
+    }
+    if (["(", "[", "{"].includes(char)) {
+      depth += 1;
+    }
+    if ([")", "]", "}"].includes(char)) {
+      depth -= 1;
+    }
+    if (char === "," && depth === 0) {
+      args.push(source.slice(start, state.index).trim());
+      start = state.index + 1;
+    }
+    state.index += 1;
+  }
+  const last = source.slice(start, state.index).trim();
+  if (last) {
+    args.push(last);
+  }
+  return args;
+};
+
+// Preserve source offsets while hiding declarations inside fixture strings,
+// comments, and regular expressions from declaration/binding scanners.
+export const maskSourceNonCode = (source: string): string => {
+  const parts: string[] = [];
+  let cursor = 0;
+  readStringLiterals(source, undefined, (start, end) => {
+    parts.push(
+      source.slice(cursor, start),
+      source.slice(start, end).replace(/[^\n]/gu, " "),
+    );
+    cursor = end;
+  });
+  parts.push(source.slice(cursor));
+  return parts.join("");
 };

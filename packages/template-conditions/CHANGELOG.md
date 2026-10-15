@@ -1,5 +1,11 @@
 # @stll/template-conditions
 
+## 0.6.4
+
+### Patch Changes
+
+- [#4842](https://github.com/stella/stella/pull/4842) [`e4508d7`](https://github.com/stella/stella/commit/e4508d714f16141cabf6ecda9c3225c9b45bd432) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the path utility module for shared non-null-object checks.
+
 ## 0.6.3
 
 ### Patch Changes

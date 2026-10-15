@@ -12,6 +12,8 @@ export const AUDIT_ACTION = {
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
 
 export const AUDIT_RESOURCE_TYPE = {
+  SERVICE_OAUTH_CLIENT: "service_oauth_client",
+  LEGAL_RESOLVE: "legal_resolve",
   AUDIT_LOG: "audit_log",
   AGENT_SKILL: "agent_skill",
   AGENT_SKILL_COMMENT: "agent_skill_comment",
@@ -21,6 +23,7 @@ export const AUDIT_RESOURCE_TYPE = {
   BILLING_CODE: "billing_code",
   CASE_LAW_MATTER_LINK: "case_law_matter_link",
   CASE_LAW_DECISION_ANNOTATION: "case_law_decision_annotation",
+  CASE_LAW_READER_ANSWER: "case_law_reader_answer",
   CASE_LAW_RESEARCH_COLUMN: "case_law_research_column",
   CHAT_FILE: "chat_file",
   CHAT_MESSAGE: "chat_message",
@@ -67,6 +70,7 @@ export const AUDIT_RESOURCE_TYPE = {
   REPORT_EXPORT: "report_export",
   RATE_TABLE: "rate_table",
   SAVED_SEARCH: "saved_search",
+  SEARCH_HISTORY: "search_history",
   SELLER_PROFILE: "seller_profile",
   SAVED_TIME_NARRATIVE: "saved_time_narrative",
   VAT_RATE: "vat_rate",
@@ -89,3 +93,13 @@ export const AUDIT_RESOURCE_TYPE = {
 
 export type AuditResourceType =
   (typeof AUDIT_RESOURCE_TYPE)[keyof typeof AUDIT_RESOURCE_TYPE];
+
+/** Account events describe the export lifecycle without carrying export contents. */
+export const ACCOUNT_AUDIT_EVENT_TYPES = [
+  "account.data_export.requested",
+  "account.data_export.ready",
+  "account.data_export.downloaded",
+  "account.data_export.expired",
+] as const;
+
+export type AccountAuditEventType = (typeof ACCOUNT_AUDIT_EVENT_TYPES)[number];

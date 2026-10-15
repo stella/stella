@@ -1,9 +1,14 @@
+// parser-output-unchanged: array partitions and retry arithmetic use shared owners with identical boundaries and delays; parsed content is unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 // parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 // parser-output-unchanged: [cz-regional] rawHash comes from the sourceFingerprint owner, equal to the previous envelope hash for a source that stores no objects.
 import { panic, Result } from "better-result";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { classifyFailure } from "@stll/errors";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
@@ -13,7 +18,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   decodeSourceRawEnvelope,
   defineSourceAdapter,
@@ -56,7 +60,6 @@ import {
   readPublisherText,
   unreadPublisherError,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-read";
-import { backoffMs } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -692,7 +695,13 @@ const retryFinaldocRead = async (
     attempt: 1,
     maxRetries: 1,
   });
-  await Bun.sleep(backoffMs(0));
+  await Bun.sleep(
+    backoffDelay(0, {
+      baseMs: 1000,
+      maxMs: 30_000,
+      jitter: { type: "additive", random: Math.random(), rangeMs: 1000 },
+    }),
+  );
   return await read();
 };
 
@@ -2345,8 +2354,7 @@ const buildCzRegionalPageItems = async ({
     }
     decisions.push(listed.decision);
   };
-  for (let i = 0; i < items.length; i += FINALDOC_CONCURRENCY) {
-    const batch = items.slice(i, i + FINALDOC_CONCURRENCY);
+  for (const batch of chunkItems(items, FINALDOC_CONCURRENCY)) {
     if (readBudgetSpent()) {
       deferred += batch.length;
       for (const item of batch) {

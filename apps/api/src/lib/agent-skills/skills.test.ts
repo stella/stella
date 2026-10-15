@@ -97,7 +97,7 @@ describe("resolveActiveSkillContext", () => {
       slug: `enabled-team-${Bun.randomUUIDv7()}`,
       userId: ids.userA1,
     });
-    await insertResource({ path: "knowledge/enabled.md", skillId });
+    await insertResource({ path: "references/enabled.md", skillId });
 
     const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Enabled Team Skill" },
@@ -114,7 +114,7 @@ describe("resolveActiveSkillContext", () => {
     expect(result.value?.body).toBe("Use this only for chat tests.");
     expect(result.value?.editable).toBe(false);
     expect(result.value?.resources).toEqual([
-      { kind: "knowledge", path: "knowledge/enabled.md" },
+      { path: "references/enabled.md" },
     ]);
   });
 
@@ -125,7 +125,7 @@ describe("resolveActiveSkillContext", () => {
       slug: `disabled-team-${Bun.randomUUIDv7()}`,
       userId: ids.userA1,
     });
-    await insertResource({ path: "knowledge/disabled.md", skillId });
+    await insertResource({ path: "references/disabled.md", skillId });
 
     const result = await resolveActiveSkillContext({
       activeSkill: { skillId, skillName: "Disabled Team Skill" },
@@ -241,12 +241,12 @@ describe("available active chat skills", () => {
     });
     await insertResource({
       content: "team resource",
-      path: "knowledge/shared.md",
+      path: "references/shared.md",
       skillId: activeTeamSkillId,
     });
     await insertResource({
       content: "private resource",
-      path: "knowledge/shared.md",
+      path: "references/shared.md",
       skillId: privateSkillId,
     });
 
@@ -266,7 +266,7 @@ describe("available active chat skills", () => {
     const activeReadResult = await readAvailableChatSkillResource({
       activeSkillId: activeTeamSkillId,
       organizationId: ids.orgA,
-      path: "knowledge/shared.md",
+      path: "references/shared.md",
       safeDb,
       skillName: slug,
       userId: ids.userA2,
@@ -287,7 +287,6 @@ describe("available active chat skills", () => {
     expect(activeReadResult.value).toEqual({
       status: "found",
       content: "team resource",
-      kind: "knowledge",
       skill: { source: "installed", id: activeTeamSkillId, origin: "authored" },
     });
   });
@@ -365,7 +364,6 @@ const insertResource = async ({
     organizationId: ids.orgA,
     skillId,
     path,
-    kind: "knowledge",
     content,
     sizeBytes,
   });

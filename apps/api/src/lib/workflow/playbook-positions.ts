@@ -7,26 +7,18 @@ import type { ConstantMap } from "@/api/lib/constant-map";
 import {
   POSITION_SEVERITIES,
   POSITION_TERM_KINDS,
-  positionRuleSchema,
+  type positionRuleSchema,
   positionSeveritySchema,
   positionTermKindSchema,
-  resolvedTiersSchema,
+  type resolvedTiersSchema,
 } from "@/api/lib/workflow/playbook-position-facets";
 
 // The run-time grading facets (`rule` discriminator, `severity`) and the
 // verdict-time `ResolvedTiers` snapshot live in `playbook-position-facets.ts`, a leaf
 // module with no `db/schema-validators` dependency, so the `playbook-verdict`
 // property tool (defined in schema-validators) can embed them without an import
-// cycle. The grading engine consumes these too, so re-export them from this one
-// module.
-export {
-  POSITION_SEVERITIES,
-  POSITION_TERM_KINDS,
-  positionRuleSchema,
-  positionSeveritySchema,
-  positionTermKindSchema,
-  resolvedTiersSchema,
-};
+// cycle. This module uses the leaf schemas to derive its position types.
+export { POSITION_SEVERITIES, POSITION_TERM_KINDS };
 export type PositionRule = Static<typeof positionRuleSchema>;
 export type PositionSeverity = Static<typeof positionSeveritySchema>;
 export type PositionTermKind = Static<typeof positionTermKindSchema>;
@@ -56,7 +48,7 @@ export const POSITION_LIMITS = {
 // ── Tier lines: identified plain-language rules and fallback entries ──
 // `id` is client-generated so reorder/DnD and finding citations reference a
 // stable identity, not the array index. Rank stays implicit in array order.
-export const tierRuleSchema = t.Object({
+const tierRuleSchema = t.Object({
   id: t.String({ format: "uuid" }),
   text: t.String({
     minLength: 1,
@@ -68,7 +60,7 @@ export type TierRule = Static<typeof tierRuleSchema>;
 // A fallback entry is simultaneously a rule and language (the accepted
 // alternative wording), so its text is capped like ideal language rather than
 // like a one-line rule.
-export const fallbackEntrySchema = t.Object({
+const fallbackEntrySchema = t.Object({
   id: t.String({ format: "uuid" }),
   text: t.String({
     minLength: 1,
@@ -83,7 +75,7 @@ export type FallbackEntry = Static<typeof fallbackEntrySchema>;
 // ── Ideal language: the acceptable tier's answer key ──
 // A clause link (resolved at run time) or inline text. FIX inserts this text
 // when a document deviates; the absence of ideal language is structural.
-export const idealLanguageSchema = t.Union([
+const idealLanguageSchema = t.Union([
   t.Object({
     source: t.Literal("clause"),
     clauseId: t.String({ format: "uuid" }),
@@ -98,7 +90,7 @@ export const idealLanguageSchema = t.Union([
 export type IdealLanguage = Static<typeof idealLanguageSchema>;
 
 // ── Tiers: the Acceptable / Fallback / Not acceptable ladder ──
-export const tiersSchema = t.Object({
+const tiersSchema = t.Object({
   acceptable: t.Object({
     rules: t.Array(tierRuleSchema, {
       maxItems: POSITION_LIMITS.tierRulesMaxItems,
@@ -126,7 +118,7 @@ export type Tiers = Static<typeof tiersSchema>;
 // and read under that matter's row security; `id` names that row. A position
 // therefore never carries another matter's text into the playbook or run that
 // holds it, and a reader sees the quote exactly when they can open its source.
-export const referencePassageSchema = t.Object({
+const referencePassageSchema = t.Object({
   id: t.String({ format: "uuid" }),
   workspaceId: t.String({ format: "uuid" }),
   entityId: t.String({ format: "uuid" }),
@@ -140,7 +132,7 @@ export type ReferencePassage = Static<typeof referencePassageSchema>;
 // `tiers` is authored (an editor, a starter pack); `reference` is derived from
 // a document someone already negotiated. Grading dispatches on `source`, so a
 // position from either origin produces the same finding.
-export const positionStandardSchema = t.Union([
+const positionStandardSchema = t.Union([
   t.Object({ source: t.Literal("tiers"), tiers: tiersSchema }),
   t.Object({
     source: t.Literal("reference"),
@@ -180,7 +172,7 @@ const askQuestionSchema = t.String({
   maxLength: POSITION_LIMITS.askQuestionMaxLength,
 });
 
-export const askManualSchema = t.Object({
+const askManualSchema = t.Object({
   question: askQuestionSchema,
   content: propertyContentSchema,
 });
@@ -191,7 +183,7 @@ export type AskManual = Static<typeof askManualSchema>;
 // result and is consumed at run time exactly like a manual ask. `manual` is the
 // Advanced escape hatch. `derived` lives only on the `auto` variant, so a manual
 // ask structurally cannot carry one.
-export const askConfigSchema = t.Union([
+const askConfigSchema = t.Union([
   t.Object({
     mode: t.Literal("auto"),
     derived: t.Optional(
@@ -208,7 +200,6 @@ export const askConfigSchema = t.Union([
     content: propertyContentSchema,
   }),
 ]);
-export type AskConfig = Static<typeof askConfigSchema>;
 
 // ── Source: one document a position was taken or revised from ──
 // Stores ids only, and only to record where the position came from. A
@@ -261,7 +252,7 @@ const extractPositionSchema = t.Object({
 // knows what to say, not just that it is off-standard. Graded positions only:
 // an extract position never grades, so it never surfaces a verdict to
 // negotiate against.
-export const negotiationSchema = t.Object({
+const negotiationSchema = t.Object({
   rationale: t.Optional(
     t.String({ maxLength: POSITION_LIMITS.rationaleMaxLength }),
   ),
@@ -365,7 +356,7 @@ export type PlaybookTrigger = NonNullable<PlaybookScope["trigger"]>;
 // positions into an immutable `playbook_definition_versions` row and flips
 // this to `approved`. This status is advisory: nothing in the run/review
 // path hard-blocks on it.
-export const playbookDefinitionStatusSchema = t.Union([
+const playbookDefinitionStatusSchema = t.Union([
   t.Literal("draft"),
   t.Literal("approved"),
 ]);

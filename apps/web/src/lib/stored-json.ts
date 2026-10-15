@@ -33,6 +33,9 @@ export const readStoredJson = <
   return result.success ? result.output : null;
 };
 
+export const serializeStoredJson = (value: unknown): string =>
+  JSON.stringify(value);
+
 /**
  * Serialize a value to storage as JSON. Pairs with `readStoredJson` for
  * the read side of the same key. Storage writes can throw (quota
@@ -45,7 +48,7 @@ export const writeStoredJson = (
   value: unknown,
 ): void => {
   try {
-    storage.setItem(key, JSON.stringify(value));
+    storage.setItem(key, serializeStoredJson(value));
   } catch {
     // Storage can be unavailable, full, or blocked; best-effort persistence.
   }

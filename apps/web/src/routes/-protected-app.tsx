@@ -1,11 +1,4 @@
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { lazy, Suspense, useCallback, useRef, useState } from "react";
 import type { MouseEvent, ReactNode } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -14,20 +7,15 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import {
-  CogIcon,
-  NewChatIcon,
-  PanelRightIcon,
-  PinIcon,
-  PinOffIcon,
-} from "@stll/ui/icons";
+import { CogIcon, PanelRightIcon, PinIcon, PinOffIcon } from "@stll/ui/icons";
 import {
   InspectorDock,
   resolveInspectorDockWidth,
   SIDE_RAIL_ICON_BUTTON_SIZE,
-  useInspectorPaneWidth,
 } from "@stll/ui/inspector";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { matterChromeStyle, resolveMatterColor } from "@stll/ui/matter-colors";
+import type { MatterChromeStyle } from "@stll/ui/matter-colors";
+import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { Separator } from "@stll/ui/separator";
 import { Sheet, SheetHeader, SheetPopup, SheetTitle } from "@stll/ui/sheet";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -38,24 +26,23 @@ import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 import { WorkspaceFrame } from "@stll/workspace-ui/workspace-frame";
 
 import { ApiVersionMismatchReporter } from "@/components/api-version-mismatch-refresh";
+import { AppSidebar } from "@/components/app-sidebar";
 import "@/features/case-law/case-decision-details-inspector-registration";
 import "@/features/case-law/case-decision-inspector-registration";
 import "@/features/inbox/signal-inspector-registration";
+import "@/features/knowledge/playbook-editor/playbook-draft-view-registration";
+import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import "@/features/statutes/provision-inspector-registration";
 import "@/features/statutes/statute-inspector-registration";
-import { AppSidebar } from "@/components/app-sidebar";
-import { resolveSidebarWorkspaceId } from "@/components/app-sidebar.logic";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
 import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
-import {
-  initializeInspectorTabBroadcast,
-  useInspectorTabsStore,
-} from "@/components/inspector/inspector-tabs-store";
+import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
-import { inspectorPaneWidthStorageKey } from "@/components/inspector/pane-width-storage";
+import { useSharedInspectorPaneWidth } from "@/components/inspector/pane-width-storage";
+import { useInspectorTabPersistence } from "@/components/inspector/use-inspector-tab-persistence";
 import { KeyboardShortcutsDialog } from "@/components/keyboard-shortcuts-dialog";
 import { NotificationBell } from "@/components/notification-bell";
 import { QuickEntry } from "@/components/quick-entry";
@@ -73,6 +60,7 @@ import { AttachedTemplateUploadDialog } from "@/components/workspaces/attached-t
 import { CreateMatterDialog } from "@/components/workspaces/create-matter-dialog";
 import { DocumentReferenceUploadDialog } from "@/components/workspaces/document-reference-upload-dialog";
 import { useGlobalChatMentionRegistration } from "@/features/chat/hooks/use-global-chat-mention-registration";
+import { PlaybookPaneLeaveConfirmation } from "@/features/knowledge/playbook-editor/playbook-pane-leave-confirmation";
 import { GlobalTimer } from "@/features/time-timers/global-timer";
 import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -84,21 +72,22 @@ import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { matterChromeStyle, resolveMatterColor } from "@/lib/matter-colors";
-import type { MatterChromeStyle } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { useEffectiveHotkey } from "@/lib/use-effective-shortcuts";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   workspaceOptions,
   workspacesNavigationOptions,
 } from "@/lib/workspaces/queries";
 import { shouldForceSidebarCollapsed } from "@/routes/-inspector-pane-width";
+import { ChatMenuContent } from "@/routes/-protected-app/-components/chat-menu-content";
 import { PaymentRetryBanner } from "@/routes/-protected-app/-components/payment-retry-banner";
 import {
   createSessionActivity,
   isSessionActivityCancelled,
   SESSION_ACTIVITY_INTERVAL_MS,
 } from "@/routes/-session-activity";
+import { UploadUnloadGuard } from "@/routes/-upload-unload-guard";
 
 const LazyInspectorPanel = lazy(
   async () =>
@@ -106,6 +95,12 @@ const LazyInspectorPanel = lazy(
       default: m.InspectorPanel,
     })),
 );
+
+const LazyNewChatMenuItem = lazy(async () => {
+  const module =
+    await import("@/routes/-protected-app/-components/new-chat-menu-item");
+  return { default: module.NewChatMenuItem };
+});
 
 // Visual shell for the inspector rail while the panel chunk is
 // loading. Mirrors the real rail's chrome (top toggle, bottom
@@ -213,9 +208,19 @@ export const ProtectedAppFrame = ({
     chatWorkspaceId: workspaceChatMatch?.params.workspaceId,
     workspaceId: workspaceMatch?.params.workspaceId,
   });
-  const { data: workspaceNavigation } = useChromeQuery(
-    workspacesNavigationOptions(inspectorBroadcastOrganizationId),
+  const workspaceNavigationView = useQueryView(
+    useChromeQuery(
+      workspacesNavigationOptions({
+        organizationId: inspectorBroadcastOrganizationId,
+        userId: inspectorBroadcastUserId,
+      }),
+    ),
   );
+  useQueryViewError(workspaceNavigationView);
+  const workspaceNavigation =
+    workspaceNavigationView.type === "items"
+      ? workspaceNavigationView.items
+      : undefined;
   const activeWorkspace = workspaceNavigation?.workspaces.find(
     ({ id }) => id === activeWorkspaceId,
   );
@@ -233,14 +238,10 @@ export const ProtectedAppFrame = ({
   });
 
   // Restore the authenticated tab scope before any previous scope can paint.
-  useLayoutEffect(
-    () =>
-      initializeInspectorTabBroadcast({
-        organizationId: inspectorBroadcastOrganizationId,
-        userId: inspectorBroadcastUserId,
-      }),
-    [inspectorBroadcastOrganizationId, inspectorBroadcastUserId],
-  );
+  useInspectorTabPersistence({
+    organizationId: inspectorBroadcastOrganizationId,
+    userId: inspectorBroadcastUserId,
+  });
 
   // Mod+J — toggles the inspector pane. With tabs already open it
   // restores or hides the pane regardless of route, so users can
@@ -285,6 +286,7 @@ export const ProtectedAppFrame = ({
             <AIAvailabilityProvider>
               <ChatEditorProvider>
                 <GlobalChatMentionRegistration />
+                <PlaybookPaneLeaveConfirmation />
                 <DragAndDropLiveRegion />
                 <WorkspaceFrame
                   composition="host-responsive"
@@ -403,10 +405,15 @@ function ProtectedContent() {
     setChatMenuOpen(false);
   };
 
-  const { data: workspace } = useChromeQuery({
-    ...workspaceOptions(workspaceId ?? ""),
-    enabled: !!workspaceId,
-  });
+  const workspaceView = useQueryView(
+    useChromeQuery({
+      ...workspaceOptions(workspaceId ?? ""),
+      enabled: !!workspaceId,
+    }),
+  );
+  useQueryViewError(workspaceView);
+  const workspace =
+    workspaceView.type === "items" ? workspaceView.items : undefined;
   const chromeActions = (
     <div
       className="ms-auto flex shrink-0 items-center gap-0.5"
@@ -464,6 +471,7 @@ function ProtectedContent() {
   return (
     <>
       <ApiVersionMismatchReporter />
+      <UploadUnloadGuard />
       <SelfhostUpdateBanner />
       <PaymentRetryBanner />
       <header className="border-sidebar-border flex h-12 shrink-0 items-center gap-2 overflow-hidden border-b bg-(--matter-sidebar-tint) px-4">
@@ -495,10 +503,12 @@ function ProtectedContent() {
           />
           {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
           <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
-            <MenuItem onClick={handleOpenNewChatFromMenu}>
-              <NewChatIcon />
-              {t("chat.newChat")}
-            </MenuItem>
+            <ChatMenuContent label={t("chat.newChat")}>
+              <LazyNewChatMenuItem
+                label={t("chat.newChat")}
+                onClick={handleOpenNewChatFromMenu}
+              />
+            </ChatMenuContent>
           </MenuPopup>
         </Menu>
       </header>
@@ -605,9 +615,9 @@ function WorkspaceInspectorSidePanel({
   // inspector's; this panel only supplies the sidebar's inline size.
   const sidebarWidth = useSidebarInlineSize();
   const viewportWidth = useViewportWidth();
-  const { resetWidth, resizeHandleProps, width } = useInspectorPaneWidth({
+  const { resetWidth, resizeHandleProps, width } = useSharedInspectorPaneWidth({
+    openedFrom: "matter",
     sidebarWidth,
-    storageKey: inspectorPaneWidthStorageKey("matter"),
     viewportWidth,
   });
   // Re-run the offset effect once the new bundle applies: `loadedLang` (not

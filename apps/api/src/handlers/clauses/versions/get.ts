@@ -12,6 +12,7 @@ const getClauseVersionParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Read the stored body of one specific clause version, with its version " +
     "number and creation time. Use clauses.get for the clause's current body " +

@@ -10,7 +10,11 @@ import {
   chatThreads,
   fileChatThreads,
 } from "@/api/db/schema";
-import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
+import {
+  estimateChatContextPromptTokens,
+  estimateChatRevisionNoteTokens,
+} from "@/api/handlers/chat/chat-prompt";
+import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import { computeThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type { ThreadContextUsage } from "@/api/handlers/chat/compaction";
 import type {
@@ -38,6 +42,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resolveEffectiveChatModelId } from "@/api/lib/chat-model-selection";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 /**
@@ -205,6 +210,13 @@ export const loadResolvedThreadMessagePage = async ({
   );
 
   const hasContext = windowedMessages.length > 0 || checkpoint !== null;
+  const revisionChanges = unwrapTxRead(
+    await readChatRevisionContextChanges({
+      messages: windowedMessages,
+      threadId,
+      tx,
+    }),
+  );
   const { promptTokens, toolTokens } = estimateChatContextPromptTokens({
     toolAvailability: {
       docxEditMode: null,
@@ -227,6 +239,7 @@ export const loadResolvedThreadMessagePage = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier: await readManagedModelTierOnTx(tx, organizationId),
   });
   const context: ThreadContextUsage | null = hasContext
     ? computeThreadContextUsage({
@@ -235,6 +248,8 @@ export const loadResolvedThreadMessagePage = async ({
           role: message.role,
           parts: message.content.data,
         })),
+        conversationContextTokens:
+          estimateChatRevisionNoteTokens(revisionChanges),
         promptTokens,
         toolTokens,
         triggerTokens,

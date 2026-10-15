@@ -1,0 +1,8 @@
+[
+  {
+    "file": "apps/api/src/db/scoped.ts",
+    "from": "61e57993996ef5278ebff1fbbb52c46cd1f0e20e5b76579b2b790540017316e0",
+    "to": "9ada6645ab3c8bba9bd50482dcfbbe02728228f0ba63d9701a028d0b95ec2122",
+    "reason": "Same root transaction runner; it now also sets the caller's enabled features before running the scoped callback."
+  }
+]

@@ -882,7 +882,7 @@ describe("startSse: subscriber attach retry", () => {
     // A timer stub that fires the callback promptly, ignoring the delay. Matching
     // Bun's full overloaded setTimeout type adds no test value, so assert it.
     const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      // oxlint-disable-next-line no-unsafe-type-assertion -- test-only timer stub
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
       realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
     const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
       immediateSetTimeout,
@@ -929,7 +929,7 @@ describe("startSse: subscriber attach retry", () => {
 
     const realSetTimeout = globalThis.setTimeout;
     const immediateSetTimeout = ((callback: (...args: unknown[]) => void) =>
-      // oxlint-disable-next-line no-unsafe-type-assertion -- test-only timer stub
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test-only timer stub
       realSetTimeout(callback, 0)) as typeof globalThis.setTimeout;
     const timeoutSpy = spyOn(globalThis, "setTimeout").mockImplementation(
       immediateSetTimeout,

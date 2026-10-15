@@ -43,7 +43,7 @@ async function buildItems() {
     await build(item).catch(() => "fallback");
     // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error -- fixture: an empty object hides an item failure
     await build(item).catch(() => ({}));
-    // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error, eslint/no-void -- fixture: void zero hides an item failure
+    // oxlint-disable-next-line no-swallowed-item-error/no-swallowed-item-error, no-void -- fixture: void zero hides an item failure
     await build(item).catch(() => void 0);
     try {
       await build(item);

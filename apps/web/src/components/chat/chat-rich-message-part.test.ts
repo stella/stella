@@ -5,6 +5,7 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { IntlProvider } from "use-intl";
 
+import { GENERATED_VISUAL_MIME_TYPE } from "@stll/api-contract/generated-visual";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
@@ -120,6 +121,30 @@ describe("rich chat message parts", () => {
     expect(video).toContain("<video");
     expect(audio).not.toContain("<track");
     expect(video).not.toContain("<track");
+  });
+
+  test("keeps generated resources outside the MCP renderer", () => {
+    const visual = {
+      type: "ui-resource",
+      resource: {
+        uri: "ui://stella/visual/abcdefghijklmnopqrstu",
+        mimeType: GENERATED_VISUAL_MIME_TYPE,
+        text: "Court overview",
+      },
+      toolCallId: "visual-call-one",
+      toolName: "show_visual",
+    } as const satisfies RichChatPart;
+    expect(normalizeUiResourcePart(visual)).toBeNull();
+    const rendered = renderMediaPart(visual);
+    expect(rendered).toContain(messages.chat.richContentUnavailable);
+    expect(rendered).not.toContain("<iframe");
+    const unknown = {
+      ...visual,
+      resource: { ...visual.resource, mimeType: "application/json" },
+    };
+    expect(renderMediaPart(unknown)).toContain(
+      messages.chat.richContentUnavailable,
+    );
   });
 
   test("normalizes base64 MCP App HTML without weakening its contract", () => {

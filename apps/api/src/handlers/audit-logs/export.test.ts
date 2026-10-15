@@ -73,8 +73,8 @@ describe("exportAuditLogs", () => {
     const result = await exportAuditLogs.handler(context);
 
     expect(result).toBe(
-      "Time,User Name,User Email,Action,Resource Type,Resource ID,Changes\n" +
-        '2026-07-16T12:00:00.000Z,Test User,test@example.com,update,chat_thread,thread_test,"{""chatModel"":{""old"":""model_a"",""new"":""model_b""}}"',
+      "Time,User Name,User Email,Action,Resource Type,Resource ID,Changes,Changes Status\n" +
+        '2026-07-16T12:00:00.000Z,Test User,test@example.com,update,chat_thread,thread_test,"{""chatModel"":{""old"":""model_a"",""new"":""model_b""}}",visible',
     );
     expect(result).not.toContain("Earlier title");
     expect(result).not.toContain("Later title");

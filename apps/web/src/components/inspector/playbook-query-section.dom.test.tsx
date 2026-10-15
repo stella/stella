@@ -4,6 +4,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 import { documentReviewPartiesKeys } from "@/components/ai-suggestions/document-review-queries";
 import messages from "@/i18n/langs/en.json";
 import { entityVersionsKeys } from "@/lib/workspaces/queries/entity-versions";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act } = await import("react");
@@ -27,7 +28,7 @@ afterEach(async () => {
   });
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const target = {
@@ -36,7 +37,7 @@ const target = {
   fileFieldId: "file",
 };
 for (const queryKey of [
-  documentReviewPartiesKeys.target(target),
+  documentReviewPartiesKeys.target(target, "detect"),
   entityVersionsKeys.all(target),
 ]) {
   describe(`${JSON.stringify(queryKey)} query region`, () => {

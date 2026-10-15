@@ -80,7 +80,11 @@ describe("integration status", () => {
       integrationStatus({
         authType: "bearer",
         authorizationStatus: "not_required",
-        connection: { status: "revoked", enabled: true },
+        connection: {
+          status: "revoked",
+          enabled: true,
+          responseDisposition: "normal",
+        },
       }),
     ).toEqual({
       tone: "neutral",
@@ -93,7 +97,11 @@ describe("integration status", () => {
       integrationStatus({
         authType: "oauth",
         authorizationStatus: "approved",
-        connection: { status: "needs_reauth", enabled: true },
+        connection: {
+          status: "needs_reauth",
+          enabled: true,
+          responseDisposition: "normal",
+        },
       }),
     ).toEqual({ tone: "warning", labelKey: "knowledge.mcp.needsReauth" });
   });
@@ -103,7 +111,11 @@ describe("integration status", () => {
       integrationStatus({
         authType: "oauth",
         authorizationStatus: "approved",
-        connection: { status: "connected", enabled: false },
+        connection: {
+          status: "connected",
+          enabled: false,
+          responseDisposition: "normal",
+        },
       }),
     ).toEqual({ tone: "neutral", labelKey: "settings.connections.turnedOff" });
   });
@@ -113,7 +125,11 @@ describe("integration status", () => {
       integrationStatus({
         authType: "oauth",
         authorizationStatus: "approved",
-        connection: { status: "connected", enabled: true },
+        connection: {
+          status: "connected",
+          enabled: true,
+          responseDisposition: "normal",
+        },
       }),
     ).toEqual({ tone: "success", labelKey: "settings.connections.connected" });
   });
@@ -133,7 +149,11 @@ describe("integration status", () => {
       integrationStatus({
         authType: "oauth",
         authorizationStatus: "needs_reapproval",
-        connection: { status: "connected", enabled: true },
+        connection: {
+          status: "connected",
+          enabled: true,
+          responseDisposition: "normal",
+        },
       }),
     ).toEqual({ tone: "warning", labelKey: "knowledge.mcp.needsReapproval" });
   });
@@ -143,7 +163,11 @@ describe("integration status", () => {
       integrationStatus({
         authType: "oauth",
         authorizationStatus: "approved",
-        connection: { status: "needs_approval", enabled: true },
+        connection: {
+          status: "needs_approval",
+          enabled: true,
+          responseDisposition: "normal",
+        },
       }),
     ).toEqual({ tone: "warning", labelKey: "knowledge.mcp.needsReapproval" });
   });

@@ -4,6 +4,7 @@ import { Result, panic } from "better-result";
 import { describe, expect, jest, spyOn, test } from "bun:test";
 
 import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { env } from "@/api/env";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
@@ -20,7 +21,7 @@ import {
   shutdownApiServices,
 } from "@/api/server-shutdown";
 
-const MODEL = BYOK_DEFAULT_MODELS.openrouter.chat;
+const MODEL = BYOK_DEFAULT_MODELS.openrouter.chat.modelId;
 const chatOptions = {
   model: MODEL,
   messages: [{ role: "user" as const, content: "fixture request" }],
@@ -475,9 +476,7 @@ test("termination aborts stalled catalog requests within the service deadline", 
       },
       stopScheduler: () => undefined,
       stopSse: () => undefined,
-      timeout: new Promise<void>((resolve) => {
-        setTimeout(resolve, deadlineMs);
-      }),
+      timeout: sleep(deadlineMs),
     });
     expect(httpStopped).toBe(true);
     expect(signals.every((signal) => signal.aborted)).toBe(true);

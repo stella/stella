@@ -8,6 +8,7 @@ import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { createFileKey } from "@/api/lib/files/utils";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import thumbnailEndpoint from "./thumbnail";
 
@@ -31,6 +32,7 @@ const readFileThumbnail = async ({
       request: new Request("https://example.test/files/thumbnail"),
       route: "/v1/workspaces/:workspaceId/files/thumbnail/:fieldId",
       scopedDb,
+      safeDb: toSafeDbMock(scopedDb),
       session: { activeOrganizationId: organizationId },
       user: { id: toSafeId<"user">("user_file_thumbnail") },
       workspaceId,
@@ -57,6 +59,9 @@ const scopedDbAnswering = (rows: unknown[]) => {
     async (callback: (tx: object) => Promise<unknown>) => {
       call += 1;
       if (call === 1) {
+        return rows.length === 0 ? [] : [{ id: fieldId }];
+      }
+      if (call === 2) {
         return rows;
       }
       return await callback({});

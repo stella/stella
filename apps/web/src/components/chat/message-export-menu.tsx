@@ -7,7 +7,7 @@ import { useTranslations } from "use-intl";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import { Loader2Icon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { Popover, PopoverPopup, PopoverTitle } from "@stll/ui/popover";
 import {
   Select,
@@ -279,7 +279,7 @@ export const MessageExportMenu = ({
             size="sm"
           >
             {isExportPending && (
-              <Loader2Icon aria-hidden className="size-3.5 animate-spin" />
+              <Loader className="size-3.5" size="sm" variant="decorative" />
             )}
             {isExportPending ? t("common.preparing") : t("common.export.title")}
           </Button>

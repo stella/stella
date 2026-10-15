@@ -1,5 +1,9 @@
 name: Disarm auto-merge on push
 
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
     types: [synchronize]
@@ -27,10 +31,17 @@ jobs:
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
+            // Pushes that keep an arm: autofix commits, and the merge of main
+            // that generated-conflicts-publish.yml pushes as the release App
+            // after rebuilding it from main's rules.
+            const keepers = [
+              { login: "autofix-ci[bot]", id: 114827586 },
+              { login: "stella-release-deployer[bot]", id: 281031312 },
+            ];
             const shouldDisarm = ({ sender, autoMerge, pushedAt }) => {
-              if (autoMerge === null || (
-                sender?.login === "autofix-ci[bot]" &&
-                sender?.id === 114827586 &&
+              if (autoMerge === null || keepers.some(keeper =>
+                sender?.login === keeper.login &&
+                sender?.id === keeper.id &&
                 sender?.type === "Bot"
               )) return false;
               const enabled = Date.parse(autoMerge.enabledAt);

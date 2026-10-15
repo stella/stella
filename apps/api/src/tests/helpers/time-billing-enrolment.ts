@@ -2,11 +2,11 @@ import { inArray } from "drizzle-orm";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import { featureEnrolments } from "@/api/db/schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import type { SafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 

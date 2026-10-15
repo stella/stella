@@ -18,6 +18,7 @@ import { withInterleaving } from "./transaction-interleaving";
 import {
   assertLockRanks,
   createTransactionRecorder,
+  NO_ADVISORY_LOCKS,
 } from "./transaction-recorder";
 import type { TransactionTrace } from "./transaction-recorder";
 
@@ -34,7 +35,10 @@ if (!databaseUrl || !runPostgresTests) {
     test("records alias UPDATE writes against the real table", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
+        // @ts-expect-error Every transaction recorder must choose its advisory-lock collaborator.
+        createTransactionRecorder({});
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: { recorder_entities: "entity" },
         });
         await db.transaction(async (tx) => {
@@ -76,6 +80,7 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: {
             recorder_workspaces: "workspace",
             recorder_entities: "entity",
@@ -122,6 +127,7 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: { recorder_rows: "workspace" },
         });
         await recorder.wrap(db.transaction.bind(db))(async (tx) => {
@@ -242,6 +248,7 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: {
             recorder_entities: "entity",
             recorder_workspaces: "workspace",
@@ -279,6 +286,7 @@ if (!databaseUrl || !runPostgresTests) {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const { db } = openClient();
           const recorder = createTransactionRecorder({
+            resolveAdvisory: NO_ADVISORY_LOCKS,
             tables: {
               recorder_entities: "entity",
               recorder_workspaces: "workspace",
@@ -516,6 +524,7 @@ if (!databaseUrl || !runPostgresTests) {
         await db.execute(sql`INSERT INTO recorder_workspaces VALUES (1)`);
         await db.execute(sql`INSERT INTO recorder_entities VALUES (1)`);
         const recorder = createTransactionRecorder({
+          resolveAdvisory: NO_ADVISORY_LOCKS,
           tables: {
             recorder_workspaces: "workspace",
             recorder_entities: "entity",

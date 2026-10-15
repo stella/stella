@@ -1,5 +1,6 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { isQueryErrorOutputKey } from "../packages/errors/src/query-field-policy.ts";
 import { getPropertyName, isAstNode, isIdentifier } from "./utils.ts";
 import type { AstNode } from "./utils.ts";
 
@@ -46,6 +47,7 @@ export const FAILURE_CONTEXT_KEYS = [
   "entityId",
   "feature",
   "jobId",
+  "jurisdiction",
   "method",
   "mode",
   "modelId",
@@ -179,7 +181,8 @@ export default eslintCompatPlugin({
               const key = getPropertyName(property.key);
               if (
                 key === null ||
-                !SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key)
+                (!SENSITIVE_LOG_ATTRIBUTE_KEY_PATTERN.test(key) &&
+                  !isQueryErrorOutputKey(key))
               ) {
                 continue;
               }

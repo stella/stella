@@ -7,17 +7,22 @@ import {
   parseCanonicalChatSourceCitationHref,
   type ChatSourceCitationTarget,
 } from "@stll/api-contract";
+import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { isFolioBlockId } from "@stll/folio-react";
-import {
-  FileTextIcon,
-  FileSpreadsheetIcon,
-  GlobeIcon,
-  MailIcon,
-  PresentationIcon,
-} from "@stll/ui/icons";
+import { GlobeIcon, MailIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import {
+  ChatDecisionCitation,
+  ChatRouteDecisionCitation,
+} from "@/components/chat/chat-decision-citation";
+import {
+  FOLIO_CITATION_MIME_TYPE,
+  officeCitationMimeType,
+  sourceCitationMimeType,
+} from "@/components/chat/citation-file-type.logic";
 import {
   openEmailCitationSource,
   openOfficeCitationSource,
@@ -29,7 +34,10 @@ import { activateSourceCitation } from "@/components/chat/source-citation-naviga
 import { InlinePill } from "@/components/inline-pill";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MarkdownReferenceChip } from "@/components/references/reference-chip";
+import {
+  MarkdownReferenceChip,
+  ReferenceFileTypeIcon,
+} from "@/components/references/reference-chip";
 import {
   isReferenceHref,
   referenceFromHref,
@@ -52,7 +60,6 @@ import {
   FOLIO_SCROLL_EVENT,
   type FolioScrollEventDetail,
 } from "@/lib/folio-scroll-event";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 // Hash fragment, NOT a `folio:` scheme. Streamdown runs
 // rehype-sanitize over rendered links; only its protocol
@@ -144,13 +151,36 @@ const ReferenceCitationLink = ({
       {children}
     </MarkdownReferenceChip>
   );
+  if (
+    decision?.locator.type === "ref" &&
+    isCaseLawDecisionId(decision.locator.ref)
+  ) {
+    return (
+      <ChatDecisionCitation
+        decisionId={decision.locator.ref}
+        passage={children}
+        paragraph={decision.paragraph ?? undefined}
+        interactive={interactive}
+      />
+    );
+  }
+  if (decision?.locator.type === "route") {
+    return (
+      <ChatRouteDecisionCitation
+        params={decision.locator.params}
+        passage={children}
+        paragraph={decision.paragraph ?? undefined}
+        interactive={interactive}
+      />
+    );
+  }
   if (source === undefined) {
     return fallback;
   }
   return (
     <LegalCitationLink
       appearance="inline"
-      anchorId={decision?.anchorId ?? undefined}
+      anchorId={decision?.paragraph?.anchorId}
       fallback={fallback}
       interactive={interactive}
       source={source}
@@ -284,7 +314,9 @@ const SourceCitationChip = ({
   return (
     <InlinePill
       data-block-id={target.type === "docx-folio" ? target.blockId : undefined}
-      leadingIcon={<FileTextIcon className="size-3 shrink-0" />}
+      leadingIcon={
+        <ReferenceFileTypeIcon mimeType={sourceCitationMimeType(target.type)} />
+      }
       onActivate={
         interactive
           ? () => {
@@ -466,11 +498,9 @@ const OfficeCitationChip = ({
         : {})}
       data-block-id={target.blockId}
       leadingIcon={
-        target.blockId.startsWith("xlsx-") ? (
-          <FileSpreadsheetIcon className="size-3 shrink-0" />
-        ) : (
-          <PresentationIcon className="size-3 shrink-0" />
-        )
+        <ReferenceFileTypeIcon
+          mimeType={officeCitationMimeType(target.blockId)}
+        />
       }
       onActivate={
         interactive && (citation.type === "error" || Boolean(workspaceId))
@@ -562,7 +592,9 @@ const FolioBlockChip = ({
   return (
     <InlinePill
       data-block-id={blockId}
-      leadingIcon={<FileTextIcon className="size-3 shrink-0" />}
+      leadingIcon={
+        <ReferenceFileTypeIcon mimeType={FOLIO_CITATION_MIME_TYPE} />
+      }
       onActivate={interactive ? handleClick : undefined}
       truncate
     >

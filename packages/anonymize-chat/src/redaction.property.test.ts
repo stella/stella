@@ -101,7 +101,7 @@ type Span = { start: number; end: number; label: string };
  * the real offset contract rather than a text-search convenience.
  */
 const buildOffsetRuntime = (spans: readonly Span[]): ChatAnonRuntime => ({
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- opaque test double for the wasm binding, never inspected
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- opaque test double for the wasm binding, never inspected
   getBinding: async () => ({}) as NativeAnonymizeBinding,
   createPipelineContext: () => ({
     nativePipelinePackage: null,
@@ -165,7 +165,7 @@ const buildOffsetRuntime = (spans: readonly Span[]): ChatAnonRuntime => ({
         };
       },
     };
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- only redactText is exercised
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- only redactText is exercised
     return pipeline as unknown as Awaited<
       ReturnType<ChatAnonRuntime["createNativePipelineFromConfig"]>
     >;

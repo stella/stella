@@ -16,14 +16,16 @@ const deleteTemplateParamsSchema = t.Object({
   templateId: tSafeId("template"),
 });
 
-type DeleteTemplateProps = {
+export type DeleteTemplateProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   templateId: SafeId<"template">;
   recordAuditEvent: AuditRecorder;
 };
 
-const deleteTemplateHandler = async function* ({
+// Shared template-delete logic reused by the HTTP handler and the review
+// organization reset, so both record the same storage cleanup and audit event.
+export const deleteTemplateHandler = async function* ({
   safeDb,
   organizationId,
   templateId,
@@ -104,6 +106,7 @@ const deleteTemplateHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "Permanently delete an organization template with its version history, its " +
     "clause slots, and the stored file of every version. Recorded fills of the " +

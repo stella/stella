@@ -114,6 +114,7 @@ export const TimerForm = ({ timer, initialMatter, onDone }: TimerFormProps) => {
             <Label htmlFor={`${id}-matter`}>{t("common.matter")}</Label>
             <MatterCombobox
               activeOrganizationId={user.activeOrganizationId}
+              userId={user.id}
               id={`${id}-matter`}
               value={matter}
               onChange={(value) => {

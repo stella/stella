@@ -634,6 +634,7 @@ describe("duplicate entity", () => {
       };
       let entityLookupCount = 0;
       const tx = {
+        execute: async () => [{ id: workspaceId }],
         query: {
           entities: {
             findFirst: async () => {
@@ -668,7 +669,9 @@ describe("duplicate entity", () => {
         }),
         update: () => ({ set: () => ({ where: async () => {} }) }),
       };
-      const { safeDb } = createScopedDbMock(tx);
+      const { safeDb } = createScopedDbMock(tx, {
+        visibleResources: { entity: [rootFolderId, documentId] },
+      });
 
       const result = await duplicateEntity.handler(
         createContext({
@@ -705,6 +708,7 @@ describe("duplicate entity", () => {
     let entityLookupCount = 0;
     let replayQuery: unknown;
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async (query: unknown) => {
@@ -752,7 +756,9 @@ describe("duplicate entity", () => {
       }),
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
 
     const result = await duplicateEntity.handler(
       createContext({
@@ -791,8 +797,10 @@ describe("duplicate entity", () => {
   test("retains copied objects when a lost commit acknowledgement replays", async () => {
     const sourceDocument = sourceEntities.at(1);
     let entityLookupCount = 0;
+    let commitState: "pending" | "written" | "acknowledgement-lost" = "pending";
     const replayFieldId = toSafeId<"field">("committed_copy_field");
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async () => {
@@ -820,6 +828,9 @@ describe("duplicate entity", () => {
       }),
       insert: (table: unknown) => ({
         values: (value: unknown) => {
+          if (table === entities) {
+            commitState = "written";
+          }
           if (table === documentCounters) {
             return {
               onConflictDoUpdate: () => ({
@@ -834,12 +845,13 @@ describe("duplicate entity", () => {
       }),
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
-    const { safeDb: committedSafeDb } = createScopedDbMock(tx);
-    let safeDbCallCount = 0;
+    const { safeDb: committedSafeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
     const safeDb: SafeDb = async (callback, retry) => {
-      safeDbCallCount++;
       const result = await committedSafeDb(callback, retry);
-      if (safeDbCallCount === 3 && !Result.isError(result)) {
+      if (commitState === "written" && !Result.isError(result)) {
+        commitState = "acknowledgement-lost";
         return Result.err(
           new DatabaseError({ message: "commit acknowledgement lost" }),
         );
@@ -911,6 +923,7 @@ describe("duplicate entity", () => {
     let siblingReads = 0;
 
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async () => sources.at(0),
@@ -974,7 +987,9 @@ describe("duplicate entity", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
     const result = await duplicateEntity.handler(createContext({ safeDb }));
 
     expect(result).toEqual({
@@ -1082,6 +1097,7 @@ describe("duplicate entity", () => {
     ];
 
     const tx = {
+      execute: async () => [{ id: workspaceId }],
       query: {
         entities: {
           findFirst: async () => brokenSubtree.at(0),
@@ -1113,7 +1129,9 @@ describe("duplicate entity", () => {
       update: () => ({ set: () => ({ where: async () => {} }) }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const { safeDb } = createScopedDbMock(tx, {
+      visibleResources: { entity: [rootFolderId, documentId] },
+    });
     const result = await duplicateEntity.handler(createContext({ safeDb }));
 
     // The abort travels as the same rejection the caller always answered.

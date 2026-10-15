@@ -31,7 +31,7 @@ desktop_rust_checks_required=false
 
 for file in "$@"; do
   case "$file" in
-    apps/desktop/src-tauri/*|apps/desktop/fixtures/*|apps/desktop/src/i18n/langs/*|apps/desktop/src/clipboard/clipboard-types.ts|packages/api-contract/src/desktop-account-policy.json|packages/api-contract/src/desktop-edit-file-types.ts|packages/api-contract/src/desktop-rpc.gen.ts)
+    apps/desktop/rust-toolchain.toml|apps/desktop/src-tauri/*|apps/desktop/fixtures/*|apps/desktop/src/i18n/langs/*|apps/desktop/src/clipboard/clipboard-types.ts|packages/api-contract/src/desktop-account-policy.json|packages/api-contract/src/desktop-feature-access.json|packages/api-contract/src/desktop-edit-file-types.ts|packages/api-contract/src/desktop-rpc.gen.ts)
       desktop_rust_checks_required=true
       break
       ;;
@@ -45,12 +45,15 @@ type Fixture = {
   readonly nativeTestInputs: readonly string[];
   readonly rustFiles: Record<string, string>;
   readonly extraFiles?: Record<string, string>;
+  /** Leave the crate's toolchain file out of the task inputs. */
+  readonly omitToolchainInput?: boolean;
 };
 
 /** A miniature repository: one crate directory and a turbo.json task. */
 const createRoot = ({
   extraFiles,
   nativeTestInputs,
+  omitToolchainInput = false,
   rustFiles,
 }: Fixture): string => {
   const root = mkdtempSync(path.join(tmpdir(), "stella-desktop-rust-inputs-"));
@@ -61,7 +64,11 @@ const createRoot = ({
     "turbo.json",
     JSON.stringify({
       tasks: {
-        "@stll/desktop#test:native": { inputs: nativeTestInputs },
+        "@stll/desktop#test:native": {
+          inputs: omitToolchainInput
+            ? nativeTestInputs
+            : ["rust-toolchain.toml", ...nativeTestInputs],
+        },
       },
     }),
   );
@@ -160,6 +167,18 @@ describe("checkDesktopRustInputs", () => {
     });
 
     expect(checkDesktopRustInputs(root)).toEqual([]);
+  });
+
+  test("reports a toolchain file no input covers", () => {
+    const root = createRoot({
+      nativeTestInputs: ["src-tauri/**"],
+      omitToolchainInput: true,
+      rustFiles: { "src/lib.rs": "pub fn f() {}\n" },
+    });
+
+    const errors = checkDesktopRustInputs(root);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("apps/desktop/rust-toolchain.toml");
   });
 
   test("reports an embed no input covers", () => {

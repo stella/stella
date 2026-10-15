@@ -40,6 +40,13 @@ import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { toSafeId } from "@/lib/safe-id";
 
+/** The block of a decision a reference points into. */
+export type CitedDecisionParagraph = {
+  anchorId: string;
+  /** The number the court printed on the block, as the server stamped it. */
+  courtParagraphNumber: number | null;
+};
+
 export type ChatReference =
   | {
       type: "entity";
@@ -56,13 +63,11 @@ export type ChatReference =
       type: "decision";
       locator: CaseLawDecisionLocator;
       /** A passage of the decision the reference points into. */
-      anchorId: string | null;
+      paragraph: CitedDecisionParagraph | null;
       label: string;
     }
   | { type: "skill"; slug: string; label: string }
   | { type: "user"; userId: string; label: string };
-
-export type ChatReferenceType = ChatReference["type"];
 
 /** What a source string resolved to: a reference, a reference the server
  * marked unresolvable (renders as its plain label), or not a reference. */
@@ -146,7 +151,10 @@ export const referenceFromHref = (
     return asReference({
       type: "decision",
       locator: { type: "ref", ref: passage.decisionId },
-      anchorId: passage.anchorId,
+      paragraph: {
+        anchorId: passage.anchorId,
+        courtParagraphNumber: passage.courtParagraphNumber,
+      },
       label:
         text.length === 0 ||
         text.toLowerCase().startsWith(CHAT_DECISION_PASSAGE_HREF_PREFIX)
@@ -187,7 +195,7 @@ export const referenceFromHref = (
       return asReference({
         type: "decision",
         locator: { type: "ref", ref: target.resource.id },
-        anchorId: null,
+        paragraph: null,
         label,
       });
     case RESOURCE_TYPE.USER:
@@ -210,18 +218,7 @@ export const referenceFromDecisionRoute = (
 ): ChatReference => ({
   type: "decision",
   locator: { type: "route", params },
-  anchorId: null,
-  label,
-});
-
-/** A decision stella holds, by its id (a publisher's URL for it, say). */
-export const referenceFromDecisionId = (
-  decisionId: string,
-  label: string,
-): ChatReference => ({
-  type: "decision",
-  locator: { type: "ref", ref: decisionId },
-  anchorId: null,
+  paragraph: null,
   label,
 });
 
@@ -287,7 +284,7 @@ export const referenceFromMentionAttrs = (
       return {
         type: "decision",
         locator: { type: "ref", ref: id },
-        anchorId: null,
+        paragraph: null,
         label,
       };
     case "entity": {

@@ -10,6 +10,11 @@ import { panic } from "better-result";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  "apps/landing/src/content/blog/**/*.md",
+];
+
 const SRC_ROOT = path.join(import.meta.dir, "..", "src");
 const BLOG_ROOT = path.join(SRC_ROOT, "content", "blog");
 const COMPONENT_EXTENSIONS = [".astro", ".tsx"];

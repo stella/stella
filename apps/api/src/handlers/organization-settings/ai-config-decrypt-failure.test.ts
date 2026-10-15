@@ -4,7 +4,11 @@ import { describe, expect, test } from "bun:test";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import readAIConfig from "./read-ai-config";
@@ -71,7 +75,12 @@ describe("AI config handlers with an undecryptable stored config", () => {
     const { safeDb, operationCount } = createSettingsDb();
 
     const result = await updateAIConfig.handler(
-      createTestHandlerContext<UpdateContext>({ body: updateBody, safeDb }),
+      createTestHandlerContext<UpdateContext>({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
+        body: updateBody,
+        safeDb,
+      }),
     );
 
     if (!("code" in result)) {
@@ -91,7 +100,11 @@ describe("AI config handlers with an undecryptable stored config", () => {
     const { safeDb } = createSettingsDb();
 
     const result = await readAIConfig.handler(
-      createTestHandlerContext<ReadContext>({ safeDb }),
+      createTestHandlerContext<ReadContext>({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
+        safeDb,
+      }),
     );
 
     if (!("code" in result)) {

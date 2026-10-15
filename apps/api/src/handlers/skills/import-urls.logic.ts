@@ -27,7 +27,7 @@ export const SKILL_IMPORT_FAILURE_CODE = {
 export type SkillImportFailureCode =
   (typeof SKILL_IMPORT_FAILURE_CODE)[keyof typeof SKILL_IMPORT_FAILURE_CODE];
 
-export type SkillImportFailure = {
+type SkillImportFailure = {
   code: SkillImportFailureCode;
   sourceUrl: string;
 };

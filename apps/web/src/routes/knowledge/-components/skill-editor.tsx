@@ -20,6 +20,7 @@ import {
   Trash2Icon,
   UploadIcon,
 } from "@stll/ui/icons";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { Input } from "@stll/ui/input";
 import {
   Menu,
@@ -63,7 +64,7 @@ import {
 } from "./skill-metadata-draft.logic";
 import {
   FILENAME_PATTERN,
-  reserveKnowledgePath,
+  reserveReferencesPath,
 } from "./skill-resource-path.logic";
 
 const SKILL_BODY_FILE_NAME = "SKILL.md";
@@ -87,7 +88,6 @@ const isBinaryUpload = (file: File) =>
 type SkillResource = {
   id: string;
   path: string;
-  kind: string;
   sizeBytes: number;
   content: string;
 };
@@ -549,9 +549,9 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       });
       return;
     }
-    // Drop new uploads into knowledge/ by default. The user can rename
+    // Drop new uploads into references/ by default. The user can rename
     // afterward if they want a different folder.
-    const reserved = reserveKnowledgePath(file.name, binary, takenPaths);
+    const reserved = reserveReferencesPath(file.name, binary, takenPaths);
     if (reserved.type === "invalid") {
       notifyUserError(undefined, tSkills("invalidPath"));
       return;
@@ -566,7 +566,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   };
 
   // Reserve every dropped/selected file's path up front against one set seeded
-  // from the current resources. `reserveKnowledgePath` runs synchronously
+  // from the current resources. `reserveReferencesPath` runs synchronously
   // before each upload's first await, so path assignment stays ordered and two
   // same-named files in one batch never resolve to the same path.
   const handleUploadFiles = (files: readonly File[]) => {
@@ -992,7 +992,6 @@ function SkillFileTree({
               id: resource.id,
               path: resource.path,
               fileName: node.name,
-              kind: resource.kind,
             }}
             onDeleteFile={onDeleteFile}
             onStartRename={onStartRename}
@@ -1012,23 +1011,12 @@ function SkillFileTree({
       renderName={(node) => {
         if (node.kind === "folder" && renamingFolderPath === node.id) {
           return (
-            <Input
-              autoFocus
-              className="flex-1"
+            <InlineRenameInput
               onBlur={onCancelFolderRename}
-              onChange={(event) => setRenameValue(event.target.value)}
+              onCancel={onCancelFolderRename}
+              onValueChange={setRenameValue}
               onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  onSubmitFolderRename(node.id, renameValue);
-                }
-                if (event.key === "Escape") {
-                  onCancelFolderRename();
-                }
-              }}
-              size="sm"
+              onCommit={() => onSubmitFolderRename(node.id, renameValue)}
               value={renameValue}
             />
           );
@@ -1041,28 +1029,21 @@ function SkillFileTree({
           resource
         ) {
           return (
-            <Input
-              autoFocus
-              className="flex-1"
+            <InlineRenameInput
               onBlur={onCancelRename}
-              onChange={(event) => setRenameValue(event.target.value)}
+              onCancel={onCancelRename}
+              onValueChange={setRenameValue}
               onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => {
-                event.stopPropagation();
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  onSubmitRename(resource.path, renameValue);
-                }
-                if (event.key === "Escape") {
-                  onCancelRename();
-                }
-              }}
-              size="sm"
+              onCommit={() => onSubmitRename(resource.path, renameValue)}
               value={renameValue}
             />
           );
         }
-        return <span className="truncate">{node.name}</span>;
+        return (
+          <span className="overflow-hidden text-ellipsis whitespace-pre">
+            {node.name}
+          </span>
+        );
       }}
       selectedId={selectedId}
     />
@@ -1073,7 +1054,6 @@ type TreeEntry = {
   id: string;
   path: string;
   fileName: string;
-  kind: string;
 };
 
 type FolderCreateActionsProps = {

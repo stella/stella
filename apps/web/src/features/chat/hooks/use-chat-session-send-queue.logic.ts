@@ -2,6 +2,7 @@ import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { isChatPastedTextPart } from "@stll/api-contract/chat";
 
 import type {
   ChatSendMessageOptions,
@@ -74,14 +75,16 @@ export const describeQueuedMessage = (
 
   const textParts: string[] = [];
   for (const part of message.content) {
-    if (part.type === "text") {
+    if (part.type === "text" && !isChatPastedTextPart(part)) {
       textParts.push(part.content);
     }
   }
 
   return {
     text: textParts.join("\n\n"),
-    fileCount: message.content.filter((part) => part.type !== "text").length,
+    fileCount: message.content.filter(
+      (part) => part.type !== "text" || isChatPastedTextPart(part),
+    ).length,
   };
 };
 
@@ -123,6 +126,8 @@ export const createInitialSendQueueState = (
  *
  * - `message-enqueued` — `enqueueMessage`
  * - `queued-message-removed` — `removeQueuedMessage`
+ * - `queued-message-promoted` — `sendQueuedMessageNow`, which then stops
+ *   the running turn so the drain sends the promoted message next
  * - `oldest-dispatch-started` — `takeOldestQueuedMessage` immediately
  *   followed by `dispatchQueuedMessage`'s eager `isGeneratingRef = true`.
  *   The two are merged into one atomic transition: in the original code
@@ -139,6 +144,7 @@ export const createInitialSendQueueState = (
 export type SendQueueEvent =
   | { type: "message-enqueued"; entry: QueuedChatEntry }
   | { type: "queued-message-removed"; id: string }
+  | { type: "queued-message-promoted"; id: string }
   | { type: "oldest-dispatch-started" }
   | { type: "dispatch-failed"; entry: QueuedChatEntry; requeue: boolean }
   | { type: "generation-status-synced"; isGenerating: boolean }
@@ -210,6 +216,23 @@ export const reduceSendQueue = (
         state: {
           ...state,
           queue: state.queue.filter((entry) => entry.id !== event.id),
+        },
+        dispatchedEntry: null,
+      };
+    }
+
+    case "queued-message-promoted": {
+      const promoted = state.queue.find((entry) => entry.id === event.id);
+      if (!promoted || state.queue[0] === promoted) {
+        return { state, dispatchedEntry: null };
+      }
+      return {
+        state: {
+          ...state,
+          queue: [
+            promoted,
+            ...state.queue.filter((entry) => entry !== promoted),
+          ],
         },
         dispatchedEntry: null,
       };

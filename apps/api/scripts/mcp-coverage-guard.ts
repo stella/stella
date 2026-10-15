@@ -113,12 +113,20 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts POST /case/decisions/search",
   case_law_coverage:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts GET /coverage",
-  lookup_case_law:
-    "no dedicated endpoint: MCP handler resolves references through the same identity branch the search endpoint takes (findDecisionIdsByIdentity in apps/api/src/handlers/case-law/decisions/search.ts); the browser reaches it by typing the docket into the public search box",
+  resolve_case_law_decision:
+    "inline endpoint: apps/api/src/handlers/legal-resolve/routes.ts GET /case/:country/decisions/resolve, shared resolveDecision service",
+  resolve_law_citation:
+    "inline endpoint: apps/api/src/handlers/legal-resolve/routes.ts GET /law/:country/citations/resolve, shared resolveLawCitation service",
   read_case_law_decision:
     "inline endpoint: apps/api/src/handlers/case-law/public-routes.ts GET /case/decisions/:decisionId",
   read_case_law_citations:
     "no dedicated endpoint: MCP handler reads the citation graph with its citing passages directly (apps/api/src/handlers/case-law/decisions/citation-passages.ts)",
+  open_case_law_decision:
+    "no dedicated endpoint: MCP reader entry over the public decision read the inline GET /case/decisions/:decisionId uses (apps/api/src/handlers/case-law/decisions/reader.ts)",
+  read_case_law_decision_blocks:
+    "no dedicated endpoint: app-only MCP reader page stream over the same public decision read, citations and provision previews (apps/api/src/handlers/case-law/decisions/reader.ts)",
+  preview_cited_provision:
+    "no dedicated endpoint: app-only MCP preview over the existing consolidated provision preview service (apps/api/src/mcp/decision-reader-tools.ts)",
   read_provision_history:
     "inline endpoint: apps/api/src/handlers/legislation/public-routes.ts GET /law/statutes/:documentId/provisions/:anchor/history",
   read_statute_provisions:
@@ -141,8 +149,10 @@ const TOOLS_WITHOUT_ENUMERABLE_ENDPOINT: Record<string, string> = {
     "no dedicated endpoint: curated meta-tool over the capability catalog (apps/api/src/mcp/capability-tools.ts)",
   describe_capability:
     "no dedicated endpoint: curated meta-tool over the capability catalog (apps/api/src/mcp/capability-tools.ts)",
-  invoke_capability:
-    "no dedicated endpoint: curated meta-tool dispatching the whole capability catalog via generated dispatch (apps/api/src/mcp/capability-tools.ts)",
+  read_capability:
+    "no dedicated endpoint: curated read executor dispatching read catalog capabilities (apps/api/src/mcp/capability-tools.ts)",
+  write_capability:
+    "no dedicated endpoint: curated write executor dispatching mutation catalog capabilities (apps/api/src/mcp/capability-tools.ts)",
   upload_document_version:
     "no dedicated endpoint: MCP host adapter bridges attached files through the canonical upload lifecycle (apps/api/src/mcp/document-file-upload.ts)",
   open_document_version_upload:

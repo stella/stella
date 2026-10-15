@@ -9,6 +9,7 @@ import {
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 
 import {
@@ -32,7 +33,6 @@ import {
   createPublicToolsHead,
   createToolEntryJsonLd,
 } from "@/lib/public-tools-seo";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
 
 const AddToStella = lazy(async () => ({

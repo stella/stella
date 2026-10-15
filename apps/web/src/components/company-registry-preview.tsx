@@ -6,6 +6,7 @@ import { isBusinessRegistryCredentialSlug } from "@stll/api-contract";
 import type { AresCompany } from "@stll/business-registries/ares";
 import { getAresCourtName } from "@stll/business-registries/ares/court-names";
 import { getAresLegalFormName } from "@stll/business-registries/ares/legal-forms";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { ExternalLinkIcon } from "@stll/ui/icons";
 import { Skeleton } from "@stll/ui/skeleton";
@@ -30,7 +31,6 @@ import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { CALENDAR_DATE_FORMAT } from "@/lib/relative-time";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type CompanyRegistryPreviewProps = {
   companyId: string;

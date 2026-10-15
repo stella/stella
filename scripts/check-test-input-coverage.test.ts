@@ -12,7 +12,16 @@ import {
   readStringLiterals,
   readTestInputs,
 } from "./check-test-input-coverage.ts";
+import { readCallArguments } from "./test-input-readers";
 import { scopeFilters } from "./test-scope.ts";
+
+test("call arguments stop at the first complete call before chained source", () => {
+  expect(
+    readCallArguments(
+      '(join("docs", directory), { mode: "read" }).scanSync({ cwd: root }); next("elsewhere.md")',
+    ),
+  ).toEqual(['join("docs", directory)', '{ mode: "read" }']);
+});
 
 const roots: string[] = [];
 
@@ -260,6 +269,22 @@ describe("test input coverage", () => {
           'readFileSync(path.join(root, "packages/shared/src/index.ts"));\n',
       },
       tasks: {},
+    });
+
+    expect(checkTestInputCoverage(root)).toEqual([]);
+  });
+
+  test("counts an explicitly declared read of a workspace dependency", () => {
+    const root = createRoot({
+      files: {
+        "apps/alpha/src/guard.test.ts":
+          'readFileSync(path.join(root, "packages/shared/src/index.ts"));\n',
+      },
+      tasks: {
+        "@stll/alpha#test": {
+          inputs: ["$TURBO_ROOT$/packages/shared/src/**"],
+        },
+      },
     });
 
     expect(checkTestInputCoverage(root)).toEqual([]);

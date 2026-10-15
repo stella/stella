@@ -12,7 +12,7 @@ import type { ReservedChatCommand } from "@/lib/reserved-chat-commands";
 
 export type SlashSkillScope = PromptScope | "built-in";
 
-export type SlashSkill = {
+type SlashSkill = {
   id: string;
   name: string;
   /** Slug used by the AI's `load-skill` tool. */

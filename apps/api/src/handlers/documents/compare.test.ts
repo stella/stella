@@ -163,7 +163,13 @@ const createHarness = ({
       },
     },
   };
-  const { safeDb, scopedDb } = createScopedDbMock(tx);
+  const { safeDb, scopedDb } = createScopedDbMock(tx, {
+    visibleResources: {
+      entity: [documentId],
+      entityVersion: rows.map(({ id }) => id),
+      field: [fieldId, secondaryFieldId],
+    },
+  });
   const applyDispositionMock = mock(
     async (file: ScannedFile, _disposition: "keep" | "accept" | "reject") =>
       file,
@@ -874,19 +880,16 @@ describe("documents.compare", () => {
     expect(harness.readFileHandlerMock).not.toHaveBeenCalled();
   });
 
-  test("rejects inaccessible versions as a closed per-target failure", async () => {
+  test("rejects inaccessible versions before comparison details", async () => {
     const harness = createHarness({ rows: [baseRow] });
 
     const result = await harness.definition.handler(harness.context);
 
     expect(result).toMatchObject({
-      results: [
-        {
-          status: "failed",
-          error: { code: "version_not_found" },
-        },
-      ],
+      code: 404,
+      response: { message: "Not found" },
     });
+    expect(harness.compareDocxMock).not.toHaveBeenCalled();
     expect(harness.readEntityVersionFileMock).not.toHaveBeenCalled();
     expect(harness.createEntityVersionFromBufferMock).not.toHaveBeenCalled();
     expect(harness.readFileHandlerMock).not.toHaveBeenCalled();

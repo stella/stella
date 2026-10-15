@@ -1,8 +1,8 @@
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@stll/ui/brand-icons";
 import { MenuItem } from "@stll/ui/menu";
 
 import { COMMUNITY_FORUM_URL, GITHUB_FEEDBACK_URL } from "@/lib/consts";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const COMMUNITY_CHANNELS = [
   { name: "Discord", href: COMMUNITY_FORUM_URL, icon: DiscordLogoIcon },

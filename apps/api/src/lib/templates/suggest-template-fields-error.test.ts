@@ -16,6 +16,8 @@ import {
   suggestTemplateFields,
   suggestTemplateFieldsOrEmpty,
 } from "@/api/lib/templates/suggest-template-fields";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const FAILURE = new Error("provider unavailable");
 
@@ -37,6 +39,7 @@ describe("suggestTemplateFields", () => {
         identifyOrganizationGroup: () => undefined,
       },
       feature: "templates.test",
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_test",
     });
 
@@ -47,6 +50,7 @@ describe("suggestTemplateFields", () => {
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       aiAnalytics,
       generateObjectForRole: async () => {
         throw FAILURE;
@@ -73,6 +77,7 @@ describe("suggestTemplateFieldsOrEmpty", () => {
         identifyOrganizationGroup: () => undefined,
       },
       feature: "templates.test",
+      modelTier: MANAGED_MODEL_TIER.standard,
       traceId: "trace_test",
     });
 
@@ -81,6 +86,7 @@ describe("suggestTemplateFieldsOrEmpty", () => {
       orgAIConfig: null,
       managedAIResidency: "eu" as const,
       organizationId,
+      admission: testModelAdmission(organizationId),
       aiAnalytics,
       generateObjectForRole: async () => {
         throw FAILURE;

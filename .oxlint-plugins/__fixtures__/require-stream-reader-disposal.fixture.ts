@@ -139,7 +139,7 @@ export const conditionalRelease = async (
   try {
     await reader.read();
   } finally {
-    // oxlint-disable-next-line eslint/no-unused-expressions -- fixture: conditional cleanup is the unsafe shape under test
+    // oxlint-disable-next-line no-unused-expressions -- fixture: conditional cleanup is the unsafe shape under test
     stopEarly && reader.releaseLock();
   }
 };
@@ -150,7 +150,7 @@ export const conditionalCancel = async (stream: ReadableStream<Uint8Array>) => {
   try {
     await reader.read();
   } finally {
-    // oxlint-disable-next-line eslint/no-unused-expressions -- fixture: conditional cleanup is the unsafe shape under test
+    // oxlint-disable-next-line no-unused-expressions -- fixture: conditional cleanup is the unsafe shape under test
     stopEarly && (await reader.cancel());
     reader.releaseLock();
   }
@@ -511,7 +511,7 @@ export const throwingSequenceBeforeRelease = async (
   try {
     await reader.read();
   } finally {
-    // oxlint-disable-next-line eslint/no-unused-expressions, typescript/no-confusing-void-expression -- fixture: sequence ordering is the unsafe cleanup shape under test
+    // oxlint-disable-next-line no-unused-expressions, typescript/no-confusing-void-expression -- fixture: sequence ordering is the unsafe cleanup shape under test
     (mightThrow(), reader.releaseLock());
   }
 };

@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 4,
+  "reason": "The API owns the sandbox treemap: @tanstack/charts supplies the hierarchy renderer, d3-scale supplies color scales, @types/d3-scale types those scales, and @playwright/test runs the real sandbox interaction contract. TypeScript AST inspection stays in packages/scripts, its existing compiler API owner."
+}

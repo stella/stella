@@ -1,4 +1,5 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -12,6 +13,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  */
 export const MCP_ERROR_CODES = [
   ...Object.values(ACTION_ADMISSION_CODES),
+  ...Object.values(VERIFICATION_RUN_CAP_CODES),
   /** Input failed validation at the tool boundary (shape, type, range). */
   "validation_error",
   /** The read result needs a smaller selection or page. */
@@ -50,6 +52,13 @@ export const MCP_ERROR_CODES = [
   "rate_limited",
   /** A named external dependency is temporarily unavailable; retry is safe. */
   "upstream_unavailable",
+  /**
+   * The case-law and legislation search index could not be reached (refused
+   * or reset connection, failed DNS lookup, timeout, or a 502/503/504 from
+   * the gateway in front of it). Nothing in the call caused it; resending the
+   * same call once the index is back succeeds.
+   */
+  "search_index_unavailable",
   /** No tool with the given name is exposed on this surface. */
   "unknown_tool",
   /** An unexpected server-side failure; details are not leaked to the caller. */

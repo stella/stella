@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { PayloadBudgetError } from "@/api/lib/compression";
+import { corpusIndexCommittedIngestTimeoutMs } from "@/api/lib/legal-search/corpus-index-client";
+import { CORPUS_INDEX_MANIFESTS } from "@/api/lib/legal-search/corpus-index-manifest";
 import {
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
@@ -9,9 +13,15 @@ import {
 import {
   advanceCorpusProjectionAppendTails,
   classifyCorpusProjectionPayloadReadFailure,
+  corpusProjectionAppendStartMarginMs,
   ingestCorpusProjectionRequest,
 } from "@/api/lib/legal-search/corpus-index-projection-executor";
+import { CORPUS_PROJECTION_LEASE_MAX_MS } from "@/api/lib/legal-search/corpus-index-projection-store";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
+
+const V5_APPEND_START_MARGIN_MS = corpusProjectionAppendStartMarginMs(
+  CORPUS_INDEX_MANIFESTS.case_law_v5,
+);
 
 test("payload budget failures block on the first read", () => {
   expect(
@@ -63,6 +73,7 @@ test("append tails coalesce serialized revisions across read windows", () => {
     ],
     mode: "buffer",
     nowMs: 0,
+    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
   });
   expect(first.flush).toEqual([]);
 
@@ -78,6 +89,7 @@ test("append tails coalesce serialized revisions across read windows", () => {
     ],
     mode: "flush-all",
     nowMs: 1,
+    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
   });
   expect(second.flush.at(0)?.entries.map(({ ndjson }) => ndjson)).toEqual([
     "cs-1",
@@ -109,6 +121,7 @@ test("single append entries remain singleton requests", () => {
     ],
     mode: "buffer",
     nowMs: 0,
+    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
   });
   expect(
     result.flush.map(({ entries }) => entries.map(({ ndjson }) => ndjson)),
@@ -129,6 +142,7 @@ test("append tails flush before their earliest lease deadline", () => {
     ],
     mode: "buffer",
     nowMs: 999,
+    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
   });
   expect(result.flush).toHaveLength(1);
   expect(result.tails.size).toBe(0);
@@ -153,6 +167,7 @@ test("append tails flush before crossing the physical request budget", () => {
     ],
     mode: "buffer",
     nowMs: 0,
+    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
   });
   expect(result.flush).toHaveLength(1);
   expect(result.flush.at(0)?.entries.map(({ ndjson }) => ndjson)).toEqual([
@@ -192,6 +207,7 @@ test("a multipart revision flushes alone between ordinary revisions", () => {
     entries,
     mode: "buffer",
     nowMs: 0,
+    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
   });
   expect(
     advanced.flush.map(({ entries: requestEntries }) =>
@@ -225,6 +241,7 @@ test("all coordinator modes wait for publication, including serving catch-up", a
       (
         await ingestCorpusProjectionRequest(client, {
           commitMode,
+          manifest: CORPUS_INDEX_MANIFESTS.case_law_v5,
           indexId: "case_law_v5_cs_sk",
           ndjson: '{"document_id":"a"}',
         })
@@ -273,12 +290,13 @@ test("append requests do not depend on how many revisions arrive at once", () =>
         requests.set(tail.indexId, perIndex);
       }
     };
-    for (let start = 0; start < entries.length; start += batchSize) {
+    for (const itemBatch of chunkItems(entries, batchSize)) {
       const advanced = advanceCorpusProjectionAppendTails({
         tails,
-        entries: entries.slice(start, start + batchSize),
+        entries: itemBatch,
         mode: "buffer",
         nowMs: 0,
+        appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
       });
       tails = advanced.tails;
       record(advanced.flush);
@@ -289,6 +307,7 @@ test("append requests do not depend on how many revisions arrive at once", () =>
         entries: [],
         mode: "flush-all",
         nowMs: 0,
+        appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
       }).flush,
     );
     return requests;
@@ -321,6 +340,7 @@ test("a cap-led flush and a margin-led flush are told apart", () => {
     entries: [entry("first", 600_000), entry("second", 600_000)],
     mode: "buffer",
     nowMs: 0,
+    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
   });
   expect(capLed.flush).toHaveLength(1);
   expect(capLed.leaseMarginReached).toBe(false);
@@ -330,6 +350,7 @@ test("a cap-led flush and a margin-led flush are told apart", () => {
     entries: [entry("first", 1000)],
     mode: "buffer",
     nowMs: 0,
+    appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
   });
   expect(marginLed.flush).toHaveLength(1);
   expect(marginLed.leaseMarginReached).toBe(true);
@@ -341,6 +362,52 @@ test("a cap-led flush and a margin-led flush are told apart", () => {
       entries: [entry("third", 600_000)],
       mode: "flush-all",
       nowMs: 0,
+      appendStartMarginMs: V5_APPEND_START_MARGIN_MS,
     }).leaseMarginReached,
   ).toBe(false);
+});
+
+/**
+ * The expired-lease sweep reclaims an `append_started` row once its lease
+ * passes, so an append may only start while its lease outlasts the ingest it
+ * is about to send. That ingest waits for the generation's own commit window,
+ * so the margin follows it: a lease that covers the ingest budget but not the
+ * confirmation behind it must stop buffering, and the longest lease must not.
+ */
+test("an append starts only with lease left for its whole ingest", () => {
+  for (const manifest of Object.values(CORPUS_INDEX_MANIFESTS)) {
+    const ingestTimeoutMs = corpusIndexCommittedIngestTimeoutMs(
+      manifest.engine.indexConfig.indexing_settings.commit_timeout_secs,
+    );
+    const marginMs = corpusProjectionAppendStartMarginMs(manifest);
+    expect(marginMs).toBeGreaterThan(ingestTimeoutMs);
+    expect(marginMs).toBeLessThan(CORPUS_PROJECTION_LEASE_MAX_MS);
+
+    const advance = (leaseExpiresAtMs: number) =>
+      advanceCorpusProjectionAppendTails({
+        tails: new Map(),
+        entries: [
+          {
+            indexId: `${manifest.generation}_cze`,
+            ndjson: "only",
+            ndjsonBytes: 1,
+            leaseExpiresAtMs,
+          },
+        ],
+        mode: "buffer",
+        nowMs: 0,
+        appendStartMarginMs: marginMs,
+      }).leaseMarginReached;
+
+    expect(advance(ingestTimeoutMs)).toBe(true);
+    expect(advance(marginMs)).toBe(true);
+    expect(advance(marginMs + 1)).toBe(false);
+    expect(advance(CORPUS_PROJECTION_LEASE_MAX_MS)).toBe(false);
+  }
+  // The longer commit window of v8 needs a longer lease than v7 to append at all.
+  expect(
+    corpusProjectionAppendStartMarginMs(CORPUS_INDEX_MANIFESTS.case_law_v8),
+  ).toBeGreaterThan(
+    corpusProjectionAppendStartMarginMs(CORPUS_INDEX_MANIFESTS.case_law_v7),
+  );
 });

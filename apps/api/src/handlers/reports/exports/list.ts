@@ -7,6 +7,7 @@ import { tPaginationCursor, workspaceParams } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
+  contract: "patch",
   description:
     "List report exports requested by the current user in a matter, newest first with cursor pagination.",
   permissions: { workspace: ["read"] },

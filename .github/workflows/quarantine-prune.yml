@@ -1,10 +1,14 @@
 name: Quarantine Exclude Prune
 
+defaults:
+  run:
+    shell: bash
+
 # A temporary `minimumReleaseAgeExcludes` entry stops being needed at a
 # wall-clock instant, and stops being safe at the same moment: it would let the
 # next version of that package publish straight past the release-age gate. So
-# the removal is proposed automatically rather than waiting to be noticed, and
-# the guard in ci.yml only tolerates an expired entry while this PR is open.
+# the removal is proposed automatically rather than waiting to be noticed.
+# Expiry still blocks the guard while the removal PR is open.
 
 on:
   schedule:
@@ -42,7 +46,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@167fb396c6c0f4e07296ad2cd72e6ef15367c776
+        uses: stella/.github/actions/setup-bun-cached@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -66,11 +70,6 @@ jobs:
           # bunfig.toml that fails CI for a different reason.
           bun scripts/check-stll-quarantine-excludes.ts
 
-      # Install before minting the write credential, as release-pr does.
-      - name: Install merge gate dependencies
-        if: steps.prune.outputs.changed == 'true'
-        run: bun install --frozen-lockfile
-
       - name: Mint app token
         if: steps.prune.outputs.changed == 'true'
         id: app-token
@@ -78,11 +77,32 @@ jobs:
         with:
           app-id: ${{ secrets.PROVENANCE_APP_ID }}
           private-key: ${{ secrets.PROVENANCE_APP_PRIVATE_KEY }}
-          # Merge-gate reads use the workflow token; the app only writes.
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-contents: write
           permission-pull-requests: write
+
+      - name: Disarm existing removal proposal
+        if: steps.prune.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+
+          armed_pr="$(gh pr list --repo "$GITHUB_REPOSITORY" \
+            --state open --base main --head "$PRUNE_BRANCH" \
+            --json number,isCrossRepository,autoMergeRequest \
+            --jq 'map(select(.isCrossRepository == false and .autoMergeRequest != null))[0].number // empty')"
+          if [[ -z "$armed_pr" ]]; then
+            echo "Existing quarantine removal proposal is not armed."
+            exit 0
+          fi
+
+          # A proposal already in the merge queue leaves it when the refresh
+          # pushes a new head, and under a merge hold the queue's required
+          # result refuses it, so disarming is what remains to do here.
+
+          gh pr merge "$armed_pr" --repo "$GITHUB_REPOSITORY" --disable-auto
 
       # The commit is created through the API so GitHub signs it. The branch
       # name is reserved for this job alone: re-running replaces its own
@@ -90,7 +110,7 @@ jobs:
       - name: Open or update the removal PR
         id: removal-pr
         if: steps.prune.outputs.changed == 'true'
-        uses: stella/.github/.github/actions/signed-commit@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/.github/actions/signed-commit@5764ab66e4df84cfd2e642c7d7e4678261e668f8
         with:
           token: ${{ steps.app-token.outputs.token }}
           mode: refresh-pr
@@ -114,10 +134,9 @@ jobs:
         if: steps.prune.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          GH_READ_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.removal-pr.outputs.pull-request-number }}
+          WRITTEN_HEAD: ${{ steps.removal-pr.outputs.commit-sha }}
           MERGE_HOLD: ${{ vars.STELLA_MERGE_HOLD }}
-          STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW: "1"
         run: |
           set -euo pipefail
 
@@ -140,10 +159,22 @@ jobs:
             exit 0
           fi
 
-          if bun scripts/merge-bar.ts "$PR_NUMBER"; then
-            echo "Removal PR #$PR_NUMBER handed to the merge gate." >> "$GITHUB_STEP_SUMMARY"
+          # Queue only the head this job wrote (or, for an unchanged proposal,
+          # the head it just compared); a later push must not ride along.
+          head="$(gh pr view "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)"
+          if [[ ! "$head" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Could not read the head of removal PR #$PR_NUMBER; not queued."
+            exit 1
+          fi
+          if [[ -n "$WRITTEN_HEAD" && "$head" != "$WRITTEN_HEAD" ]]; then
+            echo "::warning::Removal PR #$PR_NUMBER moved past the commit this job wrote; not queued."
+            echo "Removal PR #$PR_NUMBER moved past the commit this job wrote; not queued." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if gh pr merge "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" --auto --match-head-commit "$head"; then
+            echo "Removal PR #$PR_NUMBER entered the merge queue." >> "$GITHUB_STEP_SUMMARY"
           else
             status=$?
-            echo "::warning::Merge gate refused removal PR #$PR_NUMBER (exit $status); see the log above."
-            echo "Merge gate refused removal PR #$PR_NUMBER (exit $status); see the step log." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Could not enqueue removal PR #$PR_NUMBER (exit $status); see the log above."
+            echo "Could not enqueue removal PR #$PR_NUMBER (exit $status); see the step log." >> "$GITHUB_STEP_SUMMARY"
           fi

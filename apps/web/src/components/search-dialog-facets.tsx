@@ -10,7 +10,8 @@ import { CONTROL_SIZE } from "@stll/ui/control-size";
 import { Input } from "@stll/ui/input";
 import { MenuSection } from "@stll/ui/menu-section";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
+import { DateRangeFilter } from "@/components/date-range-filter";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { rememberSelectedFacetLabels } from "@/components/search-dialog.logic";
 import {
   dateInputToIsoEnd,
@@ -26,6 +27,7 @@ import type { TimeFilter } from "@/components/search-filters.logic";
 import { useFormatter } from "@/i18n/formatting-context";
 import { searchFacetOptions, TIME_PRESETS } from "@/lib/search";
 import type { SearchableFacet, TimePreset } from "@/lib/search";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type FacetGroupProps = {
   title: string;
@@ -127,31 +129,15 @@ export const TimeFacetGroup = ({
         </span>
       </Button>
       {isCustom && (
-        <div className="space-y-1 px-2">
-          <div>
-            <p className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
-              {t("search.dateFrom")}
-            </p>
-            <DatePickerPopover
-              layer="search-child"
-              locale={locale}
-              onChange={handleFromChange}
-              value={customFromValue}
-              {...(customToValue !== null && { maxDate: customToValue })}
-            />
-          </div>
-          <div>
-            <p className="text-muted-foreground text-3xs font-medium tracking-wide uppercase">
-              {t("search.dateTo")}
-            </p>
-            <DatePickerPopover
-              layer="search-child"
-              locale={locale}
-              onChange={handleToChange}
-              value={customToValue}
-              {...(customFromValue !== null && { minDate: customFromValue })}
-            />
-          </div>
+        <div className="px-2">
+          <DateRangeFilter
+            from={customFromValue}
+            to={customToValue}
+            layer="search-child"
+            locale={locale}
+            onFromChange={handleFromChange}
+            onToChange={handleToChange}
+          />
         </div>
       )}
     </MenuSection>
@@ -199,7 +185,7 @@ const FacetBucketList = ({
             {bucket.label ?? bucket.value}
           </span>
           <span className="text-muted-foreground tabular-nums">
-            {format.number(bucket.count)}
+            {bucket.countLabel ?? format.number(bucket.count)}
           </span>
         </Button>
       ))}
@@ -240,7 +226,7 @@ export const SearchableFacetGroup = ({
     {},
   );
   const isSearching = debouncedSearch.trim().length > 0;
-  const { data: searchData } = useQuery({
+  const searchDataQuery = useQuery({
     ...searchFacetOptions({
       facet,
       search: debouncedSearch,
@@ -249,6 +235,10 @@ export const SearchableFacetGroup = ({
     }),
     enabled: isSearching && searchParams.enabled,
   });
+  const searchDataView = useQueryView(searchDataQuery);
+  useQueryViewError(searchDataView);
+  const searchData =
+    searchDataView.type === "items" ? searchDataView.items : undefined;
   const resolveLabel = (bucket: FacetBucket): string =>
     formatLabel ? formatLabel(bucket) : (bucket.label ?? bucket.value);
 
@@ -287,6 +277,9 @@ export const SearchableFacetGroup = ({
   }
   return (
     <MenuSection title={title}>
+      {isSearching && searchParams.enabled && (
+        <QueryViewFeedback view={searchDataView} />
+      )}
       <Input
         onChange={(event) => {
           const value = event.target.value;

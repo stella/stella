@@ -1,5 +1,5 @@
 // The executor for generated capability leaves (spec 049 Phase 3). Unlike the
-// curated executor it calls the ONE generic `invoke_capability` tool with
+// curated executor it selects the read or write capability executor with
 // `{ capability, input: { body?, params?, query? }, validate_only?, confirm? }`,
 // mapping each flag back to the input part its schema declared. It shares the
 // curated executor's helpers (confirm gates, scope precheck, `--all` follow,
@@ -8,6 +8,7 @@
 import { Result } from "better-result";
 
 import type { Context } from "./context.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import { callTool, type CallToolResult } from "./mcp-client.js";
 import { EXIT_CODES } from "./mcp-constants.js";
 import type { CapabilityLeafSpec } from "./route-types.js";
@@ -28,9 +29,6 @@ import {
   writeInputSchema,
   writersFor,
 } from "./run-leaf-command.js";
-
-/** The generic capability tool every capability leaf dispatches to. */
-const INVOKE_TOOL = "invoke_capability";
 
 type LeafFlags = Record<string, unknown>;
 
@@ -62,6 +60,7 @@ export const runCapabilityCommand = async ({
   spec: CapabilityLeafSpec;
 }): Promise<void> => {
   const writers = writersFor(context);
+  const toolName = MCP_CAPABILITY_EXECUTORS[spec.access];
 
   if (flags[RESERVED_FLAG_KEYS.schema] === true) {
     writeInputSchema({ context, inputSchema: spec.inputSchema, writers });
@@ -170,9 +169,8 @@ export const runCapabilityCommand = async ({
     toolArgs["validate_only"] = true;
   }
 
-  // Confirm gates. A known-destructive capability prompts up front; any
-  // capability pre-approves the server's per-capability gate with --yes.
-  if (spec.destructive) {
+  // Write capabilities own confirmation; read arguments never carry a gate.
+  if (spec.access === "write" && spec.destructive) {
     const outcome = await confirmDestructive({
       context,
       flags,
@@ -184,7 +182,10 @@ export const runCapabilityCommand = async ({
       return;
     }
     toolArgs["confirm"] = true;
-  } else if (flags[RESERVED_FLAG_KEYS.yes] === true) {
+  } else if (
+    spec.access === "write" &&
+    flags[RESERVED_FLAG_KEYS.yes] === true
+  ) {
     toolArgs["confirm"] = true;
   }
 
@@ -198,7 +199,7 @@ export const runCapabilityCommand = async ({
       baseArgs: toolArgs,
       serverUrl,
       token,
-      toolName: INVOKE_TOOL,
+      toolName,
       cursorInto: (base, cursor) => withCursor(base, paginationPart, cursor),
       ...(spec.requestTimeoutMs === undefined
         ? {}
@@ -210,7 +211,7 @@ export const runCapabilityCommand = async ({
   const call = await callTool({
     serverUrl,
     token,
-    name: INVOKE_TOOL,
+    name: toolName,
     args: toolArgs,
     ...(spec.requestTimeoutMs === undefined
       ? {}
@@ -225,14 +226,14 @@ export const runCapabilityCommand = async ({
     args: toolArgs,
     call: call.value,
     context,
-    enabled: true,
+    enabled: spec.access === "write",
     flags,
     label: spec.commandPath.join(" "),
     renderCall,
     serverUrl,
     timeoutMs: spec.requestTimeoutMs,
     token,
-    toolName: INVOKE_TOOL,
+    toolName,
     writers,
   });
   if (retried) {

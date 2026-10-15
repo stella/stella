@@ -11,7 +11,7 @@ export { LEGISLATION_DOCUMENT_STATUSES as STATUTE_STATUSES };
 export { isLegislationDocumentStatus as isStatuteStatus };
 export type StatuteStatus = LegislationDocumentStatus;
 
-export const STATUTE_DISPLAY_STATUSES = [
+const STATUTE_DISPLAY_STATUSES = [
   ...LEGISLATION_DOCUMENT_STATUSES,
   "future",
 ] as const;

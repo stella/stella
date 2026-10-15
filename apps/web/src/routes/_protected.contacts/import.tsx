@@ -30,9 +30,9 @@ import {
   ArrowRightIcon,
   CheckCircle2Icon,
   FileSpreadsheetIcon,
-  Loader2Icon,
   UploadIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import {
   Select,
   SelectItem,
@@ -464,7 +464,7 @@ const UploadStep = ({
         type="button"
       >
         {isInspecting ? (
-          <Loader2Icon className="text-muted-foreground size-10 animate-spin" />
+          <Loader className="size-10" size="sm" variant="decorative" />
         ) : (
           <FileSpreadsheetIcon className="text-muted-foreground size-10" />
         )}
@@ -781,7 +781,7 @@ const ImportSummaryIcon = ({
 }) => {
   if (isPending) {
     return (
-      <Loader2Icon className="text-muted-foreground size-4 shrink-0 animate-spin" />
+      <Loader className="size-4 shrink-0" size="sm" variant="decorative" />
     );
   }
   if (errorCount > 0) {

@@ -1,7 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { contentDir } from "@stll/ui/use-content-dir";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { cn } from "@stll/ui/utils";
 
 type InlineEditProps = {
@@ -28,16 +28,6 @@ type InlineEditProps = {
   inputClassName?: string | undefined;
 };
 
-/**
- * Compact inline rename used in toolbars / tab headers.
- *
- * Deliberately NOT built on the `<Input>` primitive: that's tuned
- * for full-form inputs (rounded-lg, shadow, larger text) and looked
- * oversized when dropped inline next to a label. This stays as a
- * raw `<input>` with text-xs to match the surrounding label height
- * exactly — only a subtle border + soft 2px focus ring at 16%
- * opacity signals the edit affordance, no dark "primary" ring leak.
- */
 export const InlineEdit = ({
   value,
   onChange,
@@ -53,7 +43,10 @@ export const InlineEdit = ({
 
   return (
     <span
-      className={cn("inline-flex items-center gap-1", className)}
+      className={cn(
+        "inline-flex max-w-full min-w-0 items-center gap-1",
+        className,
+      )}
       onBlur={(event) => {
         const nextTarget = event.relatedTarget;
         if (
@@ -65,37 +58,21 @@ export const InlineEdit = ({
         onCommit();
       }}
     >
-      <input
+      <InlineRenameInput
         aria-label={inputAriaLabel ?? t("common.rename")}
-        autoFocus
-        className={cn(
-          "border-input bg-background text-foreground h-6 min-w-0 rounded-sm border px-1.5 text-xs leading-none outline-none",
-          "focus:border-ring focus:ring-ring/16 focus:ring-2 focus:ring-offset-0",
-          inputClassName,
-        )}
-        dir={contentDir(value)}
-        onChange={(e) => onChange(e.target.value)}
-        onClick={(e) => e.stopPropagation()}
-        // The editor opens seeded with the current name, so selecting it on
-        // focus makes typing replace it. A click inside collapses the
-        // selection to the caret, leaving pointer editing untouched.
-        onFocus={(e) => e.currentTarget.select()}
-        onKeyDown={(e) => {
-          e.stopPropagation();
-          if (e.key === "Enter") {
-            e.preventDefault();
-            onCommit();
-          }
-          if (e.key === "Escape") {
-            onCancel();
-          }
+        className={inputClassName}
+        onBlur={() => {
+          // The group commits when focus leaves its action buttons too.
         }}
+        onCancel={onCancel}
+        onCommit={onCommit}
+        onValueChange={onChange}
         value={value}
       />
       {suffix}
       {action}
       <Button
-        className="h-6 shrink-0 gap-0.5 px-2"
+        className="h-lh shrink-0 gap-0.5 px-2"
         onClick={onCommit}
         onMouseDown={(e) => {
           e.preventDefault();

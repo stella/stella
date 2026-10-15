@@ -46,6 +46,7 @@ import {
   invalidateTemplateClauseSources,
 } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
   clauseSlotMarker,
@@ -349,13 +350,19 @@ export const useTemplateStudioSlashMenu = ({
     slashView === "clauses" ? (slash?.query ?? "") : "",
     120,
   );
-  const { data: slashClauseData } = useQuery({
+  const slashClauseDataQuery = useQuery({
     ...clauseLibraryOptions(activeOrganizationId, {
       search: debouncedClauseSearch,
       limit: SLASH_MENU_CLAUSE_LIMIT,
     }),
     enabled: slashClausesEnabled,
   });
+  const slashClauseDataView = useQueryView(slashClauseDataQuery);
+  useQueryViewError(slashClauseDataView);
+  const slashClauseData =
+    slashClauseDataView.type === "items"
+      ? slashClauseDataView.items
+      : undefined;
   const slashClauses: SlashClause[] = useMemo(
     () =>
       slashClauseData && "items" in slashClauseData

@@ -5,6 +5,7 @@ import type { SQLChunk, SQL } from "drizzle-orm";
 import {
   oauthClient,
   oauthClientResource,
+  oauthConsent,
   oauthResource,
 } from "@/api/db/auth-schema";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/api/lib/db/better-auth-oauth-policy-census";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { MCP_LAW_HTTP_PATH } from "@/api/mcp/constants";
+import { predecessorOAuthResourceScopes } from "@/api/mcp/resource-policy-contract";
 import type {
   TestDatabase,
   TestDatabaseTransaction,
@@ -115,9 +117,12 @@ const captureRejection = async (operation: Promise<void>): Promise<unknown> =>
 
 /** The resources a deployment served before the law audience was added. */
 const preUpgradeResources = () =>
-  getBetterAuthOAuthResources().filter(
-    ({ identifier }) => !identifier.endsWith(MCP_LAW_HTTP_PATH),
-  );
+  getBetterAuthOAuthResources()
+    .filter(({ identifier }) => !identifier.endsWith(MCP_LAW_HTTP_PATH))
+    .map((resource) => ({
+      ...resource,
+      allowedScopes: predecessorOAuthResourceScopes(resource.allowedScopes),
+    }));
 
 const lawResourceIdentifier = (): string => {
   const law = getBetterAuthOAuthResources().find(({ identifier }) =>
@@ -181,6 +186,16 @@ const linkedResourceIds = async (
     `)
   ).rows;
 
+const resourcePolicies = async (transaction: TestDatabaseTransaction) =>
+  (
+    await transaction.execute(sql`
+    SELECT identifier,
+           ARRAY(SELECT unnest(allowed_scopes) ORDER BY 1) AS "allowedScopes",
+           updated_at AS "updatedAt"
+      FROM oauth_resource ORDER BY identifier
+  `)
+  ).rows;
+
 test("the repair is registered, so every deploy reconciles the policy", () => {
   // The registry is what makes this automatic. A repair module nobody lists is
   // an operator script with extra steps, which is the defect being fixed.
@@ -230,6 +245,19 @@ test("the deploy repair adds a new audience to an existing database", async () =
       expect(await resourceIdentifiers(transaction)).toContainEqual({
         identifier: lawResourceIdentifier(),
       });
+      // Every row now issues with protocol scopes, so refresh keeps
+      // offline_access.
+      const policies = await resourcePolicies(transaction);
+      for (const resource of getBetterAuthOAuthResources()) {
+        expect(
+          predecessorOAuthResourceScopes(resource.allowedScopes),
+        ).not.toEqual(resource.allowedScopes);
+        expect(policies).toContainEqual({
+          identifier: resource.identifier,
+          allowedScopes: resource.allowedScopes.toSorted(),
+          updatedAt: expect.any(String),
+        });
+      }
       // And the registration that existed before the upgrade can request it.
       expect(await linkedResourceIds(transaction)).toContainEqual({
         resourceId: lawResourceIdentifier(),
@@ -252,6 +280,7 @@ test("a second repair run changes nothing", async () => {
 
       await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection);
       const resources = await resourceIdentifiers(transaction);
+      const policies = await resourcePolicies(transaction);
       const links = await linkedResourceIds(transaction);
 
       await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection);
@@ -260,6 +289,7 @@ test("a second repair run changes nothing", async () => {
       ).toEqual({ type: "complete" });
 
       expect(await resourceIdentifiers(transaction)).toEqual(resources);
+      expect(await resourcePolicies(transaction)).toEqual(policies);
       expect(await linkedResourceIds(transaction)).toEqual(links);
 
       transaction.rollback();
@@ -271,43 +301,205 @@ test("a second repair run changes nothing", async () => {
   }
 });
 
-test("the repair refuses a conflicting resource definition", async () => {
+const PROTOCOL_SCOPES = ["openid", "profile", "email", "offline_access"];
+
+/**
+ * The policy a released deployment actually held, frozen: the rows of the
+ * release before the advanced audience existed, when external MCP access was
+ * still part of the default audience and the resolve scope did not exist yet.
+ * Later releases change the configured sets; the repair has to take a database
+ * in this state to whatever the current code configures.
+ */
+const RELEASED_POLICY = [
+  {
+    allowedScopes: [
+      "stella:search",
+      "stella:read",
+      "stella:templates",
+      "stella:documents_write",
+      "stella:matters_write",
+      "stella:contacts_write",
+      "stella:chat",
+      "stella:knowledge_write",
+      "stella:billing_write",
+      "stella:admin_read",
+      "stella:admin_write",
+      "stella:onboarding",
+      "stella:skills",
+      "stella:external_mcps",
+      "stella:feedback",
+      ...PROTOCOL_SCOPES,
+    ],
+    name: "Stella MCP",
+    path: "/mcp",
+  },
+  {
+    allowedScopes: [
+      "stella:search_anonymized",
+      "stella:read_anonymized",
+      "stella:templates_anonymized",
+      ...PROTOCOL_SCOPES,
+    ],
+    name: "Stella MCP anonymized",
+    path: "/mcp-anonymized",
+  },
+  {
+    allowedScopes: [
+      "stella:read",
+      "stella:documents_write",
+      "stella:matters_write",
+      ...PROTOCOL_SCOPES,
+    ],
+    name: "Stella MCP documents",
+    path: "/mcp-documents",
+  },
+  {
+    allowedScopes: ["stella:search", "stella:read", ...PROTOCOL_SCOPES],
+    name: "Stella MCP law",
+    path: "/mcp-law",
+  },
+] as const;
+
+const configuredResource = (path: string) => {
+  const resource = getBetterAuthOAuthResources().find(
+    ({ identifier }) => new URL(identifier).pathname === path,
+  );
+  if (resource === undefined) {
+    throw new Error(`${path} is not a configured OAuth resource`);
+  }
+  return resource;
+};
+
+const releasedIdentifier = (path: string) =>
+  new URL(path, configuredResource("/mcp").identifier).toString();
+
+const MOVED_SCOPE = "stella:external_mcps";
+
+const consentResources = async (transaction: TestDatabaseTransaction) =>
+  (
+    await transaction.execute(sql`
+      SELECT id, resources FROM oauth_consent ORDER BY id
+    `)
+  ).rows;
+
+const givenReleasedDeployment = async (
+  transaction: TestDatabaseTransaction,
+): Promise<void> => {
+  await transaction.execute(sql`
+    TRUNCATE "user", account, oauth_consent, oauth_client_resource,
+             oauth_resource, oauth_client CASCADE
+  `);
+  await transaction.insert(oauthResource).values(
+    RELEASED_POLICY.map((resource, index) => ({
+      allowedScopes: [...resource.allowedScopes],
+      id: `released-resource-${index}`,
+      identifier: releasedIdentifier(resource.path),
+      name: resource.name,
+    })),
+  );
+  await transaction.insert(oauthClient).values({
+    clientId: CLIENT_ID,
+    id: "online-repair-client-row",
+    redirectUris: ["https://client.example.invalid/callback"],
+  });
+  await transaction.insert(oauthClientResource).values(
+    RELEASED_POLICY.map((resource, index) => ({
+      clientId: CLIENT_ID,
+      id: `released-link-${index}`,
+      resourceId: releasedIdentifier(resource.path),
+    })),
+  );
+  await transaction.insert(oauthConsent).values([
+    {
+      // Approved everything on the default audience, external MCPs included.
+      clientId: CLIENT_ID,
+      id: "consent-all",
+      resources: [releasedIdentifier("/mcp")],
+      scopes: ["openid", "stella:read", MOVED_SCOPE, "offline_access"],
+    },
+    {
+      // Never approved the moved scope.
+      clientId: CLIENT_ID,
+      id: "consent-read",
+      resources: [releasedIdentifier("/mcp")],
+      scopes: ["openid", "stella:read", "offline_access"],
+    },
+    {
+      // Holds the scope for a different audience only.
+      clientId: CLIENT_ID,
+      id: "consent-law",
+      resources: [releasedIdentifier("/mcp-law")],
+      scopes: ["openid", "stella:read", MOVED_SCOPE],
+    },
+  ]);
+};
+
+test("the deploy repair takes a released policy to the configured scopes", async () => {
   try {
     await database.transaction(async (transaction) => {
-      await givenPreUpgradeDeployment(transaction);
+      await givenReleasedDeployment(transaction);
       const connection = onlineConnection(transaction);
-      const [existing] = preUpgradeResources();
-      if (existing === undefined) {
-        throw new Error("expected a pre-upgrade resource");
-      }
+      const advanced = configuredResource("/mcp/advanced");
+      expect(advanced.allowedScopes).toContain(MOVED_SCOPE);
+      expect(configuredResource("/mcp").allowedScopes).not.toContain(
+        MOVED_SCOPE,
+      );
 
-      // A stored definition that disagrees with the configured one is never
-      // overwritten: the repair refuses, exactly as the cutover command does,
-      // so a deploy cannot silently rewrite an audience's scopes.
-      await transaction.execute(sql`
-        UPDATE oauth_resource
-           SET name = 'conflicting resource name'
-         WHERE identifier = ${existing.identifier}
-      `);
-
+      // The new image refuses to boot on the released policy.
       expect(
         await captureRejection(
-          BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection),
+          ensureBetterAuthOAuthPolicy(
+            transaction,
+            getBetterAuthOAuthResources(),
+          ),
         ),
-      ).toBeInstanceOf(Error);
-      expect(
-        (
-          await transaction.execute(sql`
-            SELECT name FROM oauth_resource
-             WHERE identifier = ${existing.identifier}
-          `)
-        ).rows,
-      ).toEqual([{ name: "conflicting resource name" }]);
-      // Refusing leaves the deploy to fail on the completion read rather than
-      // on a half-written policy.
+      ).toMatchObject({ failedChecks: ["resources-match"] });
+
+      await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection);
       expect(
         await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.readCompletion(connection),
-      ).toMatchObject({ type: "incomplete" });
+      ).toEqual({ type: "complete" });
+      await ensureBetterAuthOAuthPolicy(
+        transaction,
+        getBetterAuthOAuthResources(),
+      );
+
+      // Every stored audience now carries exactly the configured scopes,
+      // widened and narrowed alike, and the new audience exists and is linked.
+      const policies = await resourcePolicies(transaction);
+      for (const resource of getBetterAuthOAuthResources()) {
+        expect(policies).toContainEqual({
+          identifier: resource.identifier,
+          allowedScopes: resource.allowedScopes.toSorted(),
+          updatedAt: expect.any(String),
+        });
+      }
+      expect(await linkedResourceIds(transaction)).toContainEqual({
+        resourceId: advanced.identifier,
+      });
+
+      // Whoever approved the moved scope keeps it where it now lives, without
+      // being asked again; nobody else gains an audience.
+      expect(await consentResources(transaction)).toEqual([
+        {
+          id: "consent-all",
+          resources: [releasedIdentifier("/mcp"), advanced.identifier],
+        },
+        {
+          id: "consent-law",
+          resources: [releasedIdentifier("/mcp-law")],
+        },
+        {
+          id: "consent-read",
+          resources: [releasedIdentifier("/mcp")],
+        },
+      ]);
+
+      // A second deploy finds nothing to change.
+      const consents = await consentResources(transaction);
+      await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection);
+      expect(await resourcePolicies(transaction)).toEqual(policies);
+      expect(await consentResources(transaction)).toEqual(consents);
 
       transaction.rollback();
     });
@@ -317,3 +509,64 @@ test("the repair refuses a conflicting resource definition", async () => {
     }
   }
 });
+
+test.each(["name", "scopes", "disabled"] as const)(
+  "the repair refuses a conflicting resource %s",
+  async (conflict) => {
+    try {
+      await database.transaction(async (transaction) => {
+        await givenPreUpgradeDeployment(transaction);
+        const connection = onlineConnection(transaction);
+        const existing = preUpgradeResources().at(-1);
+        if (existing === undefined) {
+          throw new Error("expected a pre-upgrade resource");
+        }
+
+        // A stored definition this code never configured (a foreign scope, a
+        // renamed or disabled audience) is never overwritten: the repair
+        // refuses, exactly as the cutover command does.
+        const conflicts = {
+          name: sql`UPDATE oauth_resource SET name = 'conflicting resource name' WHERE identifier = ${existing.identifier}`,
+          scopes: sql`UPDATE oauth_resource SET allowed_scopes = ARRAY['unexpected:scope'] WHERE identifier = ${existing.identifier}`,
+          disabled: sql`UPDATE oauth_resource SET disabled = true WHERE identifier = ${existing.identifier}`,
+        };
+        await transaction.execute(conflicts[conflict]);
+        const before = (
+          await transaction.execute(sql`
+        SELECT name, allowed_scopes, disabled FROM oauth_resource
+         WHERE identifier = ${existing.identifier}
+      `)
+        ).rows;
+        const policiesBefore = await resourcePolicies(transaction);
+
+        expect(
+          await captureRejection(
+            BETTER_AUTH_OAUTH_RESOURCE_REPAIR.repair(connection),
+          ),
+        ).toMatchObject({ code: "invalid-source-state" });
+        expect(
+          (
+            await transaction.execute(sql`
+            SELECT name, allowed_scopes, disabled FROM oauth_resource
+             WHERE identifier = ${existing.identifier}
+          `)
+          ).rows,
+        ).toEqual(before);
+        // Earlier resources were upgraded before this conflict was detected.
+        // A rejected repair must roll back those changes too.
+        expect(await resourcePolicies(transaction)).toEqual(policiesBefore);
+        // Refusing leaves the deploy to fail on the completion read rather than
+        // on a half-written policy.
+        expect(
+          await BETTER_AUTH_OAUTH_RESOURCE_REPAIR.readCompletion(connection),
+        ).toMatchObject({ type: "incomplete" });
+
+        transaction.rollback();
+      });
+    } catch (error) {
+      if (!(error instanceof TransactionRollbackError)) {
+        throw error;
+      }
+    }
+  },
+);

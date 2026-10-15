@@ -1,0 +1,144 @@
+{
+  "title": "Nemajetková újma: soudy a roky",
+  "data": {
+    "formattingLocale": "cs-CZ",
+    "courtYear": {
+      "buckets": [
+        {
+          "court": "CZ:ns",
+          "courtName": "Nejvyšší soud",
+          "courtAbbreviation": "NS",
+          "tier": "supreme",
+          "year": 2021,
+          "count": 36,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:ns",
+          "courtName": "Nejvyšší soud",
+          "courtAbbreviation": "NS",
+          "tier": "supreme",
+          "year": 2022,
+          "count": 48,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:ns",
+          "courtName": "Nejvyšší soud",
+          "courtAbbreviation": "NS",
+          "tier": "supreme",
+          "year": 2023,
+          "count": 57,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:ns",
+          "courtName": "Nejvyšší soud",
+          "courtAbbreviation": "NS",
+          "tier": "supreme",
+          "year": 2024,
+          "count": 42,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:nss",
+          "courtName": "Nejvyšší správní soud",
+          "courtAbbreviation": "NSS",
+          "tier": "supreme",
+          "year": 2021,
+          "count": 14,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:nss",
+          "courtName": "Nejvyšší správní soud",
+          "courtAbbreviation": "NSS",
+          "tier": "supreme",
+          "year": 2022,
+          "count": 22,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:nss",
+          "courtName": "Nejvyšší správní soud",
+          "courtAbbreviation": "NSS",
+          "tier": "supreme",
+          "year": 2023,
+          "count": 29,
+          "citationSum": null,
+          "treatment": null
+        },
+        {
+          "court": "CZ:nss",
+          "courtName": "Nejvyšší správní soud",
+          "courtAbbreviation": "NSS",
+          "tier": "supreme",
+          "year": 2024,
+          "count": 18,
+          "citationSum": null,
+          "treatment": null
+        }
+      ],
+      "truncated": false
+    },
+    "topResults": [
+      {
+        "linkId": "decision-a",
+        "courtAbbreviation": "NS",
+        "caseNumber": "25 Cdo 100/2023",
+        "citationCount": 18
+      },
+      {
+        "linkId": "decision-b",
+        "courtAbbreviation": "NSS",
+        "caseNumber": "2 As 100/2022",
+        "citationCount": 7
+      },
+      {
+        "linkId": "decision-c",
+        "courtAbbreviation": "NS",
+        "caseNumber": "30 Cdo 100/2021",
+        "citationCount": 31
+      }
+    ],
+    "labels": {
+      "eyebrow": "PŘEHLED JUDIKATURY",
+      "title": "Nemajetková újma: soudy a roky",
+      "scope": "NS a NSS · 2021–2024 · syntetická ukázková data",
+      "map-title": "Rozhodnutí podle soudu a roku",
+      "map-help": "Velikost = počet rozhodnutí · barva = úroveň soudu. Vyberte soud a poté rok. Esc nebo pravé tlačítko vrátí přehled.",
+      "ranking-title": "Nejcitovanější z vrácených výsledků",
+      "ranking-scope": "Pořadí pouze mezi výsledky aktuální stránky, nikoli v celém nalezeném souboru.",
+      "stats": [
+        "Rozhodnutí v zobrazených skupinách (odhad)",
+        "Soudy",
+        "Roky",
+        "Nejvíce citací mezi vrácenými výsledky"
+      ],
+      "estimate": "Počty jsou odhady unikátních rozhodnutí, nikoli počty textových pasáží.",
+      "truncated": "Zobrazený přehled je omezený. Součet nezahrnuje všechny nalezené skupiny.",
+      "drillOffered": "Upřesnění je připravené v chatu. Odešlete je pro podrobnější přehled.",
+      "emptyAggregate": "Pro tuto stránku nejsou dostupné souhrnné počty. Vyhledejte první stránku výsledků.",
+      "emptyRanking": "Aktuální stránka neobsahuje rozhodnutí s dostupným počtem citací.",
+      "unavailable": "—",
+      "citations": "citací"
+    }
+  },
+  "links": [
+    {
+      "id": "decision-a",
+      "decisionId": "00000000-0000-4000-8000-000000000001"
+    },
+    {
+      "id": "decision-b",
+      "decisionId": "00000000-0000-4000-8000-000000000002"
+    },
+    { "id": "decision-c", "decisionId": "00000000-0000-4000-8000-000000000003" }
+  ]
+}

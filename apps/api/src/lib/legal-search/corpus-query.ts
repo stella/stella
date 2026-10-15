@@ -6,7 +6,7 @@ import type {
   WorkIdentifier,
 } from "@stll/legal-atlas/provision-citation-profile";
 import { provisionCitationProfileFor } from "@stll/legal-atlas/provision-citation-profiles";
-import { foldToAscii } from "@stll/text-normalize";
+import { normalizeUnicode, foldToAscii } from "@stll/text-normalize";
 
 import {
   decisionTypeFilter,
@@ -308,6 +308,12 @@ export const CORPUS_QUERY_LEAF_BUDGET = 24;
 export type CorpusStemming = {
   language: MorphologyLanguage;
   fields: readonly string[];
+  /**
+   * The members of `fields` the generation indexes without positions. A stem
+   * of more than one word is a phrase, which the engine rejects on such a
+   * field, so it goes only to the others; a one-word stem reaches them all.
+   */
+  positionlessFields: readonly string[];
 };
 
 /**
@@ -328,7 +334,10 @@ const stemLeaves = (
   if (stem === "") {
     return [];
   }
-  return stemming.fields.map((field) => `${field}:${quoteCorpusValue(stem)}`);
+  const phrase = corpusTokens(stem).length > 1;
+  return stemming.fields
+    .filter((field) => !phrase || !stemming.positionlessFields.includes(field))
+    .map((field) => `${field}:${quoteCorpusValue(stem)}`);
 };
 
 export type CorpusLegacyStemming = {
@@ -353,7 +362,7 @@ const legacyStemLeaves = ({
   }
   const faithful = corpusTokens(token.value)
     .map((term) => {
-      const normalized = term.normalize("NFC").toLowerCase();
+      const normalized = normalizeUnicode(term, "NFC").toLowerCase();
       return stemTerm(normalized) || normalized;
     })
     .join(" ");
@@ -1023,7 +1032,7 @@ export const corpusDecisionTypeClause = (requested: string): string => {
  * exact without every scoped query paying for a clause its index already
  * implies.
  */
-export type CaseLawCorpusFilters = {
+type CaseLawCorpusFilters = {
   court?: string | undefined;
   courts?: readonly string[] | undefined;
   /**

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { Result, panic } from "better-result";
-import { createHash } from "node:crypto";
+import { Result, panic, TaggedError } from "better-result";
+import { randomUUID } from "node:crypto";
 import {
   copyFileSync,
   existsSync,
@@ -8,6 +8,7 @@ import {
   mkdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -15,10 +16,20 @@ import {
 import { createServer, Socket } from "node:net";
 import path from "node:path";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { isSealTrusted, parseSealStatus } from "./agent-evidence";
 import { childExitStatus } from "./child-exit-status";
+import {
+  dockerCommand,
+  DockerEndpointError,
+  resolveInstalledDevDockerKeeper,
+  type DockerTarget,
+  resolveDockerTarget,
+} from "./dev-docker";
+import { dockerKeeperCommand, ensureDockerKeeper } from "./dev-docker-keeper";
+import { decideHostAdmission, probeHostFileUsage } from "./dev-host-admission";
 import {
   type DevProcessGroupError,
   spawnDevProcess,
@@ -33,12 +44,17 @@ import {
   readDevRunnerConfig,
 } from "./dev-runner-config";
 import {
+  DEV_OWNER_PID_ENV,
   devStatePath,
+  isPidAlive,
+  parseOwnerPid,
   readOrCreateDevContentEncryptionKey,
   removeDevRuntime,
   SEAL_FILE,
+  stackShutdownReason,
   writeDevRuntime,
 } from "./dev-runtime";
+import { formatErrorChain } from "./error-chain";
 
 const ENV_FILE_SPECS = [
   {
@@ -254,10 +270,7 @@ const legacyDockerProjectName = (infraOffset: number) =>
     : `${SHARED_DOCKER_PROJECT_BASE}-${String(infraOffset)}`;
 
 const worktreeProjectHash = (worktreePath: string) =>
-  createHash("sha256")
-    .update(worktreePath)
-    .digest("hex")
-    .slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
+  hashSha256Hex(worktreePath).slice(0, DOCKER_PROJECT_WORKTREE_HASH_LENGTH);
 
 export const dockerProjectName = ({
   infraOffset,
@@ -633,10 +646,12 @@ export const parseForeignPortOwners = ({
 };
 
 const findForeignContainersOnSharedPorts = ({
+  dockerTarget,
   dockerProject,
   infraPorts,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   dockerProject: string;
   infraPorts: InfraPorts;
   rootDir: string;
@@ -644,19 +659,21 @@ const findForeignContainersOnSharedPorts = ({
   parseForeignPortOwners({
     expectedProject: dockerProject,
     output: runCommandText({
-      cmd: [
-        resolveCommandPath("docker"),
+      ...dockerCommand(dockerTarget, [
         "ps",
         "--format",
         '{{.Names}}\t{{.Label "com.docker.compose.project"}}\t{{.Ports}}',
-      ],
+      ]),
       cwd: rootDir,
     }),
     sharedPorts: sharedInfraPortList(infraPorts),
   });
 
-const dockerComposeEnv = (infraPorts: InfraPorts) => ({
-  ...process.env,
+const dockerComposeEnv = (
+  dockerTarget: DockerTarget,
+  infraPorts: InfraPorts,
+) => ({
+  ...dockerTarget.env,
   STELLA_GOTENBERG_HOST_PORT: String(infraPorts.gotenberg),
   STELLA_PG_HOST_PORT: String(infraPorts.postgres),
   STELLA_RUSTFS_CONSOLE_PORT: String(infraPorts.rustfsConsole),
@@ -786,25 +803,28 @@ export const getSharedDockerServicesWaitFailure = (
 };
 
 type DockerComposeCommandOptions = {
+  dockerTarget: DockerTarget;
   args: readonly string[];
-  composeFile?: string;
+  composeFile: string;
   dockerProject: string;
 };
 
-const dockerComposeCommand = ({
+export const dockerComposeCommand = ({
+  dockerTarget,
   args,
   composeFile,
   dockerProject,
-}: DockerComposeCommandOptions) => [
-  resolveCommandPath("docker"),
-  "compose",
-  "--project-name",
-  dockerProject,
-  ...(composeFile ? ["--file", composeFile] : []),
-  "--profile",
-  "dev",
-  ...args,
-];
+}: DockerComposeCommandOptions) =>
+  dockerCommand(dockerTarget, [
+    "compose",
+    "--project-name",
+    dockerProject,
+    "--file",
+    composeFile,
+    "--profile",
+    "dev",
+    ...args,
+  ]);
 
 export const projectsForDeletedWorktrees = ({
   output,
@@ -889,51 +909,67 @@ export const hasConflictingDockerOwner = ({
   parseDockerProjectOwnership(output).has(dockerProject);
 
 export const dockerComposeDownCommand = ({
+  dockerTarget,
   composeFile,
   dockerProject,
 }: {
+  dockerTarget: DockerTarget;
   composeFile: string;
   dockerProject: string;
 }) =>
   dockerComposeCommand({
+    dockerTarget,
     args: ["down", "--remove-orphans"],
     composeFile,
     dockerProject,
   });
 
-const readDockerComposeProjectOwnershipOutput = (rootDir: string) =>
+const readDockerComposeProjectOwnershipOutput = ({
+  rootDir,
+  dockerTarget,
+}: {
+  rootDir: string;
+  dockerTarget: DockerTarget;
+}) =>
   runCommandText({
-    cmd: [
-      resolveCommandPath("docker"),
+    ...dockerCommand(dockerTarget, [
       "ps",
       "--all",
       "--format",
       '{{.Label "com.docker.compose.project"}}\t{{.Label "com.docker.compose.project.working_dir"}}',
-    ],
+    ]),
     cwd: rootDir,
   });
 
 const stopDockerProject = ({
+  dockerTarget,
   composeFile,
   dockerProject,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   composeFile: string;
   dockerProject: string;
   rootDir: string;
 }) => {
   runStep({
-    cmd: dockerComposeDownCommand({ composeFile, dockerProject }),
+    ...dockerComposeDownCommand({
+      dockerTarget,
+      composeFile,
+      dockerProject,
+    }),
     cwd: rootDir,
     label: `Stopping Docker project ${dockerProject}`,
   });
 };
 
 const removeProjectsForDeletedWorktrees = ({
+  dockerTarget,
   composeFile,
   ownershipOutput,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   composeFile: string;
   ownershipOutput: string;
   rootDir: string;
@@ -944,6 +980,7 @@ const removeProjectsForDeletedWorktrees = ({
 
   for (const dockerProject of deletedWorktreeProjects) {
     stopDockerProject({
+      dockerTarget,
       composeFile,
       dockerProject,
       rootDir,
@@ -952,30 +989,36 @@ const removeProjectsForDeletedWorktrees = ({
 };
 
 const readSharedDockerServiceStatuses = ({
+  dockerTarget,
   dockerProject,
   infraPorts,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   dockerProject: string;
   infraPorts: InfraPorts;
   rootDir: string;
 }) =>
   parseDockerComposePsJson(
     runCommandText({
-      cmd: dockerComposeCommand({
+      ...dockerComposeCommand({
+        dockerTarget,
         args: ["ps", "--all", "--format", "json"],
+        composeFile: path.resolve(rootDir, "docker-compose.yml"),
         dockerProject,
       }),
       cwd: rootDir,
-      env: dockerComposeEnv(infraPorts),
+      env: dockerComposeEnv(dockerTarget, infraPorts),
     }),
   );
 
 const waitForSharedDockerServices = async ({
+  dockerTarget,
   dockerProject,
   infraPorts,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   dockerProject: string;
   infraPorts: InfraPorts;
   rootDir: string;
@@ -988,6 +1031,7 @@ const waitForSharedDockerServices = async ({
     DOCKER_SERVICES_READY_TIMEOUT_MS
   ) {
     const statuses = readSharedDockerServiceStatuses({
+      dockerTarget,
       dockerProject,
       infraPorts,
       rootDir,
@@ -1005,12 +1049,81 @@ const waitForSharedDockerServices = async ({
   );
 };
 
+const ensureHostDockerKeeper = async ({
+  dryRun,
+  mode,
+}: {
+  dryRun: boolean;
+  mode: DevMode;
+}) => {
+  if (!modeIncludesApi(mode)) {
+    return Result.ok(null);
+  }
+  const resolved = resolveDockerTarget({ env: process.env });
+  if (resolved.isErr()) {
+    return resolved;
+  }
+  const dockerTarget = resolved.value;
+  const approved = resolveInstalledDevDockerKeeper(dockerTarget);
+  if (approved.isErr()) {
+    const closed = dockerTarget.close();
+    if (closed.isErr()) {
+      return Result.err(
+        new DockerEndpointError({
+          message: `${approved.error.message}; ${closed.error.message}`,
+          cause: { operation: approved.error, cleanup: closed.error },
+        }),
+      );
+    }
+    return approved;
+  }
+  const label = approved.value;
+  if (dryRun || !label) {
+    return Result.ok(dockerTarget);
+  }
+  const recovered = await ensureDockerKeeper({
+    label,
+    dockerTarget,
+    run: (command) => {
+      const spec = dockerKeeperCommand({
+        command,
+        platform: process.platform,
+        uid: process.getuid?.(),
+      });
+      return Bun.spawnSync(spec.command, {
+        cwd: spec.cwd,
+        env: dockerTarget.env,
+        stdout: "pipe",
+        stderr: "pipe",
+        timeout: 5000,
+      }).success;
+    },
+    now: () => Temporal.Now.instant().epochMilliseconds,
+    sleep: async (milliseconds) => Bun.sleep(milliseconds),
+  });
+  if (recovered.isErr()) {
+    const closed = dockerTarget.close();
+    if (closed.isErr()) {
+      return Result.err(
+        new DockerEndpointError({
+          message: `${recovered.error.message}; ${closed.error.message}`,
+          cause: { operation: recovered.error, cleanup: closed.error },
+        }),
+      );
+    }
+    return Result.err(recovered.error);
+  }
+  return Result.ok(dockerTarget);
+};
+
 const ensureDockerServices = async ({
+  dockerTarget,
   dockerProject,
   infraPorts,
   markStarted,
   rootDir,
 }: {
+  dockerTarget: DockerTarget;
   dockerProject: string;
   infraPorts: InfraPorts;
   markStarted: () => void;
@@ -1019,6 +1132,7 @@ const ensureDockerServices = async ({
   if (
     hasLegacyObjectStoreService(
       readSharedDockerServiceStatuses({
+        dockerTarget,
         dockerProject,
         infraPorts,
         rootDir,
@@ -1026,17 +1140,20 @@ const ensureDockerServices = async ({
     )
   ) {
     runStep({
-      cmd: dockerComposeCommand({
+      ...dockerComposeCommand({
+        dockerTarget,
         args: ["down", "--remove-orphans"],
+        composeFile: path.resolve(rootDir, "docker-compose.yml"),
         dockerProject,
       }),
       cwd: rootDir,
-      env: dockerComposeEnv(infraPorts),
+      env: dockerComposeEnv(dockerTarget, infraPorts),
       label: "Replacing the legacy object-store service",
     });
   }
 
   const foreignOwners = findForeignContainersOnSharedPorts({
+    dockerTarget,
     dockerProject,
     infraPorts,
     rootDir,
@@ -1060,6 +1177,7 @@ const ensureDockerServices = async ({
   if (failedProbes.length === 0) {
     const currentFailure = getSharedDockerServicesWaitFailure(
       readSharedDockerServiceStatuses({
+        dockerTarget,
         dockerProject,
         infraPorts,
         rootDir,
@@ -1086,14 +1204,21 @@ const ensureDockerServices = async ({
   // one-shot setup container is polled separately and must exit successfully.
   markStarted();
   runStep({
-    cmd: dockerComposeCommand({ args: ["up", "-d"], dockerProject }),
+    // Refresh the seed image on reconciliation; healthy stacks return above.
+    ...dockerComposeCommand({
+      dockerTarget,
+      args: ["up", "-d", "--build"],
+      composeFile: path.resolve(rootDir, "docker-compose.yml"),
+      dockerProject,
+    }),
     cwd: rootDir,
-    env: dockerComposeEnv(infraPorts),
+    env: dockerComposeEnv(dockerTarget, infraPorts),
     label: "Starting Docker services",
   });
 
   console.log("==> Waiting for shared Docker services to become ready...");
   await waitForSharedDockerServices({
+    dockerTarget,
     dockerProject,
     infraPorts,
     rootDir,
@@ -1173,11 +1298,18 @@ const migrateEnvFileIfNeeded = (filePath: string, specPath: string) => {
   }
 };
 
+class WorktreeEnvLinkError extends TaggedError("WorktreeEnvLinkError")<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 export const ensureWorktreeEnvLinks = ({
+  createSymlink = symlinkSync,
   currentRoot,
   isWorktree,
   mainRoot,
 }: {
+  createSymlink?: typeof symlinkSync;
   currentRoot: string;
   isWorktree: boolean;
   mainRoot: string;
@@ -1186,22 +1318,65 @@ export const ensureWorktreeEnvLinks = ({
 
   for (const spec of ENV_FILE_SPECS) {
     const targetPath = path.resolve(currentRoot, spec.path);
-    if (existsSync(targetPath)) {
+    const mainEnvPath = path.resolve(mainRoot, spec.path);
+    const targetExists = existsSync(targetPath);
+    if (
+      targetExists &&
+      (!isWorktree || lstatSync(targetPath).isSymbolicLink())
+    ) {
       migrateEnvFileIfNeeded(targetPath, spec.path);
       continue;
     }
 
-    const mainEnvPath = path.resolve(mainRoot, spec.path);
     if (isWorktree && existsSync(mainEnvPath)) {
+      if (
+        targetExists &&
+        (!lstatSync(targetPath).isFile() ||
+          !readFileSync(targetPath).equals(readFileSync(mainEnvPath)))
+      ) {
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Refusing to replace environment file ${targetPath}: it differs from ${mainEnvPath} or is not a regular file.`,
+          }),
+        );
+      }
+      // Compare before migration so an identical older file can become a link.
       migrateEnvFileIfNeeded(mainEnvPath, spec.path);
       mkdirSync(path.dirname(targetPath), { recursive: true });
-      try {
-        symlinkSync(mainEnvPath, targetPath);
-      } catch {
-        copyFileSync(mainEnvPath, targetPath);
+      const linkPath = targetExists
+        ? `${targetPath}.link-${randomUUID()}`
+        : targetPath;
+      const linked = Result.try(() => {
+        createSymlink(mainEnvPath, linkPath);
+        if (targetExists) {
+          renameSync(linkPath, targetPath);
+        }
+      });
+      if (linked.isErr()) {
+        const reason =
+          linked.error.cause instanceof Error
+            ? linked.error.cause.message
+            : linked.error.message;
+        const cleanup = targetExists
+          ? Result.try(() => rmSync(linkPath, { force: true }))
+          : Result.ok(undefined);
+        return Result.err(
+          new WorktreeEnvLinkError({
+            message: `Cannot link environment file ${targetPath} to ${mainEnvPath}: ${reason}${cleanup.isErr() ? `; cleanup failed: ${cleanup.error.message}` : ""}`,
+            cause: linked.error,
+          }),
+        );
       }
       preparedFiles++;
       continue;
+    }
+
+    if (targetExists) {
+      return Result.err(
+        new WorktreeEnvLinkError({
+          message: `Refusing to replace environment file ${targetPath}: source ${mainEnvPath} is missing.`,
+        }),
+      );
     }
 
     const examplePath = path.resolve(currentRoot, spec.example);
@@ -1214,7 +1389,7 @@ export const ensureWorktreeEnvLinks = ({
     preparedFiles++;
   }
 
-  return preparedFiles;
+  return Result.ok(preparedFiles);
 };
 
 const apiUrlForPort = (port: number) => `http://127.0.0.1:${String(port)}`;
@@ -1529,6 +1704,8 @@ const validateDesktopBridgeHealth =
 // startup is treated as a clean exit, not a crash.
 let isShuttingDown = false;
 
+const OWNER_POLL_INTERVAL_MS = 5000;
+
 // Thrown when a shutdown interrupts an in-progress startup step (a readiness
 // wait, or spawning the next batch of persistent children). main()'s startup
 // try/catch treats this as "stop the startup sequence" rather than a crash:
@@ -1684,6 +1861,19 @@ const startBackgroundStep = (step: Step, rootDir: string) => {
   }));
 };
 
+// Cleanup runs while the startup failure is still unreported, so a failed
+// group stop is reported here instead of thrown over the original error.
+export const reportGroupStopFailure = (
+  groupStop: Result<string[], DevProcessGroupError>,
+  report: (message: string) => void = console.error,
+) => {
+  if (groupStop.isOk()) {
+    return true;
+  }
+  report(`Dev process group stop failed: ${formatErrorChain(groupStop.error)}`);
+  return false;
+};
+
 const finishBackgroundStep = async (step: BackgroundStep) => {
   const exitCode = await step.child.exited;
   if (exitCode !== 0) {
@@ -1797,11 +1987,19 @@ const buildApiEnv = ({
     ...env,
     CONTENT_ENCRYPTION_KEY:
       env["CONTENT_ENCRYPTION_KEY"] ||
-      readOrCreateDevContentEncryptionKey(rootDir).match({
-        ok: (key) => key,
-        err: (error) => panic(error.message),
-      }),
+      unwrapContentEncryptionKey(readOrCreateDevContentEncryptionKey(rootDir)),
   };
+};
+
+// A throwing match err arm is rewrapped by better-result as an opaque
+// "match err handler threw" panic; branch outside `match` to keep the cause.
+const unwrapContentEncryptionKey = (
+  result: ReturnType<typeof readOrCreateDevContentEncryptionKey>,
+) => {
+  if (result.isErr()) {
+    return panic(result.error.message, result.error);
+  }
+  return result.value;
 };
 
 type ApiScriptStepOptions = BuildApiEnvOptions & {
@@ -1815,21 +2013,34 @@ const buildApiScriptStep = ({
   args,
   label,
   ...envOptions
-}: ApiScriptStepOptions): Step => ({
+}: ApiScriptStepOptions) => ({
   cmd: [resolveCommandPath("bun"), ...args],
   cwd: path.resolve(envOptions.rootDir, "apps/api"),
   env: buildApiEnv(envOptions),
   label,
 });
 
+// A seeded stack serves only what its seed wrote. The case-law fixture lives
+// in this database's Postgres search projection, so search reads it there
+// whichever provider apps/api/.env names; a public-law database URL in that
+// file then fails the API's startup check instead of serving another corpus.
+const SEEDED_STACK_LEGAL_SEARCH_PROVIDER = "pg-fts";
+
+const withSeededStackSearch = (env: NodeJS.ProcessEnv) => ({
+  ...env,
+  LEGAL_SEARCH_PROVIDER: SEEDED_STACK_LEGAL_SEARCH_PROVIDER,
+});
+
 // The test user, its session and Playwright storage state, then the fixture
-// matters, contacts and documents.
-const buildSeedStep = (options: BuildApiEnvOptions) =>
-  buildApiScriptStep({
+// matters, contacts, documents and public case law.
+const buildSeedStep = (options: BuildApiEnvOptions): Step => {
+  const step = buildApiScriptStep({
     ...options,
     args: ["run", "db:seed-local"],
     label: "Seeding local fixtures",
   });
+  return { ...step, env: withSeededStackSearch(step.env) };
+};
 
 const buildSealCheckStep = (options: BuildApiEnvOptions) =>
   buildApiScriptStep({
@@ -1892,12 +2103,15 @@ export const buildPersistentSteps = ({
   mode,
   ports,
   rootDir,
+  seeded,
 }: {
   infraOffset: number;
   infraPorts: InfraPorts;
   mode: DevMode;
   ports: DevPorts;
   rootDir: string;
+  /** Whether this run seeds the stack (`--seed`). */
+  seeded: boolean;
 }): PersistentSteps => {
   const webBaseEnv = stripAppEnvKeys({
     baseEnv: process.env,
@@ -1907,7 +2121,20 @@ export const buildPersistentSteps = ({
     baseEnv: process.env,
     envFilePath: path.resolve(rootDir, "apps/desktop/.env"),
   });
-  const apiEnv = buildApiEnv({ infraOffset, infraPorts, ports, rootDir });
+  const configuredApiEnv = buildApiEnv({
+    infraOffset,
+    infraPorts,
+    ports,
+    rootDir,
+  });
+  // Widened to the env map the steps take, so any key reads the same way on
+  // both branches.
+  const apiEnv: NodeJS.ProcessEnv = seeded
+    ? {
+        ...withSeededStackSearch(configuredApiEnv),
+        SCHEDULED_JOBS_MODE: "disabled",
+      }
+    : configuredApiEnv;
   const webEnv = {
     ...expandEnvMap(loadEnvFile(path.resolve(rootDir, "apps/web/.env"))),
     ...createWebEnv({
@@ -1924,6 +2151,10 @@ export const buildPersistentSteps = ({
   };
   const primary: Step[] = [];
   const secondary: Step[] = [];
+  // bun --watch holds a descriptor per imported file and directory, node_modules
+  // included, and cannot exclude paths. Seeded stacks are driven by agents that
+  // restart them explicitly, so only interactive dev pays for hot reload.
+  const watchArgs = seeded ? [] : ["--watch"];
 
   if (modeIncludesApi(mode)) {
     primary.push({
@@ -1933,7 +2164,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
-        "--watch",
+        ...watchArgs,
         "src/server.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
@@ -1964,8 +2195,11 @@ export const buildPersistentSteps = ({
   // Uploads only become searchable, extractable, and readable by AI once the
   // document-processing worker drains their runs; without it every upload
   // stays queued forever. It has no HTTP surface, so it goes after the
-  // readiness-checked steps: checks pair with steps by position.
-  if (modeIncludesApi(mode)) {
+  // readiness-checked steps: checks pair with steps by position. With
+  // background workers disabled (always for a seeded stack, or by the
+  // developer's env) the process would exit at once and the runner would
+  // treat that as a crash, so it is not started.
+  if (modeIncludesApi(mode) && apiEnv["SCHEDULED_JOBS_MODE"] !== "disabled") {
     primary.push({
       cmd: [
         resolveCommandPath("bun"),
@@ -1973,7 +2207,7 @@ export const buildPersistentSteps = ({
         "--no-env-file",
         "--preload",
         "./src/dev/register-mock-ai.ts",
-        "--watch",
+        ...watchArgs,
         "src/scripts/document-processing-worker.ts",
       ],
       cwd: path.resolve(rootDir, "apps/api"),
@@ -2195,23 +2429,29 @@ const printDryRun = ({
   }
 };
 
-const readKnownDockerProjects = (rootDir: string) => [
-  ...readDockerComposeProjectOwnershipOutput(rootDir)
+const readKnownDockerProjects = ({
+  rootDir,
+  dockerTarget,
+}: {
+  rootDir: string;
+  dockerTarget: DockerTarget;
+}) => [
+  ...readDockerComposeProjectOwnershipOutput({ rootDir, dockerTarget })
     .split("\n")
     .map((line) => line.split("\t").at(0) ?? ""),
   ...runCommandText({
-    cmd: [
-      resolveCommandPath("docker"),
+    ...dockerCommand(dockerTarget, [
       "volume",
       "ls",
       "--format",
       '{{.Label "com.docker.compose.project"}}',
-    ],
+    ]),
     cwd: rootDir,
   }).split("\n"),
 ];
 
 type ResolveInfraOffsetOptions = {
+  dockerTarget: DockerTarget | null;
   gitContext: GitContext;
   mode: DevMode;
   ports: DevPorts;
@@ -2219,6 +2459,7 @@ type ResolveInfraOffsetOptions = {
 };
 
 const resolveInfraOffset = async ({
+  dockerTarget,
   gitContext,
   mode,
   ports,
@@ -2234,9 +2475,15 @@ const resolveInfraOffset = async ({
       if (!modeIncludesApi(mode) || !gitContext.isWorktree) {
         return { offset: 0, source: "default ports" };
       }
+      if (dockerTarget === null) {
+        panic("API infrastructure requires a resolved Docker endpoint.");
+      }
       return await resolveAutoInfraOffset({
         isPortFree: async (port) => await checkPortAvailabilityOnHosts(port),
-        knownProjects: readKnownDockerProjects(gitContext.mainRoot),
+        knownProjects: readKnownDockerProjects({
+          rootDir: gitContext.mainRoot,
+          dockerTarget,
+        }),
         reservedPorts: requiredPortsForMode(mode, ports),
         worktreePath: gitContext.canonicalRoot,
       });
@@ -2255,13 +2502,23 @@ const main = async () => {
   }
   const parsedArgs = config.value;
   const gitContext = createGitContext(process.cwd());
-  const preparedEnvFiles = ensureWorktreeEnvLinks({
+  const preparedEnvFilesResult = ensureWorktreeEnvLinks({
     currentRoot: gitContext.currentRoot,
     isWorktree: gitContext.isWorktree,
     mainRoot: gitContext.mainRoot,
   });
+  if (Result.isError(preparedEnvFilesResult)) {
+    panic(preparedEnvFilesResult.error.message);
+  }
+  const preparedEnvFiles = preparedEnvFilesResult.value;
 
   const { devInstance, mode, portOffset } = parsedArgs;
+  using dockerTarget = (
+    await ensureHostDockerKeeper({
+      dryRun: parsedArgs.dryRun,
+      mode,
+    })
+  ).unwrap("Development Docker endpoint preparation failed");
   // Offsets resolve before any process or container starts, so a signal
   // during resolution has nothing to clean up.
   const initialOffset = resolveOffset({
@@ -2280,6 +2537,7 @@ const main = async () => {
       ? initialOffset.source
       : `${initialOffset.source}; adjusted for free ports`;
   const resolvedInfraOffset = await resolveInfraOffset({
+    dockerTarget,
     gitContext,
     mode,
     ports,
@@ -2292,8 +2550,11 @@ const main = async () => {
     isWorktree: gitContext.isWorktree,
     worktreePath: gitContext.canonicalRoot,
   });
-  const composeFile = path.resolve(gitContext.mainRoot, "docker-compose.yml");
-  const managesDocker = !parsedArgs.dryRun && modeIncludesApi(mode);
+  const composeFile = path.resolve(
+    gitContext.currentRoot,
+    "docker-compose.yml",
+  );
+  const managesDocker = !parsedArgs.dryRun && dockerTarget !== null;
   const children: RunningStep[] = [];
   // One-shot steps running beside the servers; kept apart from `children`,
   // whose first exit means a server died.
@@ -2301,13 +2562,24 @@ const main = async () => {
   let cleanupPromise: Promise<boolean> | undefined;
   let ownsDockerProject = false;
 
+  // `unwrap` panics with the group error as its cause, which
+  // `formatErrorChain` reports; a throwing `match` err arm would not.
   const processGroupValue = <T>(result: Result<T, DevProcessGroupError>) =>
-    result.match({
-      ok: (value) => value,
-      err: (error) => {
-        throw error;
-      },
-    });
+    result.unwrap("Dev process group operation failed");
+
+  const closeDockerTarget = () => {
+    if (dockerTarget === null) {
+      return true;
+    }
+    const closed = dockerTarget.close();
+    if (closed.isErr()) {
+      console.error(
+        `Docker TLS snapshot cleanup failed: ${formatErrorChain(closed.error)}`,
+      );
+      return false;
+    }
+    return true;
+  };
 
   const cleanup = async () => {
     if (cleanupPromise) {
@@ -2328,14 +2600,16 @@ const main = async () => {
         );
       }
 
-      if (!ownsDockerProject) {
-        processGroupValue(groupStop);
-        return true;
+      const groupStopped = reportGroupStopFailure(groupStop);
+      if (!ownsDockerProject || dockerTarget === null) {
+        const closed = closeDockerTarget();
+        return groupStopped && closed;
       }
 
       const stopped = Result.try({
         try: () =>
           stopDockerProject({
+            dockerTarget,
             composeFile,
             dockerProject,
             rootDir: gitContext.mainRoot,
@@ -2348,8 +2622,8 @@ const main = async () => {
           `Docker cleanup failed for ${dockerProject}: ${stopped.error}`,
         );
       }
-      processGroupValue(groupStop);
-      return stopped.isOk();
+      const closed = closeDockerTarget();
+      return stopped.isOk() && groupStopped && closed;
     })();
 
     return cleanupPromise;
@@ -2360,10 +2634,10 @@ const main = async () => {
     process.exit(cleanupSucceeded ? exitCode : 1);
   };
 
-  for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
     process.on(signal, () => {
       shutdown(0).catch((error: unknown) => {
-        console.error("Dev runner shutdown failed:", error);
+        console.error(`Dev runner shutdown failed: ${formatErrorChain(error)}`);
         process.exit(1);
       });
     });
@@ -2384,6 +2658,7 @@ const main = async () => {
     mode,
     ports,
     rootDir: gitContext.currentRoot,
+    seeded: parsedArgs.seed,
   });
   const readinessChecks = buildReadinessChecks({
     mode,
@@ -2412,6 +2687,34 @@ const main = async () => {
     return;
   }
 
+  const probe = probeHostFileUsage();
+  const admission = decideHostAdmission({
+    usage: probe.isOk() ? probe.value : null,
+  });
+  if (admission.type === "refuse") {
+    panic(admission.message);
+  }
+  if (admission.type === "admit-unverified") {
+    console.warn(admission.reason);
+  }
+
+  const ownerPid = parseOwnerPid(process.env[DEV_OWNER_PID_ENV]);
+  const ownerWatch = setInterval(() => {
+    const reason = stackShutdownReason({
+      checkoutExists: existsSync(gitContext.currentRoot),
+      ownerAlive: ownerPid === null ? null : isPidAlive(ownerPid),
+    });
+    if (reason === null || isShuttingDown) {
+      return;
+    }
+    console.error(`Stopping the dev stack: ${reason}.`);
+    shutdown(0).catch((error: unknown) => {
+      console.error("Dev runner shutdown failed:", error);
+      process.exit(1);
+    });
+  }, OWNER_POLL_INTERVAL_MS);
+  ownerWatch.unref();
+
   const startSteps = (steps: readonly Step[]): RunningStep[] => {
     if (isShuttingDown) {
       throw new DevRunnerShutdownSignalError();
@@ -2431,13 +2734,14 @@ const main = async () => {
     if (managesDocker) {
       console.log("==> Checking Docker engine...");
       runStep({
-        cmd: [resolveCommandPath("docker"), "ps"],
+        ...dockerCommand(dockerTarget, ["ps"]),
         cwd: gitContext.currentRoot,
         label: "Verifying Docker engine health",
       });
-      const ownershipOutput = readDockerComposeProjectOwnershipOutput(
-        gitContext.mainRoot,
-      );
+      const ownershipOutput = readDockerComposeProjectOwnershipOutput({
+        rootDir: gitContext.mainRoot,
+        dockerTarget,
+      });
       if (
         hasConflictingDockerOwner({
           dockerProject,
@@ -2453,6 +2757,7 @@ const main = async () => {
       ownsDockerProject =
         parseDockerProjectOwnership(ownershipOutput).has(dockerProject);
       removeProjectsForDeletedWorktrees({
+        dockerTarget,
         composeFile,
         ownershipOutput,
         rootDir: gitContext.mainRoot,
@@ -2467,18 +2772,44 @@ const main = async () => {
         })
       ) {
         stopDockerProject({
+          dockerTarget,
           composeFile,
           dockerProject: legacyDockerProject,
           rootDir: gitContext.mainRoot,
         });
       }
       await ensureDockerServices({
+        dockerTarget,
         dockerProject,
         infraPorts,
         markStarted: () => {
           ownsDockerProject = true;
         },
         rootDir: gitContext.currentRoot,
+      });
+      const postgresContainer = runCommandText({
+        ...dockerComposeCommand({
+          dockerTarget,
+          args: ["ps", "-q", "postgres"],
+          composeFile,
+          dockerProject,
+        }),
+        cwd: gitContext.currentRoot,
+        env: dockerComposeEnv(dockerTarget, infraPorts),
+      });
+      runStep({
+        cmd: [
+          resolveCommandPath("bash"),
+          "scripts/configure-test-postgres.sh",
+          postgresContainer.trim(),
+          "postgres",
+          "stella",
+          dockerTarget.host,
+          "captured",
+        ],
+        cwd: gitContext.currentRoot,
+        env: dockerTarget.env,
+        label: "Verifying Postgres execution and owner parity",
       });
     }
 
@@ -2550,6 +2881,7 @@ const main = async () => {
       dockerProject: modeIncludesApi(mode) ? dockerProject : null,
       infraOffset,
       mode,
+      ownerPid,
       pid: process.pid,
       seeded: seeds,
       startedAt: Temporal.Now.instant().toString(),
@@ -2595,11 +2927,31 @@ const main = async () => {
   }
 };
 
-if (import.meta.main) {
+type RunMainOptions = {
+  exit: (code: number) => void;
+  report: (message: string) => void;
+  run: () => Promise<void>;
+};
+
+export const runMainAndExit = async ({ exit, report, run }: RunMainOptions) => {
   try {
-    await main();
+    await run();
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    // The exit code must survive any failure while reporting.
+    const reported = Result.try(() => report(formatErrorChain(error)));
+    if (reported.isErr()) {
+      Result.try(() =>
+        report("Dev runner failed; the error is unreadable."),
+      ).unwrapOr(undefined);
+    }
+    exit(1);
   }
+};
+
+if (import.meta.main) {
+  await runMainAndExit({
+    exit: (code) => process.exit(code),
+    report: console.error,
+    run: main,
+  });
 }

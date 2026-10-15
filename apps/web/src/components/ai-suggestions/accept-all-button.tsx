@@ -35,7 +35,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
 
 /** Above this many pending changes, "accept all" asks to confirm first. */
-export const ACCEPT_ALL_CONFIRM_THRESHOLD = 10;
+const ACCEPT_ALL_CONFIRM_THRESHOLD = 10;
 
 const SEVERITY_COUNT_KEYS = {
   high: "docxReview.countHigh",

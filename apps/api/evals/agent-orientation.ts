@@ -48,6 +48,8 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as v from "valibot";
 
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import type { AvailableChatSkill } from "@/api/lib/agent-skills/skills";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -55,6 +57,7 @@ import {
   streamChatChunks,
   toolCallEndInputOf,
 } from "@/api/lib/chat/tanstack-chat-runtime";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -82,6 +85,7 @@ import type {
   RouteNode,
 } from "../../../packages/cli/src/route-types";
 import { sameCliFlagValue } from "./lib/cli-flag-score";
+import { composeCliToolInput } from "./lib/cli-tool-input";
 import { runEvalModelTurn } from "./lib/model-turn";
 
 // A bare id resolves through whichever configured provider rates it (GPT
@@ -592,6 +596,21 @@ const SANCTIONS_COMPANY_ID = "26863154";
 
 const TASKS: readonly Task[] = [
   {
+    id: "describe-invoice-export",
+    request:
+      "Describe invoices.export before exporting a matter's invoices for the accountant. Check which formats it accepts and its permissions without invoking it.",
+    mcp: {
+      toolName: "describe_capability",
+      exampleArgs: { capability: "invoices.export" },
+      checkArgs: (args) => field(args, "capability", "invoices.export"),
+    },
+    cli: {
+      kind: "command",
+      path: ["capability", "describe"],
+      flags: { capability: "invoices.export" },
+    },
+  },
+  {
     id: "describe-invoice-pdf",
     request:
       "Describe invoices.pdf.export before attempting to download an invoice PDF. Check its file transport and permissions without invoking it.",
@@ -670,37 +689,62 @@ const TASKS: readonly Task[] = [
     },
   },
   {
-    id: "lookup-case-law",
+    id: "resolve-case-law",
     request: `A brief cites ${CASE_LAW_DOCKET}. Find that decision in the Czech corpus so I can open it.`,
     mcp: {
-      toolName: "lookup_case_law",
-      exampleArgs: { country: "CZE", identifiers: [CASE_LAW_DOCKET] },
-      checkArgs: (args) => {
-        const identifiers = args["identifiers"];
-        if (!Array.isArray(identifiers)) {
-          return ["identifiers: expected an array"];
-        }
-        return [
-          // The docket is the whole point: a paraphrase is a text search, and
-          // search_case_law is the tool for that.
-          ...(identifiers.length === 1 && identifiers.at(0) === CASE_LAW_DOCKET
-            ? []
-            : [
-                `identifiers: expected [${JSON.stringify(CASE_LAW_DOCKET)}], got ${JSON.stringify(identifiers)}`,
-              ]),
-          ...(typeof args["country"] === "string" &&
-          args["country"].toUpperCase() === "CZE"
-            ? []
-            : [
-                `country: expected CZE, got ${JSON.stringify(args["country"])}`,
-              ]),
-        ];
-      },
+      toolName: "resolve_case_law_decision",
+      exampleArgs: { country: "CZE", identifier: CASE_LAW_DOCKET },
+      checkArgs: (args) => [
+        ...(args["identifier"] === CASE_LAW_DOCKET
+          ? []
+          : [
+              `identifier: expected ${JSON.stringify(CASE_LAW_DOCKET)}, got ${JSON.stringify(args["identifier"])}`,
+            ]),
+        ...(typeof args["country"] === "string" &&
+        args["country"].toUpperCase() === "CZE"
+          ? []
+          : [`country: expected CZE, got ${JSON.stringify(args["country"])}`]),
+      ],
     },
     cli: {
       kind: "command",
-      path: ["case-law", "lookup"],
-      flags: { country: "CZE", identifiers: CASE_LAW_DOCKET },
+      path: ["case-law", "resolve"],
+      flags: { country: "CZE", identifier: CASE_LAW_DOCKET },
+    },
+  },
+  {
+    id: "resolve-law-citation",
+    request:
+      "Resolve section 1729 of the Czech statute cited as zákon č. 89/2012 Sb., in its expression on 2020-01-01.",
+    cliRequest:
+      "Resolve section 1729 of zákon č. 89/2012 Sb. in country CZE on 2020-01-01. Carry the citation source in inline --input JSON.",
+    mcp: {
+      toolName: "resolve_law_citation",
+      exampleArgs: {
+        country: "CZE",
+        source: { type: "citation", citation: "zákon č. 89/2012 Sb." },
+        section: "1729",
+        as_of: "2020-01-01",
+      },
+      checkArgs: (args) => [
+        ...field(args, "country", "CZE"),
+        ...nestedField(args, ["source", "type"], "citation"),
+        ...nestedField(args, ["source", "citation"], "zákon č. 89/2012 Sb."),
+        ...field(args, "section", "1729"),
+        ...field(args, "as_of", "2020-01-01"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["legislation", "resolve"],
+      flags: {
+        country: "CZE",
+        section: "1729",
+        "as-of": "2020-01-01",
+        input: JSON.stringify({
+          source: { type: "citation", citation: "zákon č. 89/2012 Sb." },
+        }),
+      },
     },
   },
   {
@@ -1228,7 +1272,7 @@ const TASKS: readonly Task[] = [
     request:
       "Set my daily time target to 480 minutes in the active organization through time-entries.me.daily-target.update.",
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "time-entries.me.daily-target.update",
         input: { body: { minutes: 480 } },
@@ -1250,7 +1294,7 @@ const TASKS: readonly Task[] = [
       `Start a DeepL translation to German through the document-translations.runs.create capability: document ${TRANSLATION_ENTITY_ID}, ` +
       `file field ${TRANSLATION_FIELD_ID}, in matter ${ACME_MATTER_ID}.`,
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "document-translations.runs.create",
         input: {
@@ -1514,7 +1558,7 @@ const TASKS: readonly Task[] = [
     id: "start-workflow-extraction",
     request: `Start the extraction workflow in matter ${ACME_MATTER_ID} through the matters.workflow.start capability.`,
     mcp: {
-      toolName: "invoke_capability",
+      toolName: MCP_CAPABILITY_EXECUTORS.write,
       exampleArgs: {
         capability: "matters.workflow.start",
         input: { params: { matterId: ACME_MATTER_ID } },
@@ -1832,6 +1876,12 @@ const runModelTurn = async ({
         case EventType.RUN_FINISHED: {
           break;
         }
+        case "ACTIVITY_SNAPSHOT":
+        case "ACTIVITY_DELTA": {
+          // Activity parts remain UI-only; progress payloads must not become
+          // conversational text or executable tool input in this score.
+          break;
+        }
         // Every other chunk type carries nothing this eval scores on: only
         // the first tool call's name/args/input and the final text/usage/error
         // matter here. Listed explicitly (not folded into an implicit
@@ -1853,8 +1903,6 @@ const runModelTurn = async ({
         case EventType.REASONING_ENCRYPTED_VALUE:
         case EventType.REASONING_END:
         case EventType.REASONING_MESSAGE_CHUNK:
-        case EventType.ACTIVITY_SNAPSHOT:
-        case EventType.ACTIVITY_DELTA:
         case EventType.RAW:
         case EventType.SUBAGENT_STARTED:
         case EventType.SUBAGENT_FINISHED:
@@ -2255,13 +2303,36 @@ const scoreMcpRun = ({
   };
 };
 
-const scoreCliRun = ({
+const composedCliInputIssues = async (
+  commandPath: readonly string[],
+  parsed: ParsedCliCommand,
+): Promise<string[]> => {
+  const node = walkRouteNode(CLI_SCHEMA_TREE, commandPath);
+  if (node?.kind !== "leaf") {
+    return [];
+  }
+  const composed = await composeCliToolInput({
+    spec: node.spec,
+    flags: parsed.flags,
+    repeatedFlags: parsed.repeatedFlags,
+  });
+  if (!composed.ok) {
+    return [composed.message];
+  }
+  const definition = mcpDefinitionsByName.get(node.spec.toolName);
+  if (definition === undefined) {
+    panic(`CLI tool ${node.spec.toolName} has no MCP definition`);
+  }
+  return schemaCheck(definition, composed.args).issues;
+};
+
+const scoreCliRun = async ({
   task,
   turn,
 }: {
   task: Task;
   turn: ModelTurn;
-}): { outcome: Outcome; toolOrCommand: string; issues: string[] } => {
+}): Promise<{ outcome: Outcome; toolOrCommand: string; issues: string[] }> => {
   if (turn.error !== null) {
     return { outcome: "error", toolOrCommand: "-", issues: [turn.error] };
   }
@@ -2328,6 +2399,7 @@ const scoreCliRun = ({
       }
     }
   }
+  issues.push(...(await composedCliInputIssues(expected.path, parsed)));
   for (const [flagName, minimum] of Object.entries(
     expected.repeatedAtLeast ?? {},
   )) {
@@ -2415,7 +2487,7 @@ const mcpPreflightContext = (task: Task): string => {
     );
   }
   return [
-    "Eval scope: post-discovery first-call authoring. A read-only describe_capability call has already returned this canonical capability. Do not call describe_capability; make the one invoke_capability call that would perform the requested action. This eval captures the call but never executes it.",
+    `Eval scope: post-discovery first-call authoring. A read-only describe_capability call has already returned this canonical capability. Do not call describe_capability; make the one ${MCP_CAPABILITY_EXECUTORS[capability.access]} call that would perform the requested action. This eval captures the call but never executes it.`,
     JSON.stringify({
       id: capability.id,
       description: capability.description,
@@ -2484,7 +2556,7 @@ const runCliTask = async ({
     request: task.cliRequest ?? task.request,
     tools: [],
   });
-  const score = scoreCliRun({ task, turn });
+  const score = await scoreCliRun({ task, turn });
   return {
     modelId,
     taskId: task.id,
@@ -2578,6 +2650,7 @@ const resolveModels = async (
         managedAIResidency: "eu",
         role: "chat",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

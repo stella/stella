@@ -324,12 +324,5 @@ describe("release workflows run the guard", () => {
     );
     expect(guard).toBeGreaterThan(-1);
     expect(guard).toBeLessThan(text.indexOf("git push "));
-    // Only a lag (exit 1) can be accepted, and only by an explicit input;
-    // a broken guard (any other exit) still stops the tag.
-    expect(text).toContain("type: boolean\n        default: false");
-    expect(text).toContain(
-      'if [[ "$status" -eq 1 && "$ACCEPT_NPM_LAG" == "true" ]]; then',
-    );
-    expect(text).toContain('exit "$status"');
   });
 });

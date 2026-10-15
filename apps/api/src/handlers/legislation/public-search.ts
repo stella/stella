@@ -34,6 +34,7 @@ const publicStatuteSearchQuerySchema = t.Object(
 export const createPublicStatuteSearch = (search = searchLegislationHandler) =>
   createSafeBoundedPublicHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "public_indexing" },
       cache: { kind: "none" },

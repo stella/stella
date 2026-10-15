@@ -1,0 +1,7 @@
+# Parsing and comparing decision docket identifiers
+
+Generated from `scripts/ownership/case-law-docket-grammar.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                    | Owner                                                                                                        | Enforcement | Summary                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `case-law-docket-grammar` — Parsing and comparing decision docket identifiers | `packages/api-contract/src/decision-docket-grammar.ts`, `packages/api-contract/src/decision-query-intent.ts` | none        | One total jurisdiction map recognizes docket syntax and returns normalized display and comparison forms. Search intent classification and exact result matching use that same parser, so a spelling cannot be classified under one rule and compared under another. |

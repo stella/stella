@@ -3,39 +3,29 @@
  * repository formatter does, and the write-or-check step it ends with.
  */
 
-import { panic } from "better-result";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+
+import { repoRelativePath } from "@stll/portable-path";
+
+import {
+  formattedArtifactsLikeRepository as formatArtifacts,
+  formattedLikeRepository as formatSource,
+  type GeneratedArtifact,
+} from "../packages/scripts/src/generated-artifact-format.ts";
 
 // `import.meta.dirname` rather than Bun's `import.meta.dir`: ownership.ts
 // imports this module and is itself loaded by oxlint.config.ts under Node.
 const REPO_ROOT = path.join(import.meta.dirname, "..");
-const FORMATTER_CONFIG = path.join(REPO_ROOT, ".oxfmtrc.json");
 
-type GeneratedArtifact = { path: string; contents: string };
+export const formattedArtifactsLikeRepository = async (
+  artifacts: readonly GeneratedArtifact[],
+): Promise<GeneratedArtifact[]> => formatArtifacts(artifacts, REPO_ROOT);
 
-/** `source` as the repository formatter lays out a `.${extension}` file. */
 export const formattedLikeRepository = async (
   source: string,
   extension: string,
-): Promise<string> => {
-  const workDir = await mkdtemp(path.join(os.tmpdir(), "generated-"));
-  try {
-    const file = path.join(workDir, `output.${extension}`);
-    await writeFile(file, source, "utf-8");
-    const result = Bun.spawnSync(
-      [process.execPath, "--bun", "oxfmt", "-c", FORMATTER_CONFIG, file],
-      { cwd: REPO_ROOT, stderr: "inherit", stdout: "ignore" },
-    );
-    if (result.exitCode !== 0) {
-      return panic(`oxfmt failed on the generated ${extension} file`);
-    }
-    return await readFile(file, "utf-8");
-  } finally {
-    await rm(workDir, { force: true, recursive: true });
-  }
-};
+): Promise<string> => formatSource(source, extension, REPO_ROOT);
 
 /**
  * Under `write`, overwrites the committed files; otherwise compares each with
@@ -61,7 +51,7 @@ export const writeOrCheckArtifacts = async (
   for (const { contents, path: file } of artifacts) {
     const committed = await readFile(file, "utf-8").catch(() => null);
     if (committed !== contents) {
-      drifted.push(path.relative(REPO_ROOT, file));
+      drifted.push(repoRelativePath(REPO_ROOT, file));
     }
   }
   for (const file of drifted) {

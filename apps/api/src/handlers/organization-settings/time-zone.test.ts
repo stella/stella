@@ -10,8 +10,8 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { PracticeJurisdiction } from "@/api/db/schema";
 import { projectOrganizationSettingsRow } from "@/api/handlers/organization-settings/get";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import type { MemberRole } from "@/api/lib/member-roles";
 import {
   hasMemberPermission,

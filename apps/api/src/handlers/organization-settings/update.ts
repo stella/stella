@@ -93,6 +93,7 @@ const updateOrganizationSettingsBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Change the organization's general settings: document processing mode, " +
     "matter-number pattern and padding, prompt caching, memory " +
@@ -102,7 +103,7 @@ const config = {
     "Practice jurisdictions are set through " +
     "organization-settings.practice-jurisdictions.update.",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "covered", by: "manage_organization" },
   body: updateOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;

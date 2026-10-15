@@ -3,7 +3,10 @@ import { and, eq } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
 import { timeEntries } from "@/api/db/schema";
-import { timeEntryReadColumns } from "@/api/handlers/time-entries/time-entry-columns";
+import {
+  timeEntryContextColumns,
+  timeEntryReadColumns,
+} from "@/api/handlers/time-entries/time-entry-columns";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { canManageTimeEntry } from "@/api/lib/billing/time-entry-authorization";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -15,6 +18,7 @@ const readTimeEntryByIdParamsSchema = workspaceParams({
 
 const readTimeEntryById = createSafeHandler(
   {
+    contract: "patch",
     description:
       "Read one time entry in a matter by id, with its minutes, rate, " +
       "currency, narratives, billing status, source, task and activity " +
@@ -39,7 +43,7 @@ const readTimeEntryById = createSafeHandler(
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select(timeEntryReadColumns)
+          .select({ ...timeEntryReadColumns, ...timeEntryContextColumns })
           .from(timeEntries)
           .where(
             and(

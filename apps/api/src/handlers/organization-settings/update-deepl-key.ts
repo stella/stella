@@ -31,8 +31,9 @@ const updateDeepLKeyBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: updateDeepLKeyBody,
 } satisfies HandlerConfig;

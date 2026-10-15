@@ -6,6 +6,7 @@ import fc from "fast-check";
 import JSZip from "jszip";
 
 import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -25,7 +26,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { isRecord } from "@/api/lib/type-guards";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -101,12 +105,13 @@ describe("clause body preconditions", () => {
         createTestHandlerContext<
           Parameters<typeof restoreClauseVersion.handler>[0]
         >({
+          scopedDb: NO_DB,
           safeDb,
           session: { activeOrganizationId: ids.orgA },
           user: { id: ids.userA1 },
           params: { clauseId, versionId },
           body: { expectedBody },
-          recordAuditEvent: async (_tx, event) => {
+          audit: async (_tx, event) => {
             audits.push(...(Array.isArray(event) ? event : [event]));
           },
         }),
@@ -591,12 +596,13 @@ describe("clause body preconditions", () => {
       createTestHandlerContext<
         Parameters<typeof restoreClauseVersion.handler>[0]
       >({
+        scopedDb: NO_DB,
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         params: { clauseId, versionId },
         body: { expectedBody: nextBody },
-        recordAuditEvent: async () => {
+        audit: async () => {
           audits += 1;
         },
       }),
@@ -689,12 +695,13 @@ test("historical legacy content restores with a typed warning and retains the ex
     createTestHandlerContext<
       Parameters<typeof restoreClauseVersion.handler>[0]
     >({
+      scopedDb: NO_DB,
       safeDb,
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       params: { clauseId, versionId },
       body: { expectedBody: initialBody },
-      recordAuditEvent: async () => undefined,
+      audit: async () => undefined,
     }),
   );
   expect(result).toMatchObject({
@@ -815,7 +822,8 @@ test("stored legacy versions fill literal markers with warnings and remain tenan
       slotName: "Terms",
     });
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/document.xml",
       '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>{{ clause("Terms") }}</w:t></w:r></w:p></w:body></w:document>',
     );

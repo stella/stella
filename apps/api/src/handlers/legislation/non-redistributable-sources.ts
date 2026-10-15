@@ -10,7 +10,7 @@ import {
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
 
-export class NonRedistributableLegislationSourcesError extends TaggedError(
+class NonRedistributableLegislationSourcesError extends TaggedError(
   "NonRedistributableLegislationSourcesError",
 )<{
   message: string;

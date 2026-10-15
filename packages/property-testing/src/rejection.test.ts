@@ -10,7 +10,7 @@ describe("rejectionOf", () => {
   });
 
   test("returns a non-Error reason unchanged", async () => {
-    // oxlint-disable-next-line eslint/prefer-promise-reject-errors -- a non-Error reason is the case under test
+    // oxlint-disable-next-line prefer-promise-reject-errors -- a non-Error reason is the case under test
     expect(await rejectionOf(Promise.reject("plain"))).toBe("plain");
   });
 

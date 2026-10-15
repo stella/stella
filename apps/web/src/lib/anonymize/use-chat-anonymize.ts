@@ -8,6 +8,7 @@ import type { ChatAnonPair } from "@stll/anonymize-chat";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * Watch a TipTap editor's plain-text content. Returns the
@@ -80,9 +81,11 @@ export const useChatAnonymizePreview = ({
     // every time the user pauses typing.
     placeholderData: keepPreviousData,
   });
+  const resultView = useQueryView(result);
+  useQueryViewError(resultView);
 
   if (!shouldRun) {
     return null;
   }
-  return result.data?.pairs ?? null;
+  return resultView.type === "items" ? resultView.items.pairs : null;
 };

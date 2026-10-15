@@ -15,11 +15,8 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 // Allows:
 //   <Loader label={t("common.loading")} />
 //   <Skeleton className="h-4 w-1/3" />
-//
-// `allowedFiles` is a ratchet over the sites that predate the rule: it can
-// only shrink, and a new file cannot add itself.
 
-import { filenameForContext, isAstNode, isStringLiteral } from "./utils.ts";
+import { isAstNode, isStringLiteral } from "./utils.ts";
 
 const LOADER_ICON_NAMES = new Set([
   "LoaderIcon",
@@ -28,26 +25,8 @@ const LOADER_ICON_NAMES = new Set([
   "LoaderPinwheelIcon",
 ]);
 
-const BANNED_UTILITY = /(?:^|\s)animate-(?:spin|pulse)(?:\s|$)/u;
-
-const isAllowedFile = (
-  context: Parameters<typeof filenameForContext>[0],
-  allowedFiles: unknown[],
-): boolean => {
-  const filename = filenameForContext(context);
-  return allowedFiles.some((allowedFile) => {
-    if (typeof allowedFile === "string") {
-      return filename.endsWith(allowedFile);
-    }
-    return (
-      typeof allowedFile === "object" &&
-      allowedFile !== null &&
-      "path" in allowedFile &&
-      typeof allowedFile.path === "string" &&
-      filename.endsWith(allowedFile.path)
-    );
-  });
-};
+// Tailwind accepts the important modifier on either side of a utility.
+const BANNED_UTILITY = /(?:^|[\s:])!?animate-(?:spin|pulse)!?(?:\s|$)/u;
 
 const jsxElementName = (node: unknown): string | null => {
   if (!isAstNode(node)) {
@@ -106,6 +85,15 @@ const staticStrings = (node: unknown, out: string[]): void => {
     }
     return;
   }
+  if (node.type === "ObjectExpression" && Array.isArray(node.properties)) {
+    // clsx/cn objects contribute their keys; their values only enable them.
+    for (const property of node.properties) {
+      if (isAstNode(property) && property.type === "Property") {
+        staticStrings(property.key, out);
+      }
+    }
+    return;
+  }
   if (
     node.type === "LogicalExpression" ||
     node.type === "ConditionalExpression"
@@ -129,45 +117,10 @@ export default eslintCompatPlugin({
           progressbar:
             "Do not hand-roll a progress bar. State progress in `LoaderState`'s detail text, or use `Skeleton` for content with a known shape.",
         },
-        schema: [
-          {
-            type: "object",
-            properties: {
-              allowedFiles: {
-                type: "array",
-                items: {
-                  anyOf: [
-                    { type: "string" },
-                    {
-                      type: "object",
-                      properties: {
-                        path: { type: "string" },
-                        reason: { type: "string" },
-                      },
-                      required: ["path", "reason"],
-                      additionalProperties: false,
-                    },
-                  ],
-                },
-              },
-            },
-            additionalProperties: false,
-          },
-        ],
+        schema: [],
       },
       createOnce(context) {
         return {
-          before() {
-            const options = context.options.at(0);
-            const allowedFiles =
-              typeof options === "object" &&
-              options !== null &&
-              !Array.isArray(options) &&
-              Array.isArray(options.allowedFiles)
-                ? options.allowedFiles
-                : [];
-            return !isAllowedFile(context, allowedFiles);
-          },
           JSXOpeningElement(node) {
             const name = jsxElementName(node.name);
             if (name !== null && LOADER_ICON_NAMES.has(name)) {
@@ -192,7 +145,7 @@ export default eslintCompatPlugin({
             for (const part of parts) {
               const match = BANNED_UTILITY.exec(part);
               if (match !== null) {
-                const utility = match[0].trim().slice("animate-".length);
+                const utility = match[0].trim().replace(/^.*animate-/u, "");
                 context.report({
                   node,
                   messageId: "animateUtility",

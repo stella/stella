@@ -1,6 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-handoff";
+import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
 export class DesktopHandoffFailedError extends TaggedError(
@@ -61,9 +62,7 @@ export const watchDesktopEditHandoff = async ({
             deadline - Temporal.Now.instant().epochMilliseconds,
           ),
         );
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, delayMs);
-        });
+        await sleep(delayMs);
         break;
       }
       default:

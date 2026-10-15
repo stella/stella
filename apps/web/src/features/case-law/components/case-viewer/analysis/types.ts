@@ -1,9 +1,6 @@
 import type { AnalysisHeading } from "@stll/legal-ast/analysis";
 
-export type {
-  AnalysisAnnotation,
-  AnalysisHeading,
-} from "@stll/legal-ast/analysis";
+export type { AnalysisHeading } from "@stll/legal-ast/analysis";
 
 // ── Color system ──────────────────────────────────────────
 //

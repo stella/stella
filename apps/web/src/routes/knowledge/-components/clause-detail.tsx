@@ -38,7 +38,6 @@ import {
 import {
   ChevronDownIcon,
   ChevronUpIcon,
-  Loader2Icon,
   MoreHorizontalIcon,
   PencilIcon,
   PlusIcon,
@@ -47,6 +46,7 @@ import {
   Trash2Icon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { Loader } from "@stll/ui/loader";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -577,7 +577,7 @@ const ClauseLeaveDialog = ({
   );
 };
 
-export const ClauseHeader = ({
+const ClauseHeader = ({
   detail,
   clauseId,
   categories,
@@ -737,8 +737,7 @@ export const ClauseHeader = ({
     <div className="flex items-center gap-2">
       {editingTitle && canEdit ? (
         <InlineEdit
-          className="flex-1"
-          inputClassName="flex-1 text-base"
+          className="min-w-0 flex-1 text-lg font-semibold"
           onCancel={() => {
             setTitleDraft(detail.title);
             setEditingTitle(false);
@@ -751,7 +750,7 @@ export const ClauseHeader = ({
         />
       ) : (
         <button
-          className="flex-1 truncate text-start text-lg font-semibold disabled:cursor-default"
+          className="flex-1 overflow-hidden text-start text-lg font-semibold text-ellipsis whitespace-pre disabled:cursor-default"
           dir="auto"
           disabled={!canEdit}
           onClick={() => {
@@ -1595,7 +1594,7 @@ const VariantFormDialogBody = ({
 
 // ── History Tab ──────────────────────────────────────
 
-export const HistoryTab = ({
+const HistoryTab = ({
   clauseId,
   currentBody,
   versions,
@@ -1694,7 +1693,7 @@ export const HistoryTab = ({
 
       {loading && (
         <div className="flex items-center justify-center py-4">
-          <Loader2Icon className="text-muted-foreground size-4 animate-spin" />
+          <Loader className="size-4" label={t("common.loading")} size="sm" />
         </div>
       )}
 

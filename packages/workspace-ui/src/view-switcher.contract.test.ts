@@ -22,13 +22,15 @@ test("selection remains controlled by the accessible tabs primitive", () => {
   expect(source).not.toMatch(/<TabsTab[\s\S]*?onClick=/u);
 });
 
-test("drag interactions use one published Pragmatic DnD v3 contract", () => {
+test("drag interactions use one published Pragmatic DnD v4 contract", () => {
   expect(source).toContain(
-    'from "@atlaskit/pragmatic-drag-and-drop/element/adapter"',
+    'from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter"',
   );
-  expect(source).toContain('from "@atlaskit/pragmatic-drag-and-drop/combine"');
-  expect(source).not.toContain("/adapter/element-adapter");
-  expect(source).not.toContain("/utils/combine");
+  expect(source).toContain(
+    'from "@atlaskit/pragmatic-drag-and-drop/utils/combine"',
+  );
+  expect(source).not.toContain("/element/adapter");
+  expect(source).not.toContain("pragmatic-drag-and-drop/combine");
   expect(atlaskitPeerDependencies).toEqual(atlaskitDevDependencies);
 });
 

@@ -113,6 +113,7 @@ describe("migration source comparison", () => {
     ).toEqual([1, 0]);
   });
 
+  // 1.2 s serial, 4.9 s observed while CI runs checks in parallel.
   test("ignores type-only named import changes while retaining value imports", () => {
     const source = `import { text, type Brand } from "drizzle-orm/pg-core";\n${baseSource}`;
     expect(
@@ -140,5 +141,5 @@ describe("migration source comparison", () => {
         source,
       ),
     ).toEqual([1, 1, 1, 1, 0, 0, 0, 0]);
-  });
+  }, 12_000);
 });

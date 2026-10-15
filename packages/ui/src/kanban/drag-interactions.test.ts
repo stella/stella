@@ -6,19 +6,22 @@ import { describe, expect, mock, test } from "bun:test";
 // module under test. Every other export is passed through untouched so
 // unrelated kanban tests sharing this bun:test process are unaffected.
 const realAdapter =
-  await import("@atlaskit/pragmatic-drag-and-drop/element/adapter");
+  await import("@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter");
 
 type DraggableArgs = Parameters<typeof realAdapter.draggable>[0];
 
 let capturedArgs: DraggableArgs | undefined;
 
-void mock.module("@atlaskit/pragmatic-drag-and-drop/element/adapter", () => ({
-  ...realAdapter,
-  draggable: (args: DraggableArgs) => {
-    capturedArgs = args;
-    return () => undefined;
-  },
-}));
+void mock.module(
+  "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter",
+  () => ({
+    ...realAdapter,
+    draggable: (args: DraggableArgs) => {
+      capturedArgs = args;
+      return () => undefined;
+    },
+  }),
+);
 
 const { KANBAN_CARD_DRAG_MIME, registerKanbanCardDrag } =
   await import("./drag-interactions");

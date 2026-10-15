@@ -12,6 +12,8 @@ import {
   type SQL,
 } from "drizzle-orm";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+
 import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
@@ -1094,10 +1096,12 @@ export const abandonCorpusProjectionAppendTx = async (
     attemptLimit = CORPUS_PROJECTION_APPEND_REJECTED_ATTEMPT_LIMIT;
   }
   const blocked = charge && failureAttempts >= attemptLimit;
-  const retryDelayMs = Math.min(
-    CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
-    CORPUS_PROJECTION_APPEND_RETRY_BASE_MS *
-      2 ** Math.min(Math.max(failureAttempts - 1, 0), 6),
+  const retryDelayMs = backoffDelay(
+    Math.min(Math.max(failureAttempts - 1, 0), 6),
+    {
+      baseMs: CORPUS_PROJECTION_APPEND_RETRY_BASE_MS,
+      maxMs: CORPUS_PROJECTION_APPEND_RETRY_CAP_MS,
+    },
   );
   const updated = await tx
     .update(corpusIndexProjectionStates)

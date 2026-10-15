@@ -16,12 +16,15 @@ import {
   InspectorRailIconButton,
 } from "@stll/ui/inspector";
 import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
+import { getMatterSwatch } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { DocumentIcon } from "@/components/document-icon";
+import { chatTabHeaderLabel } from "@/components/inspector/chat-context-label.logic";
 import { ExternalSourceLogo } from "@/components/inspector/external-reference-panel";
 import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
@@ -45,16 +48,16 @@ import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
-import { MatterIcon } from "@/components/matter-icon";
 import Tooltip from "@/components/tooltip";
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
-import { getMatterSwatch } from "@/lib/matter-colors";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 export const InspectorRail = ({
   activeId,
@@ -75,10 +78,18 @@ export const InspectorRail = ({
   }, [routeErrorLifecycle, inspectorState]);
   const activeTab = tabs.find((tab) => tab.id === activeId);
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const { data: activeSkillCatalogueData } = useQuery({
+  const activeSkillCatalogueDataQuery = useQuery({
     ...catalogueOptions(activeOrganizationId, userId),
     enabled: activeTab?.type === "view" && activeTab.viewType === "tool-detail",
   });
+  const activeSkillCatalogueDataView = useQueryView(
+    activeSkillCatalogueDataQuery,
+  );
+  useQueryViewError(activeSkillCatalogueDataView);
+  const activeSkillCatalogueData =
+    activeSkillCatalogueDataView.type === "items"
+      ? activeSkillCatalogueDataView.items
+      : undefined;
   const activeSkill = getActiveSkillChatContext(
     activeTab,
     activeSkillCatalogueData?.entries,
@@ -476,7 +487,45 @@ const flashTabElement = (el: HTMLElement) => {
   );
 };
 
-const VerticalTab = ({
+const ChatVerticalTab = ({
+  tab,
+  ...props
+}: VerticalTabProps & { tab: ChatTab }) => {
+  const t = useTranslations();
+  const skillLabel = useSkillLabel();
+  const label = chatTabHeaderLabel({
+    activeSkillName:
+      tab.activeSkill === undefined ? undefined : skillLabel(tab.activeSkill),
+    boundDocumentLabel: undefined,
+    newChatLabel: t("chat.newChat"),
+    tabLabel: tab.label,
+  });
+  return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
+};
+
+const VerticalTab = (props: VerticalTabProps) => {
+  const { tab } = props;
+  if (tab.type === "chat") {
+    return <ChatVerticalTab {...props} tab={tab} />;
+  }
+  if (tab.type !== "view") {
+    return <VerticalTabCell {...props} />;
+  }
+  const RailLabel = getInspectorView(tab.viewType)?.railLabel;
+  if (RailLabel === undefined) {
+    return <VerticalTabCell {...props} />;
+  }
+  return (
+    <RailLabel
+      renderLabel={(label) => (
+        <VerticalTabCell {...props} tab={{ ...tab, label }} />
+      )}
+      tab={tab}
+    />
+  );
+};
+
+const VerticalTabCell = ({
   onDropTab,
   tab,
   active,
@@ -493,12 +542,18 @@ const VerticalTab = ({
     tab.type === "external" ? tab.connectorSlug : undefined;
   const storedExternalIconHref =
     tab.type === "external" ? tab.iconHref : undefined;
-  const { data: mcpConnectorsData } = useQuery({
+  const mcpConnectorsDataQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled:
       externalConnectorSlug !== undefined &&
       storedExternalIconHref === undefined,
   });
+  const mcpConnectorsDataView = useQueryView(mcpConnectorsDataQuery);
+  useQueryViewError(mcpConnectorsDataView);
+  const mcpConnectorsData =
+    mcpConnectorsDataView.type === "items"
+      ? mcpConnectorsDataView.items
+      : undefined;
   const availableConnectors = mcpConnectorsData
     ? mcpConnectorsData.connectors
     : [];

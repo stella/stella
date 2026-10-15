@@ -7,15 +7,15 @@ import * as nodeHttp from "node:http";
 import * as nodeHttp2 from "node:http2";
 import * as nodeHttps from "node:https";
 
-import {
-  BYOK_MODEL_OPTIONS,
-  DEFAULT_MODELS,
-  isBYOKModelRoleSupported,
-} from "@stll/ai-catalog";
+import { BYOK_MODEL_OPTIONS, isBYOKModelRoleSupported } from "@stll/ai-catalog";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import {
+  FEATURE_REGISTRY,
+  CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+} from "@/api/lib/feature-access/registry";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions";
 
@@ -167,12 +167,7 @@ const chatModelSelections = (
 
 const canaryConfig = (provider: CanaryProvider): OrgAIConfig => ({
   providers: [{ apiKey: "test-key", provider }],
-  overrideModels: {
-    fast: { modelId: DEFAULT_MODELS[provider].fast, provider },
-    chat: { modelId: DEFAULT_MODELS[provider].chat, provider },
-    reasoning: { modelId: DEFAULT_MODELS[provider].reasoning, provider },
-    pdf: { modelId: DEFAULT_MODELS[provider].pdf, provider },
-  },
+  overrideModels: null,
   decision: null,
 });
 
@@ -360,9 +355,10 @@ const emptyStringEnumPaths = (value: unknown, path = "request"): string[] => {
 
 describe("AI provider production chat tool matrix", () => {
   test("an unenrolled canary accounts for gated tools without requiring their admission", () => {
-    const featureDefinitions = DEFAULT_MCP_TOOL_DEFINITIONS.filter(
-      (definition) => "featureId" in definition,
-    );
+    const featureDefinitions = [
+      ...DEFAULT_MCP_TOOL_DEFINITIONS,
+      ...CHAT_ONLY_FEATURE_TOOL_DEFINITIONS,
+    ].filter((definition) => "featureId" in definition);
     for (const { featureId } of featureDefinitions) {
       expect(Object.hasOwn(FEATURE_REGISTRY, featureId)).toBe(true);
     }
@@ -379,6 +375,10 @@ describe("AI provider production chat tool matrix", () => {
       buildCanaryChatToolsets(canaryConfig("openai")).flatMap(({ tools }) =>
         tools.map(({ name }) => name),
       ),
+    );
+    expect(registered.has(VISUAL_PREVIEW_TOOL_NAME)).toBe(false);
+    expect(DEFAULT_MCP_TOOL_DEFINITIONS).not.toContainEqual(
+      expect.objectContaining({ name: VISUAL_PREVIEW_TOOL_NAME }),
     );
     expect([...registered].toSorted()).toEqual(
       catalogNames.filter((name) => !gated.has(name)).toSorted(),

@@ -16,7 +16,7 @@ import type {
 
 import type { TranslationKey } from "@/i18n/types";
 
-export const OPERATOR_LABEL_KEYS = {
+const OPERATOR_LABEL_KEYS = {
   eq: "filters.eq",
   neq: "filters.neq",
   contains: "filters.contains",
@@ -108,26 +108,17 @@ export const operatorLabelKey = (
 export type {
   ConditionOperator,
   FieldOption,
-  FieldOptionChoice,
   FieldValueType,
   ValueEditorKind,
 } from "@stll/workspace-ui/conditions";
 export {
-  appendChild,
-  asGroup,
   buildLeaf,
-  CONDITION_OPERATORS,
   fieldForNode,
-  isConditionOperator,
   isMultiValue,
   leafFromField,
-  leafOperand,
   leafOperator,
   leafValueList,
   leafValueString,
-  operandsEqual,
   operatorsFor,
-  removeChild,
-  replaceChild,
   valueEditorFor,
 } from "@stll/workspace-ui/conditions";

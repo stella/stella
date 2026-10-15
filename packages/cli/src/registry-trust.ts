@@ -10,12 +10,16 @@
 // below, exactly as the spec pins them.
 
 import { Result } from "better-result";
-import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import type { CallerFeatureAccess } from "./feature-command-projection.js";
+import {
+  MCP_TOOL_NAME_PATTERN_FLAGS,
+  MCP_TOOL_NAME_PATTERN_SOURCE,
+} from "./generated/mcp-contract.js";
 import type { RegistryToolListing } from "./route-types.js";
 import { compileSchemaPattern } from "./schema-pattern.js";
+import { sha256Hex as hashSha256Hex } from "./sha256.js";
 
 // --- Size / depth caps (spec S5.5 rule 3), named constants, not literals. ---
 /** Reject a whole fetched body larger than this (bytes). */
@@ -37,8 +41,10 @@ export const MAX_ENUM = 300;
 /** Reject a `properties` object with more keys than this. */
 export const MAX_PROPS = 100;
 
-/** Tool names must match this (spec S5.5 rule 2). */
-const TOOL_NAME_PATTERN: RegExp = /^[a-z][a-z0-9_]{0,63}$/u;
+const MCP_TOOL_NAME_PATTERN = new RegExp(
+  MCP_TOOL_NAME_PATTERN_SOURCE,
+  MCP_TOOL_NAME_PATTERN_FLAGS,
+);
 
 /**
  * Longest display title a fetched listing may carry, in UTF-16 code units
@@ -137,7 +143,7 @@ const featureAccessSnapshotSchema = v.object({
     v.maxLength(10_000),
   ),
   tools: v.pipe(
-    v.array(v.pipe(v.string(), v.regex(TOOL_NAME_PATTERN))),
+    v.array(v.pipe(v.string(), v.regex(MCP_TOOL_NAME_PATTERN))),
     v.maxLength(MAX_TOOLS),
   ),
 });
@@ -385,7 +391,7 @@ const validateEntry = (
   }
 
   const name = entry["name"];
-  if (typeof name !== "string" || !TOOL_NAME_PATTERN.test(name)) {
+  if (typeof name !== "string" || !MCP_TOOL_NAME_PATTERN.test(name)) {
     return { ok: false, violation: `tool name is invalid: ${String(name)}` };
   }
 
@@ -490,7 +496,7 @@ export const validateFetchedToolsList = (rawBody: string): TrustResult => {
     listings.push(validated.listing);
   }
 
-  const toolsListHash = createHash("sha256").update(rawBody).digest("hex");
+  const toolsListHash = hashSha256Hex(rawBody);
 
   const featureAccessRaw = extractFeatureAccess(parsed.value);
   if (featureAccessRaw === undefined) {

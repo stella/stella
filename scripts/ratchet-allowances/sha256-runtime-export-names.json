@@ -1,0 +1,5 @@
+{
+  "metric": "cross-workspace-duplicate-export-names",
+  "delta": 5,
+  "reason": "Runtime SHA-256 owners expose consistent digest APIs; the published CLI keeps its own Node owner and private runtimes preserve existing checksum conversion names."
+}

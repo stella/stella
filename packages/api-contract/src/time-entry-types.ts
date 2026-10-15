@@ -1,6 +1,9 @@
+import type { TimeEntrySource } from "./billing";
+import type { EntityContextReference } from "./entity-reference";
+
 export type TimeEntryStatus = "draft" | "approved" | "billed" | "written_off";
 
-export type TimeEntrySource = "manual" | "timer" | "suggested";
+export type { TimeEntrySource } from "./billing";
 
 export type TimeEntry = {
   activityCode: string | null;
@@ -26,6 +29,7 @@ export type TimeEntry = {
   userId: string | null;
   userName: string | null;
   workItemId: string | null;
+  workItemReference: EntityContextReference;
 };
 
 export type TimeEntryListPage = {

@@ -23,17 +23,12 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import {
   AlertTriangleIcon,
   ArrowLeftIcon,
-  ChevronDownIcon,
   PaperclipIcon,
   SaveIcon,
 } from "@stll/ui/icons";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@stll/ui/menu";
+import { MenuItem, MenuPopup } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
+import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
@@ -727,41 +722,26 @@ const AttachmentSaveControls = ({
   const t = useTranslations();
 
   return (
-    <div className="flex shrink-0 items-center">
-      <Button
-        aria-describedby={descriptionId}
-        aria-label={t("common.save")}
-        className="min-h-11 min-w-11"
-        disabled={disabled}
-        onClick={onSave}
-        size={compact ? "icon-sm" : "sm"}
-        variant="ghost"
-      >
-        <SaveIcon aria-hidden="true" className="size-3.5" />
-        {!compact ? t("common.save") : null}
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              aria-describedby={descriptionId}
-              aria-label={t("common.selectAMatter")}
-              className="min-h-11 min-w-11"
-              disabled={disabled}
-              size="icon-sm"
-              variant="ghost"
-            />
-          }
-        >
-          <ChevronDownIcon aria-hidden="true" className="size-3.5" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onChooseMatter}>
+    <SplitButton
+      menuDescriptionId={descriptionId}
+      menuDisabled={disabled}
+      menuLabel={t("common.selectAMatter")}
+      onPrimaryClick={onSave}
+      primaryDescriptionId={descriptionId}
+      primaryDisabled={disabled}
+      primaryLabel={t("common.save")}
+      size="sm"
+      menu={
+        <MenuPopup align="end">
+          <MenuItem onClick={onChooseMatter}>
             {t("common.selectAMatter")}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+          </MenuItem>
+        </MenuPopup>
+      }
+    >
+      <SaveIcon aria-hidden="true" className="size-3.5" />
+      {!compact ? t("common.save") : null}
+    </SplitButton>
   );
 };
 

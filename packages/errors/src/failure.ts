@@ -22,6 +22,14 @@ export const FAILURE_REASON_GRADE = {
   // The provider's stream stopped before its answer finished: a dropped
   // connection or a provider-side cut, not a fault of this service.
   provider_stream_incomplete: "transient",
+  // parser-output-unchanged: model output and deadline reasons grade observed failures only; no parser reads them.
+  // The model's answer ended before it was whole: it hit its output budget, or
+  // the structured output it produced was cut off and does not parse. A fresh
+  // run usually answers in full.
+  model_output_incomplete: "transient",
+  // A run the caller bounded with a deadline outlived it: the provider was
+  // too slow for the caller's budget, not a fault of this service.
+  model_deadline_exceeded: "transient",
   quota_exhausted: "transient",
   pg_connection_lifecycle: "transient",
   // 40001: the designed outcome of a serializable or repeatable-read
@@ -43,12 +51,25 @@ export const FAILURE_REASON_GRADE = {
   generation_cancelled: "anticipated",
   chat_loop_detected: "anticipated",
   chat_empty_completion: "anticipated",
+  // parser-output-unchanged: visual preview reasons grade observed failures only; no parser reads them.
+  visual_preview_input_invalid: "anticipated",
+  visual_preview_not_configured: "anticipated",
   provider_billing: "anticipated",
   provider_credentials_rejected: "anticipated",
   model_unavailable: "anticipated",
+  // A complete structured answer that does not match the requested schema:
+  // the model's choice, which this service rejects rather than stores.
+  model_output_invalid: "anticipated",
   credentials_token_unreadable: "anticipated",
   client_disconnected: "anticipated",
   optional_file_absent: "anticipated",
+  // parser-output-unchanged: research retrieval reasons grade observed failures only; no parser reads them.
+  research_index_not_ready: "anticipated",
+  // parser-output-unchanged: sanctions reasons classify telemetry only; no parser reads them.
+  sanctions_matcher_deadline: "anticipated",
+  sanctions_matcher_saturated: "anticipated",
+  sanctions_matcher_closed: "anticipated",
+  sanctions_screening_work_limit: "anticipated",
   request_invalid: "client",
   access_denied: "client",
   usage_limited: "client",
@@ -60,9 +81,20 @@ export const FAILURE_REASON_GRADE = {
   route_not_found: "client",
   request_malformed: "client",
   unclassified: "defect",
+  // parser-output-unchanged: provider request rejections grade observed failures only; no parser reads them.
+  // A provider answered 400 to a request this service built and nothing more
+  // specific named it: the request broke the provider's contract, which is
+  // this service's bug, never the user's.
+  provider_request_rejected: "defect",
+  research_passage_target_failed: "defect",
+  sanctions_screening_failed: "defect",
+  research_passage_search_failed: "defect",
   unobserved_5xx: "defect",
   rls_denied: "defect",
   response_invalid: "defect",
+  visual_preview_unavailable: "defect",
+  visual_preview_timeout: "defect",
+  visual_preview_response_invalid: "defect",
   // 40P01 reaches a sink only after the transaction retry gave up, so what is
   // left is a lock-order signal rather than contention.
   pg_deadlock: "defect",

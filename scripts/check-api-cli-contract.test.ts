@@ -58,9 +58,10 @@ const readReleaseSmokeSource = async () => {
   const releaseWorkflow = await Bun.file(
     new URL("../.github/workflows/release.yml", import.meta.url),
   ).text();
-  const scriptPath = /run: bash (scripts\/smoke-api-image\.sh)\s/u
-    .exec(releaseWorkflow)
-    ?.at(1);
+  const scriptPath =
+    /(?:^|\n)\s*(?:run: )?bash (scripts\/smoke-api-image\.sh)\s/u
+      .exec(releaseWorkflow)
+      ?.at(1);
   if (!scriptPath) {
     throw new TypeError("Release must invoke the shared API image smoke");
   }
@@ -175,7 +176,9 @@ describe("API and CLI release contract", () => {
     ]);
 
     expect(releaseWorkflow).toContain("name: release-source-receipt");
-    expect(publishWorkflow).toContain('gh run download "$UPSTREAM_RUN_ID"');
+    expect(publishWorkflow).toContain(
+      'bash "$GH_RETRY_SCRIPT" run download "$UPSTREAM_RUN_ID"',
+    );
     expect(publishWorkflow).toContain(
       `UPSTREAM_RELEASE_REF: \${{ needs.release-trigger.outputs.release_ref }}`,
     );

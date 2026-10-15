@@ -99,7 +99,7 @@ describe("anonymizeTextFields", () => {
     // SAFETY: this test double never touches the actual binding
     // value — it only exists to satisfy `createNativePipelineFromConfig`'s
     // `binding` parameter before it is passed through unread.
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double stands in for the real wasm binding
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double stands in for the real wasm binding
     const fakeBinding = {} as NativeAnonymizeBinding;
     const createNativePipelineFromConfigMock: AnonymizeTextFieldsDependencies["createNativePipelineFromConfig"] =
       mock(async ({ config }: { config: PipelineConfig }) => {
@@ -116,7 +116,7 @@ describe("anonymizeTextFields", () => {
           }),
         };
         // SAFETY: only `redactText` is exercised by this test.
-        // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double only implements `redactText`
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double only implements `redactText`
         return pipeline as unknown as Awaited<
           ReturnType<
             AnonymizeTextFieldsDependencies["createNativePipelineFromConfig"]

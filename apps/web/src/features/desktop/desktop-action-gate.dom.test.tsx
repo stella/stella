@@ -1,18 +1,34 @@
 import type { ComponentProps } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
-import { panic } from "better-result";
-import { afterAll, afterEach, describe, expect, test } from "bun:test";
+import { panic, Result } from "better-result";
+import {
+  afterAll,
+  afterEach,
+  describe,
+  expect,
+  mock,
+  spyOn,
+  test,
+} from "bun:test";
 
 import { desktopPresenceSchema } from "@stll/api-contract/desktop-presence";
 import type { DesktopPresence } from "@stll/api-contract/desktop-presence";
 
 import messages from "@/i18n/langs/en.json";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { DesktopAction } from "./desktop-action-gate.logic";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
+
+const originalFetch = globalThis.fetch;
+// Auth initializes during imports; DOM tests own the network boundary too.
+const idleFetch = Object.assign(async () => Response.json(null), {
+  preconnect: originalFetch.preconnect,
+});
+globalThis.fetch = idleFetch;
 
 const { act } = await import("react");
 const { cleanup, fireEvent, render, screen, waitFor } =
@@ -23,10 +39,14 @@ const { IntlProvider } = await import("use-intl");
 const { DesktopRequiredDialog, useDesktopActionGate } =
   await import("@/features/desktop/desktop-action-gate");
 const { desktopPresenceOptions } = await import("./desktop-presence");
+const { DesktopConnectionStatus } = await import("./desktop-connection-status");
+const { detectDesktopPlatform, MACOS_DMG_URL, WINDOWS_EXE_URL } =
+  await import("@/lib/desktop-downloads");
+const desktopBridge = await import("@/lib/desktop-bridge");
+const { getAnalytics } = await import("@/lib/analytics/provider");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 
-const originalFetch = globalThis.fetch;
 const clients: InstanceType<typeof QueryClient>[] = [];
 
 afterEach(async () => {
@@ -36,12 +56,14 @@ afterEach(async () => {
       client.clear();
     }
     clients.length = 0;
-    globalThis.fetch = originalFetch;
+    globalThis.fetch = idleFetch;
     focusManager.setFocused(undefined);
   });
+  mock.restore();
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  globalThis.fetch = originalFetch;
+  await unregisterDomEnvironment();
 });
 
 const gate = messages.workspaces.files.desktopGate;
@@ -258,6 +280,36 @@ describe("desktop action gate uses observed presence", () => {
     },
   );
 
+  test.each(Object.keys(EXPECTED_ACTION_LABELS.not_connected))(
+    "an unlinked desktop connects once without performing %s or offering a download",
+    async (action) => {
+      if (action !== "edit-file" && action !== "sign-pdf") {
+        panic(`Unexpected test action: ${action}`);
+      }
+      const started = Result.ok<{ readonly status: "started" }>({
+        status: "started",
+      });
+      const connect = spyOn(
+        desktopBridge,
+        "linkDesktopAccount",
+      ).mockResolvedValue(started);
+      const { performed, view } = mountGate({
+        action,
+        presence: PRESENCE_FIXTURES.not_connected,
+      });
+      const trigger = view.getByRole("button", { name: gate.connect });
+      await act(async () => {
+        fireEvent.click(trigger);
+      });
+      expect(connect).toHaveBeenCalledTimes(1);
+      expect(performed).toEqual([]);
+      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(screen.queryByText(gate.signReason)).toBeNull();
+      expect(screen.queryByText(gate.editReason)).toBeNull();
+      expect(screen.queryByRole("link")).toBeNull();
+    },
+  );
+
   test("a pending observation keeps the signing action enabled and opens its workflow", async () => {
     const response = Promise.withResolvers<Response>();
     globalThis.fetch = Object.assign(async () => await response.promise, {
@@ -283,6 +335,10 @@ describe("desktop action gate uses observed presence", () => {
   });
 
   test("a failed observation keeps the desktop open action enabled", async () => {
+    const captureError = spyOn(
+      getAnalytics(),
+      "captureError",
+    ).mockImplementation(() => undefined);
     globalThis.fetch = Object.assign(
       async () =>
         Response.json({ message: "Presence unavailable" }, { status: 503 }),
@@ -294,6 +350,11 @@ describe("desktop action gate uses observed presence", () => {
     await waitFor(() =>
       expect(client.getQueryState(options.queryKey)?.status).toBe("error"),
     );
+    const queryError = client.getQueryState(options.queryKey)?.error;
+    expect(queryError).toBeDefined();
+    expect(queryError).not.toBeNull();
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(captureError).toHaveBeenCalledWith(queryError);
     const trigger = view.getByRole("button", {
       name: messages.workspaces.files.desktopEdit.openAction,
     });
@@ -429,5 +490,72 @@ describe("desktop action gate uses observed presence", () => {
     });
     expect(performed).toEqual(["open"]);
     expect(screen.queryByRole("dialog")).toBeNull();
+  });
+});
+
+describe("desktop account update requirement", () => {
+  test("a pre-device-proof desktop challenge is scrubbed and offers the platform update without network or a new deep link", async () => {
+    const originalHref = window.location.href;
+    const requests: unknown[] = [];
+    globalThis.fetch = Object.assign(
+      async (request: RequestInfo | URL) => {
+        requests.push(request);
+        throw new TypeError(
+          "Legacy desktop refusal must precede all network services",
+        );
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    try {
+      const challenge = new URLSearchParams({
+        correlationId: "90123344-5566-7788-9900-aabbccddeeff",
+        verifierHash: "a".repeat(64),
+        portSecret: "b".repeat(64),
+        protocol: "4",
+      });
+      window.location.hash = `desktop-account?${challenge.toString()}`;
+      const outcome = await desktopBridge.linkDesktopAccount({
+        apiBaseUrl: "https://api.example.test",
+      });
+      expect(outcome.isOk()).toBe(true);
+      if (outcome.isErr()) {
+        panic(
+          "Legacy desktop must produce a successful update-required refusal",
+        );
+      }
+      expect(outcome.value).toEqual({ status: "update-required" });
+      if (outcome.value.status !== "update-required") {
+        panic("Legacy desktop must not connect or start another deep link");
+      }
+      expect(window.location.hash).toBe("");
+      expect(window.location.protocol).toBe("http:");
+      expect(requests).toEqual([]);
+      render(
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <DesktopConnectionStatus state={outcome.value} />
+        </IntlProvider>,
+      );
+      expect(
+        await screen.findByText(
+          messages.workspaces.files.desktopEdit.updateRequiredTitle,
+        ),
+      ).toBeDefined();
+      const platform = detectDesktopPlatform();
+      const downloadLabel =
+        platform === "mac"
+          ? messages.settings.account.desktopDownloadMac
+          : messages.settings.account.desktopDownloadWindows;
+      const downloadHref = platform === "mac" ? MACOS_DMG_URL : WINDOWS_EXE_URL;
+      expect(
+        screen.getByRole("link", { name: downloadLabel }).getAttribute("href"),
+      ).toBe(downloadHref);
+      expect(
+        screen.queryByText(messages.settings.account.desktopConnectFailed),
+      ).toBeNull();
+      expect(requests).toEqual([]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      window.history.replaceState(null, "", originalHref);
+    }
   });
 });

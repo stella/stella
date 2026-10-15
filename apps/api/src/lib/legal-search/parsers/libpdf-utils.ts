@@ -7,7 +7,8 @@
  * and bold range mapping.
  */
 
-import type { Inline } from "@/api/lib/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Inline } from "@stll/legal-ast/document-ast";
 
 // ── Types ────────────────────────────────────────────────
 

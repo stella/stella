@@ -7,22 +7,6 @@ import type {
 } from "@/lib/workspaces/types";
 import { PERSONAL_GROUP_ID } from "@/lib/workspaces/types";
 
-export const getUniqueClientsFromWorkspace = (
-  workspaces: readonly Workspace[],
-  locale: string,
-): { id: string; displayName: string }[] => {
-  const map = new Map<string, { id: string; displayName: string }>();
-  for (const ws of workspaces) {
-    if (ws.client) {
-      map.set(ws.client.id, ws.client);
-    }
-  }
-  const compareDisplayName = compareByLocale(locale);
-  return Array.from(map.values()).toSorted((a, b) =>
-    compareDisplayName(a.displayName, b.displayName),
-  );
-};
-
 export const groupByClient = (
   workspaces: readonly Workspace[],
   locale: string,

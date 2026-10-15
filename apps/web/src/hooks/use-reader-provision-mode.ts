@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from "react";
+import { useState } from "react";
 
 import { Result } from "better-result";
 
@@ -10,17 +10,15 @@ import {
 import type { ReaderProvisionMode } from "@/components/legal-reader/reader-provision-mode.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLocalStorage } from "@/hooks/use-local-storage";
+import { useStorageOwner } from "@/lib/account/use-owner-scoped-state";
 import {
-  onStorageOwnerChange,
+  isCurrentStorageOwner,
   userStorageKey,
 } from "@/lib/account/user-scoped-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ClientOperationError } from "@/lib/errors/client";
 
 const MODE_CHANGED_EVENT = "reader-provision-mode-changed";
-const ownerKey = () => userStorageKey(READER_PROVISION_MODE_STORAGE_KEY);
-const visitorKey = () =>
-  userStorageKey(READER_PROVISION_MODE_STORAGE_KEY, { kind: "visitor" });
 
 type StoredMode = {
   key: string;
@@ -44,7 +42,8 @@ const readMode = (storage: Storage, key: string) =>
 export const useReaderProvisionMode = () => {
   const storage = useLocalStorage();
   const analytics = useAnalytics();
-  const key = useSyncExternalStore(onStorageOwnerChange, ownerKey, visitorKey);
+  const owner = useStorageOwner();
+  const key = userStorageKey(READER_PROVISION_MODE_STORAGE_KEY, owner);
   const [stored, setStored] = useState<StoredMode | null>(null);
 
   // Like text size, the stored choice is read after hydration. An owner
@@ -105,6 +104,9 @@ export const useReaderProvisionMode = () => {
   return {
     expandProvisions: mode === READER_PROVISION_MODE.expanded,
     toggle: () => {
+      if (!isCurrentStorageOwner(owner)) {
+        return;
+      }
       const next =
         mode === READER_PROVISION_MODE.expanded
           ? READER_PROVISION_MODE.collapsed

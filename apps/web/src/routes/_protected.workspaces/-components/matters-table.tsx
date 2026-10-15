@@ -10,6 +10,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { Frame } from "@stll/ui/frame";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { getInitials } from "@stll/ui/initials";
+import { getMatterColor } from "@stll/ui/matter-colors";
 import {
   SortableHead,
   Table,
@@ -27,7 +28,6 @@ import { useMatterContextMenu } from "@/components/workspaces/matter-context-men
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { getMatterColor } from "@/lib/matter-colors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import type {
   MattersColumnId,
@@ -191,7 +191,10 @@ const NameCell = ({ workspace }: CellProps) => (
         backgroundColor: getMatterColor(workspace.id),
       }}
     />
-    <BidiText as="span" className="truncate font-medium">
+    <BidiText
+      as="span"
+      className="overflow-hidden font-medium text-ellipsis whitespace-pre"
+    >
       {workspace.name}
     </BidiText>
   </div>
@@ -352,6 +355,7 @@ const MattersTableRow = ({
                 style={{ backgroundColor: getMatterColor(workspace.id) }}
               />
               <InlineEdit
+                className="font-medium"
                 onCancel={ctx.rename.cancel}
                 onChange={ctx.rename.setDraft}
                 onCommit={ctx.rename.commit}

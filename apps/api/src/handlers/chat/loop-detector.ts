@@ -1,5 +1,6 @@
 import type { ModelMessage } from "@tanstack/ai";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 
 import { type JsonValue, toJsonValue } from "@/api/lib/json-value";
@@ -419,5 +420,4 @@ const describeLoopDetection = (
   return `${detection.repetitionCount} repeated assistant text chunks`;
 };
 
-const hashString = (value: string): string =>
-  new Bun.CryptoHasher("sha256").update(value).digest("hex");
+const hashString = (value: string): string => hashSha256Hex(value);

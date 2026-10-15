@@ -10,7 +10,7 @@ import { Temporal } from "@stll/time";
 import { envBase } from "@/api/env-base";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
-  CORPUS_INDEX_COMMIT_TIMEOUT_SECS,
+  CORPUS_FINAL_INDEX_INDEXING_DEFAULT,
   type CorpusIndexConfig,
 } from "@/api/lib/legal-search/corpus-index-config";
 import { isRecord } from "@/api/lib/type-guards";
@@ -24,21 +24,74 @@ import { isRecord } from "@/api/lib/type-guards";
 
 type CorpusIndexErrorRejection = "definite" | "unknown" | "transient";
 
+/**
+ * Whether the engine was there to answer. `unreachable` is a request that
+ * never got an answer (refused or reset connection, failed DNS lookup, an
+ * expired budget) or one a gateway in front of the engine answered for it
+ * (502, 503, 504): the index is down or scaled away, and the same request can
+ * succeed once it is back. `index_missing` is the engine answering that the
+ * index the request named does not exist on the cluster: every path this
+ * client sends to is a Stella-built route naming the index, so a 404 from the
+ * engine means the index, not the route, and the same request succeeds once
+ * the index is created. `answered` is everything else, including a response
+ * this client could not read, which no retry fixes.
+ */
+type CorpusIndexErrorReach = "answered" | "unreachable" | "index_missing";
+
 export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
   message: string;
   status?: number | undefined;
   cause?: unknown;
   rejection: CorpusIndexErrorRejection;
+  reach: CorpusIndexErrorReach;
 }> {
   constructor(input: {
     message: string;
     status?: number | undefined;
     cause?: unknown;
     rejection?: CorpusIndexErrorRejection | undefined;
+    reach?: CorpusIndexErrorReach | undefined;
   }) {
-    super({ ...input, rejection: input.rejection ?? "unknown" });
+    super({
+      ...input,
+      rejection: input.rejection ?? "unknown",
+      reach: input.reach ?? "answered",
+    });
   }
 }
+
+/** The statuses a gateway answers with while the engine behind it is gone. */
+const UNREACHABLE_HTTP_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
+
+/** The status the engine answers a request naming an absent index with. */
+const INDEX_MISSING_HTTP_STATUS = 404;
+
+const reachForHttpStatus = (status: number): CorpusIndexErrorReach => {
+  if (UNREACHABLE_HTTP_STATUSES.has(status)) {
+    return "unreachable";
+  }
+  return status === INDEX_MISSING_HTTP_STATUS ? "index_missing" : "answered";
+};
+
+/**
+ * The one reading of "the search index is unavailable" every caller shares,
+ * so a search route, a tool and a test cannot each draw the line elsewhere.
+ * An engine that could not be reached and an index the engine does not hold
+ * are both a state of the deployment, not of the request: the same request
+ * succeeds once the index is back.
+ */
+export const isCorpusIndexUnavailable = (error: CorpusIndexError): boolean => {
+  switch (error.reach) {
+    case "unreachable":
+    case "index_missing":
+      return true;
+    case "answered":
+      return false;
+    default:
+      error.reach satisfies never;
+      return panic(`Unhandled corpus index reach: ${String(error.reach)}`);
+  }
+};
 
 /**
  * Mirrors Quickwit's default ingest `content_length_limit`; our node config
@@ -46,7 +99,7 @@ export class CorpusIndexError extends TaggedError("CorpusIndexError")<{
  */
 export const CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES = 10 * 1024 * 1024;
 
-const SEARCH_TIMEOUT_MS = 30_000;
+export const CORPUS_INDEX_SEARCH_TIMEOUT_MS = 30_000;
 
 /**
  * How the engine serializes a search response body. Its own default is
@@ -65,32 +118,42 @@ const SEARCH_TIMEOUT_MS = 30_000;
 const SEARCH_RESPONSE_FORMAT = "json";
 
 /**
- * The engine's own commit timeout for `commit=wait_for`: how long it
- * will hold the response open waiting for the split to be published.
- *
- * Stated here because the client budget has to outlast it — a client
- * that gives up first turns a commit that did happen into a batch the
- * caller retries. This is the engine's default; the index config below
- * does not override it, so raising it engine-side means raising the
- * budget with it.
+ * Upload allowance in front of the engine's commit wait. Under `wait_for` the
+ * engine starts that wait only once the NDJSON upload has finished.
  */
-export const CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS =
-  CORPUS_INDEX_COMMIT_TIMEOUT_SECS * 1000;
+const CORPUS_INDEX_INGEST_UPLOAD_BUDGET_MS = 60_000;
 
 /**
- * Whole-request budget for an ingest. Must exceed the commit wait above,
- * because under `wait_for` the engine only starts that wait once the
- * NDJSON upload has finished. Pinned against the commit wait in
- * `corpus-index-client.test.ts`.
+ * Whole-request budget for a `wait_for` ingest into an index whose
+ * `commit_timeout_secs` is `commitTimeoutSecs`: the engine holds the response
+ * until its commit timer publishes the split. A client that gives up first
+ * turns a commit that did happen into a batch the caller retries.
  */
-export const CORPUS_INDEX_INGEST_TIMEOUT_MS = 120_000;
+export const corpusIndexCommittedIngestTimeoutMs = (
+  commitTimeoutSecs: number,
+): number => {
+  if (!Number.isSafeInteger(commitTimeoutSecs) || commitTimeoutSecs <= 0) {
+    return panic(`Invalid corpus index commit timeout: ${commitTimeoutSecs}`);
+  }
+  return commitTimeoutSecs * 1000 + CORPUS_INDEX_INGEST_UPLOAD_BUDGET_MS;
+};
+
+/**
+ * Whole-request budget for an ingest that does not name its index's commit
+ * window: a queued (`auto`) ingest, and the compatible `ingestBatch`, sized
+ * for the commit window the generations through v7 were created with.
+ */
+export const CORPUS_INDEX_INGEST_TIMEOUT_MS =
+  corpusIndexCommittedIngestTimeoutMs(
+    CORPUS_FINAL_INDEX_INDEXING_DEFAULT.commitTimeoutSecs,
+  );
 const ADMIN_TIMEOUT_MS = 30_000;
 /**
  * Tighter than search: aggregations serve page chrome (facet counts), so a
  * slow engine must give up well inside the page's own budget rather than
  * hold the request open for the full search timeout.
  */
-const AGGREGATION_TIMEOUT_MS = 10_000;
+export const CORPUS_INDEX_AGGREGATION_TIMEOUT_MS = 10_000;
 const SPLIT_PAGE_SIZE = 1000;
 const MAX_SETTLEMENT_SPLITS = 10_000;
 const MAX_SETTLEMENT_SCAN_PASSES = 3;
@@ -133,6 +196,14 @@ export const CORPUS_INDEX_COMMIT = {
 type CorpusIndexCommitMode =
   (typeof CORPUS_INDEX_COMMIT)[keyof typeof CORPUS_INDEX_COMMIT];
 
+type CorpusIndexCommittedIngestInput = {
+  indexId: string;
+  ndjson: string;
+  observer: RegistryRequestObservation;
+  /** The target index's `indexing_settings.commit_timeout_secs`. */
+  commitTimeoutSecs: number;
+};
+
 type CorpusIndexSearchInput = {
   observer: RegistryRequestObservation;
   indexId: string;
@@ -146,6 +217,8 @@ type CorpusIndexSearchInput = {
    */
   sortBy?: string | undefined;
   snippetFields?: string[] | undefined;
+  /** Remaining whole-request budget when several searches share a deadline. */
+  timeoutMs?: number | undefined;
 };
 
 export type CorpusIndexAggregateInput = {
@@ -430,11 +503,13 @@ export type CorpusIndexClient = {
     commit: CorpusIndexCommitMode,
     observer: RegistryRequestObservation,
   ) => Promise<Result<void, CorpusIndexError>>;
-  /** Final-generation append: durable commit plus an exact V2 receipt. */
+  /**
+   * Final-generation append: durable commit plus an exact V2 receipt. The
+   * request budget follows the index's own commit window, which the engine
+   * holds the response open for.
+   */
   ingestCommittedBatch: (
-    indexId: string,
-    ndjson: string,
-    observer: RegistryRequestObservation,
+    input: CorpusIndexCommittedIngestInput,
   ) => Promise<Result<void, CorpusIndexError>>;
   /**
    * Final-generation append that returns on acceptance instead of on the
@@ -613,14 +688,26 @@ const requestFailure = ({
   request,
   error,
   unaborted,
-}: RequestFailureOptions): CorpusIndexError =>
+  reach,
+}: RequestFailureOptions & {
+  reach: CorpusIndexErrorReach;
+}): CorpusIndexError =>
   new CorpusIndexError({
     message: isAborted(error)
       ? `corpus index ${requestLabel(request)} failed within its ${request.timeoutMs}ms budget: ${String(error)}`
       : `corpus index ${requestLabel(request)} ${unaborted}: ${String(error)}`,
     cause: error,
     rejection: "unknown",
+    reach,
   });
+
+/**
+ * A body that stopped arriving (the budget expired or the connection dropped
+ * mid-stream) is the engine going away; a body that arrived and does not
+ * parse is a response, and a retry reads the same bytes.
+ */
+const bodyReadReach = (error: unknown): CorpusIndexErrorReach =>
+  error instanceof SyntaxError ? "answered" : "unreachable";
 
 const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
   await fetchCorpusIndex(
@@ -632,7 +719,14 @@ const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
     },
     request.observer,
   ).catch((error: unknown) => {
-    throw requestFailure({ request, error, unaborted: "could not be sent" });
+    // `fetch` rejects only when no response arrived: refused or reset
+    // connection, failed DNS lookup, expired budget.
+    throw requestFailure({
+      request,
+      error,
+      unaborted: "could not be sent",
+      reach: "unreachable",
+    });
   });
 
 const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
@@ -643,6 +737,7 @@ const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
       message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
       status: response.status,
       rejection: rejectionForHttpStatus(response.status),
+      reach: reachForHttpStatus(response.status),
     });
   }
   return await response.json().catch((error: unknown) => {
@@ -650,6 +745,7 @@ const requestJson = async (request: CorpusIndexRequest): Promise<unknown> => {
       request,
       error,
       unaborted: "returned an unreadable body",
+      reach: bodyReadReach(error),
     });
   });
 };
@@ -931,6 +1027,7 @@ type IngestBatchOptions = {
   ndjson: string;
   commit: CorpusIndexCommitMode;
   receiptMode: IngestReceiptMode;
+  timeoutMs: number;
 };
 
 const ingestBatch = async ({
@@ -940,6 +1037,7 @@ const ingestBatch = async ({
   commit,
   receiptMode,
   observer,
+  timeoutMs,
 }: IngestBatchOptions): Promise<Result<void, CorpusIndexError>> =>
   await Result.tryPromise({
     try: async () => {
@@ -955,7 +1053,7 @@ const ingestBatch = async ({
           headers: { "content-type": "application/x-ndjson" },
           body: ndjson,
         },
-        timeoutMs: CORPUS_INDEX_INGEST_TIMEOUT_MS,
+        timeoutMs,
       });
       if (!isRecord(response)) {
         throw new CorpusIndexError({
@@ -1226,6 +1324,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             request,
             error,
             unaborted: "returned an unreadable body",
+            reach: bodyReadReach(error),
           });
         });
         if (!isRecord(metadata) || !isRecord(metadata["index_config"])) {
@@ -1259,9 +1358,15 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       ndjson,
       commit,
       receiptMode: "compatible",
+      timeoutMs: CORPUS_INDEX_INGEST_TIMEOUT_MS,
     }),
 
-  ingestCommittedBatch: async (indexId, ndjson, observer) =>
+  ingestCommittedBatch: async ({
+    indexId,
+    ndjson,
+    observer,
+    commitTimeoutSecs,
+  }) =>
     await ingestBatch({
       observer,
       baseUrl: mutationBaseUrl(cluster),
@@ -1269,6 +1374,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       ndjson,
       commit: CORPUS_INDEX_COMMIT.waitFor,
       receiptMode: "exact-v2",
+      timeoutMs: corpusIndexCommittedIngestTimeoutMs(commitTimeoutSecs),
     }),
 
   ingestQueuedBatch: async (indexId, ndjson, observer) =>
@@ -1279,6 +1385,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       ndjson,
       commit: CORPUS_INDEX_COMMIT.auto,
       receiptMode: "exact-v2",
+      timeoutMs: CORPUS_INDEX_INGEST_TIMEOUT_MS,
     }),
 
   search: async ({
@@ -1289,6 +1396,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
     startOffset,
     sortBy,
     snippetFields,
+    timeoutMs = CORPUS_INDEX_SEARCH_TIMEOUT_MS,
   }) =>
     await Result.tryPromise({
       try: async () => {
@@ -1315,7 +1423,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           },
-          timeoutMs: SEARCH_TIMEOUT_MS,
+          timeoutMs: Math.min(timeoutMs, CORPUS_INDEX_SEARCH_TIMEOUT_MS),
         });
         if (!isRecord(response)) {
           throw new CorpusIndexError({
@@ -1370,7 +1478,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             headers: { "content-type": "application/json" },
             body: JSON.stringify(body),
           },
-          timeoutMs: SEARCH_TIMEOUT_MS,
+          timeoutMs: CORPUS_INDEX_SEARCH_TIMEOUT_MS,
         });
         const parsed = parseCorpusIndexScoredSearchResponse(
           response,
@@ -1405,7 +1513,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
               format: SEARCH_RESPONSE_FORMAT,
             }),
           },
-          timeoutMs: AGGREGATION_TIMEOUT_MS,
+          timeoutMs: CORPUS_INDEX_AGGREGATION_TIMEOUT_MS,
         });
         if (!isRecord(response) || !isRecord(response["aggregations"])) {
           throw new CorpusIndexError({

@@ -140,21 +140,6 @@
     "reason": "Elapsed-time window (lease, staleness or retention cutoff) measured from now; no calendar day is involved, so a late tick only widens the window."
   },
   {
-    "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/infosoud.ts::markTrackedCaseFailed::new Date()",
-    "count": 1,
-    "reason": "Write timestamp: records when the row changed, an event time rather than a decision about which slot is due."
-  },
-  {
-    "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/infosoud.ts::markTrackedCaseSynced::new Date()",
-    "count": 1,
-    "reason": "Write timestamp: records when the row changed, an event time rather than a decision about which slot is due."
-  },
-  {
-    "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/infosoud.ts::syncInfoSoudTrackedCases::new Date()",
-    "count": 1,
-    "reason": "Write timestamp: records when the row changed, an event time rather than a decision about which slot is due."
-  },
-  {
     "id": "no-wall-clock-scheduler-decision::apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts::createLegislationExpressionIdBackfill::Temporal.Now.instant()",
     "count": 1,
     "reason": "Injected clock default of a long-running backfill: measures elapsed run time and throttling, not which slot is due."

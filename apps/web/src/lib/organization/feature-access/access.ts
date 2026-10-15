@@ -12,13 +12,22 @@ import {
 import { callerFeatureEnabled, runForCallerFeature } from "./access.logic";
 import type { CallerFeature } from "./surfaces";
 
-export const useCallerFeatureEnabled = (feature: CallerFeature): boolean => {
+type UseCallerFeatureEnabledOptions = {
+  /** Skip the settings request when no caller decision is needed yet. */
+  enabled?: boolean;
+};
+
+export const useCallerFeatureEnabled = (
+  feature: CallerFeature,
+  { enabled = true }: UseCallerFeatureEnabledOptions = {},
+): boolean => {
   const user = useMaybeAuthenticatedUser();
   const query = useQuery({
     ...optionalOrganizationSettingsOptions({
       organizationId: user?.activeOrganizationId ?? null,
       userId: user?.id ?? "",
     }),
+    enabled,
     retry: false,
     staleTime: 30_000,
   });

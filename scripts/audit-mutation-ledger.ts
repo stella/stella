@@ -21,6 +21,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 
 import { SYSTEM_AUDIT_MODULES } from "../apps/api/src/lib/system-audit/modules.ts";
 import {
@@ -141,9 +142,10 @@ const census = (): Map<string, TargetCounts> => {
       ) {
         continue;
       }
-      const file = path
-        .relative(REPO_ROOT, path.resolve(REPO_ROOT, diagnostic["filename"]))
-        .replaceAll("\\", "/");
+      const file = repoRelativePath(
+        REPO_ROOT,
+        path.resolve(REPO_ROOT, diagnostic["filename"]),
+      ).replaceAll("\\", "/");
       if (file.endsWith(".test.ts")) {
         continue;
       }

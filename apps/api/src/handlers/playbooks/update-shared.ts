@@ -18,6 +18,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
+import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import type {
   PlaybookPositions,
   PlaybookScope,
@@ -39,6 +40,8 @@ type UpdatePlaybookDefinitionBody = {
 };
 
 type UpdatePlaybookDefinitionArgs = {
+  /** Admits the save's ask derivations; see `deriveAutoAsks`. */
+  admitModelAction: ModelActionAdmitter;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   /** Matters the caller can access; a newly added source must be in one. */
@@ -53,6 +56,7 @@ type UpdatePlaybookDefinitionArgs = {
 };
 
 export const updatePlaybookDefinitionHandler = async function* ({
+  admitModelAction,
   safeDb,
   organizationId,
   accessibleWorkspaceIds,
@@ -101,6 +105,7 @@ export const updatePlaybookDefinitionHandler = async function* ({
   // `derived` whose `rulesHash` still matches is reused (no LLM call); a
   // failed derivation persists with `derived` absent.
   const positions = await deriveAutoAsks(body.positions, {
+    admitModelAction,
     organizationId,
     orgAIConfig,
     managedAIResidency,

@@ -11,9 +11,9 @@ import { broadcast } from "@/api/lib/sse";
  * but its own event type so the frontend can switch on it without colliding
  * with semantic resource events or `workflow-extraction-preview`).
  */
-export const FLOW_RUN_UPDATE_EVENT_TYPE = "flow-run-update";
+const FLOW_RUN_UPDATE_EVENT_TYPE = "flow-run-update";
 
-export type FlowRunUpdateStep = {
+type FlowRunUpdateStep = {
   index: number;
   status: FlowRunStepStatus;
 };

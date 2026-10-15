@@ -28,8 +28,10 @@ import {
   reparseStoredRaw,
 } from "./map";
 import {
+  citationRow,
   clusterRow,
   courtListenerRecord,
+  docketRow,
   opinionRow,
   recordedClusters,
 } from "./test-records";
@@ -51,6 +53,54 @@ const stored = (result: IngestionResult): StoredRawReparseInput => ({
 });
 
 describe("complete CourtListener import mapping", () => {
+  test.each([
+    {
+      text: "Unable to extract document content",
+      reason: "source-placeholder",
+    },
+    { text: "Zqvvvv, C.J.", reason: "no-ruling-text" },
+    { text: "ÿþc", reason: "undecodable" },
+  ])("junk opinion carries $reason in rejection detail", ({ text, reason }) => {
+    const result = mapCourtListenerRecord(
+      courtListenerRecord({
+        cluster: clusterRow({
+          id: "9000000002",
+          docket_id: "9000000003",
+          case_name: "Zqvral v. Zqlorn",
+          slug: "synthetic-short-order",
+        }),
+        docket: docketRow({ id: "9000000003", docket_number: "No. 88-8888" }),
+        citations: [
+          citationRow({
+            id: "9000000004",
+            cluster_id: "9000000002",
+            volume: "888",
+            page: "888",
+          }),
+        ],
+        opinions: [
+          opinionRow({
+            id: "9000000001",
+            cluster_id: "9000000002",
+            xml_harvard: "",
+            plain_text: text,
+          }),
+        ],
+      }),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        reason: "no-usable-text",
+        diagnostics: [
+          { path: "opinions", detail: "held" },
+          { path: "opinions.9000000001.plain_text", detail: reason },
+        ],
+      });
+      expect(JSON.stringify(result.error.diagnostics)).not.toContain(text);
+    }
+  });
+
   test("a rejected label returns a typed cluster rejection while other records map", () => {
     const bad = mapCourtListenerRecord(
       courtListenerRecord({
@@ -139,6 +189,25 @@ describe("complete CourtListener import mapping", () => {
       });
     }
     expect(mapped).toBeGreaterThan(0);
+  });
+  test("unclassified page chrome yields a typed cluster rejection", () => {
+    const result = mapCourtListenerRecord(
+      courtListenerRecord({
+        opinions: [
+          opinionRow({
+            xml_harvard: "",
+            html: "<main><h1>Opinion</h1><p>The judgment is reversed.</p></main><aside><nav>Sidebar links</nav><p>Publisher sidebar</p></aside>",
+          }),
+        ],
+      }),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.reason).toBe("no-usable-text");
+      expect(result.error.diagnostics).toEqual([
+        { path: "opinions", detail: "held" },
+      ]);
+    }
   });
   test("image dependence rejects the whole cluster", () => {
     const cases = [

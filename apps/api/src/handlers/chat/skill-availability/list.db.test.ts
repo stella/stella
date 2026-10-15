@@ -19,11 +19,14 @@ import { COUNTERPARTY_CHECK_TOOL_NAME } from "@/api/handlers/chat/tools/counterp
 import { GET_DOCUMENT_OUTLINE_TOOL_NAME } from "@/api/handlers/chat/tools/folio-agent-tools";
 import { SEARCH_ALL_PAST_CHATS_TOOL_NAME } from "@/api/handlers/chat/tools/past-chat-tools";
 import { WEB_SEARCH_TOOL_NAME } from "@/api/handlers/chat/tools/web-search-tools";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -150,6 +153,7 @@ const call = async ({
     createTestHandlerContext<
       Parameters<typeof listUnavailableChatSkills.handler>[0]
     >({
+      audit: NO_AUDIT,
       getAccessibleWorkspaces: async () => workspaces,
       getWorkspaceAccess: async (workspaceId) =>
         workspaces.find(({ id }) => id === workspaceId) ?? null,
@@ -390,6 +394,7 @@ describe("built-in skills are decided beside installed ones", () => {
     const result = await listUnmetBuiltIns.handler(
       createTestHandlerContext<Parameters<typeof listUnmetBuiltIns.handler>[0]>(
         {
+          audit: NO_AUDIT,
           getAccessibleWorkspaces: async () => WITH_MATTER(),
           getWorkspaceAccess: async () => null,
           memberRole: sessionMemberRole("owner"),

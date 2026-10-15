@@ -1,3 +1,4 @@
+import type { Context } from "elysia";
 /**
  * The request lifecycle's failure and completion records, as the server's
  * `onError` and `onAfterHandle` hooks.
@@ -6,9 +7,9 @@
  * (handler, error hook, completion hook) through a real Elysia app and read
  * every record and response it produces, without starting the server.
  */
-
-import type { Context } from "elysia";
 import { AsyncLocalStorage } from "node:async_hooks";
+
+import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -32,12 +33,13 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import {
+  getMountedRequestRoute,
   getRequestContext,
   getRequestFailure,
-  isAiRequest,
 } from "@/api/lib/observability/request-context";
 import { emitRequestDurationMetric } from "@/api/lib/observability/request-metrics";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
+import { requestClassAtCompletion } from "@/api/lib/observability/route-latency-class";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const HEALTH_PATHS = new Set(["/health", "/live", "/ready", "/started"]);
@@ -66,7 +68,9 @@ const setDbQueryCountHeader = (set: Context["set"]) => {
 const shouldLogRequest = (path: string): boolean => !HEALTH_PATHS.has(path);
 
 const getRouteName = (route: string | undefined): string =>
-  route ?? "unmatched";
+  (route === undefined || route.includes("*")
+    ? (getMountedRequestRoute() ?? route)
+    : route) ?? "unmatched";
 
 const buildRequestLogDetails = ({
   durationMs,
@@ -88,7 +92,7 @@ const buildRequestLogDetails = ({
   const details = {
     durationMs: Math.round(durationMs),
     method: request.method,
-    route,
+    route: getRouteName(route),
     statusCode,
   };
 
@@ -167,26 +171,30 @@ export const answerRequestError = ({
       elysiaCode: String(code),
     });
 
-    if (statusCode >= 500) {
-      logger.request({
-        ...details,
-        errorFingerprint: identityFields(readEvidence(error)),
-        failure: grading,
-        message: "request.failed",
-        severity: "ERROR",
-      });
-    } else {
-      logger.request({
-        ...details,
-        failure: grading,
-        message: "request.failed",
-        severity: "WARN",
-      });
-    }
+    const attributes = sanitizeErrorAttributesForOutput({
+      ...details,
+      ...(statusCode >= 500
+        ? { errorFingerprint: identityFields(readEvidence(error)) }
+        : {}),
+      failure: grading,
+      message: "request.failed",
+      severity: statusCode >= 500 ? "ERROR" : "WARN",
+    });
+    logger.request({
+      durationMs: 0,
+      method: "",
+      statusCode: 500,
+      message: "request.failed" as const,
+      severity: "ERROR" as const,
+      ...attributes,
+    });
 
     emitRequestDurationMetric({
       durationMs,
-      requestClass: isAiRequest() ? "ai" : "crud",
+      requestClass: requestClassAtCompletion({
+        method: request.method,
+        route: getRouteName(route),
+      }),
       statusCode,
       route: getRouteName(route),
     });
@@ -313,10 +321,14 @@ export const completeRequest = async ({
     // Streaming responses (e.g. POST /v1/chat) settle this hook when the
     // stream object is returned, not when generation ends, so their
     // duration here understates the wall-clock. That is acceptable: the
-    // class is `ai` either way, which is excluded from the CRUD p95 SLO.
+    // declared stream class excludes setup time from the CRUD p95 SLO,
+    // even when no model has started yet.
     emitRequestDurationMetric({
       durationMs,
-      requestClass: isAiRequest() ? "ai" : "crud",
+      requestClass: requestClassAtCompletion({
+        method: request.method,
+        route: getRouteName(route),
+      }),
       statusCode,
       route: getRouteName(route),
     });

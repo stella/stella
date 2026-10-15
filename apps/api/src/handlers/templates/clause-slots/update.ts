@@ -17,6 +17,7 @@ const updateClauseSlotBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Assign one clause link of a template to a named clause slot, or clear " +
     "the assignment by passing null. The clause, its pinned version, and its " +

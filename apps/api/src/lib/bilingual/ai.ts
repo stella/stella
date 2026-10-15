@@ -32,6 +32,7 @@ import type {
 } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -54,6 +55,7 @@ class BilingualAIContractError extends TaggedError("BilingualAIContractError")<{
 
 export type BilingualAIContext = {
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -102,6 +104,7 @@ const analyticsFor = (
     feature,
     modelRole,
     orgAIConfig: context.orgAIConfig,
+    modelTier: context.admission.modelTier,
     properties: {
       organization_id: context.organizationId,
       workspace_id: context.workspaceId,
@@ -255,6 +258,7 @@ export const decideDispositions = async (
           orgAIConfig: context.orgAIConfig,
           managedAIResidency: context.managedAIResidency,
           organizationId: context.organizationId,
+          admission: context.admission,
           analytics,
           caching: request.caching,
           serviceTier: SERVICE_TIER,
@@ -368,6 +372,7 @@ export const proposeGlossary = async (
     orgAIConfig: context.orgAIConfig,
     managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
+    admission: context.admission,
     analytics,
     caching: request.caching,
     serviceTier: SERVICE_TIER,
@@ -490,6 +495,7 @@ export const translateBatch = async (
     orgAIConfig: context.orgAIConfig,
     managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
+    admission: context.admission,
     analytics,
     caching: request.caching,
     serviceTier: SERVICE_TIER,
@@ -645,6 +651,7 @@ export const translateFormattedBatch = async (
       orgAIConfig: context.orgAIConfig,
       managedAIResidency: context.managedAIResidency,
       organizationId: context.organizationId,
+      admission: context.admission,
       analytics,
       caching: request.caching,
       serviceTier: SERVICE_TIER,

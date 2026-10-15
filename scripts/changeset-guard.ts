@@ -432,7 +432,7 @@ const requireCatalogPackagesNamed = (
       [
         "Catalog versions changed for published packages no changeset names:",
         ...unnamed.map((input) => `${input.packageName}: ${input.entry}`),
-        "Add a changeset naming each package so its next release ships the new version.",
+        "Run `bun run changeset` and name each package so its next release ships the new version.",
       ].join("\n"),
     );
   }
@@ -479,7 +479,7 @@ export const checkChangesetPackages = ({
         "Changeset packages have no changed release-gated files or catalog versions since their last publish:",
         ...unrelated,
         ...notes,
-        "Remove unrelated packages from the entry; use an empty changeset for a no-release change.",
+        "Remove unrelated packages from the entry; run `bun run changeset --empty` for a no-release change.",
       ].join("\n"),
     );
   }

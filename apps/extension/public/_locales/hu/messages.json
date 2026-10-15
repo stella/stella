@@ -70,7 +70,7 @@
     "message": "Engedély után lehetővé teszi, hogy stella egy külön Chrome-lapot vezéreljen."
   },
   "extensionName": {
-    "message": "stella böngésző"
+    "message": "stella"
   },
   "grantAccess": {
     "message": "Minden webhely engedélyezése"

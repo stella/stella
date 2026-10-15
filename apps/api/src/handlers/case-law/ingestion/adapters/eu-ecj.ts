@@ -3,6 +3,12 @@
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
+import { sanitizeErrorForOutput } from "@stll/errors";
+// parser-output-unchanged: error output projection only; parsed decision fields are unchanged.
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { sha256Hex as hashContent } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import {
@@ -10,7 +16,6 @@ import {
   ADAPTER_TIMEOUT,
   PARSER_VERSIONS,
 } from "@/api/handlers/case-law/consts";
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   backlogSurface,
   decodeSourceRawEnvelope,
@@ -51,7 +56,6 @@ import {
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
-  hashContent,
   stripHtml,
 } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import type { ParseEcjDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj";
@@ -2025,8 +2029,8 @@ const fetchFormex = async (
   if (Result.isError(contentUrl)) {
     logger.warn("case_law.ingestion.formex_unavailable", {
       adapterKey: ADAPTER_KEYS.EU_ECJ,
-      reason: contentUrl.error.message,
-      url: contentUrl.error.url,
+      reason: sanitizeErrorForOutput(contentUrl.error.message),
+      url: sanitizeErrorForOutput(contentUrl.error.url),
     });
     return Result.ok({ type: "not-located" });
   }

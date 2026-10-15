@@ -1,0 +1,22 @@
+{
+  "eyebrow": "CASE LAW OVERVIEW",
+  "title": "Non-pecuniary harm: courts and years",
+  "scope": "NS and NSS · 2021–2024 · synthetic demonstration data",
+  "map-title": "Decisions by court and year",
+  "map-help": "Area = decision count · color = court tier. Select a court, then a year. Escape or right-click returns to the overview.",
+  "ranking-title": "Most cited among top results",
+  "ranking-scope": "Ranked only among decisions on the current results page, not the full matching set.",
+  "stats": [
+    "Decisions in displayed groups (estimate)",
+    "Courts",
+    "Years",
+    "Most citations among returned results"
+  ],
+  "estimate": "Counts estimate distinct decisions, not text passages.",
+  "truncated": "This overview is bounded. The sum excludes matching groups that are not displayed.",
+  "drillOffered": "A follow-up is ready in chat. Send it for a more detailed overview.",
+  "emptyAggregate": "Aggregate counts are unavailable for this page. Search the first results page.",
+  "emptyRanking": "The current page contains no decisions with an available citation count.",
+  "unavailable": "—",
+  "citations": "citations"
+}

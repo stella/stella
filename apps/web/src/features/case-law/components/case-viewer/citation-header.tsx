@@ -9,7 +9,10 @@ import { cn } from "@stll/ui/utils";
 import type { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
 import { VIEWER_OVERLAY_BAR_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { decisionYear, formatYear } from "@/features/case-law/citation-format";
-import { totalCitations } from "@/features/case-law/citation-treatment";
+import {
+  citationSummaryIsCapped,
+  totalCitations,
+} from "@/features/case-law/citation-treatment";
 import { CitationTimelinePanel } from "@/features/case-law/components/citation-timeline-panel";
 import { lastNegativeYear } from "@/features/case-law/components/citation-timeline.logic";
 import {
@@ -20,6 +23,7 @@ import { decisionCitationSummaryOptions } from "@/features/case-law/queries/cita
 import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type CitationHeaderProps = {
   /** The compact inspector shows counts beside the chart in its own row. */
@@ -70,9 +74,10 @@ export const CitationHeader = ({
   const t = useTranslations();
   const format = useFormatter();
   const now = useNow();
-  const { data: summary } = useQuery(
-    decisionCitationSummaryOptions(decisionId),
-  );
+  const summaryQuery = useQuery(decisionCitationSummaryOptions(decisionId));
+  const summaryView = useQueryView(summaryQuery);
+  useQueryViewError(summaryView);
+  const summary = summaryView.type === "items" ? summaryView.items : undefined;
   // Prefetched without blocking the route: known on one side of hydration
   // and not the other, so the strip waits for hydration to stay identical.
   const hydrated = useHydrated();
@@ -81,7 +86,7 @@ export const CitationHeader = ({
     return null;
   }
   const total = totalCitations(summary.incoming);
-  if (total === 0 && !summary.capped.incoming) {
+  if (total === 0 && !citationSummaryIsCapped(summary, "incoming")) {
     return null;
   }
 
@@ -97,13 +102,13 @@ export const CitationHeader = ({
   const lastNegative = lastNegativeYear(summary.incomingByYear);
 
   const summaryText = [
-    summary.capped.incoming
+    citationSummaryIsCapped(summary, "incoming")
       ? t("caseLaw.citation.citedAtLeast", { count: format.number(total) })
       : t("caseLaw.citation.citedSummary", { count: total }),
-    !summary.capped.incoming && negative > 0
+    !citationSummaryIsCapped(summary, "incoming") && negative > 0
       ? t("caseLaw.citation.negativeCount", { count: negative })
       : null,
-    summary.capped.incoming || lastNegative === null
+    citationSummaryIsCapped(summary, "incoming") || lastNegative === null
       ? null
       : t("caseLaw.citation.lastNegative", {
           year: formatYear(format, lastNegative),

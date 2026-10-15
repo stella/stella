@@ -1,8 +1,7 @@
+import { parseProvisionDesignation } from "@stll/decision-reader/reader-outline";
 import type { ProvisionUnit } from "@stll/legal-ast/provision-reference";
 import { stripDiacritics } from "@stll/text-normalize";
 import { OUTLINE_EMPHASIS, type OutlineItem } from "@stll/ui/outline-rail";
-
-import { parseProvisionDesignation } from "@/components/legal-reader/reader-outline";
 
 /**
  * What the rail's jump field makes of what the reader typed.

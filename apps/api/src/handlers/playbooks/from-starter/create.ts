@@ -6,6 +6,7 @@ import { instantiateStarterPositions } from "@/api/handlers/playbooks/instantiat
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import {
   findStarterPlaybook,
   STARTER_PLAYBOOK_IDS,
@@ -16,6 +17,7 @@ const fromStarterBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Create or reopen the organization's playbook from a bundled starter, " +
     "cloning its positions with fresh ids on first use and otherwise taking exactly the path " +
@@ -48,7 +50,9 @@ const createPlaybookFromStarter = createSafeRootHandler(
     promptCachingEnabled,
     recordAuditEvent,
     safeDb,
+    scopedDb,
     session,
+    user,
   }) {
     const starter = findStarterPlaybook(body.starterId);
     if (!starter) {
@@ -61,6 +65,12 @@ const createPlaybookFromStarter = createSafeRootHandler(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
     return yield* createPlaybookDefinitionHandler({
+      admitModelAction: createModelActionAdmitter({
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "playbooks.derive-ask",
+      }),
       safeDb,
       organizationId: session.activeOrganizationId,
       accessibleWorkspaceIds,

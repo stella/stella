@@ -10,6 +10,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { DialogClose, DialogFooter, DialogPanel } from "@stll/ui/dialog";
 import { AlertTriangleIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 
 import {
   bilingualErrorCodeKey,
@@ -77,27 +78,14 @@ export const BilingualRunPanel = ({
 const RunProgress = ({ detail }: { detail: BilingualRunDetail }) => {
   const t = useTranslations();
   const { completed, total } = detail.run;
-  const ratio = total === 0 ? 0 : Math.min(1, completed / total);
 
   return (
     <DialogPanel>
-      <div className="flex flex-col gap-3">
+      <div aria-busy="true" className="flex flex-col gap-3" role="status">
         <p className="text-sm font-medium">
           {t("bilingualTranslate.run.title")}
         </p>
-        <div
-          aria-label={t("bilingualTranslate.run.title")}
-          aria-valuemax={total}
-          aria-valuemin={0}
-          aria-valuenow={completed}
-          className="bg-muted h-1.5 w-full overflow-hidden rounded-full"
-          role="progressbar"
-        >
-          <div
-            className="bg-primary h-full w-full origin-left rounded-full transition-transform duration-500 ease-out"
-            style={{ transform: `scaleX(${String(ratio)})` }}
-          />
-        </div>
+        <Loader className="size-4" size="sm" variant="decorative" />
         <p className="text-muted-foreground text-xs tabular-nums">
           {t("bilingualTranslate.run.progress", {
             completed: String(completed),

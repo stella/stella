@@ -238,7 +238,7 @@ const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
 /** Operator replay keeps its timestamp order; background work walks only parser lag by ID. */
 export const BACKGROUND_REPLAY_PREVIEW_SUFFIX = ":dry-run";
 
-export type ReplaySelection =
+type ReplaySelection =
   | { type: "operator" }
   | {
       type: "background";
@@ -296,9 +296,9 @@ const replaySelectionPredicate = (
         ),
         // Durable reservations are recovered through pendingBatch; the sweep
         // must not bypass a row's backoff or reselect a terminal receipt.
-        // Scalar lookups keep each candidate bounded to its indexed receipt;
-        // an anti-join may otherwise materialize the entire source's receipts.
-        sql<boolean>`COALESCE((${tx
+        // Existence predicates let the planner combine receipt exclusions
+        // with owner RLS checks; scalar subplans repeat their startup cost.
+        sql<boolean>`NOT EXISTS (${tx
           .select({ present: sql<boolean>`true` })
           .from(caseLawReplayBatches)
           .where(
@@ -321,8 +321,8 @@ const replaySelectionPredicate = (
               ),
             ),
           )
-          .limit(1)}), false) = false`,
-        sql<boolean>`COALESCE((${tx
+          .limit(1)})`,
+        sql<boolean>`NOT EXISTS (${tx
           .select({ present: sql<boolean>`true` })
           .from(caseLawReplayBlocked)
           .where(
@@ -335,7 +335,7 @@ const replaySelectionPredicate = (
               ),
             ),
           )
-          .limit(1)}), false) = false`,
+          .limit(1)})`,
       );
     default:
       selection satisfies never;

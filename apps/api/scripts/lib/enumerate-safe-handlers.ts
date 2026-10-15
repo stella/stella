@@ -1,6 +1,8 @@
 import path from "node:path";
+import ts from "typescript";
 
 import { compareCodeUnit } from "@stll/collation";
+import { loadLocalModule } from "@stll/start-runtime/local-module-loader";
 
 import {
   isServiceClassification,
@@ -23,6 +25,7 @@ import {
 // export, or `path#exportName` for a named export.
 import {
   type HandlerKind,
+  isSafeHandlerFactory,
   SAFE_HANDLER_FACTORIES,
   SAFE_HANDLER_FACTORY_NAMES,
 } from "../../src/lib/safe-handler-factories";
@@ -36,41 +39,44 @@ export const REPO_ROOT = path.resolve(LIB_DIR, "../../../..");
 export const HANDLERS_GLOB = "apps/api/src/handlers/**/*.ts";
 
 /**
- * Only import files that textually contain a safe-handler factory call. The
+ * Only import files that contain a safe-handler factory call. The
  * handlers tree also holds pure helpers and standalone CLI scripts (e.g.
  * case-law/seed-court-weights.ts, which runs a DB seed and process.exit at
  * module top level); importing those would execute their side effects and can
  * kill the process. Files without a factory call cannot define an endpoint
  * config, so skipping them without importing is sound.
  *
- * Global so `String.prototype.match` can count call sites per file for the
- * hidden-endpoint invariant. The trailing `[<(]` excludes bare identifier
- * mentions (imports, re-exports) and only matches a call or generic
- * instantiation, so an `import { createSafeHandler }` line is never counted.
+ * Parse actual call expressions: type queries and runtime generic
+ * instantiations reference factories without constructing endpoints.
  */
-export const SAFE_HANDLER_CALL_PATTERN = new RegExp(
-  `(?:${SAFE_HANDLER_FACTORY_NAMES.join("|")})[<(]`,
-  "gu",
-);
-
-/**
- * Detection is textual (per file, which factories are called) because the
- * scope is a property of the factory, not something the runtime config
- * carries.
- */
-const FACTORY_KIND_PATTERNS = Object.entries(SAFE_HANDLER_FACTORIES).map(
-  ([name, { kind }]) => ({ kind, pattern: new RegExp(`${name}[<(]`, "u") }),
-);
-
-/** The distinct factory kinds a file's source textually calls. */
-export const detectHandlerKinds = (source: string): HandlerKind[] => {
+export const inspectSafeHandlerCalls = (source: string) => {
   const kinds = new Set<HandlerKind>();
-  for (const { kind, pattern } of FACTORY_KIND_PATTERNS) {
-    if (pattern.test(source)) {
-      kinds.add(kind);
-    }
+  let callCount = 0;
+  if (!SAFE_HANDLER_FACTORY_NAMES.some((name) => source.includes(name))) {
+    return { callCount, kinds: [...kinds] };
   }
-  return [...kinds];
+  const file = ts.createSourceFile(
+    "handler.ts",
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const visit = (node: ts.Node) => {
+    if (ts.isTypeNode(node)) {
+      return;
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      isSafeHandlerFactory(node.expression.text)
+    ) {
+      callCount += 1;
+      kinds.add(SAFE_HANDLER_FACTORIES[node.expression.text].kind);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(file);
+  return { callCount, kinds: [...kinds] };
 };
 
 export type ParsedExposure =
@@ -175,7 +181,7 @@ export type CollectedEndpoint = {
  * exported as both default and a name is recorded once under the default id, so
  * existing baseline entries stay valid. Pure (a plain record in, no I/O).
  */
-export const collectModuleEndpoints = (
+const collectModuleEndpoints = (
   mod: Record<string, unknown>,
   moduleId: string,
 ): CollectedEndpoint[] => {
@@ -222,12 +228,12 @@ export const enumerateModuleEndpoints = (
     exposure,
   }));
 
-export type DiscoveredEndpoint = CollectedEndpoint & {
+type DiscoveredEndpoint = CollectedEndpoint & {
   /** Repo-relative path of the file this endpoint was discovered in. */
   file: string;
 };
 
-export type DiscoveredFile = {
+type DiscoveredFile = {
   /** Repo-relative file path. */
   id: string;
   callCount: number;
@@ -277,13 +283,20 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
     if (ELYSIA_INSTANCE_PATTERN.test(source)) {
       routeFiles.push({ id, source });
     }
-    const callCount = (source.match(SAFE_HANDLER_CALL_PATTERN) ?? []).length;
+    const { callCount, kinds } = inspectSafeHandlerCalls(source);
     if (callCount === 0) {
       continue;
     }
     let mod: unknown;
     try {
-      mod = await import(abs);
+      const loaded = await loadLocalModule({
+        root: path.join(REPO_ROOT, "apps/api/src/handlers"),
+        modulePath: abs,
+      });
+      if (loaded.isErr()) {
+        throw loaded.error;
+      }
+      mod = loaded.value;
     } catch (error) {
       importErrors.push({
         id,
@@ -303,7 +316,7 @@ export const discoverSafeHandlers = async (): Promise<SafeHandlerDiscovery> => {
       callCount,
       enumerableCount: collected.length,
       source,
-      kinds: detectHandlerKinds(source),
+      kinds,
     });
   }
 

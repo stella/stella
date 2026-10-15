@@ -9,17 +9,31 @@ import {
   deleteTestWorkspace,
 } from "../helpers/workspace";
 
-const readContentModes = async (page: Page) =>
-  await page.evaluate(() => {
-    const raw = localStorage.getItem("stella:table");
-    return raw === null
-      ? null
-      : (
-          JSON.parse(raw) as {
-            state: { contentMode: Record<string, Record<string, string>> };
-          }
-        ).state.contentMode;
+// The table store keeps one entry per signed-in user, keyed
+// `stella:table:u:<userId>`; nothing is written under the bare name.
+const readContentModes = async (page: Page) => {
+  const { owned, unowned } = await page.evaluate(() => {
+    const keys = Array.from({ length: localStorage.length }, (_, index) =>
+      localStorage.key(index),
+    ).filter((key): key is string => key !== null);
+    return {
+      owned: keys
+        .filter((key) => key.startsWith("stella:table:u:"))
+        .map((key) => localStorage.getItem(key)),
+      unowned: localStorage.getItem("stella:table"),
+    };
   });
+  expect(unowned).toBeNull();
+  expect(owned.length).toBeLessThanOrEqual(1);
+  const raw = owned.at(0) ?? null;
+  return raw === null
+    ? null
+    : (
+        JSON.parse(raw) as {
+          state: { contentMode: Record<string, Record<string, string>> };
+        }
+      ).state.contentMode;
+};
 
 const namedView = (label: string) => {
   const id = randomUUID();

@@ -9,22 +9,34 @@
 //
 // This measures the gzipped size of every client JS asset, groups them the way
 // the build's manualChunks names them (apps/web/vite.config.ts), and guards a
-// committed baseline so that a size regression fails CI while an improvement
-// just prompts you to ratchet the baseline down.
+// committed baseline. Growth past the headroom is reported, never blocking: CI
+// annotates the grown groups and writes them to the job summary, and a nightly
+// run lists every group over budget. An improvement prompts a ratchet down.
 //
 // Modes:
 //   bun scripts/bundle-baseline.ts                 report groups + gzip sizes
 //   bun scripts/bundle-baseline.ts --write-baseline regenerate the baseline
-//   bun scripts/bundle-baseline.ts --check          CI gate (exit 1 on regression)
+//   bun scripts/bundle-baseline.ts --check          CI report (warns on growth; fails only when it cannot measure)
 //   bun scripts/bundle-baseline.ts --self-test      prove the comparison logic fires
 //
 // CI-only by design: it needs a completed `bun --filter @stll/web build` first,
 // so it is too slow for the local lint/pre-commit loop. Wired into
 // .github/workflows/ci.yml's web-build job, right after "Build web".
 
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { panic } from "better-result";
+import {
+  appendFileSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
+import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
 import { BASELINE_PATHS } from "./baseline-paths";
 
 const SCRIPTS_DIR = import.meta.dir;
@@ -33,6 +45,10 @@ const BASELINE_REL = BASELINE_PATHS.bundle;
 const BASELINE_PATH = path.resolve(REPO_ROOT, BASELINE_REL);
 const ASSETS_REL = "apps/web/dist/client/assets";
 const ASSETS_DIR = path.resolve(REPO_ROOT, ASSETS_REL);
+const SCAN_ENGINE_WASM = path.resolve(
+  REPO_ROOT,
+  "packages/scan-engine/generated/scan_engine_bg.wasm",
+);
 const WRITE_HINT = "bun scripts/bundle-baseline.ts --write-baseline";
 
 // A chunk may grow by up to this factor over its baseline before CI fails.
@@ -80,6 +96,7 @@ const VENDOR_GROUPS = [
 // newly-appearing vendor chunk a visible, guarded event.
 const GROUP_KEYS = [
   "entry",
+  "scan-engine-wasm",
   ...VENDOR_GROUPS,
   "routes",
   "largest-route",
@@ -135,6 +152,7 @@ const emptySizes = (): Sizes => ({
   entry: 0,
   "largest-route": 0,
   routes: 0,
+  "scan-engine-wasm": 0,
   total: 0,
   "vendor-anonymize-data": 0,
   "vendor-base-ui": 0,
@@ -172,6 +190,14 @@ const measure = (assetsDir: string): MeasureResult => {
   }
 
   const sizes = emptySizes();
+  if (!existsSync(SCAN_ENGINE_WASM)) {
+    return {
+      ok: false,
+      error:
+        "No committed scan engine WebAssembly found. Run `bun --filter @stll/scan-engine build:wasm` first.",
+    };
+  }
+  sizes["scan-engine-wasm"] = gzipSize(SCAN_ENGINE_WASM);
   let largestRoute = 0;
 
   for (const file of files) {
@@ -209,7 +235,7 @@ const sortedSizes = (sizes: Sizes): Sizes => {
 const writeBaseline = (sizes: Sizes): void => {
   writeFileSync(
     BASELINE_PATH,
-    `${JSON.stringify(sortedSizes(sizes), null, 2)}\n`,
+    `${JSON.stringify({ ...sortedSizes(sizes), ...readMcpBaselineField() }, null, 2)}\n`,
   );
 };
 
@@ -372,23 +398,69 @@ const runCheck = (): number => {
     return 0;
   }
 
-  console.error("\nbundle --check: chunk group(s) grew past the baseline:\n");
-  for (const d of regressions) {
-    const delta = d.current - d.baseline;
-    console.error(
-      `  ${d.key}: ${kib(d.baseline)} -> ${kib(d.current)} ` +
-        `(+${kib(delta)}, ${pct(d.current, d.baseline)})`,
-    );
-    console.error(`      ${perfMeaning(d.key)}.`);
-  }
-  console.error(
-    `\nAllowed headroom is ${Math.round((HEADROOM - 1) * 100)}% over baseline. ` +
-      "Find what grew (run\n" +
-      "`ANALYZE=1 bun --filter @stll/web build` for the visualizer treemap) and\n" +
-      "trim it, or, if the growth is genuinely justified, run\n" +
-      `\`${WRITE_HINT}\` and commit ${BASELINE_REL} with a rationale in your PR.`,
+  return reportRegressions(
+    regressions,
+    process.env["GITHUB_STEP_SUMMARY"],
+    console.log,
   );
-  return 1;
+};
+
+// Growth past the headroom is reported, never blocking: an annotation per
+// group, the console detail, and a job-summary table when a path is given.
+const reportRegressions = (
+  regressions: readonly GroupDiff[],
+  summaryPath: string | undefined,
+  log: (line: string) => void,
+): number => {
+  const headroom = `${Math.round((HEADROOM - 1) * 100)}%`;
+  log(
+    `\nbundle --check: chunk group(s) grew past the ${headroom} headroom ` +
+      "(warning only):\n",
+  );
+  for (const d of regressions) {
+    const growth = `${kib(d.baseline)} -> ${kib(d.current)} (+${kib(d.current - d.baseline)}, ${pct(d.current, d.baseline)})`;
+    log(`  ${d.key}: ${growth}`);
+    log(`      ${perfMeaning(d.key)}.`);
+    log(
+      `::warning title=Bundle size: ${d.key}::${d.key} grew ${growth} over the ${headroom} headroom.`,
+    );
+  }
+  log(
+    "\nFind what grew (run `ANALYZE=1 bun --filter @stll/web build` for the\n" +
+      "visualizer treemap) and trim it, or re-measure with\n" +
+      `\`${WRITE_HINT}\` and commit ${BASELINE_REL} with a rationale.`,
+  );
+  writeSummary(regressions, headroom, summaryPath);
+  return 0;
+};
+
+// The job summary lists the grown groups so the run page shows them without
+// reading the log.
+const writeSummary = (
+  regressions: readonly GroupDiff[],
+  headroom: string,
+  summaryPath: string | undefined,
+): void => {
+  if (summaryPath === undefined || summaryPath === "") {
+    return;
+  }
+  const rows = regressions.map(
+    (d) =>
+      `| ${d.key} | ${kib(d.baseline)} | ${kib(d.current)} | +${kib(d.current - d.baseline)} | ${pct(d.current, d.baseline)} |`,
+  );
+  appendFileSync(
+    summaryPath,
+    [
+      `### Bundle groups over the ${headroom} headroom`,
+      "",
+      "| Group | Baseline | Current | Growth | Change |",
+      "| --- | ---: | ---: | ---: | ---: |",
+      ...rows,
+      "",
+      `Re-measure with \`${WRITE_HINT}\` once the growth is understood.`,
+      "",
+    ].join("\n"),
+  );
 };
 
 // --- Self-test --------------------------------------------------------------
@@ -415,7 +487,9 @@ const runSelfTest = (): number => {
   expectClass("index-D1PgnKxZ.js", "routes", "export class WasmBinding {}");
   expectClass("rolldown-runtime-CJJwijRH.js", "entry");
   expectClass("vendor-react-DTPWpeFk.js", "vendor-react");
-  expectClass("vendor-tanstack-C8imk9BY.js", "vendor-tanstack");
+  for (const group of VENDOR_GROUPS) {
+    expectClass(`${group}-C8imk9BY.js`, group);
+  }
   expectClass(
     "vendor-tanstack-server-fn-C8imk9BY.js",
     "vendor-tanstack-server-fn",
@@ -469,6 +543,32 @@ const runSelfTest = (): number => {
     );
   }
 
+  // Over-budget growth is reported without failing, and the summary names it.
+  const summaryDir = mkdtempSync(path.join(tmpdir(), "bundle-summary-"));
+  const summaryFile = path.join(summaryDir, "summary.md");
+  writeFileSync(summaryFile, "");
+  const reported: string[] = [];
+  const exitCode = reportRegressions(regressed, summaryFile, (line) => {
+    reported.push(line);
+  });
+  const summary = readFileSync(summaryFile, "utf-8");
+  rmSync(summaryDir, { recursive: true, force: true });
+  if (exitCode !== 0) {
+    failures.push(`reportRegressions exited ${exitCode}, want 0`);
+  }
+  if (
+    !reported.some((line) =>
+      line.startsWith("::warning title=Bundle size: entry::"),
+    )
+  ) {
+    failures.push("reportRegressions did not annotate the grown group");
+  }
+  if (!summary.includes("| entry |") || !summary.includes("headroom")) {
+    failures.push(
+      "reportRegressions did not write the grown group to the summary",
+    );
+  }
+
   if (failures.length > 0) {
     console.error("bundle --self-test: FAIL");
     for (const f of failures) {
@@ -480,9 +580,85 @@ const runSelfTest = (): number => {
   return 0;
 };
 
+// MCP resources are complete HTML documents, so their budgets include fonts,
+// styles, catalogues and JavaScript rather than only JavaScript chunk weight.
+const readMcpBaselineField = () => {
+  if (!existsSync(BASELINE_PATH)) {
+    return {};
+  }
+  const baseline = v.parse(
+    v.object({ mcpApps: v.optional(v.record(v.string(), v.number())) }),
+    JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
+  );
+  return baseline.mcpApps === undefined ? {} : { mcpApps: baseline.mcpApps };
+};
+
+const runMcpApps = (): number => {
+  const measured = new Map(
+    MCP_APPS.map(({ directory }) => {
+      const file = path.join(
+        REPO_ROOT,
+        "packages/mcp-apps/src",
+        directory,
+        "generated/app.html.txt",
+      );
+      if (!existsSync(file)) {
+        panic(`Build MCP app ${directory} before measuring its budget`);
+      }
+      return [directory, gzipSize(file)] as const;
+    }),
+  );
+  const field = readMcpBaselineField();
+  if (process.argv.includes("--write-baseline")) {
+    const baseline = v.parse(
+      v.record(v.string(), v.unknown()),
+      JSON.parse(readFileSync(BASELINE_PATH, "utf-8")),
+    );
+    writeFileSync(
+      BASELINE_PATH,
+      `${JSON.stringify({ ...baseline, mcpApps: Object.fromEntries(measured) }, null, 2)}\n`,
+    );
+    console.log(`Wrote ${measured.size} MCP app budgets to ${BASELINE_REL}`);
+    return 0;
+  }
+  const baseline = new Map(Object.entries(field.mcpApps ?? {}));
+  let regressions = 0;
+  for (const [directory, size] of measured) {
+    const previous = baseline.get(directory);
+    console.log(
+      `mcp-app ${directory}: ${size} bytes gzip (baseline ${previous ?? "missing"})`,
+    );
+    if (!process.argv.includes("--check")) {
+      continue;
+    }
+    if (
+      previous === undefined ||
+      compareGroup(size, previous) === "regressed"
+    ) {
+      console.error(`MCP app ${directory} exceeds or lacks its bundle budget`);
+      regressions += 1;
+    }
+    if (previous !== undefined && compareGroup(size, previous) === "dropped") {
+      console.log(
+        `MCP app ${directory} shrank; ratchet with --mcp-apps --write-baseline`,
+      );
+    }
+  }
+  for (const directory of baseline.keys()) {
+    if (!MCP_APPS.some((app) => app.directory === directory)) {
+      console.error(`MCP app budget ${directory} has no manifest entry`);
+      regressions += 1;
+    }
+  }
+  return regressions === 0 ? 0 : 1;
+};
+
 // --- Entry ------------------------------------------------------------------
 
 const main = (): number => {
+  if (process.argv.includes("--mcp-apps")) {
+    return runMcpApps();
+  }
   if (process.argv.includes("--self-test")) {
     return runSelfTest();
   }

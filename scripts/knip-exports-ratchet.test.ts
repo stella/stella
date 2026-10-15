@@ -1,8 +1,10 @@
 import { expect, test } from "bun:test";
 
 import {
+  checkRegressions,
   collectIssueSymbols,
   diffSummaries,
+  formatFileDeltas,
   increasedWorkspaces,
   summarizeKnipReport,
   type Summary,
@@ -136,4 +138,93 @@ test("a write that would raise a workspace names it", () => {
     increasedWorkspaces(CURRENT, baseline).map((d) => d.workspace),
   ).toEqual(["apps/web"]);
   expect(increasedWorkspaces(CURRENT, CURRENT)).toEqual([]);
+});
+
+test("check fails on a new unused export even when the workspace total has slack", () => {
+  // The branch's baseline predates a drop elsewhere, so the total still fits.
+  const baseline: Summary = {
+    ...CURRENT,
+    "apps/web": {
+      count: 5,
+      files: {
+        "apps/web/src/lib/dates.ts": 2,
+        "apps/web/src/lib/retired.ts": 3,
+      },
+    },
+  };
+
+  expect(statusOf(CURRENT, baseline, "apps/web")).toBe("dropped");
+  expect(checkRegressions(CURRENT, baseline)).toEqual([
+    {
+      workspace: "apps/web",
+      status: "dropped",
+      current: 3,
+      baseline: 5,
+      changedFiles: [
+        { file: "apps/web/src/lib/citations.ts", from: 0, to: 1 },
+        { file: "apps/web/src/lib/retired.ts", from: 3, to: 0 },
+      ],
+      regressedFiles: [
+        { file: "apps/web/src/lib/citations.ts", from: 0, to: 1 },
+      ],
+    },
+  ]);
+});
+
+test("a move between files fails the check but records without a flag", () => {
+  const baseline: Summary = {
+    ...CURRENT,
+    "apps/web": {
+      count: 3,
+      files: {
+        "apps/web/src/lib/dates.ts": 2,
+        "apps/web/src/lib/old-citations.ts": 1,
+      },
+    },
+  };
+
+  expect(
+    checkRegressions(CURRENT, baseline).map((diff) => diff.workspace),
+  ).toEqual(["apps/web"]);
+  expect(increasedWorkspaces(CURRENT, baseline)).toEqual([]);
+});
+
+test("check passes when no file rose", () => {
+  expect(checkRegressions(CURRENT, CURRENT)).toEqual([]);
+});
+
+test("diff diagnostics name reductions, removed files and increases in sorted order", () => {
+  const diffs = diffSummaries(
+    {
+      "apps/web": {
+        count: 4,
+        files: {
+          "apps/web/stable.ts": 1,
+          "apps/web/new.ts": 1,
+          "apps/web/changed.ts": 2,
+        },
+      },
+    },
+    {
+      "apps/web": {
+        count: 6,
+        files: {
+          "apps/web/stable.ts": 1,
+          "apps/web/removed.ts": 2,
+          "apps/web/changed.ts": 3,
+        },
+      },
+    },
+  );
+  const diff = diffs.at(0);
+  expect(diff).toBeDefined();
+  if (diff === undefined) {
+    throw new TypeError("Expected workspace diff");
+  }
+  expect(formatFileDeltas(diff.changedFiles)).toBe(
+    "      apps/web/changed.ts: 3 -> 2\n" +
+      "      apps/web/new.ts: 0 -> 1\n" +
+      "      apps/web/removed.ts: 2 -> 0",
+  );
+  expect(formatFileDeltas([])).toBe("");
 });

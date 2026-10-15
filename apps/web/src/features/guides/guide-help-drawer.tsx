@@ -5,6 +5,7 @@ import {
   ENTITIES_PER_WORKSPACE_MAX,
   PROPERTIES_PER_WORKSPACE_MAX,
 } from "@stll/api-contract";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { DiscordLogoIcon, GitHubLogoIcon } from "@stll/ui/brand-icons";
 import { Button } from "@stll/ui/button";
 import { BookTextIcon, MailIcon } from "@stll/ui/icons";
@@ -40,7 +41,6 @@ import {
   TECHNICAL_DOCS_URL,
 } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { entitySummariesCountOptions } from "@/lib/workspaces/queries/entities";
 import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";

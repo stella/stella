@@ -11,10 +11,12 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 
 const NO_OWNER_VALUE = "__none";
@@ -42,9 +44,10 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: organization } = useQuery(
-    organizationOptions(activeOrganizationId),
-  );
+  const organizationQuery = useQuery(organizationOptions(activeOrganizationId));
+  const organizationView = useQueryView(organizationQuery);
+  const organization =
+    organizationView.type === "items" ? organizationView.items : undefined;
 
   const organizationMembers = organization ? organization.members : [];
   const memberItems = organizationMembers.map((member) => ({
@@ -69,12 +72,15 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
 
   return (
     <section className="rounded-lg border p-4">
+      <QueryViewFeedback view={organizationView} />
       <h2 className="text-muted-foreground mb-3 text-sm font-medium">
         {t("contacts.attorneys.title")}
       </h2>
       <div className="space-y-3 text-sm">
         <OwnerSelect
-          disabled={updateContact.isPending}
+          disabled={
+            updateContact.isPending || organizationView.type !== "items"
+          }
           label={t("contacts.attorneys.originating")}
           members={memberItems}
           noneLabel={t("contacts.attorneys.none")}
@@ -83,7 +89,9 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
           value={contact.originatingAttorneyId ?? NO_OWNER_VALUE}
         />
         <OwnerSelect
-          disabled={updateContact.isPending}
+          disabled={
+            updateContact.isPending || organizationView.type !== "items"
+          }
           label={t("contacts.attorneys.responsible")}
           members={memberItems}
           noneLabel={t("contacts.attorneys.none")}

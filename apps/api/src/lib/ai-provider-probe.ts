@@ -1,19 +1,26 @@
+import { Result } from "better-result";
+
+import { PROVIDER_SETUP_ERROR_CODE } from "@stll/api-contract/provider-setup";
 /**
  * Lightweight provider key health-check. Calls the provider's
  * own auth/list-models endpoint (no token cost). Used pre-save
  * in BYOK flows so the user gets a green/red signal before
  * committing the config.
  */
-
-import { Result } from "better-result";
+import type { ProviderSetupErrorCode } from "@stll/api-contract/provider-setup";
 
 import { env } from "@/api/env";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   AZURE_FOUNDRY_DEFAULT_API_VERSION,
   normalizeAzureFoundryBaseURL,
 } from "@/api/lib/azure-foundry";
+import { anthropicWorkspaceHeaders } from "@/api/lib/chat/anthropic-config";
 import { PROVIDER_DATA_POLICY } from "@/api/lib/chat/provider-data-policy";
+import { identifyProviderSetupError } from "@/api/lib/errors/provider-error-catalogue";
+import { PROVIDER_ERROR_TEXT_MAX_BYTES } from "@/api/lib/errors/redacted-provider-diagnostic";
 import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
+import { sanitizeCredentialText } from "@/api/lib/observability/credential-text";
 import type {
   SafeOutboundFetchResponse,
   SafeOutboundFetchBody,
@@ -28,6 +35,7 @@ type ProbeFetch = (opts: {
   headers?: SafeOutboundHeaders;
   maxBytes: number;
   method?: string;
+  permit: ThirdPartyOutboundPermit;
   timeoutMs: number;
   url: string | URL;
 }) => ReturnType<typeof safeOutboundFetchBytes>;
@@ -47,7 +55,7 @@ export type ProviderProbeValue = (typeof PROVIDER_PROBE_VALUES)[number];
 
 export type ProviderProbeResult =
   | { valid: true }
-  | { valid: false; error: string };
+  | { valid: false; error: string; code?: ProviderSetupErrorCode };
 
 type ProbeTarget = {
   url: URL;
@@ -59,9 +67,8 @@ const PROBE_TARGETS: Record<
   (apiKey: string) => ProbeTarget
 > = {
   google: (apiKey) => ({
-    url: new URL(
-      `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}`,
-    ),
+    url: new URL("https://generativelanguage.googleapis.com/v1beta/models"),
+    headers: { "x-goog-api-key": apiKey },
   }),
   anthropic: (apiKey) => ({
     url: new URL("https://api.anthropic.com/v1/models"),
@@ -107,16 +114,15 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const parseJsonBody = (
   response: SafeOutboundFetchResponse,
 ): Record<string, unknown> | undefined => {
-  try {
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(response.body));
-    return isRecord(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
+  const result = Result.try((): unknown =>
+    JSON.parse(new TextDecoder().decode(response.body)),
+  );
+  return result.isOk() && isRecord(result.value) ? result.value : undefined;
 };
 
 const extractDetail = (
   response: SafeOutboundFetchResponse,
+  apiKey: string,
 ): string | undefined => {
   const body = parseJsonBody(response);
   if (!body) {
@@ -124,15 +130,53 @@ const extractDetail = (
   }
   const errorField = body["error"];
   if (typeof errorField === "string") {
-    return errorField;
+    return sanitizeCredentialText(errorField, [apiKey]).text;
   }
   if (isRecord(errorField) && typeof errorField["message"] === "string") {
-    return errorField["message"];
+    return sanitizeCredentialText(errorField["message"], [apiKey]).text;
   }
   if (typeof body["message"] === "string") {
-    return body["message"];
+    return sanitizeCredentialText(body["message"], [apiKey]).text;
   }
   return undefined;
+};
+
+type ProviderProbeFailureOptions = {
+  apiKey: string;
+  provider: ProviderProbeValue;
+  response: SafeOutboundFetchResponse;
+};
+
+const providerProbeFailure = ({
+  apiKey,
+  provider,
+  response,
+}: ProviderProbeFailureOptions): ProviderProbeResult => {
+  const label = PROVIDER_LABELS[provider];
+  const detail = extractDetail(response, apiKey);
+  if (
+    detail !== undefined &&
+    new TextEncoder().encode(detail).byteLength > PROVIDER_ERROR_TEXT_MAX_BYTES
+  ) {
+    return {
+      valid: false,
+      error: `${label} returned an error message exceeding the 64 KiB diagnostic limit (HTTP ${response.status}); verification could not display the full provider error`,
+    };
+  }
+
+  const parsed = parseJsonBody(response);
+  const error = isRecord(parsed?.["error"]) ? parsed["error"] : parsed;
+  const code = identifyProviderSetupError({ provider, error });
+  const rejected =
+    provider === "azure_foundry" || provider === "huggingface"
+      ? "key or endpoint"
+      : "key";
+  const summary = `${label} rejected the ${rejected} (HTTP ${response.status})`;
+  return {
+    valid: false,
+    ...(code === undefined ? {} : { code }),
+    error: detail ? `${summary}: ${detail}` : summary,
+  };
 };
 
 /**
@@ -140,6 +184,10 @@ const extractDetail = (
  * deployments it must expose, and how the probe reaches it.
  */
 export type ProbeProviderOptions = {
+  apiKey: string;
+  permit: ThirdPartyOutboundPermit;
+  provider: ProviderProbeValue;
+  anthropicWorkspaceId?: string | undefined;
   endpoint?: string;
   apiVersion?: string;
   expectedAzureDeployments?: readonly string[];
@@ -147,17 +195,25 @@ export type ProbeProviderOptions = {
   fetchBytes?: ProbeFetch;
 };
 
-export const probeProvider = async (
-  provider: ProviderProbeValue,
-  apiKey: string,
-  {
-    endpoint,
-    apiVersion,
-    expectedAzureDeployments,
-    timeoutMs = DEFAULT_VALIDATION_TIMEOUT_MS,
-    fetchBytes = safeOutboundFetchBytes,
-  }: ProbeProviderOptions = {},
-): Promise<ProviderProbeResult> => {
+export const probeProvider = async ({
+  apiKey,
+  provider,
+  permit,
+  endpoint,
+  anthropicWorkspaceId,
+  apiVersion,
+  expectedAzureDeployments,
+  timeoutMs = DEFAULT_VALIDATION_TIMEOUT_MS,
+  fetchBytes = safeOutboundFetchBytes,
+}: ProbeProviderOptions): Promise<ProviderProbeResult> => {
+  if (provider === "anthropic" && apiKey.startsWith("sk-ant-oat")) {
+    return {
+      valid: false,
+      code: PROVIDER_SETUP_ERROR_CODE.anthropicSubscriptionToken,
+      error:
+        "Anthropic: OAuth subscription tokens cannot authenticate API requests.",
+    };
+  }
   if (provider === "azure_foundry") {
     return await probeAzureFoundry({
       apiKey,
@@ -166,15 +222,29 @@ export const probeProvider = async (
       expectedDeployments: expectedAzureDeployments,
       timeoutMs,
       fetchBytes,
+      permit,
     });
   }
 
   if (provider === "huggingface") {
-    return await probeHuggingFace(apiKey, endpoint, timeoutMs, fetchBytes);
+    return await probeHuggingFace({
+      apiKey,
+      endpoint,
+      fetchBytes,
+      permit,
+      timeoutMs,
+    });
   }
 
   const target = PROBE_TARGETS[provider](apiKey);
+  if (provider === "anthropic") {
+    target.headers = {
+      ...target.headers,
+      ...anthropicWorkspaceHeaders(anthropicWorkspaceId),
+    };
+  }
   const response = await fetchBytes({
+    permit,
     url: target.url,
     ...(target.headers === undefined ? {} : { headers: target.headers }),
     maxBytes: PROBE_MAX_BYTES,
@@ -190,22 +260,22 @@ export const probeProvider = async (
     return { valid: true };
   }
 
-  const detail = extractDetail(response.value);
-  const label = PROVIDER_LABELS[provider];
-  return {
-    valid: false,
-    error: detail
-      ? `${label} rejected the key (HTTP ${response.value.status}): ${detail}`
-      : `${label} rejected the key (HTTP ${response.value.status})`,
-  };
+  return providerProbeFailure({ apiKey, provider, response: response.value });
 };
 
-const probeHuggingFace = async (
-  apiKey: string,
-  endpoint: string | undefined,
-  timeoutMs: number,
-  fetchBytes: ProbeFetch,
-): Promise<ProviderProbeResult> => {
+const probeHuggingFace = async ({
+  apiKey,
+  endpoint,
+  fetchBytes,
+  permit,
+  timeoutMs,
+}: {
+  apiKey: string;
+  endpoint: string | undefined;
+  fetchBytes: ProbeFetch;
+  permit: ThirdPartyOutboundPermit;
+  timeoutMs: number;
+}): Promise<ProviderProbeResult> => {
   const trimmed = endpoint?.trim();
   if (!trimmed) {
     return {
@@ -221,6 +291,7 @@ const probeHuggingFace = async (
   const url = new URL(`${normalized.baseURL}/models`);
 
   const response = await fetchBytes({
+    permit,
     url,
     headers: { Authorization: `Bearer ${apiKey}` },
     maxBytes: PROBE_MAX_BYTES,
@@ -236,13 +307,11 @@ const probeHuggingFace = async (
     return { valid: true };
   }
 
-  const detail = extractDetail(response.value);
-  return {
-    valid: false,
-    error: detail
-      ? `Hugging Face rejected the key or endpoint (HTTP ${response.value.status}): ${detail}`
-      : `Hugging Face rejected the key or endpoint (HTTP ${response.value.status})`,
-  };
+  return providerProbeFailure({
+    apiKey,
+    provider: "huggingface",
+    response: response.value,
+  });
 };
 
 const probeAzureFoundry = async ({
@@ -252,6 +321,7 @@ const probeAzureFoundry = async ({
   expectedDeployments,
   timeoutMs,
   fetchBytes,
+  permit,
 }: {
   apiKey: string;
   endpoint: string | undefined;
@@ -259,6 +329,7 @@ const probeAzureFoundry = async ({
   expectedDeployments: readonly string[] | undefined;
   timeoutMs: number;
   fetchBytes: ProbeFetch;
+  permit: ThirdPartyOutboundPermit;
 }): Promise<ProviderProbeResult> => {
   if (!endpoint?.trim()) {
     return {
@@ -275,6 +346,7 @@ const probeAzureFoundry = async ({
   const url = new URL(`${normalized.baseURL}/v1/models`);
   url.searchParams.set("api-version", resolveAzureApiVersion(apiVersion));
   const response = await fetchBytes({
+    permit,
     url,
     headers: { "api-key": apiKey },
     maxBytes: PROBE_MAX_BYTES,
@@ -287,13 +359,11 @@ const probeAzureFoundry = async ({
   }
 
   if (!response.value.ok) {
-    const detail = extractDetail(response.value);
-    return {
-      valid: false,
-      error: detail
-        ? `Azure Foundry rejected the key or endpoint (HTTP ${response.value.status}): ${detail}`
-        : `Azure Foundry rejected the key or endpoint (HTTP ${response.value.status})`,
-    };
+    return providerProbeFailure({
+      apiKey,
+      provider: "azure_foundry",
+      response: response.value,
+    });
   }
 
   if (!expectedDeployments || expectedDeployments.length === 0) {

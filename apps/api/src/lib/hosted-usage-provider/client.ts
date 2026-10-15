@@ -12,7 +12,7 @@ import {
   type HostedUsageProviderApiCredentials,
 } from "@/api/lib/hosted-usage-provider/config";
 
-const REQUEST_TIMEOUT_MS = 10_000;
+export const HOSTED_PROVIDER_REQUEST_TIMEOUT_MS = 10_000;
 
 export class HostedUsageProviderApiError extends TaggedError(
   "HostedUsageProviderApiError",
@@ -103,7 +103,7 @@ const postProviderJson = async (
         "Polar-Version": getHostedUsageProviderApiVersion(),
       },
       body: JSON.stringify(body),
-      timeoutMs: REQUEST_TIMEOUT_MS,
+      timeoutMs: HOSTED_PROVIDER_REQUEST_TIMEOUT_MS,
     },
   );
 
@@ -177,6 +177,9 @@ export const createPolarSetupSession = async ({
         // Seat-based products take the seat count at checkout; the
         // resulting subscription reports it back on webhook events.
         seats,
+        // Every organization buys as a business. Polar then requires the
+        // billing name and full address, and its form collects the tax id.
+        is_business_customer: true,
         metadata,
       });
       if (!response.ok) {

@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
+import { isDocumentAst, plainTextOf } from "@stll/legal-ast/document-ast";
+import { createSha256 } from "@stll/sha256/node";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -17,8 +20,6 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
-import type { DocumentAst } from "@/api/lib/case-law/document-ast";
-import { isDocumentAst, plainTextOf } from "@/api/lib/case-law/document-ast";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { sortDeep } from "@/api/lib/sort-deep";
@@ -106,7 +107,7 @@ describe("persisted citation scopes", () => {
       const previousBytes = stableStringify(persisted);
       expect(JSON.stringify(sortDeep(documentAst))).toBe(previousBytes);
       expect(citationScopeAstHash(documentAst)).toBe(
-        new Bun.CryptoHasher("sha256").update(previousBytes).digest("hex"),
+        createSha256().update(previousBytes).digest("hex"),
       );
       compared += 1;
     }

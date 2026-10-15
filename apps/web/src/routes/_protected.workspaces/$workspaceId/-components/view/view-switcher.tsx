@@ -54,6 +54,7 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { InlineEdit } from "@/components/inline-edit";
 import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getLangDir, useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
@@ -62,6 +63,8 @@ import { notifyUserError } from "@/lib/errors/user-toast";
 import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
 import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type { WorkspaceView } from "@/lib/types";
+import { useQueryView } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 import {
   useConvertView,
   useCreateView,
@@ -73,6 +76,7 @@ import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { EMPTY_AVT_LAYOUT, switcherViews } from "@/lib/workspaces/view-layout";
 import { SaveAsTemplateDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog";
 import { TemplatePickerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog";
+import { unavailableViewLayouts } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-options.logic";
 import type { ViewLayoutPreviewKind } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 import { ViewLayoutPreview } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-layout-preview";
 
@@ -170,7 +174,9 @@ export const ViewSwitcher = ({
   const canUpdateView = usePermissions({ view: ["update"] });
   const direction = useI18nStore((state) => getLangDir(state.lang));
   const avtEnabled = useCallerFeatureEnabled(CALLER_FEATURE.verification);
-  const { data: allViews = [] } = useQuery(viewsOptions(workspaceId));
+  const allViewsQuery = useQuery(viewsOptions(workspaceId));
+  const allViewsView = useQueryView(allViewsQuery);
+  const allViews = allViewsView.type === "items" ? allViewsView.items : [];
   const views = switcherViews(allViews, avtEnabled);
   const createView = useCreateView(workspaceId);
   const reorderViews = useReorderViews(workspaceId);
@@ -187,13 +193,13 @@ export const ViewSwitcher = ({
       .map((view) => view.layout.type)
       .filter((layoutType) => isSingleViewLayout(layoutType)),
   );
+  const disallowedTemplateLayouts = unavailableViewLayouts({
+    heldSingleLayouts,
+    avtEnabled,
+  });
   const createLayoutOptions = LAYOUT_OPTIONS.filter(
-    (layoutType) => !heldSingleLayouts.has(layoutType),
+    (layoutType) => !disallowedTemplateLayouts.has(layoutType),
   );
-  const disallowedTemplateLayouts = new Set<ViewLayoutType>([
-    ...heldSingleLayouts,
-    ...(avtEnabled ? [] : ["avt" as const]),
-  ]);
   // Views hidden from the switcher keep their place after the shown ones:
   // the server takes a reorder only when it names every view.
   const hiddenViewIds = allViews
@@ -232,7 +238,7 @@ export const ViewSwitcher = ({
               icon: layoutIcons[layoutType],
               label: t(LAYOUT_LABEL_KEYS[layoutType]),
               onSelect: () => {
-                const viewId = crypto.randomUUID();
+                const viewId = createUuid();
                 createView.mutate(
                   {
                     id: viewId,
@@ -274,8 +280,13 @@ export const ViewSwitcher = ({
     </Menu>
   ) : null;
 
+  if (allViewsView.type === "pending" || allViewsView.type === "error") {
+    return <QueryViewFeedback view={allViewsView} />;
+  }
+
   return (
     <>
+      <QueryViewFeedback view={allViewsView} />
       <WorkspaceViewSwitcher
         activeViewId={activeViewId}
         addControl={addControl}
@@ -469,7 +480,6 @@ const ViewRenameEditor = ({
 
   return (
     <InlineEdit
-      inputClassName="w-24"
       onCancel={() => {
         onStop();
         setRenameValue(name);
@@ -519,7 +529,7 @@ const useViewActionsMenu = ({
   const hasActions = canUpdateView || canCreateView || canDeleteView;
 
   const handleDuplicate = (view: WorkspaceView) => {
-    const newId = crypto.randomUUID();
+    const newId = createUuid();
     createView.mutate(
       {
         id: newId,
@@ -582,8 +592,11 @@ const useViewActionsMenu = ({
             <MenuSubPopup>
               <ViewLayoutMenuContent
                 options={LAYOUT_OPTIONS.flatMap((layoutType) => {
+                  // An AVT view checks documents against a list; no other
+                  // layout's records carry over into one.
                   if (
                     layoutType === layout.type ||
+                    layoutType === "avt" ||
                     isSingleViewLayout(layoutType)
                   ) {
                     return [];

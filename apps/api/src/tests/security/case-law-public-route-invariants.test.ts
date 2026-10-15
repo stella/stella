@@ -1,13 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
-import { isSafePublicHandler } from "@/api/lib/api-handlers";
+import { isPublicReadBudgetHandler } from "@/api/lib/api-handlers";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
@@ -164,6 +165,7 @@ type PublicDecisionReadEntry =
 /** The spellings of the one predicate, plus the marker reader the projection uses. */
 const PUBLIC_DECISION_PREDICATE_TOKENS = [
   "publishedCaseLawDecision",
+  "servedCaseLawDecisionFor",
   "publicCaseLawDecisionJoin",
   "partialObservationFromMetadata",
 ] as const;
@@ -192,11 +194,7 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Relation definitions.",
   },
-  [COVERAGE_ARRIVALS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITATION_GRAPH_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
-  "apps/api/src/handlers/case-law/decisions/citations.ts": {
-    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
-  },
   [READ_DECISION_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [DECISION_PROVISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.SUBJECT },
   [LATEST_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
@@ -218,9 +216,17 @@ const PUBLIC_DECISION_READ_GATES = {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
   },
   [STATUS_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
+  [COVERAGE_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   [CITING_DECISIONS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": {
     gate: PUBLIC_DECISION_READ_GATE.SUBJECT,
+  },
+  "apps/api/src/lib/case-law/decision-citations.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  "apps/api/src/lib/case-law/citation-storage-bounds.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Reads schema column widths; issues no query or decision row read.",
   },
   "apps/api/src/lib/case-law/stored-payload.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -253,6 +259,11 @@ const PUBLIC_DECISION_READ_GATES = {
   "apps/api/src/lib/case-law/sitemap-shard-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
     reason: "Sitemap shard naming fragments; no query.",
+  },
+  "apps/api/src/lib/db/aggregate-lock.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason:
+      "Locks citation stats batch rows by ID for ingestion; returns no row.",
   },
   "apps/api/src/lib/decision-date-bounds-sql.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -290,6 +301,10 @@ const PUBLIC_DECISION_READ_GATES = {
   [PG_FTS_FACETS_FILE]: { gate: PUBLIC_DECISION_READ_GATE.PREDICATE },
   "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts": {
     gate: PUBLIC_DECISION_READ_GATE.PREDICATE,
+  },
+  "apps/api/src/lib/legal-search/deferred-document-source-ownership.ts": {
+    gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
+    reason: "Source ownership lookup for document writes; not a public read.",
   },
   "apps/api/src/lib/legal-search/sk-document-backfill.ts": {
     gate: PUBLIC_DECISION_READ_GATE.NO_ROW_READ,
@@ -478,7 +493,7 @@ describe("public case-law route boundary", () => {
     expect(block).not.toContain("permissions:");
   });
 
-  test("public read handlers use the public-safe handler factory", () => {
+  test("public read handlers use the budgeted public-safe handler factory", () => {
     // Was a grep for nine `const x = createSafePublicHandler` lines, which
     // could not see a tenth route or a handler renamed around it. The factory
     // now stamps what it produces, so the census covers every mounted route
@@ -492,7 +507,7 @@ describe("public case-law route boundary", () => {
       (route) => typeof route.handler === "function",
     );
     const ungoverned = declared
-      .filter((route) => !isSafePublicHandler(route.handler))
+      .filter((route) => !isPublicReadBudgetHandler(route.handler))
       .map((route) => `${route.method} ${route.path}`);
 
     expect(ungoverned).toEqual([]);
@@ -791,7 +806,7 @@ describe("public case-law route boundary", () => {
       [...modules].map(async (modulePath) => {
         const source = await Bun.file(modulePath).text();
         if (DECISION_TABLE_MENTION.test(source)) {
-          readers.set(nodePath.relative(repoRoot, modulePath), source);
+          readers.set(repoRelativePath(repoRoot, modulePath), source);
         }
       }),
     );
@@ -848,11 +863,11 @@ describe("public case-law route boundary", () => {
     // source's whole index range on a two-connection pool.
     expect(coverageSource).not.toContain("source-totals");
     expect(coverageSource).toContain("caseLawSources.storedTotal");
-    // The one read left against the decision table is a week of one source's
-    // arrivals: bounded by the window, and gated like every other public read.
-    expect(arrivalsSource).toContain("d.created_at >=");
-    expect(arrivalsSource).toContain("publishedCaseLawDecisionSqlFor");
-    expect(arrivalsSource).not.toContain("LIMIT");
+    // The week's arrivals are counted by the scheduler and read back as one
+    // stored integer per source: the request path reads no decision row.
+    expect(arrivalsSource).not.toMatch(DECISION_TABLE_MENTION);
+    expect(arrivalsSource).toContain(".from(caseLawSourceArrivals)");
+    expect(arrivalsSource).not.toContain('source-arrivals-refresh"');
   });
 
   test("the coverage route publishes no crawl or lease state", async () => {
@@ -885,7 +900,7 @@ describe("public case-law route boundary", () => {
 
   test("the listing-only predicate has one owner", async () => {
     const [ownerSource, markerSource] = await Promise.all([
-      readSource("apps/api/src/lib/case-law/published-decisions.ts"),
+      readSource("apps/api/src/lib/case-law/published-decisions-sql.ts"),
       readSource("apps/api/src/lib/legal-search/ingestion-normalization.ts"),
     ]);
 

@@ -458,7 +458,7 @@ export const createLocalMailVerifier =
         result: spf === false ? "none" : authResult(spf.status.result),
         domain: spf === false ? null : spf.domain,
         alignment:
-          dmarc !== false && dmarc.alignment.spf.strict ? "strict" : "relaxed",
+          dmarc !== false && dmarc.alignment?.spf.strict ? "strict" : "relaxed",
       },
       dkim: dkim.results.map((signature) => ({
         result:
@@ -467,7 +467,9 @@ export const createLocalMailVerifier =
             : authResult(signature.status.result),
         domain: normalizeDomain(signature.signingDomain),
         alignment:
-          dmarc !== false && dmarc.alignment.dkim.strict ? "strict" : "relaxed",
+          dmarc !== false && dmarc.alignment?.dkim.strict
+            ? "strict"
+            : "relaxed",
       })),
       dmarc: dmarc === false ? "none" : authResult(dmarc.status.result),
     } satisfies MailAuthentication);

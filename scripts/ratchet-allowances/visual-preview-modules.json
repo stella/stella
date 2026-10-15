@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 2,
+  "reason": "visual-preview owns bounded rendering invocation and model-facing diagnostic/image parts; visual-preview-stream owns the separate wire/history projection that keeps transient image data within the current model turn. These modules form the preview tool slice and centralize their distinct boundary contracts rather than duplicating them across chat consumers."
+}

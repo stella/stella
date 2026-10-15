@@ -1,9 +1,8 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
-import { startChatExecutionAdmission } from "@/api/handlers/chat/chat-execution-admission";
 import { aiTitlingMayReplace } from "@/api/handlers/chat/thread-title";
 import {
   buildThreadTitlePrompt,
@@ -26,6 +25,8 @@ import {
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { startExecutionAdmission } from "@/api/lib/rate-limit/execution-admission";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -53,6 +54,8 @@ type GenerateThreadTitleProps = {
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  /** The organization's scope, read for the title's managed model tier. */
+  organizationStateDb: ScopedDb;
   threadId: SafeId<"chatThread">;
   threadWorkspaceId: SafeId<"workspace"> | null;
   userId: SafeId<"user">;
@@ -60,6 +63,7 @@ type GenerateThreadTitleProps = {
 
 const generateAdmittedThreadTitle = async ({
   admissionSignal,
+  modelAdmission,
   indexThread,
   initialTitle,
   messages,
@@ -73,7 +77,8 @@ const generateAdmittedThreadTitle = async ({
   threadWorkspaceId,
   userId,
 }: GenerateThreadTitleProps & {
-  admissionSignal?: AbortSignal | undefined;
+  admissionSignal: AbortSignal;
+  modelAdmission: ModelDispatchAdmission;
 }): Promise<void> => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
@@ -88,6 +93,7 @@ const generateAdmittedThreadTitle = async ({
     feature: "chat.thread_title",
     modelRole: "fast",
     orgAIConfig,
+    modelTier: modelAdmission.modelTier,
     properties: threadWorkspaceId ? { workspace_id: threadWorkspaceId } : {},
     traceId: Bun.randomUUIDv7(),
   });
@@ -109,13 +115,10 @@ const generateAdmittedThreadTitle = async ({
     try: async () =>
       await generateTanStackTextForRole({
         dataClass: "customer",
-        abortSignal:
-          admissionSignal === undefined
-            ? AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS)
-            : AbortSignal.any([
-                AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
-                admissionSignal,
-              ]),
+        abortSignal: AbortSignal.any([
+          AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
+          admissionSignal,
+        ]),
         finishPolicy: TITLE_FINISH_POLICY,
         maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
         role: "fast",
@@ -123,6 +126,7 @@ const generateAdmittedThreadTitle = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission: modelAdmission,
         analytics: aiAnalytics,
         caching: resolveCaching({
           promptCachingEnabled,
@@ -230,11 +234,12 @@ const generateAdmittedThreadTitle = async ({
 export const generateThreadTitle = async (
   props: GenerateThreadTitleProps,
 ): Promise<void> => {
-  const admitted = await startChatExecutionAdmission({
+  const admitted = await startExecutionAdmission({
     mode: "concurrency-only",
     actionKind: "chat.generate-thread-title",
     organizationId: props.organizationId,
     userId: props.userId,
+    organizationStateDb: props.organizationStateDb,
   });
   if (Result.isError(admitted)) {
     observeFailure(admitted.error, {
@@ -247,6 +252,7 @@ export const generateThreadTitle = async (
     await generateAdmittedThreadTitle({
       ...props,
       admissionSignal: admitted.value.signal,
+      modelAdmission: admitted.value.modelAdmission,
     });
   } finally {
     await admitted.value.release();

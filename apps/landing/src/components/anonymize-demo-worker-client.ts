@@ -117,7 +117,7 @@ const ensureWorker = (): Worker => {
   return created;
 };
 
-// oxlint-disable-next-line @typescript-eslint/promise-function-async -- the body is the Promise; an inner async wrapper would just add a microtask
+// oxlint-disable-next-line typescript/promise-function-async -- the body is the Promise; an inner async wrapper would just add a microtask
 export const runAnonymizeDemo = (text: string): Promise<ChatAnonResult> => {
   const w = ensureWorker();
   nextRequestId += 1;

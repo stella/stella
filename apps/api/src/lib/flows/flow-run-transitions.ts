@@ -1,7 +1,4 @@
-import {
-  FLOW_RUN_TERMINAL_STATUSES,
-  isTerminalFlowRunStatus,
-} from "@stll/api-contract";
+import { isTerminalFlowRunStatus } from "@stll/api-contract";
 
 import type {
   FlowReviewDecision,
@@ -17,9 +14,6 @@ import type {
  */
 
 export { isTerminalFlowRunStatus };
-
-/** Run statuses from which no further transition is possible. */
-export const FLOW_TERMINAL_RUN_STATUSES = FLOW_RUN_TERMINAL_STATUSES;
 
 /**
  * What to do once a non-gate step (`ai` / `create-document`) completes, or

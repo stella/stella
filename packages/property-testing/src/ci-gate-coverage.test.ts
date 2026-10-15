@@ -2,6 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, statSync } from "node:fs";
 import path from "node:path";
 
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
+
+import { flattenWorkflowSteps } from "../../../scripts/workflow-steps";
+
 // Repo root, four levels up from this file (packages/property-testing/src).
 const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
 
@@ -346,10 +350,7 @@ const collectWorkflowSteps = (workflow: Workflow): WorkflowStep[] => {
     if (!Array.isArray(steps)) {
       continue;
     }
-    for (const step of steps) {
-      if (!isRecord(step)) {
-        continue;
-      }
+    for (const step of flattenWorkflowSteps(steps)) {
       const run = step["run"];
       const workingDirectory = step["working-directory"];
       if (typeof run === "string" && typeof workingDirectory === "string") {
@@ -426,11 +427,8 @@ const runnerCovers = ({
   ) {
     return false;
   }
-  const relativeFile = path.posix.relative(
-    runner.packageRoot,
-    declaration.file,
-  );
-  if (relativeFile.startsWith("../")) {
+  const relativeFile = repoRelativePath(runner.packageRoot, declaration.file);
+  if (!isPathInside(runner.packageRoot, declaration.file)) {
     return false;
   }
   return (
@@ -462,8 +460,8 @@ const workflowSetsGate = (
     if (!Array.isArray(steps)) {
       continue;
     }
-    for (const step of steps) {
-      if (isRecord(step) && environmentSetsGate(step["env"], declaration)) {
+    for (const step of flattenWorkflowSteps(steps)) {
+      if (environmentSetsGate(step["env"], declaration)) {
         return true;
       }
     }
@@ -513,8 +511,8 @@ const grepDiscoveryCovers = (
       continue;
     }
     const searchRoot = path.posix.join(step.workingDirectory, directory);
-    const relativeFile = path.posix.relative(searchRoot, declaration.file);
-    if (relativeFile.startsWith("../") || path.posix.isAbsolute(relativeFile)) {
+    const relativeFile = repoRelativePath(searchRoot, declaration.file);
+    if (!isPathInside(searchRoot, declaration.file)) {
       continue;
     }
     // GNU grep applies --include to each basename, including nested files.
@@ -577,6 +575,49 @@ const isWired = ({
 };
 
 describe("ci-gate coverage convention", () => {
+  test("sees a gated runner nested in a parallel group and rejects a missing gate", () => {
+    const declaration = {
+      file: "apps/api/src/db/root.test.ts",
+      gate: "STELLA_RUN_POSTGRES_TESTS",
+      gateValue: "true",
+    };
+    const runner = {
+      gate: declaration.gate,
+      gateValue: declaration.gateValue,
+      packageRoot: "apps/api",
+      script: "test:postgres",
+      runner: "scripts/run-postgres-tests.ts",
+      testFileGlob: "src/**/*.test.ts",
+    };
+    const workflow = (gate: string | undefined) => ({
+      path: ".github/workflows/ci.yml",
+      text: `jobs:
+  postgres-suites:
+    runs-on: ubuntu-latest
+    steps:
+      - parallel:
+          - id: nested-runner
+            working-directory: apps/api
+            env:${gate ? `\n              ${gate}` : ""}
+            run: bun scripts/run-postgres-tests.ts`,
+    });
+
+    expect(
+      runnerCovers({
+        declaration,
+        runner,
+        workflows: [workflow('STELLA_RUN_POSTGRES_TESTS: "true"')],
+      }),
+    ).toBe(true);
+    expect(
+      runnerCovers({
+        declaration,
+        runner,
+        workflows: [workflow(undefined)],
+      }),
+    ).toBe(false);
+  });
+
   test.each([
     {
       file: "apps/api/src/new-corpus-suite.test.ts",

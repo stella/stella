@@ -43,15 +43,30 @@ import {
   describeError,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
+import {
+  registryConnectionFailure,
+  registryOperationFailure,
+} from "./registry-errors";
 import { registryFormatHtml } from "./registry-format";
 
 const SEARCH_DEBOUNCE_MS = 300;
+const CONNECTION_FAILURE_MESSAGES = {
+  lookup: "registryErrorState",
+  connect: "registryErrorConnect",
+  role: "registryErrorRole",
+  keychain: "registryErrorKeychain",
+} as const satisfies Record<
+  ReturnType<typeof registryConnectionFailure> | "connect",
+  string
+>;
 // Emitted by the native bridge once a browser handoff stored a credential;
 // the non-activating panel gets no focus event to notice it otherwise.
 const CONNECTION_CHANGED_EVENT = "desktop-account-changed";
 
 type Connection =
   | { status: "disconnected" }
+  | { status: "expired" }
+  | { status: "reconnectRequired" }
   | { status: "unavailable" }
   | ({ status: "connected"; expiresAt: string } & DesktopRegistryConfig);
 export type DesktopConnectionStatus = Connection["status"] | "loading";
@@ -118,9 +133,9 @@ export const RegistrySearch = ({
     scope: string;
     message: string;
   } | null>(null);
-  const [connectionFailure, setConnectionFailure] = useState<string | null>(
-    null,
-  );
+  const [connectionFailure, setConnectionFailure] = useState<
+    keyof typeof CONNECTION_FAILURE_MESSAGES | null
+  >(null);
   const [attempt, setAttempt] = useState(0);
   const connectionRefresh = useRef<() => void>(() => undefined);
   const [activeResultId, setActiveResultId] = useState<string | null>(null);
@@ -130,8 +145,14 @@ export const RegistrySearch = ({
   const formatRequests = useRef(new Map<string, number>());
   const defaultFormatRequests = useRef(0);
   const [savingDefaultFormat, setSavingDefaultFormat] = useState(false);
-  const connectionError = t("registryErrorState");
+  const connectionError =
+    connectionFailure === null
+      ? null
+      : t(CONNECTION_FAILURE_MESSAGES[connectionFailure]);
   const searchError = t("registryErrorSearch");
+  const roleError = t("registryErrorRole");
+  const operationError = (error: unknown, fallback: string) =>
+    registryOperationFailure(error) === "role" ? roleError : fallback;
   const connected = connection?.status === "connected";
   const formatType =
     connection?.status === "connected"
@@ -146,7 +167,7 @@ export const RegistrySearch = ({
     attempt,
   ]);
   const errorMessage =
-    failure?.scope === scope ? failure.message : connectionFailure;
+    failure?.scope === scope ? failure.message : connectionError;
   const setError = (message: string | null) =>
     setFailure(message === null ? null : { scope, message });
 
@@ -179,12 +200,12 @@ export const RegistrySearch = ({
           setAttempt((current) => current + 1);
           return;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (disposed || request !== connectionGeneration.current) {
             return;
           }
           setConnection({ status: "unavailable" });
-          setConnectionFailure(connectionError);
+          setConnectionFailure(registryConnectionFailure(error));
         });
     };
     refresh();
@@ -209,7 +230,7 @@ export const RegistrySearch = ({
       window.removeEventListener("focus", refresh);
       stopListening();
     };
-  }, [connectionError]);
+  }, []);
 
   useEffect(() => {
     if (connectionReadAttempt === 0) {
@@ -277,12 +298,18 @@ export const RegistrySearch = ({
           });
           return;
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (generation.current !== request) {
             return;
           }
           setSearchState({ status: "idle" });
-          setFailure({ scope, message: searchError });
+          setFailure({
+            scope,
+            message:
+              registryOperationFailure(error) === "role"
+                ? roleError
+                : searchError,
+          });
         });
     }, SEARCH_DEBOUNCE_MS);
     return () => {
@@ -297,6 +324,7 @@ export const RegistrySearch = ({
     composing,
     scope,
     searchError,
+    roleError,
   ]);
 
   const currentSearch =
@@ -309,9 +337,16 @@ export const RegistrySearch = ({
     setError(null);
     setConnectionFailure(null);
     onConnectionFlowChange("signIn");
-    void onConnectAccount().catch(() => {
+    const reconnect = async () => {
+      if (connection?.status === "reconnectRequired") {
+        await invoke("account_disconnect");
+        setConnection({ status: "disconnected" });
+      }
+      await onConnectAccount();
+    };
+    void reconnect().catch(() => {
       onConnectionFlowChange("idle");
-      setConnectionFailure(t("registryErrorConnect"));
+      setConnectionFailure("connect");
     });
   };
   const disconnect = () => {
@@ -397,7 +432,7 @@ export const RegistrySearch = ({
         );
         return;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (
           request !== generation.current ||
           formatRequests.current.get(card.id) !== operation
@@ -416,7 +451,7 @@ export const RegistrySearch = ({
               }
             : current,
         );
-        setError(t("registryErrorFormat"));
+        setError(operationError(error, t("registryErrorFormat")));
       });
   };
   // The reply carries the default the member now resolves to: clearing a
@@ -450,12 +485,12 @@ export const RegistrySearch = ({
         );
         return;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (defaultFormatRequests.current !== operation) {
           return;
         }
         setSavingDefaultFormat(false);
-        setError(t("registryErrorSetDefaultFormat"));
+        setError(operationError(error, t("registryErrorSetDefaultFormat")));
       });
   };
   const openCompanyFormat = (card: ResultCard) => {
@@ -512,6 +547,8 @@ export const RegistrySearch = ({
   let emptyText = t("registrySearchHint");
   if (connection === null) {
     emptyText = t("registryLoading");
+  } else if (connection.status === "expired") {
+    emptyText = settingsT("connectionExpiredDescription");
   } else if (!connected) {
     emptyText = t("registryDisconnected");
   } else if (connection.registries.length === 0) {
@@ -745,9 +782,14 @@ export const RegistrySearch = ({
           <p role="status" className="max-w-sm text-sm">
             {errorMessage ? "" : emptyText}
           </p>
-          {connection?.status === "disconnected" ? (
+          {connection !== null &&
+          !connected &&
+          connection.status !== "unavailable" ? (
             <Button className="min-h-11" onClick={connect}>
-              {t("registryConnect")}
+              {connection.status === "expired" ||
+              connection.status === "reconnectRequired"
+                ? settingsT("reconnectToStella")
+                : t("registryConnect")}
             </Button>
           ) : null}
           {connection?.status === "unavailable" ? (
@@ -780,10 +822,15 @@ export const RegistrySearch = ({
     results,
     feedback,
     connectionStatus: connection?.status ?? "loading",
-    connectionError: connectionFailure,
+    connectionError,
     connectControl: (
       <Button className="min-h-11 rounded-xl" onClick={connect} type="button">
-        {settingsT("connectToStella")}
+        {settingsT(
+          connection?.status === "expired" ||
+            connection?.status === "reconnectRequired"
+            ? "reconnectToStella"
+            : "connectToStella",
+        )}
       </Button>
     ),
     retryConnection,

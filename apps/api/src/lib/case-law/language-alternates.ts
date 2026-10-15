@@ -150,7 +150,7 @@ export const readPublicDecisionLanguageAlternatesQuery =
  * version per route-safe language; a group with a single version is not a
  * multilingual decision and offers no alternates.
  */
-export const groupPublicDecisionLanguageAlternates = (
+const groupPublicDecisionLanguageAlternates = (
   rows: readonly PublicDecisionLanguageAlternateRow[],
 ): PublicDecisionLanguageAlternatesByGroup => {
   const groups = new Map<string, PublicDecisionLanguageAlternate[]>();

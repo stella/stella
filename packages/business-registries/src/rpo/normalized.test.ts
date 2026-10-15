@@ -9,7 +9,7 @@ const readEntity = async (name: string): Promise<RpoRawEntity> => {
     new URL(`__fixtures__/${name}`, import.meta.url),
   ).json();
   // SAFETY: captured registry fixture is consumed by the defensive parser.
-  // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- committed test fixture JSON
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- committed test fixture JSON
   return value as RpoRawEntity;
 };
 

@@ -10,55 +10,17 @@ import {
 } from "@/api/lib/client-ip";
 import { isResponseValidationError } from "@/api/lib/errors/response-validation";
 import { resolveResponseStatus } from "@/api/lib/observability/response-status";
-
-type MaybePromise<T> = T | Promise<T>;
-
-export type RateLimitCounter = {
-  count: number;
-  nextReset: Date;
-  start: number;
-};
-
-export type RateLimitContextConfig = {
-  duration: number;
-};
-
-export type RateLimitContext = {
-  decrement: (key: string) => MaybePromise<void>;
-  increment: (
-    key: string,
-    duration?: number,
-    requestTime?: number,
-  ) => MaybePromise<RateLimitCounter>;
-  init: (options: RateLimitContextConfig) => void;
-  kill: () => MaybePromise<void>;
-};
-
-export type RequestIpServer = {
-  requestIP: (request: Request) => { address: string } | null;
-};
-
-export type RateLimitGenerator = (
-  request: Request,
-  server: RequestIpServer | null,
-) => MaybePromise<string>;
-
-/**
- * Body served with a 429. A string goes out as `text/plain`; an object is
- * serialized as JSON, so a route whose clients parse every response into a
- * protocol envelope (JSON-RPC) can answer in that envelope instead of prose.
- */
-export type RateLimitErrorResponse = string | object;
-
-export type RateLimitOptions = {
-  context: RateLimitContext;
-  duration: number;
-  errorResponse?: RateLimitErrorResponse;
-  generator: RateLimitGenerator;
-  max: number;
-  onLimit?: () => void;
-  skip?: (request: Request) => MaybePromise<boolean>;
-};
+import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
+import type {
+  RateLimitBudget,
+  RateLimitContext,
+  RateLimitContextConfig,
+  RateLimitErrorResponse,
+  RateLimitGenerator,
+  RateLimitOptions,
+  ReadableRateLimitContext,
+  RequestIpServer,
+} from "@/api/lib/rate-limit/contracts";
 
 type RateLimitEntry = {
   count: number;
@@ -96,7 +58,7 @@ export const scopedRateLimitKey = ({
  * to N× the configured limit. The hard global limit is
  * enforced at the network edge.
  */
-export class InMemoryRateLimitContext implements RateLimitContext {
+export class InMemoryRateLimitContext implements ReadableRateLimitContext {
   private durationMs = 60_000;
   private readonly store = new Map<string, RateLimitEntry>();
   private readonly cleanupTimer: ReturnType<typeof setInterval>;
@@ -111,6 +73,18 @@ export class InMemoryRateLimitContext implements RateLimitContext {
 
   init({ duration }: RateLimitContextConfig) {
     this.durationMs = duration;
+  }
+
+  read(key: string) {
+    const entry = this.store.get(key);
+    if (!entry || entry.expiresAt <= Temporal.Now.instant().epochMilliseconds) {
+      return null;
+    }
+    return {
+      count: entry.count,
+      nextReset: new Date(entry.expiresAt),
+      start: entry.start,
+    };
   }
 
   increment(key: string, duration?: number, requestTime?: number) {
@@ -136,10 +110,19 @@ export class InMemoryRateLimitContext implements RateLimitContext {
     };
   }
 
-  decrement(key: string) {
+  complete(_key: string): void {
+    // In-memory counters retain no refund identities.
+  }
+
+  decrement(key: string, windowStart?: number) {
     const now = Temporal.Now.instant().epochMilliseconds;
     const entry = this.store.get(key);
-    if (entry && entry.expiresAt > now && entry.count > 0) {
+    if (
+      entry &&
+      entry.expiresAt > now &&
+      entry.count > 0 &&
+      (windowStart === undefined || entry.start === windowStart)
+    ) {
       entry.count -= 1;
     }
   }
@@ -169,12 +152,39 @@ export class InMemoryRateLimitContext implements RateLimitContext {
 
 type RateLimitResponseSet = Context["set"];
 
+/** One window a request was charged in; refunds touch only that window. */
+type RateLimitCharge = { key: string; windowStart: number };
+
 type RateLimitRequestState =
-  | { type: "counted"; key: string }
-  | { type: "counted_early_failure" }
-  | { type: "limited" }
+  | { type: "counted"; charges: RateLimitCharge[] }
+  | { type: "counted_early_failure"; charges: RateLimitCharge[] }
+  | { type: "limited"; charges: RateLimitCharge[] }
   | { type: "refunded" }
   | { type: "skipped" };
+
+type CompleteRateLimitRequestOptions = {
+  context: RateLimitContext;
+  requestState: WeakMap<Request, RateLimitRequestState>;
+  request: Request;
+};
+
+const completeRateLimitRequest = async ({
+  context,
+  requestState,
+  request,
+}: CompleteRateLimitRequestOptions) => {
+  const state = requestState.get(request);
+  if (
+    state?.type === "counted" ||
+    state?.type === "counted_early_failure" ||
+    state?.type === "limited"
+  ) {
+    await Promise.all(
+      state.charges.map(async ({ key }) => await context.complete(key)),
+    );
+  }
+  requestState.delete(request);
+};
 
 type RateLimitApplicationPhase = "before_handler" | "early_failure";
 
@@ -237,11 +247,42 @@ const rateLimitErrorStatus = (error: unknown): number | undefined => {
 const isEarlyFailureStatus = (statusCode: number): boolean =>
   statusCode === 400 || statusCode === 404 || statusCode === 422;
 
+/** Charge one window, write its headers, and report whether it is exhausted. */
+const chargeWindow = async ({
+  context,
+  budget,
+  set,
+}: {
+  context: RateLimitContext;
+  budget: RateLimitBudget;
+  set: RateLimitResponseSet;
+}): Promise<{ charge: RateLimitCharge; exceeded: boolean }> => {
+  const { count, nextReset, start } = await context.increment(
+    budget.key,
+    budget.duration,
+    Temporal.Now.instant().epochMilliseconds,
+  );
+  const exceeded = count > budget.max;
+  writeRateLimitHeaders({
+    max: budget.max,
+    remaining: Math.max(budget.max - count, 0),
+    reset: Math.max(
+      0,
+      Math.ceil(
+        (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) / 1000,
+      ),
+    ),
+    retryAfter: exceeded,
+    set,
+  });
+  return { charge: { key: budget.key, windowStart: start }, exceeded };
+};
+
 /**
  * Stella's Elysia adapter for its replica-safe rate-limit contexts.
  *
- * The adapter deliberately exposes only the static fixed-window policy Stella
- * uses. Counter storage, outage behavior, and refund identity remain owned by
+ * Fixed-window policies may be bound to the authenticated client. Counter
+ * storage, outage behavior, and refund identity remain owned by
  * the supplied context rather than by framework middleware.
  */
 export const rateLimit = ({
@@ -250,7 +291,9 @@ export const rateLimit = ({
   errorResponse = DEFAULT_RATE_LIMIT_ERROR_RESPONSE,
   generator,
   max,
+  additionalBudgets,
   onLimit,
+  budget: observeBudget,
   skip = () => false,
 }: RateLimitOptions) => {
   context.init({ duration });
@@ -280,41 +323,41 @@ export const rateLimit = ({
     }
 
     const key = await generator(request, server);
-    const { count, nextReset } = await context.increment(
-      key,
-      duration,
-      Temporal.Now.instant().epochMilliseconds,
-    );
-    const remaining = Math.max(max - count, 0);
-    const reset = Math.max(
-      0,
-      Math.ceil(
-        (nextReset.getTime() - Temporal.Now.instant().epochMilliseconds) / 1000,
-      ),
-    );
-    const exceeded = count > max;
-
-    writeRateLimitHeaders({
-      max,
-      remaining,
-      reset,
-      retryAfter: exceeded,
-      set,
-    });
-
-    if (exceeded) {
-      onLimit?.();
-      requestState.set(request, { type: "limited" });
-      set.status = 429;
-      return errorResponse;
-    }
-
+    const requestMax = typeof max === "number" ? max : await max(request);
+    const budgets = [
+      { key, max: requestMax, duration },
+      ...(additionalBudgets === undefined
+        ? []
+        : await additionalBudgets(request)),
+    ];
+    const charges: RateLimitCharge[] = [];
+    // Recorded before the first increment, so a later window that throws still
+    // leaves every earlier charge to the error and completion hooks.
     requestState.set(
       request,
       phase === "before_handler"
-        ? { type: "counted", key }
-        : { type: "counted_early_failure" },
+        ? { type: "counted", charges }
+        : { type: "counted_early_failure", charges },
     );
+    // Rejected attempts consume earlier windows; later windows are untouched.
+    for (const budget of budgets) {
+      const { charge, exceeded } = await chargeWindow({ context, budget, set });
+      charges.push(charge);
+      if (exceeded) {
+        if (observeBudget !== undefined) {
+          recordBudgetRejection({
+            ...(typeof observeBudget === "function"
+              ? observeBudget(budget.key)
+              : observeBudget),
+            windowMs: budget.duration,
+          });
+        }
+        onLimit?.({ key: budget.key, duration: budget.duration });
+        requestState.set(request, { type: "limited", charges });
+        set.status = 429;
+        return errorResponse;
+      }
+    }
     return undefined;
   };
 
@@ -344,7 +387,12 @@ export const rateLimit = ({
         switch (state.type) {
           case "counted":
             requestState.set(request, { type: "refunded" });
-            await context.decrement(state.key);
+            await Promise.all(
+              state.charges.map(
+                async ({ key, windowStart }) =>
+                  await context.decrement(key, windowStart),
+              ),
+            );
             return undefined;
           case "counted_early_failure":
           case "limited":
@@ -420,7 +468,12 @@ export const rateLimit = ({
       case "counted":
         if (handledError) {
           requestState.set(request, { type: "refunded" });
-          await context.decrement(state.key);
+          await Promise.all(
+            state.charges.map(
+              async ({ key, windowStart }) =>
+                await context.decrement(key, windowStart),
+            ),
+          );
         }
         return undefined;
       case "counted_early_failure":
@@ -434,6 +487,12 @@ export const rateLimit = ({
       }
     }
   });
+
+  plugin.onAfterResponse(
+    { as: "scoped" },
+    async ({ request }) =>
+      await completeRateLimitRequest({ context, requestState, request }),
+  );
 
   plugin.onStop(async () => {
     await context.kill();

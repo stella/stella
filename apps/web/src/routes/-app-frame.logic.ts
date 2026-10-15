@@ -10,8 +10,8 @@ import { panic } from "better-result";
  * - `neutral`: the same skeleton around a page that shows the same to every
  *   visitor (a published catalogue entry), so it renders, on the server too,
  *   before the visitor is known.
- * - `none`: the route renders its own shell (sign-in, public law, …) or is
- *   still pending, so the root adds nothing.
+ * - `none`: the route renders its own shell (sign-in, public law, …), so
+ *   the root adds nothing.
  * - `unresolved`: the frame depends on who is visiting; read the session and
  *   ask again with `audience`.
  */
@@ -60,14 +60,13 @@ export const selectAppFrame = ({
   audience,
 }: SelectAppFrameInput): AppFrame => {
   const isKnowledge = routeIds.includes(KNOWLEDGE_ROUTE_ID);
-  // Routes that sign the visitor in first: the frame waits for the user their
-  // guard puts in context, and until then the route shows its own pending
-  // shell.
+  // The root owns the first-load shell while the guard resolves the user;
+  // route fallbacks remain content-only when the member frame mounts.
   if (
     routeIds.includes(PROTECTED_ROUTE_ID) ||
     (isKnowledge && !publicKnowledge)
   ) {
-    return hasRouteUser ? "member" : "none";
+    return hasRouteUser ? "member" : "checking";
   }
   if (!isKnowledge) {
     return "none";

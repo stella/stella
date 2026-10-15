@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { isActionAdmissionCode } from "@stll/api-contract/action-admission";
+
 import type { Transaction } from "@/api/db/root";
 import { entities, templates } from "@/api/db/schema";
 import type {
@@ -9,6 +11,7 @@ import type {
   TemplatePersistenceResult,
 } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
+import { resolveCaching } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   loadManagedAIResidency,
@@ -16,7 +19,7 @@ import {
 } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
+import { authorizeHandlerUsage } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -54,6 +57,12 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { projectionPayload } from "@/api/lib/projection-totality";
+import { snapshotOperationInput } from "@/api/lib/proofs/checked-transaction";
+import {
+  createModelActionAdmitter,
+  modelActionRefusal,
+  type AdmittedModelAction,
+} from "@/api/lib/rate-limit/model-action-admission";
 import {
   brandPersistedEntityId,
   brandPersistedTemplateId,
@@ -76,6 +85,7 @@ import { renameStoredTemplate } from "@/api/lib/templates/rename-template";
 import { containsNull } from "@/api/lib/templates/template-data";
 import {
   templateConditionPreviewSchema,
+  decideTemplateConditions,
   templateDecideConditionsLogic,
 } from "@/api/lib/templates/template-decide-conditions";
 import type {
@@ -92,6 +102,8 @@ import {
   templateFillCompletionModeSchema,
 } from "@/api/lib/templates/template-fill-completion";
 import type {
+  AiFillAdmission,
+  AiFillCollaborators,
   DescribeTemplateResult,
   MissingRequiredField,
 } from "@/api/lib/templates/template-fill-service";
@@ -101,12 +113,14 @@ import {
   fillStoredTemplateWithText,
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
+import { runAdmittedAiFill } from "@/api/lib/templates/template-fill-usage";
 import { writeStoredTemplate } from "@/api/lib/templates/write-template";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { projectMcpRefusal } from "@/api/mcp/error-codes";
 import { plainRecord } from "@/api/mcp/input-schemas";
 import {
   TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
@@ -621,7 +635,7 @@ export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Create template",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: false,
     readOnlyHint: false,
@@ -661,10 +675,10 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
   description:
     "Ask what current values decide without filling. Returns every AI " +
     'condition with `path`, `label`, and either `state: "decided"`, its ' +
-    "`value`, `decided_by` (`user` or `decision_model`), and `probability` " +
+    "`value`, `decided_by` (`user`, `decision_model`, or `generative_model`), and `probability` " +
     'for model answers; or `state: "undecided"` and `reason` ' +
-    "(`no_decision_model`, `below_floor`, `failed`). Only the decision " +
-    "model runs; fill may later use the generative model. A boolean in " +
+    "(`failed` or `refusal`). The decision model uses the generative model " +
+    "when it cannot settle a question. Consumes AI usage. A boolean in " +
     "`values` wins. Nothing is written.",
   inputSchema: previewTemplateConditionsArgsSchema,
   annotations: {
@@ -713,7 +727,7 @@ export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
   },
   annotations: {
     title: "Configure template fields",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: true,
     openWorldHint: false,
     readOnlyHint: false,
@@ -755,7 +769,7 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "List the document templates in this organization (NDAs, powers of " +
     "attorney, leases), or describe one template's fillable fields. Omit " +
     "template_id to list templates: each template's id, name, field count, " +
-    "tags, and usage guidance (whenToUse / whenNotToUse); prefer a template " +
+    "tags, and usage guidance (whenToUse / whenNotToUse); use a template " +
     "whose whenToUse matches the request and skip any whose whenNotToUse " +
     "applies. Pass template_id to return that template's full field " +
     "configuration, its named conditions and formula fields. The " +
@@ -895,7 +909,7 @@ const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
   inputSchema: saveFilledTemplateArgsSchema,
   annotations: {
     title: "Save filled template",
-    destructiveHint: false,
+    destructiveHint: true,
     idempotentHint: false,
     openWorldHint: true,
     readOnlyHint: false,
@@ -1292,9 +1306,10 @@ const deferOrgAIConfig = (context: McpRequestContext) => {
       organizationId: context.organizationId,
       userId: context.userId,
     };
-    pending ??=
+    pending ??= (
       context.testDependencies?.loadOrgAIConfig?.(reader) ??
-      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, reader));
+      context.scopedDb(async (tx) => await loadOrgAIConfig(tx, reader))
+    ).then((result) => result.map((config) => snapshotOperationInput(config)));
     return await pending;
   };
 };
@@ -1339,7 +1354,7 @@ const assertTemplateFillUsage = async ({
   if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return null;
   }
-  return await assertUsageAvailableForHandler({
+  const authorization = await authorizeHandlerUsage({
     metering: { actionType: "chat", modelRole: "fast" },
     organizationId: context.organizationId,
     orgAIConfig,
@@ -1347,11 +1362,58 @@ const assertTemplateFillUsage = async ({
     userId: context.userId,
     safeDb: context.safeDb,
   });
+  if (Result.isError(authorization)) {
+    return authorization.error;
+  }
+  return await authorization.value.execute(() => null);
+};
+
+/**
+ * A fill's AI admission: the usage preflight, then the fill inside one
+ * admitted action held until its last model call settles. The fill service
+ * runs it only for a manifest with AI fields. Inside the tool call's own
+ * admission it joins that action rather than drawing another.
+ */
+const admitTemplateFillAi = ({
+  context,
+  readOrgAIConfig,
+  workspaceId,
+  collaborators,
+}: {
+  context: McpRequestContext;
+  readOrgAIConfig: () => Promise<OrgAIConfigRead>;
+  workspaceId: SafeId<"workspace"> | null;
+  collaborators: (
+    admitted: AdmittedModelAction,
+  ) => Promise<AiFillCollaborators>;
+}): AiFillAdmission<
+  | NonNullable<Awaited<ReturnType<typeof assertTemplateFillUsage>>>
+  | HandlerError<403 | 429 | 503>
+> => {
+  const admitModelAction = createModelActionAdmitter({
+    organizationId: context.organizationId,
+    userId: context.userId,
+    organizationStateDb: context.scopedDb,
+    actionKind: "templates.fill",
+  });
+  return async (fill) =>
+    await runAdmittedAiFill({
+      admitModelAction,
+      preflight: async () =>
+        await assertTemplateFillUsage({
+          context,
+          readOrgAIConfig,
+          workspaceId,
+        }),
+      collaborators,
+      fill,
+    });
 };
 
 const handleFillTemplateTool: McpToolHandler<
   v.InferInput<typeof FILL_TEMPLATE_OUTPUT_SCHEMA>
-> = async ({ args, context }) => {
+> = async (options) => {
+  const { args, context } = snapshotOperationInput(options);
   const hasPermission = hasEffectiveAuthority(context, {
     template: ["use"],
   });
@@ -1372,9 +1434,14 @@ const handleFillTemplateTool: McpToolHandler<
   // Built only when the manifest declares an AI field, so a deterministic fill
   // opens no metered trace. fill_template is org-scoped (no matter binding),
   // so there is no workspace id to redact tenant ids against.
-  const aiCollaborators = async () => {
+  const aiCollaborators = async ({
+    signal,
+    admission,
+  }: AdmittedModelAction) => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
+      admission,
+      operationSignal: signal,
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(
@@ -1398,6 +1465,7 @@ const handleFillTemplateTool: McpToolHandler<
         feature: "templates.fill",
         modelRole: "fast",
         orgAIConfig,
+        modelTier: admission.modelTier,
         properties: { organization_id: context.organizationId },
         traceId: Bun.randomUUIDv7(),
       }),
@@ -1410,12 +1478,12 @@ const handleFillTemplateTool: McpToolHandler<
     };
   };
 
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({
-      context,
-      readOrgAIConfig,
-      workspaceId: null,
-    });
+  const aiFill = admitTemplateFillAi({
+    context,
+    readOrgAIConfig,
+    workspaceId: null,
+    collaborators: aiCollaborators,
+  });
 
   const fillStoredTemplate =
     parsed.output.allow_unused_values === true
@@ -1431,8 +1499,7 @@ const handleFillTemplateTool: McpToolHandler<
     thirdPartyOutboundPermit: context.thirdPartyOutboundPermit,
     requiredFields: "enforce",
     useRecording: "caller",
-    assertUsageAvailable,
-    aiCollaborators,
+    aiFill,
   });
   if ("usageRejection" in filled) {
     return errorResult(filled.usageRejection.message);
@@ -1440,7 +1507,7 @@ const handleFillTemplateTool: McpToolHandler<
   if ("error" in filled) {
     return filled.storedTemplateError === undefined
       ? errorResult(filled.error)
-      : storedTemplateFailureResult(filled.storedTemplateError);
+      : templateFailureResult(filled.storedTemplateError);
   }
   if ("requiredFieldsRejection" in filled) {
     return requiredFieldsRejectionResult(filled.requiredFieldsRejection);
@@ -1664,7 +1731,8 @@ const validateFilledTemplateDestination = async ({
 
 const handleSaveFilledTemplateTool: McpToolHandler<
   v.InferInput<typeof SAVE_FILLED_TEMPLATE_OUTPUT_SCHEMA>
-> = async ({ args, context }) => {
+> = async (options) => {
+  const { args, context } = snapshotOperationInput(options);
   const parsed = v.safeParse(saveFilledTemplateArgsSchema, args);
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
@@ -1826,8 +1894,6 @@ const handleSaveFilledTemplateTool: McpToolHandler<
   }
 
   const readOrgAIConfig = deferOrgAIConfig(context);
-  const assertUsageAvailable = async () =>
-    await assertTemplateFillUsage({ context, readOrgAIConfig, workspaceId });
 
   const renderDeadline = AbortSignal.timeout(
     SAVE_FILLED_TEMPLATE_RENDER_TIMEOUT_MS,
@@ -1838,9 +1904,13 @@ const handleSaveFilledTemplateTool: McpToolHandler<
       : AbortSignal.any([context.request.signal, renderDeadline]);
   // Built only when the manifest declares an AI field: the fill service defers
   // this, so a deterministic fill opens no metered trace.
-  const aiCollaborators = async () => {
+  const aiCollaborators = async ({
+    signal,
+    admission,
+  }: AdmittedModelAction) => {
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
+      admission,
       orgAIConfig,
       managedAIResidency:
         await (context.testDependencies?.loadManagedAIResidency?.(
@@ -1869,10 +1939,11 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         feature: "templates.fill",
         modelRole: "fast",
         orgAIConfig,
+        modelTier: admission.modelTier,
         properties: { organization_id: context.organizationId },
         traceId: Bun.randomUUIDv7(),
       }),
-      operationSignal,
+      operationSignal: AbortSignal.any([operationSignal, signal]),
       tenantWorkspaceIds: [workspaceId],
     };
     return {
@@ -1897,8 +1968,12 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             workspaceId,
             requiredFields: "enforce",
             useRecording: "caller",
-            assertUsageAvailable,
-            aiCollaborators,
+            aiFill: admitTemplateFillAi({
+              context,
+              readOrgAIConfig,
+              workspaceId,
+              collaborators: aiCollaborators,
+            }),
           }),
         {
           label: "save filled template render",
@@ -1919,7 +1994,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     await releaseClaim();
     return filled.storedTemplateError === undefined
       ? errorResult(filled.error)
-      : storedTemplateFailureResult(filled.storedTemplateError);
+      : templateFailureResult(filled.storedTemplateError);
   }
   if ("requiredFieldsRejection" in filled) {
     await releaseClaim();
@@ -2202,10 +2277,24 @@ const downloadHostFileDocx = async ({
   context: McpRequestContext;
   file: v.InferOutput<typeof OPENAI_FILE_REFERENCE_SCHEMA>;
 }): Promise<ResolvedTemplateDocx> => {
+  const permit = context.thirdPartyOutboundPermit;
+  if (permit === undefined) {
+    return {
+      status: "error",
+      result: structuredErrorResult({
+        code: "permission_denied",
+        message:
+          "This tool reaches a third-party service and runs only as a direct tool call",
+        hint: "Call the tool directly instead of from a script.",
+      }),
+    };
+  }
+
   const downloaded = await (
     context.testDependencies?.safeOutboundFetchBytes ?? safeOutboundFetchBytes
   )({
     maxBytes: FILE_SIZE_LIMIT_BYTES.document,
+    permit,
     timeoutMs: HOST_FILE_DOWNLOAD_TIMEOUT_MS,
     url: file.download_url,
   });
@@ -2544,7 +2633,7 @@ const describeTemplateForAgent = async ({
   if ("error" in described) {
     return described.storedTemplateError === undefined
       ? errorResult(described.error)
-      : storedTemplateFailureResult(described.storedTemplateError);
+      : templateFailureResult(described.storedTemplateError);
   }
   const payload = toTemplateDetailPayload(templateId, described);
   return projectionPayload(TEMPLATE_DESCRIBE_PROJECTION, payload);
@@ -2906,10 +2995,9 @@ const handleConfigureTemplateFieldsTool: TypedMcpToolHandler<
   );
 };
 
-/** A stored template that could not be read: gone, its file refused by the
- *  scan, the scanner unavailable, or the object unreadable. */
-const storedTemplateFailureResult = (
-  error: HandlerError<404 | 422 | 500 | 503>,
+/** Curated template failures and expected usage or admission refusals. */
+const templateFailureResult = (
+  error: HandlerError<402 | 403 | 404 | 422 | 429 | 500 | 503>,
 ): InternalToolErrorResult => {
   switch (error.status) {
     case 404:
@@ -2932,6 +3020,9 @@ const storedTemplateFailureResult = (
         hint: error.hint,
         retryable: true,
       });
+    case 402:
+    case 403:
+    case 429:
     case 500:
       return internalFailureResult(error);
     default:
@@ -2964,37 +3055,107 @@ const handlePreviewTemplateConditionsTool: TypedMcpToolHandler<
   const decideConditions =
     context.testDependencies?.templateDecideConditionsLogic ??
     templateDecideConditionsLogic;
-  // Preview never falls back to the instance provider (see `client` below),
-  // so an org barred from it previews on its own config, which is none.
-  const orgAIConfig = (await deferOrgAIConfig(context)()).unwrapOr(null);
   const decided = await decideConditions({
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     templateId: brandPersistedTemplateId(parsed.output.template_id),
     body: { values: parsed.output.values },
-    orgAIConfig,
-    abortSignal:
-      context.request === undefined
-        ? AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS)
-        : AbortSignal.any([
-            context.request.signal,
+    abortSignal: context.request?.signal ?? new AbortController().signal,
+    runDecisions: async ({ fields, values, abortSignal }) => {
+      const readOrgAIConfig = deferOrgAIConfig(context);
+      const config = await readOrgAIConfig();
+      if (Result.isError(config)) {
+        return Result.err(config.error);
+      }
+      const orgAIConfig = config.value;
+      const usageError = await assertTemplateFillUsage({
+        context,
+        readOrgAIConfig,
+        workspaceId: null,
+      });
+      if (usageError !== null) {
+        return Result.err(usageError);
+      }
+      const admitModelAction = createModelActionAdmitter({
+        organizationId: context.organizationId,
+        userId: context.userId,
+        organizationStateDb: context.scopedDb,
+        actionKind: "templates.fill",
+      });
+      const admitted = await admitModelAction(async ({ signal, admission }) => {
+        const usageMetering = {
+          actionType: "chat" as const,
+          organizationId: context.organizationId,
+          safeDb: context.safeDb,
+          serviceTier: "standard" as const,
+          userId: context.userId,
+          workspaceId: null,
+        };
+        return await (
+          context.testDependencies?.decideTemplateConditions ??
+          decideTemplateConditions
+        )({
+          fields,
+          values,
+          orgAIConfig,
+          skillContext: {
+            organizationId: context.organizationId,
+            userId: context.userId,
+            safeDb: context.safeDb,
+          },
+          abortSignal: AbortSignal.any([
+            signal,
+            abortSignal,
             AbortSignal.timeout(PREVIEW_TEMPLATE_CONDITIONS_TIMEOUT_MS),
           ]),
-    // Preview has no spend reservation. Match the REST route: only the org's
-    // own credential may run until the decision model has a usage preflight.
-    ...(orgAIConfig?.decision ? {} : { client: null }),
-    usageMetering: {
-      actionType: "chat",
-      organizationId: context.organizationId,
-      safeDb: context.safeDb,
-      serviceTier: "standard",
-      userId: context.userId,
-      workspaceId: null,
-      callId: Bun.randomUUIDv7(),
+          usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
+          generation: {
+            dataClass: "customer",
+            managedAIResidency:
+              await (context.testDependencies?.loadManagedAIResidency?.(
+                context.organizationId,
+              ) ??
+                context.scopedDb(
+                  async (tx) =>
+                    await loadManagedAIResidency(tx, context.organizationId),
+                )),
+            orgAIConfig,
+            organizationId: context.organizationId,
+            admission,
+            tenantWorkspaceIds: [],
+            role: "fast",
+            serviceTier: "standard",
+            caching: resolveCaching({
+              promptCachingEnabled: false,
+              role: "fast",
+              scopeKey: parsed.output.template_id,
+            }),
+            prompt: "Decide the template conditions from the supplied values.",
+            analytics: createTanStackAIAnalyticsCallbacks({
+              dataClass: "customer",
+              feature: "templates.preview-conditions",
+              modelRole: "fast",
+              orgAIConfig,
+              modelTier: admission.modelTier,
+              organizationId: context.organizationId,
+              traceId: Bun.randomUUIDv7(),
+              usageMetering,
+            }),
+          },
+        });
+      });
+      return Result.isError(admitted)
+        ? Result.err(modelActionRefusal(admitted.error))
+        : Result.ok(admitted.value);
     },
   });
   if (Result.isError(decided)) {
-    return storedTemplateFailureResult(decided.error);
+    if (isActionAdmissionCode(decided.error.code)) {
+      return structuredErrorResult(projectMcpRefusal(decided.error));
+    }
+    return decided.error.status === 404 || decided.error.status === 422
+      ? templateFailureResult(decided.error)
+      : internalFailureResult(decided.error);
   }
 
   // Each condition's label is the org-authored field label; its path,

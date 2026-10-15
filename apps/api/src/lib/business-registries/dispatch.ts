@@ -165,7 +165,7 @@ export type RegistryJurisdictionCode =
 // Normalised cross-registry shapes
 // ---------------------------------------------------------------------------
 
-export type BusinessRegistryAddress = {
+type BusinessRegistryAddress = {
   line1: string | null;
   line2: string | null;
   postalCode: string | null;
@@ -260,7 +260,7 @@ type RegistryLookupOptions = {
   detail?: BusinessRegistryLookupDetail | undefined;
 };
 
-export type RegistryJurisdictionRole =
+type RegistryJurisdictionRole =
   | { type: "primary" }
   | {
       type: "supplementary";
@@ -692,7 +692,7 @@ const mapCompaniesHouseError = (error: unknown): HandlerError | null => {
 // validates it like the rest of config.
 const COMPANIES_HOUSE_API_KEY_ENV_VAR = "COMPANIES_HOUSE_API_KEY";
 
-export const isCompaniesHouseDeployAvailable = (credential?: string): boolean =>
+const isCompaniesHouseDeployAvailable = (credential?: string): boolean =>
   Boolean(
     credential?.trim() || process.env[COMPANIES_HOUSE_API_KEY_ENV_VAR]?.trim(),
   );
@@ -829,7 +829,7 @@ const mapDenueError = (error: unknown): HandlerError | null => {
 // worker/test contexts that do not run full env validation.
 const INEGI_DENUE_API_TOKEN_ENV_VAR = "INEGI_DENUE_API_TOKEN";
 
-export const isDenueDeployAvailable = (credential?: string): boolean =>
+const isDenueDeployAvailable = (credential?: string): boolean =>
   Boolean(
     credential?.trim() || process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim(),
   );
@@ -948,7 +948,7 @@ const mapEdgarError = (error: unknown): HandlerError | null => {
 // API server boot path validates it like the rest of config.
 const EDGAR_USER_AGENT_ENV_VAR = "EDGAR_USER_AGENT";
 
-export const isEdgarDeployAvailable = (credential?: string): boolean =>
+const isEdgarDeployAvailable = (credential?: string): boolean =>
   Boolean(credential?.trim() || process.env[EDGAR_USER_AGENT_ENV_VAR]?.trim());
 
 const requireEdgarUserAgent = (credential?: string): string => {

@@ -1,5 +1,6 @@
 import { validateCnpj } from "@stll/business-registries/cnpj";
 import { validateCpf } from "@stll/business-registries/cpf";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 const CONTACT_IMPORT_RECEIPT_VERSION = 1;
 
@@ -49,6 +50,6 @@ const canonicalJson = (value: unknown): string => {
 };
 
 export const fingerprintContactImport = (rows: readonly unknown[]): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(canonicalJson({ version: CONTACT_IMPORT_RECEIPT_VERSION, rows }))
-    .digest("hex");
+  hashSha256Hex(
+    canonicalJson({ version: CONTACT_IMPORT_RECEIPT_VERSION, rows }),
+  );

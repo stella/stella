@@ -9,9 +9,8 @@
  * dependency fails the image build.
  *
  * Self-contained on purpose: no env module, no DB client. Each probe drives
- * the real loader rather than checking existence, except the worker bundles
- * (spawning them needs request-shaped input), where presence of the exact
- * files the runtime resolves is the contract.
+ * the real loader; the sanctions probe spawns the same worker path used by
+ * the compiled API and checks both cold and cached matching.
  */
 
 import { panic } from "better-result";
@@ -39,6 +38,7 @@ import {
   runtimeOcrPdfFontPath,
   runtimeWorkerDir,
 } from "@/api/lib/runtime-worker-path";
+import { checkBundledSanctionsMatcher } from "@/api/scripts/image-smoke-sanctions";
 import { checkBundledPublicTemplates } from "@/api/scripts/image-smoke-template-packs";
 
 const probe = async (label: string, run: () => Promise<void> | void) => {
@@ -92,6 +92,8 @@ await probe("runtime worker bundles", async () => {
     panic(`runtime worker dir is missing: ${missing.join(", ")}`);
   }
 });
+
+await probe("sanctions matcher worker", checkBundledSanctionsMatcher);
 
 await probe("ocr pdf font", async () => {
   const fontPath =

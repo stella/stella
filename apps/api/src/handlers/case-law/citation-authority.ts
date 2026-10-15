@@ -88,14 +88,14 @@ export const loadCitationCourtWeightEntries = async (): Promise<
 > => flattenCourtWeightEntries(await loadLocalCourtWeights());
 
 /** The SQL aliases a contribution expression may read. */
-export type CitationContributionAliases = {
+type CitationContributionAliases = {
   /** The citation row. */
   citation: string;
   /** The decision that made the citation. */
   citing: string;
 };
 
-export type CitationContributionOptions = {
+type CitationContributionOptions = {
   aliases: CitationContributionAliases;
   /** The instant the batch is evaluated at. */
   now: SQL;
@@ -167,7 +167,7 @@ export const CITATION_AUTHORITY_WRITE_TOLERANCE = 1e-3;
  * first decision and its last on identical terms, and a test can compare
  * against `citationScore` at the same instant.
  */
-export type CitationAuthorityInstant =
+type CitationAuthorityInstant =
   | { type: "database" }
   | { type: "pinned"; at: Date };
 

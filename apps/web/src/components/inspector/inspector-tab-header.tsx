@@ -6,11 +6,11 @@ import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { MatterIcon } from "@/components/matter-icon";
 
 /**
  * Shared header strip used at the top of every inspector tab —
@@ -113,8 +113,8 @@ export const InspectorTabHeader = ({
         </Button>
         {rename?.active ? (
           <InlineEdit
+            className="text-xs font-medium"
             action={rename.action}
-            inputClassName="w-40 text-xs"
             onCancel={rename.onCancel}
             onChange={rename.onChange}
             onCommit={rename.onCommit}
@@ -124,7 +124,7 @@ export const InspectorTabHeader = ({
         ) : (
           <span
             className={cn(
-              "truncate text-xs font-medium",
+              "overflow-hidden text-xs font-medium text-ellipsis whitespace-pre",
               onStartRename !== undefined && "cursor-text",
             )}
             onContextMenu={onLabelContextMenu}

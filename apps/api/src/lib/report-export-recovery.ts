@@ -29,7 +29,7 @@
  * the workflow orphan reconciler.
  */
 
-import { Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, lt } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -37,8 +37,8 @@ import { DAY_IN_MS } from "@stll/time";
 import type { rootDb } from "@/api/db/root";
 import type { ReportExportStatus } from "@/api/db/schema";
 import { reportExports } from "@/api/db/schema";
-import { captureError } from "@/api/lib/analytics/capture";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
+import { logger } from "@/api/lib/observability/logger";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /** A `running` row this old lost its worker to a hard death. */
@@ -97,6 +97,19 @@ type RecoverStuckReportExportsOptions = {
   queue: StuckExportJobQueue;
 };
 
+type RecoverStuckReportExportsResult = {
+  failed: number;
+  recovered: number;
+};
+
+export class ReportExportInspectionError extends TaggedError(
+  "ReportExportInspectionError",
+)<{
+  cause: unknown;
+  message: string;
+  summary: RecoverStuckReportExportsResult;
+}> {}
+
 /** BullMQ states a job is finished in. Anything else is work in progress. */
 const TERMINAL_JOB_STATES = new Set(["completed", "failed"]);
 
@@ -105,13 +118,14 @@ const TERMINAL_JOB_STATES = new Set(["completed", "failed"]);
  *
  * Only a job that is absent, or one the queue has already finished, proves the
  * row outlived its worker. A lookup that errors or never answers proves
- * nothing, so the row is left for the next tick: failing a healthy export and
- * emailing its requester is far worse than recovering it five minutes later.
+ * nothing, so the row is left for the next tick and the inspection failure
+ * propagates: failing a healthy export and emailing its requester is far
+ * worse than recovering it five minutes later.
  */
 const hasLostItsJob = async (
   queue: StuckExportJobQueue,
   jobId: string,
-): Promise<boolean> => {
+): Promise<Result<boolean, unknown>> => {
   const inspected = await Result.tryPromise({
     try: async () =>
       await withTimeout(
@@ -129,23 +143,26 @@ const hasLostItsJob = async (
     catch: (cause) => cause,
   });
   if (Result.isError(inspected)) {
-    captureError(inspected.error, { jobId });
-    return false;
+    return inspected;
   }
-  return inspected.value === null || TERMINAL_JOB_STATES.has(inspected.value);
+  return Result.ok(
+    inspected.value === null || TERMINAL_JOB_STATES.has(inspected.value),
+  );
 };
 
 /**
  * Janitor: mark every abandoned export failed. Runs cross-workspace on the
  * scheduler's owner connection (RLS-exempt internal infrastructure, like the
  * workflow orphan reconciler). Idempotent and safe to call repeatedly. Returns how many rows
- * it recovered.
+ * it recovered, or a typed partial failure retaining that count.
  */
 export const recoverStuckReportExports = async ({
   db,
   now = new Date(),
   queue,
-}: RecoverStuckReportExportsOptions): Promise<number> => {
+}: RecoverStuckReportExportsOptions): Promise<
+  Result<RecoverStuckReportExportsResult, ReportExportInspectionError>
+> => {
   const runningCutoff = new Date(now.getTime() - STUCK_RUNNING_MS);
   const queuedCutoff = new Date(now.getTime() - STUCK_QUEUED_MS);
 
@@ -186,25 +203,56 @@ export const recoverStuckReportExports = async ({
         await hasLostItsJob(queue, createBullMqJobId(row.workspaceId, row.id)),
     ),
   );
-  const abandoned = runningCandidates
-    .filter((_, index) => verdicts.at(index) === true)
-    .map(({ id }) => id);
-  if (abandoned.length === 0) {
-    return recoveredQueued.length;
+  const abandoned: (typeof runningCandidates)[number]["id"][] = [];
+  let failure: { cause: unknown; count: number } | undefined;
+  for (const [index, row] of runningCandidates.entries()) {
+    const verdict = verdicts.at(index) ?? panic("Missing queue inspection");
+    if (Result.isError(verdict)) {
+      failure = {
+        cause: failure === undefined ? verdict.error : failure.cause,
+        count: (failure?.count ?? 0) + 1,
+      };
+      // The scheduler runner captures the aggregate failure once per tick.
+      logger.warn("report_export.inspection_failed", {
+        exportId: row.id,
+        stage: "inspect",
+        workspaceId: row.workspaceId,
+      });
+      continue;
+    }
+    if (verdict.value) {
+      abandoned.push(row.id);
+    }
   }
 
   // Still guarded on `running`: the queue lookups above are the window in
   // which the worker can finish and write its own terminal state.
-  const recoveredRunning = await db
-    .update(reportExports)
-    .set({ status: "failed", error: STUCK_EXPORT_ERROR })
-    .where(
-      and(
-        inArray(reportExports.id, abandoned),
-        eq(reportExports.status, "running"),
-      ),
-    )
-    .returning({ id: reportExports.id });
+  const recoveredRunning =
+    abandoned.length === 0
+      ? []
+      : await db
+          .update(reportExports)
+          .set({ status: "failed", error: STUCK_EXPORT_ERROR })
+          .where(
+            and(
+              inArray(reportExports.id, abandoned),
+              eq(reportExports.status, "running"),
+            ),
+          )
+          .returning({ id: reportExports.id });
 
-  return recoveredQueued.length + recoveredRunning.length;
+  const summary = {
+    failed: failure?.count ?? 0,
+    recovered: recoveredQueued.length + recoveredRunning.length,
+  };
+  if (failure !== undefined) {
+    return Result.err(
+      new ReportExportInspectionError({
+        cause: failure.cause,
+        message: "Inspecting report export ownership did not complete",
+        summary,
+      }),
+    );
+  }
+  return Result.ok(summary);
 };

@@ -1,6 +1,7 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import {
   SCOUT_KEY,
   SIGNAL_KIND,
@@ -8,7 +9,8 @@ import {
 } from "@stll/api-contract/signals";
 
 import { member as organizationMembers } from "@/api/db/auth-schema";
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   documentProcessingRuns,
   entities,
@@ -16,26 +18,34 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { resolveCaching } from "@/api/lib/ai-config";
+import type { RlsDatabase } from "@/api/db/scoped";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
+import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { deadlineScoutDue } from "@/api/lib/scouts/document-deadline-skip";
 import {
   capText,
   DEADLINE_SYSTEM_PROMPT,
   DEADLINE_TEXT_MIN_CHARS,
   deadlineDedupeKey,
   deadlineExtractionSchema,
+  deadlineScanAdmission,
   deadlineScoutFailureStatus,
+  type DeadlineScanAdmission,
   deadlineSeverity,
   filterDeadlines,
 } from "@/api/lib/scouts/document-deadlines.logic";
 import type { NewSignal } from "@/api/lib/signals/emit";
 import { runScout } from "@/api/lib/signals/scout";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
 // Ten bounded excerpts plus reasoning share the provider's output ceiling.
@@ -60,6 +70,10 @@ type DeadlineScoutDb = Pick<typeof rootDb, "select" | "update">;
 export type RunDocumentDeadlineScoutArgs = {
   db: DeadlineScoutDb;
   sourceRunId: SafeId<"documentProcessingRun">;
+  /** The RLS database the run's member scopes open; the application's when omitted. */
+  database?: RlsDatabase<Transaction>;
+  /** The scan's action admission; `withActionAdmission` when omitted. */
+  admit?: typeof withActionAdmission;
 };
 
 type ClaimedRun = typeof documentProcessingRuns.$inferSelect;
@@ -68,20 +82,23 @@ const claimRun = async (
   db: DeadlineScoutDb,
   sourceRunId: SafeId<"documentProcessingRun">,
 ): Promise<ClaimedRun | null> => {
+  const now = new Date();
   const claimed = await db
     .update(documentProcessingRuns)
     .set({
       deadlineScoutAttemptCount: sql`${documentProcessingRuns.deadlineScoutAttemptCount} + 1`,
-      deadlineScoutClaimedAt: new Date(),
+      deadlineScoutClaimedAt: now,
       deadlineScoutErrorCode: null,
+      deadlineScoutSkippedUntil: null,
       deadlineScoutStatus: "running",
-      updatedAt: new Date(),
+      updatedAt: now,
     })
     .where(
       and(
         eq(documentProcessingRuns.id, sourceRunId),
         eq(documentProcessingRuns.status, "succeeded"),
         eq(documentProcessingRuns.deadlineScoutStatus, "pending"),
+        deadlineScoutDue(now),
       ),
     )
     .returning();
@@ -132,6 +149,77 @@ const resolveActorUserId = async (
   return actor ? brandPersistedUserId(actor.userId) : null;
 };
 
+type ExtractDeadlinesOptions = {
+  /** Built once admission has fixed the managed model tier the scan runs on. */
+  createAnalytics: (
+    modelTier: ManagedModelTier,
+  ) => ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
+  managedAIResidency: ManagedAIResidency;
+  orgAIConfig: OrgAIConfig | null;
+  prompt: string;
+  run: ClaimedRun;
+  scopedDb: ScopedDb;
+  userId: SafeId<"user">;
+  onRefused: (admission: DeadlineScanAdmission) => void;
+  admit: typeof withActionAdmission | undefined;
+};
+
+/**
+ * One scan draws one action of the member it runs as. A scan refused for an
+ * exhausted period is skipped until the period ends; any other refusal fails
+ * its observation and retries like any other failure.
+ */
+const extractDeadlines = async ({
+  createAnalytics,
+  managedAIResidency,
+  orgAIConfig,
+  prompt,
+  run,
+  scopedDb,
+  userId,
+  onRefused,
+  admit,
+}: ExtractDeadlinesOptions) => {
+  const admitted = await createModelActionAdmitter({
+    organizationId: run.organizationId,
+    userId,
+    organizationStateDb: scopedDb,
+    actionKind: "documents.scan-deadlines",
+    ...(admit === undefined ? {} : { admit }),
+  })(
+    async ({ admission }) =>
+      await generateTanStackObjectForRole({
+        dataClass: "customer",
+        role: "chat",
+        organizationId: run.organizationId,
+        admission,
+        tenantWorkspaceIds: [run.workspaceId],
+        orgAIConfig,
+        managedAIResidency,
+        analytics: createAnalytics(admission.modelTier),
+        system: DEADLINE_SYSTEM_PROMPT,
+        prompt,
+        maxOutputTokens: DEADLINE_MAX_OUTPUT_TOKENS,
+        caching: resolveCaching({
+          promptCachingEnabled: false,
+          role: "chat",
+          scopeKey: run.organizationId,
+        }),
+        serviceTier: "flex",
+        abortSignal: AbortSignal.timeout(DEADLINE_GENERATION_TIMEOUT_MS),
+        outputSchema: deadlineExtractionSchema,
+      }),
+  );
+  if (Result.isError(admitted)) {
+    const { error } = admitted;
+    onRefused(deadlineScanAdmission(error));
+    // An observation reports its failure by rejecting, as the model call
+    // itself does; a refused scan is such a failure.
+    throw error;
+  }
+  return admitted.value;
+};
+
 const currentSourceWhere = (run: ClaimedRun) =>
   and(
     eq(extractedContent.entityId, run.entityId),
@@ -175,22 +263,61 @@ const loadCurrentSource = async (db: DeadlineScoutDb, run: ClaimedRun) => {
   return rows.at(0) ?? null;
 };
 
+/**
+ * How a claimed scan settles. `skipped`: an exhausted action period refused
+ * it; it returns to `pending` until `skippedUntil`, and the refused claim
+ * does not use one of its attempts.
+ */
+type DeadlineScanSettlement =
+  | {
+      status: "pending" | "succeeded" | "failed" | "cancelled";
+      errorCode: string | null;
+    }
+  | { status: "skipped"; skippedUntil: Date };
+
+const settledColumns = (settlement: DeadlineScanSettlement) => {
+  switch (settlement.status) {
+    case "skipped":
+      return {
+        attemptRefund: 1,
+        errorCode: ACTION_ADMISSION_CODES.periodExhausted,
+        skippedUntil: settlement.skippedUntil,
+        status: "pending",
+      } as const;
+    case "pending":
+    case "succeeded":
+    case "failed":
+    case "cancelled":
+      return {
+        attemptRefund: 0,
+        errorCode: settlement.errorCode,
+        skippedUntil: null,
+        status: settlement.status,
+      };
+    default:
+      settlement satisfies never;
+      return panic("Unhandled deadline scan settlement");
+  }
+};
+
 const settleRun = async ({
   db,
-  errorCode,
   run,
-  status,
+  settlement,
 }: {
-  db: DeadlineScoutDb;
-  errorCode: string | null;
-  run: ClaimedRun;
-  status: "pending" | "succeeded" | "failed" | "cancelled";
+  db: Pick<DeadlineScoutDb, "update">;
+  run: Pick<ClaimedRun, "id">;
+  settlement: DeadlineScanSettlement;
 }): Promise<void> => {
+  const { attemptRefund, errorCode, skippedUntil, status } =
+    settledColumns(settlement);
   await db
     .update(documentProcessingRuns)
     .set({
+      deadlineScoutAttemptCount: sql`GREATEST(${documentProcessingRuns.deadlineScoutAttemptCount} - ${attemptRefund}, 0)`,
       deadlineScoutClaimedAt: null,
       deadlineScoutErrorCode: errorCode,
+      deadlineScoutSkippedUntil: skippedUntil,
       deadlineScoutStatus: status,
       updatedAt: new Date(),
     })
@@ -215,15 +342,62 @@ const rejectDeadlineObservation = async ({
 }: RejectDeadlineObservationOptions): Promise<never> => {
   await settleRun({
     db,
-    errorCode: DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED,
     run,
-    status: deadlineScoutFailureStatus(run.deadlineScoutAttemptCount, error),
+    settlement: {
+      errorCode: DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED,
+      status: deadlineScoutFailureStatus(run.deadlineScoutAttemptCount, error),
+    },
   });
   throw new DocumentDeadlineScoutError({
     code: DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED,
     message: "Document deadline observation failed",
     cause: error,
   });
+};
+
+type SkipDeadlineScanOptions = {
+  db: Pick<DeadlineScoutDb, "update">;
+  runId: ClaimedRun["id"];
+  skippedUntil: Date;
+};
+
+/** Settle a running scan that an exhausted action period refused. */
+export const skipDeadlineScan = async ({
+  db,
+  runId,
+  skippedUntil,
+}: SkipDeadlineScanOptions): Promise<void> => {
+  await settleRun({
+    db,
+    run: { id: runId },
+    settlement: { status: "skipped", skippedUntil },
+  });
+};
+
+type SettleFailedObservationOptions = RejectDeadlineObservationOptions & {
+  admission: DeadlineScanAdmission;
+};
+
+const settleFailedObservation = async ({
+  db,
+  run,
+  admission,
+  error,
+}: SettleFailedObservationOptions): Promise<void> => {
+  switch (admission.type) {
+    case "period_exhausted":
+      await skipDeadlineScan({
+        db,
+        runId: run.id,
+        skippedUntil: admission.skippedUntil,
+      });
+      return;
+    case "admitted":
+      return await rejectDeadlineObservation({ db, run, error });
+    default:
+      admission satisfies never;
+      return panic("Unhandled deadline scan admission");
+  }
 };
 
 /**
@@ -233,6 +407,8 @@ const rejectDeadlineObservation = async ({
 export const runDocumentDeadlineScout = async ({
   db,
   sourceRunId,
+  database,
+  admit,
 }: RunDocumentDeadlineScoutArgs): Promise<void> => {
   const run = await claimRun(db, sourceRunId);
   if (!run) {
@@ -243,24 +419,26 @@ export const runDocumentDeadlineScout = async ({
   if (!actorUserId) {
     await settleRun({
       db,
-      errorCode: DEADLINE_SCOUT_ERROR_CODE.NO_ACTOR,
       run,
-      status: "failed",
+      settlement: {
+        errorCode: DEADLINE_SCOUT_ERROR_CODE.NO_ACTOR,
+        status: "failed",
+      },
     });
     return;
   }
 
-  const scopedDb = createRootScopedDb({
+  const member = {
     organizationId: run.organizationId,
     userId: actorUserId,
     workspaceIds: [run.workspaceId],
-  });
-  const safeDb = createRootSafeDb({
-    organizationId: run.organizationId,
-    userId: actorUserId,
-    workspaceIds: [run.workspaceId],
-  });
+  };
+  const scopedDb = createRootScopedDb(member, database);
+  const safeDb = createRootSafeDb(member, database);
 
+  const scan: { admission: DeadlineScanAdmission } = {
+    admission: { type: "admitted" },
+  };
   // The config is read before the scout run opens: an organization barred
   // from the instance provider without a key of its own cannot observe.
   const observed = Result.flatten(
@@ -294,44 +472,38 @@ export const runDocumentDeadlineScout = async ({
               return [];
             }
 
-            const analytics = createTanStackAIAnalyticsCallbacks({
-              dataClass: "customer",
-              feature: "inbox.deadline-scout",
-              modelRole: "chat",
-              orgAIConfig,
-              properties: {
-                organization_id: run.organizationId,
-                workspace_id: run.workspaceId,
-              },
-              traceId: Bun.randomUUIDv7(),
-              usageMetering: {
-                actionType: "background",
-                organizationId: run.organizationId,
-                safeDb,
-                serviceTier: "flex",
-                userId: actorUserId,
-                workspaceId: run.workspaceId,
-              },
-            });
-            const extraction = await generateTanStackObjectForRole({
-              dataClass: "customer",
-              role: "chat",
-              organizationId: run.organizationId,
-              tenantWorkspaceIds: [run.workspaceId],
-              orgAIConfig,
+            const extraction = await extractDeadlines({
+              createAnalytics: (modelTier) =>
+                createTanStackAIAnalyticsCallbacks({
+                  dataClass: "customer",
+                  feature: "inbox.deadline-scout",
+                  modelRole: "chat",
+                  orgAIConfig,
+                  modelTier,
+                  properties: {
+                    organization_id: run.organizationId,
+                    workspace_id: run.workspaceId,
+                  },
+                  traceId: Bun.randomUUIDv7(),
+                  usageMetering: {
+                    actionType: "background",
+                    organizationId: run.organizationId,
+                    safeDb,
+                    serviceTier: "flex",
+                    userId: actorUserId,
+                    workspaceId: run.workspaceId,
+                  },
+                }),
               managedAIResidency,
-              analytics,
-              system: DEADLINE_SYSTEM_PROMPT,
+              orgAIConfig,
               prompt: `Document "${source.entityName}":\n\n${text}`,
-              maxOutputTokens: DEADLINE_MAX_OUTPUT_TOKENS,
-              caching: resolveCaching({
-                promptCachingEnabled: false,
-                role: "chat",
-                scopeKey: run.organizationId,
-              }),
-              serviceTier: "flex",
-              abortSignal: AbortSignal.timeout(DEADLINE_GENERATION_TIMEOUT_MS),
-              outputSchema: deadlineExtractionSchema,
+              run,
+              scopedDb,
+              userId: actorUserId,
+              onRefused: (admission) => {
+                scan.admission = admission;
+              },
+              admit,
             });
 
             const now = new Date();
@@ -416,15 +588,23 @@ export const runDocumentDeadlineScout = async ({
   );
 
   if (Result.isError(observed)) {
-    return await rejectDeadlineObservation({ db, run, error: observed.error });
+    await settleFailedObservation({
+      db,
+      run,
+      admission: scan.admission,
+      error: observed.error,
+    });
+    return;
   }
 
   await settleRun({
     db,
-    errorCode: observed.value.observationAccepted
-      ? null
-      : DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED,
     run,
-    status: observed.value.observationAccepted ? "succeeded" : "cancelled",
+    settlement: observed.value.observationAccepted
+      ? { errorCode: null, status: "succeeded" }
+      : {
+          errorCode: DEADLINE_SCOUT_ERROR_CODE.SOURCE_SUPERSEDED,
+          status: "cancelled",
+        },
   });
 };

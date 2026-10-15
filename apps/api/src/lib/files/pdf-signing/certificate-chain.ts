@@ -18,6 +18,7 @@ import * as asn1js from "asn1js";
 import { Result } from "better-result";
 import * as pkijs from "pkijs";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   safePkiFetch,
   withFetchBudget,
@@ -287,11 +288,20 @@ const findIssuer = async (
   return null;
 };
 
-const fetchIssuer = async (subject: pkijs.Certificate, fetcher: PkiFetcher) => {
+const fetchIssuer = async ({
+  permit,
+  subject,
+  fetcher,
+}: {
+  permit: ThirdPartyOutboundPermit;
+  subject: pkijs.Certificate;
+  fetcher: PkiFetcher;
+}) => {
   for (const url of accessLocations(subject, CA_ISSUERS_ACCESS_METHOD)) {
     const bytes = await fetcher({
       maxBytes: ISSUER_MAX_BYTES,
       method: "GET",
+      permit,
       url,
     });
     const issuer =
@@ -313,10 +323,12 @@ type CompletedCertificateChain = {
 export const completeCertificateChain = async ({
   candidates,
   certificate,
+  permit,
   fetcher = withFetchBudget(safePkiFetch, ISSUER_FETCH_BUDGET_MS),
 }: {
   candidates: readonly Uint8Array[];
   certificate: Uint8Array;
+  permit: ThirdPartyOutboundPermit;
   fetcher?: PkiFetcher;
 }): Promise<CompletedCertificateChain> => {
   const leaf = parseCertificate(certificate);
@@ -336,7 +348,7 @@ export const completeCertificateChain = async ({
     }
     const issuer =
       (await findIssuer(current, offered)) ??
-      (await fetchIssuer(current, fetcher));
+      (await fetchIssuer({ fetcher, permit, subject: current }));
     if (issuer === null) {
       break;
     }

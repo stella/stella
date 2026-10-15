@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import type { Result } from "better-result";
 
+import { provisionHeadingLine } from "@stll/decision-reader/reader-outline";
 import { compareContent } from "@stll/folio-core";
 import type {
   FolioContentComparisonError,
@@ -12,7 +13,6 @@ import { resolveDocumentHeadingAnchor } from "@stll/legal-ast/document-ast";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { provisionPreviewBlocks } from "@stll/legal-ast/provision-preview";
 
-import { provisionHeadingLine } from "@/components/legal-reader/reader-outline";
 import { STATUTE_COMPARE_SHOW } from "@/features/statutes/statute-compare-search";
 import type { StatuteCompareShow } from "@/features/statutes/statute-compare-search";
 import {

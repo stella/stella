@@ -20,14 +20,14 @@ describe("selectAppFrame", () => {
         publicKnowledge: true,
       }),
     ).toBe("member");
-    // Still loading: the route's own pending shell shows, no frame yet.
+    // Still loading: the root owns the first shell while the guard resolves.
     expect(
       selectAppFrame({
         routeIds: PROTECTED,
         hasRouteUser: false,
         publicKnowledge: true,
       }),
-    ).toBe("none");
+    ).toBe("checking");
   });
 
   test("signed-in routes ignore the session state", () => {
@@ -63,7 +63,7 @@ describe("selectAppFrame", () => {
         publicKnowledge: false,
         audience: "anonymous",
       }),
-    ).toBe("none");
+    ).toBe("checking");
   });
 
   test("Knowledge for everyone asks for the session first", () => {

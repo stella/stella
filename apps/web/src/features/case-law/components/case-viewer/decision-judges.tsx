@@ -10,7 +10,6 @@ import {
   portraitAttributions,
 } from "@/features/case-law/decision-judges";
 import type { DecisionJudge } from "@/features/case-law/decision-judges";
-import { useFormatter } from "@/i18n/formatting-context";
 import { browserApiRootUrl } from "@/lib/api-origins";
 
 /**
@@ -97,29 +96,3 @@ const JudgePortrait = ({ judge }: { judge: DecisionJudge }) => (
     name={judge.name}
   />
 );
-
-/**
- * Who the separate opinion below belongs to. Not the court's own words, so
- * it carries `data-reader-chrome` and stays out of a quotation taken from
- * the paragraph it introduces.
- */
-export const DissentByline = ({
-  judges,
-}: {
-  judges: readonly DecisionJudge[];
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-
-  return (
-    <p
-      className="reader-chrome text-muted-foreground mt-6 mb-2 text-xs"
-      data-reader-chrome=""
-    >
-      {t.rich("caseLaw.viewer.dissentByline", {
-        bdi: (chunks) => <BidiText>{chunks}</BidiText>,
-        names: format.list(judges.map((judge) => judge.name)),
-      })}
-    </p>
-  );
-};

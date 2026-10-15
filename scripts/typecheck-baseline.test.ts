@@ -1,6 +1,54 @@
 import { expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
-import { compareField, deltaDiffs, diffAll } from "./typecheck-baseline";
+import {
+  compareField,
+  deltaDiffs,
+  diffAll,
+  readBaselineAge,
+} from "./typecheck-baseline";
+
+test("baseline age is unavailable for shallow history and accurate for full history", () => {
+  const fixture = mkdtempSync(path.join(os.tmpdir(), "typecheck-age-git-"));
+  const source = path.join(fixture, "source");
+  const bare = path.join(fixture, "source.git");
+  const full = path.join(fixture, "full");
+  const shallow = path.join(fixture, "shallow");
+  const git = (cwd: string, ...args: string[]): string =>
+    execFileSync("git", args, { cwd, encoding: "utf-8" }).trim();
+
+  try {
+    mkdirSync(source);
+    git(source, "init", "--quiet");
+    git(source, "config", "user.name", "Typecheck Test");
+    git(source, "config", "user.email", "typecheck-test@example.invalid");
+    git(source, "config", "commit.gpgsign", "false");
+    mkdirSync(path.join(source, "scripts"));
+    writeFileSync(path.join(source, "scripts/typecheck-baseline.json"), "{}\n");
+    git(source, "add", "scripts/typecheck-baseline.json");
+    git(source, "commit", "--quiet", "-m", "write baseline");
+    const baselineSha = git(source, "rev-parse", "HEAD");
+    writeFileSync(path.join(source, "unrelated.txt"), "next commit\n");
+    git(source, "add", "unrelated.txt");
+    git(source, "commit", "--quiet", "-m", "advance history");
+    git(fixture, "clone", "--quiet", "--bare", source, bare);
+    git(fixture, "clone", "--quiet", `file://${bare}`, full);
+    git(fixture, "clone", "--quiet", "--depth=1", `file://${bare}`, shallow);
+
+    expect(readBaselineAge(full)).toEqual({
+      sha: baselineSha.slice(0, 10),
+      date: git(full, "show", "-s", "--format=%cs", baselineSha),
+      commits: 1,
+    });
+    expect(git(shallow, "rev-parse", "--is-shallow-repository")).toBe("true");
+    expect(readBaselineAge(shallow)).toBeNull();
+  } finally {
+    rmSync(fixture, { recursive: true, force: true });
+  }
+});
 
 test("a change is compared with its merge base even when main has used the committed budget", () => {
   const committed = {

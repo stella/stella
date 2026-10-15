@@ -2,10 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
 const WORKFLOWS_URL = new URL("../.github/workflows/", import.meta.url);
-const UPLOAD_COMMAND = "gh release upload";
+const UPLOAD_COMMAND = "release upload";
 /** Tolerates a checkout-path prefix, as in `.workflow-source/scripts/…`. */
-const WRAPPED_UPLOAD =
-  /\bbash\s+(?:[\w.\-/]+\/)?scripts\/retry\.sh\s+gh\s+release\s+upload\b/u;
+const WRAPPED_UPLOAD = /\bbash\s+"\$GH_RETRY_SCRIPT"\s+release\s+upload\b/u;
 /**
  * A transient GitHub 5xx once left a release with half its assets. Fewer sites
  * than this means the scan stopped finding them, not that they stopped existing.
@@ -43,17 +42,19 @@ const collectUploadSites = async (): Promise<UploadSite[]> => {
 };
 
 describe("release asset uploads", () => {
-  test("every gh release upload retries", async () => {
+  test("every release asset upload uses transient HTTP recovery", async () => {
     const sites = await collectUploadSites();
 
     expect(sites.length).toBeGreaterThanOrEqual(MINIMUM_UPLOAD_SITES);
 
-    const bare = sites.filter(({ text }) => !WRAPPED_UPLOAD.test(text));
+    const bare = sites.filter(
+      ({ text }) => !WRAPPED_UPLOAD.test(text) || !text.includes("--clobber"),
+    );
     const report = bare
       .map(
         ({ file, line, text }) =>
           `.github/workflows/${file}:${line}: ${text}\n` +
-          `    wrap it: bash scripts/retry.sh ${UPLOAD_COMMAND} …`,
+          `    wrap it: bash "$GH_RETRY_SCRIPT" ${UPLOAD_COMMAND} …`,
       )
       .join("\n");
 

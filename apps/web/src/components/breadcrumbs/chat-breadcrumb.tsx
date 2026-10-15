@@ -17,7 +17,7 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useQueryView } from "@/lib/use-query-view";
 
 // Thread-title crumb for chat routes. Reuses the grouped-threads list already
-// primed by the sidebar / threads sheet (a lightweight query that never
+// primed by the sidebar / chat history (a lightweight query that never
 // instantiates the chat runtime), narrowed with `select` to this thread's
 // title. When the thread is not in the loaded pages (an older thread scrolled
 // out of the window), a bounded by-id title read fills the gap instead of
@@ -113,11 +113,10 @@ export const ChatBreadcrumb = ({
       <BreadcrumbQueryContent view={groupedView} />
       {groupedThread === null && <BreadcrumbQueryContent view={threadView} />}
       {titleEnabled && <BreadcrumbQueryContent view={titleView} />}
-      <BreadcrumbItem className="min-w-0 shrink has-[input]:flex-1">
+      <BreadcrumbItem className="min-w-0 flex-1">
         <ChatTitleRename
           hasMessages={hasMessages}
           editClassName="w-full"
-          inputClassName="flex-1 text-sm"
           ownsRenameCommand
           threadRef={threadRef}
           title={currentTitle}

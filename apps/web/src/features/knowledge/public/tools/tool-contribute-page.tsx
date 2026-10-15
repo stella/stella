@@ -12,6 +12,7 @@ import {
   type CatalogueCost,
   type CatalogueSetup,
 } from "@stll/catalogue/schema";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Button } from "@stll/ui/button";
 import { XIcon } from "@stll/ui/icons";
@@ -45,7 +46,6 @@ import {
 import { useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { PRACTICE_AREA_LABEL_KEY } from "@/lib/tools-catalogue";
 
 const COMMIT_FETCH_TIMEOUT_MS = 10_000;

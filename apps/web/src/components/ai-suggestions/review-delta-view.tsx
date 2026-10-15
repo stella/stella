@@ -16,7 +16,7 @@ import { ReviewPresenceMatrix } from "@/components/ai-suggestions/review-presenc
 import { ReviewTermTable } from "@/components/ai-suggestions/review-term-row";
 import { useFormatter } from "@/i18n/formatting-context";
 
-export type ReviewDeltaSide = {
+type ReviewDeltaSide = {
   label: string;
   passages: readonly DeltaCitation[];
   /** What the side says when it quotes nothing; see `ReviewAlignedPairSide`. */

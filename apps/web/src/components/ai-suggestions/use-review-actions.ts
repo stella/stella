@@ -1,4 +1,6 @@
 import type { RefObject } from "react";
+
+import { useQueryClient } from "@tanstack/react-query";
 /**
  * useReviewActions — the single owner of accept / reject / revert /
  * batch / navigate behaviour for AI DOCX suggestions.
@@ -13,11 +15,10 @@ import type { RefObject } from "react";
  * applied, rolled back and reverted together; the store and the server keep
  * one row per member.
  */
-
-import { useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sleep } from "@stll/concurrency/sleep";
 import type { DocxEditorRef, FolioAIEditApplyMode } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -565,9 +566,7 @@ export const useReviewActions = ({
         }
         // Yield to the macrotask queue so the "applying" status can paint before
         // the synchronous editor apply.
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, 0);
-        });
+        await sleep(0);
         // Re-read the LIVE rows: the background persist can land in the unlock/paint
         // gap and `reconcileServerIds` renames rows (client ref -> server id) and
         // flips `persisted` true. Driving the outcome + the resolve off the

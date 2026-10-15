@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 
@@ -6,13 +8,18 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { organization } from "@/api/db/auth-schema";
 import {
   auditLogs,
+  entities,
   legalListClaims,
   legalListVerificationBlocks,
   legalListVerificationRuns,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
-import { readVerificationRun } from "@/api/lib/lists/verification/read-run";
+import {
+  readContestedFactIds,
+  readRunEvidenceForGrading,
+  readVerificationRun,
+} from "@/api/lib/lists/verification/read-run";
 import {
   completeVerificationRun,
   failVerificationRun,
@@ -43,11 +50,15 @@ beforeAll(async () => {
     name: "Verification persistence matter",
     reference: Bun.randomUUIDv7().slice(0, 8),
   });
+  const documentId1 = toSafeId<"entity">(Bun.randomUUIDv7());
+  await testDb
+    .insert(entities)
+    .values({ id: documentId1, workspaceId, name: "Verification document" });
   await testDb.insert(legalListVerificationRuns).values({
     id: runId,
     organizationId,
     workspaceId,
-    entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+    entityId: documentId1,
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: "a".repeat(64),
@@ -171,11 +182,15 @@ test("completion pins source text and claims once", async () => {
 
 test("completion keeps source text when no claims are found", async () => {
   const emptyRunId = createSafeId<"legalListVerificationRun">();
+  const documentId2 = toSafeId<"entity">(Bun.randomUUIDv7());
+  await testDb
+    .insert(entities)
+    .values({ id: documentId2, workspaceId, name: "Verification document" });
   await testDb.insert(legalListVerificationRuns).values({
     id: emptyRunId,
     organizationId,
     workspaceId,
-    entityId: toSafeId<"entity">(Bun.randomUUIDv7()),
+    entityId: documentId2,
     fileFieldId: toSafeId<"field">(Bun.randomUUIDv7()),
     entityVersionId: toSafeId<"entityVersion">(Bun.randomUUIDv7()),
     contentSha256: "b".repeat(64),
@@ -225,11 +240,15 @@ test("completion keeps source text when no claims are found", async () => {
 
 test("failed transitions audit only the changed row and roll back with it", async () => {
   const failedRunId = createSafeId<"legalListVerificationRun">();
+  const documentId3 = createSafeId<"entity">();
+  await testDb
+    .insert(entities)
+    .values({ id: documentId3, workspaceId, name: "Verification document" });
   await testDb.insert(legalListVerificationRuns).values({
     id: failedRunId,
     organizationId,
     workspaceId,
-    entityId: createSafeId<"entity">(),
+    entityId: documentId3,
     fileFieldId: createSafeId<"field">(),
     entityVersionId: createSafeId<"entityVersion">(),
     contentSha256: "c".repeat(64),
@@ -303,4 +322,68 @@ test("failed transitions audit only the changed row and roll back with it", asyn
       },
     },
   ]);
+});
+
+test("contested fact reader returns only identities and preserves missing runs", async () => {
+  const original = (
+    await testDb
+      .select()
+      .from(legalListVerificationRuns)
+      .where(eq(legalListVerificationRuns.id, runId))
+      .limit(1)
+  ).at(0);
+  expect(original).toBeDefined();
+  if (original === undefined) {
+    panic("Seeded verification run is missing");
+  }
+  const readerRunId = createSafeId<"legalListVerificationRun">();
+  const ordinaryFactId = createSafeId<"entity">();
+  const contestedFactId = createSafeId<"entity">();
+  const fact = (
+    factEntityId: typeof ordinaryFactId,
+    interpretationNote: string | null,
+  ) => ({
+    factEntityId,
+    text: "A stored fact",
+    occurredOn: null,
+    occurredOnPrecision: null,
+    evidenceKind: null,
+    medium: null,
+    confidence: "high" as const,
+    interpretationNote,
+    sources: [],
+  });
+  const evidence = {
+    listId: createSafeId<"legalList">(),
+    facts: [
+      fact(ordinaryFactId, null),
+      fact(contestedFactId, "Alternative meaning"),
+    ],
+  };
+  await testDb
+    .insert(legalListVerificationRuns)
+    .values({ ...original, id: readerRunId, evidence });
+  const scopedQuery = createScopedQuery(testDb);
+  await scopedQuery([workspaceId], organizationId, async (tx) => {
+    const ids = await readContestedFactIds({
+      tx,
+      workspaceId,
+      runId: readerRunId,
+    });
+    expect(ids).toEqual(new Set([contestedFactId]));
+    expect(
+      await readRunEvidenceForGrading({ tx, workspaceId, runId: readerRunId }),
+    ).toEqual(evidence);
+    const missingRunId = createSafeId<"legalListVerificationRun">();
+    expect(
+      await readContestedFactIds({ tx, workspaceId, runId: missingRunId }),
+    ).toBeNull();
+    expect(
+      await readContestedFactIds({
+        tx,
+        workspaceId: createSafeId<"workspace">(),
+        runId: readerRunId,
+      }),
+    ).toBeNull();
+  });
 });

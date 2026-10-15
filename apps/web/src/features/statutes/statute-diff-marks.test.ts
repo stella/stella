@@ -1,15 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  buildDocumentAstSearchPieces,
+  inlinesToPlainText,
+} from "@stll/decision-reader/document-ast-text";
+import type { ReaderMarkRange } from "@stll/decision-reader/reader-search";
 import type { WordDiffSegment } from "@stll/folio-core/ai-edits";
 import type { Block, Inline } from "@stll/legal-ast/document-ast";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
-import {
-  buildDocumentAstSearchPieces,
-  inlinesToPlainText,
-} from "@/components/legal-reader/document-ast-text";
-import type { ReaderMarkRange } from "@/components/legal-reader/reader-search";
 import {
   compareText,
   diffMarkRanges,

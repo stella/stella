@@ -17,21 +17,11 @@ import { resolvedRouteIdsStore } from "@/components/inspector/resolved-route-ids
 
 export type {
   ChatTab,
-  CloseTabOptions,
-  ExternalTab,
-  ExternalTabId,
-  FileFieldReplacement,
   FileTab,
   GenericTab,
   InspectorTab,
-  InspectorTabsActions,
-  InspectorTabsState,
   InspectorTabsStore,
-  MatterTab,
-  MatterTabId,
   SkillResourceTab,
-  SkillResourceTabId,
-  TaskTab,
 } from "@/components/inspector/inspector-store-types";
 export type { InspectorBroadcastScope };
 export {
@@ -41,7 +31,7 @@ export {
 };
 
 export const useInspectorTabsStore = create<InspectorTabsStore>()(
-  immer((set) => createInspectorTabsSlice(set)),
+  immer((set, get) => createInspectorTabsSlice(set, get)),
 );
 
 // A route-owned inspector tab describes its page; once the page is no

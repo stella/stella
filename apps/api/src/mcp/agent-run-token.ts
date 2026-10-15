@@ -40,6 +40,7 @@ const AGENT_RUN_SCOPE_DISPOSITION = {
   offline_access: "excluded",
   "stella:search": "default",
   "stella:read": "default",
+  "stella:law_read": "default",
   "stella:templates": "default",
   "stella:documents_write": "default",
   "stella:matters_write": "default",
@@ -76,7 +77,7 @@ export const AGENT_RUN_DEFAULT_SCOPES = MCP_OAUTH_SCOPES.filter(
 );
 
 /** Agent-run tokens are short-lived: a run should outlive its token rarely. */
-export const AGENT_RUN_TOKEN_TTL_SECONDS = 15 * 60;
+const AGENT_RUN_TOKEN_TTL_SECONDS = 15 * 60;
 export const AGENT_RUN_TOKEN_PURPOSE = "agent-run" as const;
 
 export type AgentRunTokenClaims = {

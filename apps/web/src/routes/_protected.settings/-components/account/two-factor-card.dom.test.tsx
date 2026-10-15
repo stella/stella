@@ -3,6 +3,7 @@ import type { DataTag } from "@tanstack/react-query";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
 
 import messages from "@/i18n/langs/en.json";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({
   url: "http://localhost:3000/settings/account/security",
@@ -36,7 +37,7 @@ afterEach(async () => {
 });
 afterAll(async () => {
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 type SessionData =
@@ -82,6 +83,7 @@ const mount = (emailAvailable: boolean) => {
   client.setQueryData(authCapabilitiesOptions.queryKey, {
     emailOtp: emailAvailable,
     localPassword: false,
+    reviewPasswordSignIn: false,
     bootstrap: false,
     social: { google: false, microsoft: false },
     transactionalEmail: emailAvailable,

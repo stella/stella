@@ -1,6 +1,11 @@
+import { QueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { installUserScopedStorage } from "@/lib/account/install-user-scoped-storage";
+import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
 import { toSafeId } from "@/lib/safe-id";
 import {
   clearContactImportRequest,
@@ -21,6 +26,20 @@ const EDITED_PAYLOAD = {
 } as const satisfies ImportCommitPayload;
 
 const SCOPE = { organizationId: "org-a", userId: "user-a" };
+
+let fixtureClient: QueryClient;
+let disconnectOwner: () => void;
+const fixtureAreas = () => ({ local: null, session: null });
+beforeEach(() => {
+  fixtureClient = new QueryClient();
+  disconnectOwner = installUserScopedStorage(fixtureClient, fixtureAreas);
+  fixtureClient.setQueryData(["session"], { user: { id: SCOPE.userId } });
+});
+afterEach(() => {
+  disconnectOwner();
+  releaseUserStorage(fixtureAreas());
+  fixtureClient.clear();
+});
 
 const createStorage = () => {
   const values = new Map<string, string>();
@@ -99,11 +118,13 @@ describe("contact import request identity", () => {
       scope: SCOPE,
       storage,
     });
+    fixtureClient.setQueryData(["session"], { user: { id: "user-b" } });
     const otherUser = await resolveContactImportRequest({
       payload: PAYLOAD,
       scope: { organizationId: SCOPE.organizationId, userId: "user-b" },
       storage,
     });
+    fixtureClient.setQueryData(["session"], { user: { id: SCOPE.userId } });
     const otherOrganization = await resolveContactImportRequest({
       payload: PAYLOAD,
       scope: { organizationId: "org-b", userId: SCOPE.userId },
@@ -151,4 +172,51 @@ describe("contact import request identity", () => {
       });
     }
   });
+});
+
+test.each(["user-b", "user-a"])(
+  "pending contact retry identities stop across an owner transition ending at %s",
+  async (nextUser) => {
+    const queryClient = new QueryClient();
+    const areas = () => ({ local: null, session: null });
+    const unsubscribe = installUserScopedStorage(queryClient, areas);
+    const storage = createStorage();
+    const write = spyOn(storage, "setItem");
+    try {
+      queryClient.setQueryData(["session"], { user: { id: "user-a" } });
+      const pending = resolveContactImportRequest({
+        payload: PAYLOAD,
+        scope: SCOPE,
+        storage,
+      });
+      queryClient.setQueryData(["session"], { user: { id: "user-b" } });
+      if (nextUser === "user-a") {
+        queryClient.setQueryData(["session"], { user: { id: nextUser } });
+      }
+      expect(await rejectionOf(pending)).toMatchObject({
+        _tag: "ContactImportRequestPersistenceError",
+        message: "Contact import retry identity account changed",
+      });
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      write.mockRestore();
+      unsubscribe();
+      releaseUserStorage(areas());
+      queryClient.clear();
+    }
+  },
+);
+
+test("contact retry identities require the active account scope", async () => {
+  fixtureClient.setQueryData(["session"], { user: { id: "user-b" } });
+  const storage = createStorage();
+  const write = spyOn(storage, "setItem");
+  const error = await rejectionOf(
+    resolveContactImportRequest({ payload: PAYLOAD, scope: SCOPE, storage }),
+  );
+  expect(error).toMatchObject({
+    _tag: "ContactImportRequestPersistenceError",
+    message: "Contact import retry identity account changed",
+  });
+  expect(write).not.toHaveBeenCalled();
 });

@@ -1,6 +1,7 @@
 import { isDeepStrictEqual } from "node:util";
 
 export const CANCEL_FAILURE_SCRIPT = `let diagnostic;
+let failureSummary = "failed-step lookup unavailable";
 let evidenceTimer;
 try {
   const jobs = await Promise.race([
@@ -21,6 +22,7 @@ try {
   const failures = jobs.flatMap((job) => (job.steps || [])
     .filter((step) => step.conclusion === "failure")
     .map((step) => \`\${job.name} / \${step.number}: \${step.name} (\${job.html_url})\`));
+  failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
   diagnostic = \`\${context.job}: cancelling failed merge group; failed steps: \${failures.length ? failures.join("; ") : "not yet available from the jobs API"}\`;
 } catch {
   diagnostic = \`\${context.job}: cancelling failed merge group; failed-step lookup unavailable\`;
@@ -29,7 +31,7 @@ try {
 }
 core.error(diagnostic);
 try {
-  core.summary.addRaw(\`\${diagnostic}\\n\`);
+  core.summary.addRaw(\`Merge group failed: \${failureSummary}. Other jobs were cancelled to free runners.\\n\${diagnostic}\\n\`);
   await core.summary.write();
 } catch {
   core.error(\`\${context.job}: cancellation step summary could not be written\`);
@@ -41,7 +43,7 @@ await github.rest.actions.cancelWorkflowRun({
 `;
 
 export const CANONICAL_CANCEL_STEP = {
-  name: "Cancel failed merge-group run",
+  name: "Cancel merge group after failure in this job",
   uses: "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
   with: {
     retries: 0,
@@ -54,3 +56,27 @@ export const isCanonicalFailureCancellation = (step: unknown) =>
     ...CANONICAL_CANCEL_STEP,
     if: "failure() && github.event_name == 'merge_group'",
   });
+
+// Lint and typecheck failures are the commonest reason a pull request run
+// fails, and every other job's result is moot once one is found. The code
+// quality jobs therefore stop the rest of a failed pull request run too,
+// freeing its runners, with the same failed-step evidence. Fork pull
+// requests get a read-only token that cannot cancel the run, so they skip it.
+export const PR_CODE_QUALITY_CANCEL_STEP = {
+  name: "Cancel pull request run after code quality failure",
+  if: "failure() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository",
+  uses: CANONICAL_CANCEL_STEP.uses,
+  with: {
+    retries: 0,
+    script: CANCEL_FAILURE_SCRIPT.replaceAll(
+      "cancelling failed merge group",
+      "cancelling the pull request run after a code quality failure",
+    ).replace("Merge group failed:", "Code quality failed:"),
+  },
+} as const;
+
+/** Jobs whose failure ends the rest of a pull request run. */
+export const PR_CODE_QUALITY_JOBS = [
+  "code-quality-api",
+  "code-quality-web-rest",
+] as const;

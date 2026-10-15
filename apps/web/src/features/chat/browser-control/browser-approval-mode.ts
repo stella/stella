@@ -8,6 +8,11 @@ import {
   isReadOnlyBrowserCommand,
 } from "@stll/api-contract/browser-control";
 
+import { browserStateStorage } from "@/lib/account/browser-storage";
+import {
+  onStorageOwnerChange,
+  userStorageKey,
+} from "@/lib/account/user-scoped-storage";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 /**
@@ -53,12 +58,16 @@ export const isBrowserCommandAutoApproved = ({
 export const createBrowserApprovalStore = (getStorage: () => Storage) => {
   const listeners = new Set<() => void>();
   // A throwing storage (blocked site data, sandboxed frame) reads as unset.
-  let mode: BrowserApprovalMode =
+  const readMode = (): BrowserApprovalMode =>
     readStoredJson(
-      Result.try(() => getStorage().getItem(STORAGE_KEY)).unwrapOr(null),
+      Result.try(() =>
+        getStorage().getItem(userStorageKey(STORAGE_KEY)),
+      ).unwrapOr(null),
       modeSchema,
     ) ?? BROWSER_APPROVAL_MODE.askEveryTime;
+  let mode = readMode();
   let commandsInFlight = 0;
+  let ownerEpoch = 0;
   // Bumped by every failed command; a success only counts when its command
   // started after the latest failure, so an older command finishing late
   // cannot vouch for the page a newer failure left behind.
@@ -77,7 +86,7 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
     // then lasts until reload.
     const storage = Result.try(() => getStorage()).unwrapOr(null);
     if (storage !== null) {
-      writeStoredJson(storage, STORAGE_KEY, next);
+      writeStoredJson(storage, userStorageKey(STORAGE_KEY), next);
     }
     notify();
   };
@@ -89,6 +98,7 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
      */
     beginCommand(): (succeeded: boolean) => void {
       const startEpoch = failureEpoch;
+      const startOwnerEpoch = ownerEpoch;
       commandsInFlight += 1;
       notify();
       let finished = false;
@@ -97,6 +107,9 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
           return;
         }
         finished = true;
+        if (startOwnerEpoch !== ownerEpoch) {
+          return;
+        }
         commandsInFlight -= 1;
         if (!succeeded) {
           failureEpoch += 1;
@@ -105,6 +118,15 @@ export const createBrowserApprovalStore = (getStorage: () => Storage) => {
         }
         notify();
       };
+    },
+    /** The observable store keeps its subscribers as each account is read. */
+    restoreOwner(): void {
+      ownerEpoch += 1;
+      commandsInFlight = 0;
+      failureEpoch = 0;
+      lastSuccessEpoch = null;
+      mode = readMode();
+      notify();
     },
     getMode: (): BrowserApprovalMode => mode,
     lastCommandSucceeded: (): boolean =>
@@ -133,11 +155,19 @@ type BrowserApprovalStore = ReturnType<typeof createBrowserApprovalStore>;
 let store: BrowserApprovalStore | null = null;
 
 const getStore = (): BrowserApprovalStore => {
-  store ??= createBrowserApprovalStore(() => window.sessionStorage);
+  store ??= createBrowserApprovalStore(() => browserStateStorage("session"));
   return store;
 };
 
-const subscribe = (listener: () => void) => getStore().subscribe(listener);
+onStorageOwnerChange(() => {
+  store?.restoreOwner();
+});
+
+export const subscribeBrowserApproval = (listener: () => void) =>
+  getStore().subscribe(listener);
+
+export const getBrowserApprovalMode = (): BrowserApprovalMode =>
+  getStore().getMode();
 
 export const setBrowserApprovalMode = (mode: BrowserApprovalMode): void => {
   getStore().setMode(mode);
@@ -152,8 +182,8 @@ export const resetBrowserApproval = (): void => {
 
 export const useBrowserApprovalMode = (): BrowserApprovalMode =>
   useSyncExternalStore(
-    subscribe,
-    () => getStore().getMode(),
+    subscribeBrowserApproval,
+    getBrowserApprovalMode,
     () => BROWSER_APPROVAL_MODE.askEveryTime,
   );
 
@@ -161,7 +191,7 @@ export const useBrowserCommandAutoApproved = (
   command: BrowserControlCommand | null,
 ): boolean =>
   useSyncExternalStore(
-    subscribe,
+    subscribeBrowserApproval,
     () =>
       command !== null &&
       isBrowserCommandAutoApproved({

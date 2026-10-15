@@ -1,7 +1,4 @@
 import {
-  FLOW_RUN_STATUSES,
-  FLOW_RUN_STEP_STATUSES,
-  FLOW_RUN_TERMINAL_STATUSES,
   FLOW_SCHEDULE_FREQUENCIES,
   FLOW_STEP_KINDS,
   FLOW_TRIGGER_TYPES,
@@ -25,8 +22,6 @@ import {
 import type { TranslationKey } from "@/i18n/types";
 
 export {
-  FLOW_RUN_STATUSES,
-  FLOW_RUN_TERMINAL_STATUSES,
   FLOW_SCHEDULE_FREQUENCIES,
   FLOW_STEP_KINDS,
   FLOW_TRIGGER_TYPES,
@@ -38,8 +33,6 @@ export type {
   FlowStepKind,
   FlowTriggerType,
 };
-
-export const FLOW_STEP_STATUSES = FLOW_RUN_STEP_STATUSES;
 export type FlowStepStatus = FlowRunStepStatus;
 
 // -- Label + icon maps (typed against TranslationKey so a stale key fails

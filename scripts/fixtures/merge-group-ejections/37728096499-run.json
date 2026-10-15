@@ -1,0 +1,11 @@
+{
+  "id": 37728096499,
+  "name": "CI Checks",
+  "head_branch": "gh-readonly-queue/main/pr-5305-4e7a8e8b26a32e0e332fa19615901986740781e6",
+  "event": "merge_group",
+  "status": "completed",
+  "conclusion": "cancelled",
+  "html_url": "https://example.invalid/stella/stella/actions/runs/37728096499",
+  "created_at": "2000-01-01T00:03:25Z",
+  "updated_at": "2000-01-01T00:09:26Z"
+}

@@ -3,23 +3,20 @@ import { useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { ChevronDownIcon, DownloadIcon, FileOutputIcon } from "@stll/ui/icons";
+import { DownloadIcon, FileOutputIcon } from "@stll/ui/icons";
 import {
-  Menu,
   MenuCheckboxItem,
   MenuItem,
   MenuPopup,
   MenuSeparator,
-  MenuTrigger,
 } from "@stll/ui/menu";
-import { cn } from "@stll/ui/utils";
+import { SplitButton } from "@stll/ui/split-button";
 
 import {
   type DownloadRendition,
   type DownloadVariant,
   getDownloadVariant,
 } from "@/components/inspector/file-download-service.logic";
-import Tooltip from "@/components/tooltip";
 
 type DownloadRenditionMenuItemsProps = {
   onSelect: (variant: DownloadVariant) => void;
@@ -107,46 +104,34 @@ export const DownloadSplitButton = ({
   const downloadLabel = t("common.download");
   const downloadAsLabel = t("workspaces.files.downloadAs");
   const hasRenditions = renditions.length > 0;
+  if (!hasRenditions) {
+    return (
+      <Button
+        aria-label={downloadLabel}
+        onClick={() => onDownload("original")}
+        size="xs"
+        variant="ghost"
+      >
+        <DownloadIcon className="size-3.5" />
+      </Button>
+    );
+  }
   return (
-    <div className="inline-flex shrink-0 items-center">
-      <Tooltip
-        content={downloadLabel}
-        render={
-          <Button
-            aria-label={downloadLabel}
-            className={cn(hasRenditions && "rounded-e-none pe-1")}
-            onClick={() => onDownload("original")}
-            size="xs"
-            variant="ghost"
-          >
-            <DownloadIcon className="size-3.5" />
-          </Button>
-        }
-        side="bottom"
-      />
-      {hasRenditions && (
-        <Menu>
-          <MenuTrigger
-            aria-label={downloadAsLabel}
-            render={
-              <Button
-                className="rounded-s-none border-s ps-0.5 pe-1"
-                size="xs"
-                variant="ghost"
-              />
-            }
-            tooltip=""
-          >
-            <ChevronDownIcon className="size-3" />
-          </MenuTrigger>
-          <MenuPopup align="end" className="min-w-72">
-            <DownloadRenditionMenuItems
-              onSelect={onDownload}
-              renditions={renditions}
-            />
-          </MenuPopup>
-        </Menu>
-      )}
-    </div>
+    <SplitButton
+      primaryLabel={downloadLabel}
+      menuLabel={downloadAsLabel}
+      onPrimaryClick={() => onDownload("original")}
+      size="sm"
+      menu={
+        <MenuPopup align="end" className="min-w-72">
+          <DownloadRenditionMenuItems
+            onSelect={onDownload}
+            renditions={renditions}
+          />
+        </MenuPopup>
+      }
+    >
+      <DownloadIcon aria-hidden="true" className="size-3.5" />
+    </SplitButton>
   );
 };

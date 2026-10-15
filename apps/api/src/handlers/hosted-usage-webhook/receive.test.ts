@@ -10,6 +10,8 @@ import {
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
+
 import type { Transaction } from "@/api/db/root";
 import { hostedUsageWebhookEvents } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -180,9 +182,7 @@ describe("receiveHostedUsageWebhook — ignored event records", () => {
         type: "entitlement.created",
         data,
         signatureVerified: true,
-        payloadDigest: new Bun.CryptoHasher("sha256")
-          .update(body)
-          .digest("hex"),
+        payloadDigest: hashSha256Hex(body),
       });
       expect(stored?.result).toBe("ignored");
     });
@@ -205,9 +205,7 @@ describe("receiveHostedUsageWebhook — ignored event records", () => {
         .where(eq(hostedUsageWebhookEvents.eventId, eventId));
       expect(stored?.payload).toEqual({
         signatureVerified: true,
-        payloadDigest: new Bun.CryptoHasher("sha256")
-          .update(body)
-          .digest("hex"),
+        payloadDigest: hashSha256Hex(body),
         data: {},
       });
     });
@@ -234,9 +232,7 @@ describe("receiveHostedUsageWebhook — ignored event records", () => {
         .where(eq(hostedUsageWebhookEvents.eventId, eventId));
       expect(stored?.payload).toEqual({
         signatureVerified: true,
-        payloadDigest: new Bun.CryptoHasher("sha256")
-          .update(body)
-          .digest("hex"),
+        payloadDigest: hashSha256Hex(body),
         data: {},
       });
     });

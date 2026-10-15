@@ -6,7 +6,11 @@ import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
@@ -44,6 +48,11 @@ export const buildPolishNarrativeMessage = ({
   });
 
 const config = {
+  contract: "patch",
+  actionAdmission: {
+    type: "handler",
+    actionKind: "time-entries.polish-narrative",
+  },
   permissions: { timeEntry: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   featureAccess: { featureId: "time-billing", type: "required" },
@@ -55,6 +64,7 @@ const config = {
 const polishTimeEntryNarrative = createSafeHandler(
   config,
   async function* ({
+    modelAdmission,
     body,
     request,
     safeDb,
@@ -103,6 +113,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       feature: "time_entries.polish_narrative",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });
@@ -112,6 +123,7 @@ const polishTimeEntryNarrative = createSafeHandler(
         try: async () =>
           await generateTanStackTextForRole({
             dataClass: "customer",
+            admission: configuredModelAdmission({ modelAdmission }),
             abortSignal: AbortSignal.any([
               request.signal,
               AbortSignal.timeout(POLISH_TIMEOUT_MS),

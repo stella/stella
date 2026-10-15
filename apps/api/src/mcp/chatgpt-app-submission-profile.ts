@@ -48,6 +48,16 @@ export const CHATGPT_APP_SUBMISSION_PROFILE = {
       expected_output_url: null,
     },
     {
+      description: "Look up a case-law decision by its published identifier.",
+      user_prompt:
+        "Using stella, look up Czech decision ECLI:CZ:NS:2020:22.CDO.1000.2020.1 and show its court and reference.",
+      file_attachment_urls: null,
+      tools_triggered: "resolve_case_law_decision",
+      expected_output:
+        "Returns the shared legal resolve status envelope: an exact identity with public metadata and permitted text, ambiguity candidates, missing identifier parts, not_found or country_unavailable.",
+      expected_output_url: null,
+    },
+    {
       description: "Discover available document templates.",
       user_prompt:
         "Using stella, list the document templates available to my organization and identify their fillable fields.",

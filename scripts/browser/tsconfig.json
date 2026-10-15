@@ -1,0 +1,3 @@
+{
+  "extends": "../../apps/visual-preview/tsconfig.json"
+}

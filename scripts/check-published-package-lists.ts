@@ -16,6 +16,12 @@ import path from "node:path";
 
 import { loadChangesetPolicy } from "./changeset-guard";
 
+// Computed filesystem reads retain these repository Markdown inputs.
+export const CI_MARKDOWN_READER_INPUTS = [
+  "CONTRIBUTING.md",
+  ".changeset/README.md",
+];
+
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const START_MARKER = "<!-- published-packages:start -->";
 const END_MARKER = "<!-- published-packages:end -->";

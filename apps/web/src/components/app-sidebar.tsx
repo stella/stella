@@ -9,10 +9,6 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { useHotkey } from "@tanstack/react-hotkeys";
 import {
@@ -46,8 +42,9 @@ import {
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
-import { Input } from "@stll/ui/input";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@stll/ui/inspector";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuItem,
@@ -60,7 +57,9 @@ import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 
 import {
+  chatActivityByWorkspace,
   matterActivityIsKnownEmpty,
+  matterActivityItemVisible,
   resolveEntityActivityDestination,
   resolveAutomaticExpandedMatterId,
   resolveMatterNavigationTarget,
@@ -74,8 +73,6 @@ import {
 } from "@/components/drag-and-drop-live-region.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import { MatterActivityRow } from "@/components/matter-activity-row";
-import { MatterIcon } from "@/components/matter-icon";
-import { SearchDialog } from "@/components/search-dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -133,7 +130,12 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { detached } from "@/lib/detached";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useFindModalBoundary } from "@/lib/find-owner";
 import { formatHotkeyForPlatform, NAV_KEY } from "@/lib/hotkeys";
 import { inboxCountOptions } from "@/lib/inbox/queries";
 import { knowledgeSections } from "@/lib/knowledge/navigation";
@@ -168,6 +170,19 @@ const GuideHelpDrawer = lazy(async () => {
   return { default: module.GuideHelpDrawer };
 });
 
+const SearchDialog = lazy(async () => {
+  const module = await import("@/components/search-dialog");
+  return { default: module.SearchDialog };
+});
+
+const SEARCH_DIALOG_STATES = {
+  idle: "idle",
+  open: "open",
+  closed: "closed",
+} as const;
+type SearchDialogState =
+  (typeof SEARCH_DIALOG_STATES)[keyof typeof SEARCH_DIALOG_STATES];
+
 export const AppSidebar = (props: AppSidebarProps) => {
   const t = useTranslations();
   const format = useFormatter();
@@ -195,7 +210,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
   });
   const user = useAuthenticatedUser();
 
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchState, setSearchState] = useState<SearchDialogState>(
+    SEARCH_DIALOG_STATES.idle,
+  );
+  useFindModalBoundary(searchState === SEARCH_DIALOG_STATES.open);
+  const setSearchOpen = useCallback((open: boolean) => {
+    setSearchState(
+      open ? SEARCH_DIALOG_STATES.open : SEARCH_DIALOG_STATES.closed,
+    );
+  }, []);
   const guideDrawerAttentionSequence = useGuideDrawerStore(
     (store) => store.attentionSequence,
   );
@@ -218,7 +241,12 @@ export const AppSidebar = (props: AppSidebarProps) => {
     isError: workspacesFailed,
     isFetching: workspacesFetching,
     refetch: refetchWorkspaces,
-  } = useChromeQuery(workspacesNavigationOptions(user.activeOrganizationId));
+  } = useChromeQuery(
+    workspacesNavigationOptions({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
+  );
   const inboxQuery = useChromeQuery({
     ...inboxCountOptions(user.activeOrganizationId, user.id),
     enabled: inboxPreviewEnabled,
@@ -241,12 +269,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       ? groupedThreadsView.items.pages
       : undefined,
   );
-  const chatActivityByWorkspaceId = new Map(
-    groupedChatThreads.workspaces.flatMap((workspace) => {
-      const updatedAt = workspace.threads.at(0)?.updatedAt;
-      return updatedAt ? [[workspace.workspaceId, updatedAt] as const] : [];
-    }),
-  );
+  const chatActivityByWorkspaceId = chatActivityByWorkspace(groupedChatThreads);
   const workspaces = workspacesData?.workspaces;
   const guideWorkspaceList = ((): GuideWorkspaceListState => {
     if (workspacesPending) {
@@ -315,7 +338,11 @@ export const AppSidebar = (props: AppSidebarProps) => {
 
   const searchHotkey = useEffectiveHotkey("search");
   useHotkey(searchHotkey, () => {
-    setSearchOpen((prev) => !prev);
+    setSearchState((searchDialogState) =>
+      searchDialogState === SEARCH_DIALOG_STATES.open
+        ? SEARCH_DIALOG_STATES.closed
+        : SEARCH_DIALOG_STATES.open,
+    );
   });
 
   useHotkey(useEffectiveHotkey("newMatter"), () => {
@@ -828,7 +855,15 @@ export const AppSidebar = (props: AppSidebarProps) => {
         </SidebarMenu>
       </SidebarFooter>
 
-      <SearchDialog onOpenChange={setSearchOpen} open={searchOpen} />
+      {/* Retain the dialog after first opening so its close-completion actions run. */}
+      {searchState !== SEARCH_DIALOG_STATES.idle && (
+        <Suspense fallback={null}>
+          <SearchDialog
+            onOpenChange={setSearchOpen}
+            open={searchState === SEARCH_DIALOG_STATES.open}
+          />
+        </Suspense>
+      )}
 
       {pendingEntityDrop && (
         <CopyToMatterDialog
@@ -1155,7 +1190,10 @@ const MatterItem = ({
   );
   const activityIsKnownEmpty = matterActivityIsKnownEmpty({
     isInvalidated: activityIsInvalidated,
-    pages: cachedActivity?.pages,
+    pages: cachedActivity?.pages.map((page) => ({
+      ...page,
+      items: page.items.filter(matterActivityItemVisible),
+    })),
     status: activityStatus,
   });
   const hasExpandableContent = !activityIsKnownEmpty || showTimesheetLink;
@@ -1307,22 +1345,13 @@ const MatterItem = ({
             className="size-4 shrink-0"
             matter={{ id: ws.id, color: ws.color }}
           />
-          <Input
-            autoFocus
-            className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
-            onBlur={() => {
+          <InlineRenameInput
+            className="text-sm"
+            onCommit={() => {
               detached(rename.commit(), "app-sidebar.commit");
             }}
-            onChange={(e) => rename.setDraft(e.currentTarget.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-              if (e.key === "Escape") {
-                rename.cancel();
-                e.currentTarget.blur();
-              }
-            }}
+            onValueChange={rename.setDraft}
+            onCancel={rename.cancel}
             value={rename.state.draft}
           />
         </div>
@@ -1429,7 +1458,10 @@ const MatterItem = ({
               </MatterColorContextPicker>
             )}
             <span className="relative flex min-w-0 flex-col">
-              <BidiText as="span" className="truncate">
+              <BidiText
+                as="span"
+                className="overflow-hidden text-ellipsis whitespace-pre"
+              >
                 {ws.name}
               </BidiText>
               <Tooltip
@@ -1581,7 +1613,8 @@ const MatterActivityList = ({
     }),
     enabled: mounted,
   });
-  const items = data ? data.pages.flatMap((page) => page.items) : [];
+  const activityItems = data?.pages.flatMap((page) => page.items) ?? [];
+  const items = activityItems.filter(matterActivityItemVisible);
 
   const openEntity = async ({
     entityKind,

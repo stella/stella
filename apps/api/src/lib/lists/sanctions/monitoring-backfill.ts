@@ -123,7 +123,7 @@ export const resetMonitoringBackfills = async (
     },
   });
 
-export const transitionMonitoringBackfill = async ({
+const transitionMonitoringBackfill = async ({
   tx,
   job,
   to,
@@ -242,6 +242,7 @@ export const advanceSanctionsMonitoringBackfill = async ({
   }
   signal.throwIfAborted();
   const prepared = await prepareMonitoringContacts({
+    sourceSelection: { type: "selected", sources: [source] },
     db,
     contactRows: claim.contactRows,
     now,

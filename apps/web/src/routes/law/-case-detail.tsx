@@ -1,18 +1,21 @@
-import { lazy, Suspense, useRef } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { decisionHasNoDocument } from "@stll/decision-reader/decision-body-state.logic";
 import { Button } from "@stll/ui/button";
 import { Minimize2Icon } from "@stll/ui/icons";
 
 import { useRequireAccount } from "@/components/auth/use-require-account";
 import { createCaseDecisionDetailsTab } from "@/components/inspector/case-decision-details-view";
 import {
+  CASE_DECISION_PLACEMENT,
   createCaseDecisionViewTab,
   isCaseDecisionGenericTab,
   navigateToCaseDecisionMain,
 } from "@/components/inspector/case-decision-view";
+import type { CaseDecisionViewPayload } from "@/components/inspector/case-decision-view";
 import {
   InspectorFindBar,
   useInspectorFind,
@@ -20,17 +23,19 @@ import {
 import { INSPECTOR_PANE_INTENT } from "@/components/inspector/inspector-store-types";
 import type { InspectorOwnerRouteId } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { registerMainDecisionReader } from "@/components/inspector/main-decision-reader";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
 import Tooltip from "@/components/tooltip";
-import { decisionHasNoDocument } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import { buildDecisionFacts } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
+import { useLawHistory } from "@/features/law-search-history/law-search-history-query";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
-import { recordLawOpen } from "@/lib/law-search-history";
+import { createUuid } from "@/lib/uuid";
 import {
   extractId,
   fileMayHoldOthersOf,
@@ -58,24 +63,67 @@ export function PublicDecisionViewer({
   initialSearchQuery,
   routeId,
 }: PublicDecisionViewerProps) {
+  const {
+    record: { mutate: recordHistory },
+    enabled: historyEnabled,
+  } = useLawHistory();
   const decisionId = extractId(decision.id);
   const openedPath = useRouterState({
     select: ({ location }) => location.pathname,
   });
   useExternalSyncEffect(() => {
-    recordLawOpen({
+    if (!historyEnabled) {
+      return;
+    }
+    recordHistory({
       kind: "decision",
-      id: decision.id,
-      title: `${decision.caseNumber} · ${decision.court}`,
+      documentId: decision.id,
+      courtId: decision.courtId,
+      documentIdentity:
+        decision.courtAbbreviation === null
+          ? { kind: "unknown" }
+          : {
+              kind: "decision",
+              courtAbbreviation: decision.courtAbbreviation,
+              courtTier: decision.courtTier,
+            },
+      title: { identifier: decision.caseNumber, description: decision.court },
       path: openedPath,
     });
-  }, [decision.id, decision.caseNumber, decision.court, openedPath]);
+  }, [
+    historyEnabled,
+    recordHistory,
+    decision.id,
+    decision.caseNumber,
+    decision.court,
+    decision.courtId,
+    decision.courtAbbreviation,
+    decision.courtTier,
+    openedPath,
+  ]);
   // The block the URL names. A results row that could not open beside the
   // list lands here instead, at the passage and on the words it matched.
-  const initialAnchorId = useRouterState({
+  const routeAnchorId = useRouterState({
     select: ({ location }) =>
       location.hash === "" ? undefined : location.hash,
   });
+  const [citationLanding, setCitationLanding] = useState<{
+    route: string;
+    anchorId: string;
+    sessionId: string;
+  } | null>(null);
+  const landingRoute = `${decision.id}#${routeAnchorId ?? ""}`;
+  if (citationLanding !== null && citationLanding.route !== landingRoute) {
+    setCitationLanding(null);
+  }
+  const initialAnchorId =
+    citationLanding?.route === landingRoute
+      ? citationLanding.anchorId
+      : routeAnchorId;
+  const landingSessionId =
+    citationLanding?.route === landingRoute
+      ? citationLanding.sessionId
+      : undefined;
   // The reader arrived by a docket that found this decision alone in a case
   // file whose other decisions the read may not have reached.
   const fileMayHoldOthers = useRouterState({
@@ -108,6 +156,29 @@ export function PublicDecisionViewer({
     initialQuery: initialSearchQuery,
     panelRef,
   });
+  const openMainPassage = useLatestCallback(
+    ({ anchorId, searchQuery }: CaseDecisionViewPayload) => {
+      if (searchQuery !== undefined) {
+        find.openFindAtQuery(searchQuery);
+      }
+      if (anchorId === undefined) {
+        return;
+      }
+      setCitationLanding({
+        route: landingRoute,
+        anchorId,
+        sessionId: createUuid(),
+      });
+    },
+  );
+  useExternalSyncEffect(
+    () =>
+      registerMainDecisionReader({
+        decisionId: decision.id,
+        openPassage: openMainPassage,
+      }),
+    [decision.id, openMainPassage],
+  );
   const originalUrl =
     buildDecisionFacts({
       decisionType: decision.decisionType,
@@ -129,10 +200,11 @@ export function PublicDecisionViewer({
     if (swapTarget !== undefined) {
       inspector.close(swapTarget.id);
     }
-    inspector.open(
+    inspector.open({
+      decisionPlacement: CASE_DECISION_PLACEMENT.side,
       // The same decision, read the same way: docking it must not silently
       // drop the passage and the words the reader arrived on.
-      createCaseDecisionViewTab({
+      ...createCaseDecisionViewTab({
         caseNumber: decision.caseNumber,
         country: decision.country,
         court: decision.court,
@@ -143,7 +215,7 @@ export function PublicDecisionViewer({
         ...(initialAnchorId === undefined ? {} : { anchorId: initialAnchorId }),
         ...(find.findQuery === "" ? {} : { searchQuery: find.findQuery }),
       }),
-    );
+    });
     if (swapTarget !== undefined) {
       detached(
         navigateToCaseDecisionMain(navigate, swapTarget.payload),
@@ -208,6 +280,7 @@ export function PublicDecisionViewer({
                     decision={decision}
                     decisionId={decisionId}
                     initialAnchorId={initialAnchorId}
+                    landingSessionId={landingSessionId}
                   />
                 </div>
               }
@@ -216,6 +289,7 @@ export function PublicDecisionViewer({
                 decision={decision}
                 decisionId={decisionId}
                 initialAnchorId={initialAnchorId}
+                landingSessionId={landingSessionId}
                 user={authStatus.user}
               />
             </Suspense>
@@ -224,6 +298,7 @@ export function PublicDecisionViewer({
               decision={decision}
               decisionId={decisionId}
               initialAnchorId={initialAnchorId}
+              landingSessionId={landingSessionId}
             />
           ))}
       </div>
@@ -235,10 +310,12 @@ const GuestDecisionWorkspace = ({
   decision,
   decisionId,
   initialAnchorId,
+  landingSessionId,
 }: {
   decision: PublicCaseLawDecision;
   decisionId: ReturnType<typeof extractId>;
   initialAnchorId?: string | undefined;
+  landingSessionId?: string | undefined;
 }) => {
   const ensureAccount = useRequireAccount();
 
@@ -249,6 +326,7 @@ const GuestDecisionWorkspace = ({
         decision={decision}
         decisionId={decisionId}
         initialAnchorId={initialAnchorId}
+        landingSessionId={landingSessionId}
         onRequestAnalysis={() => {
           ensureAccount();
         }}

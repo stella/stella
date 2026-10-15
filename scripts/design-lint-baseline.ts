@@ -34,6 +34,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
+import { repoRelativePath } from "@stll/portable-path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
 import {
@@ -114,15 +115,11 @@ export const emptyBacklog = (): DesignLintBacklog => ({
   "eslint/max-params": {},
   "react/no-children-prop": {},
   "eslint/no-unexpected-multiline": {},
-  "eslint/no-use-before-define": {},
 });
 
 /** A repository-relative POSIX path, whichever form oxlint printed. */
 const repositoryPath = (filename: string): string =>
-  path
-    .relative(REPOSITORY_ROOT, path.resolve(REPOSITORY_ROOT, filename))
-    .split(path.sep)
-    .join("/");
+  repoRelativePath(REPOSITORY_ROOT, path.resolve(REPOSITORY_ROOT, filename));
 
 /**
  * Per-file counts from a lint report, keyed by repository path. Only tracked

@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { flattenWorkflowSteps } from "./workflow-steps";
+
 // A `steps.<id>` expression that names no step in its job evaluates to an
 // empty value, so a condition built on it silently never holds. Every
 // reference must name a step declared in the same job or composite action.
@@ -15,8 +17,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 
 const stepIds = (steps: unknown): Set<string> =>
   new Set(
-    (Array.isArray(steps) ? steps : []).flatMap((step: unknown) =>
-      isRecord(step) && typeof step["id"] === "string" ? [step["id"]] : [],
+    flattenWorkflowSteps(Array.isArray(steps) ? steps : []).flatMap((step) =>
+      typeof step["id"] === "string" ? [step["id"]] : [],
     ),
   );
 
@@ -108,6 +110,31 @@ describe("workflow step references", () => {
     };
     expect(danglingStepReferences("deploy.yml", workflow)).toEqual([
       "deploy.yml: job promote: steps.current names no step in this scope",
+    ]);
+  });
+
+  test("resolves ids between nested parallel siblings and still reports missing ids", () => {
+    const workflow = {
+      jobs: {
+        deploy: {
+          steps: [
+            {
+              parallel: [
+                { id: "restore", run: "bun restore" },
+                {
+                  id: "verify",
+                  if: `\${{ steps.restore.outcome == 'success' && steps.absent.outcome == 'success' }}`,
+                  run: "bun verify",
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    expect(danglingStepReferences("deploy.yml", workflow)).toEqual([
+      "deploy.yml: job deploy: steps.absent names no step in this scope",
     ]);
   });
 

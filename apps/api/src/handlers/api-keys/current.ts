@@ -7,15 +7,16 @@ import {
   CACHE_CONTROL_HEADER,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
-import { resolveMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
+import { resolveOwnMachineApiKeyCredential } from "@/api/mcp/api-key-auth";
 import { McpAuthenticationError } from "@/api/mcp/errors";
 
 /** Self-only expiry inspection; never opens a browser session or lists keys. */
 export const createCurrentMachineApiKeyHandler = (
-  resolveCredential: typeof resolveMachineApiKeyCredential = resolveMachineApiKeyCredential,
+  resolveCredential: typeof resolveOwnMachineApiKeyCredential = resolveOwnMachineApiKeyCredential,
 ) =>
   createSafeTokenHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "auth_plumbing" },
     },

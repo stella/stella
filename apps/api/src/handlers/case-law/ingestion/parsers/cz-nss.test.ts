@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
-import { hasBlockInlines } from "@/api/handlers/case-law/document-ast";
-import type { Block } from "@/api/handlers/case-law/document-ast";
+import { hasBlockInlines } from "@stll/legal-ast/document-ast";
+import type { Block } from "@stll/legal-ast/document-ast";
+
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import type { ParseNssDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 
 import { nssUnitDecisionHtml } from "./cz-nss.test-fixture";
+import { inlinesToPlainText } from "./shared-inlines";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -324,7 +326,28 @@ describe("parseNssDecisionHtml", () => {
   });
 
   describe("numbered paragraphs", () => {
-    test("strips [N] prefix from numbered paragraphs", () => {
+    test.each(["  ", "\t", "\u00a0", " \t\u00a0"])(
+      "NSS numbered paragraphs preserve rendered text after leading %j",
+      (leading) => {
+        const { documentAst } = parseNssDecisionHtml(
+          baseInput(
+            `<html><body><p>Odůvodnění:</p><p>${leading}<b>[1]</b> <b>Body</b>  </p></body></html>`,
+          ),
+        );
+        const block = documentAst.blocks.find(
+          (candidate) =>
+            candidate.type === "paragraph" && candidate.plainText === "Body",
+        );
+        expect(block?.plainText).toBe("Body");
+        expect(block).toMatchObject({ number: 1 });
+        expect(
+          block?.type === "paragraph"
+            ? inlinesToPlainText(block.inlines)
+            : undefined,
+        ).toBe("Body");
+      },
+    );
+    test("moves the [N] prefix into the paragraph's number", () => {
       const input = baseInput(nssUnitDecisionHtml);
       const { documentAst } = parseNssDecisionHtml(input);
 
@@ -333,6 +356,11 @@ describe("parseNssDecisionHtml", () => {
         (b) => b.type === "paragraph" && /^\[\d+\]/u.test(b.plainText),
       );
       expect(numberedParas.length).toBe(0);
+      expect(
+        documentAst.blocks.flatMap((b) =>
+          b.type === "paragraph" && b.number !== undefined ? [b.number] : [],
+        ),
+      ).toEqual([1, 2]);
 
       // But the content should be preserved
       const stezovatel = documentAst.blocks.find(

@@ -1,5 +1,8 @@
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
+
+import { writeZipEntry } from "@stll/docx-utils";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
 /**
  * Seed templates & clauses (Knowledge section).
  *
@@ -18,7 +21,6 @@ import JSZip from "jszip";
  *   - Database running (bun run docker:dev)
  *   - Test user seeded (bun run db:seed-test-user)
  */
-
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 import type { NamedCondition } from "@stll/template-conditions";
 
@@ -34,6 +36,7 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody, ClauseParagraph } from "@/api/lib/clauses/types";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import type { FieldMeta } from "@/api/lib/docx/types";
@@ -43,6 +46,7 @@ import { writeScannedObject } from "@/api/lib/file-scan/stored-object";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
+import { seedTemplateChatThreads } from "./seed-template-chat-threads";
 import { ensureTestUsers } from "./seed-test-user";
 import {
   ALL_TEST_USER_IDS,
@@ -105,7 +109,8 @@ const createTemplateDocx = async (
 ): Promise<Buffer> => {
   const zip = new JSZip();
 
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
@@ -115,31 +120,27 @@ const createTemplateDocx = async (
       "</Types>",
   );
 
-  zip
-    .folder("_rels")
-    ?.file(
-      ".rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
-        "</Relationships>",
-    );
+  writeZipEntry(
+    zip,
+    "_rels/.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      "</Relationships>",
+  );
 
-  zip
-    .folder("word")
-    ?.file(
-      "document.xml",
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escXml(title)}</w:t></w:r></w:p>${bodyXml}</w:body></w:document>`,
-    );
+  writeZipEntry(
+    zip,
+    "word/document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escXml(title)}</w:t></w:r></w:p>${bodyXml}</w:body></w:document>`,
+  );
 
-  zip
-    .folder("word")
-    ?.folder("_rels")
-    ?.file(
-      "document.xml.rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
-    );
+  writeZipEntry(
+    zip,
+    "word/_rels/document.xml.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
+  );
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return Buffer.from(buf);
@@ -2350,6 +2351,9 @@ export async function seedTemplates(
   authorIds: readonly string[] = ALL_TEST_USER_IDS,
 ): Promise<void> {
   const ORG_ID = organizationId ?? DEFAULT_ORG_ID;
+  if (authorIds.length === 0) {
+    panic("Seed templates requires at least one author");
+  }
   const scopedSeedId = (label: string) => seedId(`${ORG_ID}:${label}`);
   const db = openMaintenanceDb({ readOnly: false });
 
@@ -2560,6 +2564,25 @@ export async function seedTemplates(
   }
   console.log(`    Templates: ${TEMPLATES.length} (DOCX + S3)`);
 
+  // ── 5a. Template Studio chat threads ─────────────────
+  // Seed the lazy template → chat association so read-only fixtures can open
+  // templates without creating chat state. Existing associations are never
+  // repointed; on-conflict-do-nothing preserves a user's current thread.
+  const templateChatCount = await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await seedTemplateChatThreads(tx, {
+        organizationId: ORG_ID,
+        templates: TEMPLATES.map((template) => ({
+          id: scopedSeedId(template.label),
+          label: template.label,
+          name: template.name,
+        })),
+        authorIds,
+      }),
+  );
+  console.log(`    Template Studio chats: ${templateChatCount}`);
+
   // ── 6. Template-clause links ────────────────────────
   for (const link of TEMPLATE_CLAUSE_LINKS) {
     const templateId = scopedSeedId(link.templateLabel);
@@ -2601,17 +2624,13 @@ export async function seedTemplates(
 // ─── Standalone CLI entry point ─────────────────────────
 
 if (import.meta.main) {
-  requireLocalDevOpen("Seeding");
-
-  console.log("Seeding templates & clauses...\n");
-  await ensureTestUsers(DEFAULT_ORG_ID);
-  seedTemplates()
-    .then(() => {
-      console.log("\nDone.");
-      process.exit(0);
-    })
-    .catch((error: unknown) => {
-      console.error("Seed failed:", error);
-      process.exit(1);
-    });
+  await runScriptWithErrorOutput(async () => {
+    requireLocalDevOpen("Seeding");
+    console.log("Seeding templates & clauses...\n");
+    const { colleagueUserIds, testUserId } =
+      await ensureTestUsers(DEFAULT_ORG_ID);
+    await seedTemplates(DEFAULT_ORG_ID, [testUserId, ...colleagueUserIds]);
+    console.log("\nDone.");
+    process.exit(0);
+  });
 }

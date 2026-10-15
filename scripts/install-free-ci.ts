@@ -27,14 +27,20 @@
  * package.json script's commands; there, any program besides Bun and a few
  * shell builtins may come from the install. Whatever the walk cannot follow
  * (a computed path, an unknown flag, Bun handed to another program) is
- * unclassified, and the test fails on it. Out of scope: commands that a shell
- * script or a Bun script starts itself.
+ * unclassified, and the test fails on it. Literal Bun subprocess arrays that
+ * launch installed CLIs are checked too. Other subprocess commands remain
+ * outside this import walk.
  *
  * Needs no dependency install: node builtins and Bun APIs only.
  */
 
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+
+import {
+  mergeWorkflowParallelProofs,
+  synchronizeWorkflowBackgroundSteps,
+} from "./workflow-steps";
 
 export type Classification =
   /** Files Bun loads: a script, test files and preloads. */
@@ -203,6 +209,91 @@ const skipHeredocBodies = ({
   return index;
 };
 
+const readSingleQuoted = (source: string, start: number) => {
+  const end = source.indexOf("'", start + 1);
+  return {
+    text: end === -1 ? "" : source.slice(start + 1, end),
+    index: end === -1 ? source.length : end + 1,
+    failure: end === -1 ? "unterminated single quote" : undefined,
+  };
+};
+
+const readAnsiQuoted = (source: string, start: number) => {
+  let text = "";
+  let index = start + 2;
+  let failure: string | undefined;
+  while (index < source.length && source[index] !== "'") {
+    const character = source[index] ?? "";
+    if (character !== "\\") {
+      text += character;
+      index += 1;
+      continue;
+    }
+    const escape = source[index + 1] ?? "";
+    const octal = /^[0-7]{1,3}/u.exec(source.slice(index + 1))?.[0];
+    const hex =
+      escape === "x"
+        ? /^[0-9a-f]{1,2}/iu.exec(source.slice(index + 2))?.[0]
+        : undefined;
+    const numeric = octal ?? hex;
+    if (numeric !== undefined) {
+      text += String.fromCodePoint(
+        (octal === undefined
+          ? Number.parseInt(numeric, 16)
+          : Number.parseInt(numeric, 8)) % 256,
+      );
+      index += numeric.length + (octal === undefined ? 2 : 1);
+      continue;
+    }
+    switch (escape) {
+      case "a":
+        text += "\u0007";
+        break;
+      case "b":
+        text += "\b";
+        break;
+      case "e":
+      case "E":
+        text += "\u001b";
+        break;
+      case "f":
+        text += "\f";
+        break;
+      case "n":
+        text += "\n";
+        break;
+      case "r":
+        text += "\r";
+        break;
+      case "t":
+        text += "\t";
+        break;
+      case "v":
+        text += "\v";
+        break;
+      case "'":
+      case '"':
+      case "\\":
+        text += escape;
+        break;
+      case "u":
+      case "U":
+      case "c":
+        failure ??= `unsupported ANSI-C escape \\${escape}`;
+        break;
+      default:
+        text += `\\${escape}`;
+    }
+    index += 2;
+  }
+  if (source[index] !== "'") {
+    failure ??= "unterminated ANSI-C quote";
+  }
+  index += 1;
+  // Shell words cannot contain NUL; the rest of this quoted segment is discarded.
+  return { text: text.split("\0").at(0) ?? "", index, failure };
+};
+
 /**
  * Splits shell source into simple commands, in execution order. Quotes are
  * removed; a command substitution (`$(…)`, backticks) or subshell becomes
@@ -281,14 +372,14 @@ export const lexShell = (source: string): ShellEvent[] => {
       if (character === "\\") {
         text += next === "\n" ? "" : next;
         index += 2;
-      } else if (character === "'") {
-        const end = source.indexOf("'", index + 1);
-        if (end === -1) {
-          failure ??= "unterminated single quote";
-          break;
-        }
-        text += source.slice(index + 1, end);
-        index = end + 1;
+      } else if (character === "'" || (character === "$" && next === "'")) {
+        const quoted = (character === "$" ? readAnsiQuoted : readSingleQuoted)(
+          source,
+          index,
+        );
+        text += quoted.text;
+        index = quoted.index;
+        failure ??= quoted.failure;
       } else if (character === '"') {
         text += readDoubleQuoted();
       } else if (character === "$" && next === "(") {
@@ -609,7 +700,7 @@ const BUN_VALUE_FLAGS = new Set([
   "-p",
   "-r",
 ]);
-const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
+export const SOURCE_FILE = /\.(?:[cm]?[jt]s|[jt]sx)$/u;
 const TEST_FILE = /[._](?:test|spec)\.(?:[cm]?[jt]s|[jt]sx)$/u;
 
 /** A directory only known at run time; never covered by a repository path. */
@@ -636,7 +727,7 @@ const changeDirectory = ({ from, to }: ChangeDirectoryOptions): string => {
 const TIMEOUT_DURATION = /^(?:\d+(?:\.\d*)?|\.\d+)[smhd]?$/u;
 
 /** The program and its arguments, past keywords, assignments and wrappers. */
-const programWords = (words: readonly string[]): readonly string[] => {
+export const programWords = (words: readonly string[]): readonly string[] => {
   let rest = words;
   for (;;) {
     const first = rest.at(0);
@@ -702,26 +793,73 @@ type ResolvedPath =
   | { readonly type: "file"; readonly path: string }
   | { readonly type: "invalid"; readonly reason: string };
 
+type CheckoutSource = {
+  readonly prefix: string;
+  readonly sparse: readonly string[] | undefined;
+  readonly condition: readonly string[];
+};
+
+const includedInSparseCheckout = (
+  file: string,
+  patterns: readonly string[],
+) => {
+  let included = false;
+  for (const rawPattern of patterns) {
+    const excluded = rawPattern.startsWith("!");
+    const pattern = rawPattern
+      .replace(/^!/u, "")
+      .replace(/^\//u, "")
+      .replace(/\/$/u, "");
+    if (
+      file === pattern ||
+      file.startsWith(`${pattern}/`) ||
+      new Bun.Glob(pattern).match(file)
+    ) {
+      included = !excluded;
+    }
+  }
+  return included;
+};
+
 type ResolveRepoPathOptions = {
   readonly cwd: string;
   readonly root: string;
   readonly target: string;
+  readonly checkouts: readonly CheckoutSource[];
 };
 
 const resolveRepoPath = ({
   cwd,
   root,
   target,
+  checkouts,
 }: ResolveRepoPathOptions): ResolvedPath => {
   if (isComputed(target) || isComputed(cwd)) {
     return { reason: `${target} is computed at run time`, type: "invalid" };
   }
-  const joined = path.posix.normalize(path.posix.join(cwd, target));
+  const runtimePath = path.posix.normalize(path.posix.join(cwd, target));
+  const checkout = checkouts.findLast(({ prefix }) =>
+    runtimePath.startsWith(`${prefix}/`),
+  );
+  const joined =
+    checkout === undefined
+      ? runtimePath
+      : runtimePath.slice(checkout.prefix.length + 1);
   if (joined.startsWith("../") || path.posix.isAbsolute(joined)) {
     return { reason: `${target} is outside the repository`, type: "invalid" };
   }
   if (!existsSync(path.join(root, joined))) {
     return { reason: `${joined} does not exist`, type: "invalid" };
+  }
+  if (checkout?.sparse !== undefined) {
+    const unavailable = importProblems({
+      root,
+      entries: [joined],
+      sparseCheckout: checkout.sparse,
+    }).filter((problem) => problem.includes("outside sparse checkout"));
+    if (unavailable.length > 0) {
+      return { reason: unavailable.join("; "), type: "invalid" };
+    }
   }
   return { path: joined, type: "file" };
 };
@@ -741,6 +879,7 @@ type Expansion = {
 
 type ClassifyContext = {
   readonly root: string;
+  readonly checkouts: CheckoutSource[];
   /** Package scripts being expanded, to stop a script that calls itself. */
   readonly expanding: ReadonlySet<string>;
 };
@@ -771,6 +910,7 @@ const classifyBunTest = ({
       const preload = resolveRepoPath({
         cwd,
         root: context.root,
+        checkouts: context.checkouts,
         target: value ?? "",
       });
       if (preload.type === "invalid") {
@@ -781,7 +921,12 @@ const classifyBunTest = ({
     } else if (/^--?[a-z][\w-]*(?:=\S+)?$/u.test(arg)) {
       flagTakesValue = !arg.includes("=");
     } else if (TEST_FILE.test(arg)) {
-      const file = resolveRepoPath({ cwd, root: context.root, target: arg });
+      const file = resolveRepoPath({
+        cwd,
+        root: context.root,
+        checkouts: context.checkouts,
+        target: arg,
+      });
       if (file.type === "invalid") {
         return unclassified(`test file ${file.reason}`);
       }
@@ -897,6 +1042,7 @@ const expandPackageScript = ({
   const nested: ClassifyContext = {
     expanding: new Set([...context.expanding, key]),
     root: context.root,
+    checkouts: context.checkouts,
   };
   // Bun runs a script's pre and post hooks around it.
   return [`pre${name}`, name, `post${name}`].flatMap((hook) => {
@@ -940,7 +1086,7 @@ type BunFlags =
   | { readonly type: "classified"; readonly classification: Classification };
 
 /** Reads the flags before Bun's subcommand, script or file. */
-const parseBunFlags = ({
+export const parseBunFlags = ({
   args,
   context,
   cwd,
@@ -1002,6 +1148,7 @@ const parseBunFlags = ({
         const preload = resolveRepoPath({
           cwd,
           root: context.root,
+          checkouts: context.checkouts,
           target: value,
         });
         if (preload.type === "invalid") {
@@ -1125,6 +1272,7 @@ const classifyBun = ({
     const file = resolveRepoPath({
       cwd: dir,
       root: context.root,
+      checkouts: context.checkouts,
       target: subcommand,
     });
     if (file.type !== "invalid" && file.path === "scripts/ci-install.ts") {
@@ -1353,6 +1501,7 @@ type StepDefaults = {
 
 const POSIX_SHELL = /^(?:bash|sh)\b/u;
 const LOCAL_ACTION = "./.github/actions/";
+const SELF_ACTION = "$/.github/actions/";
 const LOCAL_WORKFLOW = "./.github/workflows/";
 
 const readYaml = ({ file, root }: RepoFile): unknown =>
@@ -1373,25 +1522,277 @@ const stepTitle = (step: Record<string, unknown>, position: number): string => {
 };
 
 type WalkStepsOptions = {
+  readonly cancelled?: ReadonlySet<string>;
   readonly context: ClassifyContext;
   readonly defaults: StepDefaults;
   readonly initial: readonly InstallRecord[];
   readonly job: string;
   readonly prefix: string;
+  readonly pending?: Map<string, InstallRecord[]>;
   readonly steps: readonly unknown[];
 };
 
 type WalkStepsResult = {
   readonly installs: readonly InstallRecord[];
   readonly invocations: readonly InstallFreeInvocation[];
+  readonly pending: ReadonlyMap<string, readonly InstallRecord[]>;
 };
 
-const walkSteps = ({
+type WalkParallelStepsOptions = {
+  readonly cancelled: ReadonlySet<string>;
+  readonly context: ClassifyContext;
+  readonly defaults: StepDefaults;
+  readonly initial: readonly InstallRecord[];
+  readonly job: string;
+  readonly prefix: string;
+  readonly pending: Map<string, InstallRecord[]>;
+  readonly siblings: readonly unknown[];
+};
+
+type WalkParallelStepsResult = {
+  readonly installs: readonly InstallRecord[];
+  readonly invocations: readonly InstallFreeInvocation[];
+};
+
+const walkParallelSteps = ({
+  cancelled,
   context,
   defaults,
   initial,
   job,
   prefix,
+  pending,
+  siblings,
+}: WalkParallelStepsOptions): WalkParallelStepsResult => {
+  const invocations: InstallFreeInvocation[] = [];
+  const additions = mergeWorkflowParallelProofs({
+    steps: siblings,
+    installs: initial,
+    pending,
+    cancelled,
+    walk: ({
+      step,
+      installs,
+      pending: branchPending,
+      cancelled: branchCancelled,
+    }) => {
+      const branch = walkSteps({
+        cancelled: branchCancelled,
+        context: { ...context, checkouts: [...context.checkouts] },
+        defaults,
+        initial: installs,
+        job,
+        pending: branchPending,
+        prefix,
+        steps: [step],
+      });
+      invocations.push(...branch.invocations);
+      return branch.installs;
+    },
+  });
+  return { installs: additions, invocations };
+};
+
+type WalkWorkflowStepOptions = {
+  readonly context: ClassifyContext;
+  readonly defaults: StepDefaults;
+  readonly job: string;
+  readonly prefix: string;
+  readonly position: number;
+  readonly step: Record<string, unknown>;
+  readonly installs: InstallRecord[];
+  readonly pending: Map<string, InstallRecord[]>;
+};
+
+const updateCheckoutSources = (
+  step: Record<string, unknown>,
+  context: ClassifyContext,
+) => {
+  const uses = step["uses"];
+  const condition = conditionOperands(step["if"]);
+  const checkoutOptions = step["with"];
+  if (typeof uses !== "string" || !/^actions\/checkout@\S+$/u.test(uses)) {
+    return;
+  }
+  const repository = isRecord(checkoutOptions)
+    ? checkoutOptions["repository"]
+    : undefined;
+  const prefix = isRecord(checkoutOptions)
+    ? checkoutOptions["path"]
+    : undefined;
+  // Every checkout replaces its target, including unpinned or default-path
+  // checkouts that cannot establish a trusted source mapping themselves.
+  const replacementPath =
+    typeof prefix === "string" ? path.posix.normalize(prefix) : ".";
+  for (let index = context.checkouts.length - 1; index >= 0; index -= 1) {
+    const checkout = context.checkouts[index];
+    if (
+      checkout &&
+      (isComputed(replacementPath) ||
+        replacementPath === "." ||
+        checkout.prefix === replacementPath ||
+        checkout.prefix.startsWith(`${replacementPath}/`) ||
+        replacementPath.startsWith(`${checkout.prefix}/`))
+    ) {
+      context.checkouts.splice(index, 1);
+    }
+  }
+  if (
+    /^actions\/checkout@[a-f0-9]{40}$/u.test(uses) &&
+    (repository === undefined || repository === `\${{ github.repository }}`) &&
+    typeof prefix === "string" &&
+    !isComputed(prefix) &&
+    !path.posix.isAbsolute(prefix) &&
+    !prefix.split("/").includes("..")
+  ) {
+    const sparse = isRecord(checkoutOptions)
+      ? checkoutOptions["sparse-checkout"]
+      : undefined;
+    context.checkouts.push({
+      prefix: path.posix.normalize(prefix),
+      sparse:
+        typeof sparse === "string"
+          ? sparse
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean)
+          : undefined,
+      condition,
+    });
+  }
+};
+
+const walkWorkflowStep = ({
+  context,
+  defaults,
+  job,
+  prefix,
+  position,
+  step,
+  installs,
+  pending,
+}: WalkWorkflowStepOptions): InstallFreeInvocation[] => {
+  const invocations: InstallFreeInvocation[] = [];
+  const run = step["run"];
+  const uses = step["uses"];
+  const label = `${prefix}${stepTitle(step, position)}`;
+  const condition = conditionOperands(step["if"]);
+  updateCheckoutSources(step, context);
+  const stepInstalls: InstallRecord[] = [];
+  const installStart = installs.length;
+  const covered = new Set(
+    installs
+      .filter((install) =>
+        impliesCondition({ install: install.condition, step: condition }),
+      )
+      .map((install) => install.dir),
+  );
+  if (typeof run === "string") {
+    const shell = step["shell"] ?? defaults.shell ?? "bash";
+    if (typeof shell !== "string" || !POSIX_SHELL.test(shell)) {
+      if (!covered.has("") && /\b(?:bunx?|npx)\b/u.test(run)) {
+        invocations.push({
+          classification: unclassified(
+            `runs Bun under ${typeof shell === "string" ? shell : JSON.stringify(shell)}`,
+          ),
+          command: run.trim(),
+          job,
+          step: label,
+        });
+      }
+      return invocations;
+    }
+    const result = walkCommands({
+      context: {
+        root: context.root,
+        expanding: context.expanding,
+        checkouts: context.checkouts.filter((checkout) =>
+          impliesCondition({ install: checkout.condition, step: condition }),
+        ),
+      },
+      cwd: stepCwd(step["working-directory"] ?? defaults.workingDirectory),
+      events: lexShell(run),
+      installed: covered,
+      mode: "step",
+    });
+    for (const { classification, command } of result.expansions) {
+      invocations.push({ classification, command, job, step: label });
+    }
+    for (const dir of result.installs) {
+      stepInstalls.push({ condition, dir });
+    }
+  } else if (
+    typeof uses === "string" &&
+    (uses.startsWith(LOCAL_ACTION) || uses.startsWith(SELF_ACTION))
+  ) {
+    const actionFile = ["action.yml", "action.yaml"]
+      .map((name) => path.posix.join(uses.slice(2), name))
+      .find((file) => existsSync(path.join(context.root, file)));
+    if (actionFile === undefined) {
+      invocations.push({
+        classification: unclassified(`${uses} has no action.yml`),
+        command: "",
+        job,
+        step: label,
+      });
+      return invocations;
+    }
+    const action = readYaml({ file: actionFile, root: context.root });
+    const runs = isRecord(action) ? action["runs"] : undefined;
+    if (!isRecord(runs) || runs["using"] !== "composite") {
+      return invocations;
+    }
+    const inner = walkSteps({
+      context,
+      defaults: { shell: undefined, workingDirectory: undefined },
+      initial: [...covered].map((dir) => ({ condition: [], dir })),
+      job,
+      prefix: `${label} › `,
+      steps: Array.isArray(runs["steps"]) ? runs["steps"] : [],
+    });
+    invocations.push(...inner.invocations);
+    for (const install of inner.installs) {
+      if (install.condition.length === 0 && !covered.has(install.dir)) {
+        stepInstalls.push({ condition, dir: install.dir });
+      }
+    }
+  }
+  if (
+    step["continue-on-error"] === undefined ||
+    step["continue-on-error"] === false
+  ) {
+    installs.push(...stepInstalls);
+  }
+  if (typeof step["id"] === "string") {
+    for (const { dir } of stepInstalls) {
+      installs.push({
+        condition: [`steps.${step["id"]}.outcome == 'success'`],
+        dir,
+      });
+    }
+  }
+  if (step["background"] === true) {
+    const added = installs.splice(installStart);
+    if (typeof step["id"] === "string") {
+      const records = pending.get(step["id"]);
+      if (records === undefined) {
+        pending.set(step["id"], added);
+      } else {
+        records.push(...added);
+      }
+    }
+  }
+  return invocations;
+};
+
+const walkSteps = ({
+  cancelled = new Set<string>(),
+  context,
+  defaults,
+  initial,
+  job,
+  prefix,
+  pending = new Map(),
   steps,
 }: WalkStepsOptions): WalkStepsResult => {
   const invocations: InstallFreeInvocation[] = [];
@@ -1400,100 +1801,52 @@ const walkSteps = ({
     if (!isRecord(step)) {
       continue;
     }
-    const run = step["run"];
-    const uses = step["uses"];
-    const label = `${prefix}${stepTitle(step, position)}`;
-    const condition = conditionOperands(step["if"]);
-    const stepInstalls: InstallRecord[] = [];
-    const covered = new Set(
-      installs
-        .filter((install) =>
-          impliesCondition({ install: install.condition, step: condition }),
-        )
-        .map((install) => install.dir),
-    );
-    if (typeof run === "string") {
-      const shell = step["shell"] ?? defaults.shell ?? "bash";
-      if (typeof shell !== "string" || !POSIX_SHELL.test(shell)) {
-        if (!covered.has("") && /\b(?:bunx?|npx)\b/u.test(run)) {
-          invocations.push({
-            classification: unclassified(
-              `runs Bun under ${typeof shell === "string" ? shell : JSON.stringify(shell)}`,
-            ),
-            command: run.trim(),
-            job,
-            step: label,
-          });
-        }
-        continue;
-      }
-      const result = walkCommands({
-        context,
-        cwd: stepCwd(step["working-directory"] ?? defaults.workingDirectory),
-        events: lexShell(run),
-        installed: covered,
-        mode: "step",
-      });
-      for (const { classification, command } of result.expansions) {
-        invocations.push({ classification, command, job, step: label });
-      }
-      for (const dir of result.installs) {
-        stepInstalls.push({ condition, dir });
-      }
-    } else if (typeof uses === "string" && uses.startsWith(LOCAL_ACTION)) {
-      const actionFile = ["action.yml", "action.yaml"]
-        .map((name) => path.posix.join(uses, name))
-        .find((file) => existsSync(path.join(context.root, file)));
-      if (actionFile === undefined) {
+    const completed = synchronizeWorkflowBackgroundSteps(step, pending);
+    if (completed !== undefined) {
+      installs.push(...completed);
+      continue;
+    }
+    if ("parallel" in step) {
+      if (
+        Object.keys(step).some((key) => key !== "parallel") ||
+        !Array.isArray(step["parallel"])
+      ) {
         invocations.push({
-          classification: unclassified(`${uses} has no action.yml`),
+          classification: unclassified("malformed parallel workflow step"),
           command: "",
           job,
-          step: label,
+          step: `${prefix}step ${position + 1}`,
         });
         continue;
       }
-      const action = readYaml({ file: actionFile, root: context.root });
-      const runs = isRecord(action) ? action["runs"] : undefined;
-      if (!isRecord(runs) || runs["using"] !== "composite") {
-        continue;
-      }
-      const inner = walkSteps({
+      const parallel = walkParallelSteps({
+        cancelled,
         context,
-        defaults: { shell: undefined, workingDirectory: undefined },
-        initial: [...covered].map((dir) => ({ condition: [], dir })),
+        defaults,
+        initial: installs,
         job,
-        prefix: `${label} › `,
-        steps: Array.isArray(runs["steps"]) ? runs["steps"] : [],
+        prefix,
+        pending,
+        siblings: step["parallel"],
       });
-      invocations.push(...inner.invocations);
-      // Only an unconditional install inside the action is sure to run.
-      for (const install of inner.installs) {
-        if (install.condition.length === 0 && !covered.has(install.dir)) {
-          stepInstalls.push({ condition, dir: install.dir });
-        }
-      }
+      invocations.push(...parallel.invocations);
+      installs.push(...parallel.installs);
+      continue;
     }
-    // A failed optional install leaves later workflow steps executable.
-    // Expressions may permit failure too, so only literal false is trusted.
-    if (
-      step["continue-on-error"] === undefined ||
-      step["continue-on-error"] === false
-    ) {
-      installs.push(...stepInstalls);
-    }
-    // Outcome reflects failure before continue-on-error is applied; conclusion
-    // does not. Only commands already proved to install on every path qualify.
-    if (typeof step["id"] === "string") {
-      for (const { dir } of stepInstalls) {
-        installs.push({
-          condition: [`steps.${step["id"]}.outcome == 'success'`],
-          dir,
-        });
-      }
-    }
+    invocations.push(
+      ...walkWorkflowStep({
+        context,
+        defaults,
+        job,
+        prefix,
+        position,
+        step,
+        installs,
+        pending,
+      }),
+    );
   }
-  return { installs, invocations };
+  return { installs, invocations, pending };
 };
 
 const runDefaults = (owner: unknown): Record<string, unknown> => {
@@ -1516,7 +1869,6 @@ export const installFreeInvocations = ({
   root,
   workflow: workflowFile,
 }: InstallFreeInvocationsOptions): InstallFreeInvocation[] => {
-  const context: ClassifyContext = { expanding: new Set(), root };
   const workflow = readYaml({ file: workflowFile, root });
   const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
   if (!isRecord(jobs)) {
@@ -1531,6 +1883,11 @@ export const installFreeInvocations = ({
   }
   const workflowDefaults = runDefaults(workflow);
   return Object.entries(jobs).flatMap(([id, job]) => {
+    const context: ClassifyContext = {
+      expanding: new Set(),
+      root,
+      checkouts: [],
+    };
     if (!isRecord(job)) {
       return [];
     }
@@ -1591,7 +1948,7 @@ const resolveRelative = ({
   cwd: from,
   root,
   target: specifier,
-}: ResolveRepoPathOptions): string | undefined => {
+}: Omit<ResolveRepoPathOptions, "checkouts">): string | undefined => {
   const base = path.posix.normalize(path.posix.join(from, specifier));
   return [
     base,
@@ -1605,12 +1962,84 @@ const resolveRelative = ({
   );
 };
 
+/** Skip quoted fixture source and comments before inspecting executable calls. */
+const installedBunSubprocesses = (source: string): string[] => {
+  const tokens = [
+    ...source.matchAll(
+      /\/\*[\s\S]*?\*\/|\/\/[^\n]*|`(?:\\[\s\S]|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z_$][\w$]*|[^\s]/gu,
+    ),
+  ]
+    .map(([token]) => token)
+    .filter((token) => !token.startsWith("//") && !token.startsWith("/*"));
+  const packages: string[] = [];
+  for (let index = 0; index < tokens.length; index += 1) {
+    if (
+      tokens[index] !== "Bun" ||
+      tokens[index + 1] !== "." ||
+      !["spawn", "spawnSync"].includes(tokens[index + 2] ?? "") ||
+      tokens[index + 3] !== "(" ||
+      tokens[index + 4] !== "["
+    ) {
+      continue;
+    }
+    let cursor = index + 5;
+    const literal = (token: string | undefined) => {
+      if (token === undefined || !["'", '"', "`"].includes(token.charAt(0))) {
+        return undefined;
+      }
+      // Command names and flags need no escape sequences; reject computed forms.
+      if (
+        token.includes("\\") ||
+        (token.startsWith("`") && token.includes("${"))
+      ) {
+        return undefined;
+      }
+      return token.slice(1, -1);
+    };
+    if (
+      tokens[cursor] === "process" &&
+      tokens[cursor + 1] === "." &&
+      tokens[cursor + 2] === "execPath"
+    ) {
+      cursor += 3;
+    } else if (literal(tokens[cursor]) === "bun") {
+      cursor += 1;
+    } else {
+      continue;
+    }
+    const args: string[] = [];
+    while (tokens[cursor] === ",") {
+      const value = literal(tokens[cursor + 1]);
+      if (value === undefined) {
+        break;
+      }
+      args.push(value);
+      cursor += 2;
+    }
+    const command = args.filter((arg) => arg !== "--bun");
+    const name = command.at(0) === "run" ? command.at(1) : command.at(0);
+    if (
+      name !== undefined &&
+      !name.startsWith("-") &&
+      !name.includes("/") &&
+      !SOURCE_FILE.test(name) &&
+      !BUN_BUILTIN_SUBCOMMANDS.has(name) &&
+      !INSTALL_SUBCOMMANDS.has(name) &&
+      name !== "test"
+    ) {
+      packages.push(name);
+    }
+  }
+  return packages;
+};
+
 type ImportClosureOptions = {
   readonly root: string;
   /** Repo-relative files Bun loads. */
   readonly entries: readonly string[];
   /** Inline code, evaluated in `cwd`. */
   readonly code?: { readonly cwd: string; readonly source: string };
+  readonly sparseCheckout?: readonly string[];
 };
 
 /**
@@ -1622,6 +2051,7 @@ export const importProblems = ({
   code,
   entries,
   root,
+  sparseCheckout,
 }: ImportClosureOptions): string[] => {
   const problems: string[] = [];
   const seen = new Set<string>();
@@ -1634,6 +2064,9 @@ export const importProblems = ({
     readonly source: string;
   };
   const scan = ({ from, label, loader, source }: ScanOptions) => {
+    for (const binary of installedBunSubprocesses(source)) {
+      problems.push(`${label} launches installed Bun CLI ${binary}`);
+    }
     const transpiler = new Bun.Transpiler({ loader });
     for (const { path: specifier } of transpiler.scanImports(source)) {
       if (!specifier.startsWith(".")) {
@@ -1663,6 +2096,13 @@ export const importProblems = ({
       continue;
     }
     seen.add(file);
+    if (
+      sparseCheckout !== undefined &&
+      !includedInSparseCheckout(file, sparseCheckout)
+    ) {
+      problems.push(`${file} is outside sparse checkout`);
+      continue;
+    }
     const extension = path.posix.extname(file);
     if (extension === ".json") {
       continue;

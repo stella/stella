@@ -11,12 +11,37 @@ import {
 const authCapabilities = {
   emailOtp: true,
   localPassword: false,
+  reviewPasswordSignIn: false,
   bootstrap: false,
   social: {
     google: false,
     microsoft: false,
   },
 } as const satisfies AuthCapabilities;
+
+describe("restricted password sign-in option", () => {
+  test.each([
+    { review: false, local: false, bootstrap: false, shown: false },
+    { review: true, local: false, bootstrap: false, shown: true },
+    // The full password form already covers it.
+    { review: true, local: true, bootstrap: false, shown: false },
+    { review: true, local: false, bootstrap: true, shown: false },
+  ])(
+    "offers the quiet password option only on its own capability: %o",
+    ({ review, local, bootstrap, shown }) => {
+      const options = resolveSignInOptions({
+        authCapabilities: {
+          ...authCapabilities,
+          reviewPasswordSignIn: review,
+          localPassword: local,
+          bootstrap,
+        },
+        socialProviderFlags: { google: false, microsoft: false },
+      });
+      expect(options.showReviewPasswordSignIn).toBe(shown);
+    },
+  );
+});
 
 describe("sign-in panel options", () => {
   test("hides social options and the email separator when no social provider is configured", () => {
@@ -57,12 +82,50 @@ describe("sign-in panel options", () => {
       hasAboveEmailOptions: true,
     });
   });
+
+  test.each([
+    [
+      { emailOtp: true, localPassword: false, bootstrap: false },
+      false,
+      "offered",
+    ],
+    [
+      { emailOtp: false, localPassword: false, bootstrap: true },
+      false,
+      "offered",
+    ],
+    [
+      { emailOtp: false, localPassword: true, bootstrap: false },
+      true,
+      "offered",
+    ],
+    [
+      { emailOtp: false, localPassword: true, bootstrap: false },
+      false,
+      "not_offered",
+    ],
+  ] as const)(
+    "account creation for %o with a social provider %p is %s",
+    (capabilities, google, expected) => {
+      expect(
+        resolveSignInOptions({
+          authCapabilities: {
+            ...capabilities,
+            reviewPasswordSignIn: false,
+            social: { google, microsoft: false },
+          },
+          socialProviderFlags: { google: true, microsoft: false },
+        }).accountCreation,
+      ).toBe(expected);
+    },
+  );
 });
 
 const everyOption = resolveSignInOptions({
   authCapabilities: {
     emailOtp: true,
     localPassword: true,
+    reviewPasswordSignIn: false,
     bootstrap: false,
     social: { google: true, microsoft: true },
   },
@@ -104,11 +167,38 @@ describe("last-used sign-in method", () => {
     }
   });
 
+  test("marks nothing when the page offers a single method", () => {
+    const emailOnly = resolveSignInOptions({
+      authCapabilities,
+      socialProviderFlags: { google: false, microsoft: false },
+    });
+    expect(
+      resolveLastUsedSignInMethod({
+        stored: SIGN_IN_METHOD.emailOtp,
+        options: emailOnly,
+      }),
+    ).toBeNull();
+  });
+
+  test("counts the quiet password option as another method", () => {
+    const emailAndReviewPassword = resolveSignInOptions({
+      authCapabilities: { ...authCapabilities, reviewPasswordSignIn: true },
+      socialProviderFlags: { google: false, microsoft: false },
+    });
+    expect(
+      resolveLastUsedSignInMethod({
+        stored: SIGN_IN_METHOD.emailOtp,
+        options: emailAndReviewPassword,
+      }),
+    ).toBe(SIGN_IN_METHOD.emailOtp);
+  });
+
   test("does not mark the first-account form as the password sign-in", () => {
     const bootstrap = resolveSignInOptions({
       authCapabilities: {
         ...authCapabilities,
         localPassword: true,
+        reviewPasswordSignIn: false,
         bootstrap: true,
       },
       socialProviderFlags: { google: false, microsoft: false },

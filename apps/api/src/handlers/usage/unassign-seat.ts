@@ -16,8 +16,9 @@ import { lockAssignmentCapacity } from "@/api/lib/usage/assignment-capacity";
  */
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "hosted_billing" },
   body: t.Object({
     userId: tUserId,

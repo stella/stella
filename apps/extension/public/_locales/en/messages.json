@@ -70,7 +70,7 @@
     "message": "Lets stella operate a dedicated Chrome tab after you grant site access."
   },
   "extensionName": {
-    "message": "Stella browser"
+    "message": "stella"
   },
   "grantAccess": {
     "message": "Allow all websites"

@@ -21,15 +21,19 @@ import type {
   readGatedDecisionWithDocument,
   readsSharedPublicLawCorpus,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { lookupDecisionsByIdentity } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import type { readDecisionReaderSource } from "@/api/handlers/case-law/decisions/reader";
 import type { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import type { resolveAnnotationTarget } from "@/api/handlers/legal-reader/annotations/document-blocks";
+import type { admitLawRead } from "@/api/handlers/legal-resolve/admission";
+import type { resolveDecision } from "@/api/handlers/legal-resolve/decision";
+import type { resolveLawCitation } from "@/api/handlers/legal-resolve/law";
 import type {
   resolveStatuteExpression,
   resolveStatuteWorkVersion,
 } from "@/api/handlers/legislation/by-eli";
 import type { readPublicLegislationHandler } from "@/api/handlers/legislation/get";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
+import type { readProvisionPreviewHandler } from "@/api/handlers/legislation/provision-preview";
 import type { readLegislationProvisionVersions } from "@/api/handlers/legislation/provision-versions";
 import type { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
@@ -50,11 +54,11 @@ import type { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/ano
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { createFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
-import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
+import type { ResolveCredentialMemberAuthorization } from "@/api/lib/auth/member-authorization";
+import { checkReviewAccountOrganization } from "@/api/lib/auth/review-account";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
@@ -71,6 +75,8 @@ import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { CorpusIndexQueryVariant } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
@@ -89,7 +95,10 @@ import type {
   recordTemplateUse,
 } from "@/api/lib/templates/record-use";
 import type { renameStoredTemplate } from "@/api/lib/templates/rename-template";
-import type { templateDecideConditionsLogic } from "@/api/lib/templates/template-decide-conditions";
+import type {
+  decideTemplateConditions,
+  templateDecideConditionsLogic,
+} from "@/api/lib/templates/template-decide-conditions";
 import type {
   describeStoredTemplate,
   fillStoredTemplateDocx,
@@ -162,8 +171,12 @@ export type McpRequestContext = {
     readCaseLawCourtNames?: (country: string) => Promise<readonly string[]>;
     readGatedDecisionCitations?: typeof readGatedDecisionCitations;
     readGatedDecisionCitationDigest?: typeof readGatedDecisionCitationDigest;
-    lookupDecisionsByIdentity?: typeof lookupDecisionsByIdentity;
+    admitLawRead?: typeof admitLawRead;
+    resolveDecision?: typeof resolveDecision;
+    resolveLawCitation?: typeof resolveLawCitation;
     readGatedDecisionWithDocument?: typeof readGatedDecisionWithDocument;
+    readDecisionReaderSource?: typeof readDecisionReaderSource;
+    readProvisionPreviewHandler?: typeof readProvisionPreviewHandler;
     readsSharedPublicLawCorpus?: typeof readsSharedPublicLawCorpus;
     searchLegislationHandler?: typeof searchLegislationHandler;
     resolveStatuteExpression?: typeof resolveStatuteExpression;
@@ -190,6 +203,7 @@ export type McpRequestContext = {
     loadAnonymizationAllowlistCanonicalsByWorkspace?: typeof loadAnonymizationAllowlistCanonicalsByWorkspace;
     loadAnonymizationGazetteerEntriesByWorkspace?: typeof loadAnonymizationGazetteerEntriesByWorkspace;
     templateDecideConditionsLogic?: typeof templateDecideConditionsLogic;
+    decideTemplateConditions?: typeof decideTemplateConditions;
     fillStoredTemplateDocx?: typeof fillStoredTemplateDocx;
     fillStoredTemplateWithText?: typeof fillStoredTemplateWithText;
     fillStoredTemplateWithTextStrict?: typeof fillStoredTemplateWithTextStrict;
@@ -218,7 +232,7 @@ export type McpRequestContext = {
   accessibleWorkspaceStatusById: Map<string, AccessibleWorkspace["status"]>;
   /**
    * Every accessible (non-deleting) workspace with its status. The generic
-   * capability path (`invoke_capability`) needs this to build the
+   * capability path (capability executors) needs this to build the
    * `getAccessibleWorkspaces` resolver the safe-handler context carries; existing
    * tools resolve access through `accessibleWorkspaceIdSet` /
    * `accessibleWorkspaceStatusById` and do not read it.
@@ -240,7 +254,7 @@ export type McpRequestContext = {
   toolConfirmation?: ToolConfirmation | undefined;
   /**
    * OAuth scopes granted to this session (the access token's `scope` claim).
-   * `invoke_capability` gates each capability on its catalog scope against this
+   * capability executors gate each capability on its catalog scope against this
    * list; the session-authed chat projection has no OAuth scopes and passes an
    * empty list (it never dispatches the generic path).
    */
@@ -279,7 +293,7 @@ export type McpRequestContext = {
    * The originating gateway HTTP request. Present on the MCP transport path
    * (set by `resolveMcpSessionContext`); absent on the session-authed chat
    * projection, which never dispatches the generic capability path. Only
-   * `invoke_capability` reads it (to synthesize a safe-handler context).
+   * capability executors read it (to synthesize a safe-handler context).
    */
   request?: Request;
   recordAuditEvent: AuditRecorder;
@@ -368,11 +382,13 @@ export const resolveMcpSessionContext = async (
     request,
     resolveAuthorization = resolveCredentialMemberAuthorization,
     checkAccountOperation = checkDemoAccountOperation,
+    checkAccountOrganization = checkReviewAccountOrganization,
   }: {
     clientIp?: string | null;
     request: Request;
-    resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
+    resolveAuthorization?: ResolveCredentialMemberAuthorization;
     checkAccountOperation?: typeof checkDemoAccountOperation;
+    checkAccountOrganization?: typeof checkReviewAccountOrganization;
   },
 ): Promise<McpRequestContext> => {
   const { organizationId, userId } = brandActorSessionIdentity({
@@ -390,10 +406,19 @@ export const resolveMcpSessionContext = async (
     });
   }
 
+  // A restricted account is refused its operation here, and an account bound
+  // to one organization opens no other, whatever grant or membership the
+  // credential was issued under.
   const accountOperation = checkAccountOperation(authorization.email);
-  if (Result.isError(accountOperation)) {
+  const accountAccess = Result.isError(accountOperation)
+    ? accountOperation
+    : checkAccountOrganization({
+        email: authorization.email,
+        organizationId,
+      });
+  if (Result.isError(accountAccess)) {
     throw new McpOrganizationAccessError({
-      message: accountOperation.error.message,
+      message: accountAccess.error.message,
     });
   }
 

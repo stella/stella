@@ -1,5 +1,7 @@
 import type { APIRequestContext, Page } from "@playwright/test";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+
+import { sha256Base64Url as hashSha256Base64Url } from "@stll/sha256/node";
 
 import { getStorageKey } from "../../src/consts";
 import { expect, test } from "../helpers/test";
@@ -7,6 +9,7 @@ import { expect, test } from "../helpers/test";
 const API_BASE_URL = process.env["E2E_API_URL"] ?? "http://localhost:3001";
 const WEB_BASE_URL = process.env["E2E_WEB_URL"] ?? "http://localhost:3000";
 const AUTH_BASE_URL = `${API_BASE_URL}/api/auth`;
+const CONSENT_SCOPES = "openid profile stella:read stella:search";
 const CALLBACK_PORT = 54_321;
 const LOCALE_STORAGE_KEY = getStorageKey("i18n");
 
@@ -32,12 +35,14 @@ type RegisterClientOptions = {
   request: APIRequestContext;
   id: string;
   redirectUri: string;
+  scopes?: string;
 };
 
 const registerClient = async ({
   request,
   id,
   redirectUri,
+  scopes = CONSENT_SCOPES,
 }: RegisterClientOptions): Promise<string> => {
   const response = await request.post(`${AUTH_BASE_URL}/oauth2/register`, {
     headers: { origin: new URL(WEB_BASE_URL).origin },
@@ -48,7 +53,7 @@ const registerClient = async ({
       redirect_uris: [redirectUri],
       require_pkce: true,
       response_types: ["code"],
-      scope: "openid profile stella:read stella:search",
+      scope: scopes,
       token_endpoint_auth_method: "none",
     },
   });
@@ -60,25 +65,24 @@ type AuthorizeUrlOptions = {
   clientId: string;
   id: string;
   redirectUri: string;
+  scopes?: string;
 };
 
 const authorizeUrlFor = ({
   clientId,
   id,
   redirectUri,
+  scopes = CONSENT_SCOPES,
 }: AuthorizeUrlOptions) => {
   const verifier = `oauth-consent-${id}`;
-  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const challenge = hashSha256Base64Url(verifier);
   const authorizeUrl = new URL(`${AUTH_BASE_URL}/oauth2/authorize`);
   authorizeUrl.searchParams.set("client_id", clientId);
   authorizeUrl.searchParams.set("code_challenge", challenge);
   authorizeUrl.searchParams.set("code_challenge_method", "S256");
   authorizeUrl.searchParams.set("redirect_uri", redirectUri);
   authorizeUrl.searchParams.set("response_type", "code");
-  authorizeUrl.searchParams.set(
-    "scope",
-    "openid profile stella:read stella:search",
-  );
+  authorizeUrl.searchParams.set("scope", scopes);
   authorizeUrl.searchParams.set("state", `state-${id}`);
   return authorizeUrl.toString();
 };
@@ -117,6 +121,37 @@ const openConsent = async ({
     }),
   ).toBeVisible({ timeout: 30_000 });
 };
+
+test("OAuth consent keeps its decision in view on a laptop and a phone", async ({
+  context,
+  page,
+}) => {
+  await setEnglishLocale(page);
+  for (const viewport of [
+    { width: 1280, height: 720 },
+    { width: 390, height: 844 },
+  ]) {
+    await page.setViewportSize(viewport);
+    const id = token();
+    const redirectUri = hostedRedirectUriFor(id);
+    const clientId = await registerClient({
+      request: context.request,
+      id,
+      redirectUri,
+    });
+    await openConsent({ page, clientId, id, redirectUri });
+    for (const name of ["Allow", "Decline"]) {
+      await expect(page.getByRole("button", { name })).toBeInViewport({
+        ratio: 1,
+      });
+    }
+    // A registered client is unverified: its own name, no product mark.
+    await expect(page.getByText("Unverified app")).toBeVisible();
+    await expect(
+      page.locator('[data-slot="verified-client-mark"]'),
+    ).toHaveCount(0);
+  }
+});
 
 test("OAuth consent allows and declines through the top-level callback", async ({
   context,
@@ -270,4 +305,93 @@ test("account switching preserves the signed OAuth query through auth routing", 
         ).json(),
     )
     .toBeNull();
+});
+
+test("consent discloses permissions on demand and brands only verified locations", async ({
+  context,
+  page,
+}) => {
+  await setEnglishLocale(page);
+  const scopes =
+    "openid profile offline_access stella:read stella:documents_write stella:matters_write stella:contacts_write stella:billing_write stella:skills stella:templates";
+  for (const scenario of [
+    {
+      redirectUri: "https://claude.ai/api/mcp/auth_callback",
+      name: "Claude",
+      publisher: "Anthropic",
+    },
+    {
+      redirectUri: "https://chatgpt.com/connector_platform_oauth_redirect",
+      name: "ChatGPT",
+      publisher: "OpenAI",
+    },
+    { redirectUri: hostedRedirectUriFor(token()), name: null, publisher: null },
+  ]) {
+    const id = token();
+    const clientId = await registerClient({
+      request: context.request,
+      id,
+      redirectUri: scenario.redirectUri,
+      scopes,
+    });
+    await page.goto(
+      authorizeUrlFor({
+        clientId,
+        id,
+        redirectUri: scenario.redirectUri,
+        scopes,
+      }),
+      { waitUntil: "commit" },
+    );
+    await expect(
+      page.getByRole("heading", {
+        name: `Connect ${scenario.name ?? `Consent browser test ${id}`} to stella`,
+      }),
+    ).toBeVisible();
+    if (scenario.publisher) {
+      await expect(
+        page.getByText(`Verified app by ${scenario.publisher}`),
+      ).toBeVisible();
+      await expect(
+        page.locator('[data-slot="verified-client-mark"]'),
+      ).toHaveCount(1);
+      await expect(page.getByText("Unverified app")).toHaveCount(0);
+    } else {
+      await expect(page.getByText("Unverified app")).toBeVisible();
+      await expect(
+        page.locator('[data-slot="verified-client-mark"]'),
+      ).toHaveCount(0);
+      await expect(
+        page.locator('[data-slot="unverified-client-mark"]'),
+      ).toHaveCount(1);
+    }
+    await expect(
+      page.locator('[data-slot="consent-summary-line"]'),
+    ).toHaveCount(4);
+    await expect(
+      page.locator('[data-slot="consent-sensitive-access"]'),
+    ).toHaveCount(1);
+    const permission = page.getByText(
+      "Create, edit, and delete your documents",
+      { exact: true },
+    );
+    await expect(permission).toBeHidden();
+    const disclosure = page.locator(
+      '[data-slot="consent-permissions"] > summary',
+    );
+    await disclosure.click();
+    await expect(permission).toBeVisible();
+    await disclosure.click();
+    await expect(permission).toBeHidden();
+    const host = page.getByText(new URL(scenario.redirectUri).host, {
+      exact: true,
+    });
+    await expect(host).toBeHidden();
+    const info = page.getByRole("button", { name: "Redirect details" });
+    await info.click();
+    await expect(host).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(host).toBeHidden();
+    await expect(info).toBeFocused();
+  }
 });

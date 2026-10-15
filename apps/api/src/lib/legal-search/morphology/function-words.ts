@@ -1,3 +1,4 @@
+import { normalizeUnicode } from "@stll/text-normalize";
 /**
  * Function words per corpus language: the words a reader's question is built
  * out of rather than the words it is about.
@@ -733,7 +734,7 @@ export const FUNCTION_WORDS = {
  * disagree about what "the same word" means.
  */
 export const functionWordKey = (token: string): string =>
-  token.normalize("NFC").toLowerCase();
+  normalizeUnicode(token, "NFC").toLowerCase();
 
 /**
  * Whether a list is authored for this language. Asked of the map itself

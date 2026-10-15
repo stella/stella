@@ -18,6 +18,7 @@ import {
   setMetricLineSinkForTesting,
   resetMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
@@ -251,6 +252,7 @@ const runFederated401 = async (
       {
         modelId: MODEL,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: undefined,
         reasoningEffort: undefined,
         role: "chat",

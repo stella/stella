@@ -17,11 +17,12 @@ import type {
   CatalogueLicense,
   CatalogueSetup,
 } from "@stll/catalogue";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 import { STELLA_REPO_URL } from "@/features/knowledge/public/tools/tool-detail.logic";
 
 /** Where the skill's content lives relative to this repository. */
-export type SkillSource = "github" | "in-tree";
+type SkillSource = "github" | "in-tree";
 
 /**
  * Flat contribute-form state. Kept as plain strings/arrays so the React
@@ -56,7 +57,7 @@ const MANIFEST_SCHEMA_REF = "../../../schema.json";
  * hyphens, and cap length to the schema's 64-char limit.
  */
 export const deriveSlug = (name: string): string => {
-  const normalized = name.normalize("NFKD").toLowerCase();
+  const normalized = normalizeUnicode(name, "NFKD").toLowerCase();
   let kebab = "";
   for (const character of normalized) {
     const codePoint = character.codePointAt(0);

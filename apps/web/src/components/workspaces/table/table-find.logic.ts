@@ -234,7 +234,7 @@ export type TableFindRowText = ReadonlyMap<string, string>;
  * visible mark would read as a bug, and a marked run in a row nothing matched
  * would be a lie about why it is there.
  */
-export const tableFindMatches = ({
+const tableFindMatches = ({
   columnIds,
   term,
   text,

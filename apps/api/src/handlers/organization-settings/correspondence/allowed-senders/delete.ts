@@ -13,10 +13,11 @@ const paramsSchema = t.Object({
   senderId: tSafeId("correspondenceAllowedSender"),
 });
 const config = {
+  contract: "patch",
   description:
     "Revoke an approved shared mailbox sender while retaining its approval history.",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: {
     type: "capability",
     reason: "correspondence",

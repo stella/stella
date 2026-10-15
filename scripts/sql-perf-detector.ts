@@ -247,7 +247,7 @@ const constBindings = (file: ts.SourceFile): ConstBindings => {
       ts.isIdentifier(node.name) &&
       node.initializer !== undefined &&
       ts.isVariableDeclarationList(node.parent) &&
-      // oxlint-disable-next-line eslint/no-bitwise -- TypeScript encodes declaration kind in flags
+      // oxlint-disable-next-line no-bitwise -- TypeScript encodes declaration kind in flags
       (node.parent.flags & ts.NodeFlags.Const) !== 0
     ) {
       let scope: ts.Node = node.parent;

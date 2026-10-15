@@ -9,6 +9,7 @@ import {
 } from "@stll/folio-core";
 import { readBilingualDocx } from "@stll/folio-core/server";
 
+import { entities, fields } from "@/api/db/schema";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
@@ -139,7 +140,23 @@ const createContext = (body: Partial<Ctx["body"]> = {}): Ctx =>
       targetLang: "en",
       ...body,
     },
-    ...createScopedDbMock({}),
+    ...createScopedDbMock({
+      select: () => ({
+        from: (table: unknown) => ({
+          where: () => ({
+            limit: async () => {
+              if (table === entities) {
+                return [{ id: entityId }];
+              }
+              if (table === fields) {
+                return [{ id: fieldId }];
+              }
+              return [];
+            },
+          }),
+        }),
+      }),
+    }),
     session: { activeOrganizationId: organizationId },
     workspaceId,
     user: { id: userId },

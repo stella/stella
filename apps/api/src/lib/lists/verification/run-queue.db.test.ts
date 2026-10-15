@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
@@ -13,16 +14,21 @@ import {
   entityVersions,
   fields,
   legalListVerificationRuns,
+  organizationSettings,
   properties,
   workspaces,
   workspaceMembers,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
+import { encryptAIConfig } from "@/api/lib/ai-config-crypto";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
-import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry";
+import {
+  LEGAL_LISTS_FEATURE_ID,
+  LIST_VERIFICATION_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import type { readVerificationDocument } from "@/api/lib/lists/verification/document-text";
 import {
   createVerificationCall,
@@ -40,6 +46,7 @@ import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundarie
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getTestDb,
@@ -57,6 +64,7 @@ const userId = toSafeId<"user">(`verification-requester-${Bun.randomUUIDv7()}`);
 const organizationMemberId = Bun.randomUUIDv7();
 const workspaceMemberId = createSafeId<"workspaceMember">();
 const grants = {
+  [LEGAL_LISTS_FEATURE_ID]: [{ type: "organization", organizationId }],
   [LIST_VERIFICATION_FEATURE_ID]: [{ type: "organization", organizationId }],
 } satisfies FeatureAccessGrants;
 
@@ -95,12 +103,16 @@ afterAll(async () => await releaseTestDb());
 
 const seedRun = async (status: "queued" | "running" = "queued") => {
   const id = createSafeId<"legalListVerificationRun">();
+  const entityId = createSafeId<"entity">();
+  await db
+    .insert(entities)
+    .values({ id: entityId, workspaceId, name: "Verification document" });
   await db.insert(legalListVerificationRuns).values({
     id,
     organizationId,
     workspaceId,
     requestedBy: userId,
-    entityId: createSafeId<"entity">(),
+    entityId,
     fileFieldId: createSafeId<"field">(),
     entityVersionId: createSafeId<"entityVersion">(),
     contentSha256: "a".repeat(64),
@@ -124,9 +136,6 @@ const seedPinnedRun = async () => {
   if (run === undefined) {
     throw new Error("Expected pinned run fixture");
   }
-  await db
-    .insert(entities)
-    .values({ id: run.entityId, workspaceId, name: "Verification document" });
   await db
     .insert(entityVersions)
     .values({ id: run.entityVersionId, entityId: run.entityId, workspaceId });
@@ -301,6 +310,7 @@ test("queued revocation fails once and makes no execution call", async () => {
   let calls = 0;
   const args = {
     data: { runId, organizationId, workspaceId, userId },
+    admission: testModelAdmission(organizationId),
     actor: actorFor(runId),
     grants: {},
     execute: async () => {
@@ -364,6 +374,7 @@ test("access is rechecked after resolving the pinned file before reading documen
     });
     await processListVerificationRun({
       data: { runId, organizationId, workspaceId, userId },
+      admission: testModelAdmission(organizationId),
       actor: actorFor(runId, database),
       execution: {
         readDocument: async ({ file }) => {
@@ -404,6 +415,7 @@ test.each(["matter", "grant", "deployment", "active"] as const)(
       const control = await seedPinnedRun();
       await processListVerificationRun({
         data: { runId: control, organizationId, workspaceId, userId },
+        admission: testModelAdmission(organizationId),
         actor: actorFor(control),
         execution,
       });
@@ -418,6 +430,7 @@ test.each(["matter", "grant", "deployment", "active"] as const)(
       try {
         const args = {
           data: { runId, organizationId, workspaceId, userId },
+          admission: testModelAdmission(organizationId),
           actor: actorFor(runId),
           execution,
         };
@@ -499,6 +512,7 @@ test("granted duplicate delivery executes once using the persisted requester", a
   };
   const args = {
     data: { runId, organizationId, workspaceId, userId },
+    admission: testModelAdmission(organizationId),
     actor,
     grants,
     execute,
@@ -518,6 +532,7 @@ test("job requester mismatch leaves the persisted run unchanged", async () => {
   let calls = 0;
   await processListVerificationRun({
     data: { runId, organizationId, workspaceId, userId: actor.userId },
+    admission: testModelAdmission(organizationId),
     actor,
     grants,
     execute: async () => {
@@ -605,6 +620,7 @@ test("membership removal closes queued execution with a server-bound audit", asy
   let calls = 0;
   await processListVerificationRun({
     data: { runId, organizationId, workspaceId, userId },
+    admission: testModelAdmission(organizationId),
     actor: actorFor(runId),
     grants,
     execute: async () => {
@@ -650,6 +666,7 @@ test("current role permission is required for queued execution", async () => {
   let calls = 0;
   await processListVerificationRun({
     data: { runId, organizationId, workspaceId, userId },
+    admission: testModelAdmission(organizationId),
     actor: actorFor(runId),
     grants,
     execute: async () => {
@@ -696,11 +713,13 @@ test.each([
       ).toEqual([{ id: workspaceMemberId }]);
       await processListVerificationRun({
         data: { runId, organizationId, workspaceId, userId },
+        admission: testModelAdmission(organizationId),
         actor: actorFor(runId),
         grants,
-        execute: async ({ actor, accessProof }) => {
+        execute: async ({ actor, admission, accessProof }) => {
           const call = createVerificationCall({
             deps: {
+              admission,
               accessProof,
               checkRunBudget: async () => Result.ok(),
               refreshAccessProof: async () => {
@@ -791,6 +810,7 @@ test.each([
       expect(await readAudits(runId)).toHaveLength(1);
       await processListVerificationRun({
         data: { runId, organizationId, workspaceId, userId },
+        admission: testModelAdmission(organizationId),
         actor: actorFor(runId),
         grants,
         execute: async () => {
@@ -862,6 +882,22 @@ test("queue handoff failures surface while the persisted run remains recoverable
 
 test("worker budget refusal stops model dispatch and releases its active slot", async () =>
   await withProductionPrerequisites(async () => {
+    const configured = await encryptAIConfig(organizationId, {
+      providers: [{ provider: "google", apiKey: "fixture-key" }],
+      overrideModels: {
+        chat: { provider: "google", modelId: "model-a" },
+        fast: { provider: "google", modelId: "model-a" },
+        pdf: { provider: "google", modelId: "model-a" },
+        reasoning: { provider: "google", modelId: "model-a" },
+      },
+      decision: null,
+    });
+    await db.insert(organizationSettings).values({
+      id: createSafeId<"organizationSettings">(),
+      organizationId,
+      aiConfigEncrypted: configured.ciphertext,
+      aiConfigIv: configured.iv,
+    });
     const runId = await seedPinnedRun();
     const previousActive = env.LIST_VERIFICATION_ACTIVE_RUNS_MAX;
     const previousDaily = env.LIST_VERIFICATION_DAILY_STARTS_MAX;
@@ -872,6 +908,7 @@ test("worker budget refusal stops model dispatch and releases its active slot", 
       await seedRun();
       await processListVerificationRun({
         data: { runId, organizationId, workspaceId, userId },
+        admission: testModelAdmission(organizationId),
         actor: actorFor(runId),
         grants,
         execution: {
@@ -902,5 +939,8 @@ test("worker budget refusal stops model dispatch and releases its active slot", 
     } finally {
       env.LIST_VERIFICATION_ACTIVE_RUNS_MAX = previousActive;
       env.LIST_VERIFICATION_DAILY_STARTS_MAX = previousDaily;
+      await db
+        .delete(organizationSettings)
+        .where(eq(organizationSettings.organizationId, organizationId));
     }
   }));

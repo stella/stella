@@ -1,0 +1,456 @@
+/* Source Serif 4 — shared by the public-law readers. */
+@import "@fontsource-variable/source-serif-4";
+
+/* Shared legal-reader tokens. */
+
+:root {
+  --reader-body-font: "Source Serif 4 Variable", serif;
+  --reader-body-size-base: 16px;
+  --reader-body-size: var(--reader-body-size-base);
+  /* How much larger the reader is set than the document's own sizes. One
+     step for the whole document; a reader that never asked reads at 1. Every
+     absolute type size inside a reader multiplies by it. */
+  --reader-text-scale: 1;
+  --reader-body-line-height: 1.65;
+  /* Measure: the line length the running text is read at, independent of how
+     wide the pane happens to be. A decision opened in a wide inspector ran to
+     ~100 characters a line; ~70 is the length prose is read at. */
+  --reader-measure: 70ch;
+  --reader-paragraph-gap: 1em;
+  --reader-section-gap-top: 2.5em;
+  --reader-section-gap-bottom: 0.8em;
+  --reader-anchor-offset: 88px;
+
+  /* Statute heading rhythm: the shallower the container, the wider the
+     approach to it. Absolute rather than em, so the gap ordering is the
+     level ordering and does not compound with the heading's own size. */
+  --reader-heading-gap-1: 3rem;
+  --reader-heading-gap-2: 2.4rem;
+  --reader-heading-gap-3: 1.9rem;
+  --reader-heading-gap-4: 1.5rem;
+  --reader-heading-gap-5: 1.25rem;
+  /* A section designation opens a provision, so it keeps a little more
+     approach than its depth alone would give it. */
+  --reader-heading-gap-6: 1.4rem;
+  --reader-heading-gap-bottom: 0.5rem;
+  --reader-heading-chain-gap: 0.4rem;
+}
+
+/* A heading that opens the container above it belongs to that container,
+   not to the text before it: ČÁST → HLAVA → Díl → § reads as one nested
+   stack, while the first heading after body text keeps its full approach.
+   Scoped to the statute reader; case law states its own h3 rule below. */
+.reader-statute :is(h1, h2, h3, h4, h5, h6) + :is(h1, h2, h3, h4, h5, h6) {
+  margin-top: var(--reader-heading-chain-gap);
+}
+
+/* The block a permalink was followed to, named for a moment. */
+@keyframes reader-target {
+  0%,
+  35% {
+    background-color: color-mix(in srgb, var(--color-primary) 14%, transparent);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+[data-anchor]:target {
+  animation: reader-target 2.4s ease-out;
+  border-radius: 0.25rem;
+}
+
+/* Hyphenation at every width, justification on desktop — how a law report is
+   set. Hyphenation is line breaking: it alters no character of the text, and
+   it is what keeps a justified column from opening rivers of white space. The
+   dictionary comes from the document's own language, which each reader puts
+   on its <article> as `lang`, so Czech, Slovak and Polish break at their own
+   points. The limits keep short words whole and leave at least three letters
+   on each side of a break.
+   text-align-last: start prevents short/single-line paragraphs from being
+   stretched. */
+.reader-justify {
+  -webkit-hyphens: auto;
+  hyphens: auto;
+  hyphenate-limit-chars: 7 3 3;
+}
+
+@media (min-width: 1024px) {
+  .reader-justify {
+    text-align: justify;
+    text-align-last: start;
+  }
+}
+
+/* Paper-like background for the reader.
+   Starts from the semantic card token so it adapts to all
+   palette × theme combinations (neutral, nord, flexoki) and
+   blends in a touch of the foreground so the paper stays
+   visually distinct from its surface even in the neutral
+   palette, where --card and --background both resolve to
+   white. Nord/Flexoki already separate card from background
+   and the extra blend here is effectively imperceptible. */
+.reader-paper {
+  background-color: color-mix(
+    in srgb,
+    var(--color-card) 99%,
+    var(--color-foreground)
+  );
+
+  /* The text is whatever the court's file contained, and some of it is not
+     language: an embedded-object identifier survives ingestion as one
+     1400px-wide unbreakable token, which in a 512px inspector pane becomes a
+     horizontal scrollbar over the whole document. `anywhere` gives such a
+     token break opportunities without touching how real words break, and the
+     `min-width` lets the column honour them when it is a flex or grid child. */
+  min-width: 0;
+  overflow-wrap: anywhere;
+
+  /* Containment removes intrinsic inline size. A definite size keeps a flex
+     child with automatic inline margins from collapsing instead of stretching.
+     The page marker queries the space outside the reading measure. */
+  inline-size: 100%;
+  container: reader-canvas / inline-size;
+}
+
+/* One document canvas for every public-law reader: width, centering and
+   inline gutters stay identical even when the surrounding tools differ. */
+[data-slot="reader-document-column"] {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: 1rem;
+}
+
+@media (max-width: 639px) {
+  [data-slot="reader-document-column"] {
+    padding-inline: 0.75rem;
+  }
+}
+
+/* The measure belongs to the inspector pane, where the reader is a column
+   beside the work and a line would otherwise run the width of a resized rail.
+   A full page keeps the canvas above: there the wide column is the point —
+   statutory text fills the screen instead of leaving it empty. Both readers,
+   so a line in the pane is the same length whichever document is open.
+   The pane slot comes from packages/ui/src/inspector/dock.tsx. */
+[data-slot="inspector-dock-pane"] :is(.reader-case-law, .reader-statute) {
+  inline-size: 100%;
+  max-width: var(--reader-measure);
+  margin-inline: auto;
+}
+
+/* The element the document's sizes are measured from, marked by the reader's
+   own +/- (see use-reader-text-scale.ts, which owns the slot and the step
+   together). One declaration moves the whole document: the running text
+   through --reader-body-size, anything that merely inherits through the
+   root's own font-size, and every Tailwind size utility inside through the
+   theme's type ladder, which v4 resolves at the point of use — so a
+   `text-xs` written in a reader module tomorrow scales without being
+   rewritten. The multiples are Tailwind's own, so an unscaled reader is set
+   exactly as before.
+
+   These sit on the reader root rather than at :root because a custom
+   property is substituted once where it is declared: a copy at :root would
+   be frozen at scale 1 for every descendant. The pane's chrome — header,
+   find bar, toolbars — is outside this element and keeps its own sizes. */
+[data-slot="reader-text-root"] {
+  --reader-body-size: calc(
+    var(--reader-body-size-base) * var(--reader-text-scale)
+  );
+  font-size: calc(1em * var(--reader-text-scale));
+
+  --text-xs: calc(0.75rem * var(--reader-text-scale));
+  --text-sm: calc(0.875rem * var(--reader-text-scale));
+  --text-base: calc(1rem * var(--reader-text-scale));
+  --text-lg: calc(1.125rem * var(--reader-text-scale));
+  --text-xl: calc(1.25rem * var(--reader-text-scale));
+  --text-2xl: calc(1.5rem * var(--reader-text-scale));
+  --text-3xl: calc(1.875rem * var(--reader-text-scale));
+  --text-4xl: calc(2.25rem * var(--reader-text-scale));
+  --text-5xl: calc(3rem * var(--reader-text-scale));
+  --text-6xl: calc(3.75rem * var(--reader-text-scale));
+  --text-7xl: calc(4.5rem * var(--reader-text-scale));
+  --text-8xl: calc(6rem * var(--reader-text-scale));
+  --text-9xl: calc(8rem * var(--reader-text-scale));
+}
+
+/* Collapse gap between consecutive h3 sub-headings
+   (e.g., "I." followed by "Ústavná sťažnosť"). */
+article h3 + h3 {
+  margin-top: 0.2em;
+}
+
+/* Tight stacking for signature lines (judge name + title). */
+article .reader-signature {
+  margin-block-end: 0;
+}
+
+article .reader-signature + .reader-signature {
+  margin-block-start: 0;
+}
+
+/* Highlight flash when jumping to a block (annotation, footnote, note
+   back-reference). A held wash, strong enough to find in a wall of text. */
+@keyframes reader-highlight {
+  0%,
+  40% {
+    background-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+article [data-highlight] {
+  animation: reader-highlight 1.5s ease-out;
+  border-radius: 0.25rem;
+}
+
+/* The passage a search result sent the reader to. A flash answers "you have
+   arrived" and then leaves nothing behind; a reader who scrolls on and back
+   has to find the passage again. A rule in the gutter stays until they jump
+   somewhere else, and costs no layout: it is painted outside the text column
+   rather than indenting it. */
+article [data-reader-landing] {
+  position: relative;
+}
+
+article [data-reader-landing]::before {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: -0.6rem;
+  width: 2px;
+  border-radius: 1px;
+  background-color: color-mix(in srgb, var(--color-primary) 70%, transparent);
+}
+
+/* The marker replaces the arrival flash on the block it marks. */
+article [data-reader-landing]:target {
+  animation: none;
+}
+
+/* Always show scrollbar in the decision reader scroll container.
+   Thin, subtle track that doesn't compete with the text. */
+.reader-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.reader-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.reader-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.reader-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+.reader-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted-foreground);
+}
+
+/* Footnote apparatus. One rule separates the body from the first footnote
+   of a run — consecutive footnotes continue under it without repeating the
+   line, including across the group wrappers the decision reader emits. */
+p[data-note="footnote"] {
+  margin-top: 1.5em;
+  border-top: 1px solid var(--color-border);
+  padding-top: 1em;
+}
+
+p[data-note="footnote"] + p[data-note="footnote"],
+div:has(> p[data-note="footnote"]) + div > p[data-note="footnote"]:first-child {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+
+/* The two faces a reader surface may name. Reader content never names one:
+   it inherits the serif from the reader root, and `no-font-utility-in-reader`
+   keeps a Tailwind font utility out of these modules. These classes are for
+   what cannot inherit — chrome drawn inside the text, and document text
+   quoted inside chrome, which a preview card portals out of the reader. */
+.reader-body {
+  font-family: var(--reader-body-font);
+}
+
+.reader-chrome,
+.reader-note-label,
+.reader-note-ref,
+.reader-page-marker,
+.reader-note-back,
+.reader-apparatus-summary {
+  font-family: var(--font-sans, sans-serif);
+}
+
+/* The reader's own footnote number, shown only when the source text does
+   not already open with it. A button: clicking it returns to the sentence
+   that cites the footnote. */
+.reader-note-label {
+  margin-inline-end: 0.45em;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-size: 0.78em;
+  font-weight: 600;
+  vertical-align: super;
+  color: var(--color-primary);
+  user-select: none;
+  cursor: pointer;
+}
+
+.reader-note-label:hover {
+  text-decoration: underline;
+}
+
+/* In-text note reference: superscript mark, no underline; the anchor jump
+   plus the :target flash is the interaction. */
+.reader-note-ref {
+  font-size: 0.72em;
+  vertical-align: super;
+  text-decoration: none;
+  color: var(--color-primary);
+}
+
+.reader-note-ref:hover {
+  text-decoration: underline;
+}
+
+/* Reporter page boundary, hanging in the start margin at its own line the
+   way the published volume prints it. Absolutely positioned with `top`
+   unset, so it keeps the static (line) position of the inline it replaces;
+   the paragraph is the positioning context. Clicking opens the official
+   reporter scan. */
+.reader-page-marker {
+  position: absolute;
+  inset-inline-end: 100%;
+  margin-inline-end: 1.1rem;
+  padding-top: 0.15em;
+  border-top: 1px solid var(--color-border);
+  font-size: calc(0.68rem * var(--reader-text-scale));
+  line-height: 1.2;
+  color: var(--color-muted-foreground);
+  text-decoration: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* Below the measure plus two margins there is no margin to hang in, and a
+   marker positioned into one that does not exist hangs outside the text: off
+   the unreachable start edge in LTR, and past the scrollable end edge in RTL.
+   So it comes back into the line, which is where a number nobody can reach is
+   no use at all. */
+@container reader-canvas (max-width: 44rem) {
+  .reader-page-marker {
+    position: static;
+    margin-inline: 0 0.4rem;
+    padding-top: 0;
+    border-top: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+}
+
+.reader-page-marker:hover {
+  color: var(--color-primary);
+  border-top-color: var(--color-primary);
+}
+
+/* The exact break point inside the running text: a hair-thin tick, never
+   selectable, so a copy of the sentence contains no trace of it. */
+.reader-page-tick {
+  display: inline-block;
+  width: 1px;
+  height: 0.85em;
+  margin-inline: 1px;
+  vertical-align: text-bottom;
+  background-color: color-mix(in srgb, var(--color-primary) 45%, transparent);
+  user-select: none;
+}
+
+/* The paragraph a hovered margin note belongs to. Once a note has been
+   hovered its anchor keeps `data-note-hover` ("on" or "off"), so the wash
+   layer behind the text persists and its opacity transition runs both ways
+   and can be interrupted. An annotation mark is inline, so it keeps a plain
+   background that follows its line boxes. */
+[data-note-hover="on"][data-annotation-id] {
+  border-radius: 0.25rem;
+  background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
+}
+
+[data-note-hover]:not([data-annotation-id]) {
+  position: relative;
+  isolation: isolate;
+}
+
+/* ::after, because a landing marker already owns the block's ::before. */
+[data-note-hover]:not([data-annotation-id])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 0.25rem;
+  background-color: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+[data-note-hover="on"]:not([data-annotation-id])::after {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-note-hover]:not([data-annotation-id])::after {
+    transition: opacity 120ms ease-out;
+  }
+
+  /* The first hover creates the layer; start it transparent so it fades in. */
+  @starting-style {
+    [data-note-hover="on"]:not([data-annotation-id])::after {
+      opacity: 0;
+    }
+  }
+}
+
+/* The footnote's return arrow: back to the sentence that cites it. */
+.reader-note-back {
+  margin-inline-start: 0.4em;
+  border: 0;
+  padding: 0;
+  background: none;
+  font-size: 0.9em;
+  color: var(--color-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.reader-note-back:hover {
+  text-decoration: underline;
+}
+
+/* Reporter apparatus disclosure: quiet, one line, out of the reading flow
+   until asked for. */
+.reader-apparatus {
+  margin-block: 0.75em;
+}
+
+.reader-apparatus-summary {
+  cursor: pointer;
+  font-size: calc(0.78rem * var(--reader-text-scale));
+  color: var(--color-muted-foreground);
+  user-select: none;
+}
+
+.reader-apparatus-summary:hover {
+  color: var(--color-foreground);
+}
+
+.reader-apparatus[open] > .reader-apparatus-summary {
+  margin-bottom: 0.5em;
+}

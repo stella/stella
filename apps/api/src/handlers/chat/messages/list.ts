@@ -2,7 +2,11 @@ import { panic, Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDbError } from "@/api/db/safe-db";
-import { estimateChatContextPromptTokens } from "@/api/handlers/chat/chat-prompt";
+import {
+  estimateChatContextPromptTokens,
+  estimateChatRevisionNoteTokens,
+} from "@/api/handlers/chat/chat-prompt";
+import { readChatRevisionContextChanges } from "@/api/handlers/chat/chat-revision-context";
 import {
   assertChatThreadScopeMatches,
   resolveChatScope,
@@ -29,6 +33,8 @@ import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
+import { readManagedModelTierOnTx } from "@/api/lib/usage/organization-access-state";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 /**
@@ -94,6 +100,7 @@ const resolveForkProvenance = ({
 };
 
 const config = {
+  contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
@@ -150,11 +157,15 @@ const getMessages = createSafeRootHandler(
     // next send would use.
     const buildNextSendContext = ({
       messages,
+      revisionNoteTokens = 0,
       summary,
       threadChatModel,
       webResearch,
+      modelTier,
     }: {
+      modelTier: ManagedModelTier;
       messages: readonly ChatMessage[];
+      revisionNoteTokens?: number;
       summary: {
         summarizedMessageCount: number;
         summaryMarkdown: string;
@@ -180,9 +191,11 @@ const getMessages = createSafeRootHandler(
         chatModelOverride,
         orgAIConfig,
         organizationId: session.activeOrganizationId,
+        modelTier,
       });
       return computeThreadContextUsage({
         messages,
+        conversationContextTokens: revisionNoteTokens,
         promptTokens,
         toolTokens,
         triggerTokens,
@@ -206,6 +219,7 @@ const getMessages = createSafeRootHandler(
             userId: { eq: user.id },
           },
           columns: {
+            activeSkill: true,
             workspaceId: true,
             contextMatterIds: true,
             webSearchEnabled: true,
@@ -249,8 +263,17 @@ const getMessages = createSafeRootHandler(
           disabledNativeToolSlugs,
         });
 
+        const modelTier = await readManagedModelTierOnTx(
+          tx,
+          session.activeOrganizationId,
+        );
+
         if (!thread) {
-          return { kind: "not-found" as const, webSearchAvailable };
+          return {
+            kind: "not-found" as const,
+            webSearchAvailable,
+            modelTier,
+          };
         }
 
         // Reject requests whose scope contradicts the persisted thread.
@@ -313,16 +336,25 @@ const getMessages = createSafeRootHandler(
             checkpoint,
           }),
         );
+        const revisionChanges = unwrapTxRead(
+          await readChatRevisionContextChanges({
+            messages: windowedMessages,
+            threadId,
+            tx,
+          }),
+        );
 
         return {
           kind: "ok" as const,
           attachedFiles,
           webSearchAvailable,
+          modelTier,
           thread,
           page,
           parent,
           checkpoint,
           windowedMessages,
+          revisionNoteTokens: estimateChatRevisionNoteTokens(revisionChanges),
         };
       }),
     );
@@ -330,6 +362,7 @@ const getMessages = createSafeRootHandler(
     if (reads.kind === "not-found") {
       if (allowMissingThread) {
         return Result.ok({
+          activeSkill: null,
           activeTurnId: null,
           attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
@@ -353,6 +386,7 @@ const getMessages = createSafeRootHandler(
             summary: null,
             threadChatModel: null,
             webResearch: false,
+            modelTier: reads.modelTier,
           }),
         });
       }
@@ -382,6 +416,8 @@ const getMessages = createSafeRootHandler(
       parent,
       checkpoint,
       windowedMessages,
+      modelTier,
+      revisionNoteTokens,
     } = reads;
 
     // Estimated for every thread, empty ones included: with no messages and no
@@ -392,6 +428,7 @@ const getMessages = createSafeRootHandler(
     // template studio) the standalone read path never carries template-authoring
     // tools. The trigger denominator resolves the same model the next send uses.
     const context = buildNextSendContext({
+      revisionNoteTokens,
       messages: windowedMessages.map((message) => ({
         id: message.id,
         role: message.role,
@@ -405,9 +442,11 @@ const getMessages = createSafeRootHandler(
         : null,
       threadChatModel: thread.chatModel,
       webResearch: webSearchAvailable && thread.webSearchEnabled,
+      modelTier,
     });
 
     return Result.ok({
+      activeSkill: thread.activeSkill,
       activeTurnId: page.activeTurnId,
       attachedFiles,
       forkProvenance: resolveForkProvenance({

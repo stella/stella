@@ -1,0 +1,6 @@
+{
+  "metric": "direct-failure-sinks",
+  "file": "apps/api/src/handlers/user-files/read-visual.ts",
+  "delta": 1,
+  "reason": "Bounded private attachment read failures require structured telemetry before returning a typed refusal."
+}

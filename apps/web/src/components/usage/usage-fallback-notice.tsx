@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 import { env } from "@/env";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { usageLaneOptions } from "@/lib/usage-queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * Inline notice shown when the user's included daily AI budget is spent
@@ -17,7 +18,7 @@ import { usageLaneOptions } from "@/lib/usage-queries";
 export const UsageFallbackNotice = () => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     ...usageLaneOptions({ organizationId: activeOrganizationId, userId }),
     enabled: env.VITE_FEATURE_USAGE,
     // Turns settle counters server-side with no client event to hook,
@@ -25,6 +26,9 @@ export const UsageFallbackNotice = () => {
     // interval instead of coupling into the chat runtime.
     refetchInterval: 60_000,
   });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   const budgets = data?.budgets;
   if (!budgets || budgets.fallbackWeekly === null) {

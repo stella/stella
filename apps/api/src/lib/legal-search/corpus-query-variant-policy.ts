@@ -1,5 +1,6 @@
+// parser-output-unchanged: SHA-256 owner preserves the UTF-8 JSON cursor identity, hexadecimal encoding and 32-character prefix; pinned vectors cover equality.
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 // parser-output-unchanged: Core stem query variants change search allocation only, not ingestion parser output.
-import { createHash } from "node:crypto";
 
 export const CORPUS_INDEX_QUERY_VARIANTS = [
   "off",
@@ -42,7 +43,4 @@ export const corpusQueryVariantCursorTarget = (
 ): string | null =>
   variant === "off"
     ? target
-    : createHash("sha256")
-        .update(JSON.stringify([target, variant]))
-        .digest("hex")
-        .slice(0, 32);
+    : hashSha256Hex(JSON.stringify([target, variant])).slice(0, 32);

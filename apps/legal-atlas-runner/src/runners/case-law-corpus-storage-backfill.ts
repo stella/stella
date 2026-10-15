@@ -1,6 +1,7 @@
 import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
@@ -357,10 +358,8 @@ const backfillCaseLaw = async (
       break;
     }
 
-    for (let i = 0; i < rows.length; i += CONCURRENCY) {
-      const outcomes = await Promise.all(
-        rows.slice(i, i + CONCURRENCY).map(backfillRow),
-      );
+    for (const itemBatch of chunkItems(rows, CONCURRENCY)) {
+      const outcomes = await Promise.all(itemBatch.map(backfillRow));
       for (const outcome of outcomes) {
         if (outcome === "written") {
           written += 1;
@@ -422,10 +421,8 @@ const backfillLegislation = async (
       break;
     }
 
-    for (let i = 0; i < rows.length; i += CONCURRENCY) {
-      const outcomes = await Promise.all(
-        rows.slice(i, i + CONCURRENCY).map(backfillLegislationRow),
-      );
+    for (const itemBatch of chunkItems(rows, CONCURRENCY)) {
+      const outcomes = await Promise.all(itemBatch.map(backfillLegislationRow));
       for (const outcome of outcomes) {
         if (outcome === "written") {
           written += 1;

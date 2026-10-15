@@ -82,7 +82,7 @@ const _computed = resolvePath(root, candidate)["startsWith"](root);
 const _indexOfZero = resolvedCandidate.indexOf(resolvedRoot) === 0;
 // oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment, typescript/prefer-string-starts-ends-with -- fixture proves the negated comparison is covered
 const _indexOfNotZero = resolvedCandidate.indexOf(resolvedRoot) !== 0;
-// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment, eslint/yoda -- fixture proves the mirrored comparison is covered
+// oxlint-disable-next-line no-path-prefix-containment/no-path-prefix-containment, yoda -- fixture proves the mirrored comparison is covered
 const _zeroIndexOf = 0 === resolvedCandidate.indexOf(resolvedRoot);
 
 // A platform entry point of the path module carries the same provenance.
@@ -109,13 +109,6 @@ const _rawNormalizeSeparatorBoundary = normalizePath(candidate).startsWith(
 const _windowsSeparatorBoundary = win32
   .resolve(windowsRoot, candidate)
   .startsWith(`${windowsRoot}${win32.sep}`);
-
-const relativeCandidate = path.relative(resolvedRoot, resolvedCandidate);
-const _relativeBoundary =
-  relativeCandidate !== "" &&
-  relativeCandidate !== ".." &&
-  !relativeCandidate.startsWith(`..${path.sep}`) &&
-  !path.isAbsolute(relativeCandidate);
 
 declare const isPathInside: (
   rootPath: string,

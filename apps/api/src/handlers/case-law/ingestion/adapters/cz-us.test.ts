@@ -1,4 +1,4 @@
-/* oxlint-disable typescript-eslint/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
+/* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { Result } from "better-result";
 import {
   afterAll,
@@ -11,6 +11,8 @@ import {
   setSystemTime,
   test,
 } from "bun:test";
+
+import { sha256Hex as hashContent } from "@stll/sha256/node";
 
 import {
   decodeSourceRawEnvelope,
@@ -25,7 +27,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us";
 import { NalusRateLimitedError } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
-import { hashContent } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import {
   TEXT_ABSENCE_REASON,
   TEXT_FIELD_TYPE,

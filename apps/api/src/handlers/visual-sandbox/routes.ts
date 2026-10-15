@@ -6,6 +6,7 @@ import { env } from "@/api/env";
 import { frontendOrigins } from "@/api/lib/dev-origins";
 import {
   CACHE_CONTROL_HEADER,
+  EMBEDDABLE_FRAME_HEADERS,
   PRIVATE_CACHE_CONTROL,
 } from "@/api/lib/security-headers";
 import { runtimeMode } from "@/api/runtime-mode";
@@ -36,6 +37,7 @@ export const handleVisualSandboxRequest = (
       [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
       "Content-Security-Policy": policy,
       "Content-Type": "text/html; charset=utf-8",
+      ...EMBEDDABLE_FRAME_HEADERS,
       "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
       "Referrer-Policy": "no-referrer",
       "X-Content-Type-Options": "nosniff",

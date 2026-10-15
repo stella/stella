@@ -43,7 +43,7 @@ type AnonymizedExportCheck = {
 };
 
 declare global {
-  // oxlint-disable-next-line consistent-type-definitions -- global Window augmentation requires interface declaration merging
+  // oxlint-disable-next-line typescript/consistent-type-definitions -- global Window augmentation requires interface declaration merging
   interface Window {
     runAnonymizedExportCheck: () => Promise<AnonymizedExportCheck>;
     runUnsupportedExportCheck: () => Promise<boolean[]>;

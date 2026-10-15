@@ -10,7 +10,7 @@ import {
 } from "./sql-perf-detector.ts";
 import { isSqlPerfMigration } from "./sql-perf-scope.ts";
 
-/* oxlint-disable eslint/no-template-curly-in-string -- test inputs contain literal template syntax */
+/* oxlint-disable no-template-curly-in-string -- test inputs contain literal template syntax */
 
 const kinds = (source: string) =>
   analyzeSqlPerf(source, "apps/api/src/handlers/example.ts").hits.map(

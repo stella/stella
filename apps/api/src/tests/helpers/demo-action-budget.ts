@@ -39,6 +39,7 @@ const windowCounter = () => {
         window.count -= 1;
       }
     },
+    complete: (_key: string) => undefined,
   };
 };
 
@@ -55,6 +56,7 @@ export const createTestDemoActionBudget = ({
   const counter = windowCounter();
   let now = nowMs;
   let increments = 0;
+  const completedKeys: string[] = [];
   const budget: DemoActionBudget = {
     resolveDemoUserId: async () => await Promise.resolve(demoUserId),
     counter: () => ({
@@ -68,6 +70,11 @@ export const createTestDemoActionBudget = ({
         await Promise.resolve();
         counter.decrement(key);
       },
+      complete: async (key) => {
+        await Promise.resolve();
+        counter.complete(key);
+        completedKeys.push(key);
+      },
     }),
     now: () => now,
   };
@@ -77,6 +84,7 @@ export const createTestDemoActionBudget = ({
       now = time;
     },
     increments: () => increments,
+    completions: () => completedKeys.length,
     /** The live count summed over every daily window. */
     count: counter.count,
   };

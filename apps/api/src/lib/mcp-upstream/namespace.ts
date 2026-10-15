@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
+
 /**
  * Every dynamically resolved tool family, keyed by the name prefix its tools
  * carry on the wire. Policy maps over dynamic tools (output contracts,
@@ -44,15 +46,10 @@ export const isExternalMcpToolName = (toolName: string): boolean =>
 export const isSkillToolName = (toolName: string): boolean =>
   dynamicToolNamespaceOf(toolName) === "skill";
 
-/**
- * Every exposed tool name: lowercase ASCII letters, digits and underscores,
- * starting with a letter, at most 64 characters. Clients validate fetched
- * listings against exactly this (the CLI rejects the whole listing on one
- * miss), so every derivation below ends in `fitToolName`.
- */
-export const TOOL_NAME_MAX_LENGTH = 64;
-export const TOOL_NAME_PATTERN: RegExp = /^[a-z][a-z0-9_]{0,63}$/u;
-
+// Keep existing wire names stable and within the published CLI's 64-character
+// trust limit. Raise this only after the supported CLI baseline accepts the
+// shared contract's longer names. Acceptance and emission budgets differ.
+export const EMITTED_TOOL_NAME_MAX_LENGTH = 64;
 const TOOL_NAME_HASH_LENGTH = 8;
 
 export const sanitizeToolNamePart = (value: string): string => {
@@ -61,10 +58,7 @@ export const sanitizeToolNamePart = (value: string): string => {
 };
 
 export const shortToolNameHash = (value: string): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(value)
-    .digest("hex")
-    .slice(0, TOOL_NAME_HASH_LENGTH);
+  hashSha256Hex(value).slice(0, TOOL_NAME_HASH_LENGTH);
 
 /**
  * Clips a derived name to the length limit. A clipped name ends in a hash of
@@ -77,9 +71,9 @@ const fitToolName = ({
   name: string;
   rawName: string;
 }): string =>
-  name.length <= TOOL_NAME_MAX_LENGTH
+  name.length <= EMITTED_TOOL_NAME_MAX_LENGTH
     ? name
-    : `${name.slice(0, TOOL_NAME_MAX_LENGTH - TOOL_NAME_HASH_LENGTH - 1)}_${shortToolNameHash(rawName)}`;
+    : `${name.slice(0, EMITTED_TOOL_NAME_MAX_LENGTH - TOOL_NAME_HASH_LENGTH - 1)}_${shortToolNameHash(rawName)}`;
 
 export const namespaceMcpToolName = ({
   connectorSlug,

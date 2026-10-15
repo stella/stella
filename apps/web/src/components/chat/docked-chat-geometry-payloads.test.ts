@@ -5,6 +5,7 @@ import type {
   WebRoutes,
 } from "@/generated/api-routes.gen";
 
+import { decisionParagraphRangePayloads } from "../../../e2e/helpers/decision-paragraph-range-payloads";
 import { dockedChatLegalPayloads } from "../../../e2e/helpers/docked-chat-legal-payloads";
 import { dockedChatPagePayloads } from "../../../e2e/helpers/docked-chat-page-payloads";
 
@@ -37,6 +38,13 @@ const legalContracts = {
     dockedChatLegalPayloads.versions satisfies StatuteReads["versions"]["get"]["response"][200],
 } satisfies Record<keyof typeof dockedChatLegalPayloads, unknown>;
 
+const paragraphRangeContracts = {
+  decision:
+    decisionParagraphRangePayloads.decision satisfies DecisionReads["get"]["response"][200],
+  unavailable:
+    decisionParagraphRangePayloads.unavailable satisfies DecisionReads["get"]["response"][200],
+} satisfies Record<keyof typeof decisionParagraphRangePayloads, unknown>;
+
 const pages = dockedChatPagePayloads({
   workspaceId: "019a0000-0000-7000-8000-000000000001",
   resourceId: "019a0000-0000-7000-8000-000000000002",
@@ -55,6 +63,9 @@ const pageContracts = {
 test("every installed docked-chat geometry payload has an HTTP contract check", () => {
   expect(Object.keys(legalContracts).toSorted()).toEqual(
     Object.keys(dockedChatLegalPayloads).toSorted(),
+  );
+  expect(Object.keys(paragraphRangeContracts).toSorted()).toEqual(
+    Object.keys(decisionParagraphRangePayloads).toSorted(),
   );
   expect(Object.keys(pageContracts).toSorted()).toEqual(
     Object.keys(pages).toSorted(),

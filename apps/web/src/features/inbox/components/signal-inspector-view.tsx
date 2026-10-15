@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { SIGNAL_KIND } from "@stll/api-contract/signals";
 import type { SignalEvidence } from "@stll/api-contract/signals";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
@@ -31,7 +32,6 @@ import { detached } from "@/lib/detached";
 import type { InboxSignal } from "@/lib/inbox/queries";
 import { inboxSignalOptions } from "@/lib/inbox/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 /** One inbox signal's evidence: the facts the card's claim rests on. */
 export const SignalInspectorView = ({

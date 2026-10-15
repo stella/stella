@@ -16,6 +16,7 @@ import {
 import { Skeleton } from "@stll/ui/skeleton";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/tabs";
 
+import { MatterOptionLabel } from "@/components/matter-option-label";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -112,6 +113,7 @@ type MatterMemoriesProps = {
 };
 
 const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
+  const { id: userId } = useAuthenticatedUser();
   const t = useTranslations("memory");
   const commonT = useTranslations("common");
   const activeOrganizationId = useActiveOrganizationId();
@@ -122,7 +124,9 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
     isError,
     isFetchingNextPage: isFetchingNextMatterPage,
     refetch,
-  } = useInfiniteQuery(memoryMattersOptions(activeOrganizationId));
+  } = useInfiniteQuery(
+    memoryMattersOptions({ organizationId: activeOrganizationId, userId }),
+  );
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
 
   const workspaces = data ? data.pages.flatMap((page) => page.items) : [];
@@ -169,8 +173,8 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
           <SelectPopup>
             {workspaces.map((workspace) => (
               <SelectItem key={workspace.id} value={workspace.id}>
-                <span className="min-w-0 flex-1 truncate" dir="auto">
-                  {workspace.name}
+                <span className="min-w-0 flex-1">
+                  <MatterOptionLabel matter={workspace} />
                 </span>
                 {workspace.status === "archived" ? (
                   <span className="text-muted-foreground">

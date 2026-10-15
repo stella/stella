@@ -7,6 +7,11 @@ import {
 import { Result } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
+import {
+  sanitizeErrorAttributesForOutput,
+  sanitizeErrorForOutput,
+  sanitizeQueryErrorText,
+} from "@stll/errors";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import type {
@@ -18,6 +23,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
   classifyAIBoundaryFailure,
   isAnticipatedAIFailure,
+  providerErrorBody,
   providerStatusFields,
 } from "@/api/lib/ai-error";
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
@@ -40,6 +46,7 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import { tokenUsageFromTerminalChunk } from "@/api/lib/tanstack-ai-usage";
 import { incrementLaneCounter } from "@/api/lib/usage/lane-budget";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 import {
   normalizeProviderPromptTokens,
   usageUnitsFromTokens,
@@ -76,6 +83,9 @@ type RunAnalyticsState = {
   /** What the call that failed reported before it failed, for its
    *  generation record. */
   failedCallUsage: { promptTokens: number; completionTokens: number } | null;
+  /** The provider detail the run error carried, which the error TanStack
+   *  hands `onError` no longer holds. */
+  runErrorDetail: unknown;
 };
 
 /** Which model call reported the usage: one that finished, or one whose run
@@ -114,6 +124,11 @@ type TanStackAIAnalyticsProps = {
    */
   selectedModelId?: string | undefined;
   orgAIConfig?: OrgAIConfig | null;
+  /**
+   * The managed model tier the metered dispatches run at (their admission's
+   * `modelTier`), so metering rates the model the tier served.
+   */
+  modelTier: ManagedModelTier;
   /**
    * Analytics-only organization identity for org-scoped calls that do not
    * meter usage (fixed-cost or internal features). Metered calls derive the
@@ -265,6 +280,25 @@ const usageServiceTierFromModelOptions = ({
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
+// TanStack rebuilds a run error as a plain `Error` from the event's message
+// and code, dropping the provider detail the adapter forwarded beside them.
+// Restore that detail as the cause so the classifier reads the same evidence
+// as the chat stream's own run-error handling.
+const withRunErrorDetail = (error: unknown, detail: unknown): unknown => {
+  if (
+    detail === undefined ||
+    !(error instanceof Error) ||
+    error.cause !== undefined
+  ) {
+    return error;
+  }
+  const restored = new Error(error.message, { cause: detail });
+  if ("code" in error) {
+    Object.assign(restored, { code: error.code });
+  }
+  return restored;
+};
+
 const recordTanStackConsumption = async ({
   cacheReadTokens,
   cacheWriteTokens,
@@ -386,6 +420,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
       usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 },
       usageReported: false,
       failedCallUsage: null,
+      runErrorDetail: undefined,
     };
     runs.set(ctx.runId, created);
     return created;
@@ -407,11 +442,12 @@ export const createTanStackAIAnalyticsCallbacks = ({
                 selectedModelId,
                 config.orgAIConfig,
                 modelRole,
-                config.dataClass,
+                { dataClass: config.dataClass, modelTier: config.modelTier },
               )
             : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
                 dataClass: config.dataClass,
                 organizationId: analyticsOrganizationId,
+                modelTier: config.modelTier,
               }),
         catch: (error) => error,
       });
@@ -462,9 +498,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
     // grade the record carries.
     const kind = classifyAIBoundaryFailure(error);
     const finishReason = context?.run?.finishReason;
-    const attributes = {
+    const attributes = sanitizeErrorAttributesForOutput({
       "error.type": errorTag(error),
-      "ai.error_kind": kind,
+      "ai.error_kind": sanitizeQueryErrorText(kind),
       "ai.feature": config.feature,
       ...(typeof finishReason === "string"
         ? { "ai.finish_reason": finishReason }
@@ -472,7 +508,9 @@ export const createTanStackAIAnalyticsCallbacks = ({
       ...(context?.run?.outputTokens !== undefined
         ? { "ai.output_tokens": context.run.outputTokens }
         : {}),
-      ...(HandlerError.is(error) ? { "error.status_code": error.status } : {}),
+      ...(HandlerError.is(error)
+        ? { "error.status_code": Number(sanitizeErrorForOutput(error.status)) }
+        : {}),
       ...(resolvedModelInfo
         ? {
             "ai.provider": resolvedModelInfo.provider,
@@ -480,7 +518,7 @@ export const createTanStackAIAnalyticsCallbacks = ({
           }
         : {}),
       ...providerStatusFields(error),
-    };
+    });
     if (isAnticipatedAIFailure(error, kind)) {
       logger.warn("tanstack_ai.generation.failed", attributes);
     } else {
@@ -757,6 +795,8 @@ export const createTanStackAIAnalyticsCallbacks = ({
         // failed after the provider reported usage was billed as well, so its
         // run error is metered the same way.
         if (chunk.type === EventType.RUN_ERROR) {
+          runState(ctx).runErrorDetail =
+            chunk.rawEvent ?? providerErrorBody(chunk.message);
           const usage = tokenUsageFromTerminalChunk(chunk);
           if (usage !== undefined) {
             meterUsage(ctx, usage, "failed-call");
@@ -772,7 +812,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
       onError: (ctx, { duration, error }) => {
         const run = runs.get(ctx.runId);
         runs.delete(ctx.runId);
-        captureGenerationError(error, { durationMs: duration, run });
+        captureGenerationError(withRunErrorDetail(error, run?.runErrorDetail), {
+          durationMs: duration,
+          run,
+        });
       },
       onFinish: (ctx, { duration, usage }) => {
         const run = runs.get(ctx.runId);

@@ -17,6 +17,7 @@ const updateTemplatePackVisibilityBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Hide or show the bundled template-pack catalogue for the organization. " +
     "Pass hidden true to stop offering packs in the template library; " +

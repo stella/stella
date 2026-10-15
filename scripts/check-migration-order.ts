@@ -6,7 +6,9 @@ import { appendFileSync } from "node:fs";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 
-import aliasInventory from "../apps/api/src/lib/db/migration-alias-inventory.json";
+import { createSha256 } from "@stll/sha256/bun";
+
+import aliasInventory from "../apps/api/src/lib/db/migration-alias-inventory.json" with { type: "json" };
 import {
   findMalformedRequiresLines,
   findSortUnstableNames,
@@ -311,8 +313,8 @@ const readGitFile = ({
   cwd: string;
 }): Uint8Array => runGit({ arguments_: ["show", `${ref}:${file}`], cwd });
 
-const hashBytes = (bytes: Uint8Array): string =>
-  new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+export const hashBytes = (bytes: Uint8Array): string =>
+  createSha256().update(bytes).digest("hex");
 
 const readBaseInventory = ({
   baseRef,

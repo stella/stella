@@ -39,6 +39,15 @@ impl MarkerFile {
     Self { path: Some(path) }
   }
 
+  pub fn read_state(&self) -> Result<bool, String> {
+    match fs::symlink_metadata(self.path()?) {
+      Ok(metadata) if metadata.file_type().is_file() => Ok(true),
+      Ok(_) => Err("marker file path is not a regular file".to_string()),
+      Err(error) if error.kind() == ErrorKind::NotFound => Ok(false),
+      Err(error) => Err(format!("marker file read failed: {error}")),
+    }
+  }
+
   pub fn is_set(&self) -> bool {
     self
       .path

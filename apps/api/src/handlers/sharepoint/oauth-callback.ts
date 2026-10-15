@@ -33,8 +33,9 @@ const requestQuery = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { integration: ["create"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   query: requestQuery,
 } satisfies HandlerConfig;
@@ -43,7 +44,7 @@ type CallbackRedirectInput =
   | { status: "connected" }
   | { status: "error"; reason: string };
 
-export const buildCallbackRedirectUrl = (
+const buildCallbackRedirectUrl = (
   frontendUrl: string,
   input: CallbackRedirectInput,
 ): string => {

@@ -24,11 +24,12 @@ import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 import {
-  flowReviewGateFixture,
-  waitForBlockedPid,
-} from "@/api/tests/helpers/flow-review-gate";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
+import { waitForBlockedPid } from "@/api/tests/helpers/wait-for-blocked-pid";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -136,13 +137,13 @@ const taskAction = async ({
     return { type: "ok" as const };
   }
   const context = {
+    scopedDb: NO_DB,
     safeDb,
     workspaceId: f.workspaceId,
     user: { id: f.userId },
     session: { activeOrganizationId: f.organizationId },
     request: new Request("https://example.test/review"),
-    recordAuditEvent: f.recordAuditEvent,
-    createAuditRecorder: () => f.recordAuditEvent,
+    audit: f.recordAuditEvent,
   };
   const result =
     entry !== "obligation transition"

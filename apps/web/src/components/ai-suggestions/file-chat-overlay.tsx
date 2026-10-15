@@ -26,7 +26,6 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 
 import {
   DOCX_SUGGEST_CHANGES_OPTIONS_BY_SURFACE,
@@ -60,7 +59,7 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
-import { LoaderCircleIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { stellaToast } from "@stll/ui/toast";
 
 import { activeLegalDocumentRef } from "@/components/ai-suggestions/active-legal-document";
@@ -199,6 +198,7 @@ import {
   runReservedChatCommand,
 } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 
 type ActiveFile = {
   docxEditSnapshot?:
@@ -385,7 +385,7 @@ const prepareOperations = (
   operations: readonly FolioAIEditOperation[],
 ): PreparedOperation[] =>
   operations.map((operation, index) => {
-    const id = `ai-docx-${String(index + 1)}-${uuidv7()}`;
+    const id = `ai-docx-${String(index + 1)}-${createUuid()}`;
     return {
       folio: { ...normalizeQueuedOperation(operation), id },
       id,
@@ -446,7 +446,7 @@ const queueReviewSuggestions = ({
   const queuedIds: string[] = [];
   const skipped: { id: string; reason: "noopOperation" | "missingBlock" }[] =
     [];
-  const proposalBatchId = uuidv7();
+  const proposalBatchId = createUuid();
   const items: ReviewSuggestion[] = prepared.flatMap(
     ({ id, reportId, folio }) => {
       // Drop true no-ops before they ever reach the panel: the model
@@ -810,14 +810,17 @@ const hasPersistedActiveDraftChatBinding = ({
     );
   });
 
-const fallback = (
-  <div
-    aria-hidden="true"
-    className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-  >
-    <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-  </div>
-);
+const FileChatFallback = () => {
+  const t = useTranslations("common");
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+      aria-busy="true"
+    >
+      <Loader label={t("loading")} size="sm" />
+    </div>
+  );
+};
 
 export const FileChatOverlay = ({
   workspaceId,
@@ -848,7 +851,7 @@ export const FileChatOverlay = ({
     }
 
     return (
-      <Suspense fallback={fallback}>
+      <Suspense fallback={<FileChatFallback />}>
         <ResolvedFileChatOverlay
           activeFile={{ ...activeFile, fileFieldId }}
           draftPersistence={draftPersistence}
@@ -866,7 +869,7 @@ export const FileChatOverlay = ({
   }
 
   return (
-    <Suspense fallback={fallback}>
+    <Suspense fallback={<FileChatFallback />}>
       <FileChatOverlayInner
         activeExternal={activeExternal}
         activeDraft={activeDraft}
@@ -1530,9 +1533,11 @@ const FileChatOverlayInner = ({
   ]);
 
   const {
+    activitySession,
     clientStatus,
     error,
     messages,
+    refreshAnswers,
     olderCursor,
     isLoadingOlder,
     loadOlder,
@@ -1541,6 +1546,7 @@ const FileChatOverlayInner = ({
     sendMessage,
     queuedMessages,
     removeQueuedMessage,
+    sendQueuedMessageNow,
     stop,
     leave,
     isGenerating,
@@ -1550,12 +1556,17 @@ const FileChatOverlayInner = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
@@ -1568,6 +1579,7 @@ const FileChatOverlayInner = ({
     getEditApplyMode,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId,
   });
@@ -2503,6 +2515,10 @@ const FileChatOverlayInner = ({
           handleAlwaysAllow: handleAlwaysAllowWithFolioAgentCommentExecution,
           handleApprove: handleApproveWithDocxUnlock,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
           handleRetryAfterAuthorNameSet: resendLatestMessage,
           blockedApprovalTools,
         }}
@@ -2521,6 +2537,11 @@ const FileChatOverlayInner = ({
             }
           >
             <ChatThreadMessages
+              activitySession={activitySession}
+              onAnswerEdited={refreshAnswers}
+              answerRewriteAvailability={
+                data.usedAnonymization ? "anonymized" : "available"
+              }
               activeFileName={activeFile?.fileName}
               assistantTextDensity="compact"
               approvalPendingMessageId={approvalPendingMessageId}
@@ -2537,8 +2558,12 @@ const FileChatOverlayInner = ({
               onLoadOlder={loadOlder}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
-              onRemoveQueuedMessage={removeQueuedMessage}
+              onOpenPlaybook={handleOpenPlaybook}
               onResend={resendLatestMessage}
+              queuedMessageActions={{
+                remove: removeQueuedMessage,
+                sendNow: sendQueuedMessageNow,
+              }}
               queuedMessages={queuedMessages}
               scrollContainerRef={threadScrollRef}
               showThinkingIndicator

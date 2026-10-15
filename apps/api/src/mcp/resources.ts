@@ -8,12 +8,16 @@ import {
   FILE_COMPARISON_TRANSPORT,
   MCP_APP_RESOURCE_MIME_TYPE,
 } from "@stll/api-contract";
+import { MCP_APP_BUNDLES } from "@stll/mcp-apps/bundles";
+import {
+  STATUTE_TIMELINE_APP,
+  CASE_LAW_RESULTS_APP,
+  DECISION_READER_APP,
+} from "@stll/mcp-apps/manifest";
 
 import { envBase } from "@/api/env-base";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
-import documentUploadAppHtml from "@/api/mcp/apps/document-upload/generated/app.html.txt" with { type: "text" };
-import fileComparisonAppHtml from "@/api/mcp/apps/file-comparison/generated/app.html.txt" with { type: "text" };
 import type { McpMode } from "@/api/mcp/constants";
 import { DOCUMENT_UPLOAD_APP_RESOURCE_URI } from "@/api/mcp/document-file-upload";
 import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
@@ -44,6 +48,8 @@ import {
 } from "@/api/mcp/template-workflow-reference";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 import { unlistedToolNames } from "@/api/mcp/tool-mentions";
+
+import { isMcpAppAvailable } from "./app-policy";
 
 /**
  * MCP resources are static, no-argument documents (the textbook fit for a
@@ -111,7 +117,7 @@ const servedWhereItsToolsAreListed = (
 
 const PRODUCT_IDENTITY_URI = "stella://about";
 
-export const STELLA_PRODUCT_IDENTITY = {
+const STELLA_PRODUCT_IDENTITY = {
   name: "stella",
   display_name: "stella",
   preferred_casing: "lowercase",
@@ -127,6 +133,52 @@ const buildProductIdentity = (): string =>
   JSON.stringify(STELLA_PRODUCT_IDENTITY, null, 2);
 
 const STATIC_RESOURCES: readonly StaticResource[] = [
+  {
+    uri: STATUTE_TIMELINE_APP.uri,
+    name: "statute-timeline",
+    title: "Provision history",
+    description: "View provision version windows and compare adjacent wording.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => MCP_APP_BUNDLES["statute-timeline"],
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
+  {
+    uri: DECISION_READER_APP.uri,
+    name: "decision-reader",
+    title: "Decision reader",
+    description: "Read a case-law decision and its cited provisions.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => MCP_APP_BUNDLES["decision-reader"],
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
+  {
+    uri: CASE_LAW_RESULTS_APP.uri,
+    name: "case-law-results",
+    title: "Case-law results",
+    description:
+      "Interactive results for case-law searches and identifier lookups.",
+    mimeType: MCP_APP_RESOURCE_MIME_TYPE,
+    listed: false,
+    read: () => MCP_APP_BUNDLES["case-law-results"],
+    resourceMeta: () => ({
+      ui: {
+        csp: { connectDomains: [], resourceDomains: [] },
+        prefersBorder: true,
+      },
+    }),
+  },
   {
     uri: PRODUCT_IDENTITY_URI,
     name: "stella-product-identity",
@@ -221,7 +273,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
     // A text import makes Bun embed the generated app in the compiled API
     // binary. Reading from the source tree at runtime would work in dev but
     // fail in the production image, which ships only the compiled server.
-    read: () => documentUploadAppHtml,
+    read: () => MCP_APP_BUNDLES["document-upload"],
     resourceMeta: () => uploadAppResourceMeta(),
   },
   {
@@ -232,7 +284,7 @@ const STATIC_RESOURCES: readonly StaticResource[] = [
       "Portable MCP App picker that uploads two .docx files from the user's browser for compare_documents to redline.",
     mimeType: MCP_APP_RESOURCE_MIME_TYPE,
     listed: false,
-    read: () => fileComparisonAppHtml,
+    read: () => MCP_APP_BUNDLES["file-comparison"],
     resourceMeta: () => uploadAppResourceMeta(),
   },
 ];
@@ -266,6 +318,7 @@ const uploadAppResourceMeta = (): Record<string, unknown> => {
  * states, not a default it inherits.
  */
 const MCP_RESOURCE_URIS_BY_MODE = {
+  advanced: "all",
   default: "all",
   documents: "all",
   anonymized: "all",
@@ -293,6 +346,9 @@ const isResourceServedInMode = (
     })
   ) {
     return false;
+  }
+  if (resource.uri.startsWith("ui://")) {
+    return isMcpAppAvailable({ uri: resource.uri, mode, context });
   }
   const served = MCP_RESOURCE_URIS_BY_MODE[mode];
   if (served !== "all" && !served.some((entry) => entry === resource.uri)) {

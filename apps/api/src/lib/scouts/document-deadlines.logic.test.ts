@@ -1,8 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import {
   DEADLINE_SCOUT_MAX_ATTEMPTS,
+  deadlineScanAdmission,
   deadlineScoutFailureStatus,
   deadlineDedupeKey,
   deadlineSeverity,
@@ -119,4 +121,25 @@ test("settles permanent generation failures without another attempt", () => {
       attempt >= DEADLINE_SCOUT_MAX_ATTEMPTS ? "failed" : "pending",
     );
   }
+});
+
+test("a scan refused for an exhausted period skips until that period resets", () => {
+  const retryAtMs = Date.UTC(2026, 9, 5);
+  expect(
+    deadlineScanAdmission(
+      new ActionAdmissionError({
+        message: "Action period limit reached",
+        reason: "period_exhausted",
+        retryAtMs,
+      }),
+    ),
+  ).toEqual({ type: "period_exhausted", skippedUntil: new Date(retryAtMs) });
+  expect(
+    deadlineScanAdmission(
+      new ActionAdmissionError({
+        message: "Concurrent action limit reached",
+        reason: "busy",
+      }),
+    ),
+  ).toEqual({ type: "admitted" });
 });

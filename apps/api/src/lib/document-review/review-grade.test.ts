@@ -20,6 +20,7 @@ import {
   type gradeTierMatches,
   TIER_MATCH_BATCH_SIZE,
 } from "@/api/lib/workflow/verdict-engine";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 let modelCallCount = 0;
 let abortAfterFirstCall: AbortController | null = null;
@@ -191,6 +192,7 @@ const buildArgs = (
     positions.map(({ sourceId: id }) => [id, resolvedTiers]),
   ),
   abortSignal,
+  admission: testModelAdmission(ORGANIZATION_ID),
   organizationId: ORGANIZATION_ID,
   workspaceId: WORKSPACE_ID,
   entityVersionId: ENTITY_VERSION_ID,

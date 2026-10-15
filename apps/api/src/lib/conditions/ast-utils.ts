@@ -76,7 +76,7 @@ export const collectNodePropertyIds = (
  * still valid. Kind/builtin operands carry no property id, so nodes
  * built solely on them are always retained.
  */
-export const nodeReferencesOnlyValidProperties = (
+const nodeReferencesOnlyValidProperties = (
   node: ConditionNode,
   isValidPropertyId: (id: string) => boolean,
 ): boolean => {

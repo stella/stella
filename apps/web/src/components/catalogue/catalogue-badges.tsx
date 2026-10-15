@@ -87,12 +87,3 @@ export const FirstPartyMark = () => {
     />
   );
 };
-
-export const FirstPartyBadge = () => {
-  const t = useTranslations();
-  return (
-    <span className="bg-foreground text-background inline-flex items-center rounded-md px-1.5 py-0.5 text-xs font-medium">
-      {t("catalogue.firstParty")}
-    </span>
-  );
-};

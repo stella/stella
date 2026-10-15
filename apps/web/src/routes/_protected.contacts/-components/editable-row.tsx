@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { Input } from "@stll/ui/input";
+import { InlineRenameInput } from "@stll/ui/inline-rename";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLocale } from "@/i18n/formatting-context";
@@ -134,29 +134,20 @@ export const EditableRow = ({
         {label && (
           <span className="text-muted-foreground w-32 shrink-0">{label}</span>
         )}
-        <Input
+        <InlineRenameInput
           {...inputAttributes}
-          autoFocus
-          className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
+          className="text-sm"
           dir={policy.valueKind === "text" ? "auto" : undefined}
           maxLength={
             policy.valueKind === "text"
               ? (policy.maxLength ?? undefined)
               : undefined
           }
-          onBlur={() => {
+          onCommit={() => {
             detached(rename.commit(), "editable-row.commit");
           }}
-          onChange={(e) => rename.setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.currentTarget.blur();
-            }
-            if (e.key === "Escape") {
-              rename.cancel();
-              e.currentTarget.blur();
-            }
-          }}
+          onValueChange={rename.setDraft}
+          onCancel={rename.cancel}
           value={rename.state.draft}
         />
       </div>
@@ -169,7 +160,7 @@ export const EditableRow = ({
         <span className="text-muted-foreground w-32 shrink-0">{label}</span>
       )}
       <button
-        className="hover:text-foreground cursor-text text-start text-sm"
+        className="hover:text-foreground min-w-0 cursor-text overflow-hidden text-start text-sm text-ellipsis whitespace-pre"
         disabled={rateNeedsCurrency}
         onClick={() => rename.startEditing()}
         type="button"

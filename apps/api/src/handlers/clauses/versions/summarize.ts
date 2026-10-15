@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { summarizeVersionChange } from "@/api/lib/entity-versions/version-change-summary";
@@ -15,6 +19,8 @@ const clauseVersionSummarizeParamsSchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "versions.summarize" },
   description:
     "Summarize in prose what changed between one stored clause version and " +
     "the clause's current body, over the same diff clauses.versions.diff " +
@@ -41,6 +47,7 @@ const config = {
 const clauseVersionSummarize = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     scopedDb,
     session,
     params,
@@ -77,6 +84,7 @@ const clauseVersionSummarize = createSafeRootHandler(
 
     const summary = yield* Result.await(
       summarizeVersionChange({
+        admission: configuredModelAdmission({ modelAdmission }),
         prevText: sources.prevText,
         currentText: sources.currentText,
         feature: "clauses.version_summary",

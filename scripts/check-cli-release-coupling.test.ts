@@ -588,6 +588,7 @@ test("an advancing base does not turn an unchanged PR into a release", () => {
     git("init");
     git("config", "user.name", "Release fixture");
     git("config", "user.email", "fixture@example.test");
+    git("config", "commit.gpgsign", "false");
     writeFileSync(path.join(root, "VERSION"), "0.9.47\n");
     git("add", ".");
     git("commit", "-m", "fixture base");

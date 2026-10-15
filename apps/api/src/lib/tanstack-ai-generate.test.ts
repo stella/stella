@@ -10,8 +10,10 @@ import {
   getOutputTokenLimit,
   MODEL_ROLES,
   REASONING_EFFORTS,
+  TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
 import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
@@ -22,7 +24,11 @@ import {
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
 import {
+  MODEL_OUTPUT_INCOMPLETE_MESSAGE,
   MODEL_RUN_ERROR_MESSAGE,
+  ModelDeadlineExceededError,
+  ModelOutputIncompleteError,
+  ModelOutputInvalidError,
   ModelRunError,
   ProviderCallError,
   PROVIDER_CALL_ERROR_MESSAGE,
@@ -35,12 +41,17 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
+import {
+  admitModelDispatch,
+  NO_ORGANIZATION_MODEL_DISPATCH,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
 import {
   chatTurnOutputTokens,
   generateTanStackObjectForRole,
   generateTanStackTextForRole,
   mergeGenerationOptions,
+  outputTokensWithinModelLimit,
   streamTanStackChatRun,
   streamTanStackObjectForRole,
   streamTanStackTextForRole,
@@ -55,6 +66,7 @@ import {
   projectSchemaInputJsonSchema,
   toTanStackValibotSchema,
 } from "@/api/lib/tanstack-ai-schema";
+import { testOrganizationStateDb } from "@/api/tests/helpers/model-dispatch-admission";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -375,6 +387,9 @@ const noCaching = {
   reason: "org-disabled",
 } satisfies CachingDecision;
 
+/** A sink with no local expectations, so a grade is the failure's own. */
+const anySink = failureSink({ event: "generation.test", expected: [] });
+
 /**
  * A provider answer whose only surviving detail is its response body: the
  * adapter reported the status as a plain field on its SDK exception and
@@ -451,6 +466,7 @@ describe("TanStack AI structured output generation", () => {
         caching: noCaching,
         finishPolicy: "require-complete" as const,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer" as const,
         managedAIResidency: "eu" as const,
         orgAIConfig: null,
@@ -584,6 +600,7 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -612,6 +629,7 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -666,6 +684,7 @@ describe("TanStack AI structured output generation", () => {
     const failure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -690,6 +709,7 @@ describe("TanStack AI structured output generation", () => {
       for await (const event of streamObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -720,6 +740,7 @@ describe("TanStack AI structured output generation", () => {
     const validationFailure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1030,6 +1051,7 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1058,6 +1080,7 @@ describe("TanStack AI structured output generation", () => {
       abortSignal: controller.signal,
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1094,6 +1117,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1138,6 +1162,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1163,6 +1188,7 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1202,6 +1228,7 @@ describe("TanStack AI structured output generation", () => {
       const caught = await generateObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1243,6 +1270,7 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1295,6 +1323,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1328,6 +1357,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1355,6 +1385,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1388,6 +1419,7 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1419,6 +1451,75 @@ describe("TanStack AI model-ingress guard", () => {
   });
 });
 
+describe("model dispatch within its admitted action", () => {
+  const organizationId = toSafeId<"organization">("org_dispatch_lifetime");
+  const dispatchOptions = {
+    caching: noCaching,
+    finishPolicy: "allow-incomplete",
+    organizationId,
+    dataClass: "customer",
+    managedAIResidency: "eu",
+    orgAIConfig: null,
+    prompt: "Rewrite it.",
+    role: "chat",
+    serviceTier: "standard",
+    tenantWorkspaceIds: [],
+  } as const;
+
+  test("cancels a dispatch whose admission loses its lease, though the caller passed no signal", async () => {
+    const lease = new AbortController();
+    queueRun(cancelledTextRun(["half an ans"], lease));
+
+    const caught = await admitModelDispatch({
+      organizationId,
+      actionKind: "document-reviews.background",
+      organizationStateDb: testOrganizationStateDb,
+      signal: lease.signal,
+      run: async (admission) =>
+        await generateTextForTestModel({ ...dispatchOptions, admission }),
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(lease.signal.aborted).toBe(true);
+    expect(caught).toMatchObject({ status: 502 });
+    expect(
+      gradeFailure(
+        readEvidence(caught),
+        failureSink({ event: "generation.test", expected: [] }),
+      ),
+    ).toMatchObject({ reason: "generation_cancelled" });
+  });
+
+  test("refuses a dispatch on a proof that outlived its admitted run", async () => {
+    const escaped = await admitModelDispatch({
+      organizationId,
+      actionKind: "templates.fill",
+      organizationStateDb: testOrganizationStateDb,
+      signal: new AbortController().signal,
+      run: async (admission) => await Promise.resolve(admission),
+    });
+    expect(escaped.signal.aborted).toBe(true);
+    queueRun(textRun(["never sent"]));
+
+    const outlived = "Model dispatch outlived the action that admitted it";
+    expect(
+      await rejectionOf(
+        generateTextForTestModel({ ...dispatchOptions, admission: escaped }),
+      ),
+    ).toHaveProperty("message", expect.stringContaining(outlived));
+    const stream = streamTextForTestModel({
+      ...dispatchOptions,
+      admission: escaped,
+    });
+    expect(
+      await rejectionOf(stream[Symbol.asyncIterator]().next()),
+    ).toHaveProperty("message", expect.stringContaining(outlived));
+    expect(providerRequests).toHaveLength(0);
+  });
+});
+
 describe("TanStack AI text generation", () => {
   test("rejects incomplete output when complete generation is required", async () => {
     queueRun(textRun(["partial"], "length"));
@@ -1427,6 +1528,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1440,6 +1542,8 @@ describe("TanStack AI text generation", () => {
     );
 
     expect(caught).toMatchObject({ status: 502 });
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
+    expect(classifyAIError(caught)).toBe("output_incomplete");
   });
 
   // The output-ceiling stop reaches the engine as a `RUN_ERROR` on more than
@@ -1460,6 +1564,7 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-incomplete",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1485,6 +1590,7 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-output-ceiling",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -1511,6 +1617,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1523,10 +1630,16 @@ describe("TanStack AI text generation", () => {
       (error: unknown) => error,
     );
 
+    // Named as the incomplete answer it is, never left unclassified.
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
     expect(caught).toMatchObject({
-      message: "AI generation did not complete",
+      message: MODEL_OUTPUT_INCOMPLETE_MESSAGE,
       status: 502,
     });
+    expect(classifyAIError(caught)).toBe("output_incomplete");
+    expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+      "model_output_incomplete",
+    );
   });
 
   test("rejects a cancelled run instead of returning its truncated text", async () => {
@@ -1538,6 +1651,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1576,6 +1690,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1601,6 +1716,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1622,6 +1738,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1641,6 +1758,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1668,6 +1786,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1696,6 +1815,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1734,6 +1854,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1757,6 +1878,7 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
       dataClass: "customer",
       managedAIResidency: "eu",
       orgAIConfig: null,
@@ -1785,6 +1907,7 @@ describe("TanStack AI text generation", () => {
       for await (const _delta of streamTextForTestModel({
         caching: noCaching,
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         dataClass: "customer",
         managedAIResidency: "eu",
         orgAIConfig: null,
@@ -2236,6 +2359,7 @@ test("recovers an unclassified provider failure wrapped without a status", () =>
 describe("model output that fails its schema", () => {
   const SENTINEL = "SENTINEL_MODEL_OUTPUT";
   const objectOptions = {
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     caching: noCaching,
     organizationId: null,
     dataClass: "customer" as const,
@@ -2284,6 +2408,7 @@ describe("a chat run a caller consumes itself", () => {
     const chunks: unknown[] = [];
     const caught = await (async () => {
       for await (const chunk of streamTanStackChatRun({
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         model: testModel,
         adapter: testModel.adapter,
         messages: [{ role: "user", content: "Hello" }],
@@ -2331,5 +2456,394 @@ describe("a chat run a caller consumes itself", () => {
       asTestRaw<Error | undefined>(caught)?.name,
     );
     expect(JSON.stringify({ chunks, caught })).not.toContain(SENTINEL);
+  });
+});
+
+// A provider that streams its structured answer natively, as Gemini's adapter
+// does: the engine reads the adapter's own run error codes from this path,
+// which is where a cut-off answer is noticed in production.
+type StructuredStream = (
+  signal: AbortSignal | undefined,
+) => AsyncIterable<StreamChunk>;
+
+const structuredStreamModel = (
+  stream: StructuredStream,
+): ResolvedTanStackTextModel => {
+  const adapter: AnyTextAdapter = {
+    ...providerAdapter,
+    structuredOutputStream: (options) =>
+      stream(options.chatOptions.request?.signal ?? undefined),
+  };
+  return { ...testModel, adapter };
+};
+
+const runStarted = {
+  type: EventType.RUN_STARTED,
+  runId: PROVIDER_RUN_ID,
+  threadId: PROVIDER_THREAD_ID,
+} satisfies StreamChunk;
+
+const partialAnswer = (delta: string): StreamChunk[] => [
+  {
+    type: EventType.TEXT_MESSAGE_START,
+    messageId: PROVIDER_MESSAGE_ID,
+    role: "assistant",
+  },
+  {
+    type: EventType.TEXT_MESSAGE_CONTENT,
+    messageId: PROVIDER_MESSAGE_ID,
+    delta,
+  },
+];
+
+const structuredRunError = (code: string, message: string): StreamChunk => ({
+  type: EventType.RUN_ERROR,
+  runId: PROVIDER_RUN_ID,
+  threadId: PROVIDER_THREAD_ID,
+  code,
+  message,
+});
+
+const untilAborted = async (signal: AbortSignal | undefined): Promise<void> => {
+  if (signal === undefined) {
+    throw new Error("The engine must hand the adapter the run's signal");
+  }
+  if (signal.aborted) {
+    return;
+  }
+  const aborted = Promise.withResolvers<undefined>();
+  signal.addEventListener(
+    "abort",
+    () => {
+      aborted.resolve(undefined);
+    },
+    { once: true },
+  );
+  await aborted.promise;
+};
+
+const OBJECT_OPTIONS = {
+  admission: NO_ORGANIZATION_MODEL_DISPATCH,
+  caching: noCaching,
+  organizationId: null,
+  dataClass: "customer",
+  managedAIResidency: "eu",
+  orgAIConfig: null,
+  outputSchema: v.strictObject({ answer: v.string() }),
+  prompt: "Extract the answer.",
+  role: "chat",
+  serviceTier: "standard",
+  tenantWorkspaceIds: [],
+} as const;
+
+const generateObjectWith = async (
+  stream: StructuredStream,
+  extra: { abortSignal?: AbortSignal; deadlineMs?: number } = {},
+): Promise<unknown> =>
+  await generateTanStackObjectForRole({
+    ...OBJECT_OPTIONS,
+    ...extra,
+    resolveTextModel: () => structuredStreamModel(stream),
+  }).then(
+    () => undefined,
+    (error: unknown) => error,
+  );
+
+describe("a structured answer that arrived but cannot be used is named", () => {
+  const PARTIAL_ANSWER = "partial";
+
+  test("an answer the provider stopped at its output ceiling is incomplete", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      yield* partialAnswer(`{"answer": "${PARTIAL_ANSWER}`);
+      yield structuredRunError(
+        "max_tokens",
+        "The response was cut off because the maximum token limit was reached.",
+      );
+    });
+
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
+    expect(classifyAIError(caught)).toBe("output_incomplete");
+    expect(gradeFailure(readEvidence(caught), anySink)).toMatchObject({
+      reason: "model_output_incomplete",
+      grade: "transient",
+    });
+  });
+
+  test("OpenAI's spelling of the output-ceiling stop is incomplete too", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      yield* partialAnswer(`{"answer": "${PARTIAL_ANSWER}`);
+      yield structuredRunError("incomplete", "max_output_tokens");
+    });
+
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
+  });
+
+  test("a cut-off answer that does not parse is incomplete, not unclassified", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      yield* partialAnswer(`{"answer": "${PARTIAL_ANSWER}`);
+      yield structuredRunError(
+        "parse-error",
+        `Failed to parse JSON content: {"answer": "${PARTIAL_ANSWER}`,
+      );
+    });
+
+    expect(caught).toBeInstanceOf(ModelOutputIncompleteError);
+    expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+      "model_output_incomplete",
+    );
+  });
+
+  test("a complete answer its schema rejects is invalid", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      const raw = JSON.stringify({ answer: [PARTIAL_ANSWER] });
+      yield* partialAnswer(raw);
+      yield {
+        type: EventType.CUSTOM,
+        name: "structured-output.complete",
+        value: { object: { answer: [PARTIAL_ANSWER] }, raw },
+      } satisfies StreamChunk;
+      yield {
+        type: EventType.RUN_FINISHED,
+        runId: PROVIDER_RUN_ID,
+        threadId: PROVIDER_THREAD_ID,
+        finishReason: "stop",
+      } satisfies StreamChunk;
+    });
+
+    expect(caught).toBeInstanceOf(ModelOutputInvalidError);
+    expect(classifyAIError(caught)).toBe("output_invalid");
+    expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+      "model_output_invalid",
+    );
+  });
+
+  // The codes are a closed vocabulary: a code the engine or adapter does not
+  // use for an unusable answer must not be read as one.
+  test("an unrelated run error code stays the generic model run error", async () => {
+    const caught = await generateObjectWith(async function* () {
+      yield runStarted;
+      yield structuredRunError("something-else", "Unrelated failure.");
+    });
+
+    expect(caught).toBeInstanceOf(ModelRunError);
+    expect(caught).not.toBeInstanceOf(ModelOutputIncompleteError);
+    expect(caught).not.toBeInstanceOf(ModelOutputInvalidError);
+  });
+});
+
+describe("a generation bounded by its own deadline", () => {
+  test("a structured run that outlives its deadline fails as timed out", async () => {
+    const started = performance.now();
+    const caught = await generateObjectWith(
+      async function* (signal) {
+        yield runStarted;
+        await untilAborted(signal);
+      },
+      { deadlineMs: 40 },
+    );
+
+    expect(caught).toBeInstanceOf(ModelDeadlineExceededError);
+    expect(caught).toMatchObject({ deadlineMs: 40, status: 502 });
+    expect(classifyAIError(caught)).toBe("deadline_exceeded");
+    expect(gradeFailure(readEvidence(caught), anySink)).toMatchObject({
+      reason: "model_deadline_exceeded",
+      grade: "transient",
+    });
+    // The run ended at the deadline, not whenever the provider gave up.
+    expect(performance.now() - started).toBeLessThan(5000);
+  });
+
+  // The deadline bounds model resolution as well as the provider call: a
+  // resolver that never settles must not hold the run past it.
+  test("a run whose model resolution never settles fails as timed out", async () => {
+    const pending = Promise.withResolvers<ResolvedTanStackTextModel>();
+    const resolveModel = async () => await pending.promise;
+    const object = await generateTanStackObjectForRole({
+      ...OBJECT_OPTIONS,
+      deadlineMs: 40,
+      resolveTextModel: resolveModel,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    const text = await generateTanStackTextForRole({
+      caching: noCaching,
+      deadlineMs: 40,
+      finishPolicy: "require-complete",
+      organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer",
+      managedAIResidency: "eu",
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+      resolveTextModel: resolveModel,
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    for (const caught of [object, text]) {
+      expect(caught).toBeInstanceOf(ModelDeadlineExceededError);
+      expect(caught).toMatchObject({ deadlineMs: 40, status: 502 });
+      expect(classifyAIError(caught)).toBe("deadline_exceeded");
+      expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+        "model_deadline_exceeded",
+      );
+    }
+    expect(providerRequests).toHaveLength(0);
+  });
+
+  test("a caller's own abort under a deadline that has not fired is a cancellation", async () => {
+    const controller = new AbortController();
+    const caught = await generateObjectWith(
+      async function* (signal) {
+        yield runStarted;
+        controller.abort();
+        await untilAborted(signal);
+      },
+      { abortSignal: controller.signal, deadlineMs: 60_000 },
+    );
+
+    expect(caught).not.toBeInstanceOf(ModelDeadlineExceededError);
+    expect(gradeFailure(readEvidence(caught), anySink).reason).toBe(
+      "generation_cancelled",
+    );
+  });
+
+  test("a run that answers within its deadline returns the answer", async () => {
+    const answer = { answer: "on time" };
+    const raw = JSON.stringify(answer);
+    expect(
+      await generateTanStackObjectForRole({
+        ...OBJECT_OPTIONS,
+        deadlineMs: 60_000,
+        resolveTextModel: () =>
+          structuredStreamModel(async function* () {
+            yield runStarted;
+            yield* partialAnswer(raw);
+            yield {
+              type: EventType.CUSTOM,
+              name: "structured-output.complete",
+              value: { object: answer, raw },
+            } satisfies StreamChunk;
+            yield {
+              type: EventType.RUN_FINISHED,
+              runId: PROVIDER_RUN_ID,
+              threadId: PROVIDER_THREAD_ID,
+              finishReason: "stop",
+            } satisfies StreamChunk;
+          }),
+      }),
+    ).toEqual(answer);
+  });
+
+  test("a text run that outlives its deadline fails as timed out", async () => {
+    const adapter: AnyTextAdapter = {
+      ...providerAdapter,
+      async *chatStream(options) {
+        yield runStarted;
+        await untilAborted(options.request?.signal ?? undefined);
+      },
+    };
+    const caught = await generateTanStackTextForRole({
+      caching: noCaching,
+      deadlineMs: 40,
+      finishPolicy: "require-complete",
+      organizationId: null,
+      admission: NO_ORGANIZATION_MODEL_DISPATCH,
+      dataClass: "customer",
+      managedAIResidency: "eu",
+      orgAIConfig: null,
+      prompt: "Rewrite it.",
+      role: "chat",
+      serviceTier: "standard",
+      tenantWorkspaceIds: [],
+      resolveTextModel: () => ({ ...testModel, adapter }),
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBeInstanceOf(ModelDeadlineExceededError);
+    expect(classifyAIError(caught)).toBe("deadline_exceeded");
+  });
+});
+
+describe("an output token budget bounded by the model's catalog limit", () => {
+  // SAFETY: the helpers read only provider/modelOptions/modelId.
+  const modelFor = (
+    provider: (typeof TANSTACK_AI_PROVIDERS)[number],
+    modelId: string,
+  ): ResolvedTanStackTextModel =>
+    /* oxlint-disable typescript/no-unsafe-type-assertion -- focused pure helper test */
+    ({
+      adapter: {},
+      keySource: "byok",
+      modelId,
+      modelOptions: {},
+      provider,
+    }) as ResolvedTanStackTextModel;
+  /* oxlint-enable typescript/no-unsafe-type-assertion */
+
+  test("every offered model answers a budget within its own limit", () => {
+    for (const provider of TANSTACK_AI_PROVIDERS) {
+      for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
+        const limit = getOutputTokenLimit(modelId);
+        // The catalog guard: an offered model the catalog gives no limit
+        // would leave the budget to the provider's own default.
+        expect(limit).toBeGreaterThan(0);
+        const model = modelFor(provider, modelId);
+        for (const budget of [1, 16_384, 10_000_000]) {
+          expect(outputTokensWithinModelLimit(model, budget)).toBe(
+            Math.min(budget, limit ?? 0),
+          );
+        }
+      }
+    }
+  });
+
+  test("the budget reaches the request as the provider's output option", async () => {
+    queueRun(objectRun({ answer: "ok" }));
+    const model = modelFor("openai", "gpt-5.5");
+    expect(getOutputTokenLimit("gpt-5.5")).toBeGreaterThan(16_384);
+
+    await generateTanStackObjectForRole({
+      ...OBJECT_OPTIONS,
+      outputTokenBudget: 16_384,
+      resolveTextModel: () => ({ ...model, adapter: providerAdapter }),
+    });
+
+    expect(providerRequests.at(-1)?.modelOptions).toMatchObject({
+      max_output_tokens: 16_384,
+    });
+  });
+
+  test("a model the catalog does not list keeps the provider's default", async () => {
+    queueRun(objectRun({ answer: "ok" }));
+
+    await generateObjectForTestModel({
+      ...OBJECT_OPTIONS,
+      outputTokenBudget: 16_384,
+    });
+
+    expect(providerRequests.at(-1)?.modelOptions).not.toHaveProperty(
+      "max_output_tokens",
+    );
+  });
+
+  test("a budget that is not a positive integer is refused", () => {
+    const model = modelFor("openai", "gpt-5.5");
+    for (const budget of [0, -1, 1.5, Number.NaN]) {
+      expect(() => outputTokensWithinModelLimit(model, budget)).toThrow(
+        "An output token budget must be a positive integer",
+      );
+    }
   });
 });

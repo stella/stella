@@ -44,7 +44,10 @@ import { isRecord } from "@/api/lib/type-guards";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 import { STARTER_PLAYBOOKS } from "@/api/lib/workflow/starter-playbooks";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -74,12 +77,12 @@ const orgContext = (organizationId = ids.orgA) => {
     server: null,
   };
   return createTestHandlerContext({
-    createAuditRecorder: () => createAuditRecorder(bindings),
+    scopedDb: NO_DB,
     getActiveWorkspaceIds: async () => [],
     getAccessibleWorkspaces: async () => [],
     getWorkspaceAccess: async () => null,
     pinServerValidatedWorkspaceId: () => false,
-    recordAuditEvent: createAuditRecorder(bindings),
+    audit: createAuditRecorder(bindings),
     request: bindings.request,
     route: "/playbooks",
     safeDb: toSafeDbMock(

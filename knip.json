@@ -57,9 +57,14 @@
         "src/lib/search/extraction-worker.ts!",
         "src/lib/ocr-local/ocr-local-worker.ts!",
         "src/lib/ocr-searchable-pdf-worker.ts!",
+        // Spike renderer process and its memory watchdog thread, started by
+        // path from the session.
+        "src/handlers/invoices/pdf/typst/worker.ts",
+        "src/handlers/invoices/pdf/typst/watchdog.ts",
         "scripts/*.ts",
         // Compiler contract tests are checked by the API typecheck script.
         "contracts/**/*.ts",
+        "src/**/*.type-test.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",
         "src/lib/__fixtures__/*.ts",
@@ -99,6 +104,9 @@
       // imports it through @stll/ui/icons; the app keeps the dependency so
       // vite's `resolve.dedupe` and icon chunking resolve one copy.
       "ignoreDependencies": [
+        // The gitignored API contract imports schema interfaces by name to
+        // preserve ClientTool generic identity; CI checks that generated output.
+        "@standard-schema/spec",
         // Dynamically imported from the inline bootstrap in index.html.
         "react-grab",
         "lucide-react",
@@ -120,7 +128,8 @@
         "src/**/*.astro",
         "src/content.config.ts",
         "src/pages/**/*.ts",
-        "astro.config.*"
+        "astro.config.*",
+        "e2e/**/*.ts"
       ],
       // Tailwind scans workspace-ui through the CSS @source directive.
       "ignoreDependencies": ["@tailwindcss/postcss", "@stll/workspace-ui"]
@@ -146,11 +155,21 @@
         "src/**/*.test.ts"
       ]
     },
+    "packages/decision-reader": {
+      "entry": ["src/**/*.test.{ts,tsx}"]
+    },
     "packages/legal-atlas": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/legal-ast": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/mcp-apps": {
+      "entry": [
+        "src/*/app.tsx",
+        "src/**/*.{test,spec}.{ts,tsx}",
+        "scripts/**/*.ts"
+      ]
     },
     "packages/mcp-kit": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
@@ -167,6 +186,12 @@
     "packages/permissions": {
       "entry": ["src/index.ts"]
     },
+    "packages/portable-path": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/playwright-tools": {
+      "entry": ["src/marketing-config.ts"]
+    },
     "packages/redis-config": {
       "entry": ["src/connection.ts", "src/**/*.test.ts"]
     },
@@ -176,8 +201,19 @@
     "packages/sanctions": {
       "entry": ["src/index.ts", "src/**/*.test.ts", "scripts/evaluate.ts"]
     },
+    "packages/scan-engine": {
+      "entry": ["src/scan-engine.ts", "src/**/*.test.ts"],
+      "ignore": ["generated/**"]
+    },
     "packages/scripts": {
-      "entry": ["src/i18n-check.ts", "src/i18n-typegen.ts"]
+      // The Postgres lifecycle owner is invoked by scripts/configure-test-postgres.sh.
+      "entry": [
+        "src/i18n-check.ts",
+        "src/i18n-typegen.ts",
+        "src/dev-postgres.ts",
+        // Test fixture processes are spawned by path from the tests.
+        "src/test-fixtures/*.ts"
+      ]
     },
     // The three `exports` entry points are derived from package.json, so
     // listing them here only earns a redundancy hint. These are the entries
@@ -217,6 +253,9 @@
     },
     "packages/uuid-codec": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "apps/visual-preview": {
+      "entry": ["src/handler.ts", "src/**/*.test.ts", "browser/**/*.test.ts"]
     }
   },
   "ignore": [".oxlint-plugins/**", ".claude/**"],

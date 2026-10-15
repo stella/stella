@@ -3,6 +3,7 @@ import {
   copyFileSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   mkdtempSync,
   rmSync,
   symlinkSync,
@@ -11,8 +12,15 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { inspectConfiguration, scanAll, type RatchetMetric } from "./ratchet";
-import ratchetDefinitionPaths from "./ratchet-definition-paths.json";
+import {
+  allowanceAdjustmentCommand,
+  allowanceRemovalCommand,
+  inspectConfiguration,
+  scanAll,
+  type RatchetMetric,
+} from "./ratchet";
+import ratchetDefinitionPaths from "./ratchet-definition-paths.json" with { type: "json" };
+import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const metric = {
   id: "test-metric",
@@ -90,13 +98,15 @@ const commit = (root: string, message: string) => {
 
 // Copy the real guard and its import closure; the clone's scans and Git
 // history stay small while both branches execute production CLI behavior.
-const withClone = (exercise: (root: string) => void) => {
+const withClone = (exercise: (root: string) => void, branch?: string) => {
   const temporary = mkdtempSync(path.join(tmpdir(), "ratchet-derived-totals-"));
   const seed = path.join(temporary, "seed");
   const clone = path.join(temporary, "clone");
   try {
     mkdirSync(seed);
-    for (const relative of ratchetDefinitionPaths) {
+    for (const relative of ratchetDefinitionPaths.flatMap((pattern) => [
+      ...new Bun.Glob(pattern).scanSync({ cwd: ROOT, onlyFiles: true }),
+    ])) {
       mkdirSync(path.dirname(path.join(seed, relative)), { recursive: true });
       copyFileSync(path.join(ROOT, relative), path.join(seed, relative));
     }
@@ -119,7 +129,17 @@ const withClone = (exercise: (root: string) => void) => {
     git(seed, "config", "user.name", "Ratchet fixture");
     git(seed, "config", "user.email", "ratchet@example.invalid");
     commit(seed, "fixture base");
-    git(temporary, "clone", "--quiet", seed, clone);
+    if (branch !== undefined) {
+      git(seed, "branch", branch);
+    }
+    git(
+      temporary,
+      "clone",
+      "--quiet",
+      ...(branch === undefined ? [] : ["--single-branch", "--branch", branch]),
+      seed,
+      clone,
+    );
     git(clone, "config", "user.name", "Ratchet fixture");
     git(clone, "config", "user.email", "ratchet@example.invalid");
     symlinkSync(
@@ -224,6 +244,58 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
   });
 }, 30_000);
 
+test.each([
+  { label: "all-branch clone", branch: undefined },
+  { label: "single-branch clone", branch: "feature-only" },
+])(
+  "--head refreshes main independently of the checkout ($label)",
+  ({ branch }) => {
+    withClone((root) => {
+      if (branch !== undefined) {
+        expect(git(root, "config", "--get", "remote.origin.fetch")).toBe(
+          `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
+        );
+      }
+      const fork = git(root, "rev-parse", "HEAD");
+      const origin = git(root, "remote", "get-url", "origin");
+      write({ root: origin, relative: FIRST, contents: casts(1) });
+      commit(origin, "main improvement");
+      git(root, "fetch", "origin", "+refs/heads/main:refs/remotes/origin/main");
+      const main = git(root, "rev-parse", "origin/main");
+      git(root, "checkout", "-b", "selected-head", main);
+      write({ root, relative: FIRST, contents: casts(2) });
+      commit(root, "selected head increase");
+      const head = git(root, "rev-parse", "HEAD");
+      git(root, "checkout", "-b", "other-branch", fork);
+      git(root, "update-ref", "refs/remotes/origin/main", fork);
+
+      expect(check(root).code).toBe(0);
+      expect(git(root, "rev-parse", "origin/main")).toBe(fork);
+      for (const checkoutBranch of ["other-branch", "selected-head"]) {
+        git(root, "checkout", checkoutBranch);
+        if (checkoutBranch === "selected-head") {
+          git(root, "update-ref", "-d", "refs/remotes/origin/main");
+        }
+        const checkout = git(root, "rev-parse", "HEAD");
+        const result = check(root, "--head", head);
+        expect(result.code, result.output).toBe(1);
+        expect(result.output).toContain("as-casts: 5 -> 6");
+        expect(result.output).toContain(`(${main})`);
+        expect(git(root, "rev-parse", "origin/main")).toBe(main);
+        expect(git(root, "rev-parse", "HEAD")).toBe(checkout);
+      }
+
+      git(root, "checkout", "other-branch");
+      write({ root, relative: FIRST, contents: casts(3) });
+      const worktree = check(root);
+      expect(worktree.code, worktree.output).toBe(1);
+      expect(worktree.output).toContain("as-casts: 6 -> 7");
+      expect(worktree.output).toContain(`(${fork})`);
+    }, branch);
+  },
+  30_000,
+);
+
 test("--head measures a commit as data with that commit's allowances", () => {
   withClone((root) => {
     const base = git(root, "rev-parse", "HEAD");
@@ -284,24 +356,30 @@ test("a counter cannot supply an inflated total detached from its files", () => 
   ).toThrow("does not equal its per-file total");
 });
 
-const workflow = readFileSync(
-  new URL("../.github/workflows/ci.yml", import.meta.url),
-  "utf-8",
+const workflow = Bun.YAML.parse(
+  readFileSync(
+    new URL("../.github/workflows/ci.yml", import.meta.url),
+    "utf-8",
+  ),
 );
-const selection = workflow.slice(
-  workflow.indexOf("      - name: Select measured ratchet base"),
-  workflow.indexOf("      - name: Ratchet guard"),
+const policySteps = workflowJobSteps(workflow, "ci-checks-policy");
+const selectionStep = workflowStepByName(
+  policySteps,
+  "Select measured ratchet base from the target branch",
 );
-const selectionCommand = selection
-  .slice(selection.indexOf("        run: |\n") + "        run: |\n".length)
-  .split("\n")
-  .map((line) => line.replace(/^ {10}/u, ""))
-  .join("\n");
+const ratchetGuardStep = workflowStepByName(policySteps, "Ratchet guard");
+const selectionCommand = selectionStep["run"];
+if (typeof selectionCommand !== "string") {
+  throw new TypeError("Ratchet base selection step must have a run command");
+}
 
 test("CI selects the merge base on PRs and the event base on merge groups", () => {
-  expect(selection).toContain("github.event.merge_group.base_sha");
-  expect(workflow.indexOf("Select measured ratchet base")).toBeLessThan(
-    workflow.indexOf("Ratchet guard"),
+  expect(selectionStep["env"]).toMatchObject({
+    MERGE_GROUP_BASE_SHA: `\${{ github.event.merge_group.base_sha }}`,
+    BASE_REF: `\${{ github.base_ref || 'main' }}`,
+  });
+  expect(policySteps.indexOf(selectionStep)).toBeLessThan(
+    policySteps.indexOf(ratchetGuardStep),
   );
   withClone((root) => {
     const base = git(root, "rev-parse", "HEAD");
@@ -343,10 +421,36 @@ test("CI selects the merge base on PRs and the event base on merge groups", () =
   });
 }, 30_000);
 
-test("removed writer options fail explicitly", () => {
-  const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", "--write"]);
-  expect(result.code).not.toBe(0);
-  expect(result.output).toContain("unsupported ratchet option: --write");
+describe("ratchet command-line usage", () => {
+  for (const flag of ["--help", "-h"]) {
+    test(`${flag} prints usage successfully`, () => {
+      const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", flag]);
+      expect(result.code).toBe(0);
+      expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
+      expect(result.output).toContain("--check");
+      expect(result.output).toContain("scripts/ratchet-allowances/<slug>.json");
+      expect(result.output).toContain('"delta": <positive integer>');
+    });
+  }
+
+  for (const flag of ["--write", "-x"]) {
+    test(`${flag} prints usage and fails`, () => {
+      const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", flag]);
+      expect(result.code).not.toBe(0);
+      expect(result.output).toContain(`unsupported ratchet option: ${flag}`);
+      expect(result.output).toContain("Usage: bun scripts/ratchet.ts");
+    });
+  }
+
+  test("the supported self-test mode retains its behavior", () => {
+    const result = run(ROOT, [
+      process.execPath,
+      "scripts/ratchet.ts",
+      "--self-test",
+    ]);
+    expect(result.code).toBe(0);
+    expect(result.output).toContain("ratchet --self-test: PASS");
+  });
 });
 
 test("the lint planner inherits only result-boundary debt measured in the base tree", () => {
@@ -420,6 +524,15 @@ for (const { name, count, delta, code, diagnostic } of [
         expect(result.output).toContain(diagnostic);
         if (code !== 0) {
           expect(result.output).toContain(ALLOWANCE);
+          if (count > 2) {
+            expect(result.output).toContain(
+              `mkdir -p 'scripts/ratchet-allowances' && printf '%s\\n'`,
+            );
+            expect(result.output).toContain(`> '${ALLOWANCE}'`);
+          } else {
+            expect(result.output).toContain(`rm -- '${ALLOWANCE}'`);
+          }
+          expect(result.output).toContain("bun scripts/ratchet.ts --check");
         }
       });
     },
@@ -439,6 +552,83 @@ test("multiple added allowances must sum to the actual increase", () => {
     }
     commit(root, "split funding");
     expect(check(root).code).toBe(0);
+  });
+}, 30_000);
+
+test("allowance repair commands preserve each complete filename and JSON payload", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "allowance-command-"));
+  try {
+    const target = "scripts/ratchet-allowances/one space;quote'.json";
+    const remove = "scripts/ratchet-allowances/two space;quote'.json";
+    const untouched = "scripts/ratchet-allowances/unchanged.json";
+    for (const relative of [target, remove, untouched]) {
+      write({ root, relative, contents: "unchanged bytes\n" });
+    }
+    const template = {
+      metric: "as-casts",
+      delta: 1,
+      reason: "Fixture's adjustment",
+    };
+    const command = allowanceAdjustmentCommand({
+      target,
+      remove: [remove],
+      template,
+    });
+    succeed(root, ["bash", "-euo", "pipefail", "-c", command]);
+    expect(JSON.parse(readFileSync(path.join(root, target), "utf-8"))).toEqual(
+      template,
+    );
+    expect(
+      readdirSync(path.join(root, "scripts/ratchet-allowances")).toSorted(),
+    ).toEqual([path.basename(target), path.basename(untouched)].toSorted());
+    expect(readFileSync(path.join(root, untouched), "utf-8")).toBe(
+      "unchanged bytes\n",
+    );
+    succeed(root, [
+      "bash",
+      "-euo",
+      "pipefail",
+      "-c",
+      allowanceRemovalCommand([target]),
+    ]);
+    expect(readdirSync(path.join(root, "scripts/ratchet-allowances"))).toEqual([
+      path.basename(untouched),
+    ]);
+    expect(readFileSync(path.join(root, untouched), "utf-8")).toBe(
+      "unchanged bytes\n",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("the adjustment command consolidates every added allowance for the metric", () => {
+  withClone((root) => {
+    write({ root, relative: FIRST, contents: casts(3) });
+    const files = [
+      "scripts/ratchet-allowances/one.json",
+      "scripts/ratchet-allowances/two.json",
+    ] as const;
+    for (const file of files) {
+      fund(root, { metric: "as-casts", delta: 1, reason: "Fixture" }, file);
+    }
+    commit(root, "split excess funding");
+    const result = check(root);
+    expect(result.code).toBe(1);
+    expect(result.output).toContain("actual increase 1, funded 2");
+    expect(result.output).toContain(
+      `Adjust ${files.join(", ")}, merging their funding into ${files[0]}`,
+    );
+    const command = /After deciding the increase is required, run: ([^\n]+)/u
+      .exec(result.output)
+      ?.at(1);
+    if (command === undefined) {
+      throw new TypeError("Missing allowance adjustment command");
+    }
+    succeed(root, ["bash", "-euo", "pipefail", "-c", command]);
+    commit(root, "consolidate funding");
+    const adjusted = check(root);
+    expect(adjusted.code, adjusted.output).toBe(0);
   });
 }, 30_000);
 

@@ -24,7 +24,10 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import { withCurrentMemberRole } from "@/api/lib/permission-authorization";
 import type { WithToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
-import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  projectMcpFeatureInput,
+  isMcpDescriptorFeatureEnabled,
+} from "@/api/mcp/feature-access";
 import {
   hiddenMcpDescriptorIds,
   scopeMcpDescriptorProse,
@@ -33,6 +36,7 @@ import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
 } from "@/api/mcp/static-tool-definitions";
+import { isMcpToolVisibleTo } from "@/api/mcp/tool-visibility";
 import {
   hasMcpToolAuthority,
   isAccountAuthorizedForMcpTool,
@@ -84,7 +88,10 @@ export type ChatRegistryWriteToolMap = {
 const projectedWriteToolNames = (): readonly RegistryWriteToolName[] => {
   const names: RegistryWriteToolName[] = [];
   for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-    if (definition.access !== "write") {
+    if (
+      definition.access !== "write" ||
+      !isMcpToolVisibleTo(definition, "model")
+    ) {
       continue;
     }
     if (WRITE_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
@@ -171,9 +178,13 @@ export const buildChatWriteTools = (
   const tools: ChatToolMap = {};
   for (const toolName of projectedWriteToolNames()) {
     const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
-    const definition =
+    const definition = projectMcpFeatureInput(
+      context,
       getStaticMcpToolDefinition(toolName) ??
-      panic(`Chat write tool ${toolName} is missing from the static registry`);
+        panic(
+          `Chat write tool ${toolName} is missing from the static registry`,
+        ),
+    );
     // The same declared gates MCP discovery applies: a member who cannot run
     // any of the tool's operations, or an account its declared account
     // access refuses, is not offered it.

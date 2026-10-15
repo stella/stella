@@ -102,7 +102,7 @@ export const REVIEW_SUGGESTION_ORIGIN = {
   review: "review",
 } as const;
 
-export type ReviewSuggestionOrigin =
+type ReviewSuggestionOrigin =
   (typeof REVIEW_SUGGESTION_ORIGIN)[keyof typeof REVIEW_SUGGESTION_ORIGIN];
 
 export type ReviewSuggestion = {

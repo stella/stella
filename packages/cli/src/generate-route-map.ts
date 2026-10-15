@@ -194,19 +194,41 @@ const unwrapNullableUnion = (schema: PropSchema): PropSchema => {
   return { ...outer, ...valueBranch, type: [...valueTypes, "null"] };
 };
 
+const enumValues = (schema: PropSchema): readonly string[] | undefined => {
+  const values = schema["enum"];
+  if (values !== undefined) {
+    return Array.isArray(values) &&
+      values.every((value) => typeof value === "string")
+      ? values
+      : undefined;
+  }
+  const branches = schema["anyOf"];
+  if (!Array.isArray(branches) || branches.length === 0) {
+    return undefined;
+  }
+  const literals: string[] = [];
+  for (const branch of branches) {
+    if (
+      !isRecordSchema(branch) ||
+      branch["type"] !== "string" ||
+      typeof branch["const"] !== "string"
+    ) {
+      return undefined;
+    }
+    literals.push(branch["const"]);
+  }
+  return [...new Set(literals)];
+};
+
 const typeInfo = (schema: PropSchema): TypeInfo => {
   const types = schemaTypeList(schema["type"]);
   const nullable = types.includes("null");
-  const base = types.find((t) => t !== "null");
+  const base =
+    types.find((type) => type !== "null") ??
+    (types.length === 0 && enumValues(schema) !== undefined
+      ? "string"
+      : undefined);
   return { base, nullable };
-};
-
-const enumValues = (schema: PropSchema): readonly string[] | undefined => {
-  const values = schema["enum"];
-  if (!Array.isArray(values)) {
-    return undefined;
-  }
-  return values.every((v) => typeof v === "string") ? values : undefined;
 };
 
 /** Conditionally include `min`/`max` so an absent bound is omitted, not `undefined`. */
@@ -582,7 +604,10 @@ const heuristicCommandPath = (name: string): readonly string[] => {
     return [kebabCase(name)];
   }
   const head = name.slice(0, underscore);
-  const rest = name.slice(underscore + 1);
+  const rest = name.slice(underscore + 1).replace(/^[_-]+/u, "");
+  if (rest.length === 0) {
+    return [kebabCase(name)];
+  }
   if (VERB_PREFIXES.has(head)) {
     return [kebabCase(rest), head];
   }
@@ -630,11 +655,13 @@ const toolMetadata = ({
   listing: RegistryToolListing;
   annotation: ToolAnnotation | undefined;
 }) => {
+  const feature = annotation?.feature ?? listing.feature;
   const featureId = annotation?.featureId ?? listing.featureId;
   const additionalScopes = annotation?.additionalScopes;
   const requestTimeoutMs = annotation?.requestTimeoutMs;
   const scope = annotation ? scopeOf(annotation) : undefined;
   return {
+    ...(feature === undefined ? {} : { feature }),
     ...(featureId === undefined ? {} : { featureId }),
     ...(additionalScopes === undefined ? {} : { additionalScopes }),
     ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),

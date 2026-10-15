@@ -76,7 +76,7 @@ if (!databaseUrl || !runPostgresTests) {
               }
             }
           },
-          { closeTimeout: 0 },
+          { closeMode: "force" },
         );
       } finally {
         await heldTransactionSettled;

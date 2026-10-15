@@ -16,7 +16,7 @@ declare const tag: string;
 table.text();
 // oxlint-disable-next-line no-raw-parser-html/no-raw-parser-html -- chained raw text has the same defect
 table.clone().find("p").first().text();
-// oxlint-disable-next-line no-raw-parser-html/no-raw-parser-html, dot-notation -- computed getter is still a raw text read
+// oxlint-disable-next-line no-raw-parser-html/no-raw-parser-html, typescript/dot-notation -- computed getter is still a raw text read
 table["text"]();
 // oxlint-disable-next-line no-raw-parser-html/no-raw-parser-html -- descendant rows include nested tables
 table.find("tr");

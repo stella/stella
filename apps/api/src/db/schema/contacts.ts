@@ -4,6 +4,7 @@ import { CONTACT_TYPES, WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 
 import { workspaceInsertCheck } from "@/api/db/rls";
 import {
+  ACCOUNT_AUDIT_EVENT_TYPES,
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
 } from "@/api/lib/audit-log.constants";
@@ -393,7 +394,7 @@ export const workspaceMembers = p.pgTable(
       .uniqueIndex("workspace_members_workspace_user_uidx")
       .on(table.workspaceId, table.userId),
     p.index("workspace_members_user_id_idx").on(table.userId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -435,7 +436,7 @@ export const workspaceContacts = p.pgTable(
     p
       .uniqueIndex("workspace_contacts_ws_contact_role_uidx")
       .on(table.workspaceId, table.contactId, table.role),
-    ...wsOrganizationPolicies("workspace_contacts"),
+    ...wsOrganizationPolicies("workspace_contacts", { columns: table }),
   ],
 );
 
@@ -594,6 +595,7 @@ export const auditLogs = p.pgTable(
     p
       .index("audit_logs_org_created_id_idx")
       .on(table.organizationId, table.createdAt, table.id),
+    p.index("audit_logs_created_at_brin_idx").using("brin", table.createdAt),
     p
       .index("audit_logs_org_workspace_created_id_idx")
       .on(table.organizationId, table.workspaceId, table.createdAt, table.id),
@@ -673,6 +675,70 @@ export const auditLogs = p.pgTable(
       as: "restrictive",
       for: "delete",
       to: stella,
+      using: sql`false`,
+    }),
+  ],
+);
+
+/** Account audit history belongs to its user, independently of organization membership. */
+export const accountAuditLogs = p.pgTable.withRLS(
+  "account_audit_logs",
+  {
+    id: p.uuid().primaryKey(),
+    userId: p
+      .text("user_id")
+      .$type<SafeId<"user">>()
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    eventType: p
+      .text("event_type", { enum: ACCOUNT_AUDIT_EVENT_TYPES })
+      .notNull(),
+    resourceId: p.text("resource_id").notNull(),
+    requestMetadata: jsonb("request_metadata").$type<{
+      ipAddress: string | null;
+      forwardedFor: string | null;
+      userAgent: string | null;
+    }>(),
+    groupId: p.uuid("group_id").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.check(
+      "account_audit_logs_event_type_check",
+      sql`${table.eventType} IN (${sql.join(
+        ACCOUNT_AUDIT_EVENT_TYPES.map((type) => sql`${type}`),
+        sql`, `,
+      )})`,
+    ),
+    p
+      .index("account_audit_logs_user_created_id_idx")
+      .on(table.userId, table.createdAt, table.id),
+    p.pgPolicy("account_audit_logs_select", {
+      for: "select",
+      to: "public",
+      using: sql`${table.userId} = (SELECT current_setting('app.user_id', true))`,
+    }),
+    p.pgPolicy("account_audit_logs_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: sql`${table.userId} = (SELECT current_setting('app.user_id', true))`,
+    }),
+    // Background jobs receive the owning connection; its insert cannot grant a read.
+    p.pgPolicy("account_audit_logs_owner_insert", {
+      for: "insert",
+      to: "public",
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.account_audit_logs'::regclass)`,
+    }),
+    p.pgPolicy("account_audit_logs_no_update", {
+      as: "restrictive",
+      for: "update",
+      to: "public",
+      using: sql`false`,
+    }),
+    p.pgPolicy("account_audit_logs_no_delete", {
+      as: "restrictive",
+      for: "delete",
+      to: "public",
       using: sql`false`,
     }),
   ],
@@ -792,7 +858,7 @@ export const infoSoudTrackedCases = p.pgTable(
     p
       .uniqueIndex("infosoud_tracked_cases_workspace_case_uidx")
       .on(table.workspaceId, table.courtCode, table.spisZn),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 

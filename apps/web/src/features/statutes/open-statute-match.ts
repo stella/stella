@@ -11,7 +11,7 @@ import {
 } from "@/features/statutes/queries/statutes";
 import { readStatuteIntent } from "@/features/statutes/statute-index-search.logic";
 import { ensureRouteInfiniteQueryData } from "@/lib/react-query";
-import type { StatuteCountry } from "@/lib/statute-route";
+import type { StatuteCountry } from "@/lib/statutes/statute-route";
 
 export const createStatuteFilters = (
   country: string,

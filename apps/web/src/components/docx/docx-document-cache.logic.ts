@@ -29,7 +29,7 @@ export type DocxDocumentCacheValue = {
   buffer: ArrayBuffer;
 };
 
-export type DocxDocumentCacheEntry = {
+type DocxDocumentCacheEntry = {
   key: string;
   value: DocxDocumentCacheValue;
   /** When the server handed these bytes over. Carried so a reopen restores the

@@ -127,7 +127,6 @@ export const SIZE_LINT_POLICY_OVERRIDES =
 export const BUILTIN_LINT_BACKLOG_RULES = [
   "react/no-children-prop",
   "eslint/no-unexpected-multiline",
-  "eslint/no-use-before-define",
 ] as const;
 
 type BuiltinLintBacklogRule = (typeof BUILTIN_LINT_BACKLOG_RULES)[number];

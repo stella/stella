@@ -87,7 +87,7 @@ export const asDocxFieldContent = (
   };
 };
 
-export const findDocxFieldForProperty = ({
+const findDocxFieldForProperty = ({
   fieldEntries,
   propertyId,
 }: {

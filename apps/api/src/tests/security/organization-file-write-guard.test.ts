@@ -63,6 +63,9 @@ const exemptions = {
   "scripts/seed-templates.ts:writeScannedObject:1": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:0": "fixture",
   "scripts/seed-dev.ts:writeS3ObjectWithRetry:1": "fixture",
+  // The marketing agent thread's generated view: a fixed fixture page under
+  // the seed user's chat-file key, rewritten on every seed.
+  "scripts/seed-dev.ts:writeS3ObjectWithRetry:2": "fixture",
   "src/lib/uploads/promote-tmp-object.ts:copyObject:0": "reservation_flow",
   "src/lib/uploads/promote-tmp-object.ts:writeS3ObjectWithRetry:0":
     "reservation_flow",
@@ -76,7 +79,7 @@ const exemptions = {
 // that file's new write site and key classification.
 const expectedWriteCounts = {
   "scripts/backfill-image-thumbnails.ts": 1,
-  "scripts/seed-dev.ts": 2,
+  "scripts/seed-dev.ts": 3,
   "scripts/seed-email-viewer-demo.ts": 1,
   "scripts/seed-templates.ts": 2,
   "src/handlers/chat/export/create.ts": 1,
@@ -602,8 +605,8 @@ describe("durable organization file writes", () => {
         copy: async () => await copyObject(file.source, file.target),
       });
       const prepared = [];
-      for (let start = 0; start < files.length; start += 4) {
-        prepared.push(...(await Promise.all(files.slice(start, start + 4).map(prepareFile))));
+      for (const batch of chunk(files, 4)) {
+        prepared.push(...(await Promise.all(batch.map(prepareFile))));
       }
       const inputs = Result.all(prepared);
       await copyOrganizationFiles({ inputs: inputs.value });
@@ -789,7 +792,7 @@ describe("durable organization file writes", () => {
           const source = await Bun.file(
             path.join(root, "apps/api", site.file),
           ).text();
-          expect(source).toContain("reserveOrganizationFileBytes(");
+          expect(source).toContain("authorizeOrganizationFileWrite(");
           expect(source).toContain("commitOrganizationFileBytes(");
           break;
         }

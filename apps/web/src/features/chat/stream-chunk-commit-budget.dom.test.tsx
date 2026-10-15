@@ -1,7 +1,7 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { EventType } from "@tanstack/ai";
 import type { StreamChunk } from "@tanstack/ai";
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -11,12 +11,21 @@ import {
   test,
 } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   STREAM_CHUNK_COMMIT_BUDGET,
   STREAM_EVENT_KIND,
   streamChunkKindOf,
 } from "@/features/chat/stream-chunk-commit-budget";
 import type { StreamChunkKind } from "@/features/chat/stream-chunk-commit-budget";
+import { browserStorage } from "@/lib/account/browser-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
+const localArea = () =>
+  browserStorage("local") ?? panic("Test requires local browser storage");
+const sessionArea = () =>
+  browserStorage("session") ?? panic("Test requires session browser storage");
 
 // Oracle `chat.render.stream-commits-bounded`: while a response streams, the
 // thread page commits at most its budget a second, whatever kind of chunk
@@ -49,7 +58,7 @@ const testing = await import("@testing-library/react");
 const { openChatThreadDomPage } =
   await import("@/components/chat/chat-thread-dom-page");
 const { __resetChatRequestStateForTests } =
-  await import("@/features/chat/queries");
+  await import("@/features/chat/chat-runtime-registry");
 const { toSafeId } = await import("@/lib/safe-id");
 
 const actEnvironment: unknown = Reflect.get(
@@ -63,20 +72,18 @@ beforeAll(() => {
 });
 
 afterAll(async () => {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 50);
-  });
+  await sleep(50);
   Reflect.set(globalThis, "IS_REACT_ACT_ENVIRONMENT", actEnvironment);
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 afterEach(() => {
   testing.cleanup();
   routeRequest = undefined;
   __resetChatRequestStateForTests();
-  sessionStorage.clear();
-  localStorage.clear();
+  sessionArea().clear();
+  localArea().clear();
 });
 
 const ORGANIZATION_ID = "00000000-0000-7000-8000-00000000ffff";
@@ -327,6 +334,7 @@ const createStreamingServer = (
       model: null,
       olderCursor: null,
       reasoningEffort: null,
+      activeSkill: null,
       threadExists: false,
       threadRevision: "revision-0",
       usedAnonymization: false,
@@ -356,9 +364,7 @@ const createStreamingServer = (
     return new Response(
       new ReadableStream<Uint8Array>({
         pull: async (controller) => {
-          await new Promise((resolve) => {
-            setTimeout(resolve, DELTA_INTERVAL_MS);
-          });
+          await sleep(DELTA_INTERVAL_MS);
           const event = stream[index];
           index += 1;
           if (event === undefined) {
@@ -412,11 +418,6 @@ const createStreamingServer = (
 };
 
 // --- The measurement --------------------------------------------------------
-
-const sleep = async (ms: number) =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 /** Streams `kind` to a freshly loaded page; returns the page's commit rate
  *  while the kind's deltas arrived. */

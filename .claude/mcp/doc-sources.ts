@@ -16,6 +16,14 @@ export type NoLlmsTxtExclusion = {
 };
 
 export const DOC_SOURCES = {
+  AGUI: {
+    dependencies: ["@ag-ui/core"],
+    url: "https://docs.ag-ui.com/llms.txt",
+  },
+  Zod: {
+    dependencies: ["zod"],
+    url: "https://zod.dev/llms.txt",
+  },
   Anthropic: {
     dependencies: ["@anthropic-ai/sdk"],
     url: "https://platform.claude.com/llms.txt",
@@ -56,6 +64,7 @@ export const DOC_SOURCES = {
       "@tanstack/ai-persistence",
       "@tanstack/ai-react",
       "@tanstack/ai-sandbox",
+      "@tanstack/charts",
       "@tanstack/devtools-vite",
       "@tanstack/eslint-plugin-router",
       "@tanstack/react-devtools",
@@ -173,6 +182,7 @@ export const DOC_SOURCES = {
     dependencies: [
       "@aws-sdk/client-bedrock-runtime",
       "@aws-sdk/client-cloudwatch",
+      "@aws-sdk/client-lambda",
       "@aws-sdk/client-s3",
       "@aws-sdk/client-sesv2",
       "@aws-sdk/client-sqs",
@@ -378,6 +388,110 @@ export const DOC_SOURCE_EXCLUSIONS = [
   .map(noLlmsTxt)
   .concat(
     {
+      checkedAt: "2026-10-13T00:00:00.000Z",
+      dependency: "@myriaddreamin/typst-ts-renderer",
+      explanation:
+        "https://myriad-dreamin.github.io/typst.ts/llms.txt and https://typst.app/llms.txt return 404. Use the typst.ts guide at https://myriad-dreamin.github.io/typst.ts/cookery/ and the Typst reference at https://typst.app/docs/ directly.",
+      expiresAt: "2026-11-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-13T00:00:00.000Z",
+      dependency: "@myriaddreamin/typst-ts-web-compiler",
+      explanation:
+        "https://myriad-dreamin.github.io/typst.ts/llms.txt and https://typst.app/llms.txt return 404. Use the typst.ts guide at https://myriad-dreamin.github.io/typst.ts/cookery/ and the Typst reference at https://typst.app/docs/ directly.",
+      expiresAt: "2026-11-12T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-11T00:00:00.000Z",
+      dependency: "shell-quote",
+      explanation:
+        "https://raw.githubusercontent.com/ljharb/shell-quote/main/llms.txt returns 404. Use the canonical package README at https://github.com/ljharb/shell-quote#readme directly.",
+      expiresAt: "2026-11-10T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-07T00:00:00.000Z",
+      dependency: "@gdp-ts/core",
+      explanation:
+        "https://raw.githubusercontent.com/rauchg/gdp-ts/HEAD/llms.txt returns 404. Use the package README at https://github.com/rauchg/gdp-ts#readme directly.",
+      expiresAt: "2026-11-06T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "d3-scale",
+      explanation:
+        "https://d3js.org/llms.txt returns 404. Use the official scale API reference at https://d3js.org/d3-scale directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "@types/d3-scale",
+      explanation:
+        "Type declarations for d3-scale have no separate documentation site. https://d3js.org/llms.txt returns 404; use https://d3js.org/d3-scale and the declarations in @types/d3-scale directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "@tailwindcss/postcss",
+      explanation:
+        "https://tailwindcss.com/llms.txt returns 404. Use the PostCSS installation guide at https://tailwindcss.com/docs/installation/using-postcss directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "playwright-core",
+      explanation:
+        "https://playwright.dev/llms.txt returns 404. Use the canonical documentation at https://playwright.dev/docs/api/class-browser directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "postcss",
+      explanation:
+        "https://postcss.org/llms.txt returns 404. Use the API reference at https://postcss.org/api/ directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "@sparticuz/chromium-min",
+      explanation:
+        "https://raw.githubusercontent.com/Sparticuz/chromium/main/llms.txt returns 404. Use the canonical documentation at https://github.com/Sparticuz/chromium directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "mdast-util-from-markdown",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the parser API at https://github.com/syntax-tree/mdast-util-from-markdown directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "mdast-util-gfm",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the GFM tree extension API at https://github.com/syntax-tree/mdast-util-gfm directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-06T00:00:00.000Z",
+      dependency: "micromark-extension-gfm",
+      explanation:
+        "https://unifiedjs.com/llms.txt and the canonical repository's raw llms.txt endpoint return 404. Use the GFM syntax extension API at https://github.com/micromark/micromark-extension-gfm directly.",
+      expiresAt: "2026-11-05T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
       checkedAt: "2026-09-30T00:00:00.000Z",
       dependency: "@standard-schema/spec",
       explanation:
@@ -450,11 +564,19 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-12T00:00:00.000Z",
+      checkedAt: "2026-10-08T00:00:00.000Z",
       dependency: "stylelint",
       explanation:
         "https://stylelint.io/llms.txt returns 404. Use https://stylelint.io/user-guide/rules/ and https://stylelint.io/user-guide/configure/ directly for the CSS correctness configuration.",
-      expiresAt: "2026-10-12T00:00:00.000Z",
+      expiresAt: "2026-11-07T00:00:00.000Z",
+      reason: "no-llms-txt",
+    },
+    {
+      checkedAt: "2026-10-13T00:00:00.000Z",
+      dependency: "isbot",
+      explanation:
+        "https://raw.githubusercontent.com/omrilotan/isbot/main/llms.txt returns 404 and https://isbot.js.org/llms.txt returns 404. Use the canonical README at https://github.com/omrilotan/isbot#readme directly.",
+      expiresAt: "2026-11-12T00:00:00.000Z",
       reason: "no-llms-txt",
     },
     {
@@ -466,11 +588,11 @@ export const DOC_SOURCE_EXCLUSIONS = [
       reason: "no-llms-txt",
     },
     {
-      checkedAt: "2026-09-08T00:00:00.000Z",
+      checkedAt: "2026-10-08T00:00:00.000Z",
       dependency: "temporal-polyfill",
       explanation:
         "The package publishes Markdown documentation at https://github.com/fullcalendar/temporal-polyfill and API documentation at https://tc39.es/proposal-temporal/docs/, but neither publishes llms.txt. Use those canonical references directly.",
-      expiresAt: "2026-10-08T00:00:00.000Z",
+      expiresAt: "2026-11-07T00:00:00.000Z",
       reason: "no-llms-txt",
     },
   );

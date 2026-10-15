@@ -1,5 +1,5 @@
 import { Panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { parseCzList } from "./cz";
@@ -11,8 +11,17 @@ import {
   hasExcessQueryTokens,
   nameReading,
 } from "./normalise";
-import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "./screening";
+import {
+  DEFAULT_CUTOFF,
+  buildScreeningIndex,
+  buildScreeningIndexCooperatively,
+  screen,
+} from "./screening";
 import type { ScreeningQuery } from "./screening";
+import {
+  buildScreeningIndex as buildLegacyScreeningIndex,
+  screen as legacyScreen,
+} from "./test-fixtures/legacy-screening";
 import { parseUnList } from "./un";
 
 const FIXTURES = path.join(import.meta.dir, "fixtures");
@@ -88,6 +97,23 @@ const scoreOf = (query: ScreeningQuery, key: string) =>
   matches(query, 0).find(
     ({ entry }) => `${entry.source}:${entry.sourceId}` === key,
   )?.score ?? 0;
+
+test("a cooperative build pauses between entries and builds the same index", async () => {
+  const entryCount = lists.reduce(
+    (total, list) => total + list.entries.length,
+    0,
+  );
+  let pauses = 0;
+  const cooperative = await buildScreeningIndexCooperatively(
+    lists,
+    async () => {
+      pauses += 1;
+    },
+  );
+  expect(cooperative).toEqual(index);
+  // The identifier pass and the alias pass each pause after every entry.
+  expect(pauses).toBeGreaterThanOrEqual(2 * entryCount);
+});
 
 describe("name screening", () => {
   test("does not penalise an unknown-quality alias and keeps strong duplicate quality", () => {
@@ -369,7 +395,7 @@ describe("name screening", () => {
       name: "Completely Different",
       identifiers: [` ${passport.number.toLowerCase()} `],
     });
-    expect(match?.entry).toBe(withPassport);
+    expect(match?.entry).toEqual(withPassport);
     expect(match?.score).toBe(1);
     expect(match?.evidence.identifier).toBe("match");
   });
@@ -536,88 +562,135 @@ describe("name screening", () => {
   });
 });
 
-test("warm screening work stays bounded for repeated common query tokens", () => {
-  const realistic = buildScreeningIndex([
-    {
-      version: EXTRA_VERSION,
-      entries: Array.from({ length: 20_000 }, (_, n) =>
-        listed({
-          sourceId: String(n),
-          entityType: "organisation",
-          name: `Registered Entity ${n} Holdings`,
-        }),
-      ),
-    },
-  ]);
-  const measured = [];
-  for (const name of [
-    `Registered ${"r ".repeat(249)}`.slice(0, 512),
-    "Registered ".repeat(46),
-  ]) {
-    const started = performance.now();
-    const result = screen(
-      realistic,
-      { name, entityType: "organisation" },
-      { cutoff: DEFAULT_CUTOFF },
+describe("warm screening", () => {
+  let commonLists: ParsedList[];
+  let realistic: ReturnType<typeof buildScreeningIndex>;
+  let legacy: ReturnType<typeof buildLegacyScreeningIndex>;
+
+  beforeAll(() => {
+    commonLists = [
+      {
+        version: EXTRA_VERSION,
+        entries: Array.from({ length: 20_000 }, (_, n) =>
+          listed({
+            sourceId: String(n),
+            entityType: "organisation",
+            name: `Registered Entity ${n} Holdings`,
+          }),
+        ),
+      },
+    ];
+    realistic = buildScreeningIndex(commonLists);
+  });
+
+  beforeAll(() => {
+    legacy = buildLegacyScreeningIndex(commonLists);
+  });
+
+  test("warm common-token screening stays within its deterministic work budget", () => {
+    const query = {
+      name: "Registered Entity Holdings",
+      entityType: "organisation",
+    } as const;
+    const options = { cutoff: DEFAULT_CUTOFF };
+    expect(screen(realistic, query, options).unwrap()).toEqual(
+      legacyScreen(legacy, query, options).unwrap(),
     );
-    const milliseconds = performance.now() - started;
-    console.log(
-      JSON.stringify({
-        tokens: name.split(/\s+/u).filter(Boolean).length,
-        milliseconds,
-      }),
-    );
-    measured.push(result);
-  }
-  for (const result of measured) {
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.code).toBe("excess-query-tokens");
-    }
-  }
-  for (const name of [
-    "Registered Entity Holdings",
-    "Registered a b c d e f g h i j k l m n o p q r s t u v z",
-  ]) {
-    const query = { name, entityType: "organisation" } as const;
-    screen(realistic, query, { cutoff: DEFAULT_CUTOFF });
-    const started = performance.now();
-    const result = screen(realistic, query, { cutoff: DEFAULT_CUTOFF });
-    const milliseconds = performance.now() - started;
-    console.info(
-      JSON.stringify({
-        adversarial: name,
-        milliseconds,
-        result: result.isErr() ? result.error.code : "ok",
-      }),
-    );
-    if (result.isErr()) {
-      expect(result.error.code).toBe("work-limit");
-    }
-  }
-  // Valid names retain an answer after the revised ranking bounds.
-  for (const name of ["Registered", "Registered Entity 42 Holdings"]) {
-    for (const entityType of ["organisation", undefined] as const) {
-      screen(
-        realistic,
-        entityType === undefined ? { name } : { name, entityType },
-        { cutoff: DEFAULT_CUTOFF },
-      );
+    // Work units are the matcher's own deterministic cost, so the budget
+    // holds on a loaded runner where wall-clock ratios do not. Cached lookups
+    // charge their original work, so warm and cold queries spend the same.
+    const minimalWork = () => {
+      let low = 1;
+      let high = MAX_SCREENING_WORK;
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2);
+        if (screen(realistic, query, { ...options, maxWork: middle }).isOk()) {
+          high = middle;
+        } else {
+          low = middle + 1;
+        }
+      }
+      return low;
+    };
+    const cold = minimalWork();
+    expect(minimalWork()).toBe(cold);
+    console.info(JSON.stringify({ minimalWork: cold }));
+    // Measured at 1,603,468 units; the allowance admits small ranking changes,
+    // and any larger growth needs a deliberate change to this budget.
+    expect(cold).toBeLessThanOrEqual(1_650_000);
+  });
+
+  test("warm screening work stays bounded for repeated common query tokens", () => {
+    const measured = [];
+    for (const name of [
+      `Registered ${"r ".repeat(249)}`.slice(0, 512),
+      "Registered ".repeat(46),
+    ]) {
+      const started = performance.now();
       const result = screen(
         realistic,
-        entityType === undefined ? { name } : { name, entityType },
-        { cutoff: DEFAULT_CUTOFF, maxWork: MAX_SCREENING_WORK / 2 },
+        { name, entityType: "organisation" },
+        { cutoff: DEFAULT_CUTOFF },
       );
-      expect(result.isOk()).toBe(true);
-      if (result.isOk() && name !== "Registered") {
-        expect(
-          result.value.possibleMatches.some(
-            ({ entry }) => entry.sourceId === "42",
-          ),
-        ).toBe(true);
+      const milliseconds = performance.now() - started;
+      console.log(
+        JSON.stringify({
+          tokens: name.split(/\s+/u).filter(Boolean).length,
+          milliseconds,
+        }),
+      );
+      measured.push(result);
+    }
+    for (const result of measured) {
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe("excess-query-tokens");
       }
     }
-  }
+    for (const name of [
+      "Registered Entity Holdings",
+      "Registered a b c d e f g h i j k l m n o p q r s t u v z",
+    ]) {
+      const query = { name, entityType: "organisation" } as const;
+      screen(realistic, query, { cutoff: DEFAULT_CUTOFF });
+      const started = performance.now();
+      const result = screen(realistic, query, { cutoff: DEFAULT_CUTOFF });
+      const milliseconds = performance.now() - started;
+      console.info(
+        JSON.stringify({
+          adversarial: name,
+          milliseconds,
+          result: result.isErr() ? result.error.code : "ok",
+        }),
+      );
+      if (result.isErr()) {
+        expect(result.error.code).toBe("work-limit");
+      }
+    }
+    // Valid names retain an answer after the revised ranking bounds.
+    for (const name of ["Registered", "Registered Entity 42 Holdings"]) {
+      for (const entityType of ["organisation", undefined] as const) {
+        screen(
+          realistic,
+          entityType === undefined ? { name } : { name, entityType },
+          { cutoff: DEFAULT_CUTOFF },
+        );
+        const result = screen(
+          realistic,
+          entityType === undefined ? { name } : { name, entityType },
+          { cutoff: DEFAULT_CUTOFF, maxWork: MAX_SCREENING_WORK / 2 },
+        );
+        expect(result.isOk()).toBe(true);
+        if (result.isOk() && name !== "Registered") {
+          expect(
+            result.value.possibleMatches.some(
+              ({ entry }) => entry.sourceId === "42",
+            ),
+          ).toBe(true);
+        }
+      }
+    }
+  });
 });
 
 test("repeated normalized query tokens keep exact-name equality", () => {

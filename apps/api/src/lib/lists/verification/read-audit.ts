@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { lt, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -28,17 +27,6 @@ export const recordVerificationRead = async ({
   recordAuditEvent,
   observedAt = new Date(),
 }: RecordVerificationReadOptions): Promise<void> => {
-  switch (run.status) {
-    case "queued":
-    case "running":
-      return;
-    case "completed":
-    case "failed":
-      break;
-    default:
-      run.status satisfies never;
-      return panic("Unknown verification run status");
-  }
   // PostgreSQL owns the Prague calendar conversion, including DST. The unique
   // receipt serializes concurrent reads; rollback also releases the daily claim.
   const day = sql`(${observedAt.toISOString()}::timestamptz AT TIME ZONE 'Europe/Prague')::date`;

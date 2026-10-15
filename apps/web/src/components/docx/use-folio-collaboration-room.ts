@@ -14,6 +14,8 @@ import {
   FOLIO_COLLAB_FLUSH_RESPONSE_TYPE,
   FOLIO_COLLAB_REDIS_RETRY_CLOSE_CODE,
 } from "@stll/api-contract/folio-collab";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sleep } from "@stll/concurrency/sleep";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import type { DocxEditorCollaboration } from "@stll/folio-react";
@@ -30,6 +32,8 @@ import {
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
+import { createUuid } from "@/lib/uuid";
 
 import { advanceFolioCollaborationMutationRevision } from "./folio-collaboration-mutations";
 
@@ -47,7 +51,7 @@ export type FolioCollaborationRoom = {
   seedDocumentBuffer: ArrayBuffer;
 };
 
-export type FolioCollaborationFlush = {
+type FolioCollaborationFlush = {
   documentMutationRevision: number;
   localMutationRevision: number;
   snapshotRevision: number;
@@ -98,6 +102,7 @@ const joinResponseSchema = v.object({
   roomName: v.string(),
   seedDownloadUrl: v.string(),
   shouldSeed: v.boolean(),
+  snapshotRecovery: v.picklist(["none", "unsaved-changes-discarded"]),
   token: v.string(),
   tokenExpiresAt: v.string(),
 });
@@ -138,16 +143,6 @@ const postFolioCollabJson = async ({
   }
   const data: unknown = await response.json();
   return data;
-};
-
-const waitForAbortableDelay = async (signal: AbortSignal, delayMs: number) => {
-  const retrySignal = AbortSignal.any([signal, AbortSignal.timeout(delayMs)]);
-  if (retrySignal.aborted) {
-    return;
-  }
-  await new Promise<void>((resolve) => {
-    retrySignal.addEventListener("abort", () => resolve(), { once: true });
-  });
 };
 
 class CollaborationFlushError extends TaggedError("CollaborationFlushError")<{
@@ -240,6 +235,9 @@ export const useFolioCollaborationRoom = ({
   const getEditPermissionDeniedMessage = useLatestCallback(() =>
     t("folio.editPermissionDenied"),
   );
+  const getSnapshotRecoveryMessage = useLatestCallback(() =>
+    t("folio.collaborationSnapshotRecovered"),
+  );
   const [state, setState] = useState<FolioCollaborationRoomState>({
     status: "unavailable",
     room: null,
@@ -321,6 +319,9 @@ export const useFolioCollaborationRoom = ({
         if (isDisposed()) {
           return;
         }
+        if (data.snapshotRecovery === "unsaved-changes-discarded") {
+          notifyUserError(undefined, getSnapshotRecoveryMessage());
+        }
 
         const roomId = data.roomId;
         let token = data.token;
@@ -381,14 +382,19 @@ export const useFolioCollaborationRoom = ({
             let reportedFailure = false;
             let retryDelayMs = GENERATION_REJOIN_RETRY_DELAY_MS;
             const waitForRetry = async () => {
-              await waitForAbortableDelay(
-                generationRejoinAbortController.signal,
-                retryDelayMs,
-              );
-              retryDelayMs = Math.min(
-                retryDelayMs * 2,
-                GENERATION_REJOIN_MAX_RETRY_DELAY_MS,
-              );
+              await sleep(retryDelayMs, {
+                signal: generationRejoinAbortController.signal,
+              }).catch((error: unknown) => {
+                const { signal } = generationRejoinAbortController;
+                if (signal.aborted && Object.is(error, signal.reason)) {
+                  return;
+                }
+                throw error;
+              });
+              retryDelayMs = backoffDelay(1, {
+                baseMs: retryDelayMs,
+                maxMs: GENERATION_REJOIN_MAX_RETRY_DELAY_MS,
+              });
             };
             const runAttempt = () => {
               const attempt = (async () => {
@@ -610,7 +616,7 @@ export const useFolioCollaborationRoom = ({
           connectedProvider.flushPendingUpdates();
           const documentMutationRevisionAtRequest = mutationRevision.document;
           const localMutationRevisionAtRequest = mutationRevision.local;
-          const requestId = crypto.randomUUID();
+          const requestId = createUuid();
           const snapshotRevision = await new Promise<number>(
             (resolve, reject) => {
               const timer = setTimeout(() => {
@@ -687,6 +693,7 @@ export const useFolioCollaborationRoom = ({
     getAwarenessUser,
     getEditOpenFailedMessage,
     getEditPermissionDeniedMessage,
+    getSnapshotRecoveryMessage,
     propertyId,
     workspaceId,
   ]);

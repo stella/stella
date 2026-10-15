@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 
 import { detached } from "@/lib/detached";
 import type { QueryView } from "@/lib/query-view.logic";
@@ -17,9 +18,13 @@ export const QueryViewFeedback = <TData, TError>({
   switch (view.type) {
     case "pending":
       return (
-        <p role="status" className="text-muted-foreground text-sm">
+        <div
+          role="status"
+          className="text-muted-foreground flex items-center gap-2 text-sm"
+        >
+          <Loader size="sm" variant="decorative" />
           {t("common.loading")}
-        </p>
+        </div>
       );
     case "empty":
       return null;

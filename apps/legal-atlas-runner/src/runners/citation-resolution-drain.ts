@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * The standing walk that settles every citation the corpus holds.
  *
@@ -24,7 +25,7 @@
  * cursor wrap and the contradiction escalation can be exercised on their own.
  */
 
-import { panic } from "better-result";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 
 import type { CitationResolutionCounts } from "@/api/handlers/case-law/citation-resolution";
 import {
@@ -42,9 +43,6 @@ export const CITATION_RESOLUTION_STEP = {
   /** Another writer holds the walk. Not an error; asked again next turn. */
   BUSY: "busy",
 } as const;
-
-export type CitationResolutionStepKind =
-  (typeof CITATION_RESOLUTION_STEP)[keyof typeof CITATION_RESOLUTION_STEP];
 
 export type CitationResolutionStep =
   | {
@@ -138,7 +136,7 @@ export const CITATION_RESOLUTION_DRAIN_TIMING = {
  * The longest slice a pacing wait sleeps before re-checking the drain flag.
  * The idle ceiling is minutes; a SIGTERM must not wait it out.
  */
-export const CITATION_RESOLUTION_CHECK_SLICE_MS = 1000;
+const CITATION_RESOLUTION_CHECK_SLICE_MS = 1000;
 
 export type CitationResolutionDrainOptions = {
   /**
@@ -276,13 +274,19 @@ export const runCitationResolutionDrain = async ({
         case CITATION_RESOLUTION_STEP.DRAINED: {
           summary.drained += 1;
           delayMs = idleMs;
-          idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+          idleMs = backoffDelay(1, {
+            baseMs: idleMs,
+            maxMs: timing.idleSleepMaxMs,
+          });
           break;
         }
         case CITATION_RESOLUTION_STEP.BUSY: {
           summary.busy += 1;
           delayMs = idleMs;
-          idleMs = Math.min(idleMs * 2, timing.idleSleepMaxMs);
+          idleMs = backoffDelay(1, {
+            baseMs: idleMs,
+            maxMs: timing.idleSleepMaxMs,
+          });
           break;
         }
         default: {
@@ -300,11 +304,10 @@ export const runCitationResolutionDrain = async ({
       // From its own floor, not from the duty cycle: a backfill may set the
       // batch gap to zero, and a database refusing statements must not then be
       // asked again as fast as it can refuse.
-      delayMs = Math.min(
-        Math.max(timing.batchDelayMs, timing.failureBackoffMinMs) *
-          2 ** (failureStreak - 1),
-        timing.failureBackoffMaxMs,
-      );
+      delayMs = backoffDelay(failureStreak - 1, {
+        baseMs: Math.max(timing.batchDelayMs, timing.failureBackoffMinMs),
+        maxMs: timing.failureBackoffMaxMs,
+      });
     }
 
     if (now() >= summaryDueAt) {

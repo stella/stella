@@ -1,5 +1,7 @@
 import { posthog } from "posthog-js";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { getFormattingLocale, getMessageLocale } from "@/i18n/i18n-store";
 import { getSimulateSlowLoadDelayMs } from "@/lib/dev-store";
 
@@ -10,9 +12,7 @@ export const waitForSimulatedApiDelay = async (): Promise<void> => {
   if (delayMs <= 0) {
     return;
   }
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, delayMs);
-  });
+  await sleep(delayMs);
 };
 
 export const getApiRequestHeaders = (): Record<string, string> => {

@@ -142,7 +142,7 @@ export const processAccountDeletionCleanupRequest = async (
   });
 };
 
-export const enqueuePendingAccountDeletionCleanupRequests = async (
+const enqueuePendingAccountDeletionCleanupRequests = async (
   db: AccountDeletionEffectDb,
 ): Promise<number> => {
   const requestIds = await listRecoverableAccountDeletionEffectRequestIds(db);

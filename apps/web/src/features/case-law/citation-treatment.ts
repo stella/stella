@@ -1,10 +1,13 @@
+import { panic } from "better-result";
+
+import type {
+  CitationDirection,
+  decisionCitationSummaryOptions,
+} from "@/features/case-law/queries/citations";
 import type { TranslationKey } from "@/i18n/types";
 import type { api } from "@/lib/api";
 
 type CitationsGet = ReturnType<typeof api.case.decisions>["citations"]["get"];
-type SummaryGet = ReturnType<
-  typeof api.case.decisions
->["citations"]["summary"]["get"];
 
 type CitationPageResponse = Extract<
   NonNullable<Awaited<ReturnType<CitationsGet>>["data"]>,
@@ -25,10 +28,29 @@ type CitedDecision = NonNullable<DecisionCitation["decision"]>;
  */
 export type CitedDecisionAddress = Omit<CitedDecision, "citationAuthority">;
 
-export type DecisionCitationSummary = Extract<
-  NonNullable<Awaited<ReturnType<SummaryGet>>["data"]>,
-  { incoming: unknown }
+export type DecisionCitationSummary = Awaited<
+  ReturnType<
+    NonNullable<ReturnType<typeof decisionCitationSummaryOptions>["queryFn"]>
+  >
 >;
+
+export const citationSummaryIsCapped = (
+  { precision }: DecisionCitationSummary,
+  direction: CitationDirection,
+): boolean => {
+  switch (precision.status) {
+    case "exact":
+      return false;
+    case "bounded":
+      return precision.capped[direction];
+    default: {
+      precision satisfies never;
+      return panic(
+        `Unhandled citation summary precision: ${String(precision)}`,
+      );
+    }
+  }
+};
 
 export type CitationTreatmentCounts = DecisionCitationSummary["incoming"];
 
@@ -121,35 +143,6 @@ export const CITATION_TREATMENT_DOT = {
  * decision is destructive, what stood by it is success, and what did both is
  * warning.
  */
-const DECISION_REFERENCE_UNKNOWN_TINT =
-  "bg-foreground/6 hover:bg-foreground/10";
-
-const CITATION_TREATMENT_TINT = {
-  negative: "bg-destructive/8 hover:bg-destructive/14",
-  mixed: "bg-warning/8 hover:bg-warning/14",
-  neutral: DECISION_REFERENCE_UNKNOWN_TINT,
-  positive: "bg-success/10 hover:bg-success/16",
-  supportive: "bg-success/8 hover:bg-success/14",
-  unclassified: DECISION_REFERENCE_UNKNOWN_TINT,
-} as const satisfies Record<CitationTreatment, string>;
-
-/**
- * `box-decoration-clone` so a citation broken across two lines keeps its
- * rounded ends on both, and no tint at all on paper, where a grey wash only
- * costs toner.
- */
-const DECISION_REFERENCE_TINT_SHAPE =
-  "box-decoration-clone rounded-sm px-0.5 print:bg-transparent";
-
-/**
- * The tint for one reference: its treatment's, where the citator classified
- * the citation, and the neutral wash where it did not (an unresolved or
- * external reference is still a reference).
- */
-export const decisionReferenceTintClassName = (
-  treatment?: CitationTreatment,
-): string =>
-  `${DECISION_REFERENCE_TINT_SHAPE} ${treatment === undefined ? DECISION_REFERENCE_UNKNOWN_TINT : CITATION_TREATMENT_TINT[treatment]}`;
 
 export const totalCitations = (counts: CitationTreatmentCounts): number =>
   CITATION_TREATMENT_ORDER.reduce(

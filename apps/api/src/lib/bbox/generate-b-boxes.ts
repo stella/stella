@@ -10,6 +10,7 @@ import { savePdfForModelInput } from "@/api/lib/files/pdf-signatures";
 
 export const generateBBoxes = async ({
   abortSignal,
+  admission,
   justificationId,
   organizationId,
   orgAIConfig,
@@ -36,6 +37,7 @@ export const generateBBoxes = async ({
     abortSignal,
     justificationId,
     organizationId,
+    admission,
     orgAIConfig: orgAIConfig ?? null,
     managedAIResidency,
     promptCachingEnabled,

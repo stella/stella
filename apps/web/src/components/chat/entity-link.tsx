@@ -1,6 +1,7 @@
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+
 import { MarkdownReferenceChip } from "@/components/references/reference-chip";
 import { isReferenceHref } from "@/components/references/reference.logic";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 /** Renders reference links (`#stella-entity=`, `#stella-decision=`, …) as
  *  the shared reference chip; all other links render as normal anchors. */

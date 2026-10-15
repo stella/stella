@@ -3,6 +3,8 @@ import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
+import { loadLocalModule } from "@stll/start-runtime/local-module-loader";
+
 import {
   engineParityCases,
   engineParityOutputDirectory,
@@ -12,6 +14,14 @@ import {
 // bun --cwd apps/api scripts/record-docx-engine-parity.ts [git-ref]
 // Record the main DOCX engine's XML parts, excluding ZIP metadata.
 import type * as DocxEngine from "../src/lib/docx/patch-template";
+
+const isRecordedEngine = (
+  value: unknown,
+): value is Pick<typeof DocxEngine, "fillTemplate"> =>
+  typeof value === "object" &&
+  value !== null &&
+  "fillTemplate" in value &&
+  typeof value.fillTemplate === "function";
 
 const ref = process.argv[2] ?? "origin/main";
 const enginePath = "apps/api/src/lib/docx";
@@ -35,9 +45,17 @@ try {
     "-C",
     temporary,
   ]);
-  const engine: typeof DocxEngine = await import(
-    `${temporary}/patch-template.ts`
-  );
+  const loaded = await loadLocalModule({
+    root: temporary,
+    modulePath: "patch-template.ts",
+  });
+  if (loaded.isErr()) {
+    throw loaded.error;
+  }
+  const engine = loaded.value;
+  if (!isRecordedEngine(engine)) {
+    panic("Recorded engine must export fillTemplate");
+  }
   await mkdir(engineParityOutputDirectory, { recursive: true });
   for (const { name, file, values } of await engineParityCases()) {
     const result = await engine.fillTemplate(file, values);

@@ -9,6 +9,10 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
+import {
+  assertThirdPartyOutboundPermit,
+  type ThirdPartyOutboundPermit,
+} from "@/api/lib/auth/third-party-outbound-permit";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -88,7 +92,12 @@ const attachRequestGuards = ({
     return null;
   }
   signal?.addEventListener("abort", abort, { once: true });
-  return { clearHeaderTimeout: () => clearTimeout(timeout), cleanup };
+  return {
+    clearHeaderTimeout: () => {
+      clearTimeout(timeout);
+    },
+    cleanup,
+  };
 };
 
 type SafeOutboundRedirectMode = "error" | "manual";
@@ -123,6 +132,7 @@ export const fetchWithResolvedAddress = async ({
   body,
   headers,
   maxBytes,
+  permit,
   method = "GET",
   redirect = "error",
   signal,
@@ -133,12 +143,14 @@ export const fetchWithResolvedAddress = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
+  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
+  assertThirdPartyOutboundPermit(permit);
   const primaryAddress = addresses.at(0);
   if (!primaryAddress) {
     return Result.err(
@@ -248,7 +260,9 @@ export const fetchStreamWithResolvedAddress = async ({
   body,
   headers,
   maxBytes,
+  permit,
   method = "GET",
+  redirect = "error",
   signal,
   timeoutMs,
   url,
@@ -257,13 +271,16 @@ export const fetchStreamWithResolvedAddress = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
+  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
+  redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: URL;
 }): Promise<
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
+  assertThirdPartyOutboundPermit(permit);
   const primaryAddress = addresses.at(0);
   if (!primaryAddress) {
     return Result.err(
@@ -309,7 +326,7 @@ export const fetchStreamWithResolvedAddress = async ({
             const status = response.statusCode ?? 0;
             const responseHeaders = headersFromIncoming(response.headers);
 
-            if (status >= 300 && status < 400) {
+            if (status >= 300 && status < 400 && redirect === "error") {
               response.resume();
               reject(
                 new SafeOutboundFetchError({
@@ -609,7 +626,7 @@ export const validateOutboundFetchTarget = async (
   rawUrl: string | URL,
   {
     protocolPolicy = OUTBOUND_PROTOCOL_POLICY.HTTPS_ONLY,
-    resolveAddresses = resolvePublicAddresses,
+    resolveAddresses = resolveOutboundAddresses,
     signal,
     timeoutMs = 0,
   }: {
@@ -654,6 +671,15 @@ export const validateOutboundFetchTarget = async (
     return Result.err(addresses.error);
   }
 
+  if (
+    addresses.value.length === 0 ||
+    addresses.value.some(({ address }) => isPrivateResolvedAddress(address))
+  ) {
+    return Result.err(
+      new SafeOutboundFetchError({ message: "URL host is not allowed" }),
+    );
+  }
+
   return Result.ok({ addresses: addresses.value, url: parsed.value });
 };
 
@@ -661,6 +687,7 @@ export const safeOutboundFetchBytes = async ({
   body,
   headers,
   maxBytes,
+  permit,
   method,
   redirect,
   signal,
@@ -670,12 +697,14 @@ export const safeOutboundFetchBytes = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
+  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: string | URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
+  assertThirdPartyOutboundPermit(permit);
   const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, { signal, timeoutMs });
   if (Result.isError(target)) {
@@ -694,6 +723,7 @@ export const safeOutboundFetchBytes = async ({
     body,
     headers,
     maxBytes,
+    permit,
     method,
     redirect,
     signal,
@@ -706,7 +736,9 @@ export const safeOutboundFetchStream = async ({
   body,
   headers,
   maxBytes,
+  permit,
   method,
+  redirect,
   signal,
   timeoutMs,
   url,
@@ -714,13 +746,16 @@ export const safeOutboundFetchStream = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
+  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
+  redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: string | URL;
 }): Promise<
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
+  assertThirdPartyOutboundPermit(permit);
   const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, { signal, timeoutMs });
   if (Result.isError(target)) {
@@ -739,7 +774,9 @@ export const safeOutboundFetchStream = async ({
     body,
     headers,
     maxBytes,
+    permit,
     method,
+    redirect,
     signal,
     timeoutMs: remainingTimeoutMs,
     url: target.value.url,
@@ -1123,7 +1160,7 @@ const isBlockedIPv6 = (host: string): boolean => {
   }
 };
 
-const resolvePublicAddresses = async (
+const resolveOutboundAddresses = async (
   hostname: string,
 ): Promise<Result<SafeOutboundAddress[], SafeOutboundFetchError>> => {
   const normalizedHost =
@@ -1133,16 +1170,12 @@ const resolvePublicAddresses = async (
 
   const literalFamily = isIP(normalizedHost);
   if (literalFamily !== 0) {
-    return isPrivateResolvedAddress(normalizedHost)
-      ? Result.err(
-          new SafeOutboundFetchError({ message: "URL host is not allowed" }),
-        )
-      : Result.ok([
-          {
-            address: normalizedHost,
-            family: literalFamily === 6 ? 6 : 4,
-          },
-        ]);
+    return Result.ok([
+      {
+        address: normalizedHost,
+        family: literalFamily === 6 ? 6 : 4,
+      },
+    ]);
   }
 
   const addresses = await Result.tryPromise({
@@ -1156,15 +1189,6 @@ const resolvePublicAddresses = async (
 
   if (Result.isError(addresses)) {
     return Result.err(addresses.error);
-  }
-
-  if (
-    addresses.value.length === 0 ||
-    addresses.value.some(({ address }) => isPrivateResolvedAddress(address))
-  ) {
-    return Result.err(
-      new SafeOutboundFetchError({ message: "URL host is not allowed" }),
-    );
   }
 
   return Result.ok(

@@ -48,7 +48,8 @@ const delegationCall = {
   type: "tool-call",
   id: "call-2",
   name: "spawn_subagents",
-  arguments: '{"subagents":[{"task":"Reply with the word OK."}]}',
+  arguments:
+    '{"subagents":[{"title":"Check reply","task":"Reply with the word OK."}]}',
   state: "complete",
   output: { results: [{ index: 0, status: "completed", result: "OK" }] },
 };

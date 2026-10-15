@@ -1,5 +1,6 @@
 import { and, eq } from "drizzle-orm";
 
+import { DESKTOP_HANDOFF_LIFETIME_SECONDS } from "@stll/api-contract/desktop-handoff";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -107,7 +108,8 @@ export const refreshDesktopEditSessionLiveness = async (
 };
 
 /** Handoff tokens are only for browser-to-desktop launch. */
-export const DESKTOP_EDIT_HANDOFF_TTL_MS = 2 * 60 * 1000;
+export const DESKTOP_EDIT_HANDOFF_TTL_MS =
+  DESKTOP_HANDOFF_LIFETIME_SECONDS * 1000;
 
 export const computeDesktopEditHandoffExpiresAt = () =>
   new Date(
@@ -155,6 +157,7 @@ export const authorizeDesktopEditSessionWithDb = async (
       sessionStatus: desktopEditSessions.status,
       sessionTokenHash: desktopEditSessions.sessionTokenHash,
       tokenExpiresAt: desktopEditSessions.tokenExpiresAt,
+      workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
       workspaceId: desktopEditSessions.workspaceId,
     })
@@ -199,6 +202,7 @@ export const authorizeDesktopEditSessionWithDb = async (
   if (
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
+      workspaceClientId: session.workspaceClientId,
       workspaceMemberId: session.workspaceMemberId,
     })
   ) {
@@ -243,6 +247,7 @@ export const readDesktopEditSessionEventState = async (
   const sessions = await tx
     .select({
       organizationRole: member.role,
+      workspaceClientId: workspaces.clientId,
       workspaceMemberId: workspaceMembers.id,
     })
     .from(desktopEditSessions)
@@ -274,6 +279,7 @@ export const readDesktopEditSessionEventState = async (
     !session ||
     !canWriteWorkspaceEntities({
       organizationRole: session.organizationRole,
+      workspaceClientId: session.workspaceClientId,
       workspaceMemberId: session.workspaceMemberId,
     })
   ) {

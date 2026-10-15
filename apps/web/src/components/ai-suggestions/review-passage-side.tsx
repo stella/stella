@@ -105,8 +105,7 @@ export const PASSAGE_COLLAPSE = {
   compact: "compact",
 } as const;
 
-export type PassageCollapse =
-  (typeof PASSAGE_COLLAPSE)[keyof typeof PASSAGE_COLLAPSE];
+type PassageCollapse = (typeof PASSAGE_COLLAPSE)[keyof typeof PASSAGE_COLLAPSE];
 
 /** Lines at `text-sm`/`leading-6` (1.5rem a line). */
 const COLLAPSED_HEIGHT_CLASS = {

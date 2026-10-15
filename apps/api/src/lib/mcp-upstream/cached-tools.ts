@@ -1,11 +1,14 @@
+import { MCP_TOOL_NAME_PATTERN } from "@stll/api-contract/mcp-tool-name";
+
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { LIMITS } from "@/api/lib/limits";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
   collisionSafeToolName,
+  EMITTED_TOOL_NAME_MAX_LENGTH,
   namespaceMcpToolName,
-  TOOL_NAME_PATTERN,
+  sanitizeToolNamePart,
 } from "./namespace";
 
 type ToolAnnotationInput = {
@@ -147,7 +150,12 @@ const isCachedToolDefinition = (
 
   // An entry cached before the name contract tightened is dropped rather than
   // served: one name outside the contract makes clients reject the listing.
-  if (typeof exposedName !== "string" || !TOOL_NAME_PATTERN.test(exposedName)) {
+  if (
+    typeof exposedName !== "string" ||
+    exposedName.length > EMITTED_TOOL_NAME_MAX_LENGTH ||
+    sanitizeToolNamePart(exposedName) !== exposedName ||
+    !MCP_TOOL_NAME_PATTERN.test(exposedName)
+  ) {
     return false;
   }
 

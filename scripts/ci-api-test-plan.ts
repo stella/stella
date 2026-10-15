@@ -8,6 +8,13 @@ import {
   selectApiTestImpact,
   type ApiTestImpact,
 } from "./api-test-impact";
+import {
+  API_TEST_SHARD_IDS,
+  FULL_TEST_JOB_SHARDS,
+  fullTestPlan,
+  isApiTestShardId,
+} from "./api-test-shard-plan";
+import { selectedTestJobs } from "./ci-affected-selection";
 
 const ImpactSchema = v.strictObject({
   mode: v.picklist(["all", "selected", "none"]),
@@ -17,7 +24,12 @@ const ImpactSchema = v.strictObject({
       v.regex(/^(?:src|scripts|evals)\/[^\r\n]*\.test\.tsx?$/u),
     ),
   ),
-  shards: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(4)),
+  shards: v.pipe(
+    v.number(),
+    v.integer(),
+    v.minValue(0),
+    v.maxValue(API_TEST_SHARD_IDS.length),
+  ),
 });
 
 // This also guards the workflow boundary if a selector exits successfully
@@ -27,7 +39,8 @@ export const parseApiTestImpact = (output: string): ApiTestImpact => {
     const impact = v.parse(ImpactSchema, JSON.parse(output));
     if (
       (impact.mode === "all" &&
-        (impact.shards !== 4 || impact.files.length !== 0)) ||
+        (impact.shards !== API_TEST_SHARD_IDS.length ||
+          impact.files.length !== 0)) ||
       (impact.mode === "none" &&
         (impact.shards !== 0 || impact.files.length !== 0)) ||
       (impact.mode === "selected" &&
@@ -44,70 +57,45 @@ export const parseApiTestImpact = (output: string): ApiTestImpact => {
   }
 };
 
+type TestJobShard = (typeof FULL_TEST_JOB_SHARDS)[number];
 type CiApiTestPlanOptions = {
   event: string;
   scopeUnknown: boolean;
-  apiInScope: boolean;
+  testJobs: readonly TestJobShard[];
   select: () => ApiTestImpact;
 };
 export const planCiApiTests = ({
   event,
   scopeUnknown,
-  apiInScope,
+  testJobs,
   select,
 }: CiApiTestPlanOptions) => {
   let impact = allApiTests();
-  if (event === "pull_request" && !scopeUnknown) {
+  if ((event === "pull_request" || event === "merge_group") && !scopeUnknown) {
     try {
-      impact = apiInScope
-        ? parseApiTestImpact(JSON.stringify(select()))
-        : { mode: "none", files: [], shards: 0 };
+      if (!testJobs.some(isApiTestShardId)) {
+        impact = { mode: "none", files: [], shards: 0 };
+      } else if (event === "pull_request") {
+        impact = parseApiTestImpact(JSON.stringify(select()));
+      }
     } catch {
       impact = allApiTests();
     }
   }
+  const fullPlan = fullTestPlan();
+  const enabledApiShards = new Set(API_TEST_SHARD_IDS.slice(0, impact.shards));
   return {
     impact,
     matrix: {
-      shard: [
-        ...Array.from(
-          { length: impact.shards },
-          (_, index) => `api-${index + 1}`,
-        ),
-        "rest-web",
-      ],
+      shard: fullPlan.matrix.shard.filter(
+        (shard) =>
+          (scopeUnknown ||
+            !["pull_request", "merge_group"].includes(event) ||
+            testJobs.includes(shard)) &&
+          (!isApiTestShardId(shard) || enabledApiShards.has(shard)),
+      ),
     },
   };
-};
-
-const apiInTestScope = (base: string) => {
-  const scope = Bun.spawnSync(
-    ["bun", "scripts/test-scope.ts", "--base", base],
-    { stdout: "pipe", stderr: "pipe" },
-  );
-  if (scope.exitCode !== 0) {
-    panic("Cannot compute test scope");
-  }
-  const plan = Bun.spawnSync(
-    [
-      "bun",
-      "run",
-      "test",
-      "--",
-      "--dry=json",
-      ...scope.stdout.toString().trim().split(/\s+/u),
-    ],
-    { stdout: "pipe", stderr: "pipe" },
-  );
-  if (plan.exitCode !== 0) {
-    panic("Cannot compute Turbo test plan");
-  }
-  const json: unknown = JSON.parse(plan.stdout.toString());
-  const parsed = v.parse(
-    v.object({ tasks: v.array(v.object({ taskId: v.string() })) }),
-    json,
-  );
-  return parsed.tasks.some(({ taskId }) => taskId === "@stll/api#test");
 };
 
 if (import.meta.main) {
@@ -125,14 +113,14 @@ if (import.meta.main) {
     )
       .split("\0")
       .filter(Boolean);
-    const apiInScope =
-      event === "pull_request" && !scopeUnknown
-        ? apiInTestScope(`origin/${process.env["BASE_REF"] ?? "main"}`)
-        : true;
+    const testJobs =
+      !scopeUnknown && ["pull_request", "merge_group"].includes(event)
+        ? selectedTestJobs(changed, root)
+        : FULL_TEST_JOB_SHARDS;
     plan = planCiApiTests({
       event,
       scopeUnknown,
-      apiInScope,
+      testJobs,
       select: () => selectApiTestImpact({ changed, root }),
     });
   } catch (error) {
@@ -140,7 +128,7 @@ if (import.meta.main) {
     plan = planCiApiTests({
       event: "fallback",
       scopeUnknown: true,
-      apiInScope: true,
+      testJobs: FULL_TEST_JOB_SHARDS,
       select: allApiTests,
     });
   }

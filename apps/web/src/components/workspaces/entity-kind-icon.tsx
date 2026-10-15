@@ -9,6 +9,7 @@ import {
   ListTodoIcon,
   MailIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
@@ -62,11 +63,7 @@ export const EntityIcon = ({
         />
       );
     case "pending":
-      return (
-        <CircleDashedIcon
-          className={cn("text-muted-foreground animate-pulse", className)}
-        />
-      );
+      return <Loader className={className} size="sm" variant="decorative" />;
     case "unknown":
       return (
         <CircleDashedIcon className={cn("text-muted-foreground", className)} />
@@ -80,7 +77,7 @@ export const EntityIcon = ({
 
 /** Whether a folder is drawn open or shut. Only trees and tables that own
  *  an expand affordance know this; everything else draws a shut folder. */
-export type FolderState = "collapsed" | "expanded";
+type FolderState = "collapsed" | "expanded";
 
 type EntityKindIconProps = {
   kind: EntityKind;

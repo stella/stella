@@ -7,8 +7,9 @@ import { revokePersonalApiKey } from "@/api/lib/machine-api-keys/personal-lifecy
 import { personalApiKeyIdBodySchema } from "./schema";
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
-  accountAccess: ACCOUNT_ACCESS.standard,
+  accountAccess: ACCOUNT_ACCESS.accountControl,
   mcp: { type: "internal", reason: "provider_secret" },
   body: personalApiKeyIdBodySchema,
 } satisfies HandlerConfig;

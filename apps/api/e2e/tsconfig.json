@@ -1,0 +1,3 @@
+{
+  "extends": "../tsconfig.visual-sandbox.json"
+}

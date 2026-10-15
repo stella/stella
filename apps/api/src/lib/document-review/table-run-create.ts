@@ -43,7 +43,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
  */
 export const PLAYBOOK_RUN_DOCUMENTS_MAX = 500;
 
-export type CreatedTableRun = {
+type CreatedTableRun = {
   runId: SafeId<"documentReviewRun">;
   entityId: SafeId<"entity">;
 };

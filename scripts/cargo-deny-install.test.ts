@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
   chmodSync,
   existsSync,
@@ -12,6 +11,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { createSha256 } from "@stll/sha256/node";
 
 const script = path.join(
   import.meta.dirname,
@@ -86,9 +87,7 @@ const runInstall = ({
     if (tar.status !== 0) {
       throw new Error(`tar failed: ${String(tar.stderr)}`);
     }
-    const sha256 = createHash("sha256")
-      .update(readFileSync(archive))
-      .digest("hex");
+    const sha256 = createSha256().update(readFileSync(archive)).digest("hex");
     if (corrupt) {
       writeFileSync(archive, "not the pinned archive");
     }

@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/lists/sanctions/public-screening.ts",
+  "delta": 1,
+  "reason": "The public warmup loads one sanctions edition at a time on purpose: each load holds a full edition in memory and the single matcher indexes one edition at a time, so parallel loads would multiply peak memory without finishing sooner."
+}

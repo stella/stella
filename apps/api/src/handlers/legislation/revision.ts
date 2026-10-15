@@ -1,4 +1,5 @@
 import { createStatuteSlug } from "@stll/api-contract/statute-route";
+import { createSha256 } from "@stll/sha256/bun";
 
 import { corpusStorageMode } from "@/api/env-base";
 import { storedWindow } from "@/api/handlers/legislation/version-windows";
@@ -62,7 +63,7 @@ export const legislationSourceHash = (
   classification: LegislationExpressionClassification,
 ): string => {
   const typed = typedLegislationClassification(classification);
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(
     JSON.stringify([
       input.eli,

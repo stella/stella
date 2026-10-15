@@ -9,6 +9,9 @@ import {
   type BrowserExtensionRequest,
 } from "@stll/api-contract/browser-control";
 
+import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { createUuid } from "@/lib/uuid";
+
 import {
   BROWSER_APPROVAL_MODE,
   setBrowserApprovalMode,
@@ -36,7 +39,7 @@ type FakeWindow = {
   sessionStorage: Pick<Storage, "getItem" | "setItem">;
 };
 
-const APPROVAL_MODE_KEY = "stella.chat.browserApprovalMode";
+const APPROVAL_MODE_KEY = userStorageKey("stella.chat.browserApprovalMode");
 const storedValues = new Map<string, string>();
 
 let previousWindow: PropertyDescriptor | undefined;
@@ -99,7 +102,7 @@ const report = (
     controlledTabId,
     controllerId,
     protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-    requestId: crypto.randomUUID(),
+    requestId: createUuid(),
     source: BROWSER_EXTENSION_MESSAGE_SOURCE.extension,
     type: "pong",
   });

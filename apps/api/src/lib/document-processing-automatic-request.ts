@@ -1,6 +1,6 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
+import type { rootDb, Transaction } from "@/api/db/root";
 import {
   documentProcessingRuns,
   entities,
@@ -10,10 +10,77 @@ import {
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import {
+  withAggregateRowQuery,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import { shouldRequeueOcrRunAfterProjectionLoss } from "@/api/lib/document-processing-automatic-request-state";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { resolveExtractionMimeType } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+type AutomaticOcrSourceLockOptions = {
+  tx: Transaction;
+  entityId: SafeId<"entity">;
+  entityVersionId: SafeId<"entityVersion">;
+  fieldId: SafeId<"field">;
+  workspaceId: SafeId<"workspace">;
+};
+
+/** The source fence covers all rows supplying the current file identity. */
+const lockCurrentAutomaticOcrSource = async ({
+  tx,
+  entityId,
+  entityVersionId,
+  fieldId,
+  workspaceId,
+}: AutomaticOcrSourceLockOptions) =>
+  (
+    await withAggregateRowQuery({
+      tx,
+      aggregate: "entity",
+      id: { id: entityId, workspaceId },
+      mode: "update",
+      children: [
+        {
+          aggregate: "entityVersion",
+          id: { id: entityVersionId, workspaceId },
+        },
+        { aggregate: "field", id: { id: fieldId, workspaceId } },
+      ],
+      select: (lockTx) =>
+        lockTx
+          .select({
+            content: fields.content,
+            sourceEntityId: entities.id,
+            workspaceId: entities.workspaceId,
+            versionId: entityVersions.id,
+            versionWorkspaceId: entityVersions.workspaceId,
+            fieldId: fields.id,
+            fieldWorkspaceId: fields.workspaceId,
+          })
+          .from(entities)
+          .innerJoin(
+            entityVersions,
+            and(
+              eq(entityVersions.id, entityVersionId),
+              eq(entityVersions.entityId, entities.id),
+              eq(entityVersions.workspaceId, workspaceId),
+              isNull(entityVersions.deletedAt),
+            ),
+          )
+          .innerJoin(
+            fields,
+            and(
+              eq(fields.id, fieldId),
+              eq(fields.entityVersionId, entityVersionId),
+              eq(fields.workspaceId, workspaceId),
+            ),
+          ),
+      where: sql`${entities.currentVersionId} = ${entityVersionId} AND ${entities.readOnly} = false`,
+    })
+  ).rows.at(0)?.content;
 
 export const requestAutomaticDocumentOcr = async ({
   db,
@@ -37,7 +104,15 @@ export const requestAutomaticDocumentOcr = async ({
   sourceSha256Hex: string;
   workspaceId: SafeId<"workspace">;
 }): Promise<void> => {
-  await db.transaction(async (tx) => {
+  await withAggregateTransaction(db, async (tx) => {
+    const parents = await lockForWrite(tx, {
+      organizationIds: [organizationId],
+      workspaceIds: [workspaceId],
+    });
+    if (!parents.organizationIds.size || !parents.workspaceIds.size) {
+      return null;
+    }
+
     const settings = await tx.query.organizationSettings.findFirst({
       where: { organizationId: { eq: organizationId } },
       columns: { documentProcessingMode: true },
@@ -46,37 +121,13 @@ export const requestAutomaticDocumentOcr = async ({
       return null;
     }
 
-    const currentRows = await tx
-      .select({ content: fields.content })
-      .from(entities)
-      .innerJoin(
-        entityVersions,
-        and(
-          eq(entityVersions.id, entityVersionId),
-          eq(entityVersions.entityId, entities.id),
-          eq(entityVersions.workspaceId, workspaceId),
-          isNull(entityVersions.deletedAt),
-        ),
-      )
-      .innerJoin(
-        fields,
-        and(
-          eq(fields.id, fieldId),
-          eq(fields.entityVersionId, entityVersionId),
-          eq(fields.workspaceId, workspaceId),
-        ),
-      )
-      .where(
-        and(
-          eq(entities.id, entityId),
-          eq(entities.workspaceId, workspaceId),
-          eq(entities.currentVersionId, entityVersionId),
-          eq(entities.readOnly, false),
-        ),
-      )
-      .limit(1)
-      .for("update");
-    const content = currentRows.at(0)?.content;
+    const content = await lockCurrentAutomaticOcrSource({
+      tx,
+      entityId,
+      entityVersionId,
+      fieldId,
+      workspaceId,
+    });
     if (
       content?.type !== "file" ||
       content.id !== sourceFileId ||
@@ -149,10 +200,7 @@ export const requestAutomaticDocumentOcr = async ({
       .limit(1)
       .for("update");
     const existing = existingRows.at(0);
-    if (!existing) {
-      return null;
-    }
-    if (existing.requestSource === "manual") {
+    if (!existing || existing.requestSource === "manual") {
       return null;
     }
 
@@ -194,6 +242,7 @@ export const requestAutomaticDocumentOcr = async ({
     const retried = await tx
       .update(documentProcessingRuns)
       .set({
+        attemptCount: 0,
         claimedAt: null,
         claimedBy: null,
         errorAt: null,

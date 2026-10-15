@@ -1,18 +1,24 @@
 import { useState } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { DocumentIdentityBadge } from "@stll/ui/document-identity-badge";
 import { ChevronRightIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
 import { CitedDecisionLink } from "@/components/legal-reader/cited-decision-link";
+import { decisionCitationCourtLabel } from "@/components/references/decision-citation-chip.logic";
+import { decisionCitationPresentationsById } from "@/components/references/decision-citation-presentation.logic";
+import type { DecisionCitationPresentation } from "@/components/references/decision-citation-presentation.logic";
 import {
   CITATION_TREATMENT_DOT,
   CITATION_TREATMENT_LABEL,
   CITATION_TREATMENT_ORDER,
+  citationSummaryIsCapped,
   totalCitations,
 } from "@/features/case-law/citation-treatment";
 import type {
@@ -31,9 +37,10 @@ import { useHydrated } from "@/hooks/use-hydrated";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { optionalArray } from "@/lib/arrays";
-import { citedDecisionLabel } from "@/lib/cited-decision-label";
 import { formatDecisionDate } from "@/lib/decision-date";
 import { detached } from "@/lib/detached";
+import { citedDecisionLabel } from "@/lib/legal/cited-decision-label";
+import { decisionDocumentIdentity } from "@/lib/legal/document-identity";
 import type { SafeId } from "@/lib/safe-id";
 
 export const DIRECTION_TITLE = {
@@ -177,9 +184,20 @@ export const CitationList = ({
     refetch,
   } = useInfiniteQuery(decisionCitationsInfiniteOptions(decisionId, direction));
 
-  const groups = groupByTreatment(
-    optionalArray(data?.pages).flatMap((page) => page.items),
+  const items = optionalArray(data?.pages).flatMap((page) => page.items);
+  const presentations = decisionCitationPresentationsById(
+    items.flatMap(({ decision: cited }) =>
+      cited === null
+        ? []
+        : [
+            {
+              decisionId: cited.id,
+              courtShortCode: decisionCitationCourtLabel(cited),
+            },
+          ],
+    ),
   );
+  const groups = groupByTreatment(items);
 
   return (
     <div className="flex flex-col gap-3 px-3 pb-3">
@@ -217,6 +235,7 @@ export const CitationList = ({
                 decision={decision}
                 direction={direction}
                 item={item}
+                presentations={presentations}
                 key={item.id}
               />
             ))}
@@ -300,7 +319,7 @@ export const DecisionCitations = ({
       <div className="flex flex-col gap-3">
         {CITATION_DIRECTIONS.map((direction) =>
           totalCitations(summary[direction]) > 0 ||
-          summary.capped[direction] ? (
+          citationSummaryIsCapped(summary, direction) ? (
             <section className="flex flex-col gap-2" key={direction}>
               <h3 className="text-foreground-strong-muted text-xs font-medium">
                 {t(DIRECTION_TITLE[direction])}
@@ -320,8 +339,8 @@ export const DecisionCitations = ({
   if (
     incomingTotal === 0 &&
     outgoingTotal === 0 &&
-    !summary.capped.incoming &&
-    !summary.capped.outgoing &&
+    !citationSummaryIsCapped(summary, "incoming") &&
+    !citationSummaryIsCapped(summary, "outgoing") &&
     !isError
   ) {
     return null;
@@ -329,9 +348,9 @@ export const DecisionCitations = ({
 
   return (
     <>
-      {(incomingTotal > 0 || summary.capped.incoming) && (
+      {(incomingTotal > 0 || citationSummaryIsCapped(summary, "incoming")) && (
         <CitationDirectionSection
-          capped={summary.capped.incoming}
+          capped={citationSummaryIsCapped(summary, "incoming")}
           counts={summary.incoming}
           decision={decision}
           decisionId={decisionId}
@@ -340,9 +359,9 @@ export const DecisionCitations = ({
           key={`${decisionId}-incoming`}
         />
       )}
-      {(outgoingTotal > 0 || summary.capped.outgoing) && (
+      {(outgoingTotal > 0 || citationSummaryIsCapped(summary, "outgoing")) && (
         <CitationDirectionSection
-          capped={summary.capped.outgoing}
+          capped={citationSummaryIsCapped(summary, "outgoing")}
           counts={summary.outgoing}
           decision={decision}
           decisionId={decisionId}
@@ -358,7 +377,9 @@ const CitationRow = ({
   decision,
   direction,
   item,
+  presentations,
 }: {
+  presentations: ReadonlyMap<string, DecisionCitationPresentation>;
   decision: CitedDecisionAddress;
   direction: CitationDirection;
   item: DecisionCitation;
@@ -387,9 +408,18 @@ const CitationRow = ({
 
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 text-xs">
+      <DocumentIdentityBadge
+        identity={decisionDocumentIdentity(item.decision)}
+        title={`${item.decision.caseNumber} · ${item.decision.court}`}
+      />
       <CitedDecisionLink
         decision={item.decision}
+        presentation={
+          presentations.get(item.decision.id) ??
+          panic("Citation list target missing collected identity")
+        }
         passage={{
+          type: "citation",
           citation: {
             citationText: item.citationText,
             decision: cited,

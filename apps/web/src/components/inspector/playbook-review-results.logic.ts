@@ -76,7 +76,7 @@ export const isUndecidedDeviation = (item: ReviewResultItem): boolean =>
 
 /** The two lists the results offer: every position the run covered, or only
  *  the ones that still need an answer. */
-export const REVIEW_RESULT_FILTERS = ["coverage", "deviations"] as const;
+const REVIEW_RESULT_FILTERS = ["coverage", "deviations"] as const;
 export type ReviewResultFilter = (typeof REVIEW_RESULT_FILTERS)[number];
 
 export type ReviewFlagTally = Record<ReviewFlag, number>;

@@ -87,7 +87,7 @@ const catalogueModules = {
   () => Promise<CatalogueModule>
 >;
 
-export const detectedLanguage = detectLanguage();
+const detectedLanguage = detectLanguage();
 
 const storedLanguage = (): SupportedLanguage | null => {
   try {

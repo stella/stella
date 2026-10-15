@@ -14,7 +14,10 @@ import {
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { auditChangesForResource } from "@/api/lib/audit-log-details";
+import {
+  auditReadChangesSql,
+  projectAuditReadChanges,
+} from "@/api/lib/audit-log-details";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   tPaginationCursor,
@@ -23,6 +26,7 @@ import {
   withDescription,
 } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
+import type { FeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
@@ -197,11 +201,15 @@ export const validateAuditLogFilter = (
 export const queryAuditLogPage = async function* ({
   safeDb,
   organizationId,
+  userId,
+  featureAccessSnapshot,
   recordAuditEvent,
   query,
 }: {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user"> | null;
+  featureAccessSnapshot: FeatureAccessSnapshot | undefined;
   recordAuditEvent: AuditRecorder;
   query: AuditLogFilter;
 }) {
@@ -221,7 +229,11 @@ export const queryAuditLogPage = async function* ({
           action: auditLogs.action,
           resourceType: auditLogs.resourceType,
           resourceId: auditLogs.resourceId,
-          changes: auditLogs.changes,
+          changes: auditReadChangesSql({
+            featureAccessSnapshot,
+            principal: { organizationId, userId },
+          }),
+          metadata: auditLogs.metadata,
           createdAtCursor: auditLogCursor.cursorValue.as("created_at_cursor"),
         })
         .from(auditLogs)
@@ -264,7 +276,13 @@ export const queryAuditLogPage = async function* ({
           action: row.action,
           resourceType: row.resourceType,
           resourceId: row.resourceId,
-          changes: auditChangesForResource(row.resourceType, row.changes),
+          ...projectAuditReadChanges({
+            resourceType: row.resourceType,
+            changes: row.changes,
+            metadata: row.metadata,
+            featureAccessSnapshot,
+            principal: { organizationId, userId },
+          }),
           createdAtCursor: row.createdAtCursor,
           userId: row.userId,
           actor: userMap.get(row.userId) ?? row.userId,

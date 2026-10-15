@@ -173,12 +173,12 @@ const declareRouteSmokeGroup = ({
         storageState: STORAGE_STATE,
       });
       browserForPages = browser;
-      const features = await apiGet<{ timeBilling: boolean }>(
+      const navigation = await apiGet<{ features: { timeBilling: boolean } }>(
         apiRequest,
-        "/organization-settings/deployment-features",
+        "/workspaces/navigation",
       );
       expect(
-        features.timeBilling,
+        navigation.features.timeBilling,
         "the persisted smoke principal is enrolled and verified",
       ).toBe(true);
 
@@ -321,12 +321,11 @@ const declareRouteSmokeGroup = ({
           const workspace = negativeWorkspace;
           const workspaceId = workspace.id;
           const storageState = await negativeRequest.storageState();
-          const features = await apiGet<{ timeBilling: boolean }>(
-            negativeRequest,
-            "/organization-settings/deployment-features",
-          );
+          const navigation = await apiGet<{
+            features: { timeBilling: boolean };
+          }>(negativeRequest, "/workspaces/navigation");
           expect(
-            features.timeBilling,
+            navigation.features.timeBilling,
             "the isolated verified principal is not enrolled",
           ).toBe(false);
           const isolatedBrowser = browserForPages;

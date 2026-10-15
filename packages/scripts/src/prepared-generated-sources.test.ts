@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
 import {
+  lstatSync,
+  readlinkSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -12,10 +14,13 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { createSha256, sha256Hex as nodeSha256Hex } from "@stll/sha256/node";
+
 import { CI_GENERATED_FILES } from "./generated-files";
 import {
   generatedFileHash,
   generatedInputIdentity,
+  requireUnchangedGeneratedInputs,
   validatePreparedManifest,
   verifyPreparedGeneratedFiles,
   restorePreparedGeneratedSources,
@@ -109,6 +114,7 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
       "generated-files.ts",
       "prepare-cli-runtime.ts",
       "prepared-generated-sources.ts",
+      "generated-input-identity.ts",
       "child-exit-status.ts",
     ]) {
       write(
@@ -116,17 +122,23 @@ test("CLI runtime preparation consumes a verified artifact without invoking gene
         readFileSync(new URL(file, import.meta.url), "utf-8"),
       );
     }
-    for (const dependency of ["better-result", "valibot"]) {
+    for (const dependency of ["better-result", "valibot", "@stll/sha256/bun"]) {
       const entry = import.meta.resolve(dependency);
+      const packageName = dependency.startsWith("@")
+        ? dependency.split("/").slice(0, 2).join("/")
+        : dependency;
+      const directoryName = path.basename(packageName);
       let directory = path.dirname(new URL(entry).pathname);
-      while (path.basename(directory) !== dependency) {
+      while (path.basename(directory) !== directoryName) {
         const parent = path.dirname(directory);
         if (parent === directory) {
           panic(`Fixture dependency directory not found: ${dependency}`);
         }
         directory = parent;
       }
-      symlinkSync(directory, path.join(root, "node_modules", dependency));
+      const destination = path.join(root, "node_modules", packageName);
+      mkdirSync(path.dirname(destination), { recursive: true });
+      symlinkSync(directory, destination);
     }
     write(
       "packages/cli/src/codegen.ts",
@@ -223,6 +235,44 @@ test("restore validates the whole artifact before any writes and restores every 
   }
 });
 
+test("regeneration keeps its concrete file diff after a verified handoff is cleared", () => {
+  const { root, manifest, write } = fixture();
+  const previous = process.env["CI_GENERATED_SOURCES_MANIFEST"];
+  try {
+    write(
+      ".cache/ci-generated-sources/manifest.json",
+      JSON.stringify(manifest),
+    );
+    process.env["CI_GENERATED_SOURCES_MANIFEST"] = preparedManifestPath(root);
+    expect(hasPreparedGeneratedSources(root)).toBe(true);
+    write("input.ts", "export const input = 2;\n");
+    expect(() => hasPreparedGeneratedSources(root)).toThrow(
+      "Generated source artifact does not match this source and toolchain",
+    );
+    delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
+    expect(hasPreparedGeneratedSources(root)).toBe(false);
+    process.env["CI_GENERATED_SOURCES_MANIFEST"] = "";
+    expect(hasPreparedGeneratedSources(root)).toBe(false);
+    const drift = Bun.spawnSync(
+      ["git", "diff", "--exit-code", "--", "input.ts"],
+      { cwd: root },
+    );
+    expect(drift.exitCode).toBe(1);
+    expect(drift.stdout.toString()).toContain(
+      "diff --git a/input.ts b/input.ts",
+    );
+    expect(drift.stdout.toString()).toContain("+export const input = 2;");
+    expect(drift.stderr.toString()).not.toContain("artifact");
+  } finally {
+    if (previous === undefined) {
+      delete process.env["CI_GENERATED_SOURCES_MANIFEST"];
+    } else {
+      process.env["CI_GENERATED_SOURCES_MANIFEST"] = previous;
+    }
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("configured preparation fails closed and an ordinary checkout generates locally", () => {
   const { root, manifest, write } = fixture();
   const previous = process.env["CI_GENERATED_SOURCES_MANIFEST"];
@@ -273,6 +323,7 @@ test("API runtime generation works with only packaged sources and rejects a root
       "apps/api/scripts/generate-capability-runtime.ts",
       "packages/cli/src/capability-catalog-data.ts",
       "packages/scripts/src/prepared-generated-sources.ts",
+      "packages/scripts/src/generated-input-identity.ts",
       "packages/scripts/src/generated-files.ts",
     ]) {
       write(
@@ -337,6 +388,93 @@ test("API runtime generation works with only packaged sources and rejects a root
     expect(broken.exitCode).not.toBe(0);
     expect(broken.stderr.toString()).toContain(
       "Cannot find module '../../../scripts/generated-files'",
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+// A gitlink hashes its mode and object id, a symlink its target, anything
+// else its contents.
+const treeEntryBytes = (entry: string, separator: number, absolute: string) => {
+  if (entry.startsWith("160000 ")) {
+    return entry.slice(0, separator);
+  }
+  return lstatSync(absolute).isSymbolicLink()
+    ? readlinkSync(absolute)
+    : readFileSync(absolute);
+};
+
+test("prepared input identities retain tracked directory, symlink and byte framing", () => {
+  const { root, write } = fixture();
+  try {
+    write("nested/Článek.ts", 'export const title = "Příliš žluťoučký kůň";\n');
+    write("empty.txt", "");
+    writeFileSync(
+      path.join(root, "binary.dat"),
+      new Uint8Array([255, 0, 128, 13, 10]),
+    );
+    symlinkSync("nested/Článek.ts", path.join(root, "link.ts"));
+    expect(
+      Bun.spawnSync(
+        ["git", "add", "nested", "empty.txt", "binary.dat", "link.ts"],
+        { cwd: root },
+      ).exitCode,
+    ).toBe(0);
+    expect(
+      Bun.spawnSync(
+        [
+          "git",
+          "update-index",
+          "--add",
+          "--cacheinfo",
+          "160000",
+          "a".repeat(40),
+          "submodule",
+        ],
+        { cwd: root },
+      ).exitCode,
+    ).toBe(0);
+    const inventory = Bun.spawnSync(["git", "ls-files", "--stage", "-z"], {
+      cwd: root,
+    });
+    expect(inventory.exitCode).toBe(0);
+    const oracle = createSha256().update(
+      JSON.stringify({ bun: Bun.version, compiler: "test-compiler" }),
+    );
+    const generated = new Set<string>(CI_GENERATED_FILES);
+    for (const entry of inventory.stdout.toString().split("\0")) {
+      if (entry === "") {
+        continue;
+      }
+      const separator = entry.indexOf("\t");
+      expect(separator).toBeGreaterThan(0);
+      const file = entry.slice(separator + 1);
+      if (generated.has(file)) {
+        continue;
+      }
+      const absolute = path.join(root, file);
+      const bytes = treeEntryBytes(entry, separator, absolute);
+      oracle.update(
+        JSON.stringify([entry.slice(0, 6), file, nodeSha256Hex(bytes)]),
+      );
+    }
+    expect(generatedInputIdentity(root).inputHash).toBe(oracle.digest("hex"));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("preparation preserves tracked input identity while producing ignored compiler configs", () => {
+  const { root, manifest, write } = fixture();
+  try {
+    for (const file of CI_GENERATED_FILES) {
+      write(file, `new generated bytes:${file}`);
+    }
+    expect(() => requireUnchangedGeneratedInputs(root, manifest)).not.toThrow();
+    write("input.ts", "changed by generator");
+    expect(() => requireUnchangedGeneratedInputs(root, manifest)).toThrow(
+      "Generation changed tracked source inputs",
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

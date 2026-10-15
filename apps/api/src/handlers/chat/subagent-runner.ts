@@ -6,7 +6,6 @@ import type { ModelRole } from "@stll/ai-catalog";
 import type { AIErrorKind } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatRequestOptions } from "@/api/handlers/chat/chat-request";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -21,6 +20,7 @@ import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { chatRequestOptions } from "@/api/lib/chat/chat-request";
 import {
   chatToolMapToArray,
   type ChatToolMap,
@@ -33,6 +33,7 @@ import {
 import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import { finishReasonOf } from "@/api/lib/chat/tanstack-chat-runtime";
 import type { TanStackTextFinishReason } from "@/api/lib/chat/tanstack-chat-runtime";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   abortControllerFromSignal,
   resolveTanStackTextModel,
@@ -54,6 +55,8 @@ type RunSubagentMetering = {
 };
 
 export type RunSubagentOptions = {
+  /** The parent turn's admission; a subagent is never admitted again. */
+  admission: ModelDispatchAdmission;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -209,11 +212,14 @@ export const runSubagent = async (
     managedAIResidency: options.managedAIResidency,
     modelId: options.modelId,
     organizationId: options.organizationId,
+    admission: options.admission,
     orgAIConfig: options.orgAIConfig,
     role: options.role,
   });
 
-  const abortController = abortControllerFromSignal(options.abortSignal);
+  const abortController = abortControllerFromSignal(
+    AbortSignal.any([options.abortSignal, options.admission.signal]),
+  );
 
   const analytics = createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
@@ -228,6 +234,7 @@ export const runSubagent = async (
     feature: options.metering.feature,
     modelRole: options.role,
     orgAIConfig: options.orgAIConfig,
+    modelTier: options.admission.modelTier,
     properties: {
       organization_id: options.organizationId,
       ...(options.metering.workspaceId
@@ -302,6 +309,7 @@ export const runSubagent = async (
   });
 
   const stream = streamTanStackChatRun({
+    admission: options.admission,
     model,
     adapter: model.adapter,
     messages: guardedMessages,

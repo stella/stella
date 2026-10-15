@@ -25,6 +25,10 @@ type ProvisionPreviewInput = {
 export const previewVersionColumns = {
   id: legislationDocuments.id,
   language: legislationDocuments.language,
+  country: legislationDocuments.country,
+  eli: legislationDocuments.eli,
+  slug: legislationDocuments.slug,
+  versionValidFrom: legislationDocuments.versionValidFrom,
 };
 
 const previewBlock = (block: Block) => ({

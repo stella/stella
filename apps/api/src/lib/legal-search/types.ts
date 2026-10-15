@@ -21,7 +21,7 @@ type LegalSearchDocumentFamily = Extract<CorpusFamily, "case_law">;
  * (public records): there are no tenant/workspace fields here.
  */
 
-export const LEGAL_SEARCH_ENGINES = ["pg-fts", "corpus-index"] as const;
+const LEGAL_SEARCH_ENGINES = ["pg-fts", "corpus-index"] as const;
 export type LegalSearchEngine = (typeof LEGAL_SEARCH_ENGINES)[number];
 
 export type LegalSearchQuery = {
@@ -72,7 +72,7 @@ export type LegalSearchHit = {
   createdAt: string;
 };
 
-export type LegalSearchFacets = {
+type LegalSearchFacets = {
   court: FacetBucket[];
   country: FacetBucket[];
   language: FacetBucket[];

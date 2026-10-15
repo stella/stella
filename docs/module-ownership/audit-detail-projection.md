@@ -1,0 +1,7 @@
+# Projecting audit change details for storage and reads
+
+Generated from `scripts/ownership/audit-detail-projection.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                        | Owner                                   | Enforcement                                                                               | Summary                                                                                                                                                                                       |
+| --------------------------------------------------------------------------------- | --------------------------------------- | ----------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `audit-detail-projection` — Projecting audit change details for storage and reads | `apps/api/src/lib/audit-log-details.ts` | import `auditChangesForResource` from `@/api/lib/audit-log-details` (plus 1 allowed file) | Audit readers share a total resource policy and principal-bound feature projection. The storage projection is confined to the audit writer; pages, exports and tools use the read projection. |

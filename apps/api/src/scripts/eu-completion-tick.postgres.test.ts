@@ -3,6 +3,7 @@ import { describe, expect, mock, test } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
+import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -293,9 +294,7 @@ if (!databaseUrl || !enabled) {
         const fetched = await store.markFetched({
           id: receipt.id,
           payload,
-          payloadHash: new Bun.CryptoHasher("sha256")
-            .update(payload)
-            .digest("hex"),
+          payloadHash: legacySha256Hex(payload),
           claimedFingerprint,
           target: "full",
           provenance: { requestHashes: [], requestedSurfaces: [] },

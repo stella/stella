@@ -18,6 +18,7 @@ import { sessionOptions } from "@/lib/auth-queries";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { readStoredJson } from "@/lib/stored-json";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 // Progress is the source of truth in the DB: it rides the `["session"]` query
 // (`user.guideProgress`, a serialized JSON map), so reads add no request and it
@@ -80,7 +81,10 @@ export const useOnboardingProgress = (
 ): OnboardingProgress => {
   const queryClient = useQueryClient();
   const t = useTranslations();
-  const { data } = useQuery(sessionOptions);
+  const dataQuery = useQuery(sessionOptions);
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   const stored = useMemo(
     () => parseGuideProgress(data?.user.guideProgress),

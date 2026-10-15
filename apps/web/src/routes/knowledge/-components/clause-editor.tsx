@@ -36,13 +36,13 @@ import {
   ItalicIcon,
   ListIcon,
   ListOrderedIcon,
-  Loader2Icon,
   Redo2Icon,
   RotateCcwIcon,
   Undo2Icon,
   AiActionIcon,
   XIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
@@ -901,7 +901,11 @@ const AiEditBar = ({
           type="button"
           variant={reviewing ? "ghost" : undefined}
         >
-          <AiEditSubmitIcon generating={generating} reviewing={reviewing} />
+          <AiEditSubmitIcon
+            generating={generating}
+            label={t("common.loading")}
+            reviewing={reviewing}
+          />
           {reviewing ? t("common.regenerate") : t("ai.editWithAI")}
         </Button>
         {reviewing ? (
@@ -917,13 +921,15 @@ const AiEditBar = ({
 
 const AiEditSubmitIcon = ({
   generating,
+  label,
   reviewing,
 }: {
   generating: boolean;
+  label: string;
   reviewing: boolean;
 }) => {
   if (generating) {
-    return <Loader2Icon className="size-3.5 animate-spin" />;
+    return <Loader className="size-3.5" label={label} size="sm" />;
   }
   if (reviewing) {
     return <RotateCcwIcon className="size-3.5" />;

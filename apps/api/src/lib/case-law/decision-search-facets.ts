@@ -5,6 +5,7 @@ import {
   COURT_TIER_LABELS,
   type CourtTierLabel,
 } from "@stll/api-contract/case-law-court-tiers";
+import type { CaseLawCourtYear } from "@stll/api-contract/case-law-court-year";
 import {
   isDecisionTypeKind,
   type DecisionTypeKind,
@@ -13,14 +14,17 @@ import {
   FACET_COUNT_TYPE,
   type FacetCountType,
 } from "@stll/api-contract/search";
+import { US_COURT_BY_CANONICAL_NAME } from "@stll/api-contract/us-courts";
 
 import { caseLawSources } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { courtPresentation } from "@/api/lib/case-law/court-presentation";
 import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
 import { decisionTypeKind } from "@/api/lib/case-law/decision-type-kind";
+import type { CorpusCourtYear } from "@/api/lib/legal-search/corpus-index-court-year";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawSourceId } from "@/api/lib/safe-id-boundaries";
 
@@ -65,6 +69,7 @@ type SearchCourtTier = {
 };
 
 export type DecisionSearchFacets = {
+  courtYear: CaseLawCourtYear;
   court: SearchCourtTier[];
   year: SearchFacetBucket[];
   decisionType: DecisionTypeFacetBucket[];
@@ -222,3 +227,54 @@ export const labelSourceBuckets = <TBucket extends SearchFacetBucket>(
     ...bucket,
     label: nameById.get(bucket.value) ?? null,
   }));
+
+type PresentCourtYearOptions = {
+  matrix: CorpusCourtYear | null;
+  courts: DecisionSearchFacets["court"];
+  country: string;
+  courtWeights: CourtWeightMap;
+};
+
+/** A matrix only advertises courts the filter rail can drill into. */
+export const presentCourtYear = ({
+  matrix,
+  courts,
+  country,
+  courtWeights,
+}: PresentCourtYearOptions): CaseLawCourtYear => {
+  if (matrix === null) {
+    return null;
+  }
+  const tierByCourt = new Map(
+    courts.flatMap(({ tierLabel, courts: tierCourts }) =>
+      tierCourts.map(({ value }) => [value, tierLabel] as const),
+    ),
+  );
+  const visibleBuckets = matrix.buckets.flatMap((bucket) => {
+    const tier = tierByCourt.get(bucket.court);
+    return tier === undefined ? [] : [{ ...bucket, tier }];
+  });
+  return {
+    buckets: visibleBuckets.map(({ court, year, count, tier }) => ({
+      court,
+      courtName: court,
+      courtAbbreviation: courtPresentation(courtWeights, {
+        court,
+        country,
+        courtId:
+          country === "USA"
+            ? (US_COURT_BY_CANONICAL_NAME.get(court)?.id ?? null)
+            : null,
+        ecli: null,
+      }).courtAbbreviation,
+      tier,
+      year,
+      count,
+      // The served projection has neither citation nor treatment counts.
+      citationSum: null,
+      treatment: null,
+    })),
+    truncated:
+      matrix.truncated || visibleBuckets.length !== matrix.buckets.length,
+  };
+};

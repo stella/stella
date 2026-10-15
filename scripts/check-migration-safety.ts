@@ -15,7 +15,6 @@
 // reason shorter than MIN_ACKNOWLEDGEMENT_REASON_LENGTH is itself an error.
 
 import { panic } from "better-result";
-import { createHash } from "node:crypto";
 import {
   existsSync,
   readdirSync,
@@ -25,11 +24,14 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+import { createSha256 } from "@stll/sha256/node";
+
 import { CODE_OWNED_TABLES } from "../apps/api/src/db/code-owned-tables";
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables";
 // Statement hashes pin historical index work without exempting a whole file.
 // The corpus test requires exact findings and forbids additions to this snapshot.
-import indexFindingsSnapshot from "./migration-index-findings.json";
+import indexFindingsSnapshot from "./migration-index-findings.json" with { type: "json" };
 import type { MigrationSafetyRuleId } from "./migration-safety-rule-ids";
 
 type Statement = {
@@ -784,13 +786,10 @@ const usage = () => {
 };
 
 const toRepoPath = (file: string): string =>
-  path
-    .relative(
-      process.cwd(),
-      existsSync(file) ? realpathSync(file) : path.resolve(file),
-    )
-    .split(path.sep)
-    .join("/");
+  repoRelativePath(
+    process.cwd(),
+    existsSync(file) ? realpathSync(file) : path.resolve(file),
+  );
 
 const readBaseline = (): Set<string> => {
   if (!existsSync(BASELINE_FILE)) {
@@ -1878,9 +1877,7 @@ export const checkMigrationIndexBuilds = (
             file,
             line: statement.line,
             ruleId: HIGH_VOLUME_INDEX_BUILD_RULE_ID,
-            statementHash: createHash("sha256")
-              .update(statement.raw)
-              .digest("hex"),
+            statementHash: createSha256().update(statement.raw).digest("hex"),
             description:
               "builds indexes on a high-volume table or an unresolved REINDEX target during a schema migration",
             guidance:

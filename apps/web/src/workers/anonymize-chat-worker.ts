@@ -32,7 +32,7 @@ let dictionariesPromise: Promise<
 
 const runWithPipelineContext = createPipelineContextRunner();
 
-// oxlint-disable-next-line @typescript-eslint/promise-function-async -- lazy init returns the cached promise without awaiting
+// oxlint-disable-next-line typescript/promise-function-async -- lazy init returns the cached promise without awaiting
 const getDictionaries = (): Promise<
   NonNullable<PipelineConfig["dictionaries"]>
 > => {
@@ -99,16 +99,14 @@ if (!isDedicatedWorkerScope(globalThis)) {
   panic("Chat anonymization must run in a dedicated worker");
 }
 
-const scope = globalThis;
-
 const postResponse = (response: AnonymizeChatWorkerResponse): void => {
   // Worker postMessage doesn't take a targetOrigin (unlike
   // window.postMessage); the lint rule is window-specific.
   // oxlint-disable-next-line unicorn/require-post-message-target-origin -- worker postMessage has no targetOrigin param, rule is window-specific
-  scope.postMessage(response);
+  globalThis.postMessage(response);
 };
 
-scope.addEventListener(
+globalThis.addEventListener(
   "message",
   (event: MessageEvent<AnonymizeChatWorkerRequest>) => {
     // Worker-local handling keeps the off-main-thread anonymizer self-contained:

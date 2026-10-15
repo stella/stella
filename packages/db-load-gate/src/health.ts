@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { Temporal } from "@stll/time";
 
 export type VerdictKind = "normal" | "degraded" | "stop" | "unknown";
@@ -16,6 +17,28 @@ export type Signal = {
   threshold: number | null;
   observedAt: string | null;
   reason: string;
+};
+
+/**
+ * Readings are stamped by another clock (Postgres, CloudWatch), so a fresh
+ * reading can look slightly in the future. Tolerate small skew; reject
+ * anything further ahead as a broken clock.
+ */
+export const MAX_CLOCK_SKEW_MS = 5000;
+export const isFreshReading = (
+  observedAt: string,
+  now: number,
+  maxStalenessMs: number,
+) => {
+  const age = Result.try(
+    () => now - Temporal.Instant.from(observedAt).epochMilliseconds,
+  );
+  return (
+    Result.isOk(age) &&
+    Number.isFinite(age.value) &&
+    age.value >= -MAX_CLOCK_SKEW_MS &&
+    age.value <= maxStalenessMs
+  );
 };
 export type Verdict = { kind: VerdictKind; signals: Signal[] };
 export type BusyWindow = { start: string; end: string; timeZone: string };
@@ -283,11 +306,7 @@ const isAwaitingLoadResume = ({
       ) {
         return false;
       }
-      const observedAt = signal.observedAt;
-      const age = Result.try(
-        () => now - Temporal.Instant.from(observedAt).epochMilliseconds,
-      );
-      return age.isOk() && age.value >= 0 && age.value <= config.maxStalenessMs;
+      return isFreshReading(signal.observedAt, now, config.maxStalenessMs);
     })
   );
 };
@@ -313,10 +332,10 @@ export const nextBatch = ({
   const now = clock();
   const awaitingResume = isAwaitingLoadResume({ state, verdict, config, now });
   if (verdict.kind === "stop" || verdict.kind === "unknown" || awaitingResume) {
-    const backoff = Math.min(
-      config.holdBackoffCapMs,
-      config.holdBackoffMs * 2 ** Math.min(state.holdCount, 52),
-    );
+    const backoff = backoffDelay(Math.min(state.holdCount, 52), {
+      baseMs: config.holdBackoffMs,
+      maxMs: config.holdBackoffCapMs,
+    });
     const nextState: BatchState = {
       size: state.size,
       sleepMs: state.sleepMs,

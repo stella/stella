@@ -142,7 +142,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
     // SAFETY: the mock binding value is opaque plumbing - the fake
     // `createNativePipelineFromConfig` below never inspects it, it
     // only forwards it to `redactText`'s closure over `entities`.
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double stands in for the real wasm binding
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double stands in for the real wasm binding
     getBinding: async () => ({}) as NativeAnonymizeBinding,
     createPipelineContext: () => ({
       nativePipelinePackage: null,
@@ -204,7 +204,7 @@ describe("runChatAnonPipeline excludedCanonicals", () => {
       // SAFETY: only `redactText` is exercised by these tests; the
       // rest of `PreparedNativePipeline`'s surface is intentionally
       // left unimplemented on this test double.
-      // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion -- test double only implements `redactText`
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double only implements `redactText`
       return pipeline as unknown as Awaited<
         ReturnType<ChatAnonRuntime["createNativePipelineFromConfig"]>
       >;

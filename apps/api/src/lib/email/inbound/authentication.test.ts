@@ -373,3 +373,64 @@ test("local verification validates DKIM bytes, alignment, and DMARC policy", asy
     ).toBe(false);
   }
 });
+
+test.each([
+  ["v=DMARC1; p=reject; aspf=r", "pass", true],
+  ["v=DMARC1; p=reject; aspf=s", "fail", false],
+  ["v=DMARC1; p=reject; sp=quarantine; np=reject; t=y; aspf=r", "pass", true],
+  ["v=DMARC1; p=invalid", "none", false],
+  [null, "none", false],
+] as const)(
+  "local verification applies an inherited DMARC record %s",
+  async (record, verdict, admitted) => {
+    const queried: string[] = [];
+    const verifier = createLocalMailVerifier(() => ({
+      resolve: async (domain, rrtype) => {
+        queried.push(`${rrtype} ${domain}`);
+        if (rrtype !== "TXT") {
+          return [];
+        }
+        if (domain === "example.com") {
+          return [["v=spf1 ip4:192.0.2.1 -all"]];
+        }
+        if (domain === "_dmarc.example.com" && record !== null) {
+          return [[record]];
+        }
+        return [];
+      },
+      cancel: () => {},
+    }));
+    const fromAddress = "member@team.example.com";
+    const auth = (
+      await verifier({
+        raw: Buffer.from(
+          [
+            `From: Member <${fromAddress}>`,
+            "To: Matter <matter@example.net>",
+            "Subject: Inherited mail policy",
+            "Date: Sat, 26 Sep 2026 12:00:00 +0000",
+            "Message-ID: <tree-walk@team.example.com>",
+            "",
+            "Filed correspondence.",
+            "",
+          ].join("\r\n"),
+        ),
+        fromAddress,
+        envelope: {
+          mailFrom: "member@example.com",
+          recipients: ["matter@example.net"],
+          remoteIp: "192.0.2.1",
+          helo: "mail.example.com",
+        },
+      })
+    ).unwrap();
+    expect(auth.spf.result).toBe("pass");
+    expect(auth.dkim).toEqual([
+      { result: "none", domain: null, alignment: "relaxed" },
+    ]);
+    expect(auth.dmarc).toBe(verdict);
+    expect(hasAlignedAuthentication(auth, fromAddress)).toBe(admitted);
+    expect(queried).toContain("TXT _dmarc.team.example.com");
+    expect(queried).toContain("TXT _dmarc.example.com");
+  },
+);

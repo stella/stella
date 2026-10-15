@@ -1,3 +1,6 @@
+// parser-output-unchanged: This change only redacts query parameters from error output and does not change parser output.
+import { sanitizeErrorForOutput } from "./query-error";
+
 // Dev-only error logging, shared by the API and web apps. Both surface
 // errors to `console.error` in dev and no-op in prod; the API additionally
 // forwards to a JSONL file sink so headless tools can tail errors without
@@ -27,7 +30,26 @@ export const createDevErrorLogger =
     if (!echoErrors) {
       return;
     }
+    const safeOutput = sanitizeErrorForOutput({ error, context });
+    const safeEnvelope =
+      safeOutput !== null &&
+      typeof safeOutput === "object" &&
+      "error" in safeOutput
+        ? safeOutput
+        : undefined;
+    const safeError =
+      safeEnvelope === undefined ? safeOutput : safeEnvelope.error;
+    const contextValue =
+      safeEnvelope !== undefined && "context" in safeEnvelope
+        ? safeEnvelope.context
+        : undefined;
+    const safeContext =
+      contextValue !== null &&
+      typeof contextValue === "object" &&
+      !Array.isArray(contextValue)
+        ? Object.fromEntries(Object.entries(contextValue))
+        : undefined;
     // oxlint-disable-next-line no-console -- dev-only error echo
-    console.error(error);
-    sink?.({ error, context });
+    console.error(safeError);
+    sink?.({ error: safeError, context: safeContext });
   };

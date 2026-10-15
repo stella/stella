@@ -20,7 +20,7 @@ describe("createDevQuickStartIdentity", () => {
   test("reuses the local account with a unique org and reproducible seed", () => {
     expect(createDevQuickStartIdentity(RANDOM_ID)).toEqual({
       email: "dev-quick-start@stella.dev",
-      organizationName: "Harvey LAB 018F1F7E",
+      organizationName: "Harvey LAB 89ABCDEF",
       organizationSlug: "dev-quick-start-018f1f7e89ab7def8123456789abcdef",
       selectionSeed: RANDOM_ID,
     });

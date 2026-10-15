@@ -110,3 +110,35 @@ test.describe("on a fine pointer", () => {
     expect(touch?.width).toBe(32);
   });
 });
+
+test("date triggers and their labels keep their geometry when opened", async ({
+  page,
+}) => {
+  await openFixture(page);
+  for (const triggerId of ["localized", "field", "empty-field"]) {
+    const trigger = page.locator(`#${triggerId}`);
+    const label = page.locator(`#${triggerId}-label`);
+    const triggerBox = await trigger.boundingBox();
+    const labelBox = (await label.count()) ? await label.boundingBox() : null;
+    await trigger.hover();
+    expect(await trigger.boundingBox()).toEqual(triggerBox);
+    await trigger.focus();
+    expect(await trigger.boundingBox()).toEqual(triggerBox);
+    await trigger.click();
+    await expect(page.locator('[data-slot="date-picker-popup"]')).toBeVisible();
+    expect(await trigger.boundingBox()).toEqual(triggerBox);
+    if (labelBox) {
+      expect(await label.boundingBox()).toEqual(labelBox);
+    }
+    const focusDay =
+      triggerId === "empty-field"
+        ? page.locator('[data-slot="date-picker-popup"] [aria-current="date"]')
+        : page.locator(
+            '[data-slot="date-picker-popup"] [data-date="2026-03-05"]',
+          );
+    await expect(focusDay).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(page.locator('[data-slot="date-picker-popup"]')).toBeHidden();
+    expect(await trigger.boundingBox()).toEqual(triggerBox);
+  }
+});

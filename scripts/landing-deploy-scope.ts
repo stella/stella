@@ -103,22 +103,28 @@ export type LandingClosure = {
   readonly packageKeys: ReadonlySet<string>;
 };
 
-export const landingClosure = (lock: Lockfile): LandingClosure | undefined => {
-  const landing = Object.entries(lock.workspaces).find(
-    ([, workspace]) => workspace["name"] === LANDING_PACKAGE,
+export const workspaceClosure = (
+  lock: Lockfile,
+  workspaceName: string,
+): LandingClosure | undefined => {
+  const startingWorkspace = Object.entries(lock.workspaces).find(
+    ([, workspace]) => workspace["name"] === workspaceName,
   );
-  if (landing === undefined) {
+  if (startingWorkspace === undefined) {
     return undefined;
   }
-  const workspaceDirectories = new Set<string>([landing[0]]);
+  const workspaceDirectories = new Set<string>([startingWorkspace[0]]);
   const packageKeys = new Set<string>();
   const queue: {
     readonly path: readonly string[];
     readonly dependencies: readonly string[];
   }[] = [
     {
-      path: [LANDING_PACKAGE],
-      dependencies: dependencyNames(landing[1], WORKSPACE_DEPENDENCY_FIELDS),
+      path: [workspaceName],
+      dependencies: dependencyNames(
+        startingWorkspace[1],
+        WORKSPACE_DEPENDENCY_FIELDS,
+      ),
     },
   ];
   for (let next = queue.pop(); next !== undefined; next = queue.pop()) {
@@ -160,6 +166,9 @@ export const landingClosure = (lock: Lockfile): LandingClosure | undefined => {
   }
   return { workspaceDirectories, packageKeys };
 };
+
+export const landingClosure = (lock: Lockfile): LandingClosure | undefined =>
+  workspaceClosure(lock, LANDING_PACKAGE);
 
 /**
  * Everything the install gives the landing: its workspace manifests, every

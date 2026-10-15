@@ -84,8 +84,6 @@ export const CORPUS_INDEX_PROJECTION_APPEND_MODES = [
 ] as const;
 export type CorpusIndexProjectionAppendMode =
   (typeof CORPUS_INDEX_PROJECTION_APPEND_MODES)[number];
-export type CorpusIndexProjectionWorkStatus =
-  (typeof CORPUS_INDEX_PROJECTION_WORK_STATUSES)[number];
 
 export const CORPUS_INDEX_PROJECTION_FAILURE_KINDS = [
   "payload_unavailable",
@@ -183,7 +181,7 @@ export type CorpusIndexDesiredProjection =
     }
   | { action: "erase"; epoch: bigint };
 
-export type CorpusIndexAppliedProjection =
+type CorpusIndexAppliedProjection =
   | { action: "missing" }
   | {
       action: "upsert";

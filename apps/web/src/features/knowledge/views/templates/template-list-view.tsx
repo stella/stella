@@ -23,6 +23,7 @@ import type {
 } from "@/features/knowledge/views/templates/templates-seam";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { deviceStorage } from "@/lib/account/browser-storage";
 import { optionalArray } from "@/lib/arrays";
 import { TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 
@@ -64,12 +65,12 @@ const DENSITY_STORAGE_KEY = "stella.templates.density";
 
 /** Persisted list density; defaults to compact for fast scanning. */
 const readTemplateDensity = (): TemplateDensity =>
-  localStorage.getItem(DENSITY_STORAGE_KEY) === "comfortable"
+  deviceStorage("local").getItem(DENSITY_STORAGE_KEY) === "comfortable"
     ? "comfortable"
     : "compact";
 
 const writeTemplateDensity = (density: TemplateDensity): void => {
-  localStorage.setItem(DENSITY_STORAGE_KEY, density);
+  deviceStorage("local").setItem(DENSITY_STORAGE_KEY, density);
 };
 
 const TemplateListView = ({

@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // Chat mutation matrix runner.
 //
 // scripts/chat-mutation-matrix.json lists behaviours of the chat pipeline, each
@@ -29,8 +30,6 @@
 //
 // Scenarios run on demand and nightly; PR CI validates the targets with --check.
 // Each scenario entry runs twice, once unchanged and once mutated.
-
-import { panic } from "better-result";
 import {
   mkdtempSync,
   readdirSync,
@@ -40,6 +39,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+
+import { printError } from "@stll/errors";
 
 import { CHAT_ORACLE } from "../src/tests/helpers/chat-oracles";
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
@@ -192,7 +193,7 @@ const withMutatedFile = async <T>(
     void abandon(TERMINATION_SIGNALS[signal]);
   };
   const onUncaught = (error: unknown) => {
-    console.error(error);
+    printError(error);
     void abandon(1);
   };
   const signals = Object.keys(TERMINATION_SIGNALS).filter(
@@ -217,13 +218,20 @@ const withMutatedFile = async <T>(
 };
 
 /**
+ * The `-t` filter for exactly one scenario test, inside a describe block or
+ * at the top level of its file.
+ */
+export const scenarioTestPattern = (test: string): string =>
+  `^(?:.* )?${escapeRegExp(test)}$`;
+
+/**
  * The command that runs one scenario test: the api package's runner, or the
  * web app's for a web scenario.
  */
 const scenarioCommand = (
   scenario: Entry["scenario"],
 ): { command: string[]; cwd: string } => {
-  const pattern = `^.* ${escapeRegExp(scenario.test)}$`;
+  const pattern = scenarioTestPattern(scenario.test);
   return scenario.file.startsWith(WEB_PREFIX)
     ? {
         command: [

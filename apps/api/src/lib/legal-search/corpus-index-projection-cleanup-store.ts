@@ -291,49 +291,6 @@ export const recordCorpusProjectionDeleteTx = async (
   return rows.length;
 };
 
-type RetryCorpusProjectionCleanupOptions = {
-  intentIds: readonly ProjectionIntentId[];
-  leaseToken: string;
-  errorMessage: string;
-  testNow?: Date;
-};
-
-export const retryCorpusProjectionCleanupTx = async (
-  tx: Transaction,
-  {
-    intentIds,
-    leaseToken,
-    errorMessage,
-    testNow,
-  }: RetryCorpusProjectionCleanupOptions,
-): Promise<number> => {
-  if (intentIds.length === 0) {
-    return 0;
-  }
-  await lockCorpusIndexProjectionIntentMutationsTx(tx, intentIds);
-  await lockCorpusProjectionIntentsById(tx, intentIds);
-  const transitionAt = testNow ?? sql<Date>`clock_timestamp()`;
-  const rows = await tx
-    .update(corpusIndexProjectionIntents)
-    .set({
-      status: "cleanup_pending",
-      leaseToken: null,
-      leaseExpiresAt: null,
-      cleanupStartedAt: null,
-      lastError: errorMessage.slice(0, 2048),
-      updatedAt: transitionAt,
-    })
-    .where(
-      and(
-        inArray(corpusIndexProjectionIntents.id, intentIds),
-        eq(corpusIndexProjectionIntents.status, "cleanup_started"),
-        eq(corpusIndexProjectionIntents.leaseToken, leaseToken),
-      ),
-    )
-    .returning({ id: corpusIndexProjectionIntents.id });
-  return rows.length;
-};
-
 type VerifyCorpusProjectionCleanupSettlementsOptions = {
   client: Pick<CorpusIndexClient, "readDeleteSettlements" | "search">;
   indexId: string;
@@ -623,10 +580,9 @@ type ProveCorpusProjectionCleanupSettlementOptions = {
 };
 
 /**
- * When a survivor-shaped verdict may stand: once every split that existed
- * when the delete task was created has had its maturation period, the engine
- * has applied the task wherever it can, and a split the listing missed can no
- * longer be one it is still to reach.
+ * The age floor for a survivor-shaped verdict. Merges can restart split
+ * maturity beyond this instant, so the judgement must also check delete
+ * progress over both proving and excluded splits before confirming a survivor.
  */
 const survivorConfirmableAt = ({
   family,

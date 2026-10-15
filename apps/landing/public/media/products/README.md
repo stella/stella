@@ -17,23 +17,37 @@ branch, naming the PR's branch:
 gh workflow run marketing-screenshots-update.yml -f branch=<pr-branch>
 ```
 
-Dispatching on `main` is what keeps the release App key on workflow code from
-`main`: only the app and spec code checked out from `branch` is
-branch-controlled, and the token never leaves the push step.
+That run only starts **Capture marketing screenshots**
+(`marketing-screenshots-capture.yml`) on the branch's own ref. The capture
+runs the branch's app and spec code, holds no release secret, refuses to run
+on `main`, and uploads the regenerated PNGs as its `marketing-screenshots`
+artifact. When it completes, **Publish marketing screenshots**
+(`marketing-screenshots-publish.yml`) runs from `main`: it executes nothing
+from the branch, accepts only flat, regular `*.png` files with a PNG
+signature, mints the release App token, and appends one signed commit on the
+head the capture ran on, so a push that landed on the branch in the meantime
+makes it fail. The push re-runs the PR's checks against the new head.
 
 The capture body is the composite action `.github/actions/marketing-capture`
-resolved from the branch, so a branch created before that action existed
-must be rebased onto `main` first.
+resolved from the branch, and GitHub runs the capture workflow from the
+branch's own copy. A branch created before `marketing-screenshots-capture.yml`
+existed on `main` has no such copy, so the update dispatch fails for it with a
+"workflow not found" error: rebase the branch onto `main` first, then dispatch
+again.
 
-It regenerates every baseline on the CI runner and pushes them to the branch,
-which re-runs the PR's checks against the new head. Because baselines and
-comparison render on the same runner image, the pixel tolerance only has to
-cover run-to-run noise.
+You can also start the capture directly on the branch, skipping the update
+dispatch; the publish run follows the same way:
 
-Every update run also uploads the PNGs as a `marketing-screenshots-<run id>`
-artifact. Only branches of this repository can be regenerated in place, so for
-a fork PR run the update against a same-repository branch carrying the change
-and commit the artifact's PNGs to the PR.
+```sh
+gh workflow run marketing-screenshots-capture.yml --ref <pr-branch>
+```
+
+Because baselines and comparison render on the same runner image, the pixel
+tolerance only has to cover run-to-run noise.
+
+Only branches of this repository can be regenerated in place. For a fork PR,
+run the update against a same-repository branch carrying the change and
+commit the capture run's `marketing-screenshots` artifact to the PR.
 
 Running `bun --filter @stll/web test:e2e:marketing:update` locally is for
 debugging a capture; do not commit macOS-generated PNGs.
@@ -176,34 +190,38 @@ The recorder additionally stamps every capture into
 the commit it was recorded at, and the app surfaces it films. At release time,
 
 ```sh
-bun run marketing:stale          # report per-capture FRESH/STALE verdicts
+bun run marketing:stale          # compare rendered screenshots and recording provenance
 bun run marketing:stale --strict # same, but exit non-zero when anything is stale
 ```
 
 diffs each capture's watched paths against its recorded-at commit (committed
-history only) and prints the exact re-record command for anything stale, so
+history only), then delegates to `test:e2e:marketing` before reporting FRESH.
+Use the same seeded app, browser setup, and committed screenshot baselines as
+the screenshot suite; its comparison threshold is unchanged. A comparison
+failure cannot be hidden by matching hashes or a manual source attestation.
+The command prints the exact re-record command for anything stale, so
 "the recordings silently drifted from the product" is a check failure, not a
 memory. Record from a committed tree so the stamped commit matches the code
 that produced the frames; when recording from a dirty tree, pass
 `MARKETING_COMMIT=<sha>` to stamp the commit the changes will land in. Watched
 paths cover the feature slices each scene films plus the recorder and seed;
-rendering changes that arrive through dependency upgrades (notably
-`@stll/folio-react` for the editor scene) are not tracked, so judge those
-manually when bumping.
+rendering changes outside those paths are covered by the rendered comparison.
+`bun run marketing:provenance` checks source metadata alone and reports
+PROVENANCE_MATCH/PROVENANCE_CHANGED; it does not certify rendered freshness.
 
 ## Reshooting on release
 
 `bun run marketing:reshoot` re-records only the captures `marketing:stale`
-finds stale — never the whole matrix, so a reshoot never pays to re-record
-scenes that already match the product:
+finds stale. If the shared rendered comparison fails, candidates with matching
+source metadata remain stale too; its screenshot diagnostics identify the drift:
 
 ```sh
 bun run marketing:reshoot          # re-record whatever is stale
-bun run marketing:reshoot --dry-run # print the stale set and the commands, do nothing
+bun run marketing:reshoot --dry-run # report source provenance and commands without rendering
 ```
 
 If everything is already fresh, it prints `all N recordings fresh — nothing
-to reshoot` and exits without touching the app. Otherwise it preflights the
+to reshoot` after the rendered comparison, without recording new media. Otherwise it preflights the
 local stack (`E2E_WEB_URL` / `E2E_API_URL`, defaulting to the URLs above), and
 if either is unreachable it prints the same "Refreshing the images" commands
 from this file and exits without recording anything — it never starts
@@ -220,10 +238,10 @@ stamps the pre-commit HEAD, so it is one commit behind once the first commit
 lands). The reshoot script prints the publish and commit commands, including a
 ready-to-run `jq` snippet for the second commit.
 
-`tag-on-version-bump.yml` runs `bun run marketing:stale --strict` before
-pushing a release tag, so a stale recording fails the tag push instead of
-shipping a landing page that has quietly drifted from the product. Clear it
-with `bun run marketing:reshoot` before bumping `VERSION`.
+`release-tag.yml` and the release PR warning check recording provenance.
+Rendered screenshots are checked by the heavy marketing screenshot job.
+Use `bun run marketing:stale --strict` with the seeded screenshot stack to
+verify both before bumping `VERSION`.
 
 `bun run release:maintenance` does not stop on stale recordings. It carries
 them forward under a standing attestation, `Patch release, UX diff

@@ -38,6 +38,7 @@
 
 import { PDF, SecurityError } from "@libpdf/core";
 
+import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import {
   isSkDecisionTitle,
   isSkHoldingMarker,
@@ -50,11 +51,6 @@ import {
 } from "@stll/legal-ast/slovak-document-roles";
 import type { SkDocumentSection } from "@stll/legal-ast/slovak-document-roles";
 
-import type {
-  Block,
-  DocumentAst,
-  Inline,
-} from "@/api/lib/case-law/document-ast";
 import {
   buildBoldRanges,
   isBoldFont,

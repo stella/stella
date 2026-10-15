@@ -21,6 +21,7 @@ import { Trash2Icon as Trash2, UploadIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -28,6 +29,7 @@ import { normalizeOptionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 import {
   organizationAnonymizationBlacklistKeys,
@@ -287,6 +289,7 @@ export const AnonymizationDenyListCard = () => {
       organizationId: activeOrganizationId,
     }),
   );
+  const blacklistView = useQueryView(blacklistQuery);
   // Replace the org-wide deny list. Endpoint performs a full
   // upsert: rows missing from the request are deleted, present
   // rows are upserted (keyed on lowercased canonical). Callers
@@ -311,7 +314,8 @@ export const AnonymizationDenyListCard = () => {
   const [pendingCanonical, setPendingCanonical] = useState("");
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
 
-  const entries = blacklistQuery.data?.entries;
+  const entries =
+    blacklistView.type === "items" ? blacklistView.items.entries : undefined;
   const renderedEntries = normalizeOptionalArray(entries);
 
   const submitTerm = async () => {
@@ -411,10 +415,15 @@ export const AnonymizationDenyListCard = () => {
     );
   };
 
+  if (blacklistView.type !== "items") {
+    return <QueryViewFeedback view={blacklistView} />;
+  }
+
   return (
     <Frame>
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
+          <QueryViewFeedback view={blacklistView} />
           <form
             action={submitTerm}
             className="flex flex-col gap-2 rounded-md border p-3"

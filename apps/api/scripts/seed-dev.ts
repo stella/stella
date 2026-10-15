@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Seed realistic test data for local development.
  *
@@ -21,8 +22,6 @@
  *   - Database running (bun run docker:dev)
  *   - Test user seeded (bun run db:seed-test-user)
  */
-
-import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type {
@@ -33,7 +32,10 @@ import type {
 } from "@stll/api-contract";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 import { mapWithConcurrency } from "@stll/concurrency";
-import { deriveBlockId } from "@stll/folio-core/server";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+import type { ConditionNode } from "@stll/conditions";
+import { writeZipEntry } from "@stll/docx-utils";
+import { logErrorOutput, printError } from "@stll/errors";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
 
 import {
@@ -57,6 +59,7 @@ import {
   rateEntries,
   rateTables,
   timeEntries,
+  userFiles,
   workspaceContacts,
   workspaceMembers,
   workspaces,
@@ -72,14 +75,19 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { chunked } from "@/api/lib/chunked";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { DEFAULT_DOCUMENT_TYPES } from "@/api/lib/document-types/defaults";
 import { parseEmail, parsedEmailToText } from "@/api/lib/files/email-to-html";
+import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
+import { createTextPdf } from "@/api/lib/files/text-pdf";
+import { createUserFileKey, deleteS3Keys } from "@/api/lib/files/utils";
 import { cents } from "@/api/lib/money";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { upsertSearchDocument } from "@/api/lib/search/index-entity";
 import { buildDefaultViewRows } from "@/api/lib/views";
 import type {
@@ -90,6 +98,25 @@ import type {
 import { requireLocalDevOpen } from "@/api/runtime-mode";
 
 import { seedCaseLaw } from "./seed-case-law";
+import {
+  buildExportReviewCitationSeeds,
+  buildExportReviewDocumentText,
+  buildExportReviewMetadata,
+  EXPORT_REVIEW_DOC_NAMES,
+  EXPORT_REVIEW_DOCUMENT_TYPES,
+  EXPORT_REVIEW_FOLDERS,
+  EXPORT_REVIEW_JURISDICTIONS,
+  EXPORT_TABLE_FOLDER_COUNT,
+  EXPORT_TABLE_MATTER_LABEL,
+  exportReviewCitationBlockId,
+  exportReviewDocumentIds,
+} from "./seed-export-review";
+import type {
+  ExportReviewCitationSeed,
+  ExportReviewMetadata,
+} from "./seed-export-review";
+import { buildMarketingAgentThread } from "./seed-marketing-agent-thread";
+import { writeSeedRecentFiles } from "./seed-recents";
 import { seedTemplates } from "./seed-templates";
 import {
   ensureSeedColleaguesInOrganization,
@@ -105,6 +132,7 @@ import {
   DEFAULT_USER_ID,
   pickAuthor,
   seedId,
+  seedFileIdentity,
 } from "./seed-utils";
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -123,9 +151,6 @@ const SEED_INSERT_CHUNK_SIZE = 500;
 const SEED_WORKSPACE_CONCURRENCY = 8;
 const HEAVY_MATTER_FILE_COUNT = 1000;
 const HEAVY_MATTER_FOLDER_COUNT = 25;
-const EXPORT_TABLE_MATTER_LABEL = "ws-export-review";
-const EXPORT_TABLE_FILE_COUNT = 72;
-const EXPORT_TABLE_FOLDER_COUNT = 6;
 // The akvizice matter is where the Czech (type-scoped) playbook runs; its
 // "Document Type" classifier uses the org taxonomy labels so playbook gating
 // can match the SPA document.
@@ -162,250 +187,6 @@ type UserFileId = SafeId<"userFile">;
 type WorkspaceContactId = SafeId<"workspaceContact">;
 type WorkspaceId = SafeId<"workspace">;
 
-/**
- * Unicode → WinAnsiEncoding (CP1252) mapping for chars
- * outside ASCII. Helvetica supports these natively.
- *
- * Hex keys are the standard notation for Unicode code
- * points and CP1252 byte positions.
- */
-const WIN_ANSI: Record<number, number> = {
-  256: 0x00, // U+0100 fallback for unsupported chars
-  // Latin Extended-A (Czech/Slovak/German)
-  193: 0xc1, // Á
-  225: 0xe1, // á
-  196: 0xc4, // Ä
-  228: 0xe4, // ä
-  201: 0xc9, // É
-  233: 0xe9, // é
-  205: 0xcd, // Í
-  237: 0xed, // í
-  211: 0xd3, // Ó
-  243: 0xf3, // ó
-  212: 0xd4, // Ô
-  244: 0xf4, // ô
-  214: 0xd6, // Ö
-  246: 0xf6, // ö
-  218: 0xda, // Ú
-  250: 0xfa, // ú
-  220: 0xdc, // Ü
-  252: 0xfc, // ü
-  221: 0xdd, // Ý
-  253: 0xfd, // ý
-  223: 0xdf, // ß
-  // Characters that need remapping to CP1252 positions
-  268: 0x00, // Č → not in CP1252
-  269: 0x00, // č
-  270: 0x00, // Ď
-  271: 0x00, // ď
-  282: 0x00, // Ě
-  283: 0x00, // ě
-  313: 0x00, // Ĺ
-  314: 0x00, // ĺ
-  317: 0x00, // Ľ
-  318: 0x00, // ľ
-  327: 0x00, // Ň
-  328: 0x00, // ň
-  344: 0x00, // Ř
-  345: 0x00, // ř
-  352: 0x8a, // Š → CP1252 0x8A
-  353: 0x9a, // š → CP1252 0x9A
-  356: 0x00, // Ť
-  357: 0x00, // ť
-  366: 0x00, // Ů
-  367: 0x00, // ů
-  381: 0x8e, // Ž → CP1252 0x8E
-  382: 0x9e, // ž → CP1252 0x9E
-  340: 0x00, // Ŕ
-  341: 0x00, // ŕ
-};
-
-// Fallback ASCII for chars not in WinAnsi
-const FALLBACK: Record<string, string> = {
-  Č: "C",
-  č: "c",
-  Ď: "D",
-  ď: "d",
-  Ě: "E",
-  ě: "e",
-  Ĺ: "L",
-  ĺ: "l",
-  Ľ: "L",
-  ľ: "l",
-  Ň: "N",
-  ň: "n",
-  Ř: "R",
-  ř: "r",
-  Ť: "T",
-  ť: "t",
-  Ů: "U",
-  ů: "u",
-  Ŕ: "R",
-  ŕ: "r",
-};
-
-/** Encode a string for PDF text operators using
- *  WinAnsiEncoding. Non-encodable chars get an ASCII
- *  fallback. Returns an octal-escaped PDF string. */
-const pdfEscape = (s: string): string => {
-  let out = "";
-  for (const ch of s) {
-    const cp = ch.codePointAt(0) ?? 0;
-    if (cp < 0x80) {
-      // ASCII — escape PDF special chars
-      if (ch === "\\") {
-        out += "\\\\";
-      } else if (ch === "(") {
-        out += "\\(";
-      } else if (ch === ")") {
-        out += "\\)";
-      } else {
-        out += ch;
-      }
-    } else {
-      const winAnsi = WIN_ANSI[cp];
-      if (winAnsi !== undefined && winAnsi > 0) {
-        // Encodable in WinAnsi — use octal escape
-        out += `\\${winAnsi.toString(8).padStart(3, "0")}`;
-      } else {
-        // Not in WinAnsi — ASCII fallback
-        out += FALLBACK[ch] ?? "?";
-      }
-    }
-  }
-  return out;
-};
-
-/**
- * Create a minimal but readable multi-page PDF.
- * Each page holds ~45 lines at 11pt with 14pt leading.
- */
-export const createMockPdf = (title: string, bodyText?: string): Buffer => {
-  const LINES_PER_PAGE = 45;
-  const FONT_SIZE = 11;
-  const LEADING = 14;
-  const TITLE_SIZE = 16;
-  const MARGIN_LEFT = 56;
-  const TOP_Y = 740;
-
-  // Split body text into lines, wrapping long lines at ~85 chars
-  const rawLines = (bodyText ?? title).split("\n");
-  const allLines: string[] = [];
-  for (const raw of rawLines) {
-    if (raw.length <= 85) {
-      allLines.push(raw);
-    } else {
-      // Word-wrap
-      const words = raw.split(" ");
-      let line = "";
-      for (const word of words) {
-        if (line.length + word.length + 1 > 85) {
-          allLines.push(line);
-          line = word;
-        } else {
-          line = line ? `${line} ${word}` : word;
-        }
-      }
-      if (line) {
-        allLines.push(line);
-      }
-    }
-  }
-
-  // Group into pages
-  const pages: string[][] = [];
-  for (let i = 0; i < allLines.length; i += LINES_PER_PAGE) {
-    pages.push(allLines.slice(i, i + LINES_PER_PAGE));
-  }
-  if (pages.length === 0) {
-    pages.push([title]);
-  }
-
-  const objects: string[] = [
-    "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj",
-  ];
-
-  // Build content streams for each page
-  const pageObjIds: number[] = [];
-  const contentObjStart = 4; // objects 4, 5, 6, ... are content streams
-  const pageObjStart = contentObjStart + pages.length;
-
-  for (const [p, lines] of pages.entries()) {
-    let stream = "";
-
-    // Title on first page
-    if (p === 0) {
-      stream +=
-        `BT /F1 ${TITLE_SIZE} Tf ` +
-        `${MARGIN_LEFT} ${TOP_Y} Td ` +
-        `(${pdfEscape(title)}) Tj ` +
-        `0 -${LEADING * 2} Td ` +
-        `/F1 ${FONT_SIZE} Tf `;
-    } else {
-      stream += `BT /F1 ${FONT_SIZE} Tf ${MARGIN_LEFT} ${TOP_Y} Td `;
-    }
-
-    for (const [i, line] of lines.entries()) {
-      if (i > 0 || p > 0) {
-        stream += `0 -${LEADING} Td `;
-      }
-      stream += `(${pdfEscape(line)}) Tj `;
-    }
-    stream += "ET";
-
-    const contentId = contentObjStart + p;
-    objects.push(
-      `${contentId} 0 obj\n<< /Length ${stream.length} >>\n` +
-        `stream\n${stream}\nendstream\nendobj`,
-    );
-
-    const pageId = pageObjStart + p;
-    pageObjIds.push(pageId);
-    objects.push(
-      `${pageId} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentId} 0 R /Resources << /Font << /F1 3 0 R >> >> >>\nendobj`,
-    );
-  }
-
-  // Pages object (id 2)
-  const kids = pageObjIds.map((id) => `${id} 0 R`).join(" ");
-  objects.splice(
-    1,
-    0,
-    `2 0 obj\n<< /Type /Pages /Kids [${kids}] ` +
-      `/Count ${pages.length} >>\nendobj`,
-  );
-
-  // Font object (id 3)
-  objects.splice(
-    2,
-    0,
-    "3 0 obj\n<< /Type /Font /Subtype /Type1 " +
-      "/BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj",
-  );
-
-  let pdf = "%PDF-1.4\n";
-  const offsets: number[] = [];
-  for (const obj of objects) {
-    offsets.push(pdf.length);
-    pdf += `${obj}\n`;
-  }
-
-  const xrefOffset = pdf.length;
-  pdf += "xref\n";
-  pdf += `0 ${objects.length + 1}\n`;
-  pdf += "0000000000 65535 f \n";
-  for (const offset of offsets) {
-    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
-  }
-  pdf += "trailer\n";
-  pdf += `<< /Size ${objects.length + 1} /Root 1 0 R >>\n`;
-  pdf += "startxref\n";
-  pdf += `${xrefOffset}\n`;
-  pdf += "%%EOF\n";
-
-  return Buffer.from(pdf);
-};
-
 const xmlEscape = (s: string): string =>
   s
     .replace(/&/gu, "&amp;")
@@ -436,7 +217,8 @@ export const createMockDocx = async (
   const JSZip = (await import("jszip")).default;
   const zip = new JSZip();
 
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -447,15 +229,14 @@ export const createMockDocx = async (
       }</Types>`,
   );
 
-  zip
-    .folder("_rels")
-    ?.file(
-      ".rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
-        "</Relationships>",
-    );
+  writeZipEntry(
+    zip,
+    "_rels/.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      "</Relationships>",
+  );
 
   // Build paragraphs from body text
   const lines = (bodyText ?? title).split("\n");
@@ -468,27 +249,24 @@ export const createMockDocx = async (
       `${xmlEscape(line)}</w:t></w:r></w:p>`;
   }
 
-  zip
-    .folder("word")
-    ?.file(
-      "document.xml",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-        `<w:body>${paragraphs}</w:body>` +
-        "</w:document>",
-    );
+  writeZipEntry(
+    zip,
+    "word/document.xml",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      `<w:body>${paragraphs}</w:body>` +
+      "</w:document>",
+  );
 
-  zip
-    .folder("word")
-    ?.folder("_rels")
-    ?.file(
-      "document.xml.rels",
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
-          SEED_STYLES_RELATIONSHIP
-        }</Relationships>`,
-    );
-  zip.folder("word")?.file("styles.xml", SEED_STYLES_XML);
+  writeZipEntry(
+    zip,
+    "word/_rels/document.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${
+        SEED_STYLES_RELATIONSHIP
+      }</Relationships>`,
+  );
+  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return buf;
@@ -850,7 +628,8 @@ const createSupplierAgreementDocx = async (
   const zip = new JSZip();
   const { author, date } = SUPPLIER_AGREEMENT_REVIEWER;
 
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -862,15 +641,14 @@ const createSupplierAgreementDocx = async (
       `</Types>`,
   );
 
-  zip
-    .folder("_rels")
-    ?.file(
-      ".rels",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
-        "</Relationships>",
-    );
+  writeZipEntry(
+    zip,
+    "_rels/.rels",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      "</Relationships>",
+  );
 
   let revisionId = 100;
   const runXml = (run: SupplierAgreementRun, bold: boolean): string => {
@@ -938,15 +716,14 @@ const createSupplierAgreementDocx = async (
 
   const paragraphs = SUPPLIER_AGREEMENT_PARAGRAPHS.map(paragraphXml).join("");
 
-  zip
-    .folder("word")
-    ?.file(
-      "document.xml",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-        `<w:body>${paragraphs}</w:body>` +
-        "</w:document>",
-    );
+  writeZipEntry(
+    zip,
+    "word/document.xml",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      `<w:body>${paragraphs}</w:body>` +
+      "</w:document>",
+  );
 
   const commentsXml = SUPPLIER_AGREEMENT_COMMENTS.map(
     (comment) =>
@@ -955,27 +732,24 @@ const createSupplierAgreementDocx = async (
       `<w:p><w:r><w:t xml:space="preserve">${xmlEscape(comment.text)}</w:t></w:r></w:p>` +
       "</w:comment>",
   ).join("");
-  zip
-    .folder("word")
-    ?.file(
-      "comments.xml",
-      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
-        `${commentsXml}</w:comments>`,
-    );
+  writeZipEntry(
+    zip,
+    "word/comments.xml",
+    '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<w:comments xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">' +
+      `${commentsXml}</w:comments>`,
+  );
 
-  zip
-    .folder("word")
-    ?.folder("_rels")
-    ?.file(
-      "document.xml.rels",
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-        `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>${
-          SEED_STYLES_RELATIONSHIP
-        }</Relationships>`,
-    );
-  zip.folder("word")?.file("styles.xml", SEED_STYLES_XML);
+  writeZipEntry(
+    zip,
+    "word/_rels/document.xml.rels",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="comments.xml"/>${
+        SEED_STYLES_RELATIONSHIP
+      }</Relationships>`,
+  );
+  writeZipEntry(zip, "word/styles.xml", SEED_STYLES_XML);
 
   const buf = await zip.generateAsync({ type: "nodebuffer" });
   return buf;
@@ -1018,219 +792,6 @@ const buildHeavyMatterDocNames = (): string[] => {
   }
 
   return result;
-};
-
-const EXPORT_REVIEW_FOLDERS = [
-  "Corporate",
-  "Commercial",
-  "Employment",
-  "Regulatory",
-  "Finance",
-  "Real Estate",
-] as const;
-
-const EXPORT_REVIEW_DOCUMENT_TYPES = [
-  "Shareholder Register",
-  "Customer Contract",
-  "Supplier Agreement",
-  "Employment Agreement",
-  "Permit",
-  "Loan Agreement",
-  "Lease",
-  "Insurance Policy",
-] as const;
-
-const EXPORT_REVIEW_COUNTERPARTIES = [
-  "Aurora Retail GmbH",
-  "BluePeak Manufacturing s.r.o.",
-  "Cedar Cloud Ltd.",
-  "Delta Logistics Kft.",
-  "Edison Bank plc",
-  "Fjord Analytics AB",
-  "Granite Properties B.V.",
-  "Helios Energy a.s.",
-] as const;
-
-const EXPORT_REVIEW_JURISDICTIONS = [
-  "Czech Republic",
-  "Germany",
-  "Netherlands",
-  "Hungary",
-  "United Kingdom",
-] as const;
-
-const EXPORT_REVIEW_RISK_LEVELS = [
-  "Low",
-  "Medium",
-  "High",
-  "Critical",
-] as const;
-
-const EXPORT_REVIEW_REVIEW_STATUSES = [
-  "Not Started",
-  "In Review",
-  "Needs Partner",
-  "Cleared",
-] as const;
-
-const EXPORT_REVIEW_EVIDENCE_QUALITY = [
-  "Direct citation",
-  "Needs source check",
-  "Conflicting evidence",
-] as const;
-
-// File names read like a real data room: the row's counterparty and document
-// type joined with a vintage year, e.g. Aurora_Retail_Shareholder_Register_2018.docx.
-// The counterparty/type indices mirror buildExportReviewMetadata exactly so a
-// row's name always matches its metadata columns, and the year advances once
-// per full (type, counterparty) cycle so all names stay unique. The marketing
-// recorder's content markers reference these names; keep them in sync
-// (apps/web/e2e/marketing/record-product-story.ts).
-const buildExportReviewDocNames = (): string[] => {
-  const result: string[] = [];
-
-  for (let i = 0; i < EXPORT_TABLE_FILE_COUNT; i++) {
-    const documentType = at(
-      EXPORT_REVIEW_DOCUMENT_TYPES,
-      i % EXPORT_REVIEW_DOCUMENT_TYPES.length,
-    );
-    const counterparty = at(
-      EXPORT_REVIEW_COUNTERPARTIES,
-      (i * 3) % EXPORT_REVIEW_COUNTERPARTIES.length,
-    );
-    const counterpartyName = counterparty
-      .split(" ")
-      .slice(0, 2)
-      .join("_")
-      .replaceAll(/[^\w]/gu, "");
-    const year = 2018 + Math.floor(i / EXPORT_REVIEW_DOCUMENT_TYPES.length);
-    const extension = i % 9 === 0 ? "docx" : "pdf";
-    result.push(
-      `${counterpartyName}_${documentType.replaceAll(" ", "_")}_${year}.${extension}`,
-    );
-  }
-
-  return result;
-};
-
-const EXPORT_REVIEW_DOC_NAMES = buildExportReviewDocNames();
-
-type ExportReviewMetadata = {
-  documentType: (typeof EXPORT_REVIEW_DOCUMENT_TYPES)[number];
-  counterparty: (typeof EXPORT_REVIEW_COUNTERPARTIES)[number];
-  jurisdiction: (typeof EXPORT_REVIEW_JURISDICTIONS)[number];
-  governingLaw: string;
-  effectiveDate: string;
-  expiryDate: string;
-  contractValue: number;
-  riskLevel: (typeof EXPORT_REVIEW_RISK_LEVELS)[number];
-  reviewStatus: (typeof EXPORT_REVIEW_REVIEW_STATUSES)[number];
-  evidenceQuality: (typeof EXPORT_REVIEW_EVIDENCE_QUALITY)[number];
-  tags: string[];
-  keyObligation: string;
-  riskFinding: string;
-  pageNumber: number;
-};
-
-const addDays = (date: Date, days: number): string => {
-  const copy = new Date(date);
-  copy.setDate(copy.getDate() + days);
-  return copy.toISOString().slice(0, 10);
-};
-
-export const buildExportReviewMetadata = (
-  index: number,
-): ExportReviewMetadata => {
-  const documentType = at(
-    EXPORT_REVIEW_DOCUMENT_TYPES,
-    index % EXPORT_REVIEW_DOCUMENT_TYPES.length,
-  );
-  const counterparty = at(
-    EXPORT_REVIEW_COUNTERPARTIES,
-    (index * 3) % EXPORT_REVIEW_COUNTERPARTIES.length,
-  );
-  const jurisdiction = at(
-    EXPORT_REVIEW_JURISDICTIONS,
-    // Stride must stay coprime with the list length or the "cycle" is a
-    // constant: the old *5 stride on this length-5 list pinned every row to
-    // Netherlands, which read as filler on camera. *2 varies row by row and
-    // keeps index 0 on Netherlands, which the review-citation recording's
-    // paint predicate quotes verbatim.
-    (index * 2 + 2) % EXPORT_REVIEW_JURISDICTIONS.length,
-  );
-  const riskLevel = at(
-    EXPORT_REVIEW_RISK_LEVELS,
-    (index * 7) % EXPORT_REVIEW_RISK_LEVELS.length,
-  );
-  const effectiveDate = addDays(new Date(2024, 0, 1), index * 11);
-  const expiryDate = addDays(new Date(2026, 0, 1), index * 17);
-  const contractValue = 50_000 + ((index * 137_500) % 4_950_000);
-  const reviewStatus = at(
-    EXPORT_REVIEW_REVIEW_STATUSES,
-    index % EXPORT_REVIEW_REVIEW_STATUSES.length,
-  );
-  const evidenceQuality = at(
-    EXPORT_REVIEW_EVIDENCE_QUALITY,
-    index % EXPORT_REVIEW_EVIDENCE_QUALITY.length,
-  );
-  const tags = [
-    at(["change of control", "termination", "data room", "renewal"], index % 4),
-    at(["consent needed", "pricing", "privacy", "security"], (index + 1) % 4),
-  ];
-
-  return {
-    documentType,
-    counterparty,
-    jurisdiction,
-    governingLaw:
-      jurisdiction === "United Kingdom" ? "England and Wales" : jurisdiction,
-    effectiveDate,
-    expiryDate,
-    contractValue,
-    riskLevel,
-    reviewStatus,
-    evidenceQuality,
-    tags,
-    keyObligation: `${counterparty} must provide written notice before any assignment, renewal, or material service change.`,
-    riskFinding:
-      riskLevel === "High" || riskLevel === "Critical"
-        ? "Consent, notice, or termination rights require partner review before signing."
-        : "No blocking issue identified; confirm ordinary-course compliance before closing.",
-    pageNumber: (index % 4) + 1,
-  };
-};
-
-export const buildExportReviewDocumentText = (
-  fileName: string,
-  index: number,
-): string => {
-  const metadata = buildExportReviewMetadata(index);
-  return `${metadata.documentType.toUpperCase()} — REVIEW EXTRACT
-
-${metadata.counterparty}, based in ${metadata.jurisdiction}, is party to this ${metadata.documentType.toLowerCase()} under review as part of the Project Atlas data room.
-
-Key terms
-Document: ${fileName}
-Document type: ${metadata.documentType}
-Counterparty: ${metadata.counterparty}
-Jurisdiction: ${metadata.jurisdiction}
-Governing law: ${metadata.governingLaw}
-Effective date: ${metadata.effectiveDate}
-Expiry date: ${metadata.expiryDate}
-Contract value: EUR ${metadata.contractValue}
-Risk level: ${metadata.riskLevel}
-Review status: ${metadata.reviewStatus}
-Evidence quality: ${metadata.evidenceQuality}
-Tags: ${metadata.tags.join(", ")}
-
-Key obligation
-${metadata.keyObligation}
-
-Risk finding
-${metadata.riskFinding}
-
-Extract under review:
-"${metadata.counterparty} must comply with the obligation identified above and the governing law is ${metadata.governingLaw}."`;
 };
 
 export const SEED_EMAIL_FILE_NAMES = [
@@ -1412,7 +973,7 @@ const createSeedEmailAttachment = (
   if (attachment.type === "pdf") {
     return {
       mimeType: PDF_MIME,
-      bytes: createMockPdf(attachment.title, attachment.bodyText),
+      bytes: createTextPdf(attachment.title, attachment.bodyText),
     };
   }
 
@@ -3268,8 +2829,6 @@ export const seedEntityTimestamps = ({
   return { createdAt, updatedAt };
 };
 
-const MARKETING_AGENT_THREAD_TITLE = "Project Atlas · Change-of-control review";
-
 // ─── Properties (per-workspace) ─────────────────────────
 
 type PropertySeed = {
@@ -3550,9 +3109,10 @@ const buildEntities = (wsId: WorkspaceId, wsLabel: string): EntitySeed[] => {
 
     const docNames = workspaceDocNames[wsLabel] ?? [];
     for (let i = 0; i < docNames.length; i++) {
+      const { entityId, entityVersionId } = exportReviewDocumentIds(i);
       result.push({
-        entityId: seedId(`${wsLabel}-doc-${i + 1}`),
-        versionId: seedId(`${wsLabel}-doc-${i + 1}-v`),
+        entityId,
+        versionId: entityVersionId,
         workspaceId: wsId,
         kind: "document",
         name: at(docNames, i),
@@ -3962,108 +3522,6 @@ type JustificationSeed = {
   fileFieldIds: FieldId[];
 };
 
-type ExportReviewCitationSeed = {
-  fieldSuffix: string;
-  statement: string;
-  quote: string;
-  /**
-   * The citation's 1-based position in folio's non-empty-block walk
-   * (`getSequentialFolioBlockIdIndex`/`deriveBlockId` in
-   * `@stll/folio-core/types/block-id`), fixed to this field's line in the
-   * `createMockDocx(title, buildExportReviewDocumentText(...))` layout: a
-   * leading title block (1), then one block per non-blank line of
-   * `buildExportReviewDocumentText`'s template, blank lines uncounted.
-   * Keep this in sync with that template — every docx-folio citation below
-   * only resolves to an exact-passage highlight (vs. a degraded block
-   * flash) when this points at the paragraph that actually contains
-   * `quote`.
-   */
-  blockIndex: number;
-};
-
-export const buildExportReviewCitationSeeds = (
-  metadata: ExportReviewMetadata,
-): ExportReviewCitationSeed[] => [
-  {
-    fieldSuffix: "document-type",
-    statement: `Document type extracted as ${metadata.documentType}.`,
-    quote: `Document type: ${metadata.documentType}`,
-    blockIndex: 6,
-  },
-  {
-    fieldSuffix: "counterparty",
-    statement: `Counterparty extracted as ${metadata.counterparty}.`,
-    quote: `Counterparty: ${metadata.counterparty}`,
-    blockIndex: 7,
-  },
-  {
-    fieldSuffix: "jurisdiction",
-    statement: `Jurisdiction extracted as ${metadata.jurisdiction}.`,
-    quote: `Jurisdiction: ${metadata.jurisdiction}`,
-    blockIndex: 8,
-  },
-  {
-    fieldSuffix: "governing-law",
-    statement: `Governing law extracted as ${metadata.governingLaw}.`,
-    quote: `Governing law: ${metadata.governingLaw}`,
-    blockIndex: 9,
-  },
-  {
-    fieldSuffix: "effective-date",
-    statement: `Effective date extracted as ${metadata.effectiveDate}.`,
-    quote: `Effective date: ${metadata.effectiveDate}`,
-    blockIndex: 10,
-  },
-  {
-    fieldSuffix: "expiry-date",
-    statement: `Expiry date extracted as ${metadata.expiryDate}.`,
-    quote: `Expiry date: ${metadata.expiryDate}`,
-    blockIndex: 11,
-  },
-  {
-    fieldSuffix: "contract-value",
-    statement: `Contract value extracted as EUR ${metadata.contractValue}.`,
-    quote: `Contract value: EUR ${metadata.contractValue}`,
-    blockIndex: 12,
-  },
-  {
-    fieldSuffix: "risk-level",
-    statement: `Risk level classified as ${metadata.riskLevel}.`,
-    quote: `Risk level: ${metadata.riskLevel}`,
-    blockIndex: 13,
-  },
-  {
-    fieldSuffix: "evidence-quality",
-    statement: `Evidence quality classified as ${metadata.evidenceQuality}.`,
-    quote: `Evidence quality: ${metadata.evidenceQuality}`,
-    // Position 14 is "Review status: ..." (not a citation field); evidence
-    // quality is the next line.
-    blockIndex: 15,
-  },
-  {
-    fieldSuffix: "tags",
-    statement: `Tags extracted as ${metadata.tags.join(", ")}.`,
-    quote: `Tags: ${metadata.tags.join(", ")}`,
-    blockIndex: 16,
-  },
-  {
-    fieldSuffix: "key-obligation",
-    statement: "Key obligation extracted from the obligation section.",
-    quote: metadata.keyObligation,
-    // Position 17 is the "Key obligation" heading; the obligation text
-    // itself is the next line.
-    blockIndex: 18,
-  },
-  {
-    fieldSuffix: "risk-finding",
-    statement: "Risk finding extracted from the risk section.",
-    quote: metadata.riskFinding,
-    // Position 19 is the "Risk finding" heading; the finding text itself
-    // is the next line.
-    blockIndex: 20,
-  },
-];
-
 const buildExportReviewJustificationContent = ({
   fileName,
   fileFieldId,
@@ -4088,11 +3546,7 @@ const buildExportReviewJustificationContent = ({
               citations: [
                 {
                   citationStatus: "verified",
-                  blockId: deriveBlockId({
-                    paraId: null,
-                    index: citationSeed.blockIndex,
-                    taken: new Set(),
-                  }),
+                  blockId: exportReviewCitationBlockId(citationSeed),
                   text: citationSeed.quote,
                 },
               ],
@@ -4141,7 +3595,7 @@ const buildExportReviewJustifications = (
   for (let i = 0; i < docs.length; i++) {
     const fileName = at(EXPORT_REVIEW_DOC_NAMES, i);
     const metadata = buildExportReviewMetadata(i);
-    const fileFieldId = seedId<"field">(`${wsLabel}-field-file-${i}`);
+    const { fileFieldId } = exportReviewDocumentIds(i);
     const seeds = buildExportReviewCitationSeeds(metadata);
 
     for (const citationSeed of seeds) {
@@ -5336,7 +4790,7 @@ export const seedPlaybooks = async (
                         right: { type: "literal", value: 30 },
                       },
                     ],
-                  },
+                  } satisfies ConditionNode,
                 },
                 guidance: "Splatnost nad 30 dnů zhoršuje cash flow.",
                 enabled: true,
@@ -5484,6 +4938,60 @@ export async function seed(organizationId?: string, userId?: string) {
     resolvedSeedUserIds = [USER_ID, ...colleagueUserIds];
   };
 
+  /**
+   * Delete every chat file stored in threads of these workspaces: generated
+   * views and anything a developer uploaded since the last seed. Objects (and
+   * image thumbnails) go first, as the thread delete handler does, so no row
+   * removal leaves an unreachable object behind.
+   */
+  const deleteThreadUserFiles = async (
+    workspaceIds: readonly WorkspaceId[],
+  ) => {
+    const files = await withAggregateTransaction(
+      db,
+      async (tx) =>
+        await tx
+          .select({
+            id: userFiles.id,
+            s3Key: userFiles.s3Key,
+            thumbnailFileId: userFiles.thumbnailFileId,
+            userId: userFiles.userId,
+          })
+          .from(userFiles)
+          .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))
+          .where(inArray(chatThreads.workspaceId, [...workspaceIds])),
+    );
+    for (const page of chunkItems(files, SEED_INSERT_CHUNK_SIZE)) {
+      const deleted = await deleteS3Keys(
+        page.flatMap((file) =>
+          file.thumbnailFileId === null
+            ? [file.s3Key]
+            : [
+                file.s3Key,
+                createUserFileKey({
+                  fileId: file.thumbnailFileId,
+                  mimeType: THUMBNAIL_MIME_TYPE,
+                  userId: brandPersistedUserId(file.userId),
+                }),
+              ],
+        ),
+      );
+      if (deleted.isErr()) {
+        panic("Could not delete seeded chat files from storage", deleted.error);
+      }
+      await withAggregateTransaction(
+        db,
+        async (tx) =>
+          await tx.delete(userFiles).where(
+            inArray(
+              userFiles.id,
+              page.map(({ id }) => id),
+            ),
+          ),
+      );
+    }
+  };
+
   const clearSeedData = async () => {
     const allSeedContactIds = [
       ...orgContacts,
@@ -5506,6 +5014,9 @@ export async function seed(organizationId?: string, userId?: string) {
             .delete(chatMessages)
             .where(sql`${chatMessages.workspaceId} IN ${allSeedWorkspaceIds}`),
       );
+      // user_files.thread_id uses ON DELETE RESTRICT: a thread's files
+      // must go before the thread, stored objects first.
+      await deleteThreadUserFiles(allSeedWorkspaceIds);
       await db.transaction(
         async (tx) =>
           await tx
@@ -5560,6 +5071,9 @@ export async function seed(organizationId?: string, userId?: string) {
             .delete(chatMessages)
             .where(sql`${chatMessages.workspaceId} IN ${clientWorkspaceIds}`),
       );
+      // user_files.thread_id uses ON DELETE RESTRICT: a thread's files
+      // must go before the thread, stored objects first.
+      await deleteThreadUserFiles(clientWorkspaceIds);
       await db.transaction(
         async (tx) =>
           await tx
@@ -5770,91 +5284,33 @@ export async function seed(organizationId?: string, userId?: string) {
   );
 
   const marketingAgentWorkspace = at(seedWorkspaces, 8);
-  const marketingAgentThreadId = seedId("marketing-agent-thread");
-  const marketingAgentCreatedAt = new Date("2026-07-16T09:30:00.000Z");
-  await db.transaction(
-    async (tx) =>
-      await tx.insert(chatThreads).values({
-        id: marketingAgentThreadId,
-        organizationId: ORG_ID,
-        userId: USER_ID,
-        workspaceId: marketingAgentWorkspace.id,
-        title: MARKETING_AGENT_THREAD_TITLE,
-        createdAt: marketingAgentCreatedAt,
-        updatedAt: marketingAgentCreatedAt,
-      }),
+  if (at(WS_LABELS, 8) !== EXPORT_TABLE_MATTER_LABEL) {
+    panic("The marketing agent thread must live in the Export Review matter");
+  }
+  const marketingAgent = buildMarketingAgentThread({
+    createdAt: new Date("2026-07-16T09:30:00.000Z"),
+    organizationId: ORG_ID,
+    userId: USER_ID,
+    workspaceId: marketingAgentWorkspace.id,
+  });
+  // The generated view's page is stored like a `show_visual` call stores it:
+  // JSON text in the user's chat-file space, read back through
+  // /v1/user-files/:fileId/visual.
+  await writeS3ObjectWithRetry(
+    {
+      data: marketingAgent.visualFile.bytes,
+      key: marketingAgent.visualFile.row.s3Key,
+    },
+    { type: "fixture" },
   );
-  await db.transaction(
-    async (tx) =>
-      await tx.insert(chatMessages).values([
-        {
-          id: seedId("marketing-agent-message-user"),
-          threadId: marketingAgentThreadId,
-          workspaceId: marketingAgentWorkspace.id,
-          userId: USER_ID,
-          role: "user",
-          content: {
-            version: 1,
-            data: [
-              {
-                type: "text",
-                text: "Compare the change-of-control clauses across this matter.",
-              },
-            ],
-          },
-          createdAt: marketingAgentCreatedAt,
-        },
-        {
-          id: seedId("marketing-agent-message-assistant"),
-          threadId: marketingAgentThreadId,
-          workspaceId: marketingAgentWorkspace.id,
-          userId: USER_ID,
-          role: "assistant",
-          content: {
-            version: 1,
-            data: [
-              {
-                type: "text",
-                text: "Across the cited agreements, assignment or a material service change requires written notice. The higher-risk agreements also require consent or termination review before signing.",
-              },
-              {
-                type: "data-stella-source-document",
-                data: {
-                  entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-1`),
-                  kind: "document",
-                  mimeType:
-                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                  title: at(EXPORT_REVIEW_DOC_NAMES, 0),
-                  workspaceId: marketingAgentWorkspace.id,
-                },
-              },
-              {
-                type: "data-stella-source-document",
-                data: {
-                  entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-5`),
-                  kind: "document",
-                  mimeType: "application/pdf",
-                  title: at(EXPORT_REVIEW_DOC_NAMES, 4),
-                  workspaceId: marketingAgentWorkspace.id,
-                },
-              },
-              {
-                type: "data-stella-source-document",
-                data: {
-                  entityId: seedId(`${EXPORT_TABLE_MATTER_LABEL}-doc-9`),
-                  kind: "document",
-                  mimeType: "application/pdf",
-                  title: at(EXPORT_REVIEW_DOC_NAMES, 8),
-                  workspaceId: marketingAgentWorkspace.id,
-                },
-              },
-            ],
-          },
-          createdAt: new Date(marketingAgentCreatedAt.getTime() + 2500),
-        },
-      ]),
+  await withAggregateTransaction(db, async (tx) => {
+    await tx.insert(chatThreads).values(marketingAgent.thread);
+    await tx.insert(chatMessages).values(marketingAgent.messages);
+    await tx.insert(userFiles).values(marketingAgent.visualFile.row);
+  });
+  console.log(
+    `  Marketing agent story: 1 thread, ${String(marketingAgent.messages.length)} messages, 1 generated view`,
   );
-  console.log("  Marketing agent story: 1 thread, 2 messages");
 
   // 2c. Workspace members — add all seed users to every workspace
   const allWsIds = [
@@ -6014,7 +5470,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
 
   // Chunks keep input order, so a folder lands before the documents in it.
-  for (const chunk of chunked(entityRows, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(entityRows, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -6031,7 +5487,7 @@ export async function seed(organizationId?: string, userId?: string) {
           }),
     );
   }
-  for (const chunk of chunked(plainVersionRows, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(plainVersionRows, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx.insert(entityVersions).values(chunk).onConflictDoNothing(),
@@ -6073,7 +5529,7 @@ export async function seed(organizationId?: string, userId?: string) {
   }
 
   // Link currentVersionId
-  for (const chunk of chunked(allEntities, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(allEntities, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -6156,7 +5612,7 @@ export async function seed(organizationId?: string, userId?: string) {
           case "email":
             return createSeedEmail(format.fileName);
           case "pdf":
-            return createMockPdf(title, configuredDocText);
+            return createTextPdf(title, configuredDocText);
           default: {
             format satisfies never;
             return panic(`Unsupported seed file format for ${fileName}`);
@@ -6176,9 +5632,7 @@ export async function seed(organizationId?: string, userId?: string) {
         docText = parsedEmailToText(parsedResult.value);
       }
 
-      const sha256Hex = new Bun.CryptoHasher("sha256")
-        .update(content)
-        .digest("hex");
+      const { sha256Hex, sizeBytes } = seedFileIdentity(content);
 
       const fileId = seedId(`${wsLabel}-file-${j}`);
       const s3Key = `${ORG_ID}/${wsId}/${fileId}.${format.extension}`;
@@ -6199,7 +5653,7 @@ export async function seed(organizationId?: string, userId?: string) {
         id: fileId,
         fileName,
         mimeType: format.mimeType,
-        sizeBytes: content.length,
+        sizeBytes,
         encrypted: false,
         sha256Hex,
         pdfFileId,
@@ -6230,6 +5684,7 @@ export async function seed(organizationId?: string, userId?: string) {
           `${wsLabel}-supplier-agreement-base-file`,
         );
         const baseContent = await createSupplierAgreementDocx("reject");
+        const baseIdentity = seedFileIdentity(baseContent);
         await writeS3ObjectWithRetry(
           {
             data: new Uint8Array(baseContent),
@@ -6243,11 +5698,9 @@ export async function seed(organizationId?: string, userId?: string) {
           id: baseFileId,
           fileName: "Supplier_Agreement_v3.docx",
           mimeType: DOCX_MIME,
-          sizeBytes: baseContent.byteLength,
+          sizeBytes: baseIdentity.sizeBytes,
           encrypted: false,
-          sha256Hex: new Bun.CryptoHasher("sha256")
-            .update(baseContent)
-            .digest("hex"),
+          sha256Hex: baseIdentity.sha256Hex,
           pdfFileId: null,
         } as const satisfies FieldContent;
         await db.transaction(
@@ -6370,7 +5823,7 @@ export async function seed(organizationId?: string, userId?: string) {
     const wsEntities = allEntities.filter((e) => e.workspaceId === plan.wsId);
     allFields.push(...buildFields(plan.wsLabel, wsEntities));
   }
-  for (const chunk of chunked(allFields, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(allFields, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -6396,7 +5849,7 @@ export async function seed(organizationId?: string, userId?: string) {
       ...buildExportReviewJustifications(plan.wsId, plan.wsLabel, wsEntities),
     );
   }
-  for (const chunk of chunked(allJustifications, SEED_INSERT_CHUNK_SIZE)) {
+  for (const chunk of chunkItems(allJustifications, SEED_INSERT_CHUNK_SIZE)) {
     await db.transaction(
       async (tx) =>
         await tx
@@ -6672,13 +6125,17 @@ export async function seed(organizationId?: string, userId?: string) {
   try {
     await seedCaseLaw();
   } catch (error) {
-    console.warn(
-      "  Case-law seed skipped (non-fatal — likely local schema drift):",
-      error instanceof Error ? error.message : error,
-    );
+    logErrorOutput({
+      level: "warn",
+      values: [
+        "  Case-law seed skipped (non-fatal — likely local schema drift):",
+        error,
+      ],
+    });
   }
 
   console.log("\nDone. Dev data seeded successfully.");
+  return { organizationId: ORG_ID, userId: USER_ID, workspaceIds: allWsIds };
 }
 
 // Allow running as a CLI script
@@ -6783,7 +6240,7 @@ if (import.meta.main) {
       `Resolved seed target ${target.organizationId} for user ${target.userId} (${target.label}); restarting with org-scoped IDs`,
     );
     const child = Bun.spawn({
-      cmd: [process.execPath, import.meta.path],
+      cmd: [process.execPath, import.meta.path, ...process.argv.slice(2)],
       env: {
         ...process.env,
         STELLA_SEED_ID_NAMESPACE: `org:${target.organizationId}`,
@@ -6802,9 +6259,61 @@ if (import.meta.main) {
   );
 
   seed(target.organizationId, target.userId)
-    .then(() => process.exit(0))
+    .then(async ({ organizationId, userId, workspaceIds }) => {
+      if (process.argv.includes("--seed-recents")) {
+        const seededFiles = await withAggregateTransaction(
+          db,
+          async (tx) =>
+            await tx
+              .select({
+                entityId: entities.id,
+                workspaceId: workspaces.id,
+                workspaceName: workspaces.name,
+                title: entities.name,
+                fileFieldId: fields.id,
+                filePropertyId: fields.propertyId,
+                content: fields.content,
+                openedAt: entities.createdAt,
+              })
+              .from(fields)
+              .innerJoin(
+                entityVersions,
+                eq(fields.entityVersionId, entityVersions.id),
+              )
+              .innerJoin(
+                entities,
+                eq(entities.currentVersionId, entityVersions.id),
+              )
+              .innerJoin(workspaces, eq(entities.workspaceId, workspaces.id))
+              .where(
+                and(
+                  eq(workspaces.organizationId, organizationId),
+                  inArray(workspaces.id, workspaceIds),
+                ),
+              ),
+        );
+        writeSeedRecentFiles({
+          path: `${import.meta.dir}/../../../.playwright/storage-state.json`,
+          origin: new URL(env.FRONTEND_URL).origin,
+          organizationId,
+          userId,
+          files: seededFiles.flatMap(({ content, openedAt, ...file }) =>
+            content.type === "file"
+              ? [
+                  {
+                    ...file,
+                    mimeType: content.mimeType,
+                    openedAt: openedAt.toISOString(),
+                  },
+                ]
+              : [],
+          ),
+        });
+      }
+      process.exit(0);
+    })
     .catch((error: unknown) => {
-      console.error("Seed failed:", error);
+      printError("Seed failed:", error);
       process.exit(1);
     });
 }

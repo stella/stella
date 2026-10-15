@@ -34,7 +34,7 @@ type ZoomableDocxEditor = {
   setZoom: (zoom: number) => void;
 };
 
-export const clampDocxZoom = (zoom: number) =>
+const clampDocxZoom = (zoom: number) =>
   Math.max(DOCX_MIN_ZOOM, Math.min(DOCX_MAX_ZOOM, zoom));
 
 type DocxFitZoomResult = {

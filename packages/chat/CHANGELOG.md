@@ -1,5 +1,34 @@
 # @stll/chat
 
+## 0.1.40
+
+### Patch Changes
+
+- [#5234](https://github.com/stella/stella/pull/5234) [`5bd0e3c`](https://github.com/stella/stella/commit/5bd0e3c14fea538dbf3ed6950df74c033961cb50) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a server-backed durable chat transport that restores interrupted turns and rejoins delivery after reload or a dropped connection.
+
+- [#5256](https://github.com/stella/stella/pull/5256) [`7e9ceef`](https://github.com/stella/stella/commit/7e9ceef9fa95a68d6ffb08525b9dfe5af0c58b87) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update the TanStack AI client dependency to support activity events and preserve chat state across streamed snapshots.
+
+- [#5693](https://github.com/stella/stella/pull/5693) [`fec0951`](https://github.com/stella/stella/commit/fec0951abe78c4e626739c8323267b12d0a8e5cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update runtime dependencies.
+- Updated dependencies [[`37ddc2b`](https://github.com/stella/stella/commit/37ddc2b337d710c8611eb70c35f0450a25213adf), [`65edbfb`](https://github.com/stella/stella/commit/65edbfb9c7100778054b2db7e285385978483564), [`9da3cbb`](https://github.com/stella/stella/commit/9da3cbb84db47b67b93fcd3b6f327ba3eb739baf), [`c7f973a`](https://github.com/stella/stella/commit/c7f973adced14ab6250f4a0edfa553303998bc27), [`3000990`](https://github.com/stella/stella/commit/3000990a7130ed52723e5fb1b4ece25bf5f42427), [`15e1b82`](https://github.com/stella/stella/commit/15e1b82218dd6447eaba4df106f7d3585e9b6775), [`a8c77be`](https://github.com/stella/stella/commit/a8c77be4ed683ad5d91d843220ddd1eb51486370), [`ebfe05e`](https://github.com/stella/stella/commit/ebfe05e6b528df99966f4a8e3ac1bec9be1eb778), [`553416d`](https://github.com/stella/stella/commit/553416dfc37ca3bcb5ba637fe8e78f8c829c470c), [`4e86d4d`](https://github.com/stella/stella/commit/4e86d4deb48c5f0d9a2bcb6e454afdd34e78a788), [`70a05b2`](https://github.com/stella/stella/commit/70a05b2dabd5bc7bb2422b2d0ae21e1c718c6974), [`fb4de95`](https://github.com/stella/stella/commit/fb4de9573ae022e1c006c81fff9022aa97e45ec1), [`0c55af7`](https://github.com/stella/stella/commit/0c55af71de6f04e11217bad1706b149736a8639b), [`f01d3ab`](https://github.com/stella/stella/commit/f01d3ab91b22613acfd563e5df9ffa6129b19bd5)]:
+  - @stll/ai-catalog@0.7.0
+  - @stll/ui@0.45.0
+
+## 0.1.39
+
+### Patch Changes
+
+- Updated dependencies [[`2718337`](https://github.com/stella/stella/commit/2718337304469b3c4e0d0304a15b9864c70a2aa9), [`3e73ddb`](https://github.com/stella/stella/commit/3e73ddbb5df64c5d5edb3466e613eed180642b35), [`4e74282`](https://github.com/stella/stella/commit/4e74282ce2ffe431108dfa4af8ce52a03db2499d), [`9625362`](https://github.com/stella/stella/commit/962536216f2060e5854a82fcbc4cec1ac5abd7de), [`f5e1e2b`](https://github.com/stella/stella/commit/f5e1e2bf6a143f0556647d5ac6f5a5f71c1f931a), [`84d35ae`](https://github.com/stella/stella/commit/84d35ae3c652403524ea11ebba22e40d8949c929)]:
+  - @stll/ui@0.44.0
+  - @stll/ai-catalog@0.6.1
+
+## 0.1.38
+
+### Patch Changes
+
+- Updated dependencies [[`83b4487`](https://github.com/stella/stella/commit/83b44876fe05b865329a622176ee8fd8fc51a4d8), [`e571295`](https://github.com/stella/stella/commit/e57129541729f01b92c5c64fbb2e3451507a4e7a), [`684f296`](https://github.com/stella/stella/commit/684f2963fdfab360198780bfcc0b188c5692b913), [`78d2827`](https://github.com/stella/stella/commit/78d28278c6ab3b03a70afe426893a357a453b724), [`ef2de9c`](https://github.com/stella/stella/commit/ef2de9c14bdc4f7f2fd248a46df18dabac55b73c), [`bf6a6a3`](https://github.com/stella/stella/commit/bf6a6a3e2f27df61169ddaabf85d3392dde5d222), [`598f3c4`](https://github.com/stella/stella/commit/598f3c44be0666ebca901a214e4fbf5bed547d3d), [`7bb8e47`](https://github.com/stella/stella/commit/7bb8e47bc85fad689ff939399eb5f553e65b1f54), [`b982f7f`](https://github.com/stella/stella/commit/b982f7fbbc86741e6d9df68a7da46bfaa5be669e)]:
+  - @stll/ui@0.43.0
+  - @stll/ai-catalog@0.6.0
+
 ## 0.1.37
 
 ### Patch Changes

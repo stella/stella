@@ -17,7 +17,7 @@ import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { createCountryOptions, removeJurisdiction } from "@/lib/jurisdictions";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 
-export const MAX_SELECTED_JURISDICTIONS = 12;
+const MAX_SELECTED_JURISDICTIONS = 12;
 
 const NO_SUGGESTED_COUNTRY_CODES: readonly CountryCode[] = [];
 

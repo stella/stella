@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 11,
+  "reason": "The review organization seed and reset run in the scheduler and reuse the shared create/delete functions that routes and MCP tools call, so sample data obeys the same invariants and audit as real writes; moving those functions into lib is a separate refactor."
+}

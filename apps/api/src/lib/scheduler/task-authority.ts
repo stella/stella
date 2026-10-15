@@ -113,6 +113,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "case-law-sitemap-shard-refresh.ts",
     "Public legal corpus sitemap.",
   ),
+  "caseLaw.refreshSourceArrivals": platform(
+    "case-law-source-arrivals-refresh.ts",
+    "Public legal corpus aggregates.",
+  ),
   "chat.compactThreads": {
     authority: "member-run",
     module: `${TASKS}/chat-thread-compactor.ts`,
@@ -126,6 +130,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "chat.reapOwnerlessTurns": platform(
     "chat-turn-reaper.ts",
     "Ends chat turns whose lease expired; reads no content.",
+  ),
+  "chat.purgeSecrets": platform(
+    "chat-secret-retention.ts",
+    "Clears expired encrypted chat payloads while retaining request receipts.",
   ),
   "chat.sweepRunLogs": platform(
     "chat-run-log-retention.ts",
@@ -193,6 +201,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
     "legislation-expression-id-backfill.ts",
     "Public legal corpus maintenance.",
   ),
+  "legislation.refreshFacetCounts": platform(
+    "legislation-facet-refresh.ts",
+    "Public legal corpus aggregates.",
+  ),
   "legislation.refreshSitemapShards": platform(
     "statute-sitemap-shard-refresh.ts",
     "Public legal corpus sitemap.",
@@ -218,6 +230,10 @@ export const SCHEDULER_TASK_AUTHORITY = {
   "organizations.recordMissingAccessStates": platform(
     "organization-access-state-reconcile.ts",
     "Records organization access state.",
+  ),
+  "reviewOrganization.reset": platform(
+    "review-organization-reset.ts",
+    "Resets the configured restricted review organization; each run first proves its only member is the configured review account.",
   ),
   "reportExports.reconcileQueued": platform(
     "report-export-reconcile.ts",

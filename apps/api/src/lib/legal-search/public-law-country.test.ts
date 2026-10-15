@@ -48,6 +48,7 @@ const constructedRefusal: PublicCountryUnavailable = {
 
 const refusing = createSafeBoundedPublicHandler(
   {
+    contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
     mcp: { type: "internal", reason: "health_infra" },
     cache: { kind: "none" },
@@ -71,8 +72,8 @@ const buildApp = () =>
     })
     .onError((context) => answerRequestError(context))
     .onAfterHandle(async (context) => await completeRequest(context))
-    .use(publicLegislationRoute)
-    .get("/refusing", refusing.handler, refusing.config);
+    .group("/v1", (app) => app.use(publicLegislationRoute))
+    .get("/v1/contacts/search", refusing.handler, refusing.config);
 
 describe("typed public country unavailability through the request lifecycle", () => {
   let logs: RecordingLogger;
@@ -105,7 +106,7 @@ describe("typed public country unavailability through the request lifecycle", ()
 
   test("an owner-built refusal answers its status and is not a server fault", async () => {
     const response = await buildApp().handle(
-      new Request("http://localhost/refusing"),
+      new Request("http://localhost/v1/contacts/search"),
     );
 
     expect(response.status).toBe(PUBLIC_COUNTRY_UNAVAILABLE_STATUS);
@@ -119,7 +120,7 @@ describe("typed public country unavailability through the request lifecycle", ()
       const country = pendingCountry ?? panic("No pending public country");
       const response = await buildApp().handle(
         new Request(
-          `http://localhost/law/statutes/search?country=${country}&query=synthetic`,
+          `http://localhost/v1/law/statutes/search?country=${country}&query=synthetic`,
         ),
       );
 

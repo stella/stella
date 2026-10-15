@@ -15,7 +15,16 @@ import { assertProperty } from "@stll/property-testing";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { desktopPresence } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -57,13 +66,24 @@ afterAll(async () => {
 
 test("authenticated reports converge on one row and use the server clock", async () => {
   const { testDb, ids } = fixture;
+  const device = await createDesktopDeviceSigner();
   const endpoint = createDesktopPresenceReportEndpoint({
-    authorizeAccount: async () =>
+    authorizeAccount: async (request) =>
       Result.ok({
+        consumedProof: await claimFixtureDeviceProof({
+          request: await device.signRequest({
+            request,
+            credential: "fixture-credential",
+          }),
+          deviceJkt: device.deviceJkt,
+          keyId: "test-only",
+          credential: "fixture-credential",
+        }),
         scopedDb,
         userId: ids.userA1,
         organizationId: ids.orgA,
         keyId: "test-only",
+        memberRole: sessionMemberRole("member"),
       }),
   });
   const app = new Elysia().post("/v1/desktop/presence", endpoint.handler, {
@@ -159,6 +179,8 @@ test("the signed-in read returns only the fixed presence projection", async () =
   });
   const reply = await readEndpoint.handler(
     createTestHandlerContext<Parameters<typeof readEndpoint.handler>[0]>({
+      audit: NO_AUDIT,
+      safeDb: NO_DB,
       scopedDb,
       user: { id: ids.userA1 },
       session: { activeOrganizationId: ids.orgA },

@@ -8,6 +8,8 @@ import { useTranslations } from "use-intl";
 import { compareByLocale } from "@stll/collation";
 import { COMPOSER_PICKER_TRIGGER_CLASS } from "@stll/ui/composer";
 import { ChevronDownIcon, ExternalLinkIcon, SearchIcon } from "@stll/ui/icons";
+import { resolveMatterColor } from "@stll/ui/matter-colors";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import {
   Menu,
   MenuCheckboxItem,
@@ -19,11 +21,10 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
-import { MatterIcon } from "@/components/matter-icon";
+import { COMPOSER_LIST_VIEWPORT_CLASS_NAME } from "@/components/chat/composer-submenu-search";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { useQueryView } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
@@ -216,9 +217,14 @@ export const ChatMatterPicker = ({
   // Cache hit thanks to chat-mention-providers and the app sidebar
   // — the navigation list is already in flight on any workspace
   // page.
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const workspacesView = useQueryView(
-    useQuery(workspacesNavigationOptions(activeOrganizationId)),
+    useQuery(
+      workspacesNavigationOptions({
+        organizationId: activeOrganizationId,
+        userId,
+      }),
+    ),
   );
   const workspaces =
     workspacesView.type === "items"
@@ -406,12 +412,19 @@ export const ChatMatterPicker = ({
           />
         )}
       </MenuTrigger>
-      <MenuPopup align="start" className="w-72" sideOffset={6}>
-        <MatterPickerSearch
-          search={search}
-          onChange={setSearch}
-          searchRef={searchRef}
-        />
+      <MenuPopup
+        align="start"
+        className="w-72"
+        header={
+          <MatterPickerSearch
+            search={search}
+            onChange={setSearch}
+            searchRef={searchRef}
+          />
+        }
+        sideOffset={6}
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+      >
         <div className="flex flex-col py-1">
           <QueryViewFeedback view={workspacesView} />
           {/* "All matters" sits above the per-matter rows so users

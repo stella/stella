@@ -9,7 +9,6 @@ import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
-  beforeAll,
   beforeEach,
   describe,
   expect,
@@ -26,6 +25,7 @@ import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   organizationSettings,
+  usagePolicies,
 } from "@/api/db/schema";
 import { createMembershipScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -36,11 +36,18 @@ import {
   loadOrgSettingsForAuth,
 } from "@/api/lib/ai-config-loader";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { admitModelDispatch } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { MANAGED_MODEL_TIER } from "@/api/lib/usage/managed-model-tier";
+import {
+  FREE_TIER_OFF,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
 import {
   allowsInstanceModels,
   endOrganizationEvaluation,
+  readManagedModelTier,
   recordMissingOrganizationAccessStatesWhileUnenforced,
   recordNewOrganizationAccessState,
 } from "@/api/lib/usage/organization-access-state";
@@ -49,6 +56,7 @@ import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -60,6 +68,7 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // Arbitrary fixture value; the length is deployment configuration.
 const PERIOD_DAYS = 3;
+const testState = createTestState({ file: import.meta.path, config: env });
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -141,30 +150,35 @@ const readState = async (organizationId: SafeId<"organization">) =>
 
 test("action admission reads access state only through its authorized organization scope", async () => {
   expect(
-    await readOrganizationActionState(requestScope(ids.orgA), ids.orgA),
+    (await readOrganizationActionState(requestScope(ids.orgA), ids.orgA))
+      .snapshot,
   ).toEqual({
     state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
     evaluationEndsAt: null,
   });
   expect(
-    await readOrganizationActionState(
-      requestScope(evaluatingOrgId),
-      evaluatingOrgId,
-    ),
+    (
+      await readOrganizationActionState(
+        requestScope(evaluatingOrgId),
+        evaluatingOrgId,
+      )
+    ).snapshot,
   ).toMatchObject({
     state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
   });
   // This user belongs to both organizations; the supplied request scope still
   // prevents either organization's admission reader from selecting the other.
   expect(
-    await readOrganizationActionState(requestScope(ids.orgA), evaluatingOrgId),
+    (await readOrganizationActionState(requestScope(ids.orgA), evaluatingOrgId))
+      .snapshot,
   ).toBeUndefined();
   expect(
-    await readOrganizationActionState(requestScope(evaluatingOrgId), ids.orgA),
+    (await readOrganizationActionState(requestScope(evaluatingOrgId), ids.orgA))
+      .snapshot,
   ).toBeUndefined();
 });
 
-beforeAll(async () => {
+testState.beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
@@ -397,10 +411,16 @@ describe("the stored shape", () => {
       evaluationEndsAt,
     };
 
-    expect(
-      allowsInstanceModels(row, new Date(evaluationEndsAt.getTime() - 1)),
-    ).toBe(true);
-    expect(allowsInstanceModels(row, evaluationEndsAt)).toBe(false);
+    const allowsAt = (now: Date) =>
+      allowsInstanceModels(
+        resolveOrganizationAccess({
+          snapshot: row,
+          now,
+          freeTier: FREE_TIER_OFF,
+        }),
+      );
+    expect(allowsAt(new Date(evaluationEndsAt.getTime() - 1))).toBe(true);
+    expect(allowsAt(evaluationEndsAt)).toBe(false);
   });
 
   test("a member reads only its own organization's state", async () => {
@@ -412,6 +432,64 @@ describe("the stored shape", () => {
     );
 
     expect(rows).toEqual([{ organizationId: selfManagedOrgId }]);
+  });
+});
+
+describe("managed model tier", () => {
+  const freePolicyKey = `free_${Bun.randomUUIDv7()}`;
+
+  testState.beforeAll(async () => {
+    await testDb.insert(usagePolicies).values({
+      id: createSafeId<"usagePolicy">(),
+      policyKey: freePolicyKey,
+      displayName: "Free fixture",
+      kind: "free",
+      monthlyUsageUnits: 0,
+      maxMembers: 1,
+      storageBytesPerAssignment: 1_073_741_824n,
+      serviceActionsPerPeriod: 3,
+    });
+  });
+
+  afterAll(async () => {
+    await testDb
+      .delete(usagePolicies)
+      .where(eq(usagePolicies.policyKey, freePolicyKey));
+  });
+
+  const tierOf = async (organizationId: SafeId<"organization">) =>
+    await readManagedModelTier(requestScope(organizationId), organizationId);
+
+  test("the free floor resolves the fast tier through the organization's own scope", async () => {
+    testState.setConfig("FEATURE_FREE_TIER", true);
+    await withAccessStateEnforced(async () => {
+      // The lapsed evaluation stands on the free floor.
+      expect(await tierOf(expiredOrgId)).toBe(MANAGED_MODEL_TIER.fast);
+      expect(await tierOf(evaluatingOrgId)).toBe(MANAGED_MODEL_TIER.standard);
+      expect(await tierOf(selfManagedOrgId)).toBe(MANAGED_MODEL_TIER.standard);
+      // A minted proof carries the tier admission read for its organization.
+      const modelTier = await admitModelDispatch({
+        organizationId: expiredOrgId,
+        actionKind: "chat.send",
+        organizationStateDb: requestScope(expiredOrgId),
+        signal: new AbortController().signal,
+        run: async (admission) => await Promise.resolve(admission.modelTier),
+      });
+      expect(modelTier).toBe(MANAGED_MODEL_TIER.fast);
+    });
+  });
+
+  test("without the free tier every organization is standard", async () => {
+    testState.setConfig("FEATURE_FREE_TIER", false);
+    await withAccessStateEnforced(async () => {
+      for (const organizationId of [
+        expiredOrgId,
+        evaluatingOrgId,
+        selfManagedOrgId,
+      ]) {
+        expect(await tierOf(organizationId)).toBe(MANAGED_MODEL_TIER.standard);
+      }
+    });
   });
 });
 

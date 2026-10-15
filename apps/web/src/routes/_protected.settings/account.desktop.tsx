@@ -35,7 +35,7 @@ function DesktopPage() {
 
   const handleConnectDesktop = async () => {
     const outcome = await connect();
-    if (outcome.status === "started") {
+    if (outcome.status === "started" || outcome.status === "update-required") {
       return;
     }
     if (outcome.status === "connected") {

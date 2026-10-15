@@ -34,6 +34,7 @@ const credentialRegistrySchema = t.UnionEnum(
 
 export const readBusinessRegistryCredentials = createSafeRootHandler(
   {
+    contract: "patch",
     permissions: { workspace: ["read"] },
     accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
@@ -69,8 +70,9 @@ const CREDENTIAL_PROBE_QUERIES = {
 
 export const saveBusinessRegistryCredential = createSafeRootHandler(
   {
+    contract: "patch",
     permissions: { organizationSettings: ["update"] },
-    accountAccess: ACCOUNT_ACCESS.standard,
+    accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "provider_secret" },
     body: t.Object(
       {
@@ -157,8 +159,9 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
 
 export const deleteBusinessRegistryCredential = createSafeRootHandler(
   {
+    contract: "patch",
     permissions: { organizationSettings: ["update"] },
-    accountAccess: ACCOUNT_ACCESS.standard,
+    accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "provider_secret" },
     query: t.Object({ registry: credentialRegistrySchema }),
   },

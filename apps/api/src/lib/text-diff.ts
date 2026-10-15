@@ -11,7 +11,7 @@
 
 import { diffArrays, diffWordsWithSpace } from "diff";
 
-export type VersionDiffRun = {
+type VersionDiffRun = {
   kind: "same" | "del" | "ins";
   text: string;
 };

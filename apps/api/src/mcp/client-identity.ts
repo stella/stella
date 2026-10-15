@@ -1,3 +1,10 @@
+import * as v from "valibot";
+
+import {
+  MCP_APP_EXTENSION_ID,
+  MCP_APP_RESOURCE_MIME_TYPE,
+} from "@stll/api-contract";
+
 import { getServerAnalytics } from "@/api/lib/analytics/client";
 import type { McpSessionInitializedProperties } from "@/api/lib/analytics/server-analytics";
 import { SERVER_ANALYTICS_EVENTS } from "@/api/lib/analytics/server-analytics";
@@ -49,8 +56,33 @@ export const sanitizeMcpClientIdentity = (
   };
 };
 
+const mcpUiCapabilitiesSchema = v.object({
+  extensions: v.optional(
+    v.object({
+      [MCP_APP_EXTENSION_ID]: v.optional(
+        v.object({
+          mimeTypes: v.optional(v.array(v.string())),
+        }),
+      ),
+    }),
+  ),
+});
+
+/** Handshake payloads may only contribute the MIME types Stella serves. */
+export const sanitizeMcpUiCapabilities = (capabilities: unknown) => {
+  const parsed = v.safeParse(mcpUiCapabilitiesSchema, capabilities);
+  const mimeTypes = parsed.success
+    ? parsed.output.extensions?.[MCP_APP_EXTENSION_ID]?.mimeTypes
+    : undefined;
+  const uiAppsMimeTypes = mimeTypes?.includes(MCP_APP_RESOURCE_MIME_TYPE)
+    ? [MCP_APP_RESOURCE_MIME_TYPE]
+    : [];
+  return { uiAppsSupported: uiAppsMimeTypes.length > 0, uiAppsMimeTypes };
+};
+
 export type RecordMcpSessionInitialized = (args: {
   clientInfo: unknown;
+  capabilities: unknown;
   mode: McpMode;
   session: McpSession;
 }) => void;
@@ -63,12 +95,17 @@ export type RecordMcpSessionInitialized = (args: {
  */
 export const recordMcpSessionInitialized: RecordMcpSessionInitialized = ({
   clientInfo,
+  capabilities,
   mode,
   session,
 }) => {
   const { clientName, clientVersion } = sanitizeMcpClientIdentity(clientInfo);
+  const { uiAppsSupported, uiAppsMimeTypes } =
+    sanitizeMcpUiCapabilities(capabilities);
   const properties: McpSessionInitializedProperties = {
     client_name: clientName,
+    ui_apps_supported: uiAppsSupported,
+    ui_apps_mime_types: uiAppsMimeTypes,
     ...(clientVersion === undefined ? {} : { client_version: clientVersion }),
     credential_type: session.credential?.type ?? UNSPECIFIED_CLIENT_FIELD,
     mode,

@@ -54,7 +54,7 @@ type Workflow = v.InferOutput<typeof workflowSchema>;
 const consumerIds = (source: Workflow) =>
   Object.keys(source.jobs).filter(
     (id) =>
-      id.startsWith("ci-checks-") ||
+      (id.startsWith("ci-checks-") && id !== "ci-checks-docs") ||
       id.startsWith("code-quality-") ||
       id === "typecheck-baseline",
   );
@@ -79,11 +79,16 @@ const assertHandoff = (source: Workflow) => {
     ({ name }) => name === "Upload generated sources",
   );
   expect(upload?.uses).toMatch(/^actions\/upload-artifact@[0-9a-f]{40}$/u);
+  expect(
+    upload?.with?.["include-hidden-files"],
+    "generated compiler configs must be uploaded",
+  ).toBe(true);
   expect(upload?.with).toEqual({
     name: `generated-sources-\${{ steps.generate.outputs.input_hash }}`,
     path: `\${{ runner.temp }}/generated-sources/`,
     "retention-days": 1,
     "if-no-files-found": "error",
+    "include-hidden-files": true,
   });
   const gate = source.jobs["ci-result"];
   expect(gate?.needs).toContain("ci-generated-sources");
@@ -95,7 +100,7 @@ const assertHandoff = (source: Workflow) => {
     JSON.parse(outcome?.env?.["JOB_SCOPES"] ?? ""),
   );
   expect(Object.hasOwn(scopes, "ci-generated-sources")).toBe(true);
-  expect(scopes["ci-generated-sources"]).toBeNull();
+  expect(scopes["ci-generated-sources"]).toBe("package_checks_required");
   const fast = v.parse(
     v.array(v.string()),
     JSON.parse(outcome?.env?.["FAST_REQUIRED"] ?? ""),
@@ -164,9 +169,167 @@ const assertHandoff = (source: Workflow) => {
   }
 };
 
+const assertRegenerationBoundary = (source: Workflow) => {
+  const job = source.jobs["ci-checks-generated"];
+  if (!job) {
+    panic("Missing regeneration guard leg");
+  }
+  const restored = job.steps.findIndex(
+    ({ name }) => name === "Restore generated sources",
+  );
+  const firstCheck = job.steps.findIndex(
+    ({ run }, index) => index > restored && /\bbun\s/u.test(run ?? ""),
+  );
+  const first = job.steps.at(firstCheck);
+  expect(first?.name, "verify before regeneration").toBe(
+    "CLI sharded registry and derived runtime guard",
+  );
+  const run = first?.run ?? "";
+  const verification = "bun scripts/ci-generated-sources.ts prepare";
+  const detach = "unset CI_GENERATED_SOURCES_MANIFEST";
+  const laterSteps = `echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"`;
+  const regeneration = "(cd packages/cli && bun run codegen)";
+  expect(run, "verify before regeneration").toStartWith(
+    `set -euo pipefail\n${verification}\n`,
+  );
+  expect(run.indexOf(detach), "detach current guard").toBeGreaterThan(
+    run.indexOf(verification),
+  );
+  expect(run.indexOf(laterSteps), "detach subsequent guards").toBeGreaterThan(
+    run.indexOf(detach),
+  );
+  expect(
+    run.indexOf(regeneration),
+    "verify before regeneration",
+  ).toBeGreaterThan(run.indexOf(laterSteps));
+  for (const step of job.steps.slice(firstCheck + 1)) {
+    expect(
+      step.env?.["CI_GENERATED_SOURCES_MANIFEST"],
+      `no reattached manifest: ${step.name}`,
+    ).toBeUndefined();
+  }
+  for (const id of consumerIds(source).filter(
+    (consumerId) => consumerId !== "ci-checks-generated",
+  )) {
+    for (const step of source.jobs[id]?.steps ?? []) {
+      expect(step.run ?? "", `strict consumer: ${id}`).not.toContain(detach);
+      expect(step.run ?? "", `strict consumer: ${id}`).not.toContain(
+        laterSteps,
+      );
+    }
+  }
+};
+
+test("regeneration validates its artifact before clearing both current and subsequent guard reuse", () => {
+  assertRegenerationBoundary(workflow);
+});
+
+test("missing or late verification and retained manifest reuse break the regeneration boundary", () => {
+  for (const mutation of [
+    "remove verification",
+    "late verification",
+    "current manifest",
+    "subsequent manifest",
+    "early check",
+    "reattach",
+  ] as const) {
+    const mutated = structuredClone(workflow);
+    const job = mutated.jobs["ci-checks-generated"];
+    const first = job?.steps.find(
+      ({ name }) => name === "CLI sharded registry and derived runtime guard",
+    );
+    if (!job || !first?.run) {
+      panic("Missing regeneration mutation fixture");
+    }
+    const verification = "bun scripts/ci-generated-sources.ts prepare\n";
+    switch (mutation) {
+      case "remove verification":
+        first.run = first.run.replace(verification, "");
+        break;
+      case "late verification":
+        first.run = `${first.run.replace(verification, "")}${verification}`;
+        break;
+      case "current manifest":
+        first.run = first.run.replace(
+          "unset CI_GENERATED_SOURCES_MANIFEST\n",
+          "",
+        );
+        break;
+      case "subsequent manifest":
+        first.run = first.run.replace(
+          `echo 'CI_GENERATED_SOURCES_MANIFEST=' >> "$GITHUB_ENV"\n`,
+          "",
+        );
+        break;
+      case "early check": {
+        const restoreIndex = job.steps.findIndex(
+          ({ name }) => name === "Restore generated sources",
+        );
+        job.steps.splice(restoreIndex + 1, 0, {
+          name: "New generator",
+          run: "bun --cwd packages/mcp-apps run build",
+        });
+        break;
+      }
+      case "reattach":
+        job.steps.push({
+          name: "New guard",
+          run: "bun check",
+          env: { CI_GENERATED_SOURCES_MANIFEST: manifest },
+        });
+        break;
+    }
+    expect(job).not.toEqual(workflow.jobs["ci-checks-generated"]);
+    expect(() => assertRegenerationBoundary(mutated), mutation).toThrow(
+      /verify before regeneration|detach current guard|detach subsequent guards|no reattached manifest/u,
+    );
+  }
+});
+
 test("every generated-source consumer restores the same-run artifact before checks", () => {
   expect(consumerIds(workflow).length).toBeGreaterThan(0);
   assertHandoff(workflow);
+});
+
+test("generated-source uploads include ignored compiler configs", () => {
+  for (const value of [undefined, false]) {
+    const mutated = structuredClone(workflow);
+    const upload = mutated.jobs["ci-generated-sources"]?.steps.find(
+      ({ name }) => name === "Upload generated sources",
+    );
+    if (!upload?.with) {
+      panic("Missing generated source upload fixture");
+    }
+    if (value === undefined) {
+      delete upload.with["include-hidden-files"];
+    } else {
+      upload.with["include-hidden-files"] = value;
+    }
+    expect(() => assertHandoff(mutated)).toThrow(
+      "generated compiler configs must be uploaded",
+    );
+  }
+});
+
+test("the documentation job consumes Markdown without generated-source hydration", () => {
+  const job = workflow.jobs["ci-checks-docs"];
+  expect(job?.needs).toBe("ci-plan");
+  expect(job?.["if"]).toContain(
+    "needs.ci-plan.outputs.docs_checks_required == 'true'",
+  );
+  expect(
+    job?.steps.filter(({ run }) => run?.includes("--run-markdown-checks")),
+  ).toHaveLength(1);
+  expect(
+    job?.steps.some(({ name }) => name === "Restore generated sources"),
+  ).toBe(false);
+  expect(consumerIds(workflow)).not.toContain("ci-checks-docs");
+  const mutated = structuredClone(workflow);
+  mutated.jobs["ci-checks-new"] = {
+    needs: "ci-plan",
+    steps: [{ name: "Check", run: "bun check" }],
+  };
+  expect(() => assertHandoff(mutated)).toThrow("ci-checks-new");
 });
 
 test("new consumers cannot omit generated-source hydration", () => {
@@ -295,6 +458,47 @@ const generationCommandViolations = (command: readonly string[]) => {
   if (binary !== "bun" || target === undefined) {
     return ["Expected Bun generator command"];
   }
+  if (target === "node_modules/turbo/bin/turbo") {
+    const filter = extra.at(0);
+    const packageName = filter?.match(/^--filter=(@stll\/([a-z-]+))$/u);
+    const workspace = packageName?.at(1);
+    const directory = packageName?.at(2);
+    if (
+      action !== "run" ||
+      script === undefined ||
+      extra.length !== 1 ||
+      workspace === undefined ||
+      directory === undefined ||
+      !existsSync(new URL(`../${target}`, import.meta.url))
+    ) {
+      return ["Expected rooted Turbo launcher and one explicit workspace task"];
+    }
+    const config = v.parse(
+      v.object({ tasks: v.record(v.string(), v.unknown()) }),
+      Bun.JSONC.parse(
+        readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+      ),
+    );
+    if (!Object.hasOwn(config.tasks, `${workspace}#${script}`)) {
+      return ["Turbo owner task does not exist"];
+    }
+    const manifestPath = ["apps", "packages"]
+      .map(
+        (scope) =>
+          new URL(`../${scope}/${directory}/package.json`, import.meta.url),
+      )
+      .find((filename) => existsSync(filename));
+    if (manifestPath === undefined) {
+      return ["Workspace package does not exist"];
+    }
+    const owner = v.parse(
+      v.object({ name: v.string(), scripts: v.record(v.string(), v.string()) }),
+      JSON.parse(readFileSync(manifestPath, "utf-8")),
+    );
+    return owner.name === workspace && Object.hasOwn(owner.scripts, script)
+      ? []
+      : ["Turbo owner package script does not exist"];
+  }
   if (!target.startsWith("--cwd=")) {
     return command.length === 2 &&
       existsSync(new URL(`../${target}`, import.meta.url))
@@ -324,6 +528,36 @@ const generationCommandViolations = (command: readonly string[]) => {
 test("every preparation command resolves a real generator file or package script", () => {
   for (const command of CI_GENERATION_COMMANDS) {
     expect(generationCommandViolations(command), command.join(" ")).toEqual([]);
+  }
+  for (const command of [
+    [
+      "bun",
+      "node_modules/turbo/bin/turbo",
+      "run",
+      "missing-task",
+      "--filter=@stll/web",
+    ],
+    ["bun", "node_modules/turbo/bin/turbo", "run", "generate:api-types"],
+    [
+      "bun",
+      "node_modules/turbo/bin/turbo",
+      "run",
+      "generate:api-types",
+      "--filter=@stll/missing",
+    ],
+    [
+      "bun",
+      "node_modules/turbo/bin/turbo",
+      "run",
+      "generate:api-types",
+      "--filter=@stll/web",
+      "--filter=@stll/api",
+    ],
+    ["bun", "exec", "turbo", "run", "generate:api-types", "--filter=@stll/web"],
+  ]) {
+    expect(generationCommandViolations(command), command.join(" ")).not.toEqual(
+      [],
+    );
   }
   const producer = readFileSync(
     new URL("ci-generated-sources.ts", import.meta.url),
@@ -399,7 +633,6 @@ test("API boot entry points prepare capability runtime sources before starting",
     "dev",
     "test",
     "test:property",
-    "typecheck",
     "lint",
     "lint:fix",
   ]) {
@@ -425,6 +658,24 @@ test("API boot entry points prepare capability runtime sources before starting",
     Bun.JSONC.parse(
       readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
     ),
+  );
+  expect(api.scripts["typecheck"]).toBe(
+    "bun ../../packages/scripts/src/api-typecheck.ts",
+  );
+  for (const command of ["lint", "lint:fix"]) {
+    const script =
+      api.scripts[command] ?? panic(`Missing API ${command} script`);
+    const emission = script.indexOf(
+      "turbo run generate:typecheck-declarations --filter=@stll/api",
+    );
+    expect(emission).toBeGreaterThanOrEqual(0);
+    expect(script.indexOf("bun --bun oxlint")).toBeGreaterThan(emission);
+  }
+  expect(turbo.tasks["@stll/api#typecheck"]?.dependsOn).toContain(
+    "typecheck:src",
+  );
+  expect(turbo.tasks["@stll/api#typecheck:src"]?.dependsOn).toContain(
+    "generate:capability-runtime",
   );
   expect(turbo.tasks["@stll/web#generate:api-types"]?.dependsOn).toContain(
     "@stll/api#generate:capability-runtime",

@@ -41,7 +41,7 @@ export const REVIEW_PROPOSAL_EVENT = {
   ERROR: "error",
 } as const;
 
-export type ReviewProposalEventName =
+type ReviewProposalEventName =
   (typeof REVIEW_PROPOSAL_EVENT)[keyof typeof REVIEW_PROPOSAL_EVENT];
 
 /**
@@ -228,9 +228,9 @@ export const mergeStreamedPosition = (
   return [...without, next].toSorted((a, b) => a.index - b.index);
 };
 
-export type ReviewProposalTarget = { entityId: string; fileFieldId: string };
+type ReviewProposalTarget = { entityId: string; fileFieldId: string };
 
-export type ReviewProposalReference = {
+type ReviewProposalReference = {
   workspaceId: string;
   entityId: string;
   fileFieldId: string;

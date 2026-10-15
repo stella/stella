@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The private SHA-256 workspace declares Bun types for its native owner and runtime contract tests."
+}

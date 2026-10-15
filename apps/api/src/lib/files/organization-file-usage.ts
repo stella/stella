@@ -1,20 +1,24 @@
 import { Panic, panic, Result } from "better-result";
-import { asc, count, eq, sql } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import {
   organizationFileObjects,
   organizationFileUsage,
-  usageEntitlements,
-  usagePolicies,
-  usageSeatAssignments,
 } from "@/api/db/schema";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  authorizeOperation,
+  snapshotOperationInput,
+} from "@/api/lib/proofs/checked-transaction";
+import type { CheckedOperationContext } from "@/api/lib/proofs/checked-transaction";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   lockAssignmentCapacities,
@@ -73,6 +77,40 @@ export const organizationFileUsageHandlerError = (
     cause: error,
   });
 
+const storageCapacityRow = (row: unknown): [string, bigint | null] => {
+  if (
+    !isRecord(row) ||
+    typeof row["organizationId"] !== "string" ||
+    (row["capacity"] !== null && typeof row["capacity"] !== "string")
+  ) {
+    return panic("Organization storage capacity row is malformed");
+  }
+  return [
+    row["organizationId"],
+    row["capacity"] === null ? null : BigInt(row["capacity"]),
+  ];
+};
+
+/**
+ * The organization's storage capacity in bytes, or null when nothing bounds
+ * it: the `organization_storage_capacity` database function, which reads the
+ * effective policy (a live entitlement's, or the free floor).
+ */
+const readOrganizationStorageCapacity = async (
+  tx: Pick<Transaction, "execute">,
+  organizationId: SafeId<"organization">,
+): Promise<bigint | null> => {
+  const rows = executedRows(
+    await tx.execute(
+      sql`select ${organizationId} as "organizationId", organization_storage_capacity(${organizationId})::text as capacity`,
+    ),
+  );
+  const [, capacity] = storageCapacityRow(
+    rows.at(0) ?? panic("Organization storage capacity row is missing"),
+  );
+  return capacity;
+};
+
 const positiveDifference = (next: bigint, current: bigint): bigint =>
   next > current ? next - current : 0n;
 
@@ -96,6 +134,31 @@ export type FileUsageInput = {
   sizeBytes: number;
   contentSha256Hex?: string | undefined;
 };
+
+export type CheckedFileWrite<Content> = Pick<
+  FileUsageInput,
+  "objectKey" | "sizeBytes"
+> & {
+  content: Content;
+};
+
+export type CheckedFileCopy<Source> = Pick<
+  FileUsageInput,
+  "objectKey" | "sizeBytes"
+> & {
+  source: Source;
+};
+
+type CheckedStorageOperation<T, Checked> = {
+  checked: Checked;
+  execute: (checked: Checked) => Promise<T>;
+};
+
+/** Storage callbacks only receive values from the snapshot that passed reservation. */
+export const runCheckedStorageOperation = async <T, Checked>({
+  checked,
+  execute,
+}: CheckedStorageOperation<T, Checked>) => await execute(checked);
 
 export type FileUsageReservation =
   | { status: "disabled" }
@@ -199,26 +262,8 @@ export const reserveOrganizationFileBytes = async (
           ? positiveDifference(BigInt(sizeBytes), existing.sizeBytes)
           : BigInt(sizeBytes);
 
-        const entitlement = await tx
-          .select({
-            storageBytesPerAssignment: usagePolicies.storageBytesPerAssignment,
-          })
-          .from(usageEntitlements)
-          .innerJoin(
-            usagePolicies,
-            eq(usageEntitlements.usagePolicyId, usagePolicies.id),
-          )
-          .where(eq(usageEntitlements.organizationId, organizationId))
-          .limit(1)
-          .then((rows) => rows.at(0));
-        if (entitlement && entitlement.storageBytesPerAssignment !== null) {
-          const assignments = await tx
-            .select({ value: count() })
-            .from(usageSeatAssignments)
-            .where(eq(usageSeatAssignments.organizationId, organizationId))
-            .then((rows) => rows.at(0)?.value ?? 0);
-          const cap =
-            entitlement.storageBytesPerAssignment * BigInt(assignments);
+        const cap = await readOrganizationStorageCapacity(tx, organizationId);
+        if (cap !== null) {
           const nextBytes =
             counter.committedBytes + counter.reservedBytes + additionalBytes;
           const doesNotGrowExisting =
@@ -344,16 +389,66 @@ export const removeOrganizationFileBytes = async (
   db?: FileUsageDb,
 ) => await removeOrganizationFilesBytes([objectKey], db);
 
-/** Reserve before external I/O and settle only after the provider confirms it. */
-export const writeOrganizationFile = async <T>(
-  input: FileUsageInput & { write: () => Promise<T>; db?: FileUsageDb },
-): Promise<Result<T, OrganizationFileUsageError>> => {
-  const reservation = await reserveOrganizationFileBytes(input, input.db);
+const FILE_WRITE_RESERVED = "FileWriteReserved";
+const FILE_BATCH_RESERVED = "FileBatchReserved";
+
+export const authorizeOrganizationFileWrite = async <
+  Input extends FileUsageInput,
+>(
+  input: Input,
+  db?: FileUsageDb,
+) => {
+  const operation = snapshotOperationInput(input);
+  const reservation = await reserveOrganizationFileBytes(operation, db);
   if (Result.isError(reservation)) {
     return Result.err(reservation.error);
   }
+  return await authorizeOperation({
+    kind: FILE_WRITE_RESERVED,
+    input: { operation, reservation: reservation.value, db },
+    check: async () => await Promise.resolve(reservation.map(() => undefined)),
+  });
+};
+
+export const authorizeOrganizationFileBatch = async <
+  Input extends readonly FileUsageInput[],
+>(
+  input: Input,
+  db?: FileUsageDb,
+) => {
+  const operation = snapshotOperationInput(input);
+  const reservations = await reserveOrganizationFilesBytes(operation, db);
+  if (Result.isError(reservations)) {
+    return Result.err(reservations.error);
+  }
+  return await authorizeOperation({
+    kind: FILE_BATCH_RESERVED,
+    input: { operation, reservations: reservations.value, db },
+    check: async () => await Promise.resolve(reservations.map(() => undefined)),
+  });
+};
+
+export const runCheckedOrganizationFileWrite = async <T, N, Content = unknown>({
+  proof,
+}: CheckedOperationContext<
+  typeof FILE_WRITE_RESERVED,
+  {
+    operation: Parameters<typeof writeOrganizationFile<T, Content>>[0];
+    reservation: FileUsageReservation;
+    db: FileUsageDb | undefined;
+  },
+  N
+>): Promise<Result<T, OrganizationFileUsageError>> => {
   const written = await Result.tryPromise({
-    try: input.write,
+    try: async () =>
+      await runCheckedStorageOperation({
+        checked: {
+          objectKey: proof.input.value.operation.objectKey,
+          sizeBytes: proof.input.value.operation.sizeBytes,
+          content: proof.input.value.operation.content,
+        },
+        execute: proof.input.value.operation.write,
+      }),
     catch: storageUnavailable,
   });
   if (Result.isError(written)) {
@@ -362,27 +457,40 @@ export const writeOrganizationFile = async <T>(
     return Result.err(written.error);
   }
   const committed = await commitOrganizationFileBytes(
-    reservation.value,
-    input.db,
+    proof.input.value.reservation,
+    proof.input.value.db,
   );
   return Result.isError(committed)
     ? Result.err(committed.error)
     : Result.ok(written.value);
 };
 
-export const copyOrganizationFile = async <T, E>(
-  input: FileUsageInput & {
-    copy: () => Promise<Result<T, E>>;
-    confirmedDestinationAbsentOnCopyError?: (error: E) => boolean;
-    db?: FileUsageDb;
+export const runCheckedOrganizationFileCopy = async <
+  T,
+  E,
+  N,
+  Source = unknown,
+>({
+  proof,
+}: CheckedOperationContext<
+  typeof FILE_WRITE_RESERVED,
+  {
+    operation: Parameters<typeof copyOrganizationFile<T, E, Source>>[0];
+    reservation: FileUsageReservation;
+    db: FileUsageDb | undefined;
   },
-): Promise<Result<T, E | OrganizationFileUsageError>> => {
-  const reservation = await reserveOrganizationFileBytes(input, input.db);
-  if (Result.isError(reservation)) {
-    return Result.err(reservation.error);
-  }
+  N
+>): Promise<Result<T, E | OrganizationFileUsageError>> => {
   const copied = await Result.tryPromise({
-    try: input.copy,
+    try: async () =>
+      await runCheckedStorageOperation({
+        checked: {
+          objectKey: proof.input.value.operation.objectKey,
+          sizeBytes: proof.input.value.operation.sizeBytes,
+          source: proof.input.value.operation.source,
+        },
+        execute: proof.input.value.operation.copy,
+      }),
     catch: storageUnavailable,
   });
   if (Result.isError(copied)) {
@@ -391,10 +499,14 @@ export const copyOrganizationFile = async <T, E>(
   if (Result.isError(copied.value)) {
     // Only a copy error that proves the destination was never written may
     // release the reservation; timeouts still need object-state recovery.
-    if (input.confirmedDestinationAbsentOnCopyError?.(copied.value.error)) {
+    if (
+      proof.input.value.operation.confirmedDestinationAbsentOnCopyError?.(
+        copied.value.error,
+      )
+    ) {
       const released = await releaseOrganizationFileBytes(
-        reservation.value,
-        input.db,
+        proof.input.value.reservation,
+        proof.input.value.db,
       );
       if (Result.isError(released)) {
         return Result.err(released.error);
@@ -403,12 +515,46 @@ export const copyOrganizationFile = async <T, E>(
     return Result.err(copied.value.error);
   }
   const committed = await commitOrganizationFileBytes(
-    reservation.value,
-    input.db,
+    proof.input.value.reservation,
+    proof.input.value.db,
   );
   return Result.isError(committed)
     ? Result.err(committed.error)
     : Result.ok(copied.value.value);
+};
+
+/** Reserve before external I/O and settle only after the provider confirms it. */
+export const writeOrganizationFile = async <T, Content>(
+  input: FileUsageInput & {
+    content: Content;
+    write: (checked: CheckedFileWrite<Content>) => Promise<T>;
+    db?: FileUsageDb;
+  },
+): Promise<Result<T, OrganizationFileUsageError>> => {
+  const authorization = await authorizeOrganizationFileWrite(input, input.db);
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
+  }
+  return await authorization.value.execute(
+    async (operation) => await runCheckedOrganizationFileWrite(operation),
+  );
+};
+
+export const copyOrganizationFile = async <T, E, Source>(
+  input: FileUsageInput & {
+    source: Source;
+    copy: (checked: CheckedFileCopy<Source>) => Promise<Result<T, E>>;
+    confirmedDestinationAbsentOnCopyError?: (error: E) => boolean;
+    db?: FileUsageDb;
+  },
+): Promise<Result<T, E | OrganizationFileUsageError>> => {
+  const authorization = await authorizeOrganizationFileWrite(input, input.db);
+  if (Result.isError(authorization)) {
+    return Result.err(authorization.error);
+  }
+  return await authorization.value.execute(
+    async (operation) => await runCheckedOrganizationFileCopy(operation),
+  );
 };
 
 /** Import a confirmed object or repair a byte count. Repeating the same scan is a fixed point. */
@@ -720,43 +866,18 @@ const reserveOrganizationFilesBytesOnce = async (
           .where(
             sql`${organizationFileObjects.objectKey} in (select jsonb_array_elements_text(${JSON.stringify([...keys])}::text::jsonb))`,
           );
-        const policies = await tx
-          .select({
-            organizationId: usageEntitlements.organizationId,
-            capacity: usagePolicies.storageBytesPerAssignment,
-          })
-          .from(usageEntitlements)
-          .innerJoin(
-            usagePolicies,
-            eq(usagePolicies.id, usageEntitlements.usagePolicyId),
-          )
-          .where(
-            sql`${usageEntitlements.organizationId} in (select jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb))`,
-          );
-        const assignments = await tx
-          .select({
-            organizationId: usageSeatAssignments.organizationId,
-            value: count(),
-          })
-          .from(usageSeatAssignments)
-          .where(
-            sql`${usageSeatAssignments.organizationId} in (select jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb))`,
-          )
-          .groupBy(usageSeatAssignments.organizationId);
+        const capacities = await tx.execute(sql`
+          select id as "organizationId", organization_storage_capacity(id)::text as capacity
+          from jsonb_array_elements_text(${JSON.stringify(organizationIds)}::text::jsonb) as ids(id)
+        `);
         const objectByKey = new Map(
           objects.map((object) => [object.objectKey, object]),
         );
         const counterByOrg = new Map(
           counters.map((counter) => [counter.organizationId, counter]),
         );
-        const policyByOrg = new Map(
-          policies.map((policy) => [policy.organizationId, policy.capacity]),
-        );
-        const seatsByOrg = new Map(
-          assignments.map((assignment) => [
-            assignment.organizationId,
-            assignment.value,
-          ]),
+        const capacityByOrg = new Map(
+          executedRows(capacities).map((row) => storageCapacityRow(row)),
         );
         const growthByOrg = new Map<SafeId<"organization">, bigint>();
         const growingOrgs = new Set<SafeId<"organization">>();
@@ -820,15 +941,18 @@ const reserveOrganizationFilesBytesOnce = async (
           if (!counter) {
             return panic("Organization file counter disappeared");
           }
-          const capacity = policyByOrg.get(organizationId);
+          // Null is a valid capacity (unbounded); only a missing row is a fault.
+          const capacity = capacityByOrg.get(organizationId);
+          if (capacity === undefined) {
+            return panic("Organization storage capacity row is missing");
+          }
           if (
-            capacity !== undefined &&
             capacity !== null &&
             growingOrgs.has(organizationId) &&
             counter.committedBytes +
               counter.reservedBytes +
               (growthByOrg.get(organizationId) ?? 0n) >
-              capacity * BigInt(seatsByOrg.get(organizationId) ?? 0)
+              capacity
           ) {
             return abortReservation("capacity_exceeded");
           }
@@ -954,8 +1078,7 @@ const recoverOrganizationFileReservations = async (
         return Result.err(read.error);
       }
       if (
-        new Bun.CryptoHasher("sha256").update(read.value).digest("hex") !==
-        object.expectedSha256Hex
+        hashSha256Hex(new Uint8Array(read.value)) !== object.expectedSha256Hex
       ) {
         if (ageMs >= FILE_RESERVATION_ABANDON_DELAY_MS) {
           toRelease.push(reservation);
@@ -988,15 +1111,19 @@ export const reserveOrganizationFilesBytes = async (
   inputs: readonly FileUsageInput[],
   db?: FileUsageDb,
 ): Promise<Result<FileUsageReservation[], OrganizationFileUsageError>> => {
-  const reserved = await reserveOrganizationFilesBytesOnce(inputs, db);
+  const checkedInputs = snapshotOperationInput(inputs);
+  const reserved = await reserveOrganizationFilesBytesOnce(checkedInputs, db);
   if (Result.isOk(reserved) || reserved.error.reason !== "reservation_busy") {
     return reserved;
   }
-  const recovered = await recoverOrganizationFileReservations(inputs, db);
+  const recovered = await recoverOrganizationFileReservations(
+    checkedInputs,
+    db,
+  );
   if (Result.isError(recovered)) {
     return Result.err(recovered.error);
   }
-  return await reserveOrganizationFilesBytesOnce(inputs, db);
+  return await reserveOrganizationFilesBytesOnce(checkedInputs, db);
 };
 
 export const ORGANIZATION_FILE_ACCOUNTING_BATCH_LIMIT = 128;
@@ -1206,19 +1333,35 @@ export const removeOrganizationFilesBytes = async (
       ).map(() => undefined)
     : Promise.resolve(Result.ok(undefined));
 
-export const writeOrganizationFiles = async <T>(
-  inputs: readonly (FileUsageInput & { write: () => Promise<T> })[],
+export const writeOrganizationFiles = async <T, Content>(
+  inputs: readonly (FileUsageInput & {
+    content: Content;
+    write: (checked: CheckedFileWrite<Content>) => Promise<T>;
+  })[],
   db?: FileUsageDb,
 ): Promise<
   Result<Result<T, OrganizationFileUsageError>[], OrganizationFileUsageError>
 > => {
+  const checkedInputs = snapshotOperationInput(inputs);
   const { copyOrganizationFiles } =
     await import("@/api/lib/files/copy-organization-files");
   return await copyOrganizationFiles({
-    inputs: inputs.map(({ write, ...input }) => ({
+    inputs: checkedInputs.map(({ write, content, ...input }) => ({
       ...input,
-      copy: async () =>
-        await Result.tryPromise({ try: write, catch: storageUnavailable }),
+      source: content,
+      copy: async (checked: CheckedFileCopy<Content>) =>
+        await Result.tryPromise({
+          try: async () =>
+            await runCheckedStorageOperation({
+              checked: {
+                objectKey: checked.objectKey,
+                sizeBytes: checked.sizeBytes,
+                content: checked.source,
+              },
+              execute: write,
+            }),
+          catch: storageUnavailable,
+        }),
     })),
     concurrency: 1,
     db,

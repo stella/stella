@@ -28,6 +28,7 @@ import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { runOnlineMigrations } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
+import { terminateReserved } from "./sql-close";
 
 type LedgerRow = {
   id: number;
@@ -336,7 +337,7 @@ const DEFAULT_LOCK_WAIT_RETRY: LockWaitRetry = {
   delaysMs: MIGRATION_LOCK_WAIT_RETRY_DELAYS_MS,
   budgetMs: MIGRATION_LOCK_WAIT_RETRY_BUDGET_MS,
   now: () => performance.now(),
-  sleep: async (ms) => await Bun.sleep(ms),
+  sleep: Bun.sleep,
 };
 
 type ApplyPendingOptions = {
@@ -555,7 +556,7 @@ export const runMigrations = async ({
     const onlineConnection: OnlineMigrationConnection = {
       terminate: async () => {
         session.state = "terminated";
-        await connection.close({ timeout: 0 });
+        await terminateReserved(connection);
       },
       execute: async (query, params = []) => {
         await connection.unsafe(query, [...params]);

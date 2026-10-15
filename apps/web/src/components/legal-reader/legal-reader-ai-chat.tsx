@@ -22,6 +22,8 @@ import {
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 
 type LegalReaderAIChatProps = {
+  /** The owning surface's readiness, independent of inherited authentication. */
+  aiMode: "gated" | "enabled";
   /** The document on screen, in the terms the chat carries it by. */
   activeLegal: ActiveLegalDocument;
   /** The reader's own text, which the composer floats over. */
@@ -41,13 +43,14 @@ type LegalReaderAIChatProps = {
  */
 export const LegalReaderAIChat = ({
   activeLegal,
+  aiMode,
   children,
   className,
 }: LegalReaderAIChatProps) => {
   const user = useMaybeAuthenticatedUser();
   const { key: documentKey } = activeLegalDocumentRef(activeLegal);
 
-  if (user === null) {
+  if (aiMode === "gated" || user === null) {
     return (
       <FileViewerWithAI
         activeLegal={activeLegal}

@@ -1,4 +1,6 @@
-// parser-output-unchanged: the shared visible-text helper excludes the same script/style nodes as the previous removal; validation diagnostics and stored parser output are unchanged.
+// parser-output-unchanged: Non-CourtListener callers omit sourcePolicy; their original default expressions and detectors are retained, with baseline fixture diagnostics locked by validate-ast-defaults.test.ts.
+// parser-output-unchanged: Validation work counters are diagnostics only; parsed records are unchanged.
+// parser-output-unchanged: the reference text is read from the same elements in the same order; validation diagnostics and stored parser output are unchanged.
 /**
  * AST sanity checker.
  *
@@ -9,9 +11,12 @@
  */
 
 import * as cheerio from "cheerio";
+import { type AnyNode, isTag } from "domhandler";
+
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Block, Inline } from "@stll/legal-ast/document-ast";
 
 import { visibleHtmlText } from "@/api/handlers/case-law/ingestion/parsers/shared-inlines";
-import type { Block, Inline } from "@/api/lib/case-law/document-ast";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import type { MarkupResidue } from "@/api/lib/legal-search/parsers/markup-residue";
 import { logger } from "@/api/lib/observability/logger";
@@ -43,7 +48,27 @@ export type ValidationResult = {
     duplicateBlocks: number;
     /** Blocks whose text still carries the source's own markup. */
     markupResidue: BlockMarkupResidue[];
+    /**
+     * Deterministic work done collecting the source text: subtree text
+     * computations, the characters they produced, and ancestor checks. All
+     * grow linearly with a flat document; a cache or traversal regression
+     * makes them grow faster (characters catch a wrapper's text being
+     * recomputed for every child).
+     */
+    work: {
+      textComputations: number;
+      textCharacters: number;
+      ancestorChecks: number;
+    };
   };
+};
+
+/** Explicit publisher policy; other sources keep the shared validation semantics. */
+export type ValidationSourcePolicy = {
+  source: "courtlistener";
+  projectSourceText: (text: string) => string;
+  projectInlineText: (inlines: readonly Inline[]) => string;
+  markupResidueIn: (text: string) => MarkupResidue | undefined;
 };
 
 /** Source markup found in one block, named by the anchor that holds it. */
@@ -196,6 +221,33 @@ const holdsOnlyDecoration = (text: string): boolean =>
       return peeled === "" || SKIP_WORDS.has(peeled);
     });
 
+/** Elements whose text the reference extraction reads. */
+const CONTENT_TAGS = ["p", "li", "td", "th", "div"] as const;
+const CONTENT_SELECTOR = CONTENT_TAGS.join(", ");
+const isContentTag = (name: string): boolean =>
+  CONTENT_TAGS.some((tag) => tag === name);
+
+/**
+ * Whether any descendant is a content element. A walk rather than
+ * `:has()`: css-select answers `:has()` by recursing once per nesting
+ * level, which overflows the stack on deeply nested inline markup.
+ */
+const hasContentDescendant = (nodes: readonly AnyNode[]): boolean => {
+  const pending = [...nodes];
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (!isTag(node)) {
+      continue;
+    }
+    if (isContentTag(node.name)) {
+      return true;
+    }
+    for (const child of node.children) {
+      pending.push(child);
+    }
+  }
+  return false;
+};
+
 /** Flatten inline nodes to text (line-break → space). */
 const inlineText = (inlines: readonly Inline[]): string => {
   let text = "";
@@ -231,6 +283,7 @@ export const validateAst = (
     maxMissingWords?: number;
     /** Source words with explicit inline breaks; never used for retention. */
     wordComparisonText?: string;
+    sourcePolicy?: ValidationSourcePolicy;
   },
 ): ValidationResult => {
   const { minRetainedPct = 90, maxMissingWords = 15 } = options ?? {};
@@ -250,7 +303,6 @@ export const validateAst = (
   // Extract text from content elements, but skip nested
   // elements whose text is already included by a parent
   // (e.g., <td> inside <td> in NALUS HTML).
-  const contentSelector = "p, li, td, th, div";
   const seen = new Set<string>();
   const originalParts: string[] = [];
   // Stringifying a node visits its whole subtree, and the ancestor check
@@ -258,62 +310,71 @@ export const validateAst = (
   // on flat many-paragraph documents. Each node's normalized text is
   // computed once and reused.
   const normalizedTextCache = new WeakMap<object, string>();
+  const work = { textComputations: 0, textCharacters: 0, ancestorChecks: 0 };
   const normalizedText = (el: Parameters<typeof $>[0] & object): string => {
     const cached = normalizedTextCache.get(el);
     if (cached !== undefined) {
       return cached;
     }
-    const value = visibleHtmlText($(el)).replace(/\s+/gu, " ").trim();
+    work.textComputations += 1;
+    const sourceText = visibleHtmlText($(el));
+    const value = (
+      options?.sourcePolicy
+        ? options.sourcePolicy.projectSourceText(sourceText)
+        : sourceText
+    )
+      .replace(/\s+/gu, " ")
+      .trim();
+    work.textCharacters += value.length;
     normalizedTextCache.set(el, value);
     return value;
   };
-  $("body")
-    .find(contentSelector)
-    .each((_, el) => {
-      const $el = $(el);
+  // Queried from the document root, never as `.find()` on a node: cheerio
+  // dedupes a `.find()` context of N children pairwise, which is quadratic on
+  // a body or wrapper holding tens of thousands of paragraphs.
+  $(`body :is(${CONTENT_SELECTOR})`).each((_, el) => {
+    const $el = $(el);
 
-      // Skip <div> wrappers that contain child content
-      // elements — those children are matched separately.
-      if (
-        el.tagName.toLowerCase() === "div" &&
-        $el.find("p, li, td, th, div").length > 0
-      ) {
-        return;
-      }
+    // Skip <div> wrappers that contain child content
+    // elements — those children are matched separately.
+    if (el.name === "div" && hasContentDescendant(el.children)) {
+      return;
+    }
 
-      // Skip if any ancestor in our selector already captured this
-      // text. Checking every ancestor rather than just the nearest one
-      // matters for sources that nest content two or more levels deep
-      // (Cellar quotes legislation as a table inside the cell of the
-      // numbered paragraph that introduces it): with only the nearest
-      // ancestor checked, the inner text is counted once inside the
-      // outer cell and again on its own, and the inflated original
-      // length reads as content loss in an otherwise complete AST.
-      const capturedByAncestor = $el
-        .parents(contentSelector)
-        .toArray()
-        .some((ancestor) => seen.has(normalizedText(ancestor)));
-      if (capturedByAncestor) {
-        return;
-      }
-      const text = normalizedText(el);
-      if (text && !seen.has(text)) {
-        seen.add(text);
-        originalParts.push(text);
-      }
-    });
+    // Skip if any ancestor in our selector already captured this
+    // text. Checking every ancestor rather than just the nearest one
+    // matters for sources that nest content two or more levels deep
+    // (Cellar quotes legislation as a table inside the cell of the
+    // numbered paragraph that introduces it): with only the nearest
+    // ancestor checked, the inner text is counted once inside the
+    // outer cell and again on its own, and the inflated original
+    // length reads as content loss in an otherwise complete AST.
+    const capturedByAncestor = $el
+      .parents(CONTENT_SELECTOR)
+      .toArray()
+      .some((ancestor) => {
+        work.ancestorChecks += 1;
+        return seen.has(normalizedText(ancestor));
+      });
+    if (capturedByAncestor) {
+      return;
+    }
+    const text = normalizedText(el);
+    if (text && !seen.has(text)) {
+      seen.add(text);
+      originalParts.push(text);
+    }
+  });
 
   // Also collect <img> alt text (some courts embed
   // meaningful text in alt attributes).
-  $("body")
-    .find("img[alt]")
-    .each((_, el) => {
-      const alt = $(el).attr("alt")?.trim();
-      if (alt && !seen.has(alt)) {
-        seen.add(alt);
-        originalParts.push(alt);
-      }
-    });
+  $("body img[alt]").each((_, el) => {
+    const alt = $(el).attr("alt")?.trim();
+    if (alt && !seen.has(alt)) {
+      seen.add(alt);
+      originalParts.push(alt);
+    }
+  });
 
   const originalText = normalize(originalParts.join(" "));
 
@@ -439,7 +500,9 @@ export const validateAst = (
     // is prompted with it, and none of them can tell it from the court's
     // words. It also inflates the retention ratio, so a parse carrying
     // residue is the one whose CONTENT_LOSS reading cannot be trusted.
-    const residue = markupResidueIn(text);
+    const residue = options?.sourcePolicy
+      ? options.sourcePolicy.markupResidueIn(text)
+      : markupResidueIn(text);
     if (residue) {
       markupResidue.push({ ...residue, anchorId: block.anchorId });
     }
@@ -472,7 +535,11 @@ export const validateAst = (
     if (block.type === "heading" || block.type === "paragraph") {
       // Parsers normalize plainText while inlines keep source spacing;
       // compare whitespace-collapsed forms so padding never flags.
-      const inlineLen = collapseWhitespace(inlineText(block.inlines)).length;
+      const inlineLen = (
+        options?.sourcePolicy
+          ? options.sourcePolicy.projectInlineText(block.inlines)
+          : collapseWhitespace(inlineText(block.inlines))
+      ).length;
       const plainLen = collapseWhitespace(block.plainText).length;
       // Allow some tolerance for whitespace differences
       if (
@@ -546,6 +613,7 @@ export const validateAst = (
       hugeBlocks,
       duplicateBlocks,
       markupResidue,
+      work,
     },
   };
 };

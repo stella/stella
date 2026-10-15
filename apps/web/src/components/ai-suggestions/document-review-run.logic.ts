@@ -252,7 +252,7 @@ export const reviewRunView = (
 
 /** Where the run's position list came from. `ephemeral` is the case "Save as
  *  playbook" exists for: positions confirmed for this run and never saved. */
-export type ReviewPlaybookProvenance =
+type ReviewPlaybookProvenance =
   DocumentReviewRunBasis["playbook"]["provenance"];
 
 /** One position exactly as the run pinned it. */
@@ -294,7 +294,7 @@ const pinnedReferenceFiles = (
     fileName: reference.name ?? "",
   }));
 
-export const restoreReviewBasis = ({
+const restoreReviewBasis = ({
   basis,
   skipped,
 }: Pick<DocumentReviewRunRow, "basis" | "skipped">): RestoredReviewBasis => ({

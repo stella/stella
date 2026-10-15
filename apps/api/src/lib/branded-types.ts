@@ -16,7 +16,7 @@ export type SafeId<T extends SafeIdType> = PortableSafeId<T>;
  * real row ever carries. Parse one with `parseAuthProviderId`; tests mint
  * them with `mintAuthProviderId`.
  */
-export const AUTH_PROVIDER_ID_TYPES = [
+const AUTH_PROVIDER_ID_TYPES = [
   "organization",
   "user",
 ] as const satisfies readonly SafeIdType[];

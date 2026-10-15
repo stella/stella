@@ -1,12 +1,17 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, exists, inArray, sql } from "drizzle-orm";
 
 import type { CaseLawResearchAnswerFailureReason } from "@stll/api-contract";
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { declareFailureClass } from "@stll/errors";
+import type { FailureReason } from "@stll/errors";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
+import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-number";
+import type { Block } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  caseLawDecisions,
   caseLawResearchAnswers,
   caseLawResearchColumns,
 } from "@/api/db/schema";
@@ -21,6 +26,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { reportCaseLawIncompleteAnswer } from "@/api/lib/case-law/incomplete-answer-telemetry";
 import type {
   ResearchAnswerClaim,
   ResearchAnswerCell,
@@ -45,10 +51,17 @@ import {
   systemOneSourcesFromPassages,
 } from "@/api/lib/case-law/research-answers-system-one";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import {
+  caseLawCorpusAppliedRevision,
+  currentCaseLawCorpusProjection,
+} from "@/api/lib/legal-search/case-law-corpus-projection";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
-import type { CorpusIndexHit } from "@/api/lib/legal-search/corpus-index-client";
-import { readServingCorpusIndexTargetTx } from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
+import {
+  CorpusIndexGroupNotReadyError,
+  readServingCorpusIndexTargetTx,
+} from "@/api/lib/legal-search/corpus-index-group-enrollment-store";
 import { corpusIndexRoute } from "@/api/lib/legal-search/corpus-index-manifest";
+import { corpusRevisionClause } from "@/api/lib/legal-search/corpus-index-revision-clause";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
@@ -67,6 +80,9 @@ import {
   readCorpusPayloadOrFallback,
 } from "@/api/lib/legal-search/corpus-storage";
 import { LIMITS } from "@/api/lib/limits";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import { getTanStackTextModelInfoForRole } from "@/api/lib/tanstack-ai-models";
 import {
@@ -74,16 +90,53 @@ import {
   planSystemOneAnswers,
 } from "@/api/lib/workflow/decisions/answer-questions";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
+import type { DecisionGenerationOptions } from "@/api/lib/workflow/decisions/decide";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 
 const ANSWER_TIMEOUT_MS = 120_000;
-const NO_HITS: readonly CorpusIndexHit[] = [];
+
+const RESEARCH_PASSAGE_RETRIEVAL_FAILED_SINK = failureSink({
+  event: "case_law.research_passage_retrieval_failed",
+  expected: [],
+});
+
+const RESEARCH_PASSAGE_RETRIEVAL_REASON = {
+  INDEX_NOT_READY: "index-not-ready",
+  TARGET_UNAVAILABLE: "target-unavailable",
+  SEARCH_FAILED: "search-failed",
+} as const;
+
+type ResearchPassageRetrievalReason =
+  (typeof RESEARCH_PASSAGE_RETRIEVAL_REASON)[keyof typeof RESEARCH_PASSAGE_RETRIEVAL_REASON];
+
+const RESEARCH_PASSAGE_FAILURE_REASON = {
+  "index-not-ready": "research_index_not_ready",
+  "target-unavailable": "research_passage_target_failed",
+  "search-failed": "research_passage_search_failed",
+} as const satisfies Record<ResearchPassageRetrievalReason, FailureReason>;
+
+export class ResearchPassageRetrievalError extends TaggedError(
+  "ResearchPassageRetrievalError",
+)<{
+  message: string;
+  reason: ResearchPassageRetrievalReason;
+  cause: unknown;
+}> {
+  static {
+    declareFailureClass(
+      this,
+      ({ reason }) => RESEARCH_PASSAGE_FAILURE_REASON[reason],
+    );
+  }
+}
 
 export type ResearchRunColumn = ResearchQuestion & {
   columnId: SafeId<"caseLawResearchColumn">;
 };
 
 export type RunResearchAnswersInput = {
+  /** The queuing request's admission: the whole run is one action. */
+  admission: ModelDispatchAdmission;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   columns: readonly ResearchRunColumn[];
@@ -193,20 +246,37 @@ export const runResearchAnswers = async (
 };
 
 type DecisionTextSource =
-  | { kind: "passages"; passages: ResearchPassage[]; retrieved: boolean }
+  | {
+      kind: "passages";
+      passages: ResearchPassage[];
+      retrieved: boolean;
+      // Set when retrieval was attempted and failed; it is already reported,
+      // so later stages fall back instead of retrying it.
+      retrievalFailed: boolean;
+      /**
+       * The court's number for each numbered block of the whole decision, by
+       * anchor. Kept beside the passages, since a passage the index ranked
+       * carries only its anchor.
+       */
+      courtParagraphNumbers: ReadonlyMap<string, number>;
+    }
   | { kind: "none" };
 
 type SelectDecisionPassagesOptions = {
   fallback: readonly ResearchPassage[];
   retrieved: readonly ResearchPassage[];
+  retrievalFailed: boolean;
   budgetChars: number;
+  courtParagraphNumbers: ReadonlyMap<string, number>;
 };
 
 /** Keep retrieval provenance false when the index returned no usable passage. */
 export const selectDecisionPassages = ({
   fallback,
   retrieved,
+  retrievalFailed,
   budgetChars,
+  courtParagraphNumbers,
 }: SelectDecisionPassagesOptions): DecisionTextSource => {
   const selected = selectPassagesWithinBudget(
     retrieved.length > 0 ? retrieved : fallback,
@@ -217,7 +287,13 @@ export const selectDecisionPassages = ({
   );
   return selected.length === 0
     ? { kind: "none" }
-    : { kind: "passages", passages: selected, retrieved: retrieved.length > 0 };
+    : {
+        kind: "passages",
+        passages: selected,
+        retrieved: retrieved.length > 0,
+        retrievalFailed,
+        courtParagraphNumbers,
+      };
 };
 
 type ResearchDecisionRow = {
@@ -302,9 +378,57 @@ const answerDecision = async (
     return;
   }
 
-  // Always asked: without a decision model every question comes back
-  // undecided and every column falls through to the generative call.
+  const analyticsOptions = {
+    dataClass: "customer",
+    feature: "case-law.research-answers",
+    modelRole: "fast",
+    organizationId: input.organizationId,
+    orgAIConfig: input.orgAIConfig,
+    modelTier: input.admission.modelTier,
+    properties: {
+      decision_id: decisionId,
+      jurisdiction: decision.country,
+      organization_id: input.organizationId,
+      question_count: questions.length,
+    },
+    sessionId: decisionId,
+    traceId: Bun.randomUUIDv7(),
+    usageMetering: {
+      actionType: "case_law",
+      organizationId: input.organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId: input.userId,
+      workspaceId: null,
+    },
+  } as const satisfies Parameters<typeof createTanStackAIAnalyticsCallbacks>[0];
+
   const tier = await answerWithSystemOne({
+    generation: (prompt, questionCount) => ({
+      dataClass: "customer",
+      role: "fast",
+      serviceTier: "standard",
+      orgAIConfig: input.orgAIConfig,
+      managedAIResidency: input.managedAIResidency,
+      organizationId: input.organizationId,
+      admission: input.admission,
+      tenantWorkspaceIds: [],
+      analytics: createTanStackAIAnalyticsCallbacks({
+        ...analyticsOptions,
+        properties: {
+          ...analyticsOptions.properties,
+          question_count: questionCount,
+        },
+      }),
+      caching: resolveCaching({
+        promptCachingEnabled: input.promptCachingEnabled,
+        role: "fast",
+        scopeKey: decisionId,
+      }),
+      system: RESEARCH_SYSTEM_PROMPT,
+      prompt,
+      deadlineMs: ANSWER_TIMEOUT_MS,
+    }),
     caseLawDb,
     decisionModel,
     orgAIConfig: input.orgAIConfig,
@@ -328,26 +452,10 @@ const answerDecision = async (
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
-    dataClass: "customer",
-    feature: "case-law.research-answers",
-    modelRole: "fast",
-    organizationId: input.organizationId,
-    orgAIConfig: input.orgAIConfig,
+    ...analyticsOptions,
     properties: {
-      decision_id: decisionId,
-      jurisdiction: decision.country,
-      organization_id: input.organizationId,
+      ...analyticsOptions.properties,
       question_count: generativeQuestions.length,
-    },
-    sessionId: decisionId,
-    traceId: Bun.randomUUIDv7(),
-    usageMetering: {
-      actionType: "case_law",
-      organizationId: input.organizationId,
-      safeDb,
-      serviceTier: "standard",
-      userId: input.userId,
-      workspaceId: null,
     },
   });
 
@@ -359,6 +467,7 @@ const answerDecision = async (
         {
           dataClass: "customer",
           organizationId: input.organizationId,
+          modelTier: input.admission.modelTier,
         },
       );
       const output = await generateTanStackObjectForRole({
@@ -368,6 +477,7 @@ const answerDecision = async (
         orgAIConfig: input.orgAIConfig,
         managedAIResidency: input.managedAIResidency,
         organizationId: input.organizationId,
+        admission: input.admission,
         // The corpus is global; answers are tenant rows written separately.
         tenantWorkspaceIds: [],
         analytics: aiAnalytics,
@@ -449,6 +559,7 @@ const answerDecision = async (
       justification: buildAnswerJustification(
         parsedOutcome.anchorIds,
         excerptByAnchor,
+        text.courtParagraphNumbers,
       ),
     };
     outcomes.push({
@@ -546,19 +657,34 @@ const resolveDecisionText = async (
   if (passages.length === 0) {
     return { kind: "none" };
   }
+  // Flat text has no blocks, so it numbers nothing.
+  const courtParagraphNumbers: ReadonlyMap<string, number> =
+    blocks === null ? new Map() : courtParagraphNumbersByAnchor(blocks);
   const total = passages.reduce(
     (sum, passage) => sum + passage.excerpt.length,
     0,
   );
   if (total <= budgetChars) {
-    return { kind: "passages", passages, retrieved: false };
+    return {
+      kind: "passages",
+      passages,
+      retrieved: false,
+      retrievalFailed: false,
+      courtParagraphNumbers,
+    };
   }
 
-  const retrieved = await retrievePassages(decision, questions, caseLawDb);
+  const retrieved = await retrieveResearchPassages({
+    decision,
+    questions,
+    caseLawDb,
+  });
   return selectDecisionPassages({
     fallback: passages,
-    retrieved,
+    retrieved: retrieved.unwrapOr([]),
+    retrievalFailed: retrieved.isErr(),
     budgetChars,
+    courtParagraphNumbers,
   });
 };
 
@@ -594,7 +720,7 @@ const readStoredPayload = async <T>({
 
 const readDecisionBlocks = async (
   decision: ResearchDecisionRow,
-): Promise<{ anchorId: string; plainText: string; type: string }[] | null> => {
+): Promise<readonly Block[] | null> => {
   const stored = await readStoredPayload({
     decision,
     key: decision.astS3Key,
@@ -602,7 +728,7 @@ const readDecisionBlocks = async (
     read: readCorpusAst,
     fallback: () => parsePersistedCorpusAst(decision.documentAst),
   });
-  const ast = stored === null ? null : parseUsableDocumentAst(stored);
+  const ast = stored === null ? null : parseCaseLawDecisionAst(stored);
   return ast === null ? null : ast.blocks;
 };
 
@@ -620,63 +746,170 @@ const readDecisionFulltextPassage = async (
   return trimmed.length === 0 ? [] : [{ anchorId: "text", excerpt: trimmed }];
 };
 
+type RetrieveResearchPassagesOptions = {
+  decision: Pick<ResearchDecisionRow, "id" | "country">;
+  questions: readonly { question: string }[];
+  caseLawDb: CaseLawPublicReadDb;
+  clientForCluster?: typeof getCorpusIndexClient;
+};
+
+type CurrentResearchRevisionOptions = {
+  decisionId: SafeId<"caseLawDecision">;
+  generation: string;
+};
+
+/**
+ * The revision the serving generation records as applied for the decision,
+ * or null when it holds no current copy (pending, queued for erasure, or
+ * never projected). Passages are read from that revision's copy only.
+ */
+const readCurrentResearchRevisionTx = async (
+  tx: CaseLawPublicReadTransaction,
+  { decisionId, generation }: CurrentResearchRevisionOptions,
+) => {
+  const [row] = await tx
+    .select({
+      appliedRevision: caseLawCorpusAppliedRevision(generation),
+    })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        eq(caseLawDecisions.id, decisionId),
+        currentCaseLawCorpusProjection(generation),
+      ),
+    )
+    .limit(1);
+  return row?.appliedRevision ?? null;
+};
+
 /** The passages of one decision that match the questions, best first. */
-const retrievePassages = async (
-  decision: ResearchDecisionRow,
-  questions: readonly { question: string }[],
-  caseLawDb: CaseLawPublicReadDb,
-): Promise<ResearchPassage[]> => {
+export const retrieveResearchPassages = async ({
+  decision,
+  questions,
+  caseLawDb,
+  clientForCluster = getCorpusIndexClient,
+}: RetrieveResearchPassagesOptions) => {
   const freeText = corpusFreeTextClause(
     questions.map((question) => question.question).join(" "),
   );
   if (freeText === null) {
-    return [];
+    return Result.ok([]);
   }
-  const searched = await Result.tryPromise(async () => {
-    const target = await caseLawDb(
-      async (tx) =>
-        await readServingCorpusIndexTargetTx(tx, {
-          family: "case_law",
-          jurisdiction: decision.country,
-        }),
-    );
-    // An unready index group reads as no passages, as a failed search does.
-    if (Result.isError(target)) {
-      return NO_HITS;
+  const searched = await Result.gen(async function* () {
+    const target = yield* (
+      await Result.tryPromise(
+        async () =>
+          await caseLawDb(async (tx) => {
+            const serving = await readServingCorpusIndexTargetTx(tx, {
+              family: "case_law",
+              jurisdiction: decision.country,
+            });
+            if (serving.isErr()) {
+              return Result.err(serving.error);
+            }
+            return Result.ok({
+              ...serving.value,
+              appliedRevision: await readCurrentResearchRevisionTx(tx, {
+                decisionId: decision.id,
+                generation: serving.value.serving.generation,
+              }),
+            });
+          }),
+      )
+    )
+      .andThen((result) => result)
+      .mapError(
+        (cause) =>
+          new ResearchPassageRetrievalError({
+            message:
+              "Research passage retrieval could not read its serving target",
+            reason: CorpusIndexGroupNotReadyError.is(cause)
+              ? RESEARCH_PASSAGE_RETRIEVAL_REASON.INDEX_NOT_READY
+              : RESEARCH_PASSAGE_RETRIEVAL_REASON.TARGET_UNAVAILABLE,
+            cause,
+          }),
+      );
+    const { serving, manifest, appliedRevision } = target;
+    if (appliedRevision === null) {
+      return Result.ok([]);
     }
-    const { serving, manifest } = target.value;
     const { indexId } = corpusIndexRoute(manifest, decision.country);
-    const response = await getCorpusIndexClient(serving.cluster).search({
-      observer: "unobserved",
-      indexId,
-      query: `document_id:${quoteCorpusValue(decision.id)} AND ${freeText}`,
-      maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
-      sortBy: "_score",
+    const decisionClause = corpusRevisionClause({
+      clause: `document_id:${quoteCorpusValue(decision.id)}`,
+      field: manifest.projection.projectionRevisionField,
+      revision: appliedRevision,
     });
-    return Result.isError(response) ? NO_HITS : response.value.hits;
+    const response = yield* (
+      await Result.tryPromise(
+        async () =>
+          await clientForCluster(serving.cluster).search({
+            observer: "unobserved",
+            indexId,
+            query: `${decisionClause} AND ${freeText}`,
+            maxHits: LIMITS.caseLawResearchAnswerPassagesMax,
+            sortBy: "_score",
+          }),
+      )
+    )
+      .andThen((result) => result)
+      .mapError(
+        (cause) =>
+          new ResearchPassageRetrievalError({
+            message:
+              "Research passage retrieval could not search its serving index",
+            reason: RESEARCH_PASSAGE_RETRIEVAL_REASON.SEARCH_FAILED,
+            cause,
+          }),
+      );
+    const passages = response.hits.flatMap((hit) => {
+      const anchorId = hit["anchor_id"];
+      const text = hit["text"];
+      return typeof anchorId === "string" &&
+        anchorId.length > 0 &&
+        typeof text === "string"
+        ? [{ anchorId, excerpt: text }]
+        : [];
+    });
+    reportCaseLawIncompleteAnswer({
+      surface: "research",
+      reason: "retrieved_passage_invalid",
+      count: response.hits.length - passages.length,
+    });
+    return Result.ok(passages);
   });
-  if (Result.isError(searched)) {
-    return [];
+  if (searched.isErr()) {
+    observeFailure(searched.error, {
+      sink: RESEARCH_PASSAGE_RETRIEVAL_FAILED_SINK,
+      ctx: {
+        decisionId: decision.id,
+        jurisdiction: decision.country,
+        stage: searched.error.reason,
+      },
+    });
   }
-  return searched.value.flatMap((hit) => {
-    const anchorId = hit["anchor_id"];
-    const text = hit["text"];
-    return typeof anchorId === "string" &&
-      anchorId.length > 0 &&
-      typeof text === "string"
-      ? [{ anchorId, excerpt: text }]
-      : [];
-  });
+  return searched;
 };
 
 type SystemOnePassOptions = {
+  generation: (
+    prompt: string,
+    questionCount: number,
+  ) => Extract<DecisionGenerationOptions, { dataClass: "customer" }>;
   caseLawDb: CaseLawPublicReadDb;
   decisionModel: DecisionModel | null | undefined;
   usageMetering: AIUsageMetering;
   orgAIConfig: OrgAIConfig | null;
-  decision: ResearchDecisionRow;
+  decision: Pick<
+    ResearchDecisionRow,
+    "id" | "caseNumber" | "court" | "country" | "language" | "decisionType"
+  >;
   questions: readonly ResearchRunColumn[];
-  text: { passages: readonly ResearchPassage[]; retrieved: boolean };
+  text: {
+    passages: readonly ResearchPassage[];
+    retrieved: boolean;
+    retrievalFailed: boolean;
+    courtParagraphNumbers: ReadonlyMap<string, number>;
+  };
 };
 
 type SystemOnePass = {
@@ -688,11 +921,11 @@ type SystemOnePass = {
 
 /**
  * Ask one decision's closed-answer questions in a single request and keep what
- * came back settled. Nothing here fails a cell: a transport error, an
- * unplannable question or an undecided answer leaves the column to the
- * generative call, which is the behaviour of a deployment without the tier.
+ * came back settled. The decision runtime owns fallback; only unplanned
+ * questions continue to the runner's normal generation call.
  */
-const answerWithSystemOne = async ({
+export const answerWithSystemOne = async ({
+  generation,
   usageMetering,
   caseLawDb,
   decisionModel,
@@ -702,7 +935,7 @@ const answerWithSystemOne = async ({
   text,
 }: SystemOnePassOptions): Promise<SystemOnePass> => {
   const untouched: SystemOnePass = { outcomes: [], remaining: [...questions] };
-  const { asked } = splitSystemOneQuestions(questions);
+  const { asked, generative } = splitSystemOneQuestions(questions);
   if (asked.length === 0) {
     return untouched;
   }
@@ -712,8 +945,14 @@ const answerWithSystemOne = async ({
   // opening. Text already resolved by retrieval is ranked, so it is only cut.
   const overBudget = exceedsSystemOneSourceBudget(text.passages);
   const ranked =
-    overBudget && !text.retrieved
-      ? await retrievePassages(decision, asked, caseLawDb)
+    overBudget && !text.retrieved && !text.retrievalFailed
+      ? (
+          await retrieveResearchPassages({
+            decision,
+            questions: asked,
+            caseLawDb,
+          })
+        ).unwrapOr([])
       : [];
   const sources = systemOneSourcesFromPassages(
     ranked.length > 0 ? ranked : text.passages,
@@ -736,7 +975,17 @@ const answerWithSystemOne = async ({
   if (plan.plans.size === 0) {
     return untouched;
   }
-  const { decisions, model } = await decideMany({
+  const plannedQuestions = questions.filter((question) =>
+    plan.plans.has(question.columnId),
+  );
+  const prompt = buildResearchUserMessage({
+    decision,
+    passages: text.passages,
+    questions: plannedQuestions,
+    retrieved: text.retrieved,
+  });
+  const { decisions } = await decideMany({
+    generation: generation(prompt, plannedQuestions.length),
     dataClass: "customer",
     id: "case-law.research-answers",
     orgAIConfig,
@@ -746,17 +995,12 @@ const answerWithSystemOne = async ({
     client: decisionModel,
     usageMetering: { ...usageMetering, callId: Bun.randomUUIDv7() },
   });
-  // No model answered, so nothing is settled and the run facts have no model
-  // to stamp: every column is the generative model's.
-  if (model === null) {
-    return untouched;
-  }
   const resolved = resolveSystemOneOutcomes({
     questions: asked,
     outcomes: decodeSystemOneAnswers({ plan, questions: asked, decisions }),
     excerptByAnchor: new Map(sources.map((source) => [source.id, source.text])),
+    courtParagraphNumbers: text.courtParagraphNumbers,
     run: {
-      model,
       completedAt: Temporal.Now.instant().toString({
         fractionalSecondDigits: 3,
       }),
@@ -766,15 +1010,22 @@ const answerWithSystemOne = async ({
   const byColumn = new Map(
     resolved.settled.map((entry) => [entry.columnId, entry.outcome]),
   );
+  const unplannedColumnIds = new Set([
+    ...generative.map((question) => question.columnId),
+    ...plan.unplanned,
+  ]);
   const outcomes: ColumnOutcome[] = [];
   const remaining: ResearchRunColumn[] = [];
   for (const question of questions) {
-    const outcome = byColumn.get(question.columnId);
-    if (outcome === undefined) {
+    if (unplannedColumnIds.has(question.columnId)) {
       remaining.push(question);
       continue;
     }
-    outcomes.push({ columnId: question.columnId, outcome });
+    const outcome = byColumn.get(question.columnId);
+    outcomes.push({
+      columnId: question.columnId,
+      outcome: outcome ?? { state: "failed", failureReason: "missing_answer" },
+    });
   }
   return { outcomes, remaining };
 };

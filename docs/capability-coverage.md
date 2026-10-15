@@ -5,8 +5,8 @@
 
 Every safe handler the API exposes, grouped by domain: how it is classified
 (read/write, destructive) and how it is reachable — as a curated MCP tool,
-covered by one, or only through the generic `invoke_capability` path (shown
-here as its CLI form). Projected from the same handler enumeration that builds
+covered by one, or through `read_capability` or
+`write_capability` (shown here as its CLI form). Projected from the same handler enumeration that builds
 `packages/cli/capabilities/*.json`; see
 `apps/api/scripts/export-capability-catalog.ts`.
 
@@ -15,7 +15,7 @@ here as its CLI form). Projected from the same handler enumeration that builds
 A capability id is its handler path under `apps/api/src/handlers/`, joined
 with `.`: `<domain>[.<resource>…].<action>`. The action is one word:
 a canonical verb (`list`, `get`, `create`, `update`, `delete`)
-or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
+or a domain verb (`add`, `approve`, `archive`, `cancel`, `check`, `clear`, `clip`, `clone`, `compare`, `confirm`, `convert`, `copy`, `count`, `diff`, `discover`, `discard`, `download`, `duplicate`, `export`, `fill`, `generate`, `import`, `install`, `link`, `lookup`, `move`, `pause`, `prefill`, `prepare`, `preview`, `remove`, `rename`, `reorder`, `replace`, `resolve`, `return`, `restore`, `resume`, `retry`, `review`, `rewrite`, `run`, `search`, `split`, `start`, `stop`, `suggest`, `summarize`, `sync`, `transition`, `unarchive`, `unlink`, `upload`, `upsert`).
 A compound action is a nested resource: `clauses.categories.create`, not
 `clauses.categories-create`.
 
@@ -56,9 +56,11 @@ A compound action is a nested resource: `clauses.categories.create`, not
 
 | Capability | Access | Scope | Feature | Reachable via |
 | --- | --- | --- | --- | --- |
+| `chat.decision-threads.get` | read | stella:chat | — | generic invoke → `stella capability chat decision-threads-get` |
 | `chat.export.create` | write | stella:chat | — | generic invoke → `stella capability chat export-create` |
 | `chat.fork.create` | write | stella:chat | — | generic invoke → `stella capability chat fork-create` |
 | `chat.messages.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-list` |
+| `chat.messages.revisions.list` | read | stella:chat | — | generic invoke → `stella capability chat messages-revisions-list` |
 | `chat.older-messages.list` | read | stella:chat | — | generic invoke → `stella capability chat older-messages-list` |
 | `chat.threads.delete` | write, destructive | stella:chat | — | generic invoke → `stella capability chat threads-delete` |
 | `chat.threads.list` | read | stella:chat | — | generic invoke → `stella capability chat threads-list` |
@@ -224,6 +226,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `invoices.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices delete` |
 | `invoices.entries.add` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-add` |
 | `invoices.entries.remove` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices entries-remove` |
+| `invoices.export` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices export` |
 | `invoices.get` | read | stella:read | FEATURE_TIME_BILLING | covered by `list_invoices` |
 | `invoices.lines.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-create` |
 | `invoices.lines.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability invoices lines-delete` |
@@ -416,6 +419,14 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `saved-time-narratives.delete` | write, destructive | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives delete` |
 | `saved-time-narratives.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives list` |
 | `saved-time-narratives.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability saved-time-narratives update` |
+
+## search-history
+
+| Capability | Access | Scope | Feature | Reachable via |
+| --- | --- | --- | --- | --- |
+| `search-history.clear` | write, destructive | stella:knowledge_write | — | generic invoke → `stella capability search-history clear` |
+| `search-history.delete` | write, destructive | stella:knowledge_write | — | generic invoke → `stella capability search-history delete` |
+| `search-history.list` | read | stella:read | — | generic invoke → `stella capability search-history list` |
 
 ## seller-profiles
 
@@ -672,21 +683,21 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 20 |
+| auth_plumbing | 32 |
 | billing_ui | 1 |
-| chat_thread_ui | 2 |
+| chat_thread_ui | 11 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| health_infra | 1 |
+| health_infra | 2 |
 | hosted_billing | 7 |
 | mcp_transport | 12 |
 | native_tool_ui | 10 |
 | provider_secret | 33 |
 | public_indexing | 9 |
-| realtime_stream | 4 |
-| search_ui | 15 |
+| realtime_stream | 9 |
+| search_ui | 18 |
 | session_token_exchange | 20 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 19 |
+| upload_mechanics | 20 |
 | url_preview | 2 |

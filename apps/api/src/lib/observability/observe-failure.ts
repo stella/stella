@@ -12,7 +12,7 @@
 
 import { Result } from "better-result";
 
-import type { FailureGrade } from "@stll/errors";
+import { sanitizeQueryErrorText, type FailureGrade } from "@stll/errors";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type {
@@ -65,6 +65,8 @@ export const FAILURE_CONTEXT_KEYS = [
   "entityId",
   "feature",
   "jobId",
+  // Public corpus jurisdiction code.
+  "jurisdiction",
   "method",
   "mode",
   "modelId",
@@ -167,7 +169,7 @@ const observe = (
     ...requestFields(request),
     ...errorFields(evidence),
     ...failureFields(grading, sink),
-    "failure.policy": policy.source,
+    "failure.policy": sanitizeQueryErrorText(policy.source),
     ...(context.rejected > 0
       ? { "failure.ctx_rejected": context.rejected }
       : {}),

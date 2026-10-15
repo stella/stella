@@ -30,7 +30,7 @@ const timeFilterSchema = t.Union([
   ),
 ]);
 
-export const savedSearchCriteriaBodySchema = t.Object(
+const savedSearchCriteriaBodySchema = t.Object(
   {
     version: t.Literal(SAVED_SEARCH_CRITERIA_VERSION),
     query: t.String({ maxLength: LIMITS.searchQueryMaxLength }),

@@ -10,8 +10,8 @@ import {
   SearchIcon,
   UsersIcon,
 } from "@stll/ui/icons";
+import { MattersNavIcon } from "@stll/ui/matter-icon";
 
-import { MattersNavIcon } from "@/components/matter-icon";
 import type { TranslationKey } from "@/i18n/types";
 
 type WorkspacePrimaryRoute =
@@ -40,7 +40,7 @@ type WorkspacePrimaryNavItem = {
     }
 );
 
-export const WORKSPACE_PRIMARY_NAV_ITEMS = [
+const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: SearchIcon,
     id: "search",

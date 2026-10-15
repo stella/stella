@@ -29,15 +29,17 @@ import {
   ACT_NUMBER_PATTERN,
   actNumberCondition,
 } from "@/api/lib/legal-search/legislation-act-number";
+import {
+  isLatestOpenedVersionOfWorkAt,
+  listedLegislationRef,
+} from "@/api/lib/legal-search/legislation-listed-version";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   applicableKind,
   eligibleExpression,
   inForceOn,
-  legislationVersionRef,
   legislationVersionRefAt,
   notWithdrawn,
-  openedBy,
   opensBefore,
   opensOnOrBefore,
   versionSortKey,
@@ -160,68 +162,13 @@ const decodeListCursor = (cursor: string): ListCursor | null => {
   return null;
 };
 
-const listedRef = legislationVersionRef(legislationDocuments);
-const newerRef = legislationVersionRefAt("newer");
+const listedRef = listedLegislationRef;
 const workRef = legislationVersionRefAt("work");
-
-/** Another row of the listed row's Work: `(source, eli, language)`. */
-const newerOfSameWork = sql`newer.source_id = ${legislationDocuments.sourceId}
-      AND newer.eli = ${legislationDocuments.eli}
-      AND newer.language = ${legislationDocuments.language}
-      AND newer.id <> ${legislationDocuments.id}`;
 
 /** The same Work's rows as the listed one: `(source, eli, language)`. */
 const sameWork = sql`work.source_id = ${legislationDocuments.sourceId}
   AND work.eli = ${legislationDocuments.eli}
   AND work.language = ${legislationDocuments.language}`;
-
-/**
- * The row a listing shows per Work: the latest eligible wording that opened
- * on or before `asOf`, whether or not its window is still open. A Work whose
- * last wording closed is listed as ended rather than dropped, so a repealed
- * act stays findable; a Work whose every eligible wording opens after `asOf`
- * is not listed.
- *
- * A Work with no eligible wording at all (every version never took effect,
- * or its publisher windows are inconsistent) is listed by its latest version
- * that opened by `asOf`, preferring a consolidation over a promulgated text,
- * so it stays findable under the validity that says so. Withdrawn versions
- * are never listed, so a Work holding only those is not either.
- *
- * One anti-join over the Work's other rows excludes the listed one on either
- * ground: a later version that outranks it, or (when it is not eligible
- * itself) any eligible version at all. Written as `eligible OR NOT EXISTS
- * (…)` the second ground cannot become a join, and Postgres plans it as a
- * hashed subplan that reads the whole table on every listing; as a second
- * anti-join it costs the facets aggregate a second pass over the table. The
- * listed row never satisfies the second ground itself, so leaving it out of
- * the probe changes nothing.
- */
-export const isLatestOpenedVersionOfWorkAt = (asOf: SQLWrapper): SQL => sql`(
-  ${openedBy(listedRef, asOf)}
-  AND ${notWithdrawn(listedRef)}
-) AND NOT EXISTS (
-    SELECT 1
-    FROM legislation_documents AS newer
-    WHERE ${newerOfSameWork}
-      AND ((
-        ${openedBy(newerRef, asOf)}
-        AND ${notWithdrawn(newerRef)}
-        AND (${eligibleExpression(newerRef)} OR NOT ${eligibleExpression(listedRef)})
-        AND (
-          ${applicableKind(newerRef)},
-          ${versionSortKey(newerRef.validFrom)},
-          newer.id
-        ) > (
-          ${applicableKind(listedRef)},
-          ${versionSortKey(legislationDocuments.versionValidFrom)},
-          ${legislationDocuments.id}
-        )
-      ) OR (
-        ${eligibleExpression(newerRef)}
-        AND NOT ${eligibleExpression(listedRef)}
-      ))
-  )`;
 
 /**
  * Whether the publisher states that the listed row's Work never took effect:

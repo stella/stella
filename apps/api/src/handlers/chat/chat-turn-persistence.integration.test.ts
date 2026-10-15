@@ -6,6 +6,7 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -116,6 +117,7 @@ const awaitingAskUserContent = toChatMessageContent({
       name: "ask-user",
       state: "input-complete",
       type: "tool-call",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
     },
   ] satisfies ChatPart[],
   version: 2,
@@ -305,7 +307,13 @@ describe("durable chat turn persistence", () => {
       });
       const assistant = await testDb.query.chatMessages.findFirst({
         where: { id: { eq: assistantMessageId } },
-        columns: { content: true, createdAt: true, id: true, role: true },
+        columns: {
+          content: true,
+          createdAt: true,
+          id: true,
+          role: true,
+          revision: true,
+        },
       });
       if (assistant === undefined) {
         throw new Error("Expected the failed assistant message to persist");
@@ -355,6 +363,7 @@ describe("durable chat turn persistence", () => {
         },
         state: "complete",
         type: "tool-call",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       },
     ] satisfies ChatPart[];
     const owningAssistantMessage = toPersistableChatMessage({
@@ -386,7 +395,13 @@ describe("durable chat turn persistence", () => {
 
     const messages = await testDb.query.chatMessages.findMany({
       where: { threadId: { eq: threadId } },
-      columns: { content: true, createdAt: true, id: true, role: true },
+      columns: {
+        content: true,
+        createdAt: true,
+        id: true,
+        role: true,
+        revision: true,
+      },
     });
     expect(messages).toHaveLength(2);
     const assistant = messages.find(({ id }) => id === assistantMessageId);
@@ -418,6 +433,7 @@ describe("durable chat turn persistence", () => {
         },
         state: "complete",
         type: "tool-call",
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "client" },
       },
     ]);
     expect(
@@ -496,7 +512,13 @@ describe("durable chat turn persistence", () => {
 
     const messages = await testDb.query.chatMessages.findMany({
       where: { threadId: { eq: threadId } },
-      columns: { content: true, createdAt: true, id: true, role: true },
+      columns: {
+        content: true,
+        createdAt: true,
+        id: true,
+        role: true,
+        revision: true,
+      },
     });
     expect(messages).toHaveLength(2);
     const assistant = messages.find(({ id }) => id === assistantMessageId);
@@ -1500,7 +1522,13 @@ describe("durable chat turn persistence", () => {
 
     const staleAssistant = await testDb.query.chatMessages.findFirst({
       where: { id: { eq: assistantMessageId } },
-      columns: { content: true, createdAt: true, id: true, role: true },
+      columns: {
+        content: true,
+        createdAt: true,
+        id: true,
+        role: true,
+        revision: true,
+      },
     });
     if (staleAssistant === undefined) {
       throw new Error("Expected the superseded assistant message to persist");
@@ -1838,7 +1866,13 @@ describe("durable chat turn persistence", () => {
     });
     const failedAssistant = await testDb.query.chatMessages.findFirst({
       where: { id: { eq: failedAssistantMessageId } },
-      columns: { content: true, createdAt: true, id: true, role: true },
+      columns: {
+        content: true,
+        createdAt: true,
+        id: true,
+        role: true,
+        revision: true,
+      },
     });
     if (failedAssistant === undefined) {
       throw new Error("Expected the failed assistant message to persist");
@@ -1968,6 +2002,7 @@ describe("settling a continuation reports a stored message that breaks the rules
     name: "mcp__external__delete",
     state: "approval-responded",
     type: "tool-call",
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
   } satisfies ChatPart;
   const completedCall = {
     ...approvedCall,

@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import runnerPackage from "../apps/legal-atlas-runner/package.json";
+import runnerPackage from "../apps/legal-atlas-runner/package.json" with { type: "json" };
 
 // Every operator entrypoint the builder stage bundles under /app must be
 // copied into the runner stage by the same name, or the documented command

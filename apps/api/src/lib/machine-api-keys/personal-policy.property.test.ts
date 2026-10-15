@@ -30,6 +30,7 @@ import {
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { mcpMemberAuthority } from "@/api/mcp/effective-authority";
 import { McpAuthenticationError } from "@/api/mcp/errors";
+import { PLAIN_MEMBER_FACTS } from "@/api/tests/helpers/member-authorization";
 
 const roleNames = Object.keys(roles).filter(isMemberRole);
 const roleArbitrary = fc.constantFrom(...roleNames);
@@ -97,6 +98,7 @@ const authorizeAs = (role: (typeof roleNames)[number]) => async () => ({
   email: "member@example.test",
   role,
   workspace: null,
+  ...PLAIN_MEMBER_FACTS,
 });
 
 describe("personal API key authority", () => {
@@ -274,7 +276,44 @@ describe("personal API key authority", () => {
     for (const role of roleNames) {
       expect(personalApiKeyPermissions(sessionMemberRole(role))).toEqual({
         workspace: ["read"],
+        searchHistory: ["read"],
       });
+    }
+  });
+
+  test("own history authority follows read and knowledge-write consent for every role", () => {
+    for (const role of roleNames) {
+      const memberRole = sessionMemberRole(role);
+      for (const scope of PERSONAL_API_KEY_SCOPES) {
+        const permissions = personalApiKeyPermissions(memberRole, [scope]);
+        switch (scope) {
+          case "stella:read":
+            expect(permissions["searchHistory"]).toEqual(["read"]);
+            break;
+          case "stella:knowledge_write":
+            expect(permissions["searchHistory"]).toEqual(["delete"]);
+            break;
+          case "stella:contacts_write":
+          case "stella:documents_write":
+          case "stella:matters_write":
+          case "stella:search":
+            expect(permissions["searchHistory"]).toBeUndefined();
+            break;
+          default:
+            scope satisfies never;
+        }
+        expect(
+          personalApiKeyPermissionsAllowed({ searchHistory: ["create"] }, [
+            scope,
+          ]),
+        ).toBe(false);
+      }
+      expect(
+        personalApiKeyPermissions(memberRole, [
+          "stella:read",
+          "stella:knowledge_write",
+        ])["searchHistory"],
+      ).toEqual(["read", "delete"]);
     }
   });
 

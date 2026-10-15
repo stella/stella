@@ -14,11 +14,20 @@
 // Usage:
 //   bun scripts/typecheck-coverage.ts
 //   bun scripts/typecheck-coverage.ts --self-test
+//   bun scripts/typecheck-coverage.ts --autofix <changed-source>...
 
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import {
+  type Dirent,
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 import { withoutTsgoOnlyOptionDiagnostics } from "../packages/scripts/src/tsgo-compiler-options.ts";
 
@@ -29,10 +38,8 @@ const EXEMPT_PREFIXES = [".oxlint-plugins/__fixtures__/"] as const;
 const CONVENTIONAL_TSCONFIG = "tsconfig.json";
 const ROOT_TSCONFIG = "tsconfig.json";
 const TURBO_CONFIG = "turbo.json";
-const TYPECHECK_CACHE_OUTPUTS = [
-  ".cache/tsbuildinfo*.json",
-  "**/.cache/tsbuildinfo*.json",
-] as const;
+// Bun checks report diagnostics without producing incremental build artifacts.
+const TYPECHECK_CACHE_OUTPUTS = [] as const;
 // Astro remains on its isolated TypeScript 6 checker. It does not invoke the
 // native compiler or produce a build-info file for Turbo to restore.
 const INCREMENTAL_EXEMPT_PROJECTS = new Set(["apps/landing/tsconfig.json"]);
@@ -51,6 +58,8 @@ type ProjectBuildInfo = {
   buildInfoFile: string;
   project: string;
 };
+
+type PathApi = Pick<typeof path, "isAbsolute" | "relative" | "resolve" | "sep">;
 
 // Oxc discovers only tsconfig.json files while walking up from a source file.
 // Keep every proxy beside the source subtree that its nonstandard native project
@@ -73,11 +82,11 @@ const OXC_PROJECT_PROXIES = [
     target: "apps/api/tsconfig.scripts.json",
   },
   {
-    config: "apps/api/src/mcp/apps/tsconfig.json",
-    target: "apps/api/tsconfig.mcp-apps.json",
+    config: "apps/api/src/handlers/visual-sandbox/browser/tsconfig.json",
+    target: "apps/api/tsconfig.visual-sandbox.json",
   },
   {
-    config: "apps/api/src/handlers/visual-sandbox/browser/tsconfig.json",
+    config: "apps/api/e2e/tsconfig.json",
     target: "apps/api/tsconfig.visual-sandbox.json",
   },
   {
@@ -107,6 +116,8 @@ const OXC_PROJECT_PROXIES = [
 ] as const satisfies readonly OxcProjectProxy[];
 
 const OXC_NATIVE_ONLY_PROJECTS = [
+  "apps/api/tsconfig.src.json",
+  "apps/api/tsconfig.tests.json",
   "tsconfig.scripts.json",
   "tsconfig.tooling.json",
   "tsconfig.oxlint-plugins.json",
@@ -167,6 +178,15 @@ const lines = (output: string): string[] =>
     .map((line) => line.trim())
     .filter(Boolean);
 
+// Native TypeScript supplies project membership without checking candidate
+// projects. Bun checks only the selected projects before an autofix can run.
+const projectMembership = (project: string): Set<string> =>
+  new Set(
+    lines(
+      run([process.execPath, TSC_NATIVE, "--listFilesOnly", "-p", project]),
+    ).map((source) => normalizeRepoPath(path.resolve(REPO_ROOT, source))),
+  );
+
 const supplementalProjects = (typecheckCommand: string): string[] => {
   const projects: string[] = [];
   for (const match of typecheckCommand.matchAll(PROJECT_ARGUMENT)) {
@@ -177,6 +197,34 @@ const supplementalProjects = (typecheckCommand: string): string[] => {
   }
   return projects;
 };
+
+// A config that is a symlink to a file counts like a file, as it does for
+// nearestOxcConfig; a dangling link does not.
+const isConfigFile = (directory: string, entry: Dirent): boolean =>
+  entry.isFile() ||
+  (entry.isSymbolicLink() &&
+    (statSync(path.join(REPO_ROOT, directory, entry.name), {
+      throwIfNoEntry: false,
+    })?.isFile() ??
+      false));
+
+const projectsInDirectory = (directory: string): string[] =>
+  readdirSync(path.join(REPO_ROOT, directory), { withFileTypes: true })
+    .filter(
+      (entry) =>
+        /^tsconfig.*\.json$/u.test(entry.name) &&
+        isConfigFile(directory, entry),
+    )
+    .map((entry) => normalizeRepoPath(path.join(directory, entry.name)))
+    .toSorted((left, right) => {
+      if (isConventionalProject(left) !== isConventionalProject(right)) {
+        return isConventionalProject(left) ? -1 : 1;
+      }
+      if (left === right) {
+        return 0;
+      }
+      return left < right ? -1 : 1;
+    });
 
 const typecheckProjects = (): string[] => {
   const projects = new Set<string>();
@@ -210,8 +258,19 @@ const typecheckProjects = (): string[] => {
 
       addProject(path.join(workspace, "tsconfig.json"), workspace);
 
-      for (const project of supplementalProjects(typecheck)) {
-        addProject(path.join(workspace, project), workspace);
+      for (const [name, command] of Object.entries(packageJson.scripts)) {
+        if (name !== "typecheck" && !name.startsWith("typecheck:")) {
+          continue;
+        }
+        if (
+          name === "generate:typecheck-declarations" ||
+          typeof command !== "string"
+        ) {
+          continue;
+        }
+        for (const project of supplementalProjects(command)) {
+          addProject(path.join(workspace, project), workspace);
+        }
       }
     }
   }
@@ -278,9 +337,7 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const readJsonObject = (file: string): Record<string, unknown> => {
   const parsed = Bun.JSONC.parse(readFileSync(file, "utf-8"));
   if (!isRecord(parsed)) {
-    panic(
-      `${normalizeRepoPath(path.relative(REPO_ROOT, file))} must contain an object`,
-    );
+    panic(`${repoRelativePath(REPO_ROOT, file)} must contain an object`);
   }
   return parsed;
 };
@@ -318,7 +375,7 @@ const duplicateBuildInfoErrors = (projects: ProjectBuildInfo[]): string[] => {
     const owner = owners.get(buildInfoFile);
     if (owner) {
       errors.push(
-        `${project} and ${owner} share ${normalizeRepoPath(path.relative(REPO_ROOT, buildInfoFile))}`,
+        `${project} and ${owner} share ${repoRelativePath(REPO_ROOT, buildInfoFile)}`,
       );
       continue;
     }
@@ -346,7 +403,7 @@ const incrementalProjectErrors = (projects: string[]): string[] => {
       continue;
     }
     const relativeBuildInfo = normalizeRepoPath(
-      path.relative(REPO_ROOT, buildInfoFile),
+      repoRelativePath(REPO_ROOT, buildInfoFile),
     );
     if (!/(?:^|\/)\.cache\/tsbuildinfo[^/]*\.json$/u.test(relativeBuildInfo)) {
       errors.push(
@@ -359,8 +416,9 @@ const incrementalProjectErrors = (projects: string[]): string[] => {
   return errors;
 };
 
-const turboTypecheckOutputErrors = (): string[] => {
-  const turbo = readJsonObject(path.join(REPO_ROOT, TURBO_CONFIG));
+const turboTypecheckOutputErrors = (
+  turbo = readJsonObject(path.join(REPO_ROOT, TURBO_CONFIG)),
+): string[] => {
   const tasks = turbo["tasks"];
   const typecheck = isRecord(tasks) ? tasks["typecheck"] : undefined;
   const outputs = isRecord(typecheck) ? typecheck["outputs"] : undefined;
@@ -422,7 +480,7 @@ const assertProxyTargets = (proxies: readonly OxcProjectProxy[]): void => {
     }
 
     const resolvedTarget = normalizeRepoPath(
-      path.relative(
+      repoRelativePath(
         REPO_ROOT,
         path.resolve(path.dirname(proxyPath), extendsPath),
       ),
@@ -434,20 +492,123 @@ const assertProxyTargets = (proxies: readonly OxcProjectProxy[]): void => {
   }
 };
 
+type NearestOxcConfigOptions = {
+  file: string;
+  configExists: (config: string) => boolean;
+};
+
+const nearestOxcConfig = ({
+  file,
+  configExists,
+}: NearestOxcConfigOptions): string | null => {
+  let directory = path.posix.dirname(file);
+  while (true) {
+    const config = path.posix.join(directory, CONVENTIONAL_TSCONFIG);
+    if (configExists(config)) {
+      return config;
+    }
+    if (directory === ".") {
+      return null;
+    }
+    directory = path.posix.dirname(directory);
+  }
+};
+
 const hasDiscoverableAncestorConfig = (
   file: string,
   discoverableConfigFiles: Map<string, Set<string>>,
   configExists: (config: string) => boolean,
 ): boolean => {
-  let directory = path.posix.dirname(file);
-  while (directory !== ".") {
-    const config = `${directory}/${CONVENTIONAL_TSCONFIG}`;
-    if (configExists(config)) {
-      return discoverableConfigFiles.get(config)?.has(file) ?? false;
-    }
-    directory = path.posix.dirname(directory);
+  const config = nearestOxcConfig({ file, configExists });
+  return config === null
+    ? false
+    : (discoverableConfigFiles.get(config)?.has(file) ?? false);
+};
+
+// A changed-file Oxc pass filters compiler diagnostics to its targets. Compile
+// complete selected projects, including unchanged dependencies, and prove
+// membership before running any fixer. Root sources can belong to siblings of
+// the empty conventional config; search outward from the nearest config.
+const typecheckAutofixFiles = (files: readonly string[]): void => {
+  if (files.length === 0) {
+    panic("Autofix typecheck requires source files");
   }
-  return false;
+  const projects = new Map<string, string[]>();
+  const memberships = new Map<string, Set<string>>();
+  const directoryProjects = new Map<string, string[]>();
+  for (const rawFile of files) {
+    const file = normalizeRepoPath(
+      repoRelativePath(REPO_ROOT, path.resolve(REPO_ROOT, rawFile)),
+    );
+    if (file === ".." || file.startsWith("../") || path.isAbsolute(file)) {
+      panic(`Autofix source is outside the repository: ${rawFile}`);
+    }
+    const nearest = nearestOxcConfig({
+      file,
+      configExists: (config) => existsSync(path.join(REPO_ROOT, config)),
+    });
+    if (nearest === null) {
+      panic(`Autofix source has no TypeScript project: ${file}`);
+    }
+    // Start beside the source: a sibling config can sit below the nearest
+    // conventional one.
+    let directory = path.posix.dirname(file);
+    const tried: string[] = [];
+    let coveringProject: string | undefined;
+    while (coveringProject === undefined) {
+      let candidates = directoryProjects.get(directory);
+      if (candidates === undefined) {
+        candidates = projectsInDirectory(directory);
+        directoryProjects.set(directory, candidates);
+      }
+      for (const project of candidates) {
+        tried.push(project);
+        let membership = memberships.get(project);
+        if (membership === undefined) {
+          membership = projectMembership(project);
+          memberships.set(project, membership);
+        }
+        if (membership.has(normalizeRepoPath(path.resolve(REPO_ROOT, file)))) {
+          coveringProject = project;
+          break;
+        }
+      }
+      if (coveringProject !== undefined || directory === ".") {
+        break;
+      }
+      directory = path.posix.dirname(directory);
+    }
+    // Lint-rule fixtures are invalid on purpose; the ones no project includes
+    // are skipped, as the coverage check exempts them. A fixture a project
+    // does include (a declaration file) is type-checked like any source.
+    if (coveringProject === undefined && isExempt(file)) {
+      console.log(`Autofix types skipped (exempt fixture): ${file}`);
+      continue;
+    }
+    if (coveringProject === undefined) {
+      panic(
+        `Autofix source is covered by no candidate project: ${file}. Candidates tried: ${tried.join(", ")}`,
+      );
+    }
+    const targets = projects.get(coveringProject);
+    if (targets === undefined) {
+      projects.set(coveringProject, [file]);
+    } else {
+      targets.push(file);
+    }
+  }
+  for (const [project, targets] of projects) {
+    run([
+      process.execPath,
+      "check",
+      "--no-pretty",
+      "--all",
+      `--project=${project}`,
+    ]);
+    console.log(
+      `Autofix types checked: ${project} (${targets.length} targets)`,
+    );
+  }
 };
 
 const findSourcesWithoutDiscoverableConfig = (
@@ -526,8 +687,8 @@ const coveredFilesByProject = (
       "--listFilesOnly",
     ]);
     for (const file of lines(output)) {
-      const relative = path.relative(REPO_ROOT, path.resolve(file));
-      if (relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+      const relative = repositoryRelativeFile(REPO_ROOT, file, path);
+      if (relative === null) {
         continue;
       }
       projectFiles.add(normalizeRepoPath(relative));
@@ -536,6 +697,18 @@ const coveredFilesByProject = (
   }
 
   return filesByProject;
+};
+
+const repositoryRelativeFile = (
+  root: string,
+  file: string,
+  pathApi: PathApi,
+): string | null => {
+  const absolute = pathApi.resolve(file);
+  if (!isPathInside(root, absolute, pathApi)) {
+    return null;
+  }
+  return repoRelativePath(root, absolute, pathApi);
 };
 
 const coveredFiles = (
@@ -617,11 +790,44 @@ const assert = (condition: boolean, message: string): void => {
   }
 };
 
+const selfTestGeneratedProjects = (): void => {
+  const generatedProject = "packages/example/src/generated/tsconfig.json";
+  const generatedSources = new Set([
+    "packages/example/src/generated/contracts.js",
+    "packages/example/src/generated/contracts.d.ts",
+  ]);
+  assert(
+    projectAccountingErrors(
+      ["packages/example/tsconfig.json", generatedProject],
+      [],
+      [],
+    ).length === 0,
+    "must discover a supplemental conventional project without a proxy",
+  );
+  assert(
+    findSourcesWithoutDiscoverableConfig(
+      generatedSources,
+      generatedSources,
+      new Map([[generatedProject, generatedSources]]),
+      (config) => config === generatedProject,
+    ).length === 0,
+    "must cover generated runtime JS and its declaration in their nearest conventional project",
+  );
+};
+
 const selfTest = (): void => {
   assert(isTypeScriptFile("src/new-file.ts"), "must recognize .ts files");
   assert(isTypeScriptFile("src/env.d.ts"), "must recognize declaration files");
   assert(isTypeScriptFile("src/view.tsx"), "must recognize .tsx files");
   assert(!isTypeScriptFile("src/view.js"), "must ignore non-TypeScript files");
+  assert(
+    repositoryRelativeFile(
+      String.raw`C:\repository`,
+      String.raw`C:\outside\file.ts`,
+      path.win32,
+    ) === null,
+    "must reject a Windows file outside the repository before normalizing separators",
+  );
   assert(
     isOxcSourceFile("apps/web/file.js"),
     "must recognize .js files for Oxc",
@@ -632,11 +838,23 @@ const selfTest = (): void => {
   );
 
   const parsed = supplementalProjects(
-    "tsc --noEmit -p tsconfig.test.json && tsc --project=e2e/tsconfig.json",
+    "bun check --no-pretty --all --project=tsconfig.test.json && bun check --no-pretty --all --project=e2e/tsconfig.json",
   );
   assert(
     parsed.join(",") === "tsconfig.test.json,e2e/tsconfig.json",
     "must discover supplemental typecheck projects",
+  );
+
+  assert(
+    turboTypecheckOutputErrors({ tasks: { typecheck: { outputs: [] } } })
+      .length === 0,
+    "Bun checks must have no incremental Turbo outputs",
+  );
+  assert(
+    turboTypecheckOutputErrors({
+      tasks: { typecheck: { outputs: [".cache/tsbuildinfo*.json"] } },
+    }).some((error) => error.includes("unexpected .cache/tsbuildinfo")),
+    "must reject stale native compiler outputs for Bun checks",
   );
 
   const duplicateCacheErrors = duplicateBuildInfoErrors([
@@ -741,6 +959,8 @@ const selfTest = (): void => {
     "must accept a dedicated Oxc proxy for a co-located test project",
   );
 
+  selfTestGeneratedProjects();
+
   const sourceMaskedByUnregisteredConfig = findSourcesWithoutDiscoverableConfig(
     new Set(["apps/example/scripts/unregistered.ts"]),
     new Set(["apps/example/scripts/unregistered.ts"]),
@@ -788,11 +1008,34 @@ const selfTest = (): void => {
   console.log("typecheck-coverage --self-test: PASS");
 };
 
-const main = (): void => {
+const main = async (): Promise<void> => {
+  if (process.argv.at(2) === "--autofix") {
+    typecheckAutofixFiles(process.argv.slice(3));
+    return;
+  }
   const options = parseArgs(process.argv.slice(2));
   if (options.selfTest) {
     selfTest();
     return;
+  }
+
+  run([
+    "bunx",
+    "--no-install",
+    "turbo",
+    "run",
+    "generate:typecheck-declarations",
+    "--filter=@stll/api",
+  ]);
+
+  run(["bun", "packages/scripts/src/api-typecheck-partition.ts", "--resolved"]);
+
+  // Autofix checks supplied projects without loading the repository cache audit.
+  const { typecheckCacheContractIssues } =
+    await import("../packages/scripts/src/typecheck-cache-contract");
+  const cacheIssues = typecheckCacheContractIssues(REPO_ROOT);
+  if (cacheIssues.length > 0) {
+    panic(cacheIssues.join("\n"));
   }
 
   const projects = typecheckProjects();
@@ -857,4 +1100,4 @@ const main = (): void => {
   );
 };
 
-main();
+await main();

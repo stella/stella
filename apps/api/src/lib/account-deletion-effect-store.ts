@@ -19,7 +19,7 @@ import { createEffectLease } from "@/api/lib/effect-lease";
 import type { EffectLease } from "@/api/lib/effect-lease";
 
 export const ACCOUNT_DELETION_EFFECT_KIND = "account-deletion-s3" as const;
-export const ACCOUNT_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
+const ACCOUNT_DELETION_EFFECT_LEASE_MS = 15 * 60_000;
 export const ACCOUNT_DELETION_EFFECT_MAX_ATTEMPTS = 20;
 const RECOVERY_STATE_LIMIT = 50;
 const EXHAUSTED_LEASE_ERROR =

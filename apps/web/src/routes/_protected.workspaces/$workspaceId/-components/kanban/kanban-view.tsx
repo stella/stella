@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
-import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import type { Edge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/types";
-import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
-import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
+import { monitorForElements } from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import {
   useMutation,
   useInfiniteQuery,
@@ -29,6 +29,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { getInternalPropertyId } from "@/components/workspaces/entity-utils";
 import {
   buildKanbanAssigneeMatrix,
@@ -57,6 +58,7 @@ import {
 } from "@/lib/files/attached-template-upload-preflight";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceEntity, WorkspaceView } from "@/lib/types";
+import { useQueryView } from "@/lib/use-query-view";
 import {
   calculationKindsForProperty,
   isCalculableProperty,
@@ -327,12 +329,15 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       isKanbanGroupingRenderable(grouping) &&
       subgroupByPropertyId !== null,
   });
+  const subgroupView = useQueryView(subgroupQuery);
+  const subgroupQueryData =
+    subgroupView.type === "items" ? subgroupView.items : undefined;
   const subgroupEntities = useMemo(
     () =>
-      subgroupQuery.data
-        ? subgroupQuery.data.pages.flatMap((page) => page.entities)
+      subgroupQueryData
+        ? subgroupQueryData.pages.flatMap((page) => page.entities)
         : [],
-    [subgroupQuery.data],
+    [subgroupQueryData],
   );
   const subgroup = useMemo(
     () =>
@@ -430,27 +435,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     },
   });
 
-  // A grouping with no columns is not a board: no group-by at all, or a
-  // built-in grouping (created-by) that has no fixed column list to draw.
-  if (!isKanbanGroupingRenderable(grouping) || groupByPropertyId === null) {
-    return (
-      <EmptyState
-        hint={t("workspaces.kanban.usePropertyHint")}
-        icon={KanbanIcon}
-        message={t("workspaces.kanban.selectPropertyHint")}
-      />
-    );
-  }
-
-  // A Kanban card belongs to one column, and drop/upload write a single-select
-  // value to the grouping property, so the property must be single-select. A
-  // persisted multi-select grouping (from before the picker was mode-specific,
-  // or after a property type change) would render columns no card can move into,
-  // so fall back to the property prompt.
-  if (
-    grouping.type === "property" &&
-    grouping.property.content.type !== "single-select"
-  ) {
+  if (!canRenderKanbanBoard(groupByPropertyId, grouping)) {
     return (
       <EmptyState
         hint={t("workspaces.kanban.usePropertyHint")}
@@ -973,62 +958,82 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           }),
         };
 
+  if (
+    hasSupportedSubgroup &&
+    isKanbanGroupingRenderable(grouping) &&
+    subgroupByPropertyId !== null &&
+    subgroupView.type === "error"
+  ) {
+    return <QueryViewFeedback view={subgroupView} />;
+  }
+
   if (visibleSubgroupMatrix !== null) {
     return (
-      <KanbanSubgroupBoard
-        canCreateTaskInLane={canCreateTaskInLane}
-        cardFields={cardFields}
-        hasMore={subgroupQuery.hasNextPage}
-        isLoadingMore={subgroupQuery.isFetchingNextPage}
-        isTaskCreationPending={isTaskCreationPending}
-        loadedEntityCount={subgroupEntities.length}
-        matrix={visibleSubgroupMatrix}
-        canMoveCards={
-          isStatusGrouping ||
-          (grouping.type === "property" && !isReadOnlyVerdictGrouping)
-        }
-        onChangeColumnColor={
-          handleChangeColor
-            ? (columnValue, color) => handleChangeColor(columnValue, color)
-            : undefined
-        }
-        onCreateTask={(status, laneValue) => {
-          detached(
-            handleCreateTaskInCell(status, laneValue),
-            "kanban-view.create-task-in-cell",
-          );
-        }}
-        onDropCard={(entityId, columnValue, laneValue, sourceSubgroupValue) => {
-          detached(
-            handleDropCardInCell(
-              entityId,
-              columnValue,
-              laneValue,
-              sourceSubgroupValue,
-            ),
-            "kanban-view.drop-card-in-cell",
-          );
-        }}
-        onHideColumn={handleHideColumn}
-        onLoadMore={() => {
-          if (subgroupQuery.hasNextPage && !subgroupQuery.isFetchingNextPage) {
-            detached(
-              subgroupQuery.fetchNextPage(),
-              "kanban-view.fetch-subgroups-next-page",
-            );
+      <>
+        <QueryViewFeedback view={subgroupView} />
+        <KanbanSubgroupBoard
+          canCreateTaskInLane={canCreateTaskInLane}
+          cardFields={cardFields}
+          hasMore={subgroupQuery.hasNextPage}
+          isLoadingMore={subgroupQuery.isFetchingNextPage}
+          isTaskCreationPending={isTaskCreationPending}
+          loadedEntityCount={subgroupEntities.length}
+          matrix={visibleSubgroupMatrix}
+          canMoveCards={
+            isStatusGrouping ||
+            (grouping.type === "property" && !isReadOnlyVerdictGrouping)
           }
-        }}
-        onRenameColumn={
-          handleRenameColumn
-            ? (columnValue, newValue) =>
-                handleRenameColumn(columnValue, newValue)
-            : undefined
-        }
-        onRenameEntity={handleRenameEntity}
-        onReorderColumn={handleReorderColumn}
-        properties={properties}
-        workspaceId={workspaceId}
-      />
+          onChangeColumnColor={
+            handleChangeColor
+              ? (columnValue, color) => handleChangeColor(columnValue, color)
+              : undefined
+          }
+          onCreateTask={(status, laneValue) => {
+            detached(
+              handleCreateTaskInCell(status, laneValue),
+              "kanban-view.create-task-in-cell",
+            );
+          }}
+          onDropCard={(
+            entityId,
+            columnValue,
+            laneValue,
+            sourceSubgroupValue,
+          ) => {
+            detached(
+              handleDropCardInCell(
+                entityId,
+                columnValue,
+                laneValue,
+                sourceSubgroupValue,
+              ),
+              "kanban-view.drop-card-in-cell",
+            );
+          }}
+          onHideColumn={handleHideColumn}
+          onLoadMore={() => {
+            if (
+              subgroupQuery.hasNextPage &&
+              !subgroupQuery.isFetchingNextPage
+            ) {
+              detached(
+                subgroupQuery.fetchNextPage(),
+                "kanban-view.fetch-subgroups-next-page",
+              );
+            }
+          }}
+          onRenameColumn={
+            handleRenameColumn
+              ? (columnValue, newValue) =>
+                  handleRenameColumn(columnValue, newValue)
+              : undefined
+          }
+          onRenameEntity={handleRenameEntity}
+          onReorderColumn={handleReorderColumn}
+          properties={properties}
+          workspaceId={workspaceId}
+        />
+      </>
     );
   }
 
@@ -1092,6 +1097,19 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   );
 };
 
+// Drops write one column value per card, so the board needs fixed single-select columns.
+function canRenderKanbanBoard(
+  propertyId: string | null,
+  grouping: ReturnType<typeof resolveWorkspaceKanbanGrouping>,
+): propertyId is string {
+  return (
+    propertyId !== null &&
+    isKanbanGroupingRenderable(grouping) &&
+    (grouping.type !== "property" ||
+      grouping.property.content.type === "single-select")
+  );
+}
+
 type KanbanGroupColumnProps = Omit<
   ComponentProps<typeof KanbanColumn>,
   "entities"
@@ -1126,24 +1144,29 @@ const KanbanGroupColumn = ({
       groupValue: columnValue,
     }),
   );
-  const entities = query.data
-    ? query.data.pages.flatMap((page) => page.entities)
+  const columnView = useQueryView(query);
+  const queryData = columnView.type === "items" ? columnView.items : undefined;
+  const entities = queryData
+    ? queryData.pages.flatMap((page) => page.entities)
     : [];
 
   return (
-    <KanbanColumn
-      {...props}
-      columnValue={columnValue}
-      entities={entities}
-      hasMore={query.hasNextPage}
-      isLoadingMore={query.isFetchingNextPage}
-      onLoadMore={() => {
-        if (query.hasNextPage && !query.isFetchingNextPage) {
-          detached(query.fetchNextPage(), "kanban-view.fetch-next-page");
-        }
-      }}
-      workspaceId={workspaceId}
-    />
+    <>
+      <QueryViewFeedback view={columnView} />
+      <KanbanColumn
+        {...props}
+        columnValue={columnValue}
+        entities={entities}
+        hasMore={query.hasNextPage}
+        isLoadingMore={query.isFetchingNextPage}
+        onLoadMore={() => {
+          if (query.hasNextPage && !query.isFetchingNextPage) {
+            detached(query.fetchNextPage(), "kanban-view.fetch-next-page");
+          }
+        }}
+        workspaceId={workspaceId}
+      />
+    </>
   );
 };
 

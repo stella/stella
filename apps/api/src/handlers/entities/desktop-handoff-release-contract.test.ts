@@ -28,7 +28,12 @@ import {
   hashPdfSigningToken,
   recordPdfSigningHandoffFailure,
 } from "@/api/lib/files/pdf-signing/sessions";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -269,15 +274,26 @@ test("a supported PDF desktop with its matching account redeems the signing sess
     handoffToken,
   });
   const { ids } = rlsFixture;
+  const device = await createDesktopDeviceSigner();
   const app = new Elysia().use(
     createPdfSigningSessionsRoute({
       recordFailure: dependencies.recordFailure,
       redemptionDatabase: tokenDb,
-      authorizeAccount: async () =>
+      authorizeAccount: async (request) =>
         Result.ok({
+          consumedProof: await claimFixtureDeviceProof({
+            request: await device.signRequest({
+              request,
+              credential: "matching-desktop-account",
+            }),
+            deviceJkt: device.deviceJkt,
+            keyId: "desktop-account-key",
+            credential: "matching-desktop-account",
+          }),
           organizationId: ids.orgA,
           userId: ids.userA1,
           keyId: "desktop-account-key",
+          memberRole: sessionMemberRole("member"),
           scopedDb: tokenDb.scoped({
             organizationId: ids.orgA,
             userId: ids.userA1,

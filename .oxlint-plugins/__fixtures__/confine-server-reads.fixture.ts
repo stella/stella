@@ -1,4 +1,4 @@
-/* oxlint-disable eslint/no-duplicate-imports, import/no-duplicates -- fixture imports independent cases */
+/* oxlint-disable no-duplicate-imports, import/no-duplicates -- fixture imports independent cases */
 
 // Passive fixture for `confine-server-reads/confine-server-reads`.
 

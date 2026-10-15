@@ -6,12 +6,14 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 
 import { AiRewriteControl } from "@/components/ai-rewrite-control";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import type { ClauseBody } from "@/components/templates/clause-editor-types";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type ClauseSlot = { patchKey: string; name: string; body: ClauseBody };
 
@@ -33,7 +35,7 @@ export const FillClausesSection = ({
 }: FillClausesSectionProps) => {
   const t = useTranslations();
 
-  const { data } = useQuery({
+  const dataQuery = useQuery({
     queryKey: ["template-clause-slots", templateId],
     queryFn: async ({ signal }) => {
       const response = await api
@@ -42,14 +44,18 @@ export const FillClausesSection = ({
       return unwrapEden(response);
     },
   });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   const slots = data ? data.slots : [];
   if (slots.length === 0) {
-    return null;
+    return <QueryViewFeedback view={dataView} />;
   }
 
   return (
     <section className="flex flex-col gap-2">
+      <QueryViewFeedback view={dataView} />
       <h3 className="text-foreground text-sm font-semibold">
         {t("common.clauses")}
       </h3>

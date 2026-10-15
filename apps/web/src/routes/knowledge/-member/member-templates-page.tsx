@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { LeaveConfirmDialog } from "@/features/knowledge/leave-confirm-dialog";
 import {
   memberKnowledgeActions,
   memberKnowledgeSource,
@@ -17,7 +18,6 @@ import { toAPIError, APIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isPublicKnowledgeEnabled } from "@/lib/knowledge/public-knowledge-launch";
-import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
 import { TemplateList } from "@/routes/knowledge/-components/template-list";
 import { TemplateStudioPage } from "@/routes/knowledge/-components/template-studio";
 import { useTemplateStudioStore } from "@/routes/knowledge/-components/template-studio-store";

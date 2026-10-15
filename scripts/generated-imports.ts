@@ -62,7 +62,15 @@ export const specifierCandidates = (
       return [`${stem}.mts`, `${stem}.d.mts`, target];
     case ".cjs":
       return [`${stem}.cts`, `${stem}.d.cts`, target];
-    case "":
+    default:
+      if (
+        SOURCE_EXTENSIONS.includes(extension) ||
+        extension === ".jsx" ||
+        extension === ".json"
+      ) {
+        return [target];
+      }
+      // A dot in a module basename does not make it a source extension.
       // Bundler resolution: the file forms, then the directory index forms.
       return [
         `${target}.ts`,
@@ -77,8 +85,6 @@ export const specifierCandidates = (
         `${target}/index.jsx`,
         target,
       ];
-    default:
-      return [target];
   }
 };
 

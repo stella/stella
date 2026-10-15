@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { entityContextId } from "@/api/db/entity-feature-policies";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -49,7 +50,7 @@ const listFoldersHandler = async function* ({
           createdAt: entityListTimestampCursorExpr(sql`${entities.createdAt}`),
           id: entities.id,
           name: entities.name,
-          parentId: entities.parentId,
+          parentId: entityContextId(entities.parentId),
         })
         .from(entities)
         .where(
@@ -78,6 +79,7 @@ const listFoldersHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "List the folders of a matter, oldest first with cursor pagination, each " +
     "with its id, name, and parent folder. Documents and tasks are left out; " +

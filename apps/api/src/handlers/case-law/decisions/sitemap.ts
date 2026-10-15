@@ -7,6 +7,7 @@ import {
   publicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import {
   caseLawDecisions,
@@ -27,7 +28,6 @@ import {
   SITEMAP_UNDATED_MONTH,
   SITEMAP_UNDATED_YEAR,
 } from "@/api/lib/case-law/sitemap-shard-sql";
-import { chunked } from "@/api/lib/chunked";
 import { publicLawCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -280,7 +280,7 @@ export const listSitemapShardDecisionsHandler = async (
     // would make the read unbounded. Hitting the cap is a data-integrity anomaly
     // (a group exceeding the expected variant count), not a normal case: warn and
     // proceed with what loaded rather than 500 the whole sitemap.
-    for (const groupKeyBatch of chunked(
+    for (const groupKeyBatch of chunkItems(
       languageGroupKeys,
       SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
     )) {
