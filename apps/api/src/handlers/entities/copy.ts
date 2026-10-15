@@ -613,7 +613,7 @@ const copyToWorkspaceHandler = async function* ({
       workspaceId: sourceWorkspaceId,
       entityId: sourceEntityId,
       userId,
-      access: "write",
+      access: deleteSource ? "remove" : "write",
     });
     if (admission.isErr()) {
       return Result.err(admission.error);

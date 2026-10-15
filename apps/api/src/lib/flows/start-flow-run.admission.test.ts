@@ -69,13 +69,13 @@ const selectManualFixtureRows = (projection: Record<string, unknown>) => {
   const rows = Promise.resolve(manualFixtureRows(projection));
   // Resolving the existing promise preserves its query methods at every chain link.
   const resolveRows = Promise.resolve.bind(Promise, rows);
-  Object.assign(rows, {
+  const query = Object.assign(rows, {
     innerJoin: resolveRows,
     where: resolveRows,
     for: resolveRows,
     limit: resolveRows,
   });
-  return { from: resolveRows };
+  return { from: () => query };
 };
 
 // Organization-scoped writes open a savepoint on the caller transaction; the

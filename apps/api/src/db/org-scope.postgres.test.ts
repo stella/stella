@@ -4,7 +4,13 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
-import { proveOrgScope, withOrgScope } from "@/api/db/org-scope";
+import {
+  OrgScopeMismatch,
+  OrgScopeRowAbsent,
+  proveMattersOrgScope,
+  proveOrgScope,
+  withOrgScope,
+} from "@/api/db/org-scope";
 import {
   featureEnrolments,
   flowDefinitions,
@@ -215,6 +221,60 @@ describe.skipIf(!enabled)(
               eq(flowUploadTriggerIntents.definitionId, definitionId),
             ),
           ).toBe(0);
+        } finally {
+          await b.cleanup();
+          await a.cleanup();
+        }
+      });
+    });
+
+    test("a matter page proves one organization from every locked matter", async () => {
+      await withGatedTestClients(databaseUrl(), async ({ openClient }) => {
+        const { db } = openClient();
+        const a = await flowReviewGateFixture(db, { intermediate: false });
+        const b = await flowReviewGateFixture(db, { intermediate: false });
+        const secondMatterId = createSafeId<"workspace">();
+        try {
+          await db.insert(workspaces).values({
+            id: secondMatterId,
+            organizationId: a.organizationId,
+            name: "Second matter",
+            reference: secondMatterId,
+          });
+          await withAggregateTransaction(db, async (tx) => {
+            const proof = await proveMattersOrgScope(tx, [
+              secondMatterId,
+              a.workspaceId,
+              secondMatterId,
+            ]);
+            if (proof.isErr()) {
+              panic("Matters of one organization must prove a scope");
+            }
+            expect(proof.value.organizationId).toBe(a.organizationId);
+            expect(proof.value.workspaceIds.toSorted()).toEqual(
+              [a.workspaceId, secondMatterId].toSorted(),
+            );
+          });
+          await withAggregateTransaction(db, async (tx) => {
+            const mixed = await proveMattersOrgScope(tx, [
+              a.workspaceId,
+              b.workspaceId,
+            ]);
+            expect(mixed.isErr()).toBe(true);
+            if (mixed.isErr()) {
+              expect(mixed.error).toBeInstanceOf(OrgScopeMismatch);
+            }
+            const missing = await proveMattersOrgScope(tx, [
+              a.workspaceId,
+              createSafeId<"workspace">(),
+            ]);
+            expect(missing.isErr()).toBe(true);
+            if (missing.isErr()) {
+              expect(missing.error).toBeInstanceOf(OrgScopeRowAbsent);
+            }
+            const empty = await proveMattersOrgScope(tx, []);
+            expect(empty.isErr()).toBe(true);
+          });
         } finally {
           await b.cleanup();
           await a.cleanup();

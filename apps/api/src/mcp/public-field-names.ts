@@ -165,7 +165,9 @@ export const withPublicFieldNames = (node: unknown): unknown => {
   if (Array.isArray(required)) {
     projected.set(
       "required",
-      required.map((name) => (typeof name === "string" ? rename(name) : name)),
+      required.map((name: unknown) =>
+        typeof name === "string" ? rename(name) : name,
+      ),
     );
   }
   return Object.fromEntries(projected);

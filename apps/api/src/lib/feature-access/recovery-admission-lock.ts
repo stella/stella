@@ -26,6 +26,24 @@ export const lockFeatureRecoveryAdmission = async ({
   });
 };
 
+/**
+ * Writers that only evaluate the current grant hold admission shared: grant
+ * changes and recovery still exclude them, while independent writers of one
+ * organization do not serialize on each other before their own row locks.
+ */
+export const lockFeatureAdmissionShared = async ({
+  tx,
+  organizationId,
+  featureId,
+}: LockFeatureRecoveryAdmissionOptions): Promise<void> => {
+  await withAggregateLock({
+    aggregate: "orgFeatureAdmission",
+    id: { organizationId, featureId },
+    mode: "shared",
+    tx,
+  });
+};
+
 /** Refuse an inverted wait when cleanup already holds membership or resource rows. */
 export const tryLockFeatureRecoveryAdmission = async ({
   tx,

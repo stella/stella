@@ -8,7 +8,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 import { invitation, member, organization } from "@/api/db/auth-schema";
 import {
   assertCallerOrg,
-  combineOrgScopes,
+  proveMattersOrgScope,
   proveOrgScope,
   withOrgScope,
 } from "@/api/db/org-scope";
@@ -966,33 +966,14 @@ const cancelMemberSigningSessions = async ({
       // UPDATE policy, so a row lock taken in the caller's context can see
       // nothing and silently skip every session. Prove the organization from
       // the sessions' matters, then lock and close inside that scope.
-      let provenScope: OrgScope | undefined;
-      const provenMatters = new Set<string>();
-      for (const session of organizationSessions) {
-        if (provenMatters.has(session.workspaceId)) {
-          continue;
-        }
-        provenMatters.add(session.workspaceId);
-        // db-await-in-loop: each matter of the bounded page proves its organization once, before any session lock.
-        const proof = await proveOrgScope(tx, {
-          table: "workspaces",
-          where: eq(workspaces.id, session.workspaceId),
-        });
-        if (proof.isErr()) {
-          abortTransaction(removalBusy());
-        }
-        if (provenScope === undefined) {
-          provenScope = proof.value;
-          continue;
-        }
-        const merged = combineOrgScopes(provenScope, proof.value);
-        if (merged.isErr()) {
-          abortTransaction(removalBusy());
-        }
-        provenScope = merged.value;
+      const proof = await proveMattersOrgScope(
+        tx,
+        organizationSessions.map((session) => session.workspaceId),
+      );
+      if (proof.isErr()) {
+        abortTransaction(removalBusy());
       }
-      const organizationScope =
-        provenScope ?? panic("Signing page requires a matter");
+      const organizationScope = proof.value;
       assertAssignmentScope(organizationScope, scope);
       const closed: {
         session: (typeof organizationSessions)[number];

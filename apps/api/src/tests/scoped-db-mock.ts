@@ -91,6 +91,11 @@ export const createSelectQueryMock = <TRow>(rows: TRow[]) => {
   };
 };
 
+// Every aggregate advisory statement (exclusive, shared, try, or the
+// key-only alias lookup) selects the physical key pair it resolves.
+const isAdvisoryLockStatement = (statement: string) =>
+  statement.includes(" AS key1, ") && statement.includes(" AS key2");
+
 const fixtureSelect =
   (tx: unknown, options?: ScopedDbMockOptions) => (selection: unknown) => {
     const columns =
@@ -229,7 +234,7 @@ export const createScopedDbMock = (
     const advisoryKeys = new Map<string, number>();
     const advisoryExecute = (query: SQL) => {
       const rendered = new PgDialect().sqlToQuery(query);
-      if (!/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
+      if (!isAdvisoryLockStatement(rendered.sql)) {
         return [];
       }
       const identity = JSON.stringify(rendered.params);
@@ -252,7 +257,7 @@ export const createScopedDbMock = (
                   ),
                 );
               }
-              if (/pg_(?:try_)?advisory_xact_lock\(/u.test(rendered.sql)) {
+              if (isAdvisoryLockStatement(rendered.sql)) {
                 return Promise.resolve(advisoryExecute(query));
               }
               if (

@@ -17,6 +17,7 @@ import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 import {
+  lockFeatureAdmissionShared,
   lockFeatureRecoveryAdmission,
   tryLockFeatureRecoveryAdmission,
 } from "@/api/lib/feature-access/recovery-admission-lock";
@@ -132,7 +133,12 @@ type EntityTransferAccessOptions = {
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   userId: SafeId<"user">;
-  access: "read" | "write";
+  /**
+   * `write` evaluates the grant for a transfer that keeps its source;
+   * `remove` also deletes the source subtree, whose review-task deletion
+   * admission needs the exclusive mode in the same transaction.
+   */
+  access: "read" | "write" | "remove";
 };
 
 type ReadEntityTransferEligibilityOptions = Omit<
@@ -208,12 +214,19 @@ export const readEntityTransferEligibility = async (
   });
 };
 
-/** Writers take admission before tree/entity locks and evaluate current links. */
+/**
+ * Writers take admission before tree/entity locks and evaluate current links.
+ * A transfer that keeps its source only reads the grant and links, so it
+ * holds admission shared: grant changes and flow effects (exclusive) still
+ * exclude it, while transfers in one organization serialize only on their
+ * own matter locks. A transfer that removes its source takes the exclusive
+ * mode up front, since its review-task deletion admission needs it later.
+ */
 const entityTransferIsEligible = async (
   tx: Transaction,
   { workspaceId, entityId, userId, access }: EntityTransferAccessOptions,
 ): Promise<boolean> => {
-  if (access === "write") {
+  if (access !== "read") {
     const workspace = await tx.query.workspaces.findFirst({
       where: { id: { eq: workspaceId } },
       columns: { organizationId: true },
@@ -221,11 +234,16 @@ const entityTransferIsEligible = async (
     if (workspace === undefined) {
       return false;
     }
-    await lockFeatureRecoveryAdmission({
+    const admission = {
       tx,
       organizationId: workspace.organizationId,
       featureId: "flows",
-    });
+    } as const;
+    if (access === "remove") {
+      await lockFeatureRecoveryAdmission(admission);
+    } else {
+      await lockFeatureAdmissionShared(admission);
+    }
   }
   const rows = await readEntityTransferEligibility(tx, {
     workspaceId,

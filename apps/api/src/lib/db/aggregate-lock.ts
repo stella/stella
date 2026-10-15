@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   eq,
+  inArray,
   or,
   getColumnTable,
   getColumns,
@@ -2067,6 +2068,18 @@ class AggregateScopeSourceBusy extends TaggedError("AggregateScopeSourceBusy")<{
   cause: unknown;
 }> {}
 
+const abortScopeSourceFailure = (error: unknown): never => {
+  if (getPgErrorCode(error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
+    return abortTransaction(
+      new AggregateScopeSourceBusy({
+        message: "Scope source is in use",
+        cause: error,
+      }),
+    );
+  }
+  return abortTransaction(error);
+};
+
 /** Pin ownership without adding a blocking upgrade to the caller's resource chain. */
 export const lockOrgScopeSource = async ({
   tx,
@@ -2103,15 +2116,37 @@ export const lockOrgScopeSource = async ({
     return row;
   });
   if (Result.isError(result)) {
-    if (getPgErrorCode(result.error) === PG_ERROR.LOCK_NOT_AVAILABLE) {
-      return abortTransaction(
-        new AggregateScopeSourceBusy({
-          message: "Scope source is in use",
-          cause: result.error,
-        }),
-      );
-    }
-    return abortTransaction(result.error);
+    return abortScopeSourceFailure(result.error);
+  }
+  return result.value;
+};
+
+/**
+ * Pin the ownership of several matters in one id-ordered statement, so a
+ * bounded page proves its organization without a lock round trip per matter.
+ */
+export const lockOrgScopeMatters = async ({
+  tx,
+  workspaceIds,
+}: {
+  tx: Pick<Transaction, "select">;
+  workspaceIds: readonly SafeId<"workspace">[];
+}) => {
+  const result = await Result.tryPromise(
+    async () =>
+      await tx
+        .select({
+          id: workspaces.id,
+          organizationId: workspaces.organizationId,
+        })
+        .from(workspaces)
+        .where(inArray(workspaces.id, [...workspaceIds]))
+        .orderBy(workspaces.id)
+        .limit(workspaceIds.length)
+        .for("key share", { noWait: true }),
+  );
+  if (Result.isError(result)) {
+    return abortScopeSourceFailure(result.error);
   }
   return result.value;
 };
