@@ -837,7 +837,11 @@ test("a provision-only list is the complete citing set with an exact total and i
       provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
     },
     caseLawDb,
-    dependencies: { servingGeneration: GENERATION, provider: "corpus-index" },
+    dependencies: {
+      servingGeneration: GENERATION,
+      provider: "corpus-index",
+      loadCourtWeights: async () => await Promise.resolve(courtWeights),
+    },
   });
   if (!("hits" in listed)) {
     throw new Error("expected a page");
@@ -857,7 +861,11 @@ test("a provision-only list is the complete citing set with an exact total and i
       provision: { work: "262/2006 Sb.", unit: "section", section: 317 },
     },
     caseLawDb,
-    dependencies: { servingGeneration: GENERATION, provider: "corpus-index" },
+    dependencies: {
+      servingGeneration: GENERATION,
+      provider: "corpus-index",
+      loadCourtWeights: async () => await Promise.resolve(courtWeights),
+    },
   });
   expect("hits" in none ? none.total : null).toEqual({
     type: "exact",
@@ -895,7 +903,11 @@ test("a provision-only list escapes the citing sentence it shows as markup", asy
         provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
       },
       caseLawDb,
-      dependencies: { servingGeneration: GENERATION, provider: "corpus-index" },
+      dependencies: {
+        servingGeneration: GENERATION,
+        provider: "corpus-index",
+        loadCourtWeights: async () => await Promise.resolve(courtWeights),
+      },
     });
     if (!("hits" in listed)) {
       throw new Error("expected a page");
@@ -935,7 +947,11 @@ test("a provision-only list reads its page and excerpts in one snapshot", async 
       provision: { work: "262/2006 Sb.", unit: "section", section: 316 },
     },
     caseLawDb,
-    dependencies: { servingGeneration: GENERATION, provider: "corpus-index" },
+    dependencies: {
+      servingGeneration: GENERATION,
+      provider: "corpus-index",
+      loadCourtWeights: async () => await Promise.resolve(courtWeights),
+    },
   });
   // One read for ids, total, citing sentences and rows (one repeatable-read
   // transaction), one for the language alternates.
@@ -981,6 +997,7 @@ test("a provision-only list cursor resumes only the request it was issued for", 
         dependencies: {
           servingGeneration: GENERATION,
           provider: "corpus-index",
+          loadCourtWeights: async () => await Promise.resolve(courtWeights),
         },
       });
     const first = await list(request);
@@ -1035,6 +1052,11 @@ test("a provision-only list cursor resumes only the request it was issued for", 
         false,
       );
     }
+    // `newest` lists dated decisions only; date both for its pages.
+    await db
+      .update(caseLawDecisions)
+      .set({ decisionDate: "2024-01-01" })
+      .where(inArray(caseLawDecisions.id, [czechId, slovakId]));
     const newest = await list({ ...request, sort: "newest" });
     if (!("hits" in newest) || newest.nextCursor === null) {
       throw new Error("expected a newest first page with a continuation");
@@ -1052,6 +1074,10 @@ test("a provision-only list cursor resumes only the request it was issued for", 
       ).toBe(false);
     }
   } finally {
+    await db
+      .update(caseLawDecisions)
+      .set({ decisionDate: null })
+      .where(inArray(caseLawDecisions.id, [czechId, slovakId]));
     if (extra !== undefined) {
       await db
         .delete(caseLawProvisionCitations)

@@ -2867,6 +2867,8 @@ type ListCaseLawProvisionDecisionsOptions = {
     servingGeneration?: string;
     /** The search provider, `LEGAL_SEARCH_PROVIDER` when absent. */
     provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
+    /** The court registry, the public one when absent, as search takes it. */
+    loadCourtWeights?: typeof loadPublicCourtWeights;
   };
 };
 
@@ -3058,7 +3060,9 @@ export const listCaseLawProvisionDecisions = async ({
     caseLawDb,
     languageGroupKeys: languageGroupKeysOf(pageRanked, byId),
   });
-  const courtWeights = await loadPublicCourtWeights();
+  const courtWeights = await (
+    dependencies.loadCourtWeights ?? loadPublicCourtWeights
+  )();
   const page = decisionHitsPage({
     alternatesByGroupKey: alternates,
     anchorIdById: new Map(),
