@@ -51,15 +51,19 @@ export const recordResponseConformanceViolation = (error: unknown): void => {
   }
   const sink =
     scope?.status === "capturing" ? scope.violations : defaultViolations;
-  sink.set(
-    JSON.stringify([
-      violation.route,
-      violation.status,
-      violation.issuePath,
-      violation.contentType,
-    ]),
-    violation,
-  );
+  const key = JSON.stringify([
+    violation.route,
+    violation.status,
+    violation.issuePath,
+  ]);
+  const existing = sink.get(key);
+  if (
+    existing?.contentType !== undefined &&
+    violation.contentType === undefined
+  ) {
+    return;
+  }
+  sink.set(key, violation);
 };
 
 /** Explicit negative fixtures own their violations without weakening the process sink. */

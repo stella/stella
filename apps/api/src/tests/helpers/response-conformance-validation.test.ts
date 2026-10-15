@@ -7,6 +7,10 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { ResponseConformanceError } from "@/api/lib/response-conformance-error";
 
 import {
+  captureResponseConformanceViolations,
+  recordResponseConformanceViolation,
+} from "./response-conformance-sink";
+import {
   assertHttpResponseConformance,
   assertResponseConformance,
 } from "./response-conformance-validation";
@@ -189,6 +193,50 @@ describe("response conformance validation", () => {
     ).toMatchObject({ issuePath: "items.0.name" });
   });
 
+  test.each([true, false])(
+    "preserves validator paths and deduplicates HTTP/direct defects with HTTP first=%s",
+    async (httpFirst) => {
+      for (const [schema, issuePath] of [
+        [objectSchema, "/count"],
+        [v.object({ count: v.number() }), "count"],
+      ] as const) {
+        const value = { count: "wrong" };
+        const direct = await rejectionOf(
+          assertResponseConformance({ route, status: 200, schema, value }),
+        );
+        const response = Response.json(value);
+        const http = await rejectionOf(
+          assertHttpResponseConformance({
+            route,
+            response,
+            method: "GET",
+            schema,
+          }),
+        );
+        expect(direct).toMatchObject({ route, status: 200, issuePath });
+        expect(http).toMatchObject({
+          route,
+          status: 200,
+          issuePath,
+          contentType: "application/json",
+          message: expect.stringContaining("content-type: application/json"),
+        });
+        const { violations } = await captureResponseConformanceViolations(
+          () => {
+            for (const error of httpFirst ? [http, direct] : [direct, http]) {
+              recordResponseConformanceViolation(error);
+            }
+          },
+        );
+        expect(violations).toHaveLength(1);
+        expect(violations).toMatchObject([
+          { route, status: 200, issuePath, contentType: "application/json" },
+        ]);
+        expect(await response.json()).toEqual(value);
+      }
+    },
+  );
+
   test("borrows the original while validating its owned JSON clone", async () => {
     const original = Response.json({ count: 2 });
     expect(
@@ -286,9 +334,9 @@ describe("response conformance validation", () => {
             }),
           ),
         ).toMatchObject({
-          issuePath: "(body)",
+          issuePath: contentType === "text/event-stream" ? "(body)" : "(root)",
           contentType,
-          message: `Response conformance failed: ${route} status 200 at (body) (content-type: ${contentType})`,
+          message: `Response conformance failed: ${route} status 200 at ${contentType === "text/event-stream" ? "(body)" : "(root)"} (content-type: ${contentType})`,
         });
         expect(clone).toHaveBeenCalledTimes(
           contentType === "text/event-stream" ? 0 : 1,
@@ -397,9 +445,9 @@ describe("response conformance validation", () => {
             }),
           ),
         ).toMatchObject({
-          issuePath: "(body)",
+          issuePath: "(root)",
           contentType: "text/plain",
-          message: `Response conformance failed: ${route} status 200 at (body) (content-type: text/plain)`,
+          message: `Response conformance failed: ${route} status 200 at (root) (content-type: text/plain)`,
         });
         expect(clone).toHaveBeenCalledTimes(1);
         expect(await response.text()).toBe(text);
@@ -552,7 +600,7 @@ describe("response conformance validation", () => {
           expect(await checked).toBe("valid");
         } else {
           expect(await rejectionOf(checked)).toMatchObject({
-            issuePath: "(body)",
+            issuePath: "/count",
             contentType: "application/json",
           });
         }
@@ -583,7 +631,7 @@ describe("response conformance validation", () => {
       ),
     ).toMatchObject({
       status: 201,
-      issuePath: "(body)",
+      issuePath: "/count",
       contentType: "application/problem+json",
     });
     expect(response.bodyUsed).toBe(false);
@@ -626,9 +674,9 @@ describe("response conformance validation", () => {
         }),
       ),
     ).toMatchObject({
-      issuePath: "(body)",
+      issuePath: "(root)",
       contentType: "application/json",
-      message: `Response conformance failed: ${route} status 200 at (body) (content-type: application/json)`,
+      message: `Response conformance failed: ${route} status 200 at (root) (content-type: application/json)`,
     });
     expect(await objectForString.json()).toEqual({ count: 1 });
 
@@ -655,9 +703,9 @@ describe("response conformance validation", () => {
         }),
       ),
     ).toMatchObject({
-      issuePath: "(body)",
+      issuePath: "(root)",
       contentType: "text/plain",
-      message: `Response conformance failed: ${route} status 200 at (body) (content-type: text/plain)`,
+      message: `Response conformance failed: ${route} status 200 at (root) (content-type: text/plain)`,
     });
     expect(textObject.bodyUsed).toBe(false);
     expect(await textObject.text()).toBe('{"count":1}');

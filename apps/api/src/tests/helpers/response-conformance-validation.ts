@@ -12,20 +12,14 @@ const failure = (
   { route, status, contentType }: ResponseIdentity,
   issuePath: string,
 ) => {
-  const selectedPath =
-    contentType !== undefined &&
-    issuePath !== "(schema)" &&
-    issuePath !== "(status)"
-      ? "(body)"
-      : issuePath;
   const representation =
     contentType === undefined ? "" : ` (content-type: ${contentType})`;
   return new ResponseConformanceError({
     route,
     status,
-    issuePath: selectedPath,
+    issuePath,
     ...(contentType === undefined ? {} : { contentType }),
-    message: `Response conformance failed: ${route} status ${status} at ${selectedPath}${representation}`,
+    message: `Response conformance failed: ${route} status ${status} at ${issuePath}${representation}`,
   });
 };
 

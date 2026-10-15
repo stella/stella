@@ -59,7 +59,7 @@ describe("central HTTP response conformance", () => {
       },
     );
     expect(violations).toMatchObject([
-      { route: "GET /status", status: 404, issuePath: "(body)" },
+      { route: "GET /status", status: 404, issuePath: "(root)" },
     ]);
   });
 
@@ -133,12 +133,12 @@ describe("central HTTP response conformance", () => {
         ).toMatchObject({
           route: "GET /values/:id",
           status: 200,
-          issuePath: "(body)",
+          issuePath: "/value",
         });
       },
     );
     expect(violations).toMatchObject([
-      { route: "GET /values/:id", status: 200, issuePath: "(body)" },
+      { route: "GET /values/:id", status: 200, issuePath: "/value" },
     ]);
   });
 
@@ -161,13 +161,13 @@ describe("central HTTP response conformance", () => {
           ).toMatchObject({
             route: "GET /object",
             status: 200,
-            issuePath: "(body)",
+            issuePath: "(root)",
             message: expect.stringContaining("content-type: text/plain"),
           });
         },
       );
       expect(violations).toMatchObject([
-        { route: "GET /object", status: 200, issuePath: "(body)" },
+        { route: "GET /object", status: 200, issuePath: "(root)" },
       ]);
     },
   );
@@ -220,7 +220,7 @@ describe("central HTTP response conformance", () => {
       expect(violations).toMatchObject(
         outcome === "valid"
           ? []
-          : [{ route: "GET /literal", status: 200, issuePath: "(body)" }],
+          : [{ route: "GET /literal", status: 200, issuePath: "(root)" }],
       );
     },
   );
