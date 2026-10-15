@@ -173,6 +173,7 @@
       "heldDescription": "Význam týchto extrahovaných údajov je <strong>skutočne neistý</strong> — ich obsah je predbežný alebo nepotvrdený, nejde iba o ručne písaný text. Do hodnotenia sa nezahrnú, kým ich kontrolujúca osoba nepotvrdí, neupraví alebo neprepíše. Čitateľný zdroj sa nikdy nezaradí do poradia len pre svoje médium.",
       "heldForReview": "Pozastavené na kontrolu",
       "holdOutOfScoring": "Vylúčiť z hodnotenia",
+      "inScoring": "Zahrnuté do hodnotenia",
       "includeInScoring": "Zahrnúť do hodnotenia",
       "interpretationNote": "Poznámka k výkladu",
       "interpretationNotePlaceholder": "Ak je význam tohto dôkazu sporný, opíšte ako. Ak sporný nie je, nechajte pole prázdne.",
@@ -2554,6 +2555,10 @@
       "providerRateLimited": "Bol dosiahnutý limit požiadaviek poskytovateľa. Skúste to čoskoro znova.",
       "thirdPartyBoundaryRefusal": "Požiadavka sa pokúsila použiť obsah mimo povoleného kontextu pracovného priestoru.",
       "usageLimitExceeded": "Bol dosiahnutý limit používania.",
+      "validationInvalid": "Pole obsahuje hodnotu, ktorú nemožno uložiť.",
+      "validationRequired": "Povinné pole je prázdne.",
+      "validationTooLong": "Príliš dlhé: použite najviac {limit, number} znakov.",
+      "validationTooShort": "Príliš krátke: použite aspoň {limit, number} znakov.",
       "verificationActiveLimitReached": "Vaša organizácia dosiahla limit súčasne prebiehajúcich overení. Počkajte na dokončenie niektorého overenia a skúste to znova.",
       "verificationDailyLimitReached": "Vaša organizácia dosiahla denný limit overení. Skúste to znova po polnoci (Europe/Prague).",
       "versionConflict": "Niekto iný to počas vašej úpravy zmenil. Načítajte znova aktuálnu verziu."

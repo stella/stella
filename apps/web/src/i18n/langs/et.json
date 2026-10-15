@@ -173,6 +173,7 @@
       "heldDescription": "Nende väljavõtete <strong>tähendus on tõepoolest ebaselge</strong>: sisu on esialgne või kinnitamata, mitte lihtsalt käsitsi kirjutatud. Neid ei hinnata enne, kui kontrollija need kinnitab, muudab või uuesti sisestab. Loetavat allikat ei suunata kunagi kontrolli üksnes selle kandja tõttu.",
       "heldForReview": "Kontrolli ootel",
       "holdOutOfScoring": "Jäta hindamisest välja",
+      "inScoring": "Hindamises",
       "includeInScoring": "Kaasa hindamisse",
       "interpretationNote": "Tõlgendusmärkus",
       "interpretationNotePlaceholder": "Kui selle tõendi tähendus on vaidlustatud, kirjeldage, kuidas. Kui ei ole, jätke väli tühjaks.",
@@ -2554,6 +2555,10 @@
       "providerRateLimited": "Teenusepakkuja päringulimiit on täis. Proovige varsti uuesti.",
       "thirdPartyBoundaryRefusal": "Päring üritas kasutada sisu väljaspool lubatud tööruumi konteksti.",
       "usageLimitExceeded": "Kasutuslimiit on täis.",
+      "validationInvalid": "Väljal on väärtus, mida ei saa salvestada.",
+      "validationRequired": "Kohustuslik väli on tühi.",
+      "validationTooLong": "Liiga pikk: kasuta kuni {limit, number} märki.",
+      "validationTooShort": "Liiga lühike: kasuta vähemalt {limit, number} märki.",
       "verificationActiveLimitReached": "Teie organisatsioon on jõudnud samaaegsete kontrollide piirmäärani. Oodake, kuni mõni kontroll lõpeb, ja proovige uuesti.",
       "verificationDailyLimitReached": "Teie organisatsioon on jõudnud kontrollide päevase piirmäärani. Proovige uuesti pärast keskööd (Europe/Prague).",
       "versionConflict": "Keegi teine muutis seda teie muutmise ajal. Laadige praeguse versiooni saamiseks uuesti."

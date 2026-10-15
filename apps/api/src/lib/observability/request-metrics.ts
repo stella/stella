@@ -140,6 +140,36 @@ export const emitAdmissionStorePolicyMetric = (refused: boolean): void => {
   });
 };
 
+const SANCTIONS_SCREENING_WORK_METRIC = "SanctionsScreeningWorkUsage";
+
+/**
+ * Share of its deterministic work budget one completed sanctions screening
+ * spent. Dimensioned by list so a growing list shows before it starts
+ * refusing common names.
+ */
+export const emitSanctionsScreeningWorkMetric = ({
+  source,
+  percent,
+}: {
+  source: string;
+  percent: number;
+}): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["source"]],
+          Metrics: [{ Name: SANCTIONS_SCREENING_WORK_METRIC, Unit: "Percent" }],
+        },
+      ],
+    },
+    source,
+    [SANCTIONS_SCREENING_WORK_METRIC]: percent,
+  });
+};
+
 const EVENT_LOOP_DELAY_METRIC = {
   max: "EventLoopDelayMax",
   p99: "EventLoopDelayP99",
