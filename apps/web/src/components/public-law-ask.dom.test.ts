@@ -11,7 +11,7 @@ const { useInspectorTabsStore } =
   await import("@/components/inspector/inspector-tabs-store");
 const { mentionTagAttrs, referenceFromMentionAttrs } =
   await import("@/components/references/reference.logic");
-const { claimQueuedChatSend } =
+const { claimQueuedChatSend, hasQueuedChatSend, subscribeQueuedChatSend } =
   await import("@/features/chat/queued-chat-sends");
 
 afterAll(async () => {
@@ -77,5 +77,28 @@ describe("asking a search's question in chat", () => {
     expect(new Set(threadIds).size).toBe(1);
     const [threadId] = threadIds;
     expect(threadId === undefined ? null : claim(threadId)).not.toBeNull();
+  });
+
+  test("a press while the chat holds an unsent question asks the open tab to retry", () => {
+    askPublicLawInChat(ASK);
+    const [threadId] = openedThreadIds();
+    if (threadId === undefined) {
+      throw new Error("Expected a chat tab");
+    }
+    const threadRef = { scope: "global", threadId } as const;
+    // The tab's AI check failed: it never claimed the question.
+    let retries = 0;
+    const unsubscribe = subscribeQueuedChatSend(threadRef, () => {
+      retries += 1;
+    });
+
+    askPublicLawInChat(ASK);
+    unsubscribe();
+
+    expect(retries).toBe(1);
+    expect(openedThreadIds()).toEqual([threadId]);
+    expect(hasQueuedChatSend(threadRef)).toBe(true);
+    expect(claim(threadId)).not.toBeNull();
+    expect(hasQueuedChatSend(threadRef)).toBe(false);
   });
 });

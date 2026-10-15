@@ -255,7 +255,21 @@ const scopeKeyedRead = async ({
       foreignCountryError({ corpus, allowed, hint: searchInScope }),
     );
   }
-  const countries = await resolve([...new Set(ids)]);
+  // The lookup reads the public database. A failed read is the tool's error,
+  // never a rejection: code-mode reads handle only returned results.
+  const resolved = await Result.tryPromise(
+    async () => await resolve([...new Set(ids)]),
+  );
+  if (Result.isError(resolved)) {
+    return Result.err(
+      new ChatToolError({
+        kind: "transient",
+        message: "The scope of this read could not be checked. Try again.",
+        cause: resolved.error,
+      }),
+    );
+  }
+  const countries = resolved.value;
   for (const id of ids) {
     const country = countries.get(id);
     if (country === undefined) {

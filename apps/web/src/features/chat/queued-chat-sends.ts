@@ -36,6 +36,29 @@ export const findQueuedChatSend = (html: string): ChatThreadRef | undefined =>
     (entry) => entry.html === html,
   )?.threadRef;
 
+/**
+ * Call `listener` whenever the thread's message is queued again, so a tab that
+ * is already open can retry a send its AI check held back. Returns the
+ * unsubscribe.
+ */
+export const subscribeQueuedChatSend = (
+  threadRef: ChatThreadRef,
+  listener: () => void,
+): (() => void) => {
+  const key = getChatThreadKey(threadRef);
+  return useQueuedChatSendStore.subscribe((state, previous) => {
+    const entry = state.byThreadKey[key];
+    if (entry !== undefined && entry !== previous.byThreadKey[key]) {
+      listener();
+    }
+  });
+};
+
+/** Whether the thread has a message waiting to be claimed. */
+export const hasQueuedChatSend = (threadRef: ChatThreadRef): boolean =>
+  useQueuedChatSendStore.getState().byThreadKey[getChatThreadKey(threadRef)] !==
+  undefined;
+
 /** Take the thread's queued message, once; null when there is none. */
 export const claimQueuedChatSend = (
   threadRef: ChatThreadRef,

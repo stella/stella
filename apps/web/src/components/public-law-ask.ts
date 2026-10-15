@@ -79,7 +79,8 @@ type AskPublicLawInChatOptions = {
  * to it rather than reading a jurisdiction out of the wording.
  *
  * The tab sends the message itself when it mounts (`claimQueuedChatSend`),
- * past its own AI check. A second press before then joins the same thread.
+ * past its own AI check, and keeps it queued while that check fails. A second
+ * press before the send joins the same thread and retries it.
  */
 export const askPublicLawInChat = ({
   label,
@@ -88,16 +89,13 @@ export const askPublicLawInChat = ({
   scopeLabel,
 }: AskPublicLawInChatOptions): void => {
   const html = corpusQuestionHtml({ question, scope, scopeLabel });
-  const threadRef =
-    findQueuedChatSend(html) ??
-    (() => {
-      const created = {
-        scope: "global",
-        threadId: createChatThreadId(),
-      } as const satisfies ChatThreadRef;
-      queueChatSend(created, html);
-      return created;
-    })();
+  // Queued again on a second press: a tab whose AI check held the question
+  // back (no key yet, or the check failed) retries when it is asked again.
+  const threadRef: ChatThreadRef = findQueuedChatSend(html) ?? {
+    scope: "global",
+    threadId: createChatThreadId(),
+  };
+  queueChatSend(threadRef, html);
   useInspectorTabsStore.getState().openChat({ id: threadRef.threadId, label });
 };
 

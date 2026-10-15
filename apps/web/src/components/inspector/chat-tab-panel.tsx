@@ -91,7 +91,11 @@ import { legalDocumentChatContext } from "@/features/chat/legal-document-chat-co
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import { chatThreadOptions } from "@/features/chat/queries";
-import { claimQueuedChatSend } from "@/features/chat/queued-chat-sends";
+import {
+  claimQueuedChatSend,
+  hasQueuedChatSend,
+  subscribeQueuedChatSend,
+} from "@/features/chat/queued-chat-sends";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -484,14 +488,32 @@ export const ChatTabPanel = ({
 
   // A surface that opened this tab with its question queued ("Ask in chat"):
   // send it once, through the same AI check and session a typed message takes.
-  useMountEffect(() => {
-    const queuedHtml = claimQueuedChatSend(threadRef);
-    if (queuedHtml !== null) {
-      detached(
-        handlePromptSubmit({ prompt: queuedHtml, files: [] }),
-        "chat-tab-panel.queued-send",
-      );
+  // The question is claimed only once that check passes: while it fails (no
+  // key yet, or the check itself failed) the question stays queued, and asking
+  // again retries here instead of losing it.
+  const queuedSendInFlight = useRef(false);
+  const sendQueuedQuestion = useLatestCallback(async () => {
+    if (queuedSendInFlight.current || !hasQueuedChatSend(threadRef)) {
+      return;
     }
+    queuedSendInFlight.current = true;
+    try {
+      if (!(await ensureAIAvailable())) {
+        return;
+      }
+      const queuedHtml = claimQueuedChatSend(threadRef);
+      if (queuedHtml !== null) {
+        await handlePromptSubmit({ prompt: queuedHtml, files: [] });
+      }
+    } finally {
+      queuedSendInFlight.current = false;
+    }
+  });
+  useMountEffect(() => {
+    detached(sendQueuedQuestion(), "chat-tab-panel.queued-send");
+    return subscribeQueuedChatSend(threadRef, () => {
+      detached(sendQueuedQuestion(), "chat-tab-panel.queued-send");
+    });
   });
 
   const handleComposerSubmit = useLatestCallback(
