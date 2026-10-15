@@ -9,6 +9,7 @@ import type { ReaderAnswer } from "@stll/api-contract/reader-answers";
 import { annotationTextAnchors } from "@stll/decision-reader/annotation-anchors";
 
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import {
   attachReaderAnswerMarkers,
@@ -24,7 +25,7 @@ const { ReaderAnswerCard } = await import("./reader-answer-card");
 const messages = (await import("@/i18n/langs/en.json")).default;
 afterEach(cleanup);
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 const answer = {
   id: toSafeId<"legalReaderAnswer">("00000000-0000-4000-8000-000000000001"),

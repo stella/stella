@@ -7,6 +7,7 @@ import type {
 } from "@stll/api-contract/reader-answers";
 
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { MarginItem } from "./analysis/margin-notes";
 import type { AnchoredNote } from "./analysis/margin-notes.logic";
@@ -67,7 +68,7 @@ afterEach(() => {
 });
 afterAll(async () => {
   globalThis.IntersectionObserver = originalObserver;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 const answer = {
   id: toSafeId<"legalReaderAnswer">("00000000-0000-4000-8000-000000000001"),
