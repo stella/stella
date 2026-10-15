@@ -207,6 +207,22 @@ const marketingCheckout = (job: string) => {
   return requiredExpression(checkout.with?.["ref"]);
 };
 
+// Job bodies are sliced from the workflow text for text assertions, while
+// their steps come from the whole parsed workflow: a step may be a YAML alias
+// whose anchor sits in another job, which the slice alone cannot resolve.
+const parsedWorkflows = new Map<string, Record<string, unknown>>();
+const jobSlices = new Map<string, { source: string; jobId: string }>();
+
+const parsedJobs = (source: string): Record<string, unknown> => {
+  const cached = parsedWorkflows.get(source);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const jobs = contractRecord(contractRecord(Bun.YAML.parse(source))["jobs"]);
+  parsedWorkflows.set(source, jobs);
+  return jobs;
+};
+
 const jobOf = (source: string, jobId: string): string => {
   const marker = `\n  ${jobId}:\n`;
   const start = source.indexOf(marker);
@@ -215,9 +231,12 @@ const jobOf = (source: string, jobId: string): string => {
   }
   const bodyStart = start + marker.length;
   const nextJob = source.slice(bodyStart).search(/\n {2}[a-z][\w-]*:\n/u);
-  return nextJob === -1
-    ? source.slice(bodyStart)
-    : source.slice(bodyStart, bodyStart + nextJob);
+  const slice =
+    nextJob === -1
+      ? source.slice(bodyStart)
+      : source.slice(bodyStart, bodyStart + nextJob);
+  jobSlices.set(slice, { source, jobId });
+  return slice;
 };
 
 const workflowJob = (jobId: string): string => jobOf(workflow, jobId);
@@ -241,8 +260,12 @@ const stepOf = (source: string, stepName: string, indent: number): string => {
 };
 
 const workflowStepValue = (job: string, stepName: string) => {
-  const parsed = contractRecord(Bun.YAML.parse(`job:\n${job}`));
-  const parsedJob = contractRecord(parsed["job"]);
+  const origin = jobSlices.get(job);
+  const parsedJob = contractRecord(
+    origin === undefined
+      ? contractRecord(Bun.YAML.parse(`job:\n${job}`))["job"]
+      : parsedJobs(origin.source)[origin.jobId],
+  );
   return workflowStepByName(parsedJob["steps"], stepName);
 };
 
