@@ -50,7 +50,7 @@ const formerRequester = mintAuthProviderId<"user">();
 const revokedCreator = mintAuthProviderId<"user">();
 const createdUsers = [formerRequester, revokedCreator];
 
-/** A matter without a client, reached through membership only. */
+/** A matter without a client, visible to assigned members only. */
 const personalMatter = {
   workspaceId: createSafeId<"workspace">(),
   entityId: createSafeId<"entity">(),
@@ -188,6 +188,7 @@ beforeAll(async () => {
     id: personalMatter.workspaceId,
     organizationId: ids.orgA,
     clientId: null,
+    visibility: "assigned_only",
     name: "Personal matter",
     reference: `REF-${personalMatter.workspaceId}`,
     status: "active",
@@ -362,6 +363,27 @@ describe("desktop edit session authorization", () => {
     );
 
     expect(result.status).toBe("authorized");
+  });
+
+  test("refuses an owner without a matter membership once the client matter is assigned-only", async () => {
+    const session = sessions.ownerOnClientMatter;
+    await testDb
+      .update(workspaces)
+      .set({ visibility: "assigned_only" })
+      .where(eq(workspaces.id, ids.wsA1));
+    try {
+      const result = await authorizeDesktopEditSessionWithDb(
+        { sessionId: session.id, sessionToken: session.token },
+        asTestRaw<Transaction>(testDb),
+      );
+
+      expect(result.status).toBe("permission-revoked");
+    } finally {
+      await testDb
+        .update(workspaces)
+        .set({ visibility: "admins_and_assigned" })
+        .where(eq(workspaces.id, ids.wsA1));
+    }
   });
 
   test("refuses an owner without a matter membership on a matter without a client", async () => {

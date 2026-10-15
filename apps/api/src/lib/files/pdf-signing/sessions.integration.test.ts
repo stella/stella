@@ -60,7 +60,7 @@ const createdSessionIds: SafeId<"pdfSigningSession">[] = [];
 
 const MINUTE_MS = 60_000;
 
-/** A matter without a client in tenant A, reached through membership only. */
+/** A matter without a client in tenant A, visible to assigned members only. */
 const personalMatter = {
   baseVersionId: createSafeId<"entityVersion">(),
   entityId: createSafeId<"entity">(),
@@ -163,6 +163,7 @@ beforeAll(async () => {
     id: personalMatter.workspaceId,
     organizationId: ids.orgA,
     clientId: null,
+    visibility: "assigned_only",
     name: "Personal matter",
     reference: `REF-${personalMatter.workspaceId}`,
     status: "active",

@@ -33,7 +33,7 @@ let testDb: TestDatabase;
 let ids: TestIds;
 let db: Pick<typeof rootDb, "update" | "select">;
 const handoffIds: SafeId<"desktopEditHandoff">[] = [];
-/** A matter without a client, reached through membership only. */
+/** A matter without a client, visible to assigned members only. */
 const personalMatterId = createSafeId<"workspace">();
 
 beforeAll(async () => {
@@ -45,6 +45,7 @@ beforeAll(async () => {
     id: personalMatterId,
     organizationId: ids.orgA,
     clientId: null,
+    visibility: "assigned_only",
     name: "Personal matter",
     reference: `REF-${personalMatterId}`,
     status: "active",

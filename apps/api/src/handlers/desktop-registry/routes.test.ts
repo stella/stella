@@ -160,7 +160,6 @@ test("desktop account linking preserves document access for each supported role"
     expect(
       canWriteWorkspaceEntities({
         organizationRole: role,
-        workspaceClientId: null,
         workspaceMemberId: "member-fixture",
         workspaceVisibility: "admins_and_assigned",
       }),
