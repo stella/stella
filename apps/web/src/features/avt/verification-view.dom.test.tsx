@@ -2,7 +2,6 @@ import * as React from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import type { EditorView } from "@tiptap/pm/view";
 import { panic } from "better-result";
 import { plugin } from "bun";
 import { afterAll, afterEach, expect, spyOn, test } from "bun:test";
@@ -61,6 +60,7 @@ const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
 const { act, cleanup, fireEvent, render, screen, waitFor, within } =
   await import("@testing-library/react");
 const { EditorState } = await import("@tiptap/pm/state");
+const { EditorView } = await import("@tiptap/pm/view");
 const { schema } = await import("@stll/folio-core/prosemirror");
 const { createFolioAIEditSnapshot } = await import("@stll/folio-core/ai-edits");
 
@@ -108,13 +108,13 @@ const FakeFolioHost = ({ docxPlugins, fieldId }: OriginalDocxHostProps) => {
       }
     });
     node.replaceChildren(content);
-    const view = {
+    // A real editor view over the document, which hands it to the host
+    // plugins as Folio's does.
+    const view = new EditorView(document.createElement("div"), {
       state: EditorState.create({ doc, plugins: [...plugins] }),
-    } as unknown as EditorView;
-    for (const hostPlugin of plugins) {
-      hostPlugin.spec.view?.(view);
-    }
+    });
     return () => {
+      view.destroy();
       window.removeEventListener(FOLIO_SCROLL_EVENT, onScroll);
     };
   };
@@ -629,7 +629,7 @@ test("a DOCX verification offers its original beside the reading view; a PDF one
   expect(
     screen
       .getByRole("tablist", { name: views.label })
-      .textContent?.includes(views.original),
+      .textContent.includes(views.original),
   ).toBe(true);
   expect(
     screen
@@ -694,10 +694,8 @@ test("the original locates claims in the document Folio loads, and a click on a 
       text: block.text,
     }),
   );
-  const [lease, rent] = blocks;
-  if (lease === undefined || rent === undefined) {
-    return panic("Expected two stored blocks");
-  }
+  const lease = blocks[0] ?? panic("Expected two stored blocks");
+  const rent = blocks[1] ?? panic("Expected two stored blocks");
   const anchored = (
     suffix: number,
     verdict: VerificationRun["claims"][number]["verdict"],
