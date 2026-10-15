@@ -173,6 +173,49 @@ describe("upstream token revocation on disconnect", () => {
     });
   });
 
+  test.each([
+    "mcp_refresh_token",
+    "mcp_access_token",
+    "mcp_client_secret",
+  ] as const)(
+    "decryption failure for %s reports each affected token and continues",
+    async (failedPurpose) => {
+      const fixture = fakeDependencies();
+      const decrypt = fixture.dependencies.decryptMcpSecret;
+      const failure = new HandlerError({
+        status: 500,
+        message: "Invalid envelope",
+      });
+      fixture.dependencies.decryptMcpSecret = async (options) => {
+        if (options.purpose === failedPurpose) {
+          throw failure;
+        }
+        return await decrypt(options);
+      };
+
+      const outcome = await run(oauthConnection(), fixture.dependencies);
+
+      const tokenTypes = ["refresh_token", "access_token"] as const;
+      const affected = tokenTypes.filter(
+        (type) =>
+          failedPurpose === "mcp_client_secret" ||
+          `mcp_${type}` === failedPurpose,
+      );
+      const unaffected = tokenTypes.filter((type) => !affected.includes(type));
+      expect(outcome).toEqual({
+        type: "attempted",
+        revoked: unaffected,
+        failed: affected.map((tokenType) => ({
+          tokenType,
+          error: expect.objectContaining({ cause: failure }),
+        })),
+      });
+      expect(
+        fixture.revokeCalls.map(({ revocable }) => revocable.tokenTypeHint),
+      ).toEqual(unaffected);
+    },
+  );
+
   test("a public client without a refresh token revokes only the access token", async () => {
     const fixture = fakeDependencies();
 
@@ -302,9 +345,11 @@ describe("RFC 7009 revocation request", () => {
     const request = requests.at(0);
     expect(request?.method).toBe("POST");
     expect(String(request?.url)).toBe(`${issuer}/revoke`);
-    expect(
-      Object.fromEntries(new URLSearchParams(String(request?.body))),
-    ).toEqual({
+    const body = request?.body;
+    if (!(body instanceof URLSearchParams)) {
+      expect.unreachable("Expected form body");
+    }
+    expect(Object.fromEntries(body)).toEqual({
       token: "refresh-1",
       token_type_hint: "refresh_token",
       client_id: "client-1",
@@ -332,8 +377,10 @@ describe("RFC 7009 revocation request", () => {
     });
 
     expect(Result.isError(result)).toBe(true);
-    expect(
-      new URLSearchParams(String(requests.at(0)?.body)).has("client_secret"),
-    ).toBe(false);
+    const body = requests.at(0)?.body;
+    if (!(body instanceof URLSearchParams)) {
+      expect.unreachable("Expected form body");
+    }
+    expect(body.has("client_secret")).toBe(false);
   });
 });

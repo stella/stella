@@ -14,6 +14,7 @@ import path from "node:path";
 import { CHAT_TURN_ID_HEADER } from "@stll/api-contract";
 import { sleep } from "@stll/concurrency/sleep";
 
+import type { ChatToolGrantsResponse } from "@/features/chat/chat-tool-grants";
 import { browserStorage } from "@/lib/account/browser-storage";
 import { unregisterDomEnvironment } from "@/test-dom-environment";
 
@@ -753,14 +754,7 @@ const comparableRequests = (bodies: readonly unknown[]): unknown[] => {
 
 const RELOAD_ORGANIZATION_ID = "00000000-0000-7000-8000-00000000fffd";
 /** A conversation grant as the API lists it. */
-type StoredToolGrant = {
-  id: string;
-  scope: "conversation";
-  chatThreadId: string;
-  toolName: string | null;
-  mcpConnectorId: string | null;
-  mcpConnectorToolNamespace: string | null;
-};
+type StoredToolGrant = ChatToolGrantsResponse["grants"][number];
 
 const EXTERNAL_CONNECTOR_ID = "00000000-0000-7000-8000-00000000c0de";
 let storedToolGrantCount = 0;
