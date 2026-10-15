@@ -864,14 +864,11 @@ if (import.meta.main) {
   const added =
     base === undefined
       ? []
-      : addedEntries(allowlist, baseAllowlist(root, base));
-  const errors = [
-    ...report.errors,
-    ...added.map(
-      (id) =>
-        `${ALLOWLIST_REL}: ${id} is not in ${base}; the allowlist only shrinks, so retry the fetch and give the step a timeout instead`,
-    ),
-  ];
+      : addedEntries(allowlist, baseAllowlist(root, base)).map(
+          (id) =>
+            `${ALLOWLIST_REL}: ${id} is not in ${base}; the allowlist only shrinks, so retry the fetch and give the step a timeout instead`,
+        );
+  const errors = [...report.errors, ...added];
   for (const error of errors) {
     process.stderr.write(`${error}\n`);
   }

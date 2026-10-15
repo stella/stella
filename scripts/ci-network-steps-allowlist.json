@@ -56,6 +56,14 @@
     "reason": "Downloads and re-uploads every desktop asset in one step through gh-retry.sh; no step timings exist yet to size a deadline."
   },
   {
+    "id": ".github/workflows/release-desktop.yml#carry-forward#Promote release to latest#retry",
+    "reason": "The release policy check probes the published installers with HEAD requests that are the verdict; it already retries each probe once and reports a pass after retry, and the GitHub API calls go through gh-retry.sh."
+  },
+  {
+    "id": ".github/workflows/release-desktop.yml#promote-latest#Promote release to latest#retry",
+    "reason": "The release policy check probes the published installers with HEAD requests that are the verdict; it already retries each probe once and reports a pass after retry, and the GitHub API calls go through gh-retry.sh."
+  },
+  {
     "id": ".github/workflows/release.yml#manifest#Create multi-arch manifest list#timeout",
     "reason": "Receipt download, image pull and manifest publication share one step; no step timings exist yet to size a deadline."
   },

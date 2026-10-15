@@ -664,6 +664,7 @@ jobs:
           persist-credentials: false
 
       - name: Promote release to latest
+        timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh
 
   carry-forward:
@@ -767,4 +768,5 @@ jobs:
         run: bun scripts/check-api-deployment.ts
 
       - name: Promote release to latest
+        timeout-minutes: 10
         run: bash scripts/promote-desktop-release.sh
