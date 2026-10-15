@@ -1132,9 +1132,10 @@ const applyReviewedLabelsTx = async ({
     }
     // audit: skip — operator pass over global case-law labels
     // db-await-in-loop: one batched relabel per label domain (stance and doctrine), never per entry
-    relabelled += executedRows(
-      await tx.execute(relabelCitationsStatement(labels, currentDomain)),
-    ).length;
+    const executed = await tx.execute(
+      relabelCitationsStatement(labels, currentDomain),
+    );
+    relabelled += executedRows(executed).length;
   }
   return { type: "applied", rows, summary, relabelled };
 };
