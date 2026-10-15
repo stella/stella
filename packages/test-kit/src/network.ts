@@ -61,6 +61,8 @@ const requestParts = (
     headers: new Headers(init?.headers ?? request?.headers),
     method: (init?.method ?? request?.method ?? "GET").toUpperCase(),
     redirect: init?.redirect ?? request?.redirect ?? "follow",
+    // A Request's own signal must keep cancelling the later hops.
+    signal: init?.signal ?? request?.signal ?? null,
     // Only a body given in `init` that is not a stream can be sent again.
     replayable:
       initBody === undefined
@@ -116,8 +118,8 @@ const guardedFetch =
     if (parts.redirect !== "follow") {
       return await original(input, init);
     }
-    let { method } = parts;
-    const { headers, replayable } = parts;
+    let { method, replayable } = parts;
+    const { headers, signal } = parts;
     let body = init?.body;
     let response = await original(input, { ...init, redirect: "manual" });
     for (let hops = 0; ; hops += 1) {
@@ -141,6 +143,7 @@ const guardedFetch =
       if (dropsBody(response.status, method)) {
         method = method === "HEAD" ? "HEAD" : "GET";
         body = undefined;
+        replayable = true; // no body left to resend
         deleteHeaders(headers, ["content-type", "content-length"]);
       } else if (!replayable) {
         return panic(
@@ -155,6 +158,7 @@ const guardedFetch =
         headers,
         method,
         redirect: "manual",
+        signal,
       });
     }
   };

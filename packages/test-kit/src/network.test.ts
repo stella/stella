@@ -221,6 +221,47 @@ describe("network guard", () => {
         );
       });
 
+      test("a Request's signal still cancels the hops after a redirect", async () => {
+        await withFake(redirectOnce(307), async (calls) => {
+          const controller = new AbortController();
+          await fetch(
+            new Request("http://127.0.0.1:1/start", {
+              signal: controller.signal,
+            }),
+          );
+          expect(calls).toHaveLength(2);
+          expect(calls[1]?.init?.signal).toBe(controller.signal);
+        });
+      });
+
+      test("a streamed POST dropped by a 303 can follow a later 307", async () => {
+        const statuses = [303, 307];
+        await withFake(
+          (_call, index) => {
+            const status = statuses[index];
+            return status === undefined
+              ? new Response("done")
+              : new Response(null, {
+                  headers: { location: `/hop-${index}` },
+                  status,
+                });
+          },
+          async (calls) => {
+            const response = await fetch("http://127.0.0.1:1/", {
+              body: new ReadableStream<Uint8Array>(),
+              method: "POST",
+            });
+            expect(await response.text()).toBe("done");
+            expect(calls.map((call) => call.init?.method ?? "POST")).toEqual([
+              "POST",
+              "GET",
+              "GET",
+            ]);
+            expect(calls[2]?.init?.body).toBeNull();
+          },
+        );
+      });
+
       test("a 307 cannot resend a streamed body", async () => {
         await withFake(redirectOnce(307), async (calls) => {
           const error = await rejectionOf(
