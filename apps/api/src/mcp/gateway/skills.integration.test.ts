@@ -357,26 +357,33 @@ describe("MCP skill tools against the database", () => {
 
     const tools = await loadVisibleSkillTools({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills"],
     });
     expect(tools.map((tool) => tool.exposedName)).not.toContain(name);
 
     const prompts = await listSkillPrompts({
       context,
-      mode: "default",
+      mode: "advanced",
       scopes: ["stella:skills"],
     });
     expect(prompts.map((prompt) => prompt.name)).toContain(name);
     expect(
-      await listSkillPrompts({ context, mode: "default", scopes: [] }),
+      await listSkillPrompts({ context, mode: "advanced", scopes: [] }),
+    ).toEqual([]);
+    expect(
+      await listSkillPrompts({
+        context,
+        mode: "default",
+        scopes: ["stella:skills"],
+      }),
     ).toEqual([]);
 
     const prompt = (
       await getSkillPrompt({
         args: { request: "Check the lease." },
         context,
-        mode: "default",
+        mode: "advanced",
         name,
       })
     ).unwrap();
@@ -396,7 +403,7 @@ describe("MCP skill tools against the database", () => {
     const called = await dispatchGatewayToolCall({
       args: {},
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: name,
     });
     expect(called).toMatchObject({
@@ -459,7 +466,7 @@ describe("MCP skill tools against the database", () => {
             ...recording.context,
             grantedScopes: ["stella:skills"],
           }),
-          mode: "default",
+          mode: "advanced",
           name: namespaceSkillToolName(slug),
         })
       ).unwrap();
@@ -499,7 +506,7 @@ describe("MCP skill tools against the database", () => {
         ...context,
         grantedScopes: ["stella:skills"],
       }),
-      mode: "default",
+      mode: "advanced",
       name: "skill__does_not_exist",
     });
     expect(Result.isError(result)).toBe(true);

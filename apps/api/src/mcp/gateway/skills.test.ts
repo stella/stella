@@ -413,11 +413,11 @@ describe("MCP gateway skill tools", () => {
 
     expect(
       installedOnly(
-        await loadVisibleSkillTools({ context, mode: "default" }),
+        await loadVisibleSkillTools({ context, mode: "advanced" }),
       ).map(({ name }) => name),
     ).toEqual(["auto-skill"]);
     expect(
-      installedOnly(await loadSkillPrompts({ context, mode: "default" })).map(
+      installedOnly(await loadSkillPrompts({ context, mode: "advanced" })).map(
         ({ exposedName }) => exposedName,
       ),
     ).toEqual(["skill__manual_skill"]);
@@ -434,7 +434,7 @@ describe("MCP gateway skill tools", () => {
         recordSkillReadAudit: async () => undefined,
         resolveSkillTool,
       }),
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__manual_skill",
     });
 
