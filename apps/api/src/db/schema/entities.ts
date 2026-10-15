@@ -813,6 +813,9 @@ export const folioCollabRooms = p.pgTable(
     }),
     seedClaimedAt: timestamptz("seed_claimed_at"),
     seededAt: timestamptz("seeded_at"),
+    // Set when a refused snapshot was discarded; cleared once the room is
+    // seeded again, so the seeding client can tell the user.
+    snapshotRecoveredAt: timestamptz("snapshot_recovered_at"),
     lastActivityAt: timestamptz("last_activity_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at")
