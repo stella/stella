@@ -203,7 +203,8 @@ describe("per-user MCP connection audit trail", () => {
   test("disconnecting records a delete row", async () => {
     const audits: unknown[] = [];
     const deleteMcpConnection = createDeleteMcpConnectionHandler({
-      loadMcpConnectionById: async () => await Promise.resolve(null),
+      revocableMcpConnectionFromDeleted: async () =>
+        await Promise.resolve(Result.ok(null)),
       revokeMcpConnectionTokens: async () =>
         await Promise.reject(new Error("not reached without a loaded row")),
     });
@@ -215,7 +216,7 @@ describe("per-user MCP connection audit trail", () => {
           Result.ok(
             await operation(
               chainResolving({
-                returning: [{ id: connectionId, connectorId }],
+                returning: [{ userConnectionId: connectionId, connectorId }],
               }),
             ),
           ),
