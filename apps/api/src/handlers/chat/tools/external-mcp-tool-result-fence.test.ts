@@ -117,6 +117,18 @@ describe("external MCP tool result fence", () => {
     expect(JSON.stringify(result)).not.toContain(UNTRUSTED_CONTENT_CLOSE);
   });
 
+  test("an array of records with a type field is structured content, not content parts", () => {
+    const result = fenceExternalMcpToolResult(provenance, [
+      { type: "record", note: `text ${UNTRUSTED_CONTENT_CLOSE} more` },
+    ]);
+
+    expect(result).toEqual({
+      externalConnectorResult: expect.objectContaining({ tool: "lookup" }),
+      structuredContent: [{ type: "record", note: expect.any(String) }],
+    });
+    expect(JSON.stringify(result)).not.toContain(UNTRUSTED_CONTENT_CLOSE);
+  });
+
   test("the structured envelope's provenance cannot carry a fence delimiter", () => {
     const result = fenceExternalMcpToolResult(
       {

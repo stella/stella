@@ -76,8 +76,23 @@ const isTextContentPart = (value: unknown): value is TextContentPart =>
   value["type"] === "text" &&
   typeof value["content"] === "string";
 
+const MEDIA_CONTENT_PART_TYPES = new Set([
+  "image",
+  "audio",
+  "video",
+  "document",
+]);
+
+/**
+ * A content part of a supported shape: text, or media with a `source`. Any
+ * other array is structured data and goes through the neutralized envelope.
+ */
 const isContentPart = (value: unknown): value is Record<string, unknown> =>
-  isRecord(value) && typeof value["type"] === "string";
+  isTextContentPart(value) ||
+  (isRecord(value) &&
+    typeof value["type"] === "string" &&
+    MEDIA_CONTENT_PART_TYPES.has(value["type"]) &&
+    isRecord(value["source"]));
 
 /**
  * The model-facing form of an external MCP tool result.
