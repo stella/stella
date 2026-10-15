@@ -16,10 +16,10 @@ generated from `apps/api/src/handlers/data-exports/manifest-schema.ts`
 
 ## Files
 
-| File | What it holds |
-| --- | --- |
-| `export-manifest.json` | `kind: "export"`: every part with its file name, size, SHA-256 and matter ids; totals; files that need attention (`problems`). |
-| `stella-export-<id>-part-NN-of-MM.zip` | One part. Parts target about 2 GiB and split only between matters, so every part is usable on its own. |
+| File                                   | What it holds                                                                                                                  |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `export-manifest.json`                 | `kind: "export"`: every part with its file name, size, SHA-256 and matter ids; totals; files that need attention (`problems`). |
+| `stella-export-<id>-part-NN-of-MM.zip` | One part. Parts target about 2 GiB and split only between matters, so every part is usable on its own.                         |
 
 Inside each part:
 
