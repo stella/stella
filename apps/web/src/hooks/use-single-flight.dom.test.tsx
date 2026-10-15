@@ -3,13 +3,15 @@ import { afterAll, expect, test } from "bun:test";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 
 const { act, renderHook } = await import("@testing-library/react");
 const { useSingleFlight } = await import("@/hooks/use-single-flight");
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("a second submit in the same frame is ignored until the first settles", async () => {
