@@ -2,6 +2,7 @@ import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -149,8 +150,9 @@ describe("fillTemplate", () => {
 
 const makeDocx = async (documentXml: string): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -528,9 +530,10 @@ const makeStructuralFixture = async (): Promise<ScannedFile> => {
   );
 
   const zip = new JSZip();
-  zip.file("word/document.xml", xml);
-  zip.file("word/numbering.xml", NUMBERING_XML);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", xml);
+  writeZipEntry(zip, "word/numbering.xml", NUMBERING_XML);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

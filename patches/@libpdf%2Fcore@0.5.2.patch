@@ -1,8 +1,8 @@
 diff --git a/dist/index.mjs b/dist/index.mjs
-index ca555816b328f0f73aa4fc951fda869cc3e7c493..aff6c6908a09e076da4b70d54ed410254b339d9a 100644
+index 27ae20847211562a874f02c165d58e6edf6637f7..024bee6464f58845acf40089ecc2e5bae21e976b 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
-@@ -34602,8 +34602,7 @@ function createEmbeddedFileStream(data, filename, options = {}) {
+@@ -35419,8 +35419,7 @@
  	const params = new PdfDict(paramsEntries);
  	const streamEntries = [["Type", PdfName.of("EmbeddedFile")], ["Params", params]];
  	if (mimeType) {

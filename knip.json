@@ -210,7 +210,9 @@
       "entry": [
         "src/i18n-check.ts",
         "src/i18n-typegen.ts",
-        "src/dev-postgres.ts"
+        "src/dev-postgres.ts",
+        // Test fixture processes are spawned by path from the tests.
+        "src/test-fixtures/*.ts"
       ]
     },
     // The three `exports` entry points are derived from package.json, so
@@ -225,6 +227,14 @@
     },
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/test-kit": {
+      "entry": [
+        "src/index.ts",
+        "src/db-clock.ts",
+        "src/forbid-network.ts",
+        "src/**/*.test.ts"
+      ]
     },
     "packages/typescript-config": {
       "entry": ["*.json", "**/*.test.ts"]

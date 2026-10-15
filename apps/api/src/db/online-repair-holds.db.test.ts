@@ -31,6 +31,7 @@ import {
   caseLawSources,
   corpusIndexProjectionIntents,
 } from "./schema";
+import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -269,7 +270,7 @@ describe.skipIf(!enabled)(
                 return await builder.unsafe(statement, [...parameters]);
               },
               terminate: async () => {
-                await builder.close({ timeout: 0 });
+                await terminateReserved(builder);
               },
               release: () => undefined,
             };
