@@ -10,6 +10,7 @@ import * as React from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { LiteralTextProvider } from "@stll/decision-reader/display-elision-policy";
 import { BlockRenderer } from "@stll/decision-reader/document-ast-text";
 import { Button } from "@stll/ui/button";
 import {
@@ -451,40 +452,43 @@ const ReadingDocument = ({
           // The shared reader draws the stored text; each claim is a
           // text anchor over its block, so the marks sit on the same
           // offsets the server stored.
-          <div className="space-y-4" style={READER_STYLE}>
-            {presentation.blocks.map((block) => (
-              <div
-                className="space-y-1 whitespace-pre-wrap"
-                dir="auto"
-                key={block.ordinal}
-              >
-                {block.pageNumber !== null && (
-                  <div className="text-muted-foreground text-2xs font-sans font-medium">
-                    {t("common.page", {
-                      page: format.number(block.pageNumber),
-                    })}
+          <LiteralTextProvider>
+            <div className="space-y-4" style={READER_STYLE}>
+              {presentation.blocks.map((block) => (
+                <div
+                  className="space-y-1 whitespace-pre-wrap"
+                  key={block.ordinal}
+                >
+                  {block.pageNumber !== null && (
+                    <div className="text-muted-foreground text-2xs font-sans font-medium">
+                      {t("common.page", {
+                        page: format.number(block.pageNumber),
+                      })}
+                    </div>
+                  )}
+                  <div dir="auto">
+                    <BlockRenderer
+                      activeMatchIndex={NO_ACTIVE_MATCH}
+                      anchorPresentation="embedded"
+                      anchorsByPieceId={{
+                        [block.paragraph.id]: block.claimSpans.map(
+                          ({ claim, start, end }) => ({
+                            start,
+                            end,
+                            key: claim.id,
+                            render: (children) => renderClaim(claim, children),
+                          }),
+                        ),
+                      }}
+                      block={block.paragraph}
+                      rangesByPieceId={NO_RANGES}
+                      variant="case-law"
+                    />
                   </div>
-                )}
-                <BlockRenderer
-                  activeMatchIndex={NO_ACTIVE_MATCH}
-                  anchorPresentation="embedded"
-                  anchorsByPieceId={{
-                    [block.paragraph.id]: block.claimSpans.map(
-                      ({ claim, start, end }) => ({
-                        start,
-                        end,
-                        key: claim.id,
-                        render: (children) => renderClaim(claim, children),
-                      }),
-                    ),
-                  }}
-                  block={block.paragraph}
-                  rangesByPieceId={NO_RANGES}
-                  variant="case-law"
-                />
-              </div>
-            ))}
-          </div>
+                </div>
+              ))}
+            </div>
+          </LiteralTextProvider>
         ) : (
           presentation.passages.map((passage) => (
             <div className="space-y-1" key={passage.key}>
