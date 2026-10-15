@@ -19,6 +19,8 @@ import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
+import { useSingleFlight } from "@/hooks/use-single-flight";
+import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import type { ViewLayout } from "@/lib/types";
 import { useCreateViewTemplate } from "@/routes/_protected.workspaces/$workspaceId/-mutations/view-templates";
@@ -41,6 +43,7 @@ export const SaveAsTemplateDialog = ({
   const t = useTranslations();
   const [name, setName] = useState(defaultName);
   const createTemplate = useCreateViewTemplate();
+  const submitOnce = useSingleFlight();
 
   const handleOpenChange = (next: boolean) => {
     if (next) {
@@ -52,13 +55,15 @@ export const SaveAsTemplateDialog = ({
   const trimmed = name.trim();
   const canSubmit = trimmed.length > 0 && !createTemplate.isPending;
 
-  const handleSubmit = () => {
+  const saveTemplate = (settled: () => void) => {
     if (!canSubmit) {
+      settled();
       return;
     }
     createTemplate.mutate(
       { workspaceId, name: trimmed, layout },
       {
+        onSettled: settled,
         onSuccess: () => {
           stellaToast.add({
             title: t("workspaces.views.templates.created"),
@@ -71,6 +76,9 @@ export const SaveAsTemplateDialog = ({
         },
       },
     );
+  };
+  const handleSubmit = () => {
+    detached(submitOnce.runSettled(saveTemplate), "save-as-template.submit");
   };
 
   return (

@@ -544,7 +544,10 @@ const genericLines = (lines: readonly LogLine[]): FailureLine[] =>
   });
 
 const ERROR_COMMAND = "##[error]";
-const INSTALL_INFRA_FAILURE = /^kind=infra\s+class=install-(?:stall|signal)\b/u;
+// Typed infrastructure annotations: installer stalls and signals, and an E2E
+// stack whose image pulls were rate limited.
+const INSTALL_INFRA_FAILURE =
+  /^kind=infra\s+class=(?:install-(?:stall|signal)|e2e-stack-rate-limited)\b/u;
 const GENERIC_PROCESS_EXIT =
   /^(?:Error:\s*)?Process completed with exit code \d+\.?$/u;
 // The installer prints this status after its typed signal/stall annotation.
