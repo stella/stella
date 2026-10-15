@@ -374,7 +374,14 @@ export const existingRadarProposal = async ({
   // Extension proposals belong to their owner after creation; scheduled refreshes
   // must never overwrite a human's reason or proposed source deadline.
   if (kind === "extension") {
-    return { number: pull.number, headSha: pull.head.sha };
+    if (
+      pull.body.includes("<!-- dated-exception-radar:1 -->") &&
+      /^dated-exception-action: extension$/mu.test(pull.body) &&
+      !/^dated-exception-action: removal$/mu.test(pull.body)
+    ) {
+      return { number: pull.number, headSha: pull.head.sha };
+    }
+    return undefined;
   }
   if (pull.base.sha !== baseSha || pull.body !== body) {
     return undefined;

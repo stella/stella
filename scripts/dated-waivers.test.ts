@@ -116,63 +116,29 @@ test("complete owner UTC day and exact five-day grace boundary are preserved", (
   expect(dueWaivers(entries, new Date(boundary))).toEqual(entries);
   expect(dueWaivers(entries, new Date(boundary - 1))).toEqual([]);
 });
-test("an elapsed waiver annotates the change instead of failing it", () => {
+test("elapsed entries fail globally and warn only unrelated changes", () => {
   const entries = inventory();
-  const exclusionLine = entries.find(
-    ({ kind }) => kind === "release-age-exclusion",
-  )?.line;
-  expect(exclusionLine).toBeNumber();
-  expect(
-    expiredWaiverAnnotations(entries, new Date("2026-10-02T01:02:02.999Z")),
-  ).toEqual([]);
-  const annotations = expiredWaiverAnnotations(
-    entries,
-    new Date("2026-10-02T01:02:03.000Z"),
-  );
-  expect(annotations).toHaveLength(1);
-  expect(annotations[0]).toStartWith(
-    `::warning file=bunfig.toml,line=${String(exclusionLine)}::`,
-  );
-  expect(annotations[0]).toContain(
-    "new-package (release-age-exclusion) expired at 2026-10-02T01:02:03.000Z",
-  );
-  expect(
-    expiredWaiverAnnotations(entries, new Date("2026-10-07T00:00:00.000Z")),
-  ).toHaveLength(
-    entries.filter(({ kind }) => kind === "release-age-exclusion").length,
-  );
-  expect(
-    expiredWaiverFailures(entries, new Date("2026-10-02T01:02:03.000Z")),
-  ).toEqual([]);
-});
-test("an elapsed test quarantine and other elapsed waivers still fail the check", () => {
-  const quarantine = readTestQuarantines({
-    "packages/example/src/a.test.ts":
-      'import { test } from "bun:test";\n// test-quarantine-expires: 2026-10-05T00:00:00.000Z\ntest.skip("a case", () => {});',
-  });
-  const entries = [...inventory(), ...quarantine];
-  expect(
-    expiredWaiverFailures(entries, new Date("2026-10-04T23:59:59.999Z")).some(
-      (failure) => failure.endsWith("dated waiver expired: a case"),
-    ),
-  ).toBe(false);
-  const failures = expiredWaiverFailures(
-    entries,
-    new Date("2026-10-05T00:00:00.000Z"),
-  );
-  expect(failures).toContain(
-    "packages/example/src/a.test.ts:3 dated waiver expired: a case",
-  );
-  const allElapsed = expiredWaiverFailures(
-    entries,
-    new Date("2026-10-07T00:00:00.000Z"),
-  );
-  expect(allElapsed).toHaveLength(
-    entries.filter(({ kind }) => kind !== "release-age-exclusion").length,
-  );
-  expect(allElapsed.some((failure) => failure.includes("new-package"))).toBe(
-    false,
-  );
+  const now = new Date("2026-10-07T00:00:00.000Z");
+  expect(expiredWaiverFailures(entries, now)).toHaveLength(entries.length);
+  expect(expiredWaiverAnnotations(entries, now)).toEqual([]);
+  for (const entry of entries) {
+    const unrelated = {
+      scope: { type: "changes" as const, changedFiles: new Set(["README.md"]) },
+    };
+    expect(expiredWaiverFailures([entry], now, unrelated)).toEqual([]);
+    const warnings = expiredWaiverAnnotations([entry], now, unrelated);
+    expect(warnings).toHaveLength(1);
+    expect(warnings.at(0)).toContain(entry.id);
+    expect(warnings.at(0)).toContain(RECHECK_INSTRUCTIONS[entry.kind]);
+    const owner = {
+      scope: {
+        type: "changes" as const,
+        changedFiles: new Set([entry.source]),
+      },
+    };
+    expect(expiredWaiverFailures([entry], now, owner)).toHaveLength(1);
+    expect(expiredWaiverAnnotations([entry], now, owner)).toEqual([]);
+  }
 });
 test("impossible dates, missing anchors and new expiry-bearing owners fail closed", () => {
   for (const value of ["2026-02-30", "2026-02-30T00:00:00.000Z", "tomorrow"]) {
@@ -375,6 +341,14 @@ test("check consumes validated tracked files without spawning under the offline 
     });
     expect(git.exitCode).toBe(0);
     writeFileSync(trackedFiles, git.stdout);
+    writeFileSync(
+      `${trackedFiles}.context.json`,
+      JSON.stringify({
+        scope: { type: "all" },
+        baseBunfigs: {},
+        basePackageManifests: {},
+      }),
+    );
 
     const checked = Bun.spawnSync(
       [
@@ -480,5 +454,28 @@ test("radar selects exactly the inclusive hour horizon", () => {
     expect(dueWaivers([entry], new Date(at - 72 * 3_600_000 - 1), 3)).toEqual(
       [],
     );
+  }
+});
+
+test("inventory retains distinct dated exclusions in every carrying file", () => {
+  const first = sources["bunfig.toml"];
+  const twin = first.replace(
+    "\n]\n",
+    '\n "new-package", # quarantine-expires: 2026-10-03T01:02:03.000Z\n]\n',
+  );
+  const entries = collectWaivers({
+    read: (file) => (file.endsWith("bunfig.toml") ? twin : read(file)),
+    docs: [],
+    audit: [],
+    bunfigs: ["bunfig.toml", ".claude/mcp/bunfig.toml"],
+    releaseAgeSources: {},
+  }).filter(({ kind }) => kind === "release-age-exclusion");
+  expect(entries).toHaveLength(4);
+  for (const source of ["bunfig.toml", ".claude/mcp/bunfig.toml"]) {
+    expect(
+      entries
+        .filter((entry) => entry.source === source)
+        .map(({ line }) => line),
+    ).toEqual([3, 4]);
   }
 });

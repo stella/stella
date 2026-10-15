@@ -2,9 +2,10 @@
 // The census covers policy/config expiry keys; prose-only review promises need
 // an explicit adapter (see docs/maintenance/dated-waivers.md).
 import { panic } from "better-result";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
+import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -13,11 +14,19 @@ import {
   type NoLlmsTxtExclusion,
 } from "../.claude/mcp/doc-sources";
 import {
+  quarantineBunfigFiles,
+  quarantineOwningFiles,
   readReleaseAgeExceptions,
   readTemporaryExcludes,
   RELEASE_AGE_EXCEPTION_SOURCES,
 } from "./check-stll-quarantine-excludes";
+import { trackedPolicyFiles } from "./dated-waiver-tracked-files";
 import type { AcceptanceTerms } from "./dependency-audit-acceptance";
+import {
+  expiryBlocksFiles,
+  readExpiryCheckScope,
+  type ExpiryCheckScope,
+} from "./expiry-check-scope";
 import { parseLedger } from "./suppression-waivers";
 
 export const DAY_MS = 86_400_000;
@@ -126,7 +135,14 @@ export const collectWaivers = ({
     for (const entry of parsed.entries) {
       entries.push({
         source,
-        line: sourceLine(contents, entry.name),
+        line:
+          contents
+            .split("\n")
+            .findIndex(
+              (line) =>
+                line.includes(JSON.stringify(entry.name)) &&
+                line.includes(entry.expiresAt),
+            ) + 1,
         id: entry.name,
         kind: "release-age-exclusion",
         probe: {
@@ -219,7 +235,12 @@ export const collectWaivers = ({
   const identities = new Set<string>();
   for (const entry of entries) {
     expiryInstant(entry.expiresAt);
-    const identity = JSON.stringify([entry.kind, entry.source, entry.id]);
+    const identity = JSON.stringify([
+      entry.kind,
+      entry.source,
+      entry.id,
+      ...(entry.kind === "release-age-exclusion" ? [entry.expiresAt] : []),
+    ]);
     if (identities.has(identity)) {
       panic(`Duplicate dated waiver identity: ${entry.source}:${entry.id}`);
     }
@@ -288,23 +309,37 @@ export const waiverWarnings = (
       `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expires at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
   );
 
-// An elapsed release-age exclusion is the owner's cleanup (dated-waiver-healing
-// opens it), not a defect of whichever change is under review, so the
-// per-change gate annotates it instead of failing every pull request and merge
-// group. Every other elapsed waiver, including a dated test quarantine that
-// still skips its test, keeps failing the gate.
 const isExpired = (entry: DatedWaiver, now: Date): boolean =>
   Date.parse(expiryInstant(entry.expiresAt)) <= now.getTime();
+
+type WaiverExpiryScope = {
+  scope: ExpiryCheckScope;
+  packageManifests?: Readonly<Record<string, string>>;
+  basePackageManifests?: Readonly<Record<string, string>>;
+};
+const ALL_WAIVER_EXPIRIES = {
+  scope: { type: "all" },
+} as const satisfies WaiverExpiryScope;
+const waiverBlocks = (entry: DatedWaiver, context: WaiverExpiryScope) =>
+  expiryBlocksFiles(
+    context.scope,
+    entry.kind === "release-age-exclusion"
+      ? quarantineOwningFiles({
+          bunfigFile: entry.source,
+          packageName: entry.id,
+          packageManifests: context.packageManifests,
+          basePackageManifests: context.basePackageManifests,
+        })
+      : [entry.source],
+  );
 
 export const expiredWaiverAnnotations = (
   entries: readonly DatedWaiver[],
   now: Date,
+  context: WaiverExpiryScope = ALL_WAIVER_EXPIRIES,
 ): string[] =>
   entries
-    .filter(
-      (entry) =>
-        entry.kind === "release-age-exclusion" && isExpired(entry, now),
-    )
+    .filter((entry) => isExpired(entry, now) && !waiverBlocks(entry, context))
     .map(
       (entry) =>
         `::warning file=${escapeCommand(entry.source).replaceAll(",", "%2C").replaceAll(":", "%3A")},line=${entry.line}::${escapeCommand(`${entry.id} (${entry.kind}) expired at ${entry.expiresAt}; ${RECHECK_INSTRUCTIONS[entry.kind]}`)}`,
@@ -313,16 +348,96 @@ export const expiredWaiverAnnotations = (
 export const expiredWaiverFailures = (
   entries: readonly DatedWaiver[],
   now: Date,
+  context: WaiverExpiryScope = ALL_WAIVER_EXPIRIES,
 ): string[] =>
   entries
-    .filter(
-      (entry) =>
-        entry.kind !== "release-age-exclusion" && isExpired(entry, now),
-    )
+    .filter((entry) => isExpired(entry, now) && waiverBlocks(entry, context))
     .map(
       (entry) =>
         `${entry.source}:${entry.line} dated waiver expired: ${entry.id}`,
     );
+
+/** Removing an exclusion early blocks even when the head no longer inventories it. */
+export const prematureExclusionRemovals = (
+  baseBunfigs: Readonly<Record<string, string>>,
+  headBunfigs: Readonly<Record<string, string>>,
+  now: Date,
+): string[] =>
+  Object.entries(baseBunfigs).flatMap(([source, before]) => {
+    const base = readTemporaryExcludes(before);
+    if (base.errors.length > 0) {
+      return panic(base.errors.join("\n"));
+    }
+    const remaining = readTemporaryExcludes(headBunfigs[source] ?? "");
+    if (remaining.errors.length > 0) {
+      return panic(remaining.errors.join("\n"));
+    }
+    return base.entries
+      .filter(
+        (entry) =>
+          now.getTime() < Date.parse(entry.expiresAt) &&
+          !remaining.entries.some((candidate) => candidate.name === entry.name),
+      )
+      .map(
+        (entry) =>
+          `${source}: ${entry.name} cannot be removed before release-age expiry ${entry.expiresAt}`,
+      );
+  });
+
+const proposalSchema = v.object({
+  schemaVersion: v.literal(1),
+  kind: v.literal("extension"),
+  entries: v.array(
+    v.object({
+      kind: v.picklist(Object.keys(RECHECK_INSTRUCTIONS)),
+      source: v.string(),
+      id: v.string(),
+      expiresAt: v.string(),
+    }),
+  ),
+  ownerReason: v.string(),
+});
+export const extensionProposalFailures = (
+  proposals: Readonly<Record<string, string>>,
+  entries: readonly DatedWaiver[],
+  body?: string,
+): string[] =>
+  Object.entries(proposals).flatMap(([file, contents]) => {
+    const proposal = v.parse(proposalSchema, JSON.parse(contents));
+    const reason = proposal.ownerReason.trim();
+    const placeholder =
+      /^(?:OWNER_REASON_REQUIRED|REQUIRED|TODO|TBD|placeholder)?$/iu;
+    const errors: string[] = [];
+    if (reason.length < 12 || placeholder.test(reason)) {
+      errors.push(`${file}: owner-reason: requires an explicit owner reason`);
+    }
+    if (body !== undefined) {
+      const bodyReason =
+        /^owner-reason:[ \t]*(.+)$/mu.exec(body)?.at(1)?.trim() ?? "";
+      if (bodyReason !== reason) {
+        errors.push(
+          `${file}: PR body owner-reason: must match the recorded owner reason`,
+        );
+      }
+    }
+    for (const original of proposal.entries) {
+      const current = entries.find(
+        (entry) =>
+          entry.kind === original.kind &&
+          entry.source === original.source &&
+          entry.id === original.id,
+      );
+      if (
+        current &&
+        expiryInstant(current.expiresAt) === expiryInstant(original.expiresAt)
+      ) {
+        errors.push(
+          `${file}: owner must resolve the exception or explicitly change its expiry`,
+        );
+      }
+    }
+    return errors;
+  });
 
 // A dated test quarantine is an adjacent comment on a literal test.skip/it.skip
 // call. The inventory guard blocks at expiry even while the source still skips.
@@ -481,9 +596,7 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   const root = path.resolve(import.meta.dir, "..");
   const read = (file: string): string =>
     readFileSync(path.join(root, file), "utf-8");
-  const files = tracked.filter(
-    (file) => file === "bunfig.toml" || file.endsWith("/bunfig.toml"),
-  );
+  const files = quarantineBunfigFiles(tracked);
   const policyFiles = tracked.filter(
     (file) =>
       /(?:^(?:scripts\/|\.claude\/mcp\/|\.oxlint-plugins\/|\.github\/)|config|baseline|waivers|allowances|bunfig\.toml$)/u.test(
@@ -496,6 +609,9 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
     Object.fromEntries(policyFiles.map((file) => [file, read(file)])),
     new Set([
       DOC_SOURCE_FILE,
+      ...tracked.filter((file) =>
+        file.startsWith(".github/dated-exception-proposals/"),
+      ),
       "scripts/suppression-waivers.ts",
       "scripts/suppression-waivers.json",
       "scripts/dependency-audit-baseline.json",
@@ -542,6 +658,75 @@ export const loadWaivers = (tracked: readonly string[]): DatedWaiver[] => {
   });
 };
 
+const contextSchema = v.object({
+  scope: v.variant("type", [
+    v.object({ type: v.literal("all") }),
+    v.object({
+      type: v.literal("changes"),
+      baseSha: v.pipe(v.string(), v.regex(/^[a-f0-9]{40}$/u)),
+      changedFiles: v.array(v.string()),
+    }),
+  ]),
+  baseBunfigs: v.record(v.string(), v.string()),
+  basePackageManifests: v.record(v.string(), v.string()),
+});
+const prepareCheck = (file: string): void => {
+  const tracked = trackedPolicyFiles();
+  writeFileSync(file, `${tracked.join("\0")}\0`);
+  const scope = readExpiryCheckScope();
+  const baseBunfigs = new Map<string, string>();
+  const basePackageManifests = new Map<string, string>();
+  if (scope.type === "changes") {
+    if (!scope.baseSha) {
+      panic("Expiry scope base is required");
+    }
+    const files = Bun.spawnSync([
+      "git",
+      "ls-tree",
+      "-r",
+      "--name-only",
+      "-z",
+      scope.baseSha,
+    ]);
+    if (files.exitCode !== 0) {
+      panic("Cannot enumerate expiry base files");
+    }
+    const baseFiles = files.stdout.toString().split("\0").filter(Boolean);
+    for (const source of baseFiles.filter(
+      (candidate) =>
+        quarantineBunfigFiles([candidate]).length > 0 ||
+        (scope.changedFiles.has(candidate) &&
+          (candidate === "package.json" ||
+            candidate.endsWith("/package.json"))),
+    )) {
+      const contents = Bun.spawnSync([
+        "git",
+        "show",
+        `${scope.baseSha}:${source}`,
+      ]);
+      if (contents.exitCode !== 0) {
+        panic(`Cannot read expiry base owner ${source}`);
+      }
+      if (source.endsWith("bunfig.toml")) {
+        baseBunfigs.set(source, contents.stdout.toString());
+      } else {
+        basePackageManifests.set(source, contents.stdout.toString());
+      }
+    }
+  }
+  writeFileSync(
+    `${file}.context.json`,
+    JSON.stringify({
+      scope:
+        scope.type === "all"
+          ? scope
+          : { ...scope, changedFiles: [...scope.changedFiles] },
+      baseBunfigs: Object.fromEntries(baseBunfigs),
+      basePackageManifests: Object.fromEntries(basePackageManifests),
+    }),
+  );
+};
+
 if (import.meta.main) {
   const check = process.argv.includes("--check");
   const trackedFilesFlag = process.argv.indexOf("--tracked-files");
@@ -553,16 +738,104 @@ if (import.meta.main) {
   if (trackedFilesFlag !== -1 && !trackedFilesPath) {
     panic("--tracked-files requires a path");
   }
-  if (trackedFilesPath === undefined) {
-    panic("Inventory modes require --tracked-files <NUL-separated-file>");
+  if (process.argv.includes("--prepare")) {
+    if (trackedFilesPath === undefined) {
+      panic("--prepare requires --tracked-files");
+    }
+    prepareCheck(trackedFilesPath);
+    process.exit(0);
   }
-  const entries = loadWaivers(readTrackedPolicyFiles(trackedFilesPath));
+  const tracked =
+    trackedFilesPath === undefined
+      ? trackedPolicyFiles()
+      : readTrackedPolicyFiles(trackedFilesPath);
+  const entries = loadWaivers(tracked);
   if (check) {
     const now = new Date();
-    for (const annotation of expiredWaiverAnnotations(entries, now)) {
+    const contextFile = `${trackedFilesPath}.context.json`;
+    if (process.env["GITHUB_ACTIONS"] === "true" && !existsSync(contextFile)) {
+      panic("CI expiry check requires prepared context");
+    }
+    const context = existsSync(contextFile)
+      ? v.parse(contextSchema, JSON.parse(readFileSync(contextFile, "utf-8")))
+      : {
+          scope: { type: "all" as const },
+          baseBunfigs: {},
+          basePackageManifests: {},
+        };
+    const read = (file: string) =>
+      readFileSync(path.join(import.meta.dir, "..", file), "utf-8");
+    const packageManifests = Object.fromEntries(
+      tracked
+        .filter(
+          (file) => file === "package.json" || file.endsWith("/package.json"),
+        )
+        .map((file) => [file, read(file)]),
+    );
+    const expiryContext = {
+      scope:
+        context.scope.type === "all"
+          ? context.scope
+          : {
+              type: "changes" as const,
+              changedFiles: new Set(context.scope.changedFiles),
+              baseSha: context.scope.baseSha,
+            },
+      packageManifests,
+      basePackageManifests: context.basePackageManifests,
+    };
+    for (const annotation of expiredWaiverAnnotations(
+      entries,
+      now,
+      expiryContext,
+    )) {
       console.log(annotation);
     }
-    const failures = expiredWaiverFailures(entries, now);
+    const event = process.env["GITHUB_EVENT_PATH"]
+      ? v.parse(
+          v.object({
+            pull_request: v.optional(v.object({ body: v.nullish(v.string()) })),
+          }),
+          JSON.parse(readFileSync(process.env["GITHUB_EVENT_PATH"], "utf-8")),
+        )
+      : undefined;
+    const failures = [
+      ...expiredWaiverFailures(entries, now, expiryContext),
+      ...prematureExclusionRemovals(
+        context.baseBunfigs,
+        Object.fromEntries(
+          quarantineBunfigFiles(tracked).map((file) => [file, read(file)]),
+        ),
+        now,
+      ),
+      ...extensionProposalFailures(
+        Object.fromEntries(
+          tracked
+            .filter(
+              (file) =>
+                file.startsWith(".github/dated-exception-proposals/") &&
+                file.endsWith(".json"),
+            )
+            .map((file) => [file, read(file)]),
+        ),
+        entries,
+      ),
+      ...extensionProposalFailures(
+        Object.fromEntries(
+          tracked
+            .filter(
+              (file) =>
+                file.startsWith(".github/dated-exception-proposals/") &&
+                file.endsWith(".json") &&
+                expiryContext.scope.type === "changes" &&
+                expiryContext.scope.changedFiles.has(file),
+            )
+            .map((file) => [file, read(file)]),
+        ),
+        entries,
+        event?.pull_request ? (event.pull_request.body ?? "") : undefined,
+      ),
+    ];
     if (failures.length > 0) {
       console.error(failures.join("\n"));
       process.exitCode = 1;

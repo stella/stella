@@ -38,6 +38,12 @@ import { compareCodeUnit } from "@stll/collation";
 import { isPathStrictlyInside } from "@stll/portable-path";
 
 import {
+  expiryBlocksFiles,
+  expiryWarning,
+  readExpiryCheckScope,
+  type ExpiryCheckScope,
+} from "./expiry-check-scope";
+import {
   collectLintDirectives,
   directiveReason,
   isSecurityTierRule,
@@ -262,6 +268,8 @@ type InspectionInput = {
   readonly evidenceExists: (file: string) => boolean;
   readonly evidenceContains: (file: string, symbol: string) => boolean;
   readonly today: string;
+  readonly expiryScope?: ExpiryCheckScope;
+  readonly onExpiryWarning?: (message: string) => void;
 };
 
 /** `path/to/file.ts#symbol` split into its two halves. */
@@ -320,12 +328,17 @@ const inspectEvidence = (
   return undefined;
 };
 
-const inspectShape = (
-  waivers: readonly Waiver[],
-  evidenceExists: (file: string) => boolean,
-  evidenceContains: (file: string, symbol: string) => boolean,
-  today: string,
-): string[] => {
+type InspectShapeInput = Omit<InspectionInput, "ledger" | "observation"> & {
+  waivers: readonly Waiver[];
+};
+const inspectShape = ({
+  waivers,
+  evidenceExists,
+  evidenceContains,
+  today,
+  expiryScope = { type: "all" },
+  onExpiryWarning = (message) => console.warn(expiryWarning(message)),
+}: InspectShapeInput): string[] => {
   const errors: string[] = [];
   const ids = new Set<string>();
   const keys = new Set<string>();
@@ -358,9 +371,12 @@ const inspectShape = (
       errors.push(evidenceProblem);
     }
     if (waiver.kind === "temporary" && waiver.expires < today) {
-      errors.push(
-        `${waiver.id}: temporary waiver expired on ${waiver.expires}; remove the suppression or re-justify it with a new date`,
-      );
+      const message = `${waiver.id}: temporary waiver expired on ${waiver.expires}; remove the suppression or re-justify it with a new date`;
+      if (expiryBlocksFiles(expiryScope, [LEDGER_REL, waiver.file])) {
+        errors.push(message);
+      } else {
+        onExpiryWarning(message);
+      }
     }
   }
 
@@ -373,13 +389,17 @@ export const inspectLedger = ({
   evidenceExists,
   evidenceContains,
   today,
+  expiryScope,
+  onExpiryWarning,
 }: InspectionInput): readonly string[] => {
-  const errors = inspectShape(
-    ledger.waivers,
+  const errors = inspectShape({
+    waivers: ledger.waivers,
     evidenceExists,
     evidenceContains,
     today,
-  );
+    expiryScope,
+    onExpiryWarning,
+  });
 
   for (const file of observation.bare) {
     errors.push(
@@ -459,6 +479,7 @@ const runCheck = (): number => {
     evidenceContains: (file, symbol) =>
       readFileSync(path.join(REPO_ROOT, file), "utf-8").includes(symbol),
     today: today(),
+    expiryScope: readExpiryCheckScope(),
   });
 
   if (errors.length === 0) {

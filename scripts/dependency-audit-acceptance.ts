@@ -13,6 +13,13 @@
 // calendar day, a non-boolean `untilPatched`, an advisory without a
 // vulnerable range, or a registry lookup that failed.
 
+import { BASELINE_PATHS } from "./baseline-paths";
+import {
+  expiryBlocksFiles,
+  expiryWarning,
+  type ExpiryCheckScope,
+} from "./expiry-check-scope";
+
 export type AcceptanceTerms = {
   id: string;
   package: string;
@@ -45,6 +52,8 @@ type LapsedAcceptancesOptions = {
   today: string;
   /** The package's latest published version, or undefined when the lookup failed. */
   latestVersion: (pkg: string) => string | undefined;
+  expiryScope?: ExpiryCheckScope;
+  onExpiryWarning?: (message: string) => void;
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
@@ -101,6 +110,8 @@ export const lapsedAcceptances = ({
   current,
   today,
   latestVersion,
+  expiryScope = { type: "all" },
+  onExpiryWarning = (message) => console.warn(expiryWarning(message)),
 }: LapsedAcceptancesOptions): LapsedAcceptance[] => {
   const currentById = new Map(
     current.map((advisory) => [advisory.id, advisory]),
@@ -127,8 +138,13 @@ export const lapsedAcceptances = ({
         continue;
       }
       if (today > entry.expiresOn) {
-        lapse(`the acceptance expired on ${entry.expiresOn}`);
-        continue;
+        if (expiryBlocksFiles(expiryScope, [BASELINE_PATHS.dependencyAudit])) {
+          lapse(`the acceptance expired on ${entry.expiresOn}`);
+          continue;
+        }
+        onExpiryWarning(
+          `${entry.id} for ${entry.package}: acceptance expired on ${entry.expiresOn}; remediate or re-review ${BASELINE_PATHS.dependencyAudit}.`,
+        );
       }
     }
     const advisory = currentById.get(entry.id);

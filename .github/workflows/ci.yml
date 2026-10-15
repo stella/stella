@@ -8128,8 +8128,6 @@ jobs:
 
       - *merge_group_cancel
 
-  # Expiry is wall-clock state: path scopes and previously completed runs
-  # cannot certify it. This required job runs for every merge candidate.
   dated-waiver-expiry:
     if: ${{ !cancelled() && inputs.heavy_only != true && (github.event_name != 'pull_request' || github.event.pull_request.draft != true) }}
     runs-on: ubuntu-latest
@@ -8168,7 +8166,7 @@ jobs:
 
       - name: List tracked files for dated waiver guard
         if: ${{ !cancelled() }}
-        run: git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"
+        run: bun scripts/dated-waivers.ts --prepare --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"
 
       - name: Check dated waiver expiry on the current tree
         if: ${{ !cancelled() }}

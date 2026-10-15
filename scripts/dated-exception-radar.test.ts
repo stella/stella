@@ -251,13 +251,43 @@ test("extension refresh preserves owner changes", async () => {
     request: async () => [
       {
         number: 9,
-        body: "owner-reason: Concrete owner decision",
+        body: "<!-- dated-exception-radar:1 -->\ndated-exception-action: extension\nowner-reason: Concrete owner decision",
         head: { sha: "b".repeat(40) },
         base: { sha: "c".repeat(40) },
       },
     ],
   });
   expect(existing).toEqual({ number: 9, headSha: "b".repeat(40) });
+});
+
+test("failed probes replace an existing removal with an owner extension request", async () => {
+  const grouped = group();
+  const first = grouped.entries.at(0);
+  if (!first) {
+    throw new Error("Fixture entry missing");
+  }
+  const ordinary = {
+    ...grouped,
+    entries: [{ ...first, kind: "dependency-audit" as const }],
+  };
+  const action = radarAction(ordinary, "red", now);
+  expect(action).toEqual({ kind: "extension", arm: false });
+  const reusable = await existingRadarProposal({
+    key: ordinary.key,
+    kind: action.kind,
+    body: radarBody(ordinary, action.kind, now),
+    baseSha: "a".repeat(40),
+    files: {},
+    request: async () => [
+      {
+        number: 9,
+        body: radarBody(ordinary, "removal", now),
+        head: { sha: "b".repeat(40) },
+        base: { sha: "a".repeat(40) },
+      },
+    ],
+  });
+  expect(reusable).toBeUndefined();
 });
 
 test("one failed publication does not suppress another due proposal", async () => {

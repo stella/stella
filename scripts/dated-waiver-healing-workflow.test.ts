@@ -260,7 +260,7 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     "--ignore-scripts",
   ]);
   expect(trackedFiles?.run).toBe(
-    'git ls-files -z > "$RUNNER_TEMP/dated-waiver-tracked-files"',
+    'bun scripts/dated-waivers.ts --prepare --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
   );
   expect(check?.run).toBe(
     'bun --preload ./scripts/offline-network-preload.ts scripts/dated-waivers.ts --check --tracked-files "$RUNNER_TEMP/dated-waiver-tracked-files"',
@@ -269,4 +269,41 @@ test("required CI expiry checks cannot be skipped by paths, reuse, or queue dept
     expect(step.env?.["GH_TOKEN"]).toBeUndefined();
     expect(step["continue-on-error"]).not.toBe(true);
   }
+});
+
+test("hourly radar shares the manual maintenance flow and checks main expiry after publishing", () => {
+  const hourly = v.parse(
+    v.object({
+      on: v.object({ schedule: v.array(v.object({ cron: v.string() })) }),
+      permissions: v.record(v.string(), v.string()),
+      concurrency: v.object({
+        group: v.string(),
+        "cancel-in-progress": v.boolean(),
+      }),
+      jobs: v.object({ prune: v.object({ steps: v.array(v.unknown()) }) }),
+    }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/quarantine-prune.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  expect(hourly.on.schedule).toEqual([{ cron: "17 * * * *" }]);
+  expect(hourly.permissions).toEqual({});
+  expect(hourly.concurrency).toEqual({
+    group: "dated-exception-radar",
+    "cancel-in-progress": false,
+  });
+  expect(hourly.jobs.prune.steps).toEqual(steps);
+  const expiry = requiredStep("Check main expiry after publication");
+  expect(steps.indexOf(expiry)).toBeGreaterThan(
+    steps.indexOf(
+      requiredStep(
+        "Publish proposals and request eligible automatic maintenance",
+      ),
+    ),
+  );
+  expect(expiry.run).toContain("--prepare --tracked-files");
+  expect(expiry.run).toContain("--check --tracked-files");
 });

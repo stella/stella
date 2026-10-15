@@ -18,6 +18,12 @@ import {
   type NoLlmsTxtExclusion,
 } from "../.claude/mcp/doc-sources.ts";
 import {
+  expiryBlocksFiles,
+  expiryWarning,
+  readExpiryCheckScope,
+  type ExpiryCheckScope,
+} from "../scripts/expiry-check-scope.ts";
+import {
   filenameForContext,
   getPropertyName,
   isAstNode,
@@ -42,6 +48,8 @@ type DocumentationSourcePolicyOptions = {
   exclusions: readonly NoLlmsTxtExclusion[];
   now: Date;
   sources: Readonly<Record<string, DocSource>>;
+  expiryScope?: ExpiryCheckScope;
+  onExpiryWarning?: (message: string) => void;
 };
 
 const readDependencyNames = (value: unknown): string[] =>
@@ -115,6 +123,9 @@ export const checkDocumentationSourcePolicy = ({
   exclusions,
   now,
   sources,
+  expiryScope = { type: "all" },
+  onExpiryWarning = (message) =>
+    process.stderr.write(`${expiryWarning(message)}\n`),
 }: DocumentationSourcePolicyOptions): string[] => {
   const failures: string[] = [];
   const classifications = new Map<string, string[]>();
@@ -169,9 +180,12 @@ export const checkDocumentationSourcePolicy = ({
       );
     }
     if (now.getTime() >= expiresAt) {
-      failures.push(
-        `${exclusion.dependency} has an expired no-llms-txt quarantine (${exclusion.expiresAt}); recheck its canonical documentation.`,
-      );
+      const message = `${exclusion.dependency} has an expired no-llms-txt quarantine (${exclusion.expiresAt}); recheck its canonical documentation.`;
+      if (expiryBlocksFiles(expiryScope, [POLICY_PATH_SUFFIX])) {
+        failures.push(message);
+      } else {
+        onExpiryWarning(message);
+      }
     }
   }
 
@@ -397,6 +411,7 @@ export default eslintCompatPlugin({
               exclusions: DOC_SOURCE_EXCLUSIONS,
               now: new Date(),
               sources: DOC_SOURCES,
+              expiryScope: readExpiryCheckScope(),
             });
             for (const failure of failures) {
               context.report({

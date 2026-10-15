@@ -3,7 +3,11 @@ import { describe, expect, test } from "bun:test";
 import {
   checkQuarantineExcludes,
   pruneExpiredExcludes,
+  pruneQuarantineBunfigs,
+  quarantineBunfigFiles,
+  quarantineOwningFiles,
 } from "./check-stll-quarantine-excludes";
+import { expiryScopeBase } from "./expiry-check-scope";
 
 const lockfile = `
 "packages": {
@@ -19,6 +23,179 @@ minimumReleaseAgeExcludes = [
   ${temporaryLine}
 ]
 `;
+
+describe("expiry ownership", () => {
+  test.each([
+    { catalog: { "better-result": "2.0.0" } },
+    { catalogs: { server: { "better-result": "2.0.0" } } },
+  ])("recognizes catalog pins in either manifest tree: %j", (manifest) => {
+    for (const manifests of [
+      { packageManifests: { "package.json": JSON.stringify(manifest) } },
+      { basePackageManifests: { "package.json": JSON.stringify(manifest) } },
+    ]) {
+      expect(
+        quarantineOwningFiles({
+          bunfigFile: "bunfig.toml",
+          packageName: "better-result",
+          ...manifests,
+        }),
+      ).toEqual(["bunfig.toml", "bun.lock", "package.json"]);
+    }
+  });
+  test("retains ownership when a change deletes a manifest pin", () => {
+    expect(
+      quarantineOwningFiles({
+        bunfigFile: "bunfig.toml",
+        packageName: "better-result",
+        packageManifests: { "package.json": "{}" },
+        basePackageManifests: {
+          "package.json": '{"dependencies":{"better-result":"2.0.0"}}',
+        },
+      }),
+    ).toEqual(["bunfig.toml", "bun.lock", "package.json"]);
+    expect(
+      quarantineOwningFiles({
+        bunfigFile: ".claude/mcp/bunfig.toml",
+        packageName: "better-result",
+        basePackageManifests: {
+          "package.json": '{"dependencies":{"better-result":"2.0.0"}}',
+        },
+      }),
+    ).toEqual([".claude/mcp/bunfig.toml", ".claude/mcp/bun.lock"]);
+  });
+  const bunfig = createBunfig(
+    '"better-result", # quarantine-expires: 2026-08-06T21:35:30.036Z',
+  );
+  const now = new Date("2026-08-07T00:00:00.000Z");
+
+  test.each(["pull_request", "merge_group"])(
+    "reads the exact %s base",
+    (eventName) => {
+      const sha = "a".repeat(40);
+      expect(
+        expiryScopeBase(eventName, {
+          pull_request: { base: { sha } },
+          merge_group: { base_sha: sha },
+        }),
+      ).toBe(sha);
+      expect(() => expiryScopeBase(eventName, {})).toThrow(
+        "exact event base SHA",
+      );
+    },
+  );
+
+  test.each(["bunfig.toml", "bun.lock", "packages/client/package.json"])(
+    "blocks the owning file: %s",
+    (file) => {
+      const result = checkQuarantineExcludes({
+        bunfig,
+        lockfile,
+        now,
+        scope: { type: "changes", changedFiles: new Set([file]) },
+        packageManifests: {
+          "packages/client/package.json":
+            '{"devDependencies":{"better-result":"2.0.0"}}',
+        },
+      });
+      expect(result.errors.join(" ")).toContain("expired at");
+      expect(result.warnings).toEqual([]);
+    },
+  );
+
+  test.each(["README.md", "packages/other/package.json"])(
+    "warns unrelated changes: %s",
+    (file) => {
+      const result = checkQuarantineExcludes({
+        bunfig,
+        lockfile,
+        now,
+        scope: { type: "changes", changedFiles: new Set([file]) },
+        packageManifests: {
+          "packages/other/package.json": '{"dependencies":{"other":"1.0.0"}}',
+        },
+      });
+      expect(result.errors).toEqual([]);
+      expect(result.warnings.join(" ")).toContain('"better-result" expired at');
+      expect(result.warnings.join(" ")).toContain("--prune");
+    },
+  );
+
+  test.each([
+    '"better-result",',
+    '"better-result", # quarantine-expires: nope',
+    '"@stll/*", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z',
+  ])("retains structural failures: %s", (line) => {
+    const result = checkQuarantineExcludes({
+      bunfig: createBunfig(line),
+      lockfile,
+      now,
+      scope: { type: "changes", changedFiles: new Set(["README.md"]) },
+    });
+    expect(result.errors.length).toBeGreaterThan(0);
+  });
+
+  test("keeps first-party completeness blocking outside ownership", () => {
+    const result = checkQuarantineExcludes({
+      bunfig,
+      lockfile: `${lockfile}\n"@stll/missing": ["@stll/missing@1.0.0"]`,
+      now,
+      scope: { type: "changes", changedFiles: new Set(["README.md"]) },
+    });
+    expect(result.errors.join(" ")).toContain("missing 1 first-party");
+    expect(result.warnings.join(" ")).toContain("expired at");
+  });
+
+  test("scopes container exception expiry to its source", () => {
+    const input = {
+      bunfig: createBunfig(""),
+      lockfile,
+      now,
+      releaseAgeExceptionSources: {
+        "docker-compose.yml":
+          "# release-age-quarantine-exception: 2026-08-01T00:00:00.000Z",
+      },
+    };
+    const unrelated = checkQuarantineExcludes({
+      ...input,
+      scope: { type: "changes", changedFiles: new Set(["README.md"]) },
+    });
+    expect(unrelated.errors).toEqual([]);
+    expect(unrelated.warnings.join(" ")).toContain("Remove the exception");
+    const related = checkQuarantineExcludes({
+      ...input,
+      scope: { type: "changes", changedFiles: new Set(["docker-compose.yml"]) },
+    });
+    expect(related.errors.join(" ")).toContain("expired at");
+  });
+
+  test("prunes every scanned bunfig and reaches a fixed point", () => {
+    const scanned = quarantineBunfigFiles([
+      "bunfig.toml",
+      ".claude/mcp/bunfig.toml",
+      "node_modules/pkg/bunfig.toml",
+      "package.json",
+    ]);
+    expect(scanned).toEqual(["bunfig.toml", ".claude/mcp/bunfig.toml"]);
+    const result = pruneQuarantineBunfigs({
+      bunfigs: Object.fromEntries(scanned.map((file) => [file, bunfig])),
+      now,
+    });
+    expect(Object.keys(result)).toEqual(scanned);
+    for (const entry of Object.values(result)) {
+      expect(entry.pruned).toEqual(["better-result"]);
+      expect(entry.bunfig).not.toContain("better-result");
+    }
+    const repeated = pruneQuarantineBunfigs({
+      bunfigs: Object.fromEntries(
+        Object.entries(result).map(([file, entry]) => [file, entry.bunfig]),
+      ),
+      now,
+    });
+    for (const entry of Object.values(repeated)) {
+      expect(entry.pruned).toEqual([]);
+    }
+  });
+});
 
 describe("quarantine exclude guard", () => {
   test("rejects every undated third-party exclusion", () => {
