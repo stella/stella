@@ -49,16 +49,44 @@ const SNAPSHOT = {
   welcomeStatus: "completed",
 } satisfies ClipboardSnapshot;
 
-const installNativeBoundary = async (page: Page, language: "ar" | "en") => {
+type NativeBoundaryOptions = {
+  language: "ar" | "en";
+  groups?: ClipboardSnapshot["groups"];
+  copyLifecycle?: "keepVisible" | "hideUntilReopened";
+};
+
+const installNativeBoundary = async (
+  page: Page,
+  {
+    language,
+    groups = SNAPSHOT.groups,
+    copyLifecycle = "keepVisible",
+  }: NativeBoundaryOptions,
+) => {
   expect(isClipboardSnapshot(SNAPSHOT)).toBe(true);
   await page.addInitScript(
-    ({ clipboardSnapshot, nativeLanguage, nativeBlurEvent }) => {
+    ({
+      clipboardSnapshot,
+      nativeLanguage,
+      nativeBlurEvent,
+      nativeCopyLifecycle,
+    }) => {
       const callbacks = new Map<number, (data: unknown) => unknown>();
       const invocations: {
         args: Record<string, unknown>;
         command: string;
       }[] = [];
       let nextCallbackId = 1;
+      let session = 1;
+      Reflect.set(window, "__STELLA_TEST_REOPEN_CLIPBOARD__", () => {
+        if (!document.documentElement.hidden) {
+          throw new TypeError("Clipboard must be hidden before a new session");
+        }
+        document.documentElement.hidden = false;
+        window.dispatchEvent(new FocusEvent("focus"));
+        session += 1;
+        return session;
+      });
 
       Reflect.set(window, "__STELLA_TEST_INVOCATIONS__", invocations);
       Reflect.set(window, "__STELLA_TEST_NATIVE_BLUR__", () => {
@@ -82,6 +110,16 @@ const installNativeBoundary = async (page: Page, language: "ar" | "en") => {
         convertFileSrc: (path: string) => path,
         invoke: async (command: string, args: Record<string, unknown> = {}) => {
           invocations.push({ args, command });
+          if (
+            (command === "clipboard_copy_item" ||
+              command === "clipboard_copy_items" ||
+              command === "clipboard_hide") &&
+            nativeCopyLifecycle === "hideUntilReopened"
+          ) {
+            document.documentElement.hidden = true;
+            window.dispatchEvent(new FocusEvent("blur"));
+            return undefined;
+          }
           if (command === "clipboard_get_snapshot") {
             return clipboardSnapshot;
           }
@@ -200,15 +238,16 @@ const installNativeBoundary = async (page: Page, language: "ar" | "en") => {
       });
     },
     {
-      clipboardSnapshot: SNAPSHOT,
+      clipboardSnapshot: { ...SNAPSHOT, groups },
       nativeLanguage: language,
       nativeBlurEvent: TauriEvent.WINDOW_BLUR,
+      nativeCopyLifecycle: copyLifecycle,
     },
   );
 };
 
 const openClipboard = async (page: Page, language: "ar" | "en") => {
-  await installNativeBoundary(page, language);
+  await installNativeBoundary(page, { language });
   await page.goto("/");
   const cards = page.locator("[data-clipboard-card-trigger]");
   await expect(cards.first()).toBeFocused();
@@ -1481,14 +1520,17 @@ test("Cmd-click toggles ordered selection and Escape clears it before hiding", a
   expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
   await cards.nth(0).click({ modifiers: ["Meta"] });
   await expect(cards.nth(0)).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("Escape");
+  await expect(page.locator("[data-selected]")).toHaveCount(0);
+  expect(await invocationCount(page, "clipboard_hide")).toBe(0);
+  await cards.nth(2).click({ modifiers: ["Meta"] });
+  await cards.nth(1).click({ modifiers: ["Meta"] });
   await page.keyboard.press("Meta+c");
   expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
     format: "original",
     ids: ["clip-3", "clip-2"],
   });
-  await page.keyboard.press("Escape");
   await expect(page.locator("[data-selected]")).toHaveCount(0);
-  expect(await invocationCount(page, "clipboard_hide")).toBe(0);
   await cards.nth(0).click();
   expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
     format: "original",
@@ -1508,6 +1550,10 @@ test("click and Enter paste the selection in click order using either format", a
     format: "original",
     ids: ["clip-2", "clip-1", "clip-3"],
   });
+  await expect(page.locator("[data-selected]")).toHaveCount(0);
+  await cards.nth(1).click({ modifiers: ["Meta"] });
+  await cards.nth(0).click({ modifiers: ["Meta"] });
+  await cards.nth(2).click({ modifiers: ["Meta"] });
   await page.keyboard.press("Shift+Enter");
   expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
     format: "plainText",
@@ -1552,26 +1598,143 @@ for (const colorScheme of ["light", "dark"] as const) {
     page,
   }) => {
     await page.emulateMedia({ colorScheme });
-    await openClipboard(page, "en");
-    const chips = page.locator(".clipboard-groups-rail button");
+    await installNativeBoundary(page, {
+      language: "en",
+      groups: [
+        ...SNAPSHOT.groups,
+        ...Array.from({ length: 9 }, (_, index) => ({
+          color: DEFAULT_CLIPBOARD_GROUP_COLOR,
+          id: `overflow-group-${index}`,
+          name: `Collection ${index + 1}`,
+        })),
+      ],
+    });
+    await page.goto("/");
+    await expect(
+      page.locator("[data-clipboard-card-trigger]").first(),
+    ).toBeFocused();
+    const rail = page.locator(".clipboard-groups-rail");
+    expect(
+      await rail.evaluate(
+        (element) => element.scrollWidth > element.clientWidth,
+      ),
+    ).toBe(true);
+    const chips = rail.locator("button");
     expect(await chips.count()).toBeGreaterThanOrEqual(3);
     for (const chip of await chips.all()) {
       await chip.focus();
-      await page.keyboard.press("Tab");
-      await page.keyboard.press("Shift+Tab");
+      await page.keyboard.press("ArrowRight");
+      await page.keyboard.press("ArrowLeft");
       await expect(chip).toBeFocused();
       const marker = await chip.evaluate((element) => {
         const style = getComputedStyle(element);
+        const bounds = element.getBoundingClientRect();
+        const parentRail = element.closest("nav");
+        if (!parentRail) {
+          throw new TypeError("Chip has no rail");
+        }
+        const railBounds = parentRail.getBoundingClientRect();
         return {
           inset: style.getPropertyValue("--tw-ring-inset").trim(),
           offset: style.getPropertyValue("--tw-ring-offset-width").trim(),
           outline: Number.parseFloat(style.outlineWidth),
           outlineOffset: Number.parseFloat(style.outlineOffset),
+          bounds: {
+            left: bounds.left,
+            right: bounds.right,
+            top: bounds.top,
+            bottom: bounds.bottom,
+          },
+          railBounds: {
+            left: railBounds.left,
+            right: railBounds.right,
+            top: railBounds.top,
+            bottom: railBounds.bottom,
+          },
         };
       });
       expect(marker.inset).toBe("inset");
       expect(marker.offset).toBe("0px");
       expect(marker.outlineOffset).toBeLessThanOrEqual(-marker.outline);
+      expect(marker.bounds.left).toBeGreaterThanOrEqual(marker.railBounds.left);
+      expect(marker.bounds.right).toBeLessThanOrEqual(marker.railBounds.right);
+      expect(marker.bounds.top).toBeGreaterThanOrEqual(marker.railBounds.top);
+      expect(marker.bounds.bottom).toBeLessThanOrEqual(
+        marker.railBounds.bottom,
+      );
     }
   });
 }
+
+test("a successful multi-copy cannot carry selection into a reopened clipboard session", async ({
+  page,
+}) => {
+  await installNativeBoundary(page, {
+    language: "en",
+    copyLifecycle: "hideUntilReopened",
+  });
+  await page.goto("/");
+  const cards = page.locator("[data-clipboard-card-trigger]");
+  await expect(cards.first()).toBeFocused();
+  await cards.nth(0).click({ modifiers: ["Meta"] });
+  await cards.nth(2).click({ modifiers: ["Meta"] });
+  await page.keyboard.press("Meta+c");
+  await expect(page.locator("html")).toHaveAttribute("hidden", "");
+  expect(await lastInvocationArgs(page, "clipboard_copy_items")).toEqual({
+    format: "original",
+    ids: ["clip-1", "clip-3"],
+  });
+  const session = await page.evaluate(() => {
+    const reopen: unknown = Reflect.get(
+      window,
+      "__STELLA_TEST_REOPEN_CLIPBOARD__",
+    );
+    if (typeof reopen !== "function") {
+      throw new TypeError("Native reopen boundary missing");
+    }
+    return reopen();
+  });
+  expect(session).toBe(2);
+  await expect(page.locator("html")).not.toHaveAttribute("hidden");
+  await cards.nth(3).click();
+  expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
+    format: "original",
+    id: "clip-4",
+  });
+  expect(await invocationCount(page, "clipboard_copy_items")).toBe(1);
+});
+
+test("dismissing and reopening starts a new selection session without a copy", async ({
+  page,
+}) => {
+  await installNativeBoundary(page, {
+    language: "en",
+    copyLifecycle: "hideUntilReopened",
+  });
+  await page.goto("/");
+  const cards = page.locator("[data-clipboard-card-trigger]");
+  await expect(cards.first()).toBeFocused();
+  await cards.first().click({ modifiers: ["Meta"] });
+  await expect(page.locator("[data-selected]")).toHaveCount(1);
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("hidden", "");
+  expect(
+    await page.evaluate(() => {
+      const reopen: unknown = Reflect.get(
+        window,
+        "__STELLA_TEST_REOPEN_CLIPBOARD__",
+      );
+      if (typeof reopen !== "function") {
+        throw new TypeError("Native reopen boundary missing");
+      }
+      return reopen();
+    }),
+  ).toBe(2);
+  await expect(page.locator("[data-selected]")).toHaveCount(0);
+  await cards.nth(3).click();
+  expect(await lastInvocationArgs(page, "clipboard_copy_item")).toEqual({
+    format: "original",
+    id: "clip-4",
+  });
+  expect(await invocationCount(page, "clipboard_copy_items")).toBe(0);
+});

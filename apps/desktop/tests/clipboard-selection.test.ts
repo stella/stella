@@ -1,37 +1,65 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ClipboardSelectionState } from "../src/clipboard/clipboard-selection";
 import { clipboardSelection } from "../src/clipboard/clipboard-selection";
 
 describe("ordered clipboard selection", () => {
   test("keeps click order, toggles off, and appends a reselected clip", () => {
-    let selection: string[] = [];
+    let selection: ClipboardSelectionState = { ids: [], session: 0 };
     for (const id of ["third", "first", "second"]) {
       selection = clipboardSelection(selection, { type: "toggle", id });
     }
-    expect(selection).toEqual(["third", "first", "second"]);
+    expect(selection.ids).toEqual(["third", "first", "second"]);
     selection = clipboardSelection(selection, { type: "toggle", id: "first" });
-    expect(selection).toEqual(["third", "second"]);
+    expect(selection.ids).toEqual(["third", "second"]);
     expect(
-      clipboardSelection(selection, { type: "toggle", id: "first" }),
+      clipboardSelection(selection, { type: "toggle", id: "first" }).ids,
     ).toEqual(["third", "second", "first"]);
   });
 
   test("Escape clears every selected clip and clearing is idempotent", () => {
-    const cleared = clipboardSelection(["third", "first", "second"], {
-      type: "clear",
-    });
-    expect(cleared).toEqual([]);
-    expect(clipboardSelection(cleared, { type: "clear" })).toEqual([]);
+    const cleared = clipboardSelection(
+      { ids: ["third", "first", "second"], session: 0 },
+      {
+        type: "clear",
+      },
+    );
+    expect(cleared.ids).toEqual([]);
+    expect(clipboardSelection(cleared, { type: "clear" })).toEqual(cleared);
   });
 
   test("toggling an unselected clip twice restores the prior selection without mutating it", () => {
-    const selection = ["third", "first"];
+    const selection = { ids: ["third", "first"], session: 0 };
     expect(
       clipboardSelection(
         clipboardSelection(selection, { type: "toggle", id: "second" }),
         { type: "toggle", id: "second" },
       ),
     ).toEqual(selection);
-    expect(selection).toEqual(["third", "first"]);
+    expect(selection.ids).toEqual(["third", "first"]);
+  });
+  test("successful copies and new sessions clear selection through its owner", () => {
+    const selection = { ids: ["third", "first"], session: 7 };
+    expect(
+      clipboardSelection(selection, { type: "copySucceeded", session: 7 }),
+    ).toEqual({ ids: [], session: 7 });
+    expect(clipboardSelection(selection, { type: "sessionStarted" })).toEqual({
+      ids: [],
+      session: 8,
+    });
+  });
+
+  test("a late copy completion cannot clear a later session selection", () => {
+    const nextSession = clipboardSelection(
+      { ids: ["old"], session: 7 },
+      { type: "sessionStarted" },
+    );
+    const selected = clipboardSelection(nextSession, {
+      type: "toggle",
+      id: "new",
+    });
+    expect(
+      clipboardSelection(selected, { type: "copySucceeded", session: 7 }),
+    ).toEqual({ ids: ["new"], session: 8 });
   });
 });

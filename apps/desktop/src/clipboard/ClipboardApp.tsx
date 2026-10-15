@@ -4,6 +4,7 @@ import {
   useEffect,
   useEffectEvent,
   useRef,
+  useReducer,
   useState,
 } from "react";
 import type {
@@ -1569,7 +1570,10 @@ const ClipboardApp = () => {
     useState<ClipboardSearchScope>("clips");
   const [searchComposing, setSearchComposing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [selection, setSelection] = useState<string[]>([]);
+  const [selection, dispatchSelection] = useReducer(clipboardSelection, {
+    ids: [],
+    session: 0,
+  });
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [appError, setError] = useState<ClipboardAppError | null>(null);
   const [dialog, setDialog] = useState<ClipboardDialogState>({
@@ -1782,6 +1786,7 @@ const ClipboardApp = () => {
       timelineRef.current?.focus();
     };
     const handleWindowFocus = () => {
+      dispatchSelection({ type: "sessionStarted" });
       setAgeReferenceTime(Temporal.Now.instant().epochMilliseconds);
       // The pointer may have moved while the window was hidden; the next
       // pointer move only seeds the position.
@@ -1896,22 +1901,24 @@ const ClipboardApp = () => {
     format: ClipboardCopyFormat = "original",
   ) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    const ids = selection;
+    const { ids, session } = selection;
     const copying =
       ids.length > 0
         ? invoke("clipboard_copy_items", { format, ids })
         : invoke("clipboard_copy_item", { format, id: item.id });
-    void copying.catch((error: unknown) => {
-      // An unrecognised rejection means the clip never left the window.
-      const kind = isClipboardCopyError(error) ? error.kind : "copy";
-      const feedback = COPY_FAILURE_FEEDBACK[kind];
-      reportDesktopError({
-        code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
-        operation: feedback.operation,
-        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+    void copying
+      .then(() => dispatchSelection({ type: "copySucceeded", session }))
+      .catch((error: unknown) => {
+        // An unrecognised rejection means the clip never left the window.
+        const kind = isClipboardCopyError(error) ? error.kind : "copy";
+        const feedback = COPY_FAILURE_FEEDBACK[kind];
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+          operation: feedback.operation,
+          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+        });
+        setError({ message: t(feedback.messageKey), source: "operation" });
       });
-      setError({ message: t(feedback.messageKey), source: "operation" });
-    });
   };
 
   const copyItemFromEnter = (item: ClipboardItem, shiftKey: boolean) => {
@@ -2477,8 +2484,8 @@ const ClipboardApp = () => {
       setDialog({ type: "closed" });
       return;
     }
-    if (selection.length > 0) {
-      setSelection((current) => clipboardSelection(current, { type: "clear" }));
+    if (selection.ids.length > 0) {
+      dispatchSelection({ type: "clear" });
       return;
     }
     requestHide();
@@ -2718,14 +2725,9 @@ const ClipboardApp = () => {
                         return (
                           <ClipboardCard
                             active={index === activeIndex}
-                            selected={selection.includes(item.id)}
+                            selected={selection.ids.includes(item.id)}
                             onToggleSelection={(id) =>
-                              setSelection((current) =>
-                                clipboardSelection(current, {
-                                  type: "toggle",
-                                  id,
-                                }),
-                              )
+                              dispatchSelection({ type: "toggle", id })
                             }
                             ageReferenceTime={ageReferenceTime}
                             dragging={
@@ -2904,6 +2906,15 @@ const ClipboardApp = () => {
                     "clipboard-groups-rail border-border flex min-w-0 scrollbar-none items-center gap-1 overflow-x-auto border-s ps-2",
                     searchSource === "registry" && "hidden",
                   )}
+                  onFocusCapture={({ target }) => {
+                    if (target instanceof HTMLElement) {
+                      target.scrollIntoView({
+                        block: "nearest",
+                        inline: "nearest",
+                        behavior: "instant",
+                      });
+                    }
+                  }}
                   onWheel={handleRailWheel}
                 >
                   <Button
