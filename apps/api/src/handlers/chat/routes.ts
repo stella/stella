@@ -28,6 +28,7 @@ import deleteThread from "@/api/handlers/chat/threads/delete";
 import getThreads from "@/api/handlers/chat/threads/list";
 import renameThread from "@/api/handlers/chat/threads/rename";
 import updateThread from "@/api/handlers/chat/threads/update";
+import readChatToolGrantCoverage from "@/api/handlers/chat/tool-grants/coverage";
 import createChatToolGrant from "@/api/handlers/chat/tool-grants/create";
 import deleteChatToolGrant from "@/api/handlers/chat/tool-grants/delete";
 import listChatToolGrants from "@/api/handlers/chat/tool-grants/list";
@@ -66,6 +67,10 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .get("/tool-grants", listChatToolGrants.handler, {
     query: listChatToolGrants.config.query,
     permissions: listChatToolGrants.config.permissions,
+  })
+  .get("/tool-grants/coverage", readChatToolGrantCoverage.handler, {
+    query: readChatToolGrantCoverage.config.query,
+    permissions: readChatToolGrantCoverage.config.permissions,
   })
   .post("/tool-grants", createChatToolGrant.handler, {
     body: createChatToolGrant.config.body,

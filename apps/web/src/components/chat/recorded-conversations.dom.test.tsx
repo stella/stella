@@ -374,6 +374,21 @@ const createRecordedServer = (
     ) {
       return threadPage();
     }
+    if (
+      url.origin === API_ORIGIN &&
+      url.pathname === "/v1/chat/tool-grants/coverage"
+    ) {
+      const toolName = url.searchParams.get("toolName") ?? "";
+      const asked = storedToolGrant(recording.threadId, toolName);
+      return Response.json({
+        covered: grants.some((grant) =>
+          asked.mcpConnectorId === null
+            ? grant.toolName === toolName
+            : grant.mcpConnectorToolNamespace ===
+              asked.mcpConnectorToolNamespace,
+        ),
+      });
+    }
     if (url.origin === API_ORIGIN && url.pathname === "/v1/chat/tool-grants") {
       if (method === "GET") {
         return Response.json({ grants });

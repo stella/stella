@@ -6,8 +6,13 @@ import {
   type ChatToolGrantScope,
 } from "@stll/api-contract/chat-tool-grants";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
-import { chatToolGrants, mcpConnectors } from "@/api/db/schema";
+import {
+  chatToolGrants,
+  mcpConnectors,
+  mcpUserConnections,
+} from "@/api/db/schema";
 import { markChatToolExecutionGranted } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import type { LoadedExternalMcpConnector } from "@/api/handlers/chat/tools/external-mcp-tools";
 import {
@@ -16,6 +21,7 @@ import {
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import { LIMITS } from "@/api/lib/limits";
 import {
   dynamicToolNamespacePrefix,
   isExternalMcpToolName,
@@ -257,4 +263,52 @@ const withGrantDecision = ({
     return toolDefinition;
   }
   return withoutApprovalGate(toolDefinition);
+};
+
+/**
+ * What a grant for `toolName` covers outside a turn, where no connector tools
+ * are loaded: the tool itself, or the one enabled connector of this user whose
+ * namespace the name carries. Null when the name cannot hold a grant.
+ */
+export const resolveStoredGrantSubject = async ({
+  organizationId,
+  toolName,
+  tx,
+  userId,
+}: {
+  organizationId: SafeId<"organization">;
+  toolName: string;
+  tx: Transaction;
+  userId: SafeId<"user">;
+}): Promise<
+  | { type: "tool"; toolName: string }
+  | { type: "mcp-connector"; connectorId: SafeId<"mcpConnector"> }
+  | null
+> => {
+  if (!isGrantableChatTool(toolName)) {
+    return null;
+  }
+  if (!isExternalMcpToolName(toolName)) {
+    return { type: "tool", toolName };
+  }
+  const connectors = await tx
+    .select({ id: mcpConnectors.id, slug: mcpConnectors.slug })
+    .from(mcpUserConnections)
+    .innerJoin(
+      mcpConnectors,
+      eq(mcpConnectors.id, mcpUserConnections.connectorId),
+    )
+    .where(
+      and(
+        eq(mcpUserConnections.organizationId, organizationId),
+        eq(mcpUserConnections.userId, userId),
+        eq(mcpUserConnections.enabled, true),
+      ),
+    )
+    .limit(LIMITS.mcpGatewayConnectorsMax);
+  const connectorId = resolveExternalMcpGrantConnectorId({
+    connectors,
+    toolName,
+  });
+  return connectorId === null ? null : { type: "mcp-connector", connectorId };
 };
