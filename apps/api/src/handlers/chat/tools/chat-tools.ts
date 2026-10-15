@@ -26,6 +26,7 @@ import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-cont
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
 import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
+import { createConnectorTools } from "@/api/handlers/chat/tools/connector-tools";
 import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
@@ -363,9 +364,11 @@ type SubagentTools = ReturnType<typeof createSpawnSubagentsTool>;
 type RememberTools = ReturnType<typeof createRememberTools>;
 type ShowVisualTools = ReturnType<typeof createShowVisualTools>;
 type SecretTools = ReturnType<typeof createSecretTools>;
+type ConnectorTools = ReturnType<typeof createConnectorTools>;
 
 type BuiltInChatTools = OrgTools &
   SecretTools &
+  ConnectorTools &
   ChatExecutionTools &
   SkillTools &
   CurrentSkillEditTools &
@@ -394,7 +397,7 @@ export type ChatTools = BuiltInChatTools;
 
 export type ChatBuiltinApprovalToolName = Exclude<
   keyof ChatUIToolsFor<BuiltInChatTools>,
-  "ask-user" | "create-document" | "request_secret"
+  "ask-user" | "create-document" | "request_secret" | "connect_connector"
 >;
 
 type BuiltInChatToolPolicyName =
@@ -811,6 +814,33 @@ const createSecretToolsForTurn = ({
   return createSecretTools({ safeDb, organizationId, userId, threadId });
 };
 
+type CreateConnectorToolsForTurnProps = Pick<
+  GetChatToolsProps,
+  "delegationDepth" | "memberRole" | "purpose"
+>;
+
+/**
+ * Connecting sends nothing from the conversation to the connector, so the
+ * tool is offered in anonymized mode too. Only the top-level turn has a card
+ * to answer it, and only members who may connect integrations are asked.
+ */
+const createConnectorToolsForTurn = ({
+  delegationDepth,
+  memberRole,
+  purpose,
+}: CreateConnectorToolsForTurnProps): ChatToolMap => {
+  if ((delegationDepth ?? 0) > 0) {
+    return {};
+  }
+  if (purpose === CHAT_TOOL_SET_PURPOSE.validation) {
+    return createConnectorTools();
+  }
+  if (!hasMemberPermission(memberRole, { integration: ["create"] })) {
+    return {};
+  }
+  return createConnectorTools();
+};
+
 export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   const {
     featureAccessSnapshot,
@@ -878,6 +908,11 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     threadId,
     thirdPartyBoundary,
     userId,
+  });
+  const connectorTools = createConnectorToolsForTurn({
+    delegationDepth: props.delegationDepth,
+    memberRole,
+    purpose,
   });
   // The nested review request sends the selected documents to the configured
   // model. Until that request accepts the chat anonymization boundary, do not
@@ -1276,6 +1311,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         : createShowVisualTools(props.visualTools)),
       ...orgTools,
       ...secretTools,
+      ...connectorTools,
       ...executionTools,
       ...skillTools,
       ...businessRegistryTools,

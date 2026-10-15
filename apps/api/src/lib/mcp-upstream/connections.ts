@@ -3,12 +3,12 @@ import { toolDefinition } from "@tanstack/ai";
 import { createMCPClient } from "@tanstack/ai-mcp";
 import type { MCPClient } from "@tanstack/ai-mcp";
 import { panic, Result } from "better-result";
-import { and, asc, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   mcpConnectorAuthorizationReviews,
   mcpConnectors,
@@ -406,6 +406,78 @@ export const loadMcpConnectionById = async ({
   });
   return normalized.at(0) ?? null;
 };
+
+/** At most this many connectors are offered to the model as connectable. */
+export const CONNECTABLE_MCP_CONNECTORS_MAX = 20;
+
+export type ConnectableMcpConnector = {
+  slug: string;
+  displayName: string;
+};
+
+/**
+ * Connectors the organization offers whose tools would not load for this
+ * user: no connection yet, or an enabled one that is not connected (it needs
+ * sign-in again). A connection the user disabled is a choice, not a gap, so
+ * it is not offered. Uses the same authorization-review gate as
+ * {@link loadActiveMcpConnectionsForUser}.
+ */
+export const loadConnectableMcpConnectorsForUser = async ({
+  organizationId,
+  safeDb,
+  userId,
+}: {
+  organizationId: SafeId<"organization">;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+}): Promise<Result<ConnectableMcpConnector[], SafeDbError>> =>
+  await safeDb((tx) =>
+    tx
+      .selectDistinctOn([mcpConnectors.slug], {
+        slug: mcpConnectors.slug,
+        displayName: mcpConnectors.displayName,
+      })
+      .from(mcpConnectors)
+      .leftJoin(
+        mcpConnectorAuthorizationReviews,
+        and(
+          eq(mcpConnectorAuthorizationReviews.connectorId, mcpConnectors.id),
+          eq(mcpConnectorAuthorizationReviews.organizationId, organizationId),
+        ),
+      )
+      .leftJoin(
+        mcpUserConnections,
+        and(
+          eq(mcpUserConnections.connectorId, mcpConnectors.id),
+          eq(mcpUserConnections.organizationId, organizationId),
+          eq(mcpUserConnections.userId, userId),
+        ),
+      )
+      .where(
+        and(
+          or(
+            isNull(mcpConnectors.organizationId),
+            eq(mcpConnectors.organizationId, organizationId),
+          ),
+          approvedMcpAuthorizationReview,
+          or(
+            isNull(mcpUserConnections.id),
+            and(
+              eq(mcpUserConnections.enabled, true),
+              or(
+                ne(mcpUserConnections.status, "connected"),
+                ne(
+                  mcpUserConnections.responseDisposition,
+                  MCP_RESPONSE_DISPOSITION.normal,
+                ),
+              ),
+            ),
+          ),
+        ),
+      )
+      .orderBy(asc(mcpConnectors.slug))
+      .limit(CONNECTABLE_MCP_CONNECTORS_MAX),
+  );
 
 /**
  * The credential columns a disconnect deletes and returns in one statement,
