@@ -109,6 +109,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 import { fileComparisonObjectKey } from "@/api/lib/uploads/file-comparison/uploads";
+import { restoreMatterStewards } from "@/api/lib/workspaces/visibility";
 
 // ── Extracted steps for verifyAndDeleteUser ─────────────────────────────
 //
@@ -312,12 +313,30 @@ export const CLEAR_WORKSPACE_LEAD_ROLE_TABLES = [
  */
 export const clearWorkspaceLeadRole = async (
   tx: Transaction,
-  currentUserId: string,
+  currentUserId: SafeId<"user">,
 ): Promise<void> => {
-  await tx
+  const ledMatters = await tx
     .update(workspaces)
     .set({ leadUserId: null })
-    .where(eq(workspaces.leadUserId, currentUserId));
+    .where(eq(workspaces.leadUserId, currentUserId))
+    .returning({
+      id: workspaces.id,
+      organizationId: workspaces.organizationId,
+    });
+  for (const [organizationId, matters] of Map.groupBy(
+    ledMatters,
+    (matter) => matter.organizationId,
+  )) {
+    // db-await-in-loop: one repair statement per organization whose matters the account led
+    await restoreMatterStewards(tx, {
+      workspaceIds: matters.map(({ id }) => id),
+      departingUserId: currentUserId,
+      recordAuditEvent: accountDeletionAuditRecorder(
+        organizationId,
+        currentUserId,
+      ),
+    });
+  }
 };
 
 export type ReassignActiveTaskAssignmentsParams = {
@@ -728,6 +747,25 @@ export const reassignActiveTaskAssignmentsAndDropMemberships = async ({
   return taskReassignmentCount;
 };
 
+/** The account-deletion run's audit recorder for one organization. */
+const accountDeletionAuditRecorder = (
+  organizationId: SafeId<"organization">,
+  userId: SafeId<"user">,
+) =>
+  createBackgroundAuditRecorder({
+    execution: {
+      performer: {
+        id: "account-deletion",
+        name: "Account deletion",
+        type: "service",
+      },
+      trigger: { source: "account-deletion", type: "system" },
+    },
+    organizationId,
+    workspaceId: null,
+    userId,
+  });
+
 type AccountDeletionAuditEnvelope = {
   organizationId: SafeId<"organization">;
   event: AuditEvent;
@@ -749,19 +787,10 @@ const recordAccountDeletionAuditEvents = async (
   }
 
   for (const [organizationId, events] of eventsByOrganization) {
-    const recordAuditEvent = createBackgroundAuditRecorder({
-      execution: {
-        performer: {
-          id: "account-deletion",
-          name: "Account deletion",
-          type: "service",
-        },
-        trigger: { source: "account-deletion", type: "system" },
-      },
+    const recordAuditEvent = accountDeletionAuditRecorder(
       organizationId,
-      workspaceId: null,
       userId,
-    });
+    );
     // db-await-in-loop: each organization's events already insert in one statement per org-bound recorder
     await recordAuditEvent(tx, events);
   }

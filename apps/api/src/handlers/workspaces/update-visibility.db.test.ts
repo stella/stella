@@ -11,6 +11,7 @@ import { eq, inArray } from "drizzle-orm";
 
 import type { MatterVisibility } from "@stll/api-contract";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -20,6 +21,10 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  leadsAssignedOnlyMatter,
+  restoreMatterStewards,
+} from "@/api/lib/workspaces/visibility";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -236,6 +241,48 @@ describe("changing a matter's visibility", () => {
     expect(await readVisibility(workspaceId)).toBe("admins_and_assigned");
   });
 
+  test("the lead cannot clear the lead of an assigned-only matter", async () => {
+    const workspaceId = await createMatter({
+      visibility: "assigned_only",
+      members: [ids.userA1, ids.userA2],
+    });
+
+    const { result, events } = await changeVisibility({
+      actor: LEAD(),
+      workspaceId,
+      body: { leadUserId: null },
+    });
+
+    expect(statusOf(result)).toBe(400);
+    expect(events).toEqual([]);
+    expect(await readLead(workspaceId)).toBe(ids.userA1);
+  });
+
+  test("a matter without a lead cannot be made assigned-only, even with members", async () => {
+    const workspaceId = await createMatter({
+      visibility: "admins_and_assigned",
+      members: [ids.userA2],
+    });
+
+    const { result } = await changeVisibility({
+      actor: ADMIN(),
+      workspaceId,
+      body: { visibility: "assigned_only" },
+    });
+
+    expect(statusOf(result)).toBe(400);
+    expect(await readVisibility(workspaceId)).toBe("admins_and_assigned");
+
+    // Naming an assigned member lead in the same change satisfies it.
+    const named = await changeVisibility({
+      actor: ADMIN(),
+      workspaceId,
+      body: { visibility: "assigned_only", leadUserId: ids.userA2 },
+    });
+    expect(Result.isOk(named.result)).toBe(true);
+    expect(await readVisibility(workspaceId)).toBe("assigned_only");
+  });
+
   test("restating the current visibility is not a change and needs no permission", async () => {
     const workspaceId = await createMatter({
       visibility: "assigned_only",
@@ -303,5 +350,74 @@ describe("changing a matter's lead", () => {
 
     expect(Result.isOk(result)).toBe(true);
     expect(await readLead(workspaceId)).toBe(ids.userA2);
+  });
+});
+
+describe("keeping a steward when a lead leaves", () => {
+  // Assignment removal, organization offboarding and account deletion clear
+  // the departing lead and then restore the steward through this one call.
+  const restore = async (
+    workspaceId: SafeId<"workspace">,
+    departingUserId: SafeId<"user">,
+  ) =>
+    await restoreMatterStewards(asTestRaw<Transaction>(testDb), {
+      workspaceIds: [workspaceId],
+      departingUserId,
+    });
+
+  test("the earliest remaining assigned internal member becomes lead; the departing user is never chosen", async () => {
+    const workspaceId = await createMatter({
+      visibility: "assigned_only",
+      members: [ids.userA1, ids.userA2],
+    });
+
+    // The departing lead's rows may still exist when the repair runs.
+    await restore(workspaceId, ids.userA1);
+
+    expect(await readLead(workspaceId)).toBe(ids.userA2);
+    expect(await readVisibility(workspaceId)).toBe("assigned_only");
+  });
+
+  test("with nobody left to lead, the matter reopens to owners and admins plus assigned members", async () => {
+    const workspaceId = await createMatter({
+      visibility: "assigned_only",
+      members: [ids.userA1],
+    });
+
+    await restore(workspaceId, ids.userA1);
+
+    expect(await readLead(workspaceId)).toBeNull();
+    expect(await readVisibility(workspaceId)).toBe("admins_and_assigned");
+  });
+
+  test("a matter whose lead stays usable is left alone", async () => {
+    const workspaceId = await createMatter({
+      visibility: "assigned_only",
+      members: [ids.userA1, ids.userA2],
+    });
+
+    await restore(workspaceId, ids.userA2);
+
+    expect(await readLead(workspaceId)).toBe(ids.userA1);
+    expect(await readVisibility(workspaceId)).toBe("assigned_only");
+  });
+
+  test("a member who leads an assigned-only matter is found before their role turns external", async () => {
+    const assignedOnly = await createMatter({
+      visibility: "assigned_only",
+      members: [ids.userA1, ids.userA2],
+    });
+    const led = async (userId: SafeId<"user">) =>
+      await leadsAssignedOnlyMatter(asTestRaw<Transaction>(testDb), {
+        organizationId: ids.orgA,
+        userId,
+      });
+
+    expect(await led(ids.userA1)).toBe(true);
+    await testDb
+      .update(workspaces)
+      .set({ visibility: "admins_and_assigned" })
+      .where(eq(workspaces.id, assignedOnly));
+    expect(await led(ids.userA1)).toBe(false);
   });
 });

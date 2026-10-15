@@ -24,12 +24,17 @@ ALTER TABLE "workspaces"
     CHECK ("visibility" IN ('all_members', 'admins_and_assigned', 'assigned_only'));
 --> statement-breakpoint
 
--- An assigned-only matter is managed by its lead (owners and admins do not
--- reach it), so every one needs a lead who can still act. A clientless matter
--- created without a lead takes its earliest assigned member (by assignment
--- time, then id) who is still an internal member of the matter's
--- organization. External members are never chosen. Bounded to clientless
--- matters without a lead.
+-- Steward invariant: an assigned-only matter is managed by its lead (owners
+-- and admins do not reach it), so it always has a usable lead, one who is an
+-- internal member (owner, admin, member, intern) of the matter's organization
+-- and assigned to it. The application keeps this in
+-- apps/api/src/lib/workspaces/visibility.ts; this backfill applies the same
+-- rule once.
+--
+-- First repair: a clientless matter whose lead is missing or no longer usable
+-- (left the organization, became external, or unassigned) takes its earliest
+-- assigned internal member, by assignment time then id, as lead. A matter
+-- with no such member keeps its lead as it is. Bounded to clientless matters.
 UPDATE "workspaces" AS w
 SET "lead_user_id" = steward.user_id
 FROM (
@@ -40,20 +45,29 @@ FROM (
     ON m.user_id = wm.user_id
    AND m.organization_id = matter.organization_id
   WHERE matter.client_id IS NULL
-    AND matter.lead_user_id IS NULL
-    AND m.role <> 'external'
+    AND m.role IN ('owner', 'admin', 'member', 'intern')
+    AND NOT EXISTS (
+      SELECT 1
+      FROM "workspace_members" AS lead_assignment
+      JOIN "member" AS lead_member
+        ON lead_member.user_id = lead_assignment.user_id
+       AND lead_member.organization_id = matter.organization_id
+      WHERE lead_assignment.workspace_id = matter.id
+        AND lead_assignment.user_id = matter.lead_user_id
+        AND lead_member.role IN ('owner', 'admin', 'member', 'intern')
+    )
   ORDER BY wm.workspace_id, wm.created_at, wm.id
 ) AS steward
 WHERE w.id = steward.workspace_id;
 --> statement-breakpoint
 
--- Preserve today's behaviour: a matter without a client stays assigned_only
--- and every other matter admins_and_assigned, so nothing becomes visible to
--- anyone who could not already see it. The one exception is a clientless
--- matter with no lead who is still an assigned internal member: nobody could
--- manage it as assigned_only, so it stays admins_and_assigned and owners and
--- admins can recover it. all_members is never set here; only an explicit,
--- audited change opens a matter that wide. Bounded to the clientless matters.
+-- Then visibility: a matter without a client stays assigned_only and every
+-- other matter admins_and_assigned, so nothing becomes visible to anyone who
+-- could not already see it, except a clientless matter that still has no
+-- usable lead: nobody could manage it as assigned_only, so it stays
+-- admins_and_assigned and owners and admins can recover it. all_members is
+-- never set here; only an explicit, audited change opens a matter that wide.
+-- Bounded to the clientless matters.
 UPDATE "workspaces" AS w
 SET "visibility" = 'assigned_only'
 WHERE w.client_id IS NULL
@@ -65,7 +79,7 @@ WHERE w.client_id IS NULL
      AND m.organization_id = w.organization_id
     WHERE wm.workspace_id = w.id
       AND wm.user_id = w.lead_user_id
-      AND m.role <> 'external'
+      AND m.role IN ('owner', 'admin', 'member', 'intern')
   );
 --> statement-breakpoint
 
@@ -81,8 +95,18 @@ ALTER TABLE "workspaces" ALTER COLUMN "visibility" DROP DEFAULT;
 CREATE FUNCTION public.workspaces_legacy_visibility() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
+  -- The creating user leads a clientless matter they made without a lead
+  -- (the old writer assigns its creator), keeping the steward invariant.
+  -- Without a known creator the matter stays reachable by owners and admins.
+  IF NEW.client_id IS NULL THEN
+    NEW.lead_user_id := COALESCE(
+      NEW.lead_user_id,
+      NULLIF(pg_catalog.current_setting('app.user_id', true), '')
+    );
+  END IF;
   NEW.visibility := CASE
-    WHEN NEW.client_id IS NULL THEN 'assigned_only'
+    WHEN NEW.client_id IS NULL AND NEW.lead_user_id IS NOT NULL
+      THEN 'assigned_only'
     ELSE 'admins_and_assigned'
   END;
   RETURN NEW;

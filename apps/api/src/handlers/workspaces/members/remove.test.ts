@@ -134,9 +134,15 @@ describe("removeWorkspaceMember", () => {
     const updates: { table: string; value: unknown }[] = [];
     const insertedAuditLogs: unknown[] = [];
     const deletedWorkspaceMembers: unknown[] = [];
+    let stewardRepairs = 0;
 
     const { safeDb, scopedDb } = createScopedDbMock({
       $count: async () => 0,
+      // The lead's matter restores its steward in the same transaction.
+      execute: async () => {
+        stewardRepairs += 1;
+        return [];
+      },
       select: () => ({
         from: (table: unknown) => ({
           innerJoin: () => ({
@@ -252,5 +258,6 @@ describe("removeWorkspaceMember", () => {
       "ws_test123",
       "user_lead",
     );
+    expect(stewardRepairs).toBe(1);
   });
 });

@@ -33,6 +33,7 @@ import { clearMemberAssignments } from "@/api/lib/member-assignment-offboarding"
 import { broadcastWorkspaceResourceSetUpdated } from "@/api/lib/resource-realtime";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { broadcastSessionEvent, revokeWorkspaceSseAccess } from "@/api/lib/sse";
+import { restoreMatterStewards } from "@/api/lib/workspaces/visibility";
 
 const config = {
   contract: "patch",
@@ -400,6 +401,11 @@ export const removeWorkspaceMemberHandler = async function* ({
           .update(workspaces)
           .set({ leadUserId: null })
           .where(eq(workspaces.id, workspaceId));
+        await restoreMatterStewards(tx, {
+          workspaceIds: [workspaceId],
+          departingUserId: userId,
+          recordAuditEvent,
+        });
       }
 
       const closedSessions = await tx

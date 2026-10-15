@@ -36,7 +36,10 @@ import { pickDefined } from "@/api/lib/pick-defined";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
-import { tMatterVisibility } from "@/api/lib/workspaces/visibility";
+import {
+  hasUsableSteward,
+  tMatterVisibility,
+} from "@/api/lib/workspaces/visibility";
 
 const updateWorkspaceBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
@@ -197,14 +200,6 @@ type StewardshipFailure = {
   message: "Only the matter lead or an organization admin can change who can see or lead this matter";
 };
 
-type VisibilityChangeFailure =
-  | StewardshipFailure
-  | {
-      ok: false;
-      status: 400;
-      message: "A matter visible to assigned members only needs at least one member";
-    };
-
 /**
  * Visibility and lead are the matter's stewardship: only its current lead (as
  * stored before this request, so naming yourself lead in the same request
@@ -223,45 +218,65 @@ const checkStewardship = (
           "Only the matter lead or an organization admin can change who can see or lead this matter",
       };
 
-/**
- * Refuse a visibility change the actor may not make, or one that would leave
- * an assigned-only matter nobody can reach.
- */
-const checkVisibilityChange = async ({
-  tx,
+/** Refuse a visibility change the actor may not make. */
+const checkVisibilityChange = ({
   actor,
-  workspaceId,
   currentLeadUserId,
+}: {
+  actor: WorkspaceUpdateActor;
+  currentLeadUserId: string | null;
+}): StewardshipFailure | null => checkStewardship(actor, currentLeadUserId);
+
+type StewardFailure = {
+  ok: false;
+  status: 400;
+  message: "A matter visible to assigned members only needs a lead who is an internal member assigned to it";
+};
+
+/**
+ * The resulting matter, not the request, must keep the steward invariant: an
+ * assigned-only matter always has a usable lead. Checked whenever the lead or
+ * the visibility changes.
+ */
+const checkResultingSteward = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  current,
   next,
+  assigningUserIds,
 }: {
   tx: Transaction;
-  actor: WorkspaceUpdateActor;
+  organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
-  currentLeadUserId: string | null;
-  next: MatterVisibility;
-}): Promise<VisibilityChangeFailure | null> => {
-  const stewardship = checkStewardship(actor, currentLeadUserId);
-  if (stewardship) {
-    return stewardship;
-  }
-  if (next !== MATTER_VISIBILITY.assignedOnly) {
+  current: { leadUserId: string | null; visibility: MatterVisibility };
+  next: {
+    leadUserId: string | null | undefined;
+    visibility: MatterVisibility | undefined;
+  };
+  assigningUserIds: readonly string[];
+}): Promise<StewardFailure | null> => {
+  const leadUserId =
+    next.leadUserId === undefined ? current.leadUserId : next.leadUserId;
+  const visibility = next.visibility ?? current.visibility;
+  const changed =
+    leadUserId !== current.leadUserId || visibility !== current.visibility;
+  if (!changed || visibility !== MATTER_VISIBILITY.assignedOnly) {
     return null;
   }
-  // No lock: removing a member already refuses to remove the last one, so a
-  // matter that has a member now keeps one.
-  const members = await tx
-    .select({ id: workspaceMembers.id })
-    .from(workspaceMembers)
-    .where(eq(workspaceMembers.workspaceId, workspaceId))
-    .limit(1);
-  return members.length === 0
-    ? {
+  return (await hasUsableSteward(tx, {
+    organizationId,
+    workspaceId,
+    leadUserId,
+    assigningUserIds,
+  }))
+    ? null
+    : {
         ok: false,
         status: 400,
         message:
-          "A matter visible to assigned members only needs at least one member",
-      }
-    : null;
+          "A matter visible to assigned members only needs a lead who is an internal member assigned to it",
+      };
 };
 
 export type UpdateWorkspaceHandlerProps = {
@@ -416,16 +431,25 @@ export const updateWorkspaceHandler = async function* ({
     const visibilityChanged =
       body.visibility !== undefined && body.visibility !== workspace.visibility;
     if (body.visibility !== undefined && visibilityChanged) {
-      const visibilityCheck = await checkVisibilityChange({
-        tx,
+      const visibilityCheck = checkVisibilityChange({
         actor,
-        workspaceId,
         currentLeadUserId: workspace.leadUserId,
-        next: body.visibility,
       });
       if (visibilityCheck) {
         return visibilityCheck;
       }
+    }
+
+    const stewardCheck = await checkResultingSteward({
+      tx,
+      organizationId,
+      workspaceId,
+      current: workspace,
+      next: { leadUserId: body.leadUserId, visibility: body.visibility },
+      assigningUserIds: requestedMemberUserIds,
+    });
+    if (stewardCheck) {
+      return stewardCheck;
     }
 
     // Before the write, so a reference that is both retired and currently held

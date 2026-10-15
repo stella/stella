@@ -139,6 +139,9 @@ describe("matter visibility migration", () => {
     const keptLead = "00000000-0000-4000-8000-000000000012";
     const memberless = "00000000-0000-4000-8000-000000000013";
     const externalOnly = "00000000-0000-4000-8000-000000000014";
+    const departedLead = "00000000-0000-4000-8000-000000000015";
+    const unassignedLead = "00000000-0000-4000-8000-000000000016";
+    const externalLead = "00000000-0000-4000-8000-000000000017";
     await using database = new PGlite();
     await seed(database);
     await database.exec(`
@@ -146,14 +149,22 @@ describe("matter visibility migration", () => {
         ('${leadless}', '${ORG}', NULL, NULL),
         ('${keptLead}', '${ORG}', NULL, '${OTHER_MEMBER}'),
         ('${memberless}', '${ORG}', NULL, NULL),
-        ('${externalOnly}', '${ORG}', NULL, NULL);
+        ('${externalOnly}', '${ORG}', NULL, NULL),
+        ('${departedLead}', '${ORG}', NULL, 'user_departed'),
+        ('${unassignedLead}', '${ORG}', NULL, '${ADMIN}'),
+        ('${externalLead}', '${ORG}', NULL, '${EXTERNAL}');
       INSERT INTO workspace_members (id, workspace_id, user_id, created_at) VALUES
         ('wl1', '${leadless}', '${EXTERNAL}', '2026-01-01T00:00:00Z'),
         ('wl2', '${leadless}', '${MEMBER}', '2026-01-02T00:00:00Z'),
         ('wl3', '${leadless}', '${OTHER_MEMBER}', '2026-01-03T00:00:00Z'),
         ('wk1', '${keptLead}', '${MEMBER}', '2026-01-01T00:00:00Z'),
         ('wk2', '${keptLead}', '${OTHER_MEMBER}', '2026-01-02T00:00:00Z'),
-        ('we1', '${externalOnly}', '${EXTERNAL}', '2026-01-01T00:00:00Z');
+        ('we1', '${externalOnly}', '${EXTERNAL}', '2026-01-01T00:00:00Z'),
+        ('wd1', '${departedLead}', 'user_departed', '2026-01-01T00:00:00Z'),
+        ('wd2', '${departedLead}', '${OTHER_MEMBER}', '2026-01-02T00:00:00Z'),
+        ('wu1', '${unassignedLead}', '${INTERN}', '2026-01-01T00:00:00Z'),
+        ('wx1', '${externalLead}', '${EXTERNAL}', '2026-01-01T00:00:00Z'),
+        ('wx2', '${externalLead}', '${MEMBER}', '2026-01-02T00:00:00Z');
     `);
     await database.exec(migrationSql);
 
@@ -170,12 +181,20 @@ describe("matter visibility migration", () => {
     expect(leads[keptLead]).toBe(OTHER_MEMBER);
     expect(leads[memberless]).toBeNull();
     expect(leads[externalOnly]).toBeNull();
+    // A lead who left the organization, is not assigned, or is external is
+    // repaired the same way.
+    expect(leads[departedLead]).toBe(OTHER_MEMBER);
+    expect(leads[unassignedLead]).toBe(INTERN);
+    expect(leads[externalLead]).toBe(MEMBER);
 
     const visibility = await visibilityById(database);
     expect(visibility[leadless]).toBe("assigned_only");
     expect(visibility[keptLead]).toBe("assigned_only");
     expect(visibility[memberless]).toBe("admins_and_assigned");
     expect(visibility[externalOnly]).toBe("admins_and_assigned");
+    for (const repaired of [departedLead, unassignedLead, externalLead]) {
+      expect(visibility[repaired]).toBe("assigned_only");
+    }
 
     // The new lead is assigned, so they reach the matter they now manage.
     expect(
@@ -312,8 +331,16 @@ describe("matter visibility migration", () => {
     ).toContain(allMembersMatter);
   });
 
-  test("a writer that omits visibility gets the visibility the old rule implied", async () => {
+  test("a writer that omits visibility gets the visibility the old rule implied, with its creator as lead", async () => {
     await using database = await migrated();
+    // Without a known creator, a clientless matter stays manageable.
+    await database.exec(`
+      INSERT INTO workspaces (id, organization_id, client_id) VALUES
+        ('00000000-0000-4000-8000-0000000000a5', '${ORG}', NULL);
+    `);
+    await database.query("SELECT set_config('app.user_id', $1, false)", [
+      MEMBER,
+    ]);
     await database.exec(`
       INSERT INTO workspaces (id, organization_id, client_id) VALUES
         ('00000000-0000-4000-8000-0000000000a1', '${ORG}', NULL),
@@ -330,6 +357,13 @@ describe("matter visibility migration", () => {
     expect(visibility["00000000-0000-4000-8000-0000000000a2"]).toBe(
       "admins_and_assigned",
     );
+    expect(visibility["00000000-0000-4000-8000-0000000000a5"]).toBe(
+      "admins_and_assigned",
+    );
+    const { rows } = await database.query<{ lead: string | null }>(
+      "SELECT lead_user_id AS lead FROM workspaces WHERE id = '00000000-0000-4000-8000-0000000000a1'",
+    );
+    expect(rows.at(0)?.lead).toBe(MEMBER);
     // An explicit value always wins.
     expect(visibility["00000000-0000-4000-8000-0000000000a3"]).toBe(
       "all_members",

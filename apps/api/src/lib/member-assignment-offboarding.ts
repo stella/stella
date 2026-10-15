@@ -70,6 +70,7 @@ import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { enqueueContactSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 import { lockTaskAssignmentMembers } from "@/api/lib/tasks/assignment-membership";
 import { closeRemovedMemberActiveTimer } from "@/api/lib/time-entry-offboarding";
+import { restoreMatterStewards } from "@/api/lib/workspaces/visibility";
 
 type AssignmentScope =
   | { type: "workspace"; workspaceId: SafeId<"workspace"> }
@@ -1500,7 +1501,7 @@ export const removeOrganizationMemberInTransaction = async (
     actorUserId,
     reassignTo,
   });
-  await tx
+  const ledMatters = await tx
     .update(workspaces)
     .set({ leadUserId: null })
     .where(
@@ -1508,7 +1509,8 @@ export const removeOrganizationMemberInTransaction = async (
         eq(workspaces.organizationId, organizationId),
         eq(workspaces.leadUserId, userId),
       ),
-    );
+    )
+    .returning({ id: workspaces.id });
   await cancelMemberDesktopSessions({
     tx,
     organizationId,
@@ -1523,6 +1525,11 @@ export const removeOrganizationMemberInTransaction = async (
       performer: { type: "user", id: actorUserId },
       trigger: { type: "system", source: "membership_removal" },
     },
+  });
+  await restoreMatterStewards(tx, {
+    workspaceIds: ledMatters.map(({ id }) => id),
+    departingUserId: userId,
+    recordAuditEvent,
   });
   await clearMemberPresence({
     tx,

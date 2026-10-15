@@ -31,7 +31,12 @@ import {
 } from "@stll/api-contract/professional-use";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import { errorOutputLogger } from "@stll/errors";
-import { ac, assignableRoles, roles } from "@stll/permissions";
+import {
+  ac,
+  assignableRoles,
+  INTERNAL_MEMBER_ROLES,
+  roles,
+} from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
@@ -273,7 +278,10 @@ import {
   ORGANIZATION_DELETION_REFUSAL_CODE,
 } from "@/api/lib/usage/renewing-hosted-subscription";
 import { normalizeUserShortcutsField } from "@/api/lib/user-shortcuts";
-import { reachesMatterWithoutAssignmentSql } from "@/api/lib/workspaces/visibility";
+import {
+  leadsAssignedOnlyMatter,
+  reachesMatterWithoutAssignmentSql,
+} from "@/api/lib/workspaces/visibility";
 import {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_MEMBER_ID_CLAIM,
@@ -1540,6 +1548,19 @@ export const createAuth = (
           brandPersistedOrganizationId(org.id),
           newRole,
         );
+        if (
+          !INTERNAL_MEMBER_ROLES.some((role) => role === newRole) &&
+          (await leadsAssignedOnlyMatter(rootDb, {
+            organizationId: brandPersistedOrganizationId(org.id),
+            userId: brandPersistedUserId(updatedMember.userId),
+          }))
+        ) {
+          throw new APIError("BAD_REQUEST", {
+            code: "member_leads_assigned_only_matter",
+            message:
+              "Hand over the matters this member leads that are visible to assigned members only before changing their role.",
+          });
+        }
         if (newRole !== "owner") {
           await refuseLastOwnerChange(
             brandPersistedOrganizationId(org.id),
