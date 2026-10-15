@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import {
   euEcjAdapter,
   readEcjFormexArchive,
@@ -23,10 +25,10 @@ const joined =
 test("every archive member survives stored replay and repeated bibliography stays ordered", async () => {
   const zip = new JSZip();
   zip.folder("documents");
-  zip.file("documents/primary.xml", primary);
-  zip.file("documents/joined.xml", joined);
+  writeZipEntry(zip, "documents/primary.xml", primary);
+  writeZipEntry(zip, "documents/joined.xml", joined);
   const asset = new Uint8Array([0, 255, 128, 4]);
-  zip.file("assets/figure.bin", asset);
+  writeZipEntry(zip, "assets/figure.bin", asset);
   const formex = await readEcjFormexArchive(
     await zip.generateAsync({ type: "arraybuffer" }),
   );

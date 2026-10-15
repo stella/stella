@@ -90,5 +90,9 @@
   {
     "name": "Typecheck command rejects errors",
     "reason": "Compiler parity and seeded compiler probes run only through explicit Manual checks dispatch."
+  },
+  {
+    "name": "Dependabot group guard",
+    "reason": "Reads installed manifests, so it moved to ci-checks-policy after the install as 'Dependabot group guard (installed packages)'."
   }
 ]
