@@ -27,6 +27,9 @@ const linkText = (node: ReactNode): string => {
   return "";
 };
 
+const hasElementContent = (node: ReactNode): boolean =>
+  Array.isArray(node) ? node.some(hasElementContent) : isValidElement(node);
+
 const ProxyIcon = ({ src }: { src: string }) => {
   const [failed, setFailed] = useState(false);
   // The host owns authenticated proxy retrieval; only its local object URL
@@ -87,10 +90,14 @@ export const ChatLink = ({
     );
   }
   const text = linkText(children).trim();
-  const label =
-    text && normalizeChatLink(text) === null
-      ? children
-      : target.hostname.replace(/^www\./u, "");
+  // Text labels that only repeat a URL collapse to the hostname; element-only
+  // content such as a linked image has no text label and stays as authored.
+  const keepChildren = text
+    ? normalizeChatLink(text) === null
+    : hasElementContent(children);
+  const label = keepChildren
+    ? children
+    : target.hostname.replace(/^www\./u, "");
   let icon = <GlobeIcon aria-hidden="true" className="size-[1em]" />;
   if (iconSource) {
     icon = <ProxyIcon key={iconSource.src} src={iconSource.src} />;

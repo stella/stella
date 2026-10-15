@@ -43,6 +43,17 @@ for (const { locale, catalogue } of locales) {
   });
 }
 
+test("an image-only link keeps its image instead of falling back to the hostname", () => {
+  const view = render(
+    <ChatLink href="https://example.org/figure">
+      <img alt="Court building" src="https://example.org/figure.png" />
+    </ChatLink>,
+  );
+  const link = view.getByRole("link", { name: "Court building" });
+  expect(link.querySelector("img")?.getAttribute("alt")).toBe("Court building");
+  expect(link.textContent).not.toContain("example.org");
+});
+
 test("bare link titles use the hostname and only exact brand hosts receive a mark", () => {
   const raw = "https://github.com/stella/stella";
   const xLabel = "X source";
