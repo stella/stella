@@ -1,6 +1,8 @@
 import { TypeCompiler } from "@sinclair/typebox/compiler";
 import { expect, test } from "bun:test";
 
+import { CLAUSE_NUMBERING_LEVEL_LIMITS } from "@stll/api-contract";
+
 import { LIMITS } from "@/api/lib/limits";
 
 import { clauseBodySchema, clauseExpectedBodySchema } from "./body-schema";
@@ -49,6 +51,26 @@ test("clause numbering accepts every supported level and rejects invalid levels"
     expect(writtenBody.Check(imported)).toBe(false);
     expect(normalizeClauseBody(imported)).toEqual([{ text: "Item" }]);
   }
+});
+
+test("clause numbering bounds come from the shared contract limits", () => {
+  const item = (ilvl: number) => [
+    {
+      text: "Item",
+      listKind: "ordered",
+      numbering: { kind: "levelOnly", ilvl },
+    },
+  ];
+  expect(LIMITS.clauseNumberingLevelMin).toBe(
+    CLAUSE_NUMBERING_LEVEL_LIMITS.min,
+  );
+  expect(LIMITS.clauseNumberingLevelMax).toBe(
+    CLAUSE_NUMBERING_LEVEL_LIMITS.max,
+  );
+  expect(writtenBody.Check(item(CLAUSE_NUMBERING_LEVEL_LIMITS.max))).toBe(true);
+  expect(writtenBody.Check(item(CLAUSE_NUMBERING_LEVEL_LIMITS.max + 1))).toBe(
+    false,
+  );
 });
 
 test("clause writes reject removed list depth fields", () => {

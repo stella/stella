@@ -13,6 +13,14 @@
 export const FLOW_RUN_INPUT_ENTITIES_MAX = 50;
 
 /**
+ * Zero-based list nesting levels a clause paragraph's numbering may carry.
+ * OOXML numbering defines nine levels (`w:ilvl` 0..8). The API rejects a level
+ * outside this range, so the clause editor keeps deeper nesting at the deepest
+ * supported level.
+ */
+export const CLAUSE_NUMBERING_LEVEL_LIMITS = { min: 0, max: 8 } as const;
+
+/**
  * Enabled skills an agent surface exposes: chat `load-skill`, template field
  * generators, and the MCP skill tools. The composer's slash menu must not
  * offer a skill the model cannot load.

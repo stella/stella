@@ -1,5 +1,6 @@
 import type { JSONContent } from "@tiptap/react";
 
+import { CLAUSE_NUMBERING_LEVEL_LIMITS } from "@stll/api-contract";
 import { isBlockDirectiveKind } from "@stll/template-conditions";
 
 import type {
@@ -240,6 +241,8 @@ const nodeToParagraph = (node: JSONContent): ClauseParagraph => {
  * Flatten a `bulletList`/`orderedList` node to list-item paragraphs at `level`.
  * Each `listItem` contributes one paragraph (its leading block) tagged with the
  * list kind + level; any nested list inside the item recurses one level deeper.
+ * The emitted level stops at the deepest level the API accepts: nesting past
+ * it stays at that level, the same rule the stored-body migration applies.
  */
 const flattenList = (
   listNode: JSONContent,
@@ -258,7 +261,10 @@ const flattenList = (
     const leadBlock = blocks.find((b) => listKindOfNode(b.type) === null);
     const lead = leadBlock ? nodeToParagraph(leadBlock) : { text: "" };
     lead.listKind = kind;
-    lead.numbering = { kind: "levelOnly", ilvl: level };
+    lead.numbering = {
+      kind: "levelOnly",
+      ilvl: Math.min(level, CLAUSE_NUMBERING_LEVEL_LIMITS.max),
+    };
     out.push(lead);
 
     for (const block of blocks) {

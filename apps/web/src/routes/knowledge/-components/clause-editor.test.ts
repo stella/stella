@@ -5,6 +5,7 @@ import type { Command } from "@tiptap/pm/state";
 import type { JSONContent } from "@tiptap/react";
 import { describe, expect, test } from "bun:test";
 
+import { CLAUSE_NUMBERING_LEVEL_LIMITS } from "@stll/api-contract";
 import {
   acceptAIEditRevision,
   acceptAllChanges,
@@ -250,6 +251,40 @@ describe("clause body ⇄ TipTap round-trip", () => {
     ];
 
     expect(tipTapToClauseBody(clauseBodyToTipTap(body))).toEqual(body);
+  });
+
+  test("list nesting past the deepest supported level stays at that level", () => {
+    const depth = 10;
+    const paragraph = (text: string): JSONContent => ({
+      type: "paragraph",
+      content: [{ type: "text", text }],
+    });
+    let list: JSONContent | null = null;
+    for (let index = depth - 1; index >= 0; index -= 1) {
+      const item: JSONContent = {
+        type: "listItem",
+        content: [paragraph(`Level ${index}`), ...(list ? [list] : [])],
+      };
+      list = { type: "orderedList", content: [item] };
+    }
+    if (!list) {
+      throw new Error("expected a nested list");
+    }
+
+    const body = tipTapToClauseBody({ type: "doc", content: [list] });
+
+    const levels = body.map((p) =>
+      p.numbering?.kind === "levelOnly" ? p.numbering.ilvl : null,
+    );
+    expect(CLAUSE_NUMBERING_LEVEL_LIMITS.max).toBe(8);
+    expect(levels).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 8]);
+    expect(body.map((p) => p.text)).toEqual(
+      Array.from({ length: depth }, (_, index) => `Level ${index}`),
+    );
+    for (const level of levels) {
+      expect(level).toBeGreaterThanOrEqual(CLAUSE_NUMBERING_LEVEL_LIMITS.min);
+      expect(level).toBeLessThanOrEqual(CLAUSE_NUMBERING_LEVEL_LIMITS.max);
+    }
   });
 
   test("a nested ordered list inside a bullet list round-trips", () => {
