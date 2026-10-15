@@ -69,7 +69,10 @@ const oldPreparation = new Set([
   "Generate types",
 ]);
 
-const producerGate = "steps.generated-plan.outputs.required == 'true'";
+// Each producer step also repeats the reused-depth gate, so a run that reuses
+// an earlier depth result never reaches an expensive planner step.
+const producerGate =
+  "steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'";
 const producerSteps = [
   "Fetch submodules for generated sources",
   "Install generated source dependencies",

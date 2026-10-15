@@ -1603,17 +1603,17 @@ jobs:
           && steps.changed-files.outputs.package_checks_required == 'true'
         run: echo "required=true" >> "$GITHUB_OUTPUT"
       - name: Fetch submodules for generated sources
-        if: steps.generated-plan.outputs.required == 'true'
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
         run: git submodule update --init --recursive
       - name: Install generated source dependencies
-        if: steps.generated-plan.outputs.required == 'true'
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
         uses: $/.github/actions/ci-install
         with:
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           NPM_TOKEN: ""
       - name: Prepare local check environment
-        if: steps.generated-plan.outputs.required == 'true'
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
         env:
           STELLA_VERIFY: prepare
         run: |
@@ -1621,7 +1621,7 @@ jobs:
             [[ -f "$app/.env" ]] || cp "$app/.env.example" "$app/.env"
           done
       - name: Produce generated sources
-        if: steps.generated-plan.outputs.required == 'true'
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
         env:
           STELLA_VERIFY: prepare
         id: generate
@@ -1633,7 +1633,7 @@ jobs:
             bun scripts/ci-generated-sources.ts produce "$RUNNER_TEMP/generated-sources"
           fi
       - name: Upload generated sources
-        if: steps.generated-plan.outputs.required == 'true'
+        if: steps.completed-depth.outputs.run_required != 'false' && steps.generated-plan.outputs.required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: generated-sources-${{ steps.generate.outputs.input_hash }}
