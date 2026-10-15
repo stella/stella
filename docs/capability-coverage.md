@@ -281,6 +281,7 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `lists.items.sources.verification.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-sources-verification-update` |
 | `lists.items.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists items-update` |
 | `lists.list` | read | stella:read | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists list` |
+| `lists.sample-case.create` | write | stella:documents_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sample-case-create` |
 | `lists.sections.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists sections-create` |
 | `lists.update` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists update` |
 | `lists.verifications.claim-reviews.bulk.create` | write | stella:matters_write | FEATURE_LEGAL_LISTS | generic invoke → `stella capability lists verifications-claim-reviews-bulk-create` |
