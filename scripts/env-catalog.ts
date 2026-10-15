@@ -1492,6 +1492,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_WEB_URL",
   "EVENT_NAME",
   "EXPECTED_COMMIT",
+  // Flake trial ownership and isolated subprocess fixture handoffs.
+  "FLAKE_CHILD_RECORD",
+  "FLAKE_GATE_FIXTURE_PRELOADED",
+  "FLAKE_GATE_TRIAL",
   "GH_READ_TOKEN",
   "HEAD_SHA",
   // Scheduled journey checks: endpoint overrides and bounded request/retry timing.

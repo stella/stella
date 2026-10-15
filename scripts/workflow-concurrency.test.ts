@@ -666,7 +666,10 @@ test("unrelated flake-gate labels use an isolated non-cancelling group", async (
   const reusableCall = {
     ...requested,
     run_id: 44,
-    event: { ...requested.event, action: "opened", label: undefined },
+    event: {
+      pull_request: requested.event.pull_request,
+      action: "opened",
+    },
     inputs: { base_ref: "origin/main" },
   };
   const reusableGroup = await groupFor(file, reusableCall);
