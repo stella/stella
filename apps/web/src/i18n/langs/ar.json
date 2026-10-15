@@ -2074,6 +2074,7 @@
     "versionLabel": "الإصدار {version}",
     "viewSource": "عرض المصدر",
     "website": "موقع الويب",
+    "whenToUse": "متى يُستخدَم",
     "workflow": "سير العمل",
     "workflows": "مسارات العمل",
     "zoomIn": "تكبير",
@@ -3648,6 +3649,10 @@
       "importTitle": "استيراد مهارة",
       "importedSkills": "{count, plural, zero {لم يتم استيراد أي مهارات} one {تم استيراد مهارة واحدة} two {تم استيراد مهارتين} few {تم استيراد # مهارات} many {تم استيراد # مهارة} other {تم استيراد # مهارة}}",
       "invalidPath": "يجب أن يستخدم المسار حروفاً صغيرة وأرقاماً ونقاطاً وشرطات أو شرطات سفلية",
+      "invocationAuto": "تلقائيًا",
+      "invocationAutoHelp": "يمكن للذكاء الاصطناعي استخدام هذه المهارة من تلقاء نفسه عندما تناسب الطلب.",
+      "invocationManual": "عند الاستدعاء فقط",
+      "invocationManualHelp": "تُستخدم فقط عندما تستدعيها باستخدام / أو تضيفها إلى رسالتك.",
       "license": "الترخيص: {license}",
       "newFile": "ملف جديد",
       "newFileFilenamePlaceholder": "notes.md",
@@ -5556,7 +5561,6 @@
     "viewVersion": "عرض",
     "whenNotToUse": "متى لا يُستخدَم",
     "whenNotToUsePlaceholder": "متى ينبغي تجنّب هذا القالب؟",
-    "whenToUse": "متى يُستخدَم",
     "whenToUsePlaceholder": "متى ينبغي استخدام هذا القالب؟ (يوجّه اختيار القالب بالذكاء الاصطناعي)"
   },
   "timesheets": {

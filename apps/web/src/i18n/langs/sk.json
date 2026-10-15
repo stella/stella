@@ -2074,6 +2074,7 @@
     "versionLabel": "Verzia {version}",
     "viewSource": "Zobraziť zdroj",
     "website": "Web",
+    "whenToUse": "Kedy použiť",
     "workflow": "Pracovný postup",
     "workflows": "Pracovné postupy",
     "zoomIn": "Priblížiť",
@@ -3648,6 +3649,10 @@
       "importTitle": "Importovať zručnosť",
       "importedSkills": "{count, plural, one {Importovaná # zručnosť} few {Importované # zručnosti} other {Importovaných # zručností}}",
       "invalidPath": "Cesta smie obsahovať iba malé písmená, číslice, bodky, spojovníky alebo podčiarkovníky",
+      "invocationAuto": "Automaticky",
+      "invocationAutoHelp": "AI môže túto zručnosť použiť sama, keď sa hodí k požiadavke.",
+      "invocationManual": "Iba na vyžiadanie",
+      "invocationManualHelp": "Použije sa iba vtedy, keď ju spustíte cez / alebo ju pridáte do správy.",
       "license": "Licencia: {license}",
       "newFile": "Nový súbor",
       "newFileFilenamePlaceholder": "notes.md",
@@ -5556,7 +5561,6 @@
     "viewVersion": "Zobraziť",
     "whenNotToUse": "Kedy nepoužívať",
     "whenNotToUsePlaceholder": "Kedy sa tomuto vzoru vyhnúť?",
-    "whenToUse": "Kedy použiť",
     "whenToUsePlaceholder": "Kedy sa má tento vzor použiť? (pomáha AI s výberom vzoru)"
   },
   "timesheets": {

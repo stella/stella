@@ -2074,6 +2074,7 @@
     "versionLabel": "Version {version}",
     "viewSource": "Voir la source",
     "website": "Site web",
+    "whenToUse": "Quand utiliser",
     "workflow": "Flux de travail",
     "workflows": "Flux de travail",
     "zoomIn": "Zoom avant",
@@ -3648,6 +3649,10 @@
       "importTitle": "Importer une compétence",
       "importedSkills": "{count, plural, one {# compétence importée} other {# compétences importées}}",
       "invalidPath": "Le chemin ne doit contenir que des lettres minuscules, des chiffres, des points, des traits d'union ou des tirets bas",
+      "invocationAuto": "Automatiquement",
+      "invocationAutoHelp": "L’IA peut utiliser cette compétence d’elle-même lorsqu’elle correspond à la demande.",
+      "invocationManual": "Uniquement sur demande",
+      "invocationManualHelp": "Utilisée uniquement lorsque vous l’appelez avec / ou l’ajoutez à votre message.",
       "license": "Licence : {license}",
       "newFile": "Nouveau fichier",
       "newFileFilenamePlaceholder": "notes.md",
@@ -5556,7 +5561,6 @@
     "viewVersion": "Voir",
     "whenNotToUse": "Quand ne pas utiliser",
     "whenNotToUsePlaceholder": "Quand faut-il éviter ce modèle ?",
-    "whenToUse": "Quand utiliser",
     "whenToUsePlaceholder": "Quand ce modèle doit-il être utilisé ? (guide la sélection de modèles par l'IA)"
   },
   "timesheets": {

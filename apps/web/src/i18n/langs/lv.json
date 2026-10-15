@@ -2074,6 +2074,7 @@
     "versionLabel": "{version}. versija",
     "viewSource": "Skatīt avotu",
     "website": "Vietne",
+    "whenToUse": "Kad izmantot",
     "workflow": "Darbplūsma",
     "workflows": "Darbplūsmas",
     "zoomIn": "Tuvināt",
@@ -3648,6 +3649,10 @@
       "importTitle": "Importēt prasmi",
       "importedSkills": "{count, plural, zero {Importētas # prasmes} one {Importēta # prasme} other {Importētas # prasmes}}",
       "invalidPath": "Ceļā drīkst izmantot tikai mazos burtus, ciparus, punktus, defises vai pasvītras",
+      "invocationAuto": "Automātiski",
+      "invocationAutoHelp": "AI var pats izmantot šo prasmi, ja tā atbilst pieprasījumam.",
+      "invocationManual": "Tikai pēc izsaukuma",
+      "invocationManualHelp": "Tiek izmantota tikai tad, kad to izsaucat ar / vai pievienojat savai ziņai.",
       "license": "Licence: {license}",
       "newFile": "Jauns fails",
       "newFileFilenamePlaceholder": "notes.md",
@@ -5556,7 +5561,6 @@
     "viewVersion": "Skatīt",
     "whenNotToUse": "Kad neizmantot",
     "whenNotToUsePlaceholder": "Kad no šīs veidnes izvairīties?",
-    "whenToUse": "Kad izmantot",
     "whenToUsePlaceholder": "Kad šī veidne būtu jāizmanto? (palīdz AI izvēlēties veidni)"
   },
   "timesheets": {
