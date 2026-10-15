@@ -66,6 +66,9 @@ const CHAT_TOOL_GRANT_POLICY = {
   ChatToolGrantPolicy
 >;
 
+/** Name prefix of tools served by an installed external MCP connector. */
+const EXTERNAL_MCP_TOOL_NAME_PREFIX = "mcp__";
+
 /** Approval-gated built-in tools: exactly the names the grant policy covers. */
 export const isApprovalGatedBuiltInChatTool = (
   toolName: string,
@@ -73,15 +76,20 @@ export const isApprovalGatedBuiltInChatTool = (
   Object.hasOwn(CHAT_TOOL_GRANT_POLICY, toolName);
 
 /**
- * Dynamic tools (external MCP connectors, skills) have no built-in entry and
- * are grantable; their approval policy still applies to every ungranted call.
+ * Built-in tools follow their entry. External connector tools (the `mcp__`
+ * namespace) are grantable, covered through their connector. Any other name
+ * has no standing approval: it asks on every call.
  */
 export const getChatToolGrantPolicy = (
   toolName: string,
-): ChatToolGrantPolicy =>
-  isApprovalGatedBuiltInChatTool(toolName)
-    ? CHAT_TOOL_GRANT_POLICY[toolName]
-    : CHAT_TOOL_GRANT_POLICY_KIND.grantable;
+): ChatToolGrantPolicy => {
+  if (isApprovalGatedBuiltInChatTool(toolName)) {
+    return CHAT_TOOL_GRANT_POLICY[toolName];
+  }
+  return toolName.startsWith(EXTERNAL_MCP_TOOL_NAME_PREFIX)
+    ? CHAT_TOOL_GRANT_POLICY_KIND.grantable
+    : CHAT_TOOL_GRANT_POLICY_KIND.approveOnce;
+};
 
 export const isGrantableChatTool = (toolName: string): boolean =>
   getChatToolGrantPolicy(toolName) === CHAT_TOOL_GRANT_POLICY_KIND.grantable;

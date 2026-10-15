@@ -2,10 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
-import {
-  isApprovalGatedBuiltInChatTool,
-  isGrantableChatTool,
-} from "@stll/api-contract/chat-tool-grants";
+import { isGrantableChatTool } from "@stll/api-contract/chat-tool-grants";
 
 import {
   chatThreads,
@@ -56,16 +53,10 @@ const createChatToolGrant = createSafeRootHandler(
     session,
     user,
   }) {
-    // Only an approval-gated built-in tool or a connector tool can hold a
-    // grant, so one user's grants in scope for a conversation stay bounded
-    // by the tools that exist, whatever a client sends.
-    if (
-      !isGrantableChatTool(toolName) ||
-      !(
-        isExternalMcpToolName(toolName) ||
-        isApprovalGatedBuiltInChatTool(toolName)
-      )
-    ) {
+    // The shared policy allows grants only for grantable approval-gated
+    // built-in tools and connector tools, so one user's grants in scope for a
+    // conversation stay bounded by the tools that exist.
+    if (!isGrantableChatTool(toolName)) {
       return Result.err(notGrantable());
     }
     const organizationId = session.activeOrganizationId;
