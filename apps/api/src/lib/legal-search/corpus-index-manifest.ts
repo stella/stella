@@ -64,7 +64,7 @@ import {
   type CorpusIndexDocstoreSettings,
   type CorpusIndexIndexingSettings,
 } from "@/api/lib/legal-search/corpus-index-config";
-import { QUICKWIT_V09_BINARY_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
+import { QUICKWIT_V09_BUILD_VERSION } from "@/api/lib/legal-search/corpus-index-engine-version";
 import { deepFreeze } from "@/api/lib/legal-search/deep-freeze";
 import {
   CORPUS_INDEX_ID_MAX_LENGTH,
@@ -85,7 +85,7 @@ type CorpusIndexManifestBase = {
   schemaVersion: typeof CORPUS_INDEX_MANIFEST_SCHEMA_VERSION;
   cluster: "q09";
   engine: {
-    binaryVersion: typeof QUICKWIT_V09_BINARY_VERSION;
+    binaryVersion: typeof QUICKWIT_V09_BUILD_VERSION;
     indexConfig: ReturnType<typeof indexConfig>;
   };
 };
@@ -640,7 +640,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     generation: "case_law_v5",
     cluster: "q09",
     engine: {
-      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      binaryVersion: QUICKWIT_V09_BUILD_VERSION,
       indexConfig: CASE_LAW_V5_INDEX_CONFIG,
     },
     projection: {
@@ -659,7 +659,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     generation: "case_law_v6",
     cluster: "q09",
     engine: {
-      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      binaryVersion: QUICKWIT_V09_BUILD_VERSION,
       indexConfig: CASE_LAW_V6_INDEX_CONFIG,
     },
     projection: {
@@ -683,7 +683,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     generation: "case_law_v7",
     cluster: "q09",
     engine: {
-      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      binaryVersion: QUICKWIT_V09_BUILD_VERSION,
       indexConfig: CASE_LAW_V7_INDEX_CONFIG,
     },
     projection: {
@@ -708,7 +708,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     generation: "case_law_v8",
     cluster: "q09",
     engine: {
-      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      binaryVersion: QUICKWIT_V09_BUILD_VERSION,
       indexConfig: CASE_LAW_V8_INDEX_CONFIG,
     },
     projection: {
@@ -733,7 +733,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     generation: "legislation_v2",
     cluster: "q09",
     engine: {
-      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      binaryVersion: QUICKWIT_V09_BUILD_VERSION,
       indexConfig: LEGISLATION_V2_INDEX_CONFIG,
     },
     projection: {
@@ -751,7 +751,7 @@ export const CORPUS_INDEX_MANIFESTS = deepFreeze({
     generation: "legislation_v3",
     cluster: "q09",
     engine: {
-      binaryVersion: QUICKWIT_V09_BINARY_VERSION,
+      binaryVersion: QUICKWIT_V09_BUILD_VERSION,
       indexConfig: LEGISLATION_V3_INDEX_CONFIG,
     },
     projection: {

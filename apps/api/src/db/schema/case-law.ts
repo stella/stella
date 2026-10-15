@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import type { SQLWrapper } from "drizzle-orm";
 
 import {
   CASE_LAW_ANALYSIS_FAILURE_CODES,
@@ -66,6 +67,7 @@ import {
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
+import { DOCTRINAL_TREATMENTS } from "@/api/lib/case-law/doctrine";
 import { publishedUnredactedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
@@ -217,6 +219,10 @@ const CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS_SQL_VALUES =
 
 const POLARITY_SQL_VALUES = POLARITIES.map((polarity) =>
   sql.raw(`'${polarity}'`),
+);
+
+const DOCTRINAL_TREATMENT_SQL_VALUES = DOCTRINAL_TREATMENTS.map((treatment) =>
+  sql.raw(`'${treatment}'`),
 );
 
 const REVIEWABLE_POLARITY_SQL_VALUES = REVIEWABLE_POLARITIES.map((polarity) =>
@@ -1853,6 +1859,11 @@ export const caseLawCitations = p.pgTable(
     resolutionRuleId: p.varchar("resolution_rule_id", { length: 32 }),
     sectionIndex: p.integer("section_index"),
     polarity: p.varchar("polarity", { length: 16 }),
+    /** Reviewed doctrinal action; null until the citation is read. */
+    doctrinalTreatment: p.varchar("doctrinal_treatment", {
+      length: 16,
+      enum: DOCTRINAL_TREATMENTS,
+    }),
     polarityRuleId: safeUuid<"caseLawPolarityRule">(
       "polarity_rule_id",
     ).references(() => caseLawPolarityRules.id, {
@@ -1870,6 +1881,10 @@ export const caseLawCitations = p.pgTable(
       .index("case_law_citations_polarity_null_idx")
       .on(t.polarity)
       .where(isNull(t.polarity)),
+    p
+      .index("case_law_citations_doctrine_cited_idx")
+      .on(t.citedDecisionId)
+      .where(sql`${t.doctrinalTreatment} IN ('distinguishes', 'limits')`),
     // Rule -> citations, for retiring a rule and for its telemetry.
     p
       .index("case_law_citations_polarity_rule_idx")
@@ -1913,6 +1928,10 @@ export const caseLawCitations = p.pgTable(
         ),
       )
       .where(settledCitationSql(t.resolutionStatus)),
+    p.check(
+      "citations_doctrinal_treatment_values",
+      sql`${t.doctrinalTreatment} IN (${sql.join(DOCTRINAL_TREATMENT_SQL_VALUES, sql.raw(","))})`,
+    ),
     p.check(
       "citations_polarity_values",
       sql`${t.polarity} IN (${sql.join(POLARITY_SQL_VALUES, sql.raw(","))})`,
@@ -2692,6 +2711,63 @@ export const caseLawPolarityRules = p.pgTable(
   ],
 );
 
+/** Where a citation review is recorded and who produced it. */
+const citationReviewProvenanceColumns = () => ({
+  /** Opaque reference to where the review is recorded. */
+  reviewRef: p.varchar("review_ref", { length: 200 }).notNull(),
+  /**
+   * Who produced the label; decides which review stands when another
+   * arrives (`CITATION_REVIEW_ORIGIN_PRECEDENCE`). The provenance columns
+   * below are set exactly when a model produced it.
+   */
+  origin: p.text("origin", { enum: CITATION_REVIEW_ORIGINS }).notNull(),
+  model: p.text("model"),
+  promptVersion: p.text("prompt_version"),
+  promptSha256: p.varchar("prompt_sha256", { length: 64 }),
+  /** Digest of the passage the label was read from. */
+  evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
+  runId: p.text("run_id"),
+  producedAt: timestamptz("produced_at"),
+  /** When the current review was made; a changed review moves it. */
+  reviewedAt: timestamptz("reviewed_at").defaultNow().notNull(),
+  updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+});
+
+type CitationReviewProvenanceTable = Record<
+  | "reviewRef"
+  | "origin"
+  | "model"
+  | "promptVersion"
+  | "promptSha256"
+  | "evidenceSha256"
+  | "runId"
+  | "producedAt",
+  SQLWrapper
+>;
+
+/** A model-produced review carries its full provenance; a human one none. */
+const citationReviewProvenanceChecks = (
+  prefix: string,
+  t: CitationReviewProvenanceTable,
+) => [
+  p.check(`${prefix}_review_ref_non_empty`, sql`${t.reviewRef} <> ''`),
+  p.check(
+    `${prefix}_origin_values`,
+    sql`${t.origin} IN (${sql.join(CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})`,
+  ),
+  p.check(
+    `${prefix}_origin_provenance`,
+    sql`(${t.origin} IN (${sql.raw(`'${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}'`)})
+        AND ${t.model} IS NULL AND ${t.promptVersion} IS NULL
+        AND ${t.promptSha256} IS NULL AND ${t.evidenceSha256} IS NULL
+        AND ${t.runId} IS NULL AND ${t.producedAt} IS NULL)
+      OR (${t.origin} IN (${sql.join(AI_CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})
+        AND ${t.model} IS NOT NULL AND ${t.promptVersion} IS NOT NULL
+        AND ${t.promptSha256} IS NOT NULL AND ${t.evidenceSha256} IS NOT NULL
+        AND ${t.runId} IS NOT NULL AND ${t.producedAt} IS NOT NULL)`,
+  ),
+];
+
 /**
  * A reviewed polarity for one citation of one decision.
  *
@@ -2713,24 +2789,7 @@ export const caseLawCitationReviews = p.pgTable(
       .varchar("polarity", { length: 16 })
       .$type<ReviewablePolarity>()
       .notNull(),
-    /** Opaque reference to where the review is recorded. */
-    reviewRef: p.varchar("review_ref", { length: 200 }).notNull(),
-    /**
-     * Who produced the label; decides which review stands when another
-     * arrives (`CITATION_REVIEW_ORIGIN_PRECEDENCE`). The provenance columns
-     * below are set exactly when a model produced it.
-     */
-    origin: p.text("origin", { enum: CITATION_REVIEW_ORIGINS }).notNull(),
-    model: p.text("model"),
-    promptVersion: p.text("prompt_version"),
-    promptSha256: p.varchar("prompt_sha256", { length: 64 }),
-    /** Digest of the passage the label was read from. */
-    evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
-    runId: p.text("run_id"),
-    producedAt: timestamptz("produced_at"),
-    /** When the current review was made; a changed review moves it. */
-    reviewedAt: timestamptz("reviewed_at").defaultNow().notNull(),
-    updatedAt: timestamptz("updated_at").defaultNow().notNull(),
+    ...citationReviewProvenanceColumns(),
   },
   (t) => [
     p
@@ -2751,23 +2810,62 @@ export const caseLawCitationReviews = p.pgTable(
       "citation_reviews_citation_key_non_empty",
       sql`${t.citationKey} <> ''`,
     ),
-    p.check("citation_reviews_review_ref_non_empty", sql`${t.reviewRef} <> ''`),
-    p.check(
-      "citation_reviews_origin_values",
-      sql`${t.origin} IN (${sql.join(CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})`,
-    ),
-    p.check(
-      "citation_reviews_origin_provenance",
-      sql`(${t.origin} IN (${sql.raw(`'${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}'`)})
-        AND ${t.model} IS NULL AND ${t.promptVersion} IS NULL
-        AND ${t.promptSha256} IS NULL AND ${t.evidenceSha256} IS NULL
-        AND ${t.runId} IS NULL AND ${t.producedAt} IS NULL)
-      OR (${t.origin} IN (${sql.join(AI_CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})
-        AND ${t.model} IS NOT NULL AND ${t.promptVersion} IS NOT NULL
-        AND ${t.promptSha256} IS NOT NULL AND ${t.evidenceSha256} IS NOT NULL
-        AND ${t.runId} IS NOT NULL AND ${t.producedAt} IS NOT NULL)`,
-    ),
+    ...citationReviewProvenanceChecks("citation_reviews", t),
     ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/** Reviewed doctrine keyed to survive citation refreshes. */
+export const caseLawCitationDoctrineReviews = p.pgTable.withRLS(
+  "case_law_citation_doctrine_reviews",
+  {
+    id: pUuid<"caseLawCitationDoctrineReview">().primaryKey(),
+    citingDecisionId:
+      safeUuid<"caseLawDecision">("citing_decision_id").notNull(),
+    /** Same key as `case_law_citations.citation_key`. */
+    citationKey: p.varchar("citation_key", { length: 128 }).notNull(),
+    doctrinalTreatment: p
+      .varchar("doctrinal_treatment", {
+        length: 16,
+        enum: DOCTRINAL_TREATMENTS,
+      })
+      .notNull(),
+    /** Verbatim passage supporting a distinguishes or limits finding. */
+    evidenceQuote: p.text("evidence_quote"),
+    ...citationReviewProvenanceColumns(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.citingDecisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "case_law_citation_doctrine_reviews_citing_decision_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .uniqueIndex("case_law_citation_doctrine_reviews_citation_idx")
+      .on(t.citingDecisionId, t.citationKey),
+    p.check(
+      "citation_doctrine_reviews_treatment_values",
+      sql`${t.doctrinalTreatment} IN (${sql.join(DOCTRINAL_TREATMENT_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "citation_doctrine_reviews_citation_key_non_empty",
+      sql`${t.citationKey} <> ''`,
+    ),
+    ...citationReviewProvenanceChecks("citation_doctrine_reviews", t),
+    p.check(
+      "citation_doctrine_reviews_evidence_quote_required",
+      sql`${t.doctrinalTreatment} = 'not_stated' OR (${t.evidenceQuote} IS NOT NULL AND btrim(${t.evidenceQuote}) <> '')`,
+    ),
+    p.pgPolicy("citation_doctrine_reviews_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_citation_doctrine_reviews'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_citation_doctrine_reviews'::regclass)`,
+    }),
+    ...caseLawIngestionOnlyPolicies(),
+    ...publicLawReaderPolicies(),
   ],
 );
 

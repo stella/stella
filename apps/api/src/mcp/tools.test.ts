@@ -521,6 +521,7 @@ const createCitationRow = (
   citationText,
   textWithheldReason: null,
   sectionIndex: null,
+  doctrine: "unread",
   treatment: "unclassified",
   decision,
 });
@@ -538,6 +539,7 @@ const noCitations = () => ({
 const createCitationDigest = (
   overrides: Partial<DecisionCitationDigest> = {},
 ): DecisionCitationDigest => ({
+  doctrineSummary: { status: "unavailable" },
   summary: {
     incoming: { ...noCitations(), positive: 1 },
     outgoing: { ...noCitations(), unclassified: 1 },
@@ -3509,6 +3511,7 @@ describe("OpenAI-compatible MCP tools", () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
       page: {
+        doctrineAvailability: "available",
         items: [
           {
             id: "00000000-0000-4000-8000-0000000c0001",
@@ -3516,6 +3519,7 @@ describe("OpenAI-compatible MCP tools", () => {
             textWithheldReason: null,
             extractionWarnings: [],
             sectionIndex: 3,
+            doctrine: "unread",
             treatment: "negative",
             decision: {
               id: CITING_DECISION_ID,
@@ -3548,6 +3552,7 @@ describe("OpenAI-compatible MCP tools", () => {
             textWithheldReason: null,
             extractionWarnings: [],
             sectionIndex: null,
+            doctrine: "unread",
             treatment: "unclassified",
             decision: null,
             passage: null,
@@ -3577,6 +3582,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(parseToolPayload(result)).toEqual({
       decisionId: DECISION_ID,
       direction: "cited_by",
+      doctrineAvailability: "available",
       nextCursor: "Y2l0YXRpb25fY3Vyc29yXzI",
       citations: [
         {
@@ -3585,6 +3591,7 @@ describe("OpenAI-compatible MCP tools", () => {
           textWithheldReason: null,
           extractionWarnings: [],
           polarity: "negative",
+          doctrine: "unread",
           decision: {
             appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
             url: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/ns-31-cdo-900-2025`,
@@ -3609,6 +3616,7 @@ describe("OpenAI-compatible MCP tools", () => {
           textWithheldReason: null,
           extractionWarnings: [],
           polarity: "unclassified",
+          doctrine: "unread",
           decision: null,
           passage: null,
         },
@@ -3619,7 +3627,7 @@ describe("OpenAI-compatible MCP tools", () => {
   test("read_case_law_citations defaults the page size and passes the cursor through", async () => {
     readGatedDecisionCitationsMock.mockResolvedValue({
       type: "page",
-      page: { items: [], nextCursor: null },
+      page: { items: [], nextCursor: null, doctrineAvailability: "available" },
     });
 
     await handleMcpToolCall({
@@ -5659,6 +5667,7 @@ describe("OpenAI-compatible MCP tools", () => {
             metadata: { panel: "29 Cdo" },
             citations: {
               citedBy: {
+                doctrineCounts: { status: "unavailable" },
                 count: 1,
                 polarity: { positive: 1 },
                 top: {
@@ -5675,6 +5684,7 @@ describe("OpenAI-compatible MCP tools", () => {
                 },
               },
               cites: {
+                doctrineCounts: { status: "unavailable" },
                 count: 1,
                 decisions: [
                   { citation: "29 Odo 1/2001", textWithheldReason: null },
