@@ -10,6 +10,7 @@ import {
   test,
 } from "bun:test";
 import JSZip from "jszip";
+import * as v from "valibot";
 
 import {
   AGENT_INPUT_NORMALIZATION_KEY,
@@ -437,6 +438,22 @@ const readWorkspaceHandlerMock = mock();
 const readOverviewHandlerMock = mock();
 const readWorkspaceContactsHandlerMock = mock();
 const readWorkspaceMembersHandlerMock = mock();
+
+/** The parts of a search_case_law payload the merge tests read. */
+const searchCaseLawPayloadSchema = v.object({
+  results: v.array(
+    v.object({
+      decisionId: v.string(),
+      match: v.string(),
+      snippet: v.nullish(v.string()),
+    }),
+  ),
+  searches: v.array(
+    v.object({
+      warnings: v.array(v.object({ code: v.string(), message: v.string() })),
+    }),
+  ),
+});
 
 const parseToolPayload = (
   result: Awaited<ReturnType<typeof handleMcpToolCall>>,
@@ -3012,10 +3029,10 @@ describe("OpenAI-compatible MCP tools", () => {
       toolName: "search_case_law",
     });
 
-    const payload = parseToolPayload(result) as {
-      results: { decisionId: string; match: string }[];
-      searches: { warnings: { code: string }[] }[];
-    };
+    const payload = v.parse(
+      searchCaseLawPayloadSchema,
+      parseToolPayload(result),
+    );
     expect(
       payload.results.map(({ decisionId, match }) => ({ decisionId, match })),
     ).toEqual([
@@ -3066,19 +3083,19 @@ describe("OpenAI-compatible MCP tools", () => {
       .mockResolvedValueOnce(
         page([{ decisionId: PARTIAL_ID, match: "all_terms" }], "spor"),
       );
-    const merged = parseToolPayload(
-      await handleMcpToolCall({
-        args: {
-          country: "CZE",
-          queries: ["shareholder dispute", "spor"],
-        },
-        context: createContext(),
-        toolName: "search_case_law",
-      }),
-    ) as {
-      results: { decisionId: string; match: string }[];
-      searches: { warnings: { code: string; message: string }[] }[];
-    };
+    const merged = v.parse(
+      searchCaseLawPayloadSchema,
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: {
+            country: "CZE",
+            queries: ["shareholder dispute", "spor"],
+          },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      ),
+    );
     expect(
       merged.results.find(({ decisionId }) => decisionId === PARTIAL_ID)?.match,
     ).toBe("all_terms");
@@ -3121,15 +3138,16 @@ describe("OpenAI-compatible MCP tools", () => {
           "spor",
         ),
       );
-    const promoted = parseToolPayload(
-      await handleMcpToolCall({
-        args: { country: "CZE", queries: ["shareholder dispute", "spor"] },
-        context: createContext(),
-        toolName: "search_case_law",
-      }),
-    ) as {
-      results: { decisionId: string; match: string; snippet?: string }[];
-    };
+    const promoted = v.parse(
+      searchCaseLawPayloadSchema,
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { country: "CZE", queries: ["shareholder dispute", "spor"] },
+          context: createContext(),
+          toolName: "search_case_law",
+        }),
+      ),
+    );
     const representative = promoted.results.find(
       ({ decisionId }) => decisionId === PARTIAL_ID,
     );

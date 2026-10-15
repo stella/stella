@@ -725,33 +725,63 @@ test("a short strict page is topped up with new partial matches only, after the 
   if (resolution.type !== "ready") {
     panic("Expected the Czech corpus group to be ready");
   }
-  // Each request scans strictly first; a second scan in the same request is
-  // the relaxed one, which returns the strict hit again, its sibling and one
-  // new partial match.
+  // Relevance scans run through the scored endpoint: each request scans
+  // strictly first, and a second scan in the same request is the relaxed one,
+  // which returns the strict hit again, its sibling and one new partial
+  // match. Highlights run through the search endpoint, facets through the
+  // aggregate one.
   let scans = 0;
-  const hitsOf = (ids: readonly string[]) =>
-    Result.ok({
-      numHits: ids.length,
-      hits: ids.map((id) => ({ document_id: id, anchor_id: `${id}-p` })),
-      snippets: ids.map(() => ({ text: ["<b>promlčení</b> nároku"] })),
-    });
-  const searchSpy = spyOn(
-    getCorpusIndexClient(manifest.cluster),
-    "search",
-  ).mockImplementation(async (options) => {
-    if (options.snippetFields?.includes("text")) {
+  const engine = getCorpusIndexClient(manifest.cluster);
+  const scoredSpy = spyOn(engine, "scoredSearch").mockImplementation(
+    async () => {
+      scans += 1;
+      const ids = scans === 1 ? [czechId] : [czechId, slovakId, projectedId];
+      return await Promise.resolve(
+        Result.ok({
+          numHits: ids.length,
+          hits: ids.map((id, index) => ({
+            fields: { document_id: id, anchor_id: `${id}-p` },
+            score: 10 - index,
+          })),
+        }),
+      );
+    },
+  );
+  const searchSpy = spyOn(engine, "search").mockImplementation(
+    async (options) => {
       const named = [czechId, slovakId, projectedId].filter((id) =>
         options.query.includes(id),
       );
+      const ids = named.length === 0 ? [czechId] : named;
       return await Promise.resolve(
-        hitsOf(named.length === 0 ? [czechId] : named),
+        Result.ok({
+          numHits: ids.length,
+          hits: ids.map((id) => ({ document_id: id, anchor_id: `${id}-p` })),
+          snippets: ids.map(() => ({ text: ["<b>promlčení</b> nároku"] })),
+        }),
       );
-    }
-    scans += 1;
-    return await Promise.resolve(
-      hitsOf(scans === 1 ? [czechId] : [czechId, slovakId, projectedId]),
-    );
-  });
+    },
+  );
+  const aggregateSpy = spyOn(engine, "aggregate").mockImplementation(
+    async ({ aggs }) => {
+      const answered: Record<string, unknown> = {};
+      for (const name of Object.keys(aggs)) {
+        answered[name] =
+          name === "total"
+            ? { value: 1 }
+            : {
+                buckets: [
+                  {
+                    key: name === "year" ? "2024" : `${name}-value`,
+                    doc_count: 1,
+                    decisions: { value: 1 },
+                  },
+                ],
+              };
+      }
+      return await Promise.resolve(Result.ok(answered));
+    },
+  );
   resetPublicCaseLawConfigForTesting(caseLawDb);
   const search = async (strict: boolean) => {
     scans = 0;
@@ -761,6 +791,11 @@ test("a short strict page is topped up with new partial matches only, after the 
       observer: "unobserved",
       dependencies: {
         configuredVariant: "off",
+        loadCourtWeights: async () => await Promise.resolve(courtWeights),
+        readSourceRegistry: async () =>
+          await Promise.resolve(
+            Result.ok({ excludedSourceIds: [], nameById: new Map() }),
+          ),
         readServingTarget: async () =>
           await Promise.resolve(
             Result.ok({
@@ -787,7 +822,7 @@ test("a short strict page is topped up with new partial matches only, after the 
     expect(relaxed.scans).toBe(2);
     expect(
       relaxed.result.hits.map(({ decisionId, match }) => ({
-        decisionId: String(decisionId),
+        decisionId,
         match,
       })),
     ).toEqual([
@@ -798,7 +833,9 @@ test("a short strict page is topped up with new partial matches only, after the 
     expect(relaxed.result.total).toEqual(strictOnly.result.total);
     expect(relaxed.result.facets).toEqual(strictOnly.result.facets);
   } finally {
+    scoredSpy.mockRestore();
     searchSpy.mockRestore();
+    aggregateSpy.mockRestore();
     resetPublicCaseLawConfigForTesting();
     await db.delete(corpusIndexProjectionStates).where(
       and(
