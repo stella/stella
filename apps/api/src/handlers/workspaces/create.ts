@@ -68,8 +68,10 @@ const createWorkspaceBodySchema = t.Object({
     tMatterVisibility({
       description:
         "Who can see the matter: all_members (every internal member), " +
-        "admins_and_assigned (owners, admins and assigned members; the " +
-        "default) or assigned_only (assigned members only)",
+        "admins_and_assigned (owners, admins and assigned members) or " +
+        "assigned_only (assigned members only). Defaults to assigned_only " +
+        "(only assigned members; the creator leads) for a matter without a " +
+        "client, and to admins_and_assigned for a client matter.",
     }),
   ),
 });
