@@ -5,6 +5,8 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { listSkillMetadata, readSkillDisplayName } from "@stll/skills";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 
 const { QueryClient, QueryClientProvider } =
@@ -25,7 +27,7 @@ afterEach(async () => {
   });
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const ORGANIZATION_ID = "org-1";

@@ -2959,12 +2959,6 @@
   },
   {
     "file": "apps/api/src/lib/folio-collab-rooms.ts",
-    "fingerprint": "c94869504d79f2e3062cd497e1911f8b0403bcbe6c0c57abe37229eb73994f2d",
-    "count": 2,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/folio-collab-rooms.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/folio-collab-rooms.ts",
     "fingerprint": "d53a5c64637fa37ff3d4e55a897c12382cbe89c79b63bb0a2897797d33313c43",
     "count": 1,
     "reason": "builder-for in apps/api/src/lib/folio-collab-rooms.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
