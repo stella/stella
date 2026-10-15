@@ -131,6 +131,21 @@ describe("dispatchGatewayToolCall", () => {
     expect(callGatewayExternalMcpToolMock).not.toHaveBeenCalled();
   });
 
+  test("refuses a skill on the default surface before loading or dispatching", async () => {
+    resolveSkillToolMock.mockResolvedValue(resolvedSkill);
+    const result = await dispatchGatewayToolCall({
+      args: {},
+      context,
+      mode: "default",
+      toolName: "skill__alpha",
+      dependencies,
+    });
+    expect(result).toBeNull();
+    expect(resolveSkillToolMock).not.toHaveBeenCalled();
+    expect(readSkillToolMock).not.toHaveBeenCalled();
+    expect(recordSkillReadAuditMock).not.toHaveBeenCalled();
+  });
+
   test("refuses a skill the session lacks tools for, naming the scope to grant", async () => {
     resolveSkillToolMock.mockResolvedValue({
       ...resolvedSkill,
@@ -143,7 +158,7 @@ describe("dispatchGatewayToolCall", () => {
         ...context,
         grantedScopes: ["stella:skills"],
       }),
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__alpha",
       dependencies,
     });
@@ -159,7 +174,7 @@ describe("dispatchGatewayToolCall", () => {
     });
     expect(resolveSkillToolMock).toHaveBeenCalledWith({
       context: expect.objectContaining({ grantedScopes: ["stella:skills"] }),
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__alpha",
     });
     expect(readSkillToolMock).not.toHaveBeenCalled();
@@ -172,7 +187,7 @@ describe("dispatchGatewayToolCall", () => {
     const result = await dispatchGatewayToolCall({
       args: {},
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__missing",
       dependencies,
     });
@@ -200,7 +215,7 @@ describe("dispatchGatewayToolCall", () => {
     const result = await dispatchGatewayToolCall({
       args: {},
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__alpha",
       dependencies,
     });
@@ -257,7 +272,7 @@ describe("dispatchGatewayToolCall", () => {
     const result = await dispatchGatewayToolCall({
       args: {},
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__alpha",
       dependencies,
     });
@@ -278,7 +293,7 @@ describe("dispatchGatewayToolCall", () => {
     const rejection: unknown = await dispatchGatewayToolCall({
       args: {},
       context,
-      mode: "default",
+      mode: "advanced",
       toolName: "skill__alpha",
       dependencies,
     }).then(

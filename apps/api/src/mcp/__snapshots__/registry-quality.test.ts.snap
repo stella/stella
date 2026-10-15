@@ -1569,9 +1569,9 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     "scope": "stella:templates",
     "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Fill template changes state or starts stateful work.",
-      "destructiveHint": "Fill template is additive and does not overwrite or remove existing state.",
-      "openWorldHint": "Fill template can access public or external entities outside the private workspace."
+      "readOnlyHint": "Records template execution, fill history, and usage before returning the rendered output.",
+      "destructiveHint": "Renders a transient result without overwriting or deleting an existing document.",
+      "openWorldHint": "Registry fields query external business registries; AI fields and conditions can call model providers."
     },
     "description": "Fill a template and return the rendered text; pass output_mode='docx' for base64 bytes. Call list_templates first, then pass its field paths in values. Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true. Missing required values always fail. Unfilled placeholders or failed AI drafts fail unless completion_mode is allow_partial. Errors name exact paths; never guess required values. Output includes completionStatus.",
     "annotations": {
@@ -5898,64 +5898,123 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
     }
   },
   {
-    "name": "manage_organization",
+    "name": "add_matter_member",
     "scope": "stella:admin_write",
     "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Manage organization changes state or starts stateful work.",
-      "destructiveHint": "Manage organization can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
-      "openWorldHint": "Manage organization is confined to the private workspace or a bounded computation."
+      "readOnlyHint": "Add matter member changes state or starts stateful work.",
+      "destructiveHint": "Add matter member is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Add matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id; the other fields apply to update_org_settings. Manage provider secrets in the dashboard.",
+    "description": "Grant an organization member matter access.",
     "annotations": {
-      "title": "Manage organization",
-      "destructiveHint": true,
+      "title": "Add matter member",
+      "readOnlyHint": false,
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     },
     "inputSchema": {
       "type": "object",
       "required": [
-        "action"
+        "matter_id",
+        "user_id"
       ],
       "additionalProperties": false,
       "properties": {
-        "action": {
-          "enum": [
-            "add_member",
-            "remove_member",
-            "update_org_settings"
-          ],
-          "type": "string",
-          "description": "Administrative action; the settings fields apply only to update_org_settings"
-        },
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID for add_member and remove_member."
+          "description": "Matter ID"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "User id to add or remove for the member actions"
+          "description": "Existing organization member ID"
+        }
+      }
+    }
+  },
+  {
+    "name": "remove_matter_member",
+    "scope": "stella:admin_write",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Remove matter member changes state or starts stateful work.",
+      "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
+      "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
+    },
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "annotations": {
+      "title": "Remove matter member",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "matter_id",
+        "user_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Matter ID"
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Matter member ID"
         },
         "reassign_to": {
           "type": "string",
           "minLength": 1,
-          "description": "Replacement matter member for remove_member; omit to leave tasks unassigned"
+          "description": "Reassign work to this member; omit to unassign"
         },
+        "confirm": {
+          "type": "boolean",
+          "description": "True after human approval"
+        }
+      }
+    }
+  },
+  {
+    "name": "update_organization_settings",
+    "scope": "stella:admin_write",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Update organization settings changes state or starts stateful work.",
+      "destructiveHint": "Update organization settings is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Update organization settings is confined to the private workspace or a bounded computation."
+    },
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
+    "annotations": {
+      "title": "Update organization settings",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
         "matter_number_pattern": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern; send with matter_number_padding"
+          "description": "Number pattern; pair with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width; send with matter_number_pattern"
+          "description": "Zero-padding width"
         },
         "matter_numbering_enabled": {
           "type": "boolean",
@@ -5971,18 +6030,18 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "searchable-text"
           ],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction"
+          "description": "Automatic PDF text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60"
+          "description": "Minutes per increment; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry"
+          "description": "Entry edit window in days"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -5994,11 +6053,11 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock"
+          "description": "Locked month-end date; null unlocks"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries"
+          "description": "Require time-entry narrative"
         },
         "time_zone": {
           "anyOf": [
@@ -6011,11 +6070,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
               "type": "null"
             }
           ],
-          "description": "IANA time zone, e.g. Europe/Prague; null follows the primary practice jurisdiction"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions."
+          "description": "IANA zone; null follows the primary practice jurisdiction"
         }
       }
     }
@@ -8058,9 +8113,9 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     "scope": "stella:templates",
     "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Fill template changes state or starts stateful work.",
-      "destructiveHint": "Fill template is additive and does not overwrite or remove existing state.",
-      "openWorldHint": "Fill template can access public or external entities outside the private workspace."
+      "readOnlyHint": "Records template execution, fill history, and usage before returning the rendered output.",
+      "destructiveHint": "Renders a transient result without overwriting or deleting an existing document.",
+      "openWorldHint": "Registry fields query external business registries; AI fields and conditions can call model providers."
     },
     "description": "Fill a template and return the rendered text; pass output_mode='docx' for base64 bytes. Call list_templates first, then pass its field paths in values. Registry, composite, formula, and AI fields resolve automatically. Unknown keys fail unless allow_unused_values is true. Missing required values always fail. Unfilled placeholders or failed AI drafts fail unless completion_mode is allow_partial. Errors name exact paths; never guess required values. Output includes completionStatus.",
     "annotations": {
@@ -12387,64 +12442,123 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
     }
   },
   {
-    "name": "manage_organization",
+    "name": "add_matter_member",
     "scope": "stella:admin_write",
     "access": "write",
     "annotationReasons": {
-      "readOnlyHint": "Manage organization changes state or starts stateful work.",
-      "destructiveHint": "Manage organization can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
-      "openWorldHint": "Manage organization is confined to the private workspace or a bounded computation."
+      "readOnlyHint": "Add matter member changes state or starts stateful work.",
+      "destructiveHint": "Add matter member is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Add matter member is confined to the private workspace or a bounded computation."
     },
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id; the other fields apply to update_org_settings. Manage provider secrets in the dashboard.",
+    "description": "Grant an organization member matter access.",
     "annotations": {
-      "title": "Manage organization",
-      "destructiveHint": true,
+      "title": "Add matter member",
+      "readOnlyHint": false,
+      "destructiveHint": false,
       "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "openWorldHint": false
     },
     "inputSchema": {
       "type": "object",
       "required": [
-        "action"
+        "matter_id",
+        "user_id"
       ],
       "additionalProperties": false,
       "properties": {
-        "action": {
-          "enum": [
-            "add_member",
-            "remove_member",
-            "update_org_settings"
-          ],
-          "type": "string",
-          "description": "Administrative action; the settings fields apply only to update_org_settings"
-        },
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID for add_member and remove_member."
+          "description": "Matter ID"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "User id to add or remove for the member actions"
+          "description": "Existing organization member ID"
+        }
+      }
+    }
+  },
+  {
+    "name": "remove_matter_member",
+    "scope": "stella:admin_write",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Remove matter member changes state or starts stateful work.",
+      "destructiveHint": "Remove matter member can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
+      "openWorldHint": "Remove matter member is confined to the private workspace or a bounded computation."
+    },
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "annotations": {
+      "title": "Remove matter member",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [
+        "matter_id",
+        "user_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Matter ID"
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Matter member ID"
         },
         "reassign_to": {
           "type": "string",
           "minLength": 1,
-          "description": "Replacement matter member for remove_member; omit to leave tasks unassigned"
+          "description": "Reassign work to this member; omit to unassign"
         },
+        "confirm": {
+          "type": "boolean",
+          "description": "True after human approval"
+        }
+      }
+    }
+  },
+  {
+    "name": "update_organization_settings",
+    "scope": "stella:admin_write",
+    "access": "write",
+    "annotationReasons": {
+      "readOnlyHint": "Update organization settings changes state or starts stateful work.",
+      "destructiveHint": "Update organization settings is additive and does not overwrite or remove existing state.",
+      "openWorldHint": "Update organization settings is confined to the private workspace or a bounded computation."
+    },
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
+    "annotations": {
+      "title": "Update organization settings",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
         "matter_number_pattern": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern; send with matter_number_padding"
+          "description": "Number pattern; pair with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width; send with matter_number_pattern"
+          "description": "Zero-padding width"
         },
         "matter_numbering_enabled": {
           "type": "boolean",
@@ -12460,18 +12574,18 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "searchable-text"
           ],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction"
+          "description": "Automatic PDF text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60"
+          "description": "Minutes per increment; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry"
+          "description": "Entry edit window in days"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -12483,11 +12597,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock"
+          "description": "Locked month-end date; null unlocks"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries"
+          "description": "Require time-entry narrative"
         },
         "time_zone": {
           "anyOf": [
@@ -12500,11 +12614,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
               "type": "null"
             }
           ],
-          "description": "IANA time zone, e.g. Europe/Prague; null follows the primary practice jurisdiction"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions."
+          "description": "IANA zone; null follows the primary practice jurisdiction"
         }
       }
     }

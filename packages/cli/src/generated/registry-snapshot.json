@@ -5305,79 +5305,100 @@
   },
   {
     "cli": {
-      "command": ["organization"],
-      "scope": "admin_write",
-      "discriminator": {
-        "prop": "action",
-        "subcommands": {
-          "add_member": {
-            "command": "add-member",
-            "include": ["matter_id", "user_id"],
-            "required": ["matter_id", "user_id"],
-            "destructive": false
-          },
-          "remove_member": {
-            "command": "remove-member",
-            "include": ["matter_id", "user_id", "reassign_to"],
-            "required": ["matter_id", "user_id"],
-            "destructive": true
-          },
-          "update_org_settings": {
-            "command": "update-settings",
-            "include": [
-              "matter_number_pattern",
-              "matter_number_padding",
-              "prompt_caching_enabled",
-              "document_processing_mode",
-              "time_minimum_unit_minutes",
-              "time_edit_window_days",
-              "time_locked_through_month",
-              "time_narrative_required",
-              "time_zone"
-            ],
-            "destructive": false
-          }
-        }
-      }
+      "command": ["matter", "add-member"],
+      "scope": "admin_write"
     },
-    "name": "manage_organization",
-    "description": "Manage organization members and non-secret settings. Member actions require matter_id and user_id; the other fields apply to update_org_settings. Manage provider secrets in the dashboard.",
+    "name": "add_matter_member",
+    "description": "Grant an organization member matter access.",
     "inputSchema": {
       "type": "object",
-      "required": ["action"],
+      "required": ["matter_id", "user_id"],
       "additionalProperties": false,
       "properties": {
-        "action": {
-          "enum": ["add_member", "remove_member", "update_org_settings"],
-          "type": "string",
-          "description": "Administrative action; the settings fields apply only to update_org_settings"
-        },
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID for add_member and remove_member."
+          "description": "Matter ID"
         },
         "user_id": {
           "type": "string",
           "minLength": 1,
-          "description": "User id to add or remove for the member actions"
+          "description": "Existing organization member ID"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Add matter member",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["matter", "remove-member"],
+      "scope": "admin_write"
+    },
+    "name": "remove_matter_member",
+    "description": "Revoke matter access; cancel desktop editing sessions. Reassign work or unassign it. Requires human approval (confirm: true).",
+    "inputSchema": {
+      "type": "object",
+      "required": ["matter_id", "user_id"],
+      "additionalProperties": false,
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Matter ID"
+        },
+        "user_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Matter member ID"
         },
         "reassign_to": {
           "type": "string",
           "minLength": 1,
-          "description": "Replacement matter member for remove_member; omit to leave tasks unassigned"
+          "description": "Reassign work to this member; omit to unassign"
         },
+        "confirm": {
+          "type": "boolean",
+          "description": "True after human approval"
+        }
+      }
+    },
+    "annotations": {
+      "title": "Remove matter member",
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": false
+    }
+  },
+  {
+    "cli": {
+      "command": ["organization", "update-settings"],
+      "scope": "admin_write"
+    },
+    "name": "update_organization_settings",
+    "description": "Update supplied non-secret settings. Pair matter_number_pattern with matter_number_padding. Provider secrets: dashboard; jurisdictions: set_practice_jurisdictions.",
+    "inputSchema": {
+      "type": "object",
+      "required": [],
+      "additionalProperties": false,
+      "properties": {
         "matter_number_pattern": {
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "description": "Matter-number pattern; send with matter_number_padding"
+          "description": "Number pattern; pair with matter_number_padding"
         },
         "matter_number_padding": {
           "type": "integer",
           "minimum": 1,
           "maximum": 6,
-          "description": "Matter-number zero-padding width; send with matter_number_pattern"
+          "description": "Zero-padding width"
         },
         "matter_numbering_enabled": {
           "type": "boolean",
@@ -5390,18 +5411,18 @@
         "document_processing_mode": {
           "enum": ["off", "searchable-text"],
           "type": "string",
-          "description": "Set automatic PDF searchable-text extraction"
+          "description": "Automatic PDF text extraction"
         },
         "time_minimum_unit_minutes": {
           "type": "integer",
           "minimum": 1,
           "maximum": 60,
-          "description": "Minimum time increment in minutes; must divide 60"
+          "description": "Minutes per increment; must divide 60"
         },
         "time_edit_window_days": {
           "type": "integer",
           "minimum": 0,
-          "description": "Days a timekeeper may edit an entry"
+          "description": "Entry edit window in days"
         },
         "time_locked_through_month": {
           "anyOf": [
@@ -5413,11 +5434,11 @@
               "type": "null"
             }
           ],
-          "description": "Last day of the latest locked month, or null to unlock"
+          "description": "Locked month-end date; null unlocks"
         },
         "time_narrative_required": {
           "type": "boolean",
-          "description": "Require a narrative on time entries"
+          "description": "Require time-entry narrative"
         },
         "time_zone": {
           "anyOf": [
@@ -5430,20 +5451,16 @@
               "type": "null"
             }
           ],
-          "description": "IANA time zone, e.g. Europe/Prague; null follows the primary practice jurisdiction"
-        },
-        "confirm": {
-          "type": "boolean",
-          "description": "Required for the remove_member action: must be true to remove a member (an irreversible action). Set it only after a human user has approved the removal; ignored by the other actions."
+          "description": "IANA zone; null follows the primary practice jurisdiction"
         }
       }
     },
     "annotations": {
-      "title": "Manage organization",
-      "destructiveHint": true,
-      "idempotentHint": false,
-      "openWorldHint": false,
-      "readOnlyHint": false
+      "title": "Update organization settings",
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
     }
   },
   {

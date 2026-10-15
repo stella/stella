@@ -23,7 +23,9 @@ export const MCP_CHAT_TOOL_POLICY_KINDS = {
   "delete_reader_annotation": "mutation",
   "save_time_entry": "mutation",
   "delete_time_entry": "mutation",
-  "manage_organization": "mutation"
+  "add_matter_member": "mutation",
+  "remove_matter_member": "mutation",
+  "update_organization_settings": "mutation"
 } as const;
 
 export const MCP_CHAT_TOOL_GRANT_POLICIES = {
@@ -49,5 +51,7 @@ export const MCP_CHAT_TOOL_GRANT_POLICIES = {
   "delete_reader_annotation": "approve-once",
   "save_time_entry": "approve-once",
   "delete_time_entry": "approve-once",
-  "manage_organization": "approve-once"
+  "add_matter_member": "grantable",
+  "remove_matter_member": "approve-once",
+  "update_organization_settings": "approve-once"
 } as const;

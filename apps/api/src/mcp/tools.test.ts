@@ -168,8 +168,9 @@ const wireSchemaValidator = createWireSchemaValidator();
  * tool's executable output source. The schema a client is shown is a
  * projection of that source, so each successful result of a tool with an
  * output contract must carry structured content, and that content is read
- * against the advertised output schema by an independent validator. A relayed
- * third-party tool resolves no contract and is exempt.
+ * against the advertised output schema by an independent validator and must
+ * exclude request receipts. A relayed third-party tool resolves no contract
+ * and is exempt.
  */
 const handleMcpToolCall = async (
   call: Parameters<typeof dispatchMcpToolCall>[0],
@@ -180,6 +181,10 @@ const handleMcpToolCall = async (
     call.mode,
   )?.outputSchema;
   if (result.isError !== true && outputSchema !== undefined) {
+    expect(
+      JSON.stringify(result.structuredContent),
+      `${call.toolName} success result includes a request receipt`,
+    ).not.toContain('"requestId"');
     expect(
       result.structuredContent,
       `${call.toolName} succeeded without structured content`,
@@ -1531,12 +1536,18 @@ describe("OpenAI-compatible MCP tools", () => {
       "stella:documents_write",
       "stella:templates",
     ]);
-    expect(getMcpToolRequiredScopesHint("mcp__registry__lookup")).toEqual([
-      "stella:external_mcps",
-    ]);
-    expect(getMcpToolRequiredScopesHint("skill__research")).toEqual([
-      "stella:skills",
-    ]);
+    expect(
+      getMcpToolRequiredScopesHint("mcp__registry__lookup", "advanced"),
+    ).toEqual(["stella:external_mcps"]);
+    expect(getMcpToolRequiredScopesHint("skill__research", "advanced")).toEqual(
+      ["stella:skills"],
+    );
+    expect(
+      getMcpToolRequiredScopesHint("skill__research", "default"),
+    ).toBeUndefined();
+    expect(
+      getMcpToolRequiredScopesHint("mcp__registry__lookup", "default"),
+    ).toBeUndefined();
     expect(
       getMcpToolRequiredScopesHint("mcp__registry__lookup", "anonymized"),
     ).toBe(undefined);
@@ -10293,49 +10304,45 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  test("mixed destructive tools reach their handler without blanket confirmation", async () => {
+  test("organization settings reach validation without confirmation", async () => {
     const result = await handleMcpToolCall({
-      args: { action: "update_org_settings" },
+      args: {},
       context: createContext(),
-      toolName: "manage_organization",
+      toolName: "update_organization_settings",
     });
 
     const error = validationEnvelope(result);
     expect(error["code"]).toBe("validation_error");
-    expect(error["message"]).toBe(
-      "Provide at least one setting to change for update_org_settings",
-    );
+    expect(error["message"]).toBe("Provide at least one setting to change");
   });
 
-  test("mixed destructive tools require confirmation for the destructive action", async () => {
+  test("member removal requires human confirmation", async () => {
     const result = await handleMcpToolCall({
       args: {
-        action: "remove_member",
         matter_id: "00000000-0000-4000-8000-0000000e0001",
         user_id: "user_2",
       },
       context: createContext(),
-      toolName: "manage_organization",
+      toolName: "remove_matter_member",
     });
 
     expectErrorEnvelope(result, {
       code: "confirmation_required",
       message:
-        "manage_organization is an irreversible operation and was called without confirmation",
+        "remove_matter_member is an irreversible operation and was called without confirmation",
       hint: "This operation is irreversible. Confirm with the human user, then retry with confirm: true.",
     });
   });
 
-  test("mixed destructive tools clear the selected-action gate with confirmation", async () => {
+  test("confirmed member removal reaches the handler", async () => {
     const result = await handleMcpToolCall({
       args: {
-        action: "remove_member",
         matter_id: "00000000-0000-4000-8000-0000000e0404",
         user_id: "user_2",
         confirm: true,
       },
       context: createContext(),
-      toolName: "manage_organization",
+      toolName: "remove_matter_member",
     });
 
     expectErrorEnvelope(result, {
