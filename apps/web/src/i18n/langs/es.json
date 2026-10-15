@@ -363,6 +363,8 @@
       "chooseList": "Elegir una lista",
       "createList": "Crear una lista",
       "evidenceList": "Hechos de",
+      "loadSample": "Cargar caso de ejemplo",
+      "loadSampleFailed": "No se pudo cargar el caso de ejemplo",
       "noLists": "Este asunto no tiene listas.",
       "pickList": "Elija la lista con cuyos hechos se contrastan los documentos de este asunto."
     }
@@ -2942,6 +2944,7 @@
     "checkingDocxEditDescription": "stella sigue comprobando si este DOCX se puede editar de forma segura. Vuelve a intentarlo cuando el documento termine de cargarse.",
     "checkingDocxEditTitle": "Comprobando el documento",
     "chooseEvidence": "Elija un archivo para insertar una referencia de prueba numerada.",
+    "collaborationSnapshotRecovered": "No se pudo volver a abrir la copia de colaboración almacenada. La sala se restauró a partir del último documento guardado; es posible que se hayan perdido los cambios no guardados.",
     "comment": "Comentario",
     "comments": {
       "addPlaceholder": "Añadir comentario...",
@@ -4538,6 +4541,8 @@
   },
   "search": {
     "aiRefine": "Mejorar consulta con IA",
+    "caseLawMatchingDecisions": "{count, plural, one {# resolución coincidente} other {# resoluciones coincidentes}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ resolución coincidente} other {#+ resoluciones coincidentes}}",
     "continueInChat": "Continuar en el chat",
     "dateFrom": "Desde",
     "dateTo": "Hasta",
@@ -4993,17 +4998,22 @@
     "provisionAskSummarize": "Resumir cómo aplican los tribunales este precepto",
     "provisionAskSummarizePrompt": "Resume cómo aplican los tribunales {subject}, citando las resoluciones en las que te bases.",
     "provisionDetailsFor": "Detalles de {provision}",
+    "provisionEffectiveFrom": "en vigor desde el {date}",
     "provisionHistoryEarliest": "Versión más antigua disponible.",
     "provisionHistoryEmpty": "No consta ninguna versión de este precepto.",
     "provisionHistoryLoadOlder": "Cargue versiones anteriores para compararlas.",
     "provisionHistoryUnavailable": "No se ha podido cargar el historial de este precepto.",
+    "provisionPartTextUnavailable": "El texto de {provisionLabel} no está disponible",
     "provisionPromptSubject": "{provision} de {statute} ({eli}), en la redacción vigente desde el {date}",
     "provisionPromptSubjectUndated": "{provision} de {statute} ({eli})",
+    "provisionTextUnavailable": "Texto no disponible para esta versión",
     "publisherWindowInconsistent": "No se puede determinar la versión vigente en esta fecha: los datos del editor son incoherentes.",
     "resolvedAlias": "Reconocido como {label}",
     "searchAskPrompt": "{query} (legislación de {country})",
     "searchLabel": "Buscar en la legislación",
     "searchPlaceholder": "Número, nombre o título, p. ej. 89/2012 Sb.",
+    "showCitedPartOnly": "Mostrar solo la parte citada",
+    "showFullProvision": "Mostrar la disposición completa",
     "showInText": "Ver en el texto",
     "statedWindow": "Fechas indicadas por el editor: {range}",
     "status": {
@@ -5019,7 +5029,6 @@
     "title": "Legislación",
     "validity": "Vigente del {from} al {to}",
     "versionAppliedInDecision": "Versión aplicada en la resolución <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Redacción vigente desde {date}",
     "wordingVersionUnknown": "No se conoce la fecha de la versión de la redacción"
   },
   "styleSets": {

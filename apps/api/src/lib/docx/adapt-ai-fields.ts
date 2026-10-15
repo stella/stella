@@ -18,6 +18,7 @@
  * the fill boundary injects the adapter (see `buildAiOccurrenceAdapter`).
  */
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { placeholderPattern, resolvePath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -167,7 +168,7 @@ export const adaptAiFields = async ({
       counters,
     );
     if (patched.changed) {
-      zip.file(part.name, patched.xml);
+      writeZipEntry(zip, part.name, patched.xml);
       anyChanged = true;
     }
   }

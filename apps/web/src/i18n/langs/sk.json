@@ -363,6 +363,8 @@
       "chooseList": "Vybrať zoznam",
       "createList": "Vytvoriť zoznam",
       "evidenceList": "Fakty zo zoznamu",
+      "loadSample": "Načítať ukážkový prípad",
+      "loadSampleFailed": "Ukážkový prípad sa nepodarilo načítať",
       "noLists": "Tento spis nemá žiadne zoznamy.",
       "pickList": "Vyberte zoznam, s ktorého faktami sa porovnávajú dokumenty tohto spisu."
     }
@@ -2942,6 +2944,7 @@
     "checkingDocxEditDescription": "stella ešte kontroluje, či možno tento DOCX bezpečne upravovať. Skúste to znova, keď sa dokument načíta.",
     "checkingDocxEditTitle": "Kontrola dokumentu",
     "chooseEvidence": "Vyberte súbor na vloženie číslovaného odkazu na dôkaz.",
+    "collaborationSnapshotRecovered": "Uloženú kópiu na spoluprácu sa nepodarilo znova otvoriť. Miestnosť bola obnovená z posledného uloženého dokumentu; neuložené zmeny sa mohli stratiť.",
     "comment": "Komentár",
     "comments": {
       "addPlaceholder": "Pridať komentár...",
@@ -4538,6 +4541,8 @@
   },
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",
+    "caseLawMatchingDecisions": "{count, plural, one {# zodpovedajúce rozhodnutie} few {# zodpovedajúce rozhodnutia} many {# zodpovedajúceho rozhodnutia} other {# zodpovedajúcich rozhodnutí}}",
+    "caseLawMatchingDecisionsAtLeast": "{count, plural, one {#+ zodpovedajúce rozhodnutie} few {#+ zodpovedajúce rozhodnutia} many {#+ zodpovedajúceho rozhodnutia} other {#+ zodpovedajúcich rozhodnutí}}",
     "continueInChat": "Pokračovať v chate",
     "dateFrom": "Od",
     "dateTo": "Do",
@@ -4993,17 +4998,22 @@
     "provisionAskSummarize": "Zhrnúť, ako súdy toto ustanovenie používajú",
     "provisionAskSummarizePrompt": "Zhrň, ako súdy používajú {subject}, a cituj rozhodnutia, z ktorých vychádzaš.",
     "provisionDetailsFor": "Podrobnosti k {provision}",
+    "provisionEffectiveFrom": "účinné od {date}",
     "provisionHistoryEarliest": "Najstaršie zachované znenie.",
     "provisionHistoryEmpty": "K tomuto ustanoveniu nie je zachované žiadne znenie.",
     "provisionHistoryLoadOlder": "Načítajte staršie znenia a porovnajte ich.",
     "provisionHistoryUnavailable": "Históriu tohto ustanovenia sa nepodarilo načítať.",
+    "provisionPartTextUnavailable": "Znenie {provisionLabel} nie je k dispozícii",
     "provisionPromptSubject": "{provision} predpisu {statute} ({eli}) v znení účinnom od {date}",
     "provisionPromptSubjectUndated": "{provision} predpisu {statute} ({eli})",
+    "provisionTextUnavailable": "Text nie je pre toto znenie k dispozícii",
     "publisherWindowInconsistent": "K tomuto dňu nemožno určiť účinné znenie: údaje vydavateľa si odporujú.",
     "resolvedAlias": "Rozpoznané ako {label}",
     "searchAskPrompt": "{query} (právne predpisy: {country})",
     "searchLabel": "Hľadať v právnych predpisoch",
     "searchPlaceholder": "Číslo, skratka alebo názov, napr. 40/1964 Zb.",
+    "showCitedPartOnly": "Zobraziť len citovanú časť",
+    "showFullProvision": "Zobraziť celé ustanovenie",
     "showInText": "Zobraziť v texte",
     "statedWindow": "Dátumy uvedené vydavateľom: {range}",
     "status": {
@@ -5019,7 +5029,6 @@
     "title": "Právne predpisy",
     "validity": "Platné od {from} do {to}",
     "versionAppliedInDecision": "Znenie použité v rozhodnutí <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Znenie účinné od {date}",
     "wordingVersionUnknown": "Dátum verzie znenia nie je k dispozícii"
   },
   "styleSets": {

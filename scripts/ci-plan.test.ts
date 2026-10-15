@@ -34,7 +34,11 @@ import { FULL_TEST_JOB_SHARDS } from "./api-test-shard-plan";
 import { requiresMalwareScan } from "./check-standalone-lockfiles";
 import { planCiApiTests } from "./ci-api-test-plan";
 import { ciBrowserScopePredicate } from "./ci-browser-scope";
-import { CANONICAL_CANCEL_STEP } from "./ci-cancellation-contract";
+import {
+  CANONICAL_CANCEL_STEP,
+  PR_CODE_QUALITY_CANCEL_STEP,
+  PR_CODE_QUALITY_JOBS,
+} from "./ci-cancellation-contract";
 import {
   markdownReaders,
   requiresDesktopBrowser,
@@ -394,12 +398,31 @@ test("every release requires both final image smokes regardless of other changed
 }, 30_000);
 
 test("API image construction and smoke orchestration changes require the final image", () => {
+  const block = GENERATORS.find(
+    ({ id }) => id === "api-image-install-tooling",
+  )?.blocks?.at(0);
+  if (block === undefined) {
+    panic("Missing API install tooling generator");
+  }
+  const dockerfile = readFileSync(
+    new URL(`../${block.path}`, import.meta.url),
+    "utf-8",
+  );
+  const copies = dockerfile.slice(
+    dockerfile.indexOf(block.begin),
+    dockerfile.indexOf(block.end),
+  );
+  const toolingFiles = [...copies.matchAll(/^COPY (\S+) \S+$/gmu)].map(
+    (match) => match.at(1) ?? panic("Missing generated COPY source"),
+  );
+  expect(toolingFiles.length).toBeGreaterThan(0);
   for (const file of [
     "apps/api/Dockerfile",
     "scripts/smoke-api-image.sh",
     ".dockerignore",
     ".github/workflows/ci.yml",
     ".github/workflows/release.yml",
+    ...toolingFiles,
   ]) {
     expect(imageSmokePlan([file]).at(0), file).toBe("true");
   }
@@ -750,6 +773,25 @@ const cancellationJobSchema = v.looseObject({
 });
 const regularCancellationJobs = () =>
   Object.entries(ciJobs).filter(([id]) => !CANCELLATION_EXCEPTIONS.has(id));
+
+test("only the code quality jobs end a failed pull request run, just before the merge-group cancellation", () => {
+  const owners: string[] = [];
+  for (const [id, value] of Object.entries(ciJobs)) {
+    const steps = v.parse(cancellationJobSchema, value).steps ?? [];
+    const index = steps.findIndex(
+      ({ name }) => name === PR_CODE_QUALITY_CANCEL_STEP.name,
+    );
+    if (index === -1) {
+      continue;
+    }
+    owners.push(id);
+    expect(steps.at(index), id).toEqual(PR_CODE_QUALITY_CANCEL_STEP);
+    expect(index, id).toBe(steps.length - 2);
+    expect(steps.at(-1)?.name, id).toBe(CANONICAL_CANCEL_STEP.name);
+  }
+  expect(owners.toSorted()).toEqual([...PR_CODE_QUALITY_JOBS]);
+  expect(PR_CODE_QUALITY_CANCEL_STEP.with.script).not.toContain("merge group");
+});
 
 test("every eligible CI job cancels a failed merge group in its final step with job-scoped permission", () => {
   expect(ciJobs["merge-group-fail-fast"]).toBeUndefined();
@@ -2793,7 +2835,9 @@ test("transfer read guard runs for API-only pull request changes", () => {
   expect(fastRequired).toContain("ci-checks-rest");
 });
 
-// Scope subprocesses take 1.6 s serial and exceed 5 s while CI checks run in parallel.
+// Two subprocesses prove the workflow hands its changed files to the scope
+// script; every case is classified in process, because each subprocess is a
+// cold Bun start that runs for seconds while CI checks run in parallel.
 test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
   expect(packageScopeStart).toBeGreaterThan(-1);
   expect(selector).toContain(packageScope);
@@ -2835,8 +2879,10 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
   ].map((glob) =>
     glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example"),
   );
-  // Ordinary documentation still skips package checks.
+  // Ordinary documentation still skips package checks, through the workflow.
   expect(packageChecksPlan(["README.md"])).toBe("false");
+  // A CLI source still requires them through the workflow.
+  expect(packageChecksPlan(["packages/cli/src/cli.ts"])).toBe("true");
   // Every CLI path, alone and on either side of provenance files.
   const provenance = [".provenance.yml", "provenance/attestation.json"];
   for (const cliPath of cliPaths) {
@@ -2845,7 +2891,9 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
       [cliPath, ...provenance],
       [...provenance, cliPath],
     ]) {
-      expect(packageChecksPlan(files), files.join(" ")).toBe("true");
+      expect(requiresPackageChecks({ changed: files }), files.join(" ")).toBe(
+        true,
+      );
     }
   }
 }, 15_000);
@@ -2955,6 +3003,17 @@ const annotate = (logs: { build?: string; smoke?: string }) => {
 };
 
 test("a failed API image run annotates the failing lines, escaped", () => {
+  expect(
+    annotate({
+      build: [
+        "#13 120.001 ::error title=install-stall::kind=infra class=install-stall restore=cold idle_ms=120000",
+        "#13 120.002 Install finished; exit 1; signal SIGKILL",
+        "#13 ERROR: process did not complete successfully: exit code: 1",
+      ].join("\n"),
+    }),
+  ).toEqual([
+    "::error title=infra-stall::kind=infra class=install-stall restore=cold idle_ms=120000",
+  ]);
   expect(
     annotate({
       smoke: [
@@ -4433,18 +4492,19 @@ ${implication}
     ({ name }) => name === "Check route network baseline",
   );
   expect(smoke?.run).toContain("route-smoke.spec.ts --project=route-smoke");
-  const ready = steps.find(
-    ({ name }) => name === "Require production browser stack",
+  // The shared setup fails the job when the stack is not ready, so the
+  // smoke can never pass without running.
+  const routeSmoke = ciJobs["route-smoke"];
+  const rawSteps = flattenWorkflowSteps(
+    typeof routeSmoke === "object" &&
+      routeSmoke !== null &&
+      "steps" in routeSmoke
+      ? routeSmoke.steps
+      : undefined,
   );
-  expect(ready?.run).toBeDefined();
-  for (const status of ["ready", "rate-limited", ""]) {
-    const check = Bun.spawnSync(["bash", "-e", "-c", ready?.run ?? "exit 2"], {
-      env: { STACK_STATUS: status },
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    expect(check.exitCode, status).toBe(status === "ready" ? 0 : 1);
-  }
+  const setup = rawSteps.find(({ id }) => id === "e2e-stack");
+  expect(setup?.["uses"]).toBe("./.github/actions/setup-production-e2e");
+  expect(smoke?.if ?? "").not.toContain("always()");
 });
 
 test("an unreadable PR diff requires route smoke while manual and queue runs retain their suites", () => {
