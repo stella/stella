@@ -386,6 +386,34 @@ describe("matter access census self-test", () => {
     }
   });
 
+  test("a SQL-wrapped matter column and a local predicate helper are still set filters", () => {
+    for (const [prelude, filter] of [
+      ["", `inArray(sql\`\${entities.workspaceId}\`, ids)`],
+      [
+        "const within = (column: AnyColumn, values: string[]) => inArray(column, values);",
+        "within(entities.workspaceId, ids)",
+      ],
+      [
+        "function within(column: AnyColumn, values: string[]) { return inArray(column, values); }",
+        `within(sql\`\${workspaces.id}\`, ids)`,
+      ],
+    ] as const) {
+      const findings = classifyMatterAccessModule(
+        "apps/api/src/lib/example-reader.ts",
+        `import { inArray, sql } from "drizzle-orm";
+        import { rootDb } from "@/api/db/root";
+        import { entities, workspaces } from "@/api/db/schema";
+        ${prelude}
+        export const read = async (ids: string[]) =>
+          await rootDb.select().from(entities).where(${filter});`,
+      );
+      expect(
+        findings.map(({ signal, sites }) => [signal, sites["read"]]),
+        filter,
+      ).toEqual([["owner-connection-workspace-set", 1]]);
+    }
+  });
+
   test("the shared app-side write check is enumerated as a copy of the rule", () => {
     const file = "apps/api/src/lib/entities/workspace-entity-write-access.ts";
     expect(

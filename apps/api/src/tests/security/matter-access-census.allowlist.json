@@ -188,6 +188,15 @@
       "canExecuteListVerificationInWorkspace": 1
     }
   },
+  "apps/api/src/lib/search/index-entity.ts::owner-connection-workspace-set": {
+    "reason": "The local helper receives the matter column to build an index version token in the projection; it filters nothing by a matter set.",
+    "sites": {
+      "<module>#rootDb": 1,
+      "buildSearchDocument#rootDb": 1,
+      "buildSearchDocument.versionSetToken": 1,
+      "upsertSearchDocument#rootDb": 1
+    }
+  },
   "apps/api/src/lib/search/index-global.ts::owner-connection-workspace-set": {
     "reason": "The owner connection only maintains search projections; reads take the caller's scoped transaction and filter by the ids the request resolved through the owner module.",
     "sites": {

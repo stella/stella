@@ -31,7 +31,12 @@ import ts from "typescript";
  *
  * Names resolve through renamed imports and plain local aliases
  * (`const matters = workspaces`), so renaming a table, the connection or a
- * rule does not hide a site.
+ * rule does not hide a site. A matter column also counts when wrapped
+ * (sql`${column}`) or handed to a function the module declares itself.
+ *
+ * Limits: the census reads one module's syntax. Code written to evade it
+ * (a re-export through another module, dynamic import, computed property
+ * names) is out of its reach; review and the database rule cover that.
  *
  * Deny by default: no module meets a signal on its own except the owner module
  * for `reads-authorization-view`. Matter reads belong in a row-policy-scoped
@@ -140,6 +145,30 @@ const isMatterIdColumn = (column: ts.Expression, aliases: Aliases): boolean =>
     (column.name.text === "workspaceId" ||
       (column.name.text === "id" &&
         tableName(column.expression, aliases) === "workspaces")));
+
+/** A matter-id column, also when wrapped: `(c)`, `c as T`, sql`${c}`. */
+const holdsMatterIdColumn = (
+  node: ts.Expression,
+  aliases: Aliases,
+): boolean => {
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isNonNullExpression(node) ||
+    ts.isSatisfiesExpression(node)
+  ) {
+    return holdsMatterIdColumn(node.expression, aliases);
+  }
+  if (ts.isTaggedTemplateExpression(node)) {
+    return (
+      ts.isTemplateExpression(node.template) &&
+      node.template.templateSpans.some((span) =>
+        holdsMatterIdColumn(span.expression, aliases),
+      )
+    );
+  }
+  return isMatterIdColumn(node, aliases);
+};
 
 const OWNER_CONNECTION_MODULE = "apps/api/src/db/root";
 
@@ -293,6 +322,45 @@ const isInArrayCall = (
   ts.isCallExpression(node) &&
   aliasTarget(node.expression, aliases) === "inArray";
 
+/** Names of the functions a module declares itself (hoisting included). */
+const localFunctionNames = (sourceFile: ts.SourceFile) => {
+  const names = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
+      names.add(node.name.text);
+    }
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer !== undefined &&
+      (ts.isArrowFunction(node.initializer) ||
+        ts.isFunctionExpression(node.initializer))
+    ) {
+      names.add(node.name.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return names;
+};
+
+/**
+ * A set predicate on a matter-id column: `inArray` under any name, or a
+ * function the module declares itself that receives the column (a local
+ * predicate helper hides the `inArray` behind a parameter). Over-matching a
+ * local helper only adds a finding; it never hides one.
+ */
+const isMatterSetPredicate = (
+  node: ts.Node,
+  aliases: Aliases,
+  localFunctions: ReadonlySet<string>,
+) =>
+  ts.isCallExpression(node) &&
+  (isInArrayCall(node, aliases) ||
+    (ts.isIdentifier(node.expression) &&
+      localFunctions.has(node.expression.text))) &&
+  node.arguments.some((argument) => holdsMatterIdColumn(argument, aliases));
+
 const recordIdentifier = (
   node: ts.Identifier,
   facts: Facts,
@@ -401,6 +469,7 @@ const readFacts = (file: string, source: string): Facts => {
     roleRule: siteCounter(),
   };
   const aliases: Aliases = new Map();
+  const localFunctions = localFunctionNames(sourceFile);
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node)) {
       // Import specifiers name the imported symbols; they are not uses.
@@ -419,11 +488,8 @@ const readFacts = (file: string, source: string): Facts => {
     ) {
       facts.namesMemberRole = true;
     }
-    if (isInArrayCall(node, aliases)) {
-      const [column] = node.arguments;
-      if (column !== undefined && isMatterIdColumn(column, aliases)) {
-        facts.workspaceSet.add(node);
-      }
+    if (isMatterSetPredicate(node, aliases, localFunctions)) {
+      facts.workspaceSet.add(node);
     }
     // sql`${entities.workspaceId} = ANY(${ids})`: an interpolated matter
     // column opening a set predicate.
