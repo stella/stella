@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import uploadSkill from "@/api/handlers/skills/upload";
 import fillTemplate from "@/api/handlers/templates/fill";
 import prepareTemplate from "@/api/handlers/templates/prepare";
@@ -74,7 +76,9 @@ test("archive entry validation returns a client response before parsing", async 
 
 test("archive validation applies configured limits", async () => {
   const zip = new JSZip();
-  zip.file("word/document.xml", "<document/>", { createFolders: false });
+  writeZipEntry(zip, "word/document.xml", "<document/>", {
+    createFolders: false,
+  });
   const bytes = await zip.generateAsync({
     type: "uint8array",
     compression: "STORE",

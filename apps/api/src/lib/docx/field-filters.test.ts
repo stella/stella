@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
 import { DATE_FORMAT_SPEC_HINT } from "@stll/agent-input";
+import { writeZipEntry } from "@stll/docx-utils";
 import {
   classifyMarker,
   filtersFromFieldConfig,
@@ -28,7 +29,7 @@ const makeDocx = async (
   paragraphs: readonly string[],
 ): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", WRAP(paragraphs.map(P).join("")));
+  writeZipEntry(zip, "word/document.xml", WRAP(paragraphs.map(P).join("")));
   return testDocxFile(await zip.generateAsync({ type: "uint8array" }));
 };
 
