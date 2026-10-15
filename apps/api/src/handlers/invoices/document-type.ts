@@ -6,7 +6,9 @@ import type { InvoiceDocumentType } from "@stll/invoicing";
 
 import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS, invoices } from "@/api/db/schema";
+import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockOriginalInvoice } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const tInvoiceDocumentType = t.Union([
@@ -62,22 +64,10 @@ export const validateInvoiceDocument = async (
       }),
     );
   }
-  const rows = await tx
-    .select({
-      status: invoices.status,
-      documentType: invoices.documentType,
-      currency: invoices.currency,
-      totalAmount: invoices.totalAmount,
-    })
-    .from(invoices)
-    .where(
-      and(
-        eq(invoices.id, originalInvoiceId),
-        eq(invoices.workspaceId, workspaceId),
-      ),
-    )
-    .limit(1)
-    .for("update");
+  const rows = await lockOriginalInvoice(tx, {
+    invoiceId: originalInvoiceId,
+    workspaceId,
+  });
   const original = rows.at(0);
   if (!original) {
     return Result.err(
@@ -126,7 +116,7 @@ export const validateInvoiceDocument = async (
     .from(invoices)
     .where(
       and(
-        eq(invoices.workspaceId, workspaceId),
+        invoiceInMatter(invoices, workspaceId),
         eq(invoices.originalInvoiceId, originalInvoiceId),
         ne(invoices.status, INVOICE_STATUS.VOID),
         ne(invoices.id, invoiceId),

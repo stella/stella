@@ -1470,12 +1470,6 @@
     "reason": "rollback to savepoint in apps/api/src/handlers/hosted-usage-webhook/replay.ts: Existing SQL savepoint coordination; migrate through the aggregate owner to retain parent lock history."
   },
   {
-    "file": "apps/api/src/handlers/invoices/document-type.ts",
-    "fingerprint": "04c4864c40ca369cffa87c626eb992d3f079a7477396832620e3dea2780849fe",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/invoices/document-type.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
     "file": "apps/api/src/handlers/invoices/lines/create.ts",
     "fingerprint": "0f2e8449ee672932545b6ae451a31fe87d20c2d7a96156856238a37a7efaf197",
     "count": 1,
@@ -1486,12 +1480,6 @@
     "fingerprint": "3966aea5af7239eec9ed02e516d5a2d40af867f55c3b2164061e09b3070acdbf",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/invoices/lines/create.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/handlers/invoices/lock-invoice.ts",
-    "fingerprint": "b35572fecd2369b2922a28db1178fd5ebeed045a6400fb0b2a2532cca03f5368",
-    "count": 1,
-    "reason": "builder-for in apps/api/src/handlers/invoices/lock-invoice.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/handlers/legislation/ingestion.ts",
@@ -2260,12 +2248,6 @@
     "fingerprint": "417504192e24109eab7c3ed529a2ccf11edb14f06da52ce9965b479f4e974cda",
     "count": 1,
     "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-insert.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
-  },
-  {
-    "file": "apps/api/src/lib/billing/time-entry-running.ts",
-    "fingerprint": "2c7c57ce23d0b4126039dd033c46b966411d63e36fe63cbbf15dab2aa4ec9ec5",
-    "count": 1,
-    "reason": "pg_advisory_xact_lock( in apps/api/src/lib/billing/time-entry-running.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
   {
     "file": "apps/api/src/lib/billing/time-entry-running.ts",

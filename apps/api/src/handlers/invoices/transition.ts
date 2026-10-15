@@ -18,7 +18,7 @@ import {
   lockDraftInvoiceForLines,
   recalculateInvoiceTotals,
 } from "@/api/handlers/invoices/invoice-lines";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -31,6 +31,7 @@ import {
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
@@ -163,12 +164,7 @@ const releaseInvoiceEntries = async (
       invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(timeEntries.invoiceId, invoiceId),
-        eq(timeEntries.workspaceId, workspaceId),
-      ),
-    )
+    .where(and(eq(timeEntries.invoiceId, invoiceId)))
     .returning({ id: timeEntries.id });
 
   const revertedExpenses = await tx
@@ -178,12 +174,7 @@ const releaseInvoiceEntries = async (
       invoiceId: null,
       updatedAt: now,
     })
-    .where(
-      and(
-        eq(expenses.invoiceId, invoiceId),
-        eq(expenses.workspaceId, workspaceId),
-      ),
-    )
+    .where(and(eq(expenses.invoiceId, invoiceId)))
     .returning({ id: expenses.id });
 
   // The voided document keeps its lines; releasing them lets the
@@ -194,7 +185,6 @@ const releaseInvoiceEntries = async (
     .where(
       and(
         eq(invoiceLines.invoiceId, invoiceId),
-        eq(invoiceLines.workspaceId, workspaceId),
         isNull(invoiceLines.releasedAt),
       ),
     );
@@ -250,7 +240,7 @@ const transitionInvoice = createSafeHandler(
         if (body.action === "void" || body.action === "finalize") {
           const runningError = await guardRunningTimeEntries({
             tx,
-            workspaceId,
+            organizationId: session.activeOrganizationId,
             actorUserId: user.id,
             selection: { type: "invoice", invoiceId: params.invoiceId },
           });
@@ -277,7 +267,7 @@ const transitionInvoice = createSafeHandler(
             .from(invoices)
             .where(
               and(
-                eq(invoices.workspaceId, workspaceId),
+                invoiceInMatter(invoices, workspaceId),
                 eq(invoices.originalInvoiceId, existing.id),
                 ne(invoices.status, INVOICE_STATUS.VOID),
               ),
@@ -363,7 +353,7 @@ const transitionInvoice = createSafeHandler(
           .where(
             and(
               eq(invoices.id, params.invoiceId),
-              eq(invoices.workspaceId, workspaceId),
+              invoiceInMatter(invoices, workspaceId),
               inArray(invoices.status, transition.from),
             ),
           )

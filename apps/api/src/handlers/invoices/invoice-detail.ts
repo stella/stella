@@ -9,11 +9,13 @@ const expenseContext = entityContextProjection(expenses.matterId);
 export const INVOICE_DETAIL_RELATIONS = {
   lines: {
     columns: INVOICE_LINE_COLUMNS,
+    with: { workspace: { columns: { id: true, name: true, color: true } } },
     orderBy: { position: "asc", id: "asc" },
   },
   timeEntries: {
     columns: {
       id: true,
+      workspaceId: true,
       dateWorked: true,
       billedMinutes: true,
       rateAtEntry: true,
@@ -35,6 +37,7 @@ export const INVOICE_DETAIL_RELATIONS = {
   expenses: {
     columns: {
       id: true,
+      workspaceId: true,
       dateIncurred: true,
       amount: true,
       currency: true,

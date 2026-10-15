@@ -5,6 +5,7 @@ import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
 import { invoiceLines, INVOICE_BILLING_PURPOSE } from "@/api/db/schema";
+import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import {
   lockBillingArrangement,
   readBillingUsage,
@@ -31,7 +32,10 @@ export const checkInvoiceBillingArrangement = async (
   { invoiceId, workspaceId }: CheckInvoiceBillingArrangementOptions,
 ) => {
   const invoice = await tx.query.invoices.findFirst({
-    where: { id: { eq: invoiceId }, workspaceId: { eq: workspaceId } },
+    where: {
+      id: { eq: invoiceId },
+      RAW: (table) => invoiceInMatter(table, workspaceId),
+    },
   });
   if (!invoice) {
     return panic("The locked invoice disappeared during billing validation");

@@ -1,5 +1,6 @@
 import {
   INVOICE_LINE_SOURCES,
+  INVOICE_LINE_INPUT_LIMITS,
   INVOICE_STATUS,
   INVOICE_STATUSES,
   NUMBER_SERIES_DOCUMENT_TYPES,
@@ -18,7 +19,11 @@ import { VAT_TREATMENTS } from "@stll/invoicing";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
-import { timeEntryPolicies } from "@/api/db/rls";
+import {
+  timeEntryPolicies,
+  invoicePolicies,
+  invoiceLineVisibilityPolicy,
+} from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -47,7 +52,7 @@ import {
   wsPolicies,
   timestamptz,
 } from "./common";
-import { workspaces } from "./contacts";
+import { contacts, workspaces } from "./contacts";
 import { entities } from "./entities";
 
 export const ACTIVE_TIMER_INDEX_NAME =
@@ -948,9 +953,13 @@ export const invoices = p.pgTable(
     organizationId: safeOrganizationId("organization_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    workspaceId: safeWorkspaceId("workspace_id")
-      .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+    clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
+      onDelete: "restrict",
+    }),
+    workspaceId: safeWorkspaceId("workspace_id").references(
+      () => workspaces.id,
+      { onDelete: "cascade" },
+    ),
     invoiceNumber: p.varchar("invoice_number", { length: 64 }),
     documentType: p
       .text("document_type", { enum: NUMBER_SERIES_DOCUMENT_TYPES })
@@ -1002,6 +1011,34 @@ export const invoices = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    p
+      .index("invoices_client_backfill_idx")
+      .on(table.id)
+      .where(
+        sql`${table.clientId} IS NULL AND ${table.workspaceId} IS NOT NULL`,
+      ),
+    p.unique("invoices_id_org_unique").on(table.id, table.organizationId),
+    p.foreignKey({
+      columns: [table.originalInvoiceId, table.organizationId],
+      foreignColumns: [table.id, table.organizationId],
+      name: "invoices_original_organization_fk",
+    }),
+    p.check(
+      "invoices_scope_check",
+      sql`${table.workspaceId} IS NOT NULL OR ${table.clientId} IS NOT NULL`,
+    ),
+    p.foreignKey({
+      columns: [table.organizationId, table.clientId],
+      foreignColumns: [contacts.organizationId, contacts.id],
+      name: "invoices_client_organization_fk",
+    }),
+    p
+      .index("invoices_org_client_created_idx")
+      .on(table.organizationId, table.clientId, table.createdAt, table.id),
+    p
+      .uniqueIndex("invoices_client_number_uidx")
+      .on(table.organizationId, table.clientId, table.invoiceNumber)
+      .where(sql`${table.workspaceId} IS NULL`),
     p.check(
       "invoices_billing_mode_check",
       sql`${table.billingMode} IN (${sql.join(
@@ -1037,7 +1074,7 @@ export const invoices = p.pgTable(
     p
       .uniqueIndex("invoices_ws_number_uidx")
       .on(table.workspaceId, table.invoiceNumber),
-    ...wsOrganizationPolicies("invoices", { columns: table }),
+    ...invoicePolicies(table),
   ],
 );
 
@@ -1082,8 +1119,23 @@ export const invoiceLines = p.pgTable(
       .default(INVOICE_BILLING_PURPOSE.ORDINARY),
     position: p.integer().notNull(),
     description: p.text().notNull(),
-    quantity: p.numeric({ precision: 18, scale: 4 }).notNull(),
-    unit: p.varchar({ length: 32 }),
+    recordedDescription: p.text("recorded_description"),
+    recordedQuantity: p.numeric("recorded_quantity", {
+      precision: INVOICE_LINE_INPUT_LIMITS.quantityPrecision,
+      scale: INVOICE_LINE_INPUT_LIMITS.quantityScale,
+    }),
+    recordedUnit: p.varchar("recorded_unit", {
+      length: INVOICE_LINE_INPUT_LIMITS.unitMaxChars,
+    }),
+    recordedUnitPrice: centsColumn("recorded_unit_price"),
+    recordedNetAmount: centsColumn("recorded_net_amount"),
+    quantity: p
+      .numeric({
+        precision: INVOICE_LINE_INPUT_LIMITS.quantityPrecision,
+        scale: INVOICE_LINE_INPUT_LIMITS.quantityScale,
+      })
+      .notNull(),
+    unit: p.varchar({ length: INVOICE_LINE_INPUT_LIMITS.unitMaxChars }),
     unitPrice: centsColumn("unit_price").notNull(),
     vatRateBps: p.integer("vat_rate_bps").notNull(),
     vatTreatment: p.text("vat_treatment", { enum: VAT_TREATMENTS }).notNull(),
@@ -1105,6 +1157,11 @@ export const invoiceLines = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    invoiceLineVisibilityPolicy(table),
+    p.check(
+      "invoice_lines_recorded_snapshot_check",
+      sql`(${table.recordedDescription} IS NULL AND ${table.recordedQuantity} IS NULL AND ${table.recordedUnitPrice} IS NULL AND ${table.recordedNetAmount} IS NULL) OR (${table.recordedDescription} IS NOT NULL AND ${table.recordedQuantity} IS NOT NULL AND ${table.recordedUnitPrice} IS NOT NULL AND ${table.recordedNetAmount} IS NOT NULL)`,
+    ),
     p.check(
       "invoice_lines_billing_purpose_check",
       sql`${table.billingPurpose} IN (${sql.join(

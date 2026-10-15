@@ -4,6 +4,8 @@ import { type Static, t } from "elysia";
 
 import {
   INVOICE_LINE_SOURCE,
+  INVOICE_LINE_INPUT_LIMITS,
+  INVOICE_LINE_QUANTITY_PATTERN,
   type InvoiceLineSource,
 } from "@stll/api-contract";
 import {
@@ -29,7 +31,7 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import { validateInvoiceDocument } from "@/api/handlers/invoices/document-type";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,
@@ -39,6 +41,7 @@ import {
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { checkInvoiceBillingArrangement } from "@/api/lib/billing/invoice-arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
+import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { cents, type CentsAmount } from "@/api/lib/money";
@@ -48,12 +51,13 @@ import type {
 } from "@/api/lib/projection-totality";
 
 /** Stored quantity scale: `invoice_lines.quantity` is `numeric(18, 4)`. */
-const QUANTITY_SCALE = 4;
+const QUANTITY_SCALE = INVOICE_LINE_INPUT_LIMITS.quantityScale;
 const QUANTITY_FACTOR = 10 ** QUANTITY_SCALE;
-const LINE_DESCRIPTION_MAX_CHARS = 10_000;
+const LINE_DESCRIPTION_MAX_CHARS =
+  INVOICE_LINE_INPUT_LIMITS.descriptionMaxChars;
 
 export const tInvoiceLineQuantity = t.String({
-  pattern: `^(0|[1-9][0-9]{0,13})(\\.[0-9]{1,${QUANTITY_SCALE}})?$`,
+  pattern: INVOICE_LINE_QUANTITY_PATTERN,
   description:
     'Non-negative decimal quantity with a dot and at most four decimals, e.g. "1.5"',
 });
@@ -83,11 +87,14 @@ true satisfies [VatTreatment] extends [Static<typeof tVatTreatment>]
   : never;
 
 export const tLineDescription = t.String({
-  minLength: 1,
+  minLength: INVOICE_LINE_INPUT_LIMITS.descriptionMinChars,
   maxLength: LINE_DESCRIPTION_MAX_CHARS,
 });
 
-export const tLineUnit = t.String({ minLength: 1, maxLength: 32 });
+export const tLineUnit = t.String({
+  minLength: INVOICE_LINE_INPUT_LIMITS.descriptionMinChars,
+  maxLength: INVOICE_LINE_INPUT_LIMITS.unitMaxChars,
+});
 
 export type LineVat = {
   vatRateBps: number;
@@ -114,6 +121,7 @@ export type InvoiceLineDraft = LineVat & {
   billingPurpose: (typeof invoiceLines.$inferSelect)["billingPurpose"];
   timeEntryId: SafeId<"timeEntry"> | null;
   expenseId: SafeId<"expense"> | null;
+  recordedDescription?: string;
 };
 
 type PricedLine = InvoiceLineDraft & {
@@ -165,6 +173,7 @@ export const timeEntryLineDraft = (
     entry.invoiceNarrative,
     entry.narrative,
   ),
+  recordedDescription: lineDescription(entry.invoiceNarrative, entry.narrative),
   quantity: hoursQuantity(entry.billedMinutes),
   unit: "h",
   unitPrice: entry.noCharge ? cents(0) : entry.rateAtEntry,
@@ -196,6 +205,10 @@ export const expenseLineDraft = (
   return {
     description: lineDescription(
       description,
+      expense.invoiceDescription,
+      expense.description,
+    ),
+    recordedDescription: lineDescription(
       expense.invoiceDescription,
       expense.description,
     ),
@@ -312,7 +325,7 @@ export const insertInvoiceLines = async (
   const invoice = await tx.query.invoices.findFirst({
     where: {
       id: { eq: scope.invoiceId },
-      workspaceId: { eq: scope.workspaceId },
+      organizationId: { eq: scope.organizationId },
     },
     columns: { documentType: true },
   });
@@ -328,12 +341,7 @@ export const insertInvoiceLines = async (
   const [last] = await tx
     .select({ position: max(invoiceLines.position) })
     .from(invoiceLines)
-    .where(
-      and(
-        eq(invoiceLines.invoiceId, scope.invoiceId),
-        eq(invoiceLines.workspaceId, scope.workspaceId),
-      ),
-    );
+    .where(and(eq(invoiceLines.invoiceId, scope.invoiceId)));
   const start = (last?.position ?? -1) + 1;
   const inserted = await tx
     .insert(invoiceLines)
@@ -344,6 +352,11 @@ export const insertInvoiceLines = async (
         invoiceId: scope.invoiceId,
         position: start + index,
         description: line.description,
+        recordedDescription: line.recordedDescription ?? line.description,
+        recordedQuantity: line.quantity,
+        recordedUnit: line.unit,
+        recordedUnitPrice: line.unitPrice,
+        recordedNetAmount: line.netAmount,
         quantity: line.quantity,
         unit: line.unit,
         unitPrice: line.unitPrice,
@@ -388,10 +401,7 @@ export const checkInvoiceLineCapacity = async (
 ): Promise<Result<void, HandlerError>> => {
   const lineCount = await tx.$count(
     invoiceLines,
-    and(
-      eq(invoiceLines.invoiceId, scope.invoiceId),
-      eq(invoiceLines.workspaceId, scope.workspaceId),
-    ),
+    and(eq(invoiceLines.invoiceId, scope.invoiceId)),
   );
   if (lineCount + adding > LIMITS.invoiceLinesPerInvoice) {
     return Result.err(
@@ -740,9 +750,26 @@ export const recalculateInvoiceTotals = async (
   now: Date,
   recordAuditEvent: AuditRecorder,
 ): Promise<Result<InvoiceTotals, HandlerError>> => {
-  const billing = await checkInvoiceBillingArrangement(tx, scope);
-  if (billing.isErr()) {
-    return Result.err(billing.error);
+  const matterRows = await tx
+    .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+    .from(invoiceLines)
+    .where(eq(invoiceLines.invoiceId, scope.invoiceId))
+    .limit(LIMITS.invoiceLinesPerInvoice);
+  const matterIds = [
+    ...new Set([
+      scope.workspaceId,
+      ...matterRows.map((line) => line.workspaceId),
+    ]),
+  ].toSorted();
+  for (const workspaceId of matterIds) {
+    // db-await-in-loop: each included matter has its own billing cap; caller holds ordered matter locks
+    const billing = await checkInvoiceBillingArrangement(tx, {
+      invoiceId: scope.invoiceId,
+      workspaceId,
+    });
+    if (billing.isErr()) {
+      return Result.err(billing.error);
+    }
   }
   const lines = await tx
     .select({
@@ -752,15 +779,10 @@ export const recalculateInvoiceTotals = async (
       vatTreatment: invoiceLines.vatTreatment,
     })
     .from(invoiceLines)
-    .where(
-      and(
-        eq(invoiceLines.invoiceId, scope.invoiceId),
-        eq(invoiceLines.workspaceId, scope.workspaceId),
-      ),
-    );
+    .where(and(eq(invoiceLines.invoiceId, scope.invoiceId)));
   const invoiceScope = and(
     eq(invoices.id, scope.invoiceId),
-    eq(invoices.workspaceId, scope.workspaceId),
+    invoiceInMatter(invoices, scope.workspaceId),
   );
   const [stored] = await tx
     .select({
@@ -824,8 +846,14 @@ export const recalculateInvoiceTotals = async (
 
 /** Columns an invoice detail read returns for each line. */
 export const INVOICE_LINE_COLUMNS = {
+  workspaceId: true,
   id: true,
   position: true,
+  recordedDescription: true,
+  recordedQuantity: true,
+  recordedUnit: true,
+  recordedUnitPrice: true,
+  recordedNetAmount: true,
   description: true,
   quantity: true,
   unit: true,
@@ -842,11 +870,10 @@ export const INVOICE_LINE_COLUMNS = {
   releasedAt: true,
 } as const;
 
-// Tenant and parent identifiers come from the scoped invoice detail; line
-// persistence timestamps belong to audit bookkeeping, not the document line.
+// Organization and parent identifiers come from the scoped invoice detail;
+// timestamps belong to audit bookkeeping, not the document line.
 const INVOICE_LINE_OMITTED_COLUMNS = [
   "organizationId",
-  "workspaceId",
   "invoiceId",
   "createdAt",
   "updatedAt",

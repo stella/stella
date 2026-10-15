@@ -2,8 +2,15 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
-import { timeEntries, timeEntryTimerStates } from "@/api/db/schema";
+import {
+  invoiceLines,
+  invoices,
+  timeEntries,
+  timeEntryTimerStates,
+  workspaces,
+} from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withBillingMatterAdvisoryLocks } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -16,6 +23,13 @@ export const timeEntryIsRunning = () => sql<boolean>`COALESCE((
     AND ${timeEntryTimerStates.userId} = ${timeEntries.userId}
 ), ${timeEntries.timerStartedAt} IS NOT NULL AND ${timeEntries.timerStoppedAt} IS NULL)`;
 
+type InvoiceRunningSelection = {
+  type: "invoice";
+  invoiceId: SafeId<"invoice">;
+  additionalIds?: SafeId<"timeEntry">[];
+  runningCheck?: "all" | "additional";
+};
+
 type GuardRunningTimeEntriesOptions = {
   tx: Pick<PgAsyncDatabase<PgQueryResultHKT>, "select" | "execute">;
   actorUserId: SafeId<"user">;
@@ -24,12 +38,15 @@ type GuardRunningTimeEntriesOptions = {
       workspaceId: SafeId<"workspace">;
       selection:
         | { type: "entries"; ids: SafeId<"timeEntry">[] }
-        | { type: "invoice"; invoiceId: SafeId<"invoice"> }
+        | InvoiceRunningSelection
         | { type: "none" };
     }
   | {
       organizationId: SafeId<"organization">;
-      selection: { type: "approval_batch"; ids: SafeId<"timeEntry">[] };
+      additionalWorkspaceIds?: readonly SafeId<"workspace">[];
+      selection:
+        | { type: "approval_batch"; ids: SafeId<"timeEntry">[] }
+        | InvoiceRunningSelection;
     }
 );
 
@@ -43,7 +60,8 @@ export const guardRunningTimeEntries = async (
       case "entries":
         return inArray(timeEntries.id, selection.ids);
       case "invoice":
-        return eq(timeEntries.invoiceId, selection.invoiceId);
+        // sql-perf-allow: bounded by invoice ID and the time_entries_invoice_idx source index.
+        return sql`((${timeEntries.invoiceId} = ${selection.invoiceId} AND EXISTS (SELECT 1 FROM ${invoices} visible_invoice WHERE visible_invoice.id = ${selection.invoiceId})) OR ${inArray(timeEntries.id, selection.additionalIds ?? [])})`;
       case "none":
         return sql`false`;
       default:
@@ -84,12 +102,15 @@ export const guardRunningTimeEntries = async (
     ORDER BY owner_locks.lock_key
   `);
   if ("organizationId" in options) {
-    await tx.execute(sql`
-      SELECT pg_advisory_xact_lock(matter_locks.lock_key)
-      FROM (SELECT DISTINCT hashtext(${timeEntries.workspaceId}::text) AS lock_key
-        FROM ${timeEntries} WHERE ${condition} AND ${timeEntries.workspaceId} IS NOT NULL ORDER BY lock_key) AS matter_locks
-      ORDER BY matter_locks.lock_key
-    `);
+    const invoiceMatters =
+      selection.type === "invoice"
+        ? sql`UNION SELECT hashtext(${invoiceLines.workspaceId}::text) AS lock_key FROM ${invoiceLines} WHERE ${invoiceLines.invoiceId}=${selection.invoiceId}`
+        : sql``;
+    const selectedMatters = sql`UNION SELECT hashtext(${workspaces.id}::text) AS lock_key FROM ${workspaces} WHERE ${inArray(workspaces.id, [...(options.additionalWorkspaceIds ?? [])])} AND ${workspaces.organizationId}=${options.organizationId}`;
+    await withBillingMatterAdvisoryLocks(
+      tx,
+      sql`SELECT DISTINCT hashtext(${timeEntries.workspaceId}::text) AS lock_key FROM ${timeEntries} WHERE ${condition} AND ${timeEntries.workspaceId} IS NOT NULL ${invoiceMatters} ${selectedMatters}`,
+    );
   } else {
     await tx.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext(${options.workspaceId}))`,
@@ -114,16 +135,20 @@ export const guardRunningTimeEntries = async (
     });
   }
   // Approval batches report running refusals per row under these same locks.
-  if ("organizationId" in options) {
+  if (selection.type === "approval_batch") {
     return null;
   }
+  const runningIds =
+    selection.type === "invoice" && selection.runningCheck === "additional"
+      ? (selection.additionalIds ?? [])
+      : ids;
   const [blocked] = await tx
     .select({ id: timeEntries.id })
     .from(timeEntries)
     .where(
       and(
-        eq(timeEntries.workspaceId, options.workspaceId),
-        inArray(timeEntries.id, ids),
+        condition,
+        inArray(timeEntries.id, runningIds),
         ne(timeEntries.userId, actorUserId),
         timeEntryIsRunning(),
       ),

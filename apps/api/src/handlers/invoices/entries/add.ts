@@ -393,11 +393,14 @@ const addEntries = createSafeHandler(
     const txResult = await resultTx(safeDb, async (tx) => {
       const runningError = await guardRunningTimeEntries({
         tx,
-        workspaceId,
+        organizationId: session.activeOrganizationId,
         actorUserId: user.id,
-        selection: body.timeEntryIds
-          ? { type: "entries", ids: body.timeEntryIds }
-          : { type: "none" },
+        selection: {
+          type: "invoice",
+          runningCheck: "additional",
+          invoiceId: params.invoiceId,
+          additionalIds: body.timeEntryIds ?? [],
+        },
       });
       if (runningError) {
         return Result.err(runningError);

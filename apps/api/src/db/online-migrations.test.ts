@@ -1211,6 +1211,12 @@ const createHarness = ({
             }
             return [{ isValidated: !pendingConstraints.has(constraintName) }];
           }
+          // This harness starts with invoice clients already backfilled.
+          if (
+            query.includes("FROM public.invoices i JOIN public.workspaces w")
+          ) {
+            return [];
+          }
           // The decision-date repair's selection: nothing left to repair.
           if (query.includes("corrupt AS MATERIALIZED")) {
             if (timeoutRepairBatch) {

@@ -35,6 +35,7 @@ export {
   buildMoneyS3Xml,
   buildPohodaXml,
   buildUblFiles,
+  quantityText,
   type InvoiceExportLine,
   type InvoiceExportLineSource,
   type InvoiceExportRecord,

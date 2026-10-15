@@ -48,6 +48,7 @@ import {
   installPgliteSanctionsMonitoringTriggers,
   installPgliteTreeParentGuards,
   installPgliteWorkspaceAccessObjects,
+  installPgliteInvoiceObjects,
 } from "@/api/tests/pglite-schema";
 import {
   deriveStellaTablePrivileges,
@@ -679,6 +680,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteFlowTransitions(db);
   await installPgliteWorkspaceAccessObjects(db);
+  await installPgliteInvoiceObjects(db);
   await db.transaction(async (tx) => {
     await installPgliteEntityFeatureGateMaintenance(tx);
   });

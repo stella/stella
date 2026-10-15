@@ -12,6 +12,10 @@ import {
 } from "../lib/db/migration-history";
 import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
+import {
+  CLIENT_INVOICE_BACKFILL,
+  CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
+} from "./client-invoice-backfill";
 import { CORPUS_PROJECTION_CLEANUP_STALL_REPAIR } from "./corpus-projection-cleanup-stall-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
@@ -148,6 +152,41 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
     isUnique: false,
     name: "time_entries_approval_queue_idx",
     tableName: "time_entries",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_id_org_unique" ON public."invoices" USING btree (id, organization_id)',
+    definitionBody: "ON public.invoices USING btree (id, organization_id)",
+    isUnique: true,
+    name: "invoices_id_org_unique",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "invoices_org_client_created_idx" ON public."invoices" USING btree (organization_id, client_id, created_at, id)',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, client_id, created_at, id)",
+    isUnique: false,
+    name: "invoices_org_client_created_idx",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "invoices_client_number_uidx" ON public."invoices" USING btree (organization_id, client_id, invoice_number) WHERE workspace_id IS NULL',
+    definitionBody:
+      "ON public.invoices USING btree (organization_id, client_id, invoice_number) WHERE (workspace_id IS NULL)",
+    isUnique: true,
+    name: "invoices_client_number_uidx",
+    tableName: "invoices",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "invoices_client_backfill_idx" ON public."invoices" USING btree (id) WHERE client_id IS NULL AND workspace_id IS NOT NULL',
+    definitionBody:
+      "ON public.invoices USING btree (id) WHERE ((client_id IS NULL) AND (workspace_id IS NOT NULL))",
+    isUnique: false,
+    name: "invoices_client_backfill_idx",
+    tableName: "invoices",
   },
   {
     createSql:
@@ -485,6 +524,8 @@ export const ONLINE_VALIDATED_INDEX_NAMES: ReadonlySet<string> = new Set([
  * skips the ones already complete, and validates their completion.
  */
 export const ONLINE_MIGRATION_REPAIRS: readonly OnlineRepair[] = [
+  CLIENT_INVOICE_BACKFILL,
+  ...CLIENT_INVOICE_CONSTRAINT_VALIDATIONS,
   DECISION_DATE_CEILING_REPAIR,
   CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR,
   ...SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS,

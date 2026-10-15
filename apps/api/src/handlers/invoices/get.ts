@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceTotals } from "@/api/handlers/invoices/invoice-lines";
+import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -32,7 +33,7 @@ const readInvoiceById = createSafeHandler(
         tx.query.invoices.findFirst({
           where: {
             id: { eq: params.invoiceId },
-            workspaceId: { eq: workspaceId },
+            RAW: (table) => invoiceInMatter(table, workspaceId),
           },
           with: INVOICE_DETAIL_RELATIONS,
         }),

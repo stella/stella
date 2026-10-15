@@ -98,13 +98,20 @@
       data.labels.total,
     ).map(h => text(size: 7pt, weight: "semibold", fill: muted, upper(h))),
   ),
-  ..data.lines.map(line => (
-    line.description,
-    if line.quantity != none { line.quantity } else { [] },
-    if line.unitPrice != none { line.unitPrice } else { [] },
-    line.net,
-    [#line.vat \ #text(size: 7pt, fill: muted, line.vatLabel)],
-    text(weight: "medium", line.total),
+  ..data.groups.map(group => (
+    table.cell(colspan: 6, fill: tint, text(weight: "semibold", group.workspaceName)),
+    ..group.lines.map(line => (
+      line.description,
+      if line.quantity != none { line.quantity } else { [] },
+      if line.unitPrice != none { line.unitPrice } else { [] },
+      line.net,
+      [#line.vat \ #text(size: 7pt, fill: muted, line.vatLabel)],
+      text(weight: "medium", line.total),
+    )).flatten(),
+    table.cell(colspan: 3, text(weight: "semibold", data.labels.total)),
+    text(weight: "semibold", group.net),
+    text(weight: "semibold", group.vat),
+    text(weight: "semibold", group.total),
   )).flatten(),
 )
 #v(10pt)

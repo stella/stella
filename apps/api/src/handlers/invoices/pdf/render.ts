@@ -34,6 +34,8 @@ import {
 } from "@/api/lib/files/pdf-signing/stamp-layout";
 import type { SupportedLang } from "@/api/lib/locale";
 
+import { groupInvoiceLinesByMatter } from "./matter-groups";
+
 export type RenderInvoicePdfOptions = {
   invoice: {
     status: InvoiceStatus;
@@ -54,6 +56,8 @@ export type RenderInvoicePdfOptions = {
     buyerPostalCode: string | null;
     buyerCountry: string | null;
     lines: {
+      workspaceId: string;
+      workspaceName: string;
       description: string;
       /** Null only on a line that was never billed by quantity. */
       quantity: string | null;
@@ -739,19 +743,27 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
   field(l.registration, invoice.buyerRegistrationId);
   field(l.vatId, invoice.buyerVatId);
   write("");
-  for (const line of invoice.lines) {
-    field(l.description, line.description);
-    if (line.quantity !== null && line.unitPrice !== null) {
-      const billed =
-        line.unit === null
-          ? quantity(line.quantity)
-          : `${quantity(line.quantity)} ${line.unit}`;
+  for (const group of groupInvoiceLinesByMatter(invoice.lines)) {
+    write(group.workspaceName);
+    for (const line of group.lines) {
+      field(l.description, line.description);
+      if (line.quantity !== null && line.unitPrice !== null) {
+        const billed =
+          line.unit === null
+            ? quantity(line.quantity)
+            : `${quantity(line.quantity)} ${line.unit}`;
+        write(
+          `${l.quantity}: ${isolate(billed)}   ${l.unitPrice}: ${isolate(money(line.unitPrice))}`,
+        );
+      }
       write(
-        `${l.quantity}: ${isolate(billed)}   ${l.unitPrice}: ${isolate(money(line.unitPrice))}`,
+        `${l.net}: ${isolate(money(line.netAmount))}   ${treatments[line.vatTreatment]} ${isolate(vatRate(line.vatRateBps))}: ${isolate(money(line.vatAmount))}   ${l.total}: ${isolate(money(line.grossAmount))}`,
       );
+      write("");
     }
+    write(`${l.total}: ${isolate(group.workspaceName)}`);
     write(
-      `${l.net}: ${isolate(money(line.netAmount))}   ${treatments[line.vatTreatment]} ${isolate(vatRate(line.vatRateBps))}: ${isolate(money(line.vatAmount))}   ${l.total}: ${isolate(money(line.grossAmount))}`,
+      `${l.net}: ${isolate(money(group.netAmount))}   ${l.vat}: ${isolate(money(group.vatAmount))}   ${l.total}: ${isolate(money(group.grossAmount))}`,
     );
     write("");
   }

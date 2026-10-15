@@ -1,10 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
 import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
+import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import { renderInvoicePdf } from "@/api/handlers/invoices/pdf/render";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -58,7 +59,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
           const invoice = await tx.query.invoices.findFirst({
             where: {
               id: { eq: params.invoiceId },
-              workspaceId: { eq: workspaceId },
+              RAW: (table) => invoiceInMatter(table, workspaceId),
               organizationId: { eq: session.activeOrganizationId },
             },
             with: INVOICE_DETAIL_RELATIONS,
@@ -81,12 +82,18 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
               : await tx.query.invoices.findFirst({
                   where: {
                     id: { eq: invoice.originalInvoiceId },
-                    workspaceId: { eq: workspaceId },
+                    RAW: (table) => invoiceInMatter(table, workspaceId),
                     organizationId: { eq: session.activeOrganizationId },
                   },
                   columns: { invoiceNumber: true },
                 });
+          const matter = await tx.query.workspaces.findFirst({
+            where: { id: { eq: workspaceId } },
+            columns: { name: true },
+          });
           return {
+            matterName:
+              matter?.name ?? panic("Authorized invoice matter disappeared"),
             invoice,
             seller: seller ?? null,
             originalNumber: original?.invoiceNumber ?? null,
@@ -127,17 +134,29 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
               ...loaded,
               invoice: {
                 ...loaded.invoice,
-                lines: amounts.lines.map((line) => ({
-                  description: line.description,
-                  quantity: line.quantity,
-                  unit: line.unit,
-                  unitPrice: line.unitPrice,
-                  netAmount: line.netAmountMinor,
-                  vatAmount: line.vatAmountMinor,
-                  grossAmount: line.grossAmountMinor,
-                  vatRateBps: line.vatRateBps,
-                  vatTreatment: line.vatTreatment,
-                })),
+                lines: amounts.lines.map((line, index) => {
+                  const stored = loaded.invoice.lines.at(index);
+                  if (loaded.invoice.lines.length > 0 && !stored) {
+                    return panic("A document line has no stored source");
+                  }
+                  const matter = stored
+                    ? (stored.workspace ??
+                      panic("Invoice line matter is missing"))
+                    : null;
+                  return {
+                    workspaceId: stored ? stored.workspaceId : workspaceId,
+                    workspaceName: matter ? matter.name : loaded.matterName,
+                    description: line.description,
+                    quantity: line.quantity,
+                    unit: line.unit,
+                    unitPrice: line.unitPrice,
+                    netAmount: line.netAmountMinor,
+                    vatAmount: line.vatAmountMinor,
+                    grossAmount: line.grossAmountMinor,
+                    vatRateBps: line.vatRateBps,
+                    vatTreatment: line.vatTreatment,
+                  };
+                }),
               },
               totals: amounts.totals,
               locale: extractFormattingLocale(request),

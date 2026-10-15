@@ -2,6 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   eq,
+  inArray,
   or,
   getColumnTable,
   getColumns,
@@ -22,16 +23,22 @@ import { compareCodeUnit } from "@stll/collation";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import type { InvoiceStatus } from "@/api/db/schema";
 import {
   entities,
   entityVersions,
   fields,
   pdfSigningSessions,
   workspaces,
+  invoices,
+  invoiceLines,
 } from "@/api/db/schema";
+import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
+import { lockBillingArrangement } from "@/api/lib/billing/arrangements";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
+import { LIMITS } from "@/api/lib/limits";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
   brandPersistedOrganizationId,
@@ -2005,3 +2012,135 @@ export const withDecisionCitationStatsLocks = async ({
     ) anchors
   `);
 };
+
+/** Timer guards use the same advisory key order before any matter row lock. */
+export const withInvoiceMatterLocks = async (
+  tx: Transaction,
+  workspaceIds: readonly SafeId<"workspace">[],
+) => {
+  const ids = [...new Set(workspaceIds)].toSorted();
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(keys.key) FROM (SELECT DISTINCT hashtext(matter_id::text) AS key FROM unnest(ARRAY[${sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )}]) AS matter_id ORDER BY key) keys ORDER BY keys.key`,
+  );
+  await tx
+    .select({ id: workspaces.id })
+    .from(workspaces)
+    .where(inArray(workspaces.id, ids))
+    .orderBy(workspaces.id)
+    .limit(ids.length)
+    .for("no key update");
+  for (const id of ids) {
+    // db-await-in-loop: bounded invoice matter set, advisory locks already acquired together
+    await lockBillingArrangement(tx, id);
+  }
+};
+
+type LockInvoiceOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+  status: InvoiceStatus | readonly InvoiceStatus[];
+};
+
+/**
+ * Locks the invoice row with `SELECT ... FOR UPDATE` and returns the columns
+ * every mutation handler (update, transition, delete, add-entries,
+ * remove-entries) needs to make its status-conditional decision. Callers
+ * must re-check `status` (or the relevant precondition) inside the same
+ * transaction before mutating, and repeat the identical status filter on the
+ * mutating statement itself: the lock alone does not stop a concurrent
+ * transaction from having already committed a status change before this one
+ * started.
+ *
+ * Call this BEFORE any child-row writes (`time_entries`, `expenses`) inside
+ * the transaction, never after. Every invoice mutation handler in this
+ * module locks the invoice row first and mutates children second; a handler
+ * that mutates children first and only touches the invoice row later (e.g.
+ * via an `UPDATE invoices ...` at the end of the transaction) acquires its
+ * locks in the opposite order and can deadlock against a concurrent
+ * transaction that follows the invoice-first order.
+ */
+export const lockInvoiceInStatus = async (
+  tx: Transaction,
+  { invoiceId, workspaceId, status }: LockInvoiceOptions,
+) => {
+  const lineMatters = await tx
+    .selectDistinct({ workspaceId: invoiceLines.workspaceId })
+    .from(invoiceLines)
+    .where(eq(invoiceLines.invoiceId, invoiceId))
+    .limit(LIMITS.invoiceLinesPerInvoice);
+  const matterIds = [
+    ...new Set([workspaceId, ...lineMatters.map((line) => line.workspaceId)]),
+  ].toSorted();
+  await withInvoiceMatterLocks(tx, matterIds);
+  const statusFilter =
+    typeof status === "string"
+      ? eq(invoices.status, status)
+      : inArray(invoices.status, [...status]);
+
+  const rows = await tx
+    .select({
+      id: invoices.id,
+      status: invoices.status,
+      documentType: invoices.documentType,
+      billingMode: invoices.billingMode,
+      flatFeeAmount: invoices.flatFeeAmount,
+      originalInvoiceId: invoices.originalInvoiceId,
+      finalizedAt: invoices.finalizedAt,
+      currency: invoices.currency,
+      dueDate: invoices.dueDate,
+      invoiceDate: invoices.invoiceDate,
+      invoiceNumber: invoices.invoiceNumber,
+      notes: invoices.notes,
+      reference: invoices.reference,
+      sellerProfileId: invoices.sellerProfileId,
+      taxableSupplyDate: invoices.taxableSupplyDate,
+      totalAmount: invoices.totalAmount,
+    })
+    .from(invoices)
+    .where(
+      and(
+        eq(invoices.id, invoiceId),
+        invoiceInMatter(invoices, workspaceId),
+        statusFilter,
+      ),
+    )
+    .limit(1)
+    .for("update");
+
+  return rows.at(0);
+};
+
+/** Caller holds timer-owner locks; all selected matter advisory keys are acquired together. */
+export const withBillingMatterAdvisoryLocks = async (
+  tx: ExecuteTransaction,
+  keys: SQL,
+) => {
+  await tx.execute(
+    sql`SELECT pg_advisory_xact_lock(matter_locks.lock_key) FROM (${keys} ORDER BY lock_key) matter_locks ORDER BY matter_locks.lock_key`,
+  );
+};
+
+type LockOriginalInvoiceOptions = {
+  invoiceId: SafeId<"invoice">;
+  workspaceId: SafeId<"workspace">;
+};
+export const lockOriginalInvoice = async (
+  tx: Transaction,
+  { invoiceId, workspaceId }: LockOriginalInvoiceOptions,
+) =>
+  await tx
+    .select({
+      status: invoices.status,
+      documentType: invoices.documentType,
+      currency: invoices.currency,
+      totalAmount: invoices.totalAmount,
+    })
+    .from(invoices)
+    .where(
+      and(eq(invoices.id, invoiceId), invoiceInMatter(invoices, workspaceId)),
+    )
+    .limit(1)
+    .for("update");

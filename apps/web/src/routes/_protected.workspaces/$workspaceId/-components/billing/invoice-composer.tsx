@@ -27,6 +27,7 @@ import {
   InfoIcon,
 } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import { MatterIcon } from "@stll/ui/matter-icon";
 import { Switch } from "@stll/ui/switch";
 import {
   Table,
@@ -52,7 +53,10 @@ import {
   invoiceByIdOptions,
   invoicesKeys,
 } from "@/lib/workspaces/queries/invoices";
-import type { InvoicePrefill } from "@/lib/workspaces/queries/invoices";
+import type {
+  ClientInvoicePrefill,
+  InvoicePrefill,
+} from "@/lib/workspaces/queries/invoices";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { InvoicePdfDownloadButton } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/invoice-pdf-download-button";
 
@@ -159,7 +163,15 @@ const RowText = ({
   </span>
 );
 
+type ClientComposerMatter = ClientInvoicePrefill["matters"][number];
+
+type ClientComposer = {
+  clientId: string;
+  matters: readonly ClientComposerMatter[];
+};
+
 type InvoiceComposerProps = {
+  client?: ClientComposer;
   workspaceId: string;
   prefill: InvoicePrefill;
 };
@@ -173,6 +185,7 @@ type InvoiceComposerProps = {
 export const InvoiceComposer = ({
   workspaceId,
   prefill,
+  client,
 }: InvoiceComposerProps) => {
   const t = useTranslations();
   const currency = prefill.currency;
@@ -214,8 +227,19 @@ export const InvoiceComposer = ({
     includedExpenseCount: includedExpenses.length,
   });
 
+  const invoiceWorkspaceId =
+    client?.matters.find(
+      (matter) =>
+        matter.prefill.timeEntries.some((entry) =>
+          includedEntryIds.includes(entry.id),
+        ) ||
+        matter.prefill.expenses.some((expense) =>
+          includedExpenses.includes(expense.id),
+        ),
+    )?.workspaceId ?? workspaceId;
   const submit = useComposerSubmit({
-    workspaceId,
+    workspaceId: invoiceWorkspaceId,
+    ...(client === undefined ? {} : { client }),
     onDone: setIssued,
   });
 
@@ -224,7 +248,7 @@ export const InvoiceComposer = ({
       <IssuedState
         buyerName={prefill.buyer.buyerName}
         invoice={issued}
-        workspaceId={workspaceId}
+        workspaceId={invoiceWorkspaceId}
       />
     );
   }
@@ -282,6 +306,7 @@ export const InvoiceComposer = ({
         {step === "items" && (
           <ItemsStep
             choices={choices}
+            {...(client === undefined ? {} : { client })}
             currency={currency}
             entries={entries}
             expenses={expenses}
@@ -305,7 +330,7 @@ export const InvoiceComposer = ({
                 return next;
               })
             }
-            prefill={prefill}
+            prefill={{ ...prefill, vat }}
           />
         )}
         {step === "details" && (
@@ -354,9 +379,11 @@ type CreateInvoiceBody = Parameters<ReturnType<typeof api.invoices>["put"]>[0];
  */
 const useComposerSubmit = ({
   workspaceId,
+  client,
   onDone,
 }: {
   workspaceId: string;
+  client?: ClientComposer;
   onDone: (invoice: IssuedInvoice) => void;
 }) => {
   const t = useTranslations();
@@ -374,7 +401,52 @@ const useComposerSubmit = ({
       });
       return await submitComposedInvoice({
         issue,
-        create: async () => unwrapEden(await invoices.put(body)),
+        create: async () => {
+          if (client === undefined) {
+            return unwrapEden(await invoices.put(body));
+          }
+          return unwrapEden(
+            await api["client-invoices"]({
+              clientId: toSafeId<"contact">(client.clientId),
+            }).put({
+              invoiceDate: body.invoiceDate,
+              ...(body.dueDate === undefined ? {} : { dueDate: body.dueDate }),
+              ...(body.taxableSupplyDate === undefined
+                ? {}
+                : { taxableSupplyDate: body.taxableSupplyDate }),
+              currency: body.currency,
+              ...(body.sellerProfileId === undefined
+                ? {}
+                : { sellerProfileId: body.sellerProfileId }),
+              ...(body.expectedTotalAmount === undefined
+                ? {}
+                : { expectedTotalAmount: body.expectedTotalAmount }),
+              matters: client.matters.flatMap((matter) => {
+                const timeEntryIds = matter.prefill.timeEntries
+                  .filter((entry) =>
+                    body.timeEntryIds?.includes(
+                      toSafeId<"timeEntry">(entry.id),
+                    ),
+                  )
+                  .map((entry) => toSafeId<"timeEntry">(entry.id));
+                const expenseIds = matter.prefill.expenses
+                  .filter((expense) =>
+                    body.expenseIds?.includes(toSafeId<"expense">(expense.id)),
+                  )
+                  .map((expense) => toSafeId<"expense">(expense.id));
+                return timeEntryIds.length + expenseIds.length === 0
+                  ? []
+                  : [
+                      {
+                        workspaceId: toSafeId<"workspace">(matter.workspaceId),
+                        timeEntryIds,
+                        expenseIds,
+                      },
+                    ];
+              }),
+            }),
+          );
+        },
         finalize: async (id) => {
           const finalized = await invoices({
             invoiceId: toSafeId<"invoice">(id),
@@ -414,9 +486,13 @@ const useComposerSubmit = ({
     },
     onSuccess: (invoice) => {
       for (const queryKey of [
-        invoicesKeys.all(workspaceId),
-        timeEntriesKeys.all(workspaceId),
-        expensesQueryRoot(workspaceId),
+        ...(
+          client?.matters.map((matter) => matter.workspaceId) ?? [workspaceId]
+        ).flatMap((id) => [
+          invoicesKeys.all(id),
+          timeEntriesKeys.all(id),
+          expensesQueryRoot(id),
+        ]),
       ]) {
         detached(
           queryClient.invalidateQueries({ queryKey }),
@@ -467,6 +543,8 @@ const StepNav = ({ step, hasItems, onStep }: StepNavProps) => {
 };
 
 type ItemsStepProps = {
+  client?: ClientComposer;
+  adjustmentMode?: "editable" | "recorded";
   prefill: InvoicePrefill;
   currency: string;
   entries: readonly PrefillEntry[];
@@ -478,6 +556,8 @@ type ItemsStepProps = {
 };
 
 const ItemsStep = ({
+  client,
+  adjustmentMode = "editable",
   prefill,
   currency,
   entries,
@@ -490,6 +570,99 @@ const ItemsStep = ({
   const t = useTranslations();
   const format = useFormatter();
   const flatFee = prefill.billingMode === "flat_fee";
+  if (client !== undefined) {
+    const groups = client.matters.map((matter) => {
+      const matterEntries = entries.filter((entry) =>
+        matter.prefill.timeEntries.some((item) => item.id === entry.id),
+      );
+      const matterExpenses = expenses.filter((expense) =>
+        matter.prefill.expenses.some((item) => item.id === expense.id),
+      );
+      const totals = composeTotals({
+        entries: matterEntries,
+        choices,
+        expenses: matterExpenses,
+        includedExpenseIds,
+        vat: prefill.vat,
+      });
+      return {
+        matter,
+        matterEntries,
+        matterExpenses,
+        amount: totals?.grossAmountMinor ?? 0,
+      };
+    });
+    const total = groups.reduce((sum, group) => sum + group.amount, 0);
+    return (
+      <div className="flex flex-col gap-4">
+        <Callout>{t("billing.clientComposer.visibility")}</Callout>
+        {groups.map(({ matter, matterEntries, matterExpenses, amount }) => {
+          const allIncluded =
+            matterEntries.every(
+              (entry) => entryChoice(choices, entry).included,
+            ) &&
+            matterExpenses.every((expense) =>
+              includedExpenseIds.has(expense.id),
+            );
+          return (
+            <section className="flex flex-col gap-3" key={matter.workspaceId}>
+              <div className="flex flex-wrap items-center gap-3">
+                <Checkbox
+                  aria-label={t("billing.clientComposer.includeMatter", {
+                    matterName: matter.name,
+                  })}
+                  checked={allIncluded}
+                  onCheckedChange={(included) => {
+                    for (const entry of matterEntries) {
+                      onChoice(entry, { included });
+                    }
+                    for (const expense of matterExpenses) {
+                      onExpense(expense, included);
+                    }
+                  }}
+                />
+                <MatterIcon
+                  className="size-5"
+                  matter={{ id: matter.workspaceId, color: matter.color }}
+                />
+                <h2 className="min-w-0 flex-1 text-sm font-semibold">
+                  <bdi>{matter.name}</bdi>
+                </h2>
+                <span className="text-sm font-medium tabular-nums">
+                  {formatCurrencyAmount(amount, currency)}
+                </span>
+              </div>
+              <meter
+                aria-label={matter.name}
+                className="h-2 w-full"
+                value={total === 0 ? 0 : amount / total}
+              />
+              <ItemsStep
+                adjustmentMode="recorded"
+                prefill={matter.prefill}
+                currency={currency}
+                entries={matterEntries}
+                expenses={matterExpenses}
+                choices={choices}
+                includedExpenseIds={includedExpenseIds}
+                onChoice={onChoice}
+                onExpense={onExpense}
+              />
+              <p className="text-muted-foreground text-end text-xs tabular-nums">
+                {t("billing.clientComposer.matterSubtotal", {
+                  amount: formatCurrencyAmount(amount, currency),
+                  share: format.number(total === 0 ? 0 : amount / total, {
+                    style: "percent",
+                    maximumFractionDigits: 1,
+                  }),
+                })}
+              </p>
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
   const otherCurrencyCount =
     prefill.timeEntries.length -
     entries.length +
@@ -550,7 +723,7 @@ const ItemsStep = ({
             choices={choices}
             currency={currency}
             entries={entries}
-            locked={flatFee}
+            locked={flatFee || adjustmentMode === "recorded"}
             onChoice={onChoice}
           />
         )}

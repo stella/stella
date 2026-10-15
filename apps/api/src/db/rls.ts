@@ -1793,3 +1793,48 @@ export const templateChatThreadPolicies = () => [
     using: templateChatThreadScopeCheck,
   }),
 ];
+
+type InvoicePolicyColumns = {
+  id: p.AnyPgColumn;
+  organizationId: p.AnyPgColumn;
+  workspaceId: p.AnyPgColumn;
+};
+
+/** The owner-evaluated predicate sees hidden lines, preventing partial invoices. */
+export const invoicePolicies = (table: InvoicePolicyColumns) => {
+  const access = sql`public.stella_invoice_access(${table.id}, ${table.organizationId}, ${table.workspaceId})`;
+  return [
+    p.pgPolicy("invoices_workspace_select", {
+      for: "select",
+      to: stella,
+      using: access,
+    }),
+    p.pgPolicy("invoices_workspace_insert", {
+      for: "insert",
+      to: stella,
+      withCheck: access,
+    }),
+    p.pgPolicy("invoices_workspace_update", {
+      for: "update",
+      to: stella,
+      using: access,
+      withCheck: access,
+    }),
+    p.pgPolicy("invoices_workspace_delete", {
+      for: "delete",
+      to: stella,
+      using: access,
+    }),
+  ];
+};
+
+export const invoiceLineVisibilityPolicy = (table: {
+  invoiceId: p.AnyPgColumn;
+}) =>
+  p.pgPolicy("invoice_lines_complete_invoice", {
+    as: "restrictive",
+    for: "all",
+    to: stella,
+    using: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+    withCheck: sql`EXISTS (SELECT 1 FROM public.invoices i WHERE i.id = ${table.invoiceId})`,
+  });

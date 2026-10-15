@@ -8,8 +8,10 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 import { Elysia } from "elysia";
+import fc from "fast-check";
 
 import { calculateDocumentTotals } from "@stll/invoicing";
+import { assertProperty } from "@stll/property-testing";
 
 import { user as authUser } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -410,7 +412,7 @@ describe("invoice lines", () => {
     ]);
   });
 
-  test("an entry line keeps the entry's amount and releases the entry when removed", async () => {
+  test("an entry line permits billed overrides and releases the entry when removed", async () => {
     const invoiceId = await seedInvoice();
     const expenseId = await seedExpense({ amount: 10_000, markup: 10 });
     const lineId = await expectCreated(invoiceId, {
@@ -421,7 +423,12 @@ describe("invoice lines", () => {
 
     expect(
       await runUpdate(invoiceId, lineId, { unitPriceMinor: 1 }),
-    ).toMatchObject({ code: 400 });
+    ).toMatchObject({ totals: { netAmountMinor: 1 } });
+    expect(
+      await runUpdate(invoiceId, lineId, { resetToRecorded: true }),
+    ).toMatchObject({
+      totals: { netAmountMinor: 11_000 },
+    });
     expect(
       await runUpdate(invoiceId, lineId, { vatRateBps: REDUCED_RATE }),
     ).toMatchObject({
@@ -811,6 +818,186 @@ describe("invoice lines", () => {
         },
       }),
     ]);
+  });
+
+  test("invoice line overrides preserve recorded work and reset exactly", async () => {
+    await assertProperty(
+      "invoice line overrides preserve recorded work and reset exactly",
+      fc.asyncProperty(
+        fc.integer({ min: 1, max: 480 }),
+        fc.integer({ min: 0, max: 100_000 }),
+        fc.integer({ min: 0, max: 40 }),
+        async (billedMinutes, unitPriceMinor, hours) => {
+          const invoiceId = await seedInvoice();
+          const timeEntryId = await seedTimeEntry({ billedMinutes });
+          const lineId = await expectCreated(invoiceId, {
+            source: { type: "time_entry", timeEntryId },
+            vatRateBps: STANDARD_RATE,
+            vatTreatment: "domestic_vat",
+          });
+          const sourceRows = await testDb
+            .select()
+            .from(timeEntries)
+            .where(eq(timeEntries.id, timeEntryId));
+          const recordedRows = await testDb
+            .select()
+            .from(invoiceLines)
+            .where(eq(invoiceLines.id, lineId));
+          const recorded = recordedRows.at(0);
+          expect(recorded).toBeDefined();
+          if (!recorded) {
+            throw new Error("Created line missing");
+          }
+          expect(
+            await runUpdate(invoiceId, lineId, {
+              description: "Narrative only",
+              quantity: recorded.quantity,
+              unitPriceMinor: recorded.unitPrice,
+            }),
+          ).toHaveProperty("id", lineId);
+          const narrativeRows = await testDb
+            .select()
+            .from(invoiceLines)
+            .where(eq(invoiceLines.id, lineId));
+          expect(narrativeRows.at(0)?.netAmount).toBe(recorded.netAmount);
+          expect(
+            await runUpdate(invoiceId, lineId, {
+              description: "Adjusted invoice narrative",
+              quantity: `${hours}.25`,
+              unitPriceMinor,
+            }),
+          ).toHaveProperty("id", lineId);
+          expect(
+            await testDb
+              .select()
+              .from(timeEntries)
+              .where(eq(timeEntries.id, timeEntryId)),
+          ).toEqual(sourceRows);
+          const editedRows = await testDb
+            .select()
+            .from(invoiceLines)
+            .where(eq(invoiceLines.id, lineId));
+          expect(editedRows.at(0)).toMatchObject({
+            description: "Adjusted invoice narrative",
+            recordedDescription: recorded?.description,
+            recordedQuantity: recorded?.quantity,
+            recordedUnitPrice: recorded?.unitPrice,
+            recordedNetAmount: recorded?.netAmount,
+          });
+          expect(
+            await runUpdate(invoiceId, lineId, { resetToRecorded: true }),
+          ).toHaveProperty("id", lineId);
+          const resetRows = await testDb
+            .select()
+            .from(invoiceLines)
+            .where(eq(invoiceLines.id, lineId));
+          expect(resetRows.at(0)).toMatchObject({
+            description: recorded?.description,
+            quantity: recorded?.quantity,
+            unitPrice: recorded?.unitPrice,
+            netAmount: recorded?.netAmount,
+          });
+          expect(
+            await testDb
+              .select()
+              .from(timeEntries)
+              .where(eq(timeEntries.id, timeEntryId)),
+          ).toEqual(sourceRows);
+        },
+      ),
+      { numRuns: 10 },
+    );
+  });
+
+  test("invoice quantity overrides retain distinct high-precision decimals", async () => {
+    await assertProperty(
+      "invoice quantity overrides retain distinct high-precision decimals",
+      fc.asyncProperty(fc.integer({ min: 0, max: 9998 }), async (fraction) => {
+        const invoiceId = await seedInvoice();
+        const quantity = `99999999999999.${fraction.toString().padStart(4, "0")}`;
+        const changedQuantity = `99999999999999.${(fraction + 1).toString().padStart(4, "0")}`;
+        const lineId = await expectCreated(
+          invoiceId,
+          manual({ quantity, unitPriceMinor: 0 }, 0),
+        );
+        expect(
+          await runUpdate(invoiceId, lineId, { quantity: changedQuantity }),
+        ).toHaveProperty("id", lineId);
+        const rows = await testDb
+          .select()
+          .from(invoiceLines)
+          .where(eq(invoiceLines.id, lineId));
+        expect(rows.at(0)?.quantity).toBe(changedQuantity);
+        expect(rows.at(0)?.recordedQuantity).toBe(quantity);
+      }),
+      { numRuns: 10 },
+    );
+  });
+
+  test("previously issued draft lines remain immutable", async () => {
+    const invoiceId = await seedInvoice();
+    const lineId = await expectCreated(
+      invoiceId,
+      manual({ quantity: "1", unitPriceMinor: 12_000 }, STANDARD_RATE),
+    );
+    await testDb
+      .update(invoices)
+      .set({ finalizedAt: new Date("2026-01-01T00:00:00Z") })
+      .where(eq(invoices.id, invoiceId));
+    const before = await testDb
+      .select()
+      .from(invoiceLines)
+      .where(eq(invoiceLines.id, lineId));
+    for (const body of [
+      { description: "Revised" },
+      { resetToRecorded: true },
+    ] satisfies UpdateBody[]) {
+      expect(await runUpdate(invoiceId, lineId, body)).toMatchObject({
+        code: 409,
+        response: {
+          message:
+            "Issued invoice lines cannot be edited; create a credit note instead",
+        },
+      });
+    }
+    expect(
+      await testDb
+        .select()
+        .from(invoiceLines)
+        .where(eq(invoiceLines.id, lineId)),
+    ).toEqual(before);
+  });
+
+  test("expense overrides preserve the source and can be reset", async () => {
+    const invoiceId = await seedInvoice();
+    const expenseId = await seedExpense({ amount: 12_000, markup: 15 });
+    const lineId = await expectCreated(invoiceId, {
+      source: { type: "expense", expenseId },
+      vatRateBps: STANDARD_RATE,
+      vatTreatment: "domestic_vat",
+    });
+    const before = await testDb
+      .select()
+      .from(expenses)
+      .where(eq(expenses.id, expenseId));
+    expect(
+      await runUpdate(invoiceId, lineId, {
+        description: "Billed filing fee",
+        quantity: "2",
+        unitPriceMinor: 5000,
+      }),
+    ).toHaveProperty("id", lineId);
+    expect(readLines(await runGet(invoiceId)).at(0)?.netAmount).toBe(10_000);
+    expect(
+      await runUpdate(invoiceId, lineId, { resetToRecorded: true }),
+    ).toHaveProperty("id", lineId);
+    expect(readLines(await runGet(invoiceId)).at(0)).toMatchObject({
+      description: "Court fee",
+      netAmount: 13_800,
+    });
+    expect(
+      await testDb.select().from(expenses).where(eq(expenses.id, expenseId)),
+    ).toEqual(before);
   });
 
   test("a line patch that omits the VAT treatment keeps it", async () => {

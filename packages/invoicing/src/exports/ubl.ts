@@ -4,6 +4,7 @@ import { invalidInput, type InvoicingResult } from "../errors";
 import type { InvoiceParty, VatTreatment } from "../types";
 import {
   amountText,
+  exportMattersOf,
   countryCodeOf,
   effectiveVatRateBps,
   invoiceDescriptionOf,
@@ -225,7 +226,13 @@ const document = (record: InvoiceExportRecord): string => {
           text("cbc:Note", invoiceDescriptionOf(record)),
         ]),
     text("cbc:DocumentCurrencyCode", currency),
-    text("cbc:BuyerReference", record.reference ?? record.matter.reference),
+    text(
+      "cbc:BuyerReference",
+      record.reference ??
+        exportMattersOf(record)
+          .flatMap((matter) => matter.reference ?? [])
+          .join(", "),
+    ),
     record.originalNumber
       ? el(
           "cac:BillingReference",

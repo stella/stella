@@ -9,13 +9,14 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
-import { lockInvoiceInStatus } from "@/api/handlers/invoices/lock-invoice";
+import { invoiceInMatter } from "@/api/handlers/invoices/invoice-scope";
 import { invoiceRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
+import { lockInvoiceInStatus } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
@@ -38,14 +39,21 @@ const deleteInvoice = createSafeHandler(
     },
     params: invoiceParamsSchema,
   },
-  async function* ({ safeDb, user, workspaceId, params, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    user,
+    session,
+    workspaceId,
+    params,
+    recordAuditEvent,
+  }) {
     const now = new Date();
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
         const runningError = await guardRunningTimeEntries({
           tx,
-          workspaceId,
+          organizationId: session.activeOrganizationId,
           actorUserId: user.id,
           selection: { type: "invoice", invoiceId: params.invoiceId },
         });
@@ -70,7 +78,7 @@ const deleteInvoice = createSafeHandler(
           .from(invoices)
           .where(
             and(
-              eq(invoices.workspaceId, workspaceId),
+              invoiceInMatter(invoices, workspaceId),
               eq(invoices.originalInvoiceId, invoice.id),
             ),
           )
@@ -89,12 +97,7 @@ const deleteInvoice = createSafeHandler(
             invoiceAttachment: INVOICE_ATTACHMENT.CHARGED,
             updatedAt: now,
           })
-          .where(
-            and(
-              eq(timeEntries.invoiceId, params.invoiceId),
-              eq(timeEntries.workspaceId, workspaceId),
-            ),
-          )
+          .where(and(eq(timeEntries.invoiceId, params.invoiceId)))
           .returning({ id: timeEntries.id });
 
         const restoredExpenses = await tx
@@ -104,12 +107,7 @@ const deleteInvoice = createSafeHandler(
             invoiceId: null,
             updatedAt: now,
           })
-          .where(
-            and(
-              eq(expenses.invoiceId, params.invoiceId),
-              eq(expenses.workspaceId, workspaceId),
-            ),
-          )
+          .where(and(eq(expenses.invoiceId, params.invoiceId)))
           .returning({ id: expenses.id });
 
         await tx
@@ -117,7 +115,7 @@ const deleteInvoice = createSafeHandler(
           .where(
             and(
               eq(invoices.id, params.invoiceId),
-              eq(invoices.workspaceId, workspaceId),
+              invoiceInMatter(invoices, workspaceId),
               eq(invoices.status, INVOICE_STATUS.DRAFT),
             ),
           );

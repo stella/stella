@@ -214,11 +214,13 @@ const createInvoiceLine = createSafeHandler(
       async (tx): Promise<Result<CreatedLine, HandlerError>> => {
         const runningError = await guardRunningTimeEntries({
           tx,
-          workspaceId,
+          organizationId: session.activeOrganizationId,
           actorUserId: user.id,
           selection: {
-            type: "entries",
-            ids:
+            type: "invoice",
+            runningCheck: "additional",
+            invoiceId: params.invoiceId,
+            additionalIds:
               body.source.type === "time_entry"
                 ? [body.source.timeEntryId]
                 : [],

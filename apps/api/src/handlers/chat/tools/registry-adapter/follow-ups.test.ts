@@ -189,6 +189,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
         invoices: {
           findFirst: async () => ({
             id: INV_UUID,
+            clientId: null,
             workspaceId: WS_UUID,
             invoiceNumber: "INV-1",
             documentType: "invoice",
@@ -220,6 +221,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
             timeEntries: [
               {
                 id: TE_UUID,
+                workspaceId: WS_UUID,
                 workItemId: ENTITY_UUID,
                 workItemReference: { type: "available", id: ENTITY_UUID },
                 dateWorked: "2026-01-01",

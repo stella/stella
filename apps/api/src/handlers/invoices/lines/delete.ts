@@ -77,11 +77,15 @@ const deleteInvoiceLine = createSafeHandler(
             .limit(1);
           const runningError = await guardRunningTimeEntries({
             tx,
-            workspaceId,
+            organizationId: session.activeOrganizationId,
             actorUserId: user.id,
             selection: {
-              type: "entries",
-              ids: sourceLine?.timeEntryId ? [sourceLine.timeEntryId] : [],
+              type: "invoice",
+              runningCheck: "additional",
+              invoiceId: params.invoiceId,
+              additionalIds: sourceLine?.timeEntryId
+                ? [sourceLine.timeEntryId]
+                : [],
             },
           });
           if (runningError) {

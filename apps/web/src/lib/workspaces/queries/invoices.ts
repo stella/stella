@@ -76,3 +76,33 @@ export type InvoicePrefill = Awaited<
 >;
 
 export type { InvoiceStatus };
+
+export const clientInvoicePrefillOptions = (
+  clientId: string,
+  period: { periodStart: string | null; periodEnd: string | null },
+) =>
+  queryOptions({
+    queryKey: ["client-invoices", clientId, "prefill", period],
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    queryFn: async ({ signal }) =>
+      unwrapEden(
+        await api["client-invoices"]({ clientId }).prefill.get({
+          query: {
+            ...(period.periodStart === null
+              ? {}
+              : { periodStart: period.periodStart }),
+            ...(period.periodEnd === null
+              ? {}
+              : { periodEnd: period.periodEnd }),
+          },
+          fetch: { signal },
+        }),
+      ),
+  });
+
+export type ClientInvoicePrefill = Awaited<
+  ReturnType<
+    NonNullable<ReturnType<typeof clientInvoicePrefillOptions>["queryFn"]>
+  >
+>;
