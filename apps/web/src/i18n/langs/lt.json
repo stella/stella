@@ -173,6 +173,7 @@
       "heldDescription": "Šių ištraukų <strong>reikšmė iš tiesų neaiški</strong>: turinys yra preliminarus arba nepatvirtintas, o ne vien parašytas ranka. Jos nevertinamos, kol tikrintojas jų nepatvirtina, nepataiso arba neįveda iš naujo. Įskaitomas šaltinis niekada nesiunčiamas peržiūrėti vien dėl jo laikmenos.",
       "heldForReview": "Sulaikyta peržiūrai",
       "holdOutOfScoring": "Neįtraukti į vertinimą",
+      "inScoring": "Įtraukta į vertinimą",
       "includeInScoring": "Įtraukti į vertinimą",
       "interpretationNote": "Aiškinimo pastaba",
       "interpretationNotePlaceholder": "Jei šio įrodymo reikšmė yra ginčijama, aprašykite, kaip. Jei ne, palikite lauką tuščią.",
@@ -2074,6 +2075,7 @@
     "versionLabel": "{version} versija",
     "viewSource": "Žiūrėti šaltinį",
     "website": "Svetainė",
+    "whenToUse": "Kada naudoti",
     "workflow": "Darbo eiga",
     "workflows": "Darbo eigos",
     "zoomIn": "Priartinti",
@@ -2553,6 +2555,10 @@
       "providerRateLimited": "Pasiektas teikėjo užklausų limitas. Netrukus bandykite dar kartą.",
       "thirdPartyBoundaryRefusal": "Užklausa bandė naudoti turinį už leidžiamo darbo srities konteksto ribų.",
       "usageLimitExceeded": "Pasiektas naudojimo limitas.",
+      "validationInvalid": "Lauke yra reikšmė, kurios negalima išsaugoti.",
+      "validationRequired": "Privalomas laukas tuščias.",
+      "validationTooLong": "Per ilga: naudokite ne daugiau kaip {limit, number} simbolių.",
+      "validationTooShort": "Per trumpa: naudokite ne mažiau kaip {limit, number} simbolių.",
       "verificationActiveLimitReached": "Jūsų organizacija pasiekė vienu metu vykdomų patikrų limitą. Palaukite, kol viena patikra bus baigta, ir bandykite dar kartą.",
       "verificationDailyLimitReached": "Jūsų organizacija pasiekė dienos patikrų limitą. Bandykite dar kartą po vidurnakčio (Europe/Prague).",
       "versionConflict": "Kažkas kitas tai pakeitė, kol redagavote. Įkelkite iš naujo, kad gautumėte dabartinę versiją."
@@ -3648,6 +3654,10 @@
       "importTitle": "Importuoti įgūdį",
       "importedSkills": "{count, plural, one {Importuotas # įgūdis} few {Importuoti # įgūdžiai} other {Importuota # įgūdžių}}",
       "invalidPath": "Kelyje galima naudoti tik mažąsias raides, skaitmenis, taškus, brūkšnelius arba pabraukimus",
+      "invocationAuto": "Automatiškai",
+      "invocationAutoHelp": "DI gali pats naudoti šį įgūdį, kai jis tinka užklausai.",
+      "invocationManual": "Tik iškvietus",
+      "invocationManualHelp": "Naudojamas tik tada, kai iškviečiate jį su / arba pridedate prie savo žinutės.",
       "license": "Licencija: {license}",
       "newFile": "Naujas failas",
       "newFileFilenamePlaceholder": "notes.md",
@@ -4338,6 +4348,8 @@
         "yearMonthSequential": "Metai-mėnuo / Nuoseklus (2026-02/001)",
         "yearSequential": "Metai / Nuoseklus (2026/001)"
       },
+      "showInTitle": "Rodyti numerį šalia bylos pavadinimo",
+      "showInTitleDescription": "Kai išjungta, pavadinimas yra būtent tas, kurį įvedėte.",
       "title": "Bylų numeravimas",
       "tokenHelp": "Galimos žymos: '{'SEQ'}' (eilės numeris), '{'YYYY'}' (metai), '{'YY'}' (2 skaitmenų metai), '{'MM'}' (mėnuo)"
     },
@@ -4507,6 +4519,25 @@
     },
     "tokenHelp": "Kaip gauti žetoną",
     "viewOnGithub": "Peržiūrėti GitHub platformoje"
+  },
+  "readerAnswers": {
+    "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
+    "citation": "¶{paragraph}",
+    "expand": "Išskleisti atsakymą",
+    "explain": "Paaiškinti",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Užduoti papildomą klausimą",
+    "invalidCitations": "{count, plural, one {Nepavyko patikrinti # nuorodos.} few {Nepavyko patikrinti # nuorodų.} many {Nepavyko patikrinti # nuorodos.} other {Nepavyko patikrinti # nuorodų.}}",
+    "loading": "Generuojamas atsakymas…",
+    "minimise": "Suskleisti atsakymą",
+    "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
+    "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
+    "regenerate": "Generuoti atsakymą iš naujo",
+    "selectionError": "Pasirinkite tekstą vienoje pastraipoje (iki 2000 ženklų).",
+    "send": "Siųsti papildomą klausimą",
+    "share": "Bendrinti su komanda",
+    "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
+    "title": "Atsakymas apie pasirinktą tekstą"
   },
   "routeError": {
     "backToMatters": "Grįžti į bylas",
@@ -5554,7 +5585,6 @@
     "viewVersion": "Peržiūrėti",
     "whenNotToUse": "Kada nenaudoti",
     "whenNotToUsePlaceholder": "Kada šio šablono vengti?",
-    "whenToUse": "Kada naudoti",
     "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda DI pasirinkti šabloną)"
   },
   "timesheets": {
@@ -5675,7 +5705,7 @@
       "title": "Kopijuoti į bylą"
     },
     "create": {
-      "ownerTypeToggle": "Bylos tipas",
+      "matterName": "Bylos pavadinimas",
       "personalDescription": "Asmeninės bylos yra privačios ir nereikalauja kliento. Galite jas vėliau paaukštinti, kad pasidalintumėte su komanda."
     },
     "createNewWorkspace": "Sukurti naują bylą",
@@ -6127,15 +6157,12 @@
       "upcomingTasks": "Būsima agenda",
       "uploaded": "įkėlė"
     },
-    "ownerType": {
-      "client": "Klientas",
-      "personal": "Asmeninė"
-    },
     "parties": {
       "addParty": "Pridėti šalį",
       "changeClient": "Keisti klientą",
       "client": "Klientas",
       "noClient": "Klientas nepriskirtas",
+      "noClientOptional": "Be kliento (neprivaloma)",
       "noParties": "Šioje byloje nėra pridėtų šalių.",
       "partyRoles": {
         "co_counsel": "Bendraadvokatas",

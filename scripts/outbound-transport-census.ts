@@ -988,6 +988,12 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
+    path: "apps/web/src/features/case-law/components/case-viewer/reader-answers-query.ts",
+    class: "operator-configured-infrastructure",
+    reason: "Streams reader answers from the configured API.",
+    transports: ["module:@stll/fetch"],
+  },
+  {
     path: "apps/web/src/features/case-law/queries/decision-analysis.ts",
     class: "operator-configured-infrastructure",
     reason: "Reads decision analysis responses from the configured API.",
