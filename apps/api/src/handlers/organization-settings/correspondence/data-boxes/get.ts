@@ -22,6 +22,7 @@ const UNPROJECTED_DATA_BOX_SETTINGS_COLUMNS = [
   "organizationId", // The active organization scopes this read.
   "personalApiKeyPolicy", // API-key policy belongs to general settings.
   "sanctionsMonitoringMode", // Sanctions policy belongs to general settings.
+  "matterNumberingEnabled", // Matter numbering belongs to general settings.
   "matterNumberPattern", // Matter numbering belongs to general settings.
   "matterNumberPadding", // Matter numbering belongs to general settings.
   "timeMinimumUnitMinutes", // Timekeeping belongs to general settings.
