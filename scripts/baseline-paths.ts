@@ -21,6 +21,8 @@ export const BASELINE_PATHS = {
   actionlint: ".github/actionlint-baseline.json",
   /** scripts/check-test-state-baseline.ts */
   testState: "scripts/test-state-baseline.json",
+  /** scripts/check-rust-test-determinism.ts */
+  rustTestDeterminism: "scripts/rust-test-determinism-baseline.json",
   /** scripts/check-aggregate-locks.ts */
   aggregateLocks: "scripts/aggregate-lock-baseline.json",
   /** scripts/check-write-contracts.ts */
