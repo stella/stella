@@ -10,7 +10,9 @@ import { normalizeChatLink } from "@stll/chat/link-detection";
 import { linkIconOptions } from "@/features/chat/link-icons";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
-export const ProxyChatLink = (props: ComponentProps<typeof ChatLink>) => {
+export const ProxyChatLink = (
+  props: Omit<ComponentProps<typeof ChatLink>, "iconSource">,
+) => {
   const hostname = normalizeChatLink(props.href)?.hostname ?? "";
   const [visible, setVisible] = useState(false);
   const { data: blob, isError } = useQuery({

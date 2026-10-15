@@ -19,6 +19,7 @@ const { apiUrl } = await import("@/lib/api-url");
 class VisibleIntersectionObserver implements IntersectionObserver {
   readonly root: Element | Document | null = null;
   readonly rootMargin: string;
+  readonly scrollMargin: string;
   readonly thresholds: readonly number[];
   private readonly observed = new Set<Element>();
   private readonly callback: IntersectionObserverCallback;
@@ -29,6 +30,7 @@ class VisibleIntersectionObserver implements IntersectionObserver {
   ) {
     this.callback = callback;
     this.rootMargin = options?.rootMargin ?? "0px";
+    this.scrollMargin = options?.scrollMargin ?? "0px";
     this.thresholds = Array.isArray(options?.threshold)
       ? options.threshold
       : [options?.threshold ?? 0];

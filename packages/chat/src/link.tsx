@@ -68,7 +68,7 @@ type ChatLinkProps = Omit<
   "href" | "target" | "rel" | "className"
 > & {
   href: string;
-  iconSource?: ChatLinkIconSource;
+  iconSource?: ChatLinkIconSource | undefined;
   newTabLabel?: string;
 };
 
