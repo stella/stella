@@ -315,6 +315,43 @@ describe("matter access census self-test", () => {
     ]);
   });
 
+  test("aliases taken through a namespace, destructuring or a local predicate name stay tracked", () => {
+    const file = "apps/api/src/lib/example-reader.ts";
+    const reader = (connection: string) => `
+      import { inArray } from "drizzle-orm";
+      import * as root from "@/api/db/root";
+      import { workspaces } from "@/api/db/schema";
+      const owner = root.rootDb;
+      const { rootDb: unscoped } = root;
+      const within = inArray;
+      export const readMatters = async (ids: string[]) =>
+        await unscoped.select().from(workspaces).where(within(workspaces.id, ids));
+      export const readScoped = async (tx: Tx, ids: string[]) =>
+        await search(ids, ${connection});
+    `;
+    const allowed = classifyMatterAccessModule(file, reader("tx"));
+    expect(allowed.map(({ signal, sites }) => [signal, sites])).toEqual([
+      [
+        "owner-connection-workspace-set",
+        { readMatters: 1, "owner#rootDb": 1, "readMatters#rootDb": 1 },
+      ],
+    ]);
+    const reviewed = {
+      [`${file}::owner-connection-workspace-set`]: {
+        reason: "One reviewed reader.",
+        sites: allowed[0]?.sites ?? {},
+      },
+    };
+    expect(
+      evaluateMatterAccessCensus(
+        classifyMatterAccessModule(file, reader("owner")),
+        reviewed,
+      ).violations,
+    ).toEqual([
+      `${file}::owner-connection-workspace-set @ readScoped#rootDb: 1 sites, allowed 0`,
+    ]);
+  });
+
   test("the shared app-side write check is enumerated as a copy of the rule", () => {
     const file = "apps/api/src/lib/entities/workspace-entity-write-access.ts";
     expect(

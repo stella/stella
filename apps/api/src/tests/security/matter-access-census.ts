@@ -98,6 +98,25 @@ type Aliases = Map<string, string>;
 const resolveName = (name: string, aliases: Aliases) =>
   aliases.get(name) ?? name;
 
+/** The name an alias initializer stands for: `x`, `ns.x`, `(x as T)`. */
+const aliasTarget = (
+  node: ts.Expression,
+  aliases: Aliases,
+): string | undefined => {
+  if (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isNonNullExpression(node) ||
+    ts.isSatisfiesExpression(node)
+  ) {
+    return aliasTarget(node.expression, aliases);
+  }
+  if (ts.isIdentifier(node)) {
+    return resolveName(node.text, aliases);
+  }
+  return ts.isPropertyAccessExpression(node) ? node.name.text : undefined;
+};
+
 /** The table an expression names: `workspaces`, an alias, or `schema.x`. */
 const tableName = (node: ts.Expression, aliases: Aliases) => {
   if (ts.isIdentifier(node)) {
@@ -191,13 +210,9 @@ type Facts = {
   roleRule: SiteCounter;
 };
 
-/** Local names that refer to drizzle's `inArray`, direct or namespaced. */
-type InArrayNames = { direct: Set<string>; namespaces: Set<string> };
-
 const recordImport = (
   node: ts.ImportDeclaration,
   facts: Facts,
-  inArray: InArrayNames,
   aliases: Aliases,
 ) => {
   if (
@@ -223,20 +238,6 @@ const recordImport = (
       }
     }
   }
-  if (specifier === "drizzle-orm") {
-    if (ts.isNamespaceImport(bindings)) {
-      inArray.namespaces.add(bindings.name.text);
-    } else {
-      for (const element of bindings.elements) {
-        if (
-          !element.isTypeOnly &&
-          (element.propertyName ?? element.name).text === "inArray"
-        ) {
-          inArray.direct.add(element.name.text);
-        }
-      }
-    }
-  }
   if (
     specifier === "@/api/db/root" &&
     ts.isNamedImports(bindings) &&
@@ -250,17 +251,17 @@ const recordImport = (
   }
 };
 
+/**
+ * A call whose callee resolves to `inArray`: the import under any name, a
+ * local alias of it, or `<anything>.inArray`. Over-matching a same-named
+ * helper only adds a finding; it never hides one.
+ */
 const isInArrayCall = (
   node: ts.Node,
-  inArray: InArrayNames,
+  aliases: Aliases,
 ): node is ts.CallExpression =>
   ts.isCallExpression(node) &&
-  ((ts.isIdentifier(node.expression) &&
-    inArray.direct.has(node.expression.text)) ||
-    (ts.isPropertyAccessExpression(node.expression) &&
-      ts.isIdentifier(node.expression.expression) &&
-      inArray.namespaces.has(node.expression.expression.text) &&
-      node.expression.name.text === "inArray"));
+  aliasTarget(node.expression, aliases) === "inArray";
 
 const recordIdentifier = (
   node: ts.Identifier,
@@ -303,23 +304,41 @@ const recordLiteral = (node: ts.Node, text: string, facts: Facts) => {
 };
 
 /**
- * `const matters = workspaces`: later uses of `matters` mean `workspaces`.
- * The declared name itself is not a use.
+ * Local aliases: `const matters = workspaces`, `const owner = root.rootDb`,
+ * `const { rootDb: owner } = root`, `const within = d.inArray`. Later uses of
+ * the alias mean the original name; the declared name itself is not a use.
  */
+const isAliasDeclaration = (node: ts.Node): node is ts.VariableDeclaration =>
+  ts.isVariableDeclaration(node) &&
+  node.initializer !== undefined &&
+  (ts.isObjectBindingPattern(node.name) ||
+    aliasTarget(node.initializer, new Map()) !== undefined);
+
 const isLocalAliasName = (node: ts.Identifier) =>
-  ts.isVariableDeclaration(node.parent) &&
-  node.parent.name === node &&
-  node.parent.initializer !== undefined &&
-  ts.isIdentifier(node.parent.initializer);
+  (isAliasDeclaration(node.parent) && node.parent.name === node) ||
+  (ts.isBindingElement(node.parent) &&
+    ts.isObjectBindingPattern(node.parent.parent) &&
+    isAliasDeclaration(node.parent.parent.parent));
 
 const recordLocalAlias = (node: ts.Node, aliases: Aliases) => {
-  if (
-    ts.isVariableDeclaration(node) &&
-    ts.isIdentifier(node.name) &&
-    node.initializer !== undefined &&
-    ts.isIdentifier(node.initializer)
-  ) {
-    aliases.set(node.name.text, resolveName(node.initializer.text, aliases));
+  if (!isAliasDeclaration(node) || node.initializer === undefined) {
+    return;
+  }
+  if (ts.isIdentifier(node.name)) {
+    const target = aliasTarget(node.initializer, aliases);
+    if (target !== undefined) {
+      aliases.set(node.name.text, target);
+    }
+    return;
+  }
+  if (!ts.isObjectBindingPattern(node.name)) {
+    return;
+  }
+  for (const element of node.name.elements) {
+    const key = element.propertyName ?? element.name;
+    if (ts.isIdentifier(element.name) && ts.isIdentifier(key)) {
+      aliases.set(element.name.text, resolveName(key.text, aliases));
+    }
   }
 };
 
@@ -341,12 +360,11 @@ const readFacts = (file: string, source: string): Facts => {
     rootDbUse: siteCounter(),
     roleRule: siteCounter(),
   };
-  const inArray: InArrayNames = { direct: new Set(), namespaces: new Set() };
   const aliases: Aliases = new Map();
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node)) {
       // Import specifiers name the imported symbols; they are not uses.
-      recordImport(node, facts, inArray, aliases);
+      recordImport(node, facts, aliases);
       return;
     }
     recordLocalAlias(node, aliases);
@@ -361,7 +379,7 @@ const readFacts = (file: string, source: string): Facts => {
     ) {
       facts.namesMemberRole = true;
     }
-    if (isInArrayCall(node, inArray)) {
+    if (isInArrayCall(node, aliases)) {
       const [column] = node.arguments;
       if (column !== undefined && isMatterIdColumn(column, aliases)) {
         facts.workspaceSet.add(node);
