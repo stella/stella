@@ -65,7 +65,7 @@ import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { useCreateWorkspace } from "@/lib/workspaces/mutations";
 import { workspacesOptions } from "@/lib/workspaces/queries";
 
-const SelectedClient = ({ client }: { client: MatterDraftClient }) => (
+export const SelectedClient = ({ client }: { client: MatterDraftClient }) => (
   <div className="bg-muted/40 flex items-center gap-2 rounded-lg border px-3 py-2">
     {client.type === "person" ? (
       <UserIcon className="text-muted-foreground size-4" />

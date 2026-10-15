@@ -20,6 +20,8 @@ type LoadVisibleSkillOptions = {
 };
 
 type VisibleSkill = {
+  boundClientId: SafeId<"contact"> | null;
+  boundWorkspaceId: SafeId<"workspace"> | null;
   id: SafeId<"agentSkill">;
   scope: AgentSkillScope;
   userId: string;
@@ -46,6 +48,8 @@ export const loadVisibleSkill = async (
 ): Promise<VisibleSkill> => {
   const query = tx
     .select({
+      boundClientId: agentSkills.boundClientId,
+      boundWorkspaceId: agentSkills.boundWorkspaceId,
       id: agentSkills.id,
       scope: agentSkills.scope,
       userId: agentSkills.userId,
@@ -76,7 +80,14 @@ export const loadVisibleSkill = async (
 };
 
 type CanManageSkillOptions = {
-  skill: Pick<VisibleSkill, "scope" | "userId">;
+  /**
+   * The binding is optional for callers that read only the scope and author;
+   * absent counts as unbound, which never widens who may write.
+   */
+  skill: Pick<VisibleSkill, "scope" | "userId"> & {
+    boundClientId?: string | null | undefined;
+    boundWorkspaceId?: string | null | undefined;
+  };
   memberRole: AuthorizedMemberRole;
   userId: SafeId<"user">;
   /** The skill permission the write spends: `delete` removes the skill,
@@ -86,10 +97,12 @@ type CanManageSkillOptions = {
 
 /**
  * Who may write to a skill directly (edit it, accept a proposal against it,
- * remove someone else's proposal or comment, delete it): admins and owners for
- * team skills, the author for private ones, each spending the permission the
- * write needs. Everyone else who can see the skill proposes and comments
- * instead.
+ * remove someone else's proposal or comment, delete it), each spending the
+ * permission the write needs:
+ * - team skills: admins and owners, or the author of one bound to a matter;
+ * - private skills: the author, and a client-bound one only as a manager.
+ * Everyone else who can see the skill proposes and comments instead. Row
+ * security adds the binding's reach; this mirrors `agentSkillWriteRule`.
  */
 export const canManageSkill = ({
   skill,
@@ -98,12 +111,19 @@ export const canManageSkill = ({
   spends,
 }: CanManageSkillOptions): boolean => {
   const permission = { agentSkill: [spends] };
+  const isAuthor =
+    skill.userId === userId && hasMemberPermission(memberRole, permission);
   switch (skill.scope) {
     case "team":
-      return hasManagementPermission(memberRole, permission);
+      return (
+        hasManagementPermission(memberRole, permission) ||
+        ((skill.boundWorkspaceId ?? null) !== null && isAuthor)
+      );
     case "private":
       return (
-        skill.userId === userId && hasMemberPermission(memberRole, permission)
+        isAuthor &&
+        ((skill.boundClientId ?? null) === null ||
+          hasManagementPermission(memberRole, permission))
       );
     default: {
       skill.scope satisfies never;

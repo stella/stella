@@ -22,6 +22,11 @@ import {
   type AgentSkillOrigin,
 } from "@/api/db/schema";
 import { canManageSkill } from "@/api/lib/agent-skills/access";
+import { skillBindingCondition, UNBOUND } from "@/api/lib/agent-skills/binding";
+import type {
+  SkillBinding,
+  SkillBindingScope,
+} from "@/api/lib/agent-skills/binding";
 import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -110,10 +115,18 @@ export const resolvesToBuiltInSkill = (
 
 export const ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS = 30_000;
 
-type ChatSkillContext = {
+type ChatSkillCaller = {
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
+};
+
+type ChatSkillContext = ChatSkillCaller & {
+  /**
+   * Where the conversation may use a bound skill. Required on every read
+   * that serves a skill to a model, so none can skip the binding.
+   */
+  bindingScope: SkillBindingScope;
 };
 
 /**
@@ -135,6 +148,12 @@ type ChatMemberRole = AuthorizedMemberRole;
  */
 export type ActiveSkillContext = {
   body: string;
+  /**
+   * The skill's binding, checked against the turn's binding scope once the
+   * turn's matters are known (`skillBindingAllows`); null on both for an
+   * unbound or built-in skill.
+   */
+  binding: SkillBinding;
   description: string;
   displayName: string;
   /** `stella-chat-documented-reads`, as declared. */
@@ -161,13 +180,18 @@ export type ActiveSkillContext = {
     }
 );
 
+/**
+ * Resolved before the turn's matters are known, so it reads any skill row
+ * security lets the caller see; the turn then checks `binding` against its
+ * binding scope and refuses a skill bound elsewhere.
+ */
 export const resolveActiveSkillContext = async ({
   activeSkill,
   memberRole,
   organizationId,
   safeDb,
   userId,
-}: ChatSkillContext & {
+}: ChatSkillCaller & {
   activeSkill: ActiveChatSkillRequest | undefined;
   memberRole: ChatMemberRole;
 }): Promise<
@@ -189,6 +213,7 @@ export const resolveActiveSkillContext = async ({
   }
 
   const installed = await findInstalledSkills({
+    bindingScope: ANY_READABLE_BINDING,
     organizationId,
     safeDb,
     skillNames: [skillName],
@@ -215,6 +240,7 @@ export const resolveActiveSkillContext = async ({
 
   const skill = loadSkill(skillName);
   return Result.ok({
+    binding: UNBOUND,
     body: skill.body,
     description: skill.description,
     displayName: readSkillDisplayName(skill),
@@ -237,7 +263,7 @@ const resolveInstalledActiveSkill = async ({
   organizationId,
   safeDb,
   userId,
-}: ChatSkillContext & {
+}: ChatSkillCaller & {
   activeSkill: { skillId: SafeId<"agentSkill">; skillName: string };
   memberRole: ChatMemberRole;
 }): Promise<
@@ -248,6 +274,8 @@ const resolveInstalledActiveSkill = async ({
       .select({
         id: agentSkills.id,
         body: agentSkills.body,
+        boundClientId: agentSkills.boundClientId,
+        boundWorkspaceId: agentSkills.boundWorkspaceId,
         description: agentSkills.description,
         enabled: agentSkills.enabled,
         metadata: agentSkills.metadata,
@@ -311,6 +339,10 @@ const resolveInstalledActiveSkill = async ({
   }
 
   return Result.ok({
+    binding: {
+      boundClientId: skill.boundClientId,
+      boundWorkspaceId: skill.boundWorkspaceId,
+    },
     body: skill.body,
     description: skill.description,
     displayName: skill.name,
@@ -393,6 +425,7 @@ const canReadActiveSkillBody = ({
 };
 
 export const listAvailableChatSkillMetadata = async ({
+  bindingScope,
   organizationId,
   safeDb,
   userId,
@@ -417,6 +450,7 @@ export const listAvailableChatSkillMetadata = async ({
           eq(agentSkills.organizationId, organizationId),
           eq(agentSkills.enabled, true),
           or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
+          skillBindingCondition(bindingScope),
         ),
       )
       .orderBy(agentSkills.scope, agentSkills.slug, agentSkills.id)
@@ -466,6 +500,7 @@ export const loadAvailableChatSkill = async ({
  */
 export const loadAvailableChatSkills = async ({
   activeSkillId,
+  bindingScope,
   organizationId,
   safeDb,
   skillNames,
@@ -476,6 +511,7 @@ export const loadAvailableChatSkills = async ({
 }): Promise<Result<Map<string, LoadedChatSkill>, SafeDbError>> => {
   const rowsResult = await findInstalledSkills({
     activeSkillId,
+    bindingScope,
     organizationId,
     safeDb,
     skillNames,
@@ -573,6 +609,7 @@ export type AvailableChatSkillResourceRead =
 
 export const readAvailableChatSkillResource = async ({
   activeSkillId,
+  bindingScope,
   organizationId,
   path,
   safeDb,
@@ -585,6 +622,7 @@ export const readAvailableChatSkillResource = async ({
 }): Promise<Result<AvailableChatSkillResourceRead, SafeDbError>> => {
   const rowResult = await findInstalledSkills({
     activeSkillId,
+    bindingScope,
     organizationId,
     safeDb,
     skillNames: [skillName],
@@ -662,15 +700,27 @@ const readBuiltInSkillResource = ({
   };
 };
 
-/** The row each name resolves to for the caller, keyed by slug. */
+/**
+ * Active-skill resolution only: any row the caller may read, whatever its
+ * binding, because the turn checks the binding once its matters are known.
+ */
+const ANY_READABLE_BINDING = Symbol("any readable binding");
+
+/**
+ * The row each name resolves to for the caller, keyed by slug. A row outside
+ * `bindingScope` is not a candidate, so a bound skill can neither be served
+ * nor shadow an unbound one with the same slug outside its binding.
+ */
 const findInstalledSkills = async ({
   activeSkillId,
+  bindingScope,
   organizationId,
   safeDb,
   skillNames,
   userId,
-}: ChatSkillContext & {
+}: ChatSkillCaller & {
   activeSkillId?: SafeId<"agentSkill"> | undefined;
+  bindingScope: SkillBindingScope | typeof ANY_READABLE_BINDING;
   skillNames: readonly string[];
 }) => {
   if (skillNames.length === 0) {
@@ -702,6 +752,9 @@ const findInstalledSkills = async ({
           enabledOrActive,
           inArray(agentSkills.slug, [...skillNames]),
           or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
+          bindingScope === ANY_READABLE_BINDING
+            ? undefined
+            : skillBindingCondition(bindingScope),
         ),
       )
       .limit(LIMITS.agentSkillsPerUser),

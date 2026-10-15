@@ -19,6 +19,10 @@ import renameSkillResource from "@/api/handlers/skills/resources/rename";
 import updateSkillResource from "@/api/handlers/skills/resources/update";
 import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import updateSkill from "@/api/handlers/skills/update";
+import {
+  NO_SKILL_BINDING_SCOPE,
+  UNBOUND,
+} from "@/api/lib/agent-skills/binding";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { noModelOfferedSkills } from "@/api/lib/agent-skills/invocation";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
@@ -155,7 +159,9 @@ const seedSkillWithResource = async () => {
 
 const skillEditTools = (skillId: SafeId<"agentSkill">) =>
   createSkillTools({
+    bindingScope: NO_SKILL_BINDING_SCOPE,
     activeSkillContext: {
+      binding: UNBOUND,
       body: "Follow the fixture instructions.",
       description: "Agent skill test fixture",
       displayName: "Fixture",

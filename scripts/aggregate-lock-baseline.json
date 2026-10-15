@@ -1771,7 +1771,7 @@
   },
   {
     "file": "apps/api/src/handlers/skills/update.ts",
-    "fingerprint": "362b7954c5875a3730ec3e485c127c17f540ff820cc646e548ed27b9fefd1476",
+    "fingerprint": "270bd1490b6feb89cea19cc72d7088996750ec56eee035496196bbeb9ee45912",
     "count": 1,
     "reason": "builder-for in apps/api/src/handlers/skills/update.ts: Existing transaction coordination; migrate this acquisition through the aggregate owner."
   },
