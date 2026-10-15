@@ -77,24 +77,24 @@ const result = Result.try(() => {
       panic(`Census lint failed: ${lint.stderr.toString()}`);
     }
     const report: unknown = JSON.parse(lint.stdout.toString());
-    if (!isRecord(report) || !Array.isArray(report.diagnostics)) {
+    if (!isRecord(report) || !Array.isArray(report["diagnostics"])) {
       panic("Census lint returned no diagnostics");
     }
-    for (const diagnostic of report.diagnostics) {
+    for (const diagnostic of report["diagnostics"]) {
       if (
         !isRecord(diagnostic) ||
-        typeof diagnostic.code !== "string" ||
-        typeof diagnostic.filename !== "string"
+        typeof diagnostic["code"] !== "string" ||
+        typeof diagnostic["filename"] !== "string"
       ) {
         panic("Census encountered a parser/configuration error");
       }
-      const rule = diagnostic.code.split("(").at(0) ?? "";
+      const rule = diagnostic["code"].split("(").at(0) ?? "";
       if (!isRule(rule)) {
-        panic(`Unexpected census diagnostic: ${diagnostic.code}`);
+        panic(`Unexpected census diagnostic: ${diagnostic["code"]}`);
       }
       const file = repoRelativePath(
         ROOT,
-        path.resolve(ROOT, diagnostic.filename),
+        path.resolve(ROOT, diagnostic["filename"]),
       );
       const baseline = baselines.get(rule);
       if (baseline === undefined) {
