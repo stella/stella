@@ -7,6 +7,7 @@ import { testChatApprovalContextValue } from "@/components/chat/chat-approval-co
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 import type { ChatSourceDocument } from "@/lib/api-contract";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -37,7 +38,7 @@ afterEach(async () => {
   });
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
   if (previousApiUrl === undefined) {
     delete process.env["VITE_API_URL"];
   } else {

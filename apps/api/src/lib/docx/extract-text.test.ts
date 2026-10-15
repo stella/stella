@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
@@ -12,11 +14,12 @@ const makeDocx = async (
   numberingXml?: string,
 ): Promise<ScannedFile> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
+  writeZipEntry(zip, "word/document.xml", documentXml);
   if (numberingXml !== undefined) {
-    zip.file("word/numbering.xml", numberingXml);
+    writeZipEntry(zip, "word/numbering.xml", numberingXml);
   }
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -116,7 +119,7 @@ describe("extractDocxDocument", () => {
 
   test("handles missing document.xml", async () => {
     const zip = new JSZip();
-    zip.file("other.xml", "<root/>");
+    writeZipEntry(zip, "other.xml", "<root/>");
     const docx = testDocxFile(await zip.generateAsync({ type: "uint8array" }));
     const result = await extractDocxDocument(docx);
 

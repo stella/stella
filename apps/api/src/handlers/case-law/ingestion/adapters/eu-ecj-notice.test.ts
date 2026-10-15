@@ -13,6 +13,7 @@ import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import type { DocumentStageObservation } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import type { Transaction } from "@/api/db/root";
@@ -862,7 +863,7 @@ describe("stored Formex refresh", () => {
 
   test("stores a fetched ZIP as the adapter's Formex archive shape", async () => {
     const archive = new JSZip();
-    archive.file("FORMEX/main.xml", "<new-formex />");
+    writeZipEntry(archive, "FORMEX/main.xml", "<new-formex />");
     const bytes = await archive.generateAsync({ type: "uint8array" });
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored({
