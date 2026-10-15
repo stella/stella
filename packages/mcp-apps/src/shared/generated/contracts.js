@@ -407,7 +407,7 @@ var yt = {
     EU: "pending_public",
     HUN: "pending_public",
     POL: "pending_public",
-    SVK: "pending_public",
+    SVK: "pages_public",
     USA: "pending_public",
   },
   gt = (e) => Object.hasOwn(D, e),
