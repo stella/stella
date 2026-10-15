@@ -174,6 +174,19 @@ describe("parseIconEntries", () => {
     ]);
   });
 
+  test("reads ownedBy after any comment indentation, so spacing cannot unown an icon", () => {
+    for (const prefix of ["//ownedBy:", "//  ownedBy:", "//\townedBy:"]) {
+      const source = [
+        `${prefix} CopyButton (packages/ui/src/components/copy-button.tsx)`,
+        'export { CopyIcon as CopyToClipboardIcon } from "lucide-react";',
+      ].join("\n");
+      expect(parseIconEntries(source)[0]?.owner).toEqual({
+        component: "CopyButton",
+        path: "packages/ui/src/components/copy-button.tsx",
+      });
+    }
+  });
+
   test("fails on an ownership line that does not parse, so a typo cannot unown an icon", () => {
     for (const typo of [
       "// ownedby: CopyButton (packages/ui/src/components/copy-button.tsx)",

@@ -188,7 +188,7 @@ export const ActivityDayReview = ({
 }: {
   header: ReactNode;
   snapshot: ActivityDaySnapshot;
-  onCopy: (text: string, onSuccess: () => void) => void;
+  onCopy: (text: string, onSettled: (copied: boolean) => void) => void;
   onReviewStatusChange: (status: ActivityReviewStatus) => void;
 }) => {
   const t = useTranslations("activity");
@@ -445,8 +445,8 @@ export const ActivityDayReview = ({
         snapshot={snapshot}
         submission={submission}
         onCopy={async () =>
-          // Resolves once the copy lands; a failed copy is reported by the
-          // command runner and leaves the button unconfirmed.
+          // Resolves once the copy settles; a failed copy is reported by the
+          // command runner and resolves false, leaving the button unconfirmed.
           new Promise<boolean>((resolve) => {
             onCopy(
               selected
@@ -455,7 +455,7 @@ export const ActivityDayReview = ({
                     `${group.matter.name} · ${format.dateTime(calendarDate(snapshot.date), { dateStyle: "medium" })} · ${t("hours", { hours: hours(group.roundedTenths / 10) })}: ${editFor(group).narrative}`,
                 )
                 .join("\n"),
-              () => resolve(true),
+              resolve,
             );
           })
         }

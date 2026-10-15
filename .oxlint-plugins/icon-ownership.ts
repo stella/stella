@@ -48,7 +48,7 @@ export const parseIconEntries = (source: string): IconEntry[] => {
       });
       comments = [];
     } else if (line.startsWith("//")) {
-      const comment = line.replace(/^\/\/\s?/u, "");
+      const comment = line.replace(/^\/\/\s*/u, "");
       if (OWNERSHIP_LIKE.test(comment) && !OWNED_BY.test(comment)) {
         panic(
           `${ICON_MODULE_PATH}: malformed ownership line "${comment}"; ` +
