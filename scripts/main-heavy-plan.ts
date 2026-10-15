@@ -114,8 +114,6 @@ export const MERGE_GROUP_EXCEPTIONS = {
     "Negative proof against the pull request base, rather than the queued tree.",
   "heavy-web-build":
     "Heavy-dispatch artifact producer; web-build produces the merge-group artifact.",
-  "release-typecheck":
-    "Scheduled compilation of the next release version; normal typechecks certify queued source.",
 } as const;
 
 export const queueAdmittedJobs = (workflow: unknown) => {
