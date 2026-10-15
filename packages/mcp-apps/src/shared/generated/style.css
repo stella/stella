@@ -956,6 +956,10 @@
     width: calc(var(--spacing) * 12);
     height: calc(var(--spacing) * 12);
   }
+  .size-\[0\.8em\] {
+    width: 0.8em;
+    height: 0.8em;
+  }
   .size-\[0\.65625rem\] {
     width: 0.65625rem;
     height: 0.65625rem;

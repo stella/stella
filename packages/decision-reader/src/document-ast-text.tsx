@@ -907,7 +907,7 @@ const BlockPermalink = ({
 
   const { copyPermalink } = useReaderPresentation();
   const { copied, copy } = useCopyConfirmation(
-    () => copyPermalink?.(anchorId) ?? Promise.resolve(false),
+    async () => copyPermalink?.(anchorId) ?? Promise.resolve(false),
   );
   if (copyPermalink === undefined) {
     return null;

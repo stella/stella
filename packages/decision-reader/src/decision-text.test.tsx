@@ -63,7 +63,7 @@ export const fakeReaderAdapters = {
     }
   },
   renderBodyUnavailable: ({ reason }) => <p>{reason}</p>,
-  copyPermalink: () => Promise.resolve(true),
+  copyPermalink: async () => Promise.resolve(true),
   openProvision: () => undefined,
   loadProvisionPreview: async () => ({
     documentId: "act",
