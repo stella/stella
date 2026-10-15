@@ -12,6 +12,7 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const SUMMARY_TIMEOUT_MS = 30_000;
@@ -32,6 +33,7 @@ type SummarizeVersionDiffOptions = {
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
 };
 
@@ -41,6 +43,7 @@ export const summarizeVersionDiff = async ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   aiAnalytics,
 }: SummarizeVersionDiffOptions): Promise<string> => {
   const { summary } = await generateTanStackObjectForRole({
@@ -49,6 +52,7 @@ export const summarizeVersionDiff = async ({
     orgAIConfig,
     managedAIResidency,
     organizationId,
+    admission,
     // Shared by root-scoped and workspace-scoped callers; no workspace id is
     // threaded through this helper's options.
     tenantWorkspaceIds: [],

@@ -36,7 +36,7 @@ import type { OutboundHostPolicy } from "@/api/lib/restrict-outbound-url";
  */
 
 /** Lifecycle of a legislative text at a given point in time. */
-export type LegislationStatus = "current" | "historical" | "repealed" | "draft";
+type LegislationStatus = "current" | "historical" | "repealed" | "draft";
 
 /**
  * How the publisher states the close of a consolidation window.
@@ -106,7 +106,7 @@ export type VersionWindow =
  * updates the same row. `<namespace>:work:<eli>` is reserved for a work the
  * adapter declares `unversioned`.
  */
-export type LegislationExpressionIdentity = {
+type LegislationExpressionIdentity = {
   publisherId: string;
   /**
    * The kind of text the version holds. Omitted, it follows the window: a
@@ -237,10 +237,10 @@ export type LegislationSyncPage = {
  * yet. Declaring the walk alone is what an adapter can honestly promise
  * today, and it is exactly what `tipWindowSlices` consumes.
  */
-export type LegislationSourceReconciliation = SourceSliceWalk;
+type LegislationSourceReconciliation = SourceSliceWalk;
 
 /** A legislation source whose forward-only cursor cannot be reconciled. */
-export type LegislationReconciliationUnsupported = {
+type LegislationReconciliationUnsupported = {
   type: "unsupported";
   /** Why this source cannot be reconciled. Printed to operators. */
   reason: string;
@@ -337,8 +337,3 @@ export type LegislationSourceAdapter = {
     | LegislationSourceReconciliation
     | LegislationReconciliationUnsupported;
 };
-
-/** Preserve an adapter's literal registry key while contextualizing its API. */
-export const defineLegislationAdapter = <const TKey extends string>(
-  adapter: LegislationSourceAdapter & { readonly key: TKey },
-): LegislationSourceAdapter & { readonly key: TKey } => adapter;

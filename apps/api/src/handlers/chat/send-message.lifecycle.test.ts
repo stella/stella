@@ -1,12 +1,15 @@
-import { EventType } from "@tanstack/ai";
+import { EventType, memoryStream } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -29,6 +32,7 @@ describe("send lifecycle checkpoint indexing", () => {
           return Result.ok({
             signal: new AbortController().signal,
             release: async () => undefined,
+            modelAdmission: testModelAdmission(options.organizationId),
             reservePeriod: async (
               identity: AdmittedActionIdentity,
               organizationStateDb?: ScopedDb,
@@ -62,10 +66,14 @@ describe("send lifecycle checkpoint indexing", () => {
           }),
         ),
       ).toBe(true);
+      const viewer = new AbortController();
+      viewer.abort();
+      expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(true);
       lifecycle.claimTurn(
         { id: toSafeId<"chatTurn">(turn), executionId: turn },
         undefined,
       );
+      expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(false);
       for (const runId of [
         "initial",
         "initial",
@@ -76,6 +84,7 @@ describe("send lifecycle checkpoint indexing", () => {
         expect(Result.isOk(outcome)).toBe(true);
       }
       const run = lifecycle.startRun(undefined);
+      expect(lifecycle.isClientConnectionAborted(viewer.signal)).toBe(false);
       const response = run.produce(
         (async function* () {
           yield {
@@ -86,6 +95,7 @@ describe("send lifecycle checkpoint indexing", () => {
           } as const;
           await run.settle(async () => ({ type: "not-owned" }));
         })(),
+        memoryStream({ runId: Bun.randomUUIDv7() }),
       );
       await response.text();
       await lifecycle.cleanup();
@@ -108,6 +118,7 @@ describe("send lifecycle checkpoint indexing", () => {
         parts: [
           {
             type: "tool-call",
+            metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
             id: "approval-1",
             name: "web_search",
             arguments: "{}",
@@ -162,6 +173,7 @@ describe("send lifecycle checkpoint indexing", () => {
           });
           return Result.ok({
             signal: admission.signal,
+            modelAdmission: testModelAdmission(options.organizationId),
             reservePeriod: async (
               identity: AdmittedActionIdentity,
               organizationStateDb?: ScopedDb,

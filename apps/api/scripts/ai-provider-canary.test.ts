@@ -1,5 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -16,6 +17,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import type { CachingDecision } from "@/api/lib/ai-config";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
@@ -142,6 +144,7 @@ const generateProbeTextFinishing = async (finish: ProbeFinish) => {
     finishPolicy: CANARY_TEXT_FINISH_POLICY,
     maxOutputTokens: 16,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: null,
     prompt: "Reply with exactly OK.",
     resolveTextModel: () => model,
@@ -186,7 +189,12 @@ describe("AI provider catalog canary coverage", () => {
       const ids = catalogModelIds(provider);
       expect(new Set(ids).size).toBe(ids.length);
       for (const role of MODEL_ROLES) {
-        expect(ids).toContain(DEFAULT_MODELS[provider][role]);
+        const modelId = DEFAULT_MODELS[provider][role];
+        if (modelId === null) {
+          expect(isBYOKProviderRoleSupported({ provider, role })).toBe(false);
+          continue;
+        }
+        expect(ids).toContain(modelId);
       }
       for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
         expect(ids).toContain(modelId);
@@ -307,7 +315,9 @@ describe("AI provider PDF canary contract", () => {
       const selection = pdfCanarySelection(provider);
       if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
         expect(selection).toEqual({
-          modelId: DEFAULT_MODELS[provider].pdf,
+          modelId:
+            DEFAULT_MODELS[provider].pdf ??
+            panic(`${provider} supports PDF without a default PDF model`),
           role: "pdf",
         });
         continue;
@@ -678,6 +688,9 @@ describe("AI provider canary retry contract", () => {
       model_unavailable: false,
       provider_unavailable: true,
       provider_stream_incomplete: true,
+      output_incomplete: true,
+      output_invalid: false,
+      deadline_exceeded: true,
       loop_detected: false,
       empty_completion: false,
       unknown: false,

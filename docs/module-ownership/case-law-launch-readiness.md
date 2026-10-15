@@ -1,0 +1,7 @@
+# Selecting countries exposed by public case-law surfaces
+
+Generated from `scripts/ownership/case-law-launch-readiness.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                                            | Owner                                                                                                                                             | Enforcement | Summary                                                                                                                                                                                                          |
+| ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `case-law-launch-readiness` — Selecting countries exposed by public case-law surfaces | `packages/api-contract/src/case-law-launch-readiness.ts`, `packages/api-contract/src/launch-readiness.json`, `apps/web/src/lib/case-law-route.ts` | none        | One checked-in inclusion list carries complete readiness evidence for each public country. The shared parser rejects incomplete or ambiguous rows, and web and API consumers use the resulting country boundary. |

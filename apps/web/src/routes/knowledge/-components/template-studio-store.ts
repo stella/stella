@@ -135,14 +135,14 @@ export type StudioActions = {
 /** A bilingual-mirror proposal the page queues for the chat surface — the
  *  Studio's only AISuggestion decoration writer — to place in-document as
  *  an accept/reject suggestion. */
-export type MirrorSuggestionRequest = {
+type MirrorSuggestionRequest = {
   spec: ReplacementSpec;
   /** Runs once when the placed suggestion is accepted. */
   onAccepted?: (() => void) | undefined;
 };
 
 /** Page-owned UI state the inspector's action row reflects. */
-export type StudioUiState = {
+type StudioUiState = {
   metaLabel: string;
   showDirectives: boolean;
   hasSelection: boolean;

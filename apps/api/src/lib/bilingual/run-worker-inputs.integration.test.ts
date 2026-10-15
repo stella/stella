@@ -42,6 +42,7 @@ import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedBilingualTranslationRunId } from "@/api/lib/safe-id-boundaries";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -204,7 +205,7 @@ afterAll(async () => {
 });
 
 const expectStoppedBeforeReading = async () => {
-  await processBilingualRun(actor);
+  await processBilingualRun(actor, testModelAdmission(actor.organizationId));
   const run = await readRun();
   expect(run).toMatchObject({
     status: "failed",
@@ -231,7 +232,7 @@ describe("bilingual run", () => {
   });
 
   test("a run completes while its requester keeps access", async () => {
-    await processBilingualRun(actor);
+    await processBilingualRun(actor, testModelAdmission(actor.organizationId));
     expect(await readRun()).toMatchObject({
       status: "completed",
       errorCode: null,

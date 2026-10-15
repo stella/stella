@@ -1,0 +1,5 @@
+{
+  "metric": "api-lib-top-level-entries",
+  "delta": 1,
+  "reason": "A pure shared route constructor keeps capability context synthesis and handler audience selection on the same route contract without importing MCP dispatch into handlers."
+}

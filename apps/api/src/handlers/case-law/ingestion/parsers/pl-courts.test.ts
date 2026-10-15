@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
-import type { Block, Inline } from "@/api/handlers/case-law/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+import type { Block, Inline } from "@stll/legal-ast/document-ast";
+
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 
 const baseInput = (

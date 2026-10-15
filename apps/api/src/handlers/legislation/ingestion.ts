@@ -1000,7 +1000,7 @@ export const processLegislationDocument = async (
   };
 };
 
-export type LegislationIngestionSource = {
+type LegislationIngestionSource = {
   id: SafeId<"legislationSource">;
   syncCursor: string | null;
   config?: Record<string, unknown> | undefined;

@@ -23,6 +23,7 @@ import type {
 } from "@/api/lib/api-handlers";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -40,6 +41,7 @@ const requestBody = t.Object({
 });
 
 const config = {
+  contract: "patch",
   permissions: { organizationSettings: ["update"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: mcpConnectorRealtimeUpdates,
@@ -122,7 +124,8 @@ export const createMcpConnectorHandler = ({
         );
       }
 
-      const probeResult = await probeServer(normalizedUrl);
+      const permit = grantThirdPartyOutboundPermit();
+      const probeResult = await probeServer(normalizedUrl, permit);
       if (Result.isError(probeResult)) {
         return Result.err(
           new HandlerError({
@@ -169,7 +172,7 @@ export const createMcpConnectorHandler = ({
           organizationId: session.activeOrganizationId,
           safeDb,
         }),
-        discoverIconUrl(normalizedUrl),
+        discoverIconUrl(normalizedUrl, permit),
       ]);
 
       const inserted = yield* Result.await(

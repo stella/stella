@@ -10,6 +10,7 @@ import {
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
 import { compareByLocale } from "@stll/collation";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import type { ContextMenuAction } from "@stll/ui/context-menu";
 import { Form } from "@stll/ui/form";
@@ -37,7 +38,6 @@ import {
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { useLocale } from "@/i18n/formatting-context";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { isCatalogueEntryAvailableDuringOnboarding } from "@/routes/onboarding/-components/onboarding-catalogue-setup.logic";
 
 const toRowDisplay = (entry: LoadedCatalogueEntry): CatalogueRowDisplay => ({
@@ -273,7 +273,7 @@ export const CatalogueStep = ({
             {query.length > 0 && (
               <InputGroupAddon align="inline-end">
                 <Button
-                  aria-label={t("onboarding.catalogueClearSearch")}
+                  aria-label={t("common.clearSearch")}
                   onClick={() => setQuery("")}
                   size="icon-xs"
                   type="button"

@@ -1,4 +1,4 @@
-import { chunked } from "@/api/lib/chunked";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 /**
  * Rows per statement. PostgreSQL accepts at most 65,535 bind parameters in one
@@ -41,7 +41,7 @@ export const insertInChunks = async <TRow>(
   rows: readonly TRow[],
   write: (batch: TRow[]) => Promise<unknown>,
 ): Promise<void> => {
-  for (const batch of chunked(rows, DB_INSERT_BATCH_SIZE)) {
+  for (const batch of chunkItems(rows, DB_INSERT_BATCH_SIZE)) {
     await write(batch);
   }
 };

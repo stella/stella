@@ -25,6 +25,7 @@ import { LIST_VERIFICATION_FEATURE_ID } from "@/api/lib/feature-access/registry"
 import type { ListVerificationAccessProof } from "@/api/lib/lists/verification/access";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import type { ListVerificationRunCapError } from "@/api/lib/lists/verification/run-caps";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -39,6 +40,7 @@ export class ListVerificationAccessRevokedError extends TaggedError(
 export type VerificationModelDeps = {
   accessProof: ListVerificationAccessProof;
   refreshAccessProof: () => Promise<ListVerificationAccessProof | null>;
+  admission: ModelDispatchAdmission;
   checkRunBudget: () => Promise<Result<void, ListVerificationRunCapError>>;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -105,6 +107,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
     feature,
     modelRole: VERIFICATION_MODEL_ROLE,
     orgAIConfig: deps.orgAIConfig,
+    modelTier: deps.admission.modelTier,
     properties: {
       organization_id: deps.organizationId,
       workspace_id: deps.workspaceId,
@@ -153,6 +156,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
           orgAIConfig: deps.orgAIConfig,
           managedAIResidency: deps.managedAIResidency,
           organizationId: deps.organizationId,
+          admission: deps.admission,
           analytics,
           caching,
           serviceTier: deps.serviceTier,

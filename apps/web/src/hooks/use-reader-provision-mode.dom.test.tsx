@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { browserStorage } from "@/lib/account/browser-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -33,7 +34,7 @@ afterEach(() => {
 });
 
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const Reader = ({ label }: { label: string }) => {
@@ -120,7 +121,7 @@ describe("remembered provision reading mode", () => {
     );
   });
 
-  test("account changes use separate keys and clear the departing owner's choice", async () => {
+  test("account changes use separate keys and keep the departing owner's choice for them", async () => {
     const client = new QueryClient();
     const uninstall = installUserScopedStorage(client);
     const reader = render(<Reader label="reader" />);
@@ -143,7 +144,7 @@ describe("remembered provision reading mode", () => {
     expect(userStorageKey(READER_PROVISION_MODE_STORAGE_KEY)).not.toBe(
       accountAKey,
     );
-    expect(localArea().getItem(accountAKey)).toBeNull();
+    expect(localArea().getItem(accountAKey)).toBe('"expanded"');
     expect(reader.getByRole("button").getAttribute("aria-pressed")).toBe(
       "false",
     );

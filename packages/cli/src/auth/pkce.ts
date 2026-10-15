@@ -1,11 +1,10 @@
+import { sha256Base64Url as hashSha256Base64Url } from "../sha256.js";
 // PKCE (RFC 7636) helpers for the loopback authorization-code flow.
 //
 // Mirrors the existing repo convention for PKCE generation
 // (`apps/api/src/lib/mcp-upstream/oauth.ts`'s `createPkce`): random
-// bytes via Web Crypto, S256 challenge via `node:crypto` `createHash` so the
-// published CLI runs under plain Node (Bun executes `node:*` natively).
-
-import { createHash } from "node:crypto";
+// bytes via Web Crypto, S256 challenge via the Node SHA-256 owner so the
+// published CLI runs under plain Node.
 
 const VERIFIER_BYTES = 32;
 const STATE_BYTES = 32;
@@ -30,7 +29,7 @@ export const createPkcePair = (): PkcePair => {
 
 /** Derives the S256 code challenge for a given verifier (exported for tests/vectors). */
 export const generateCodeChallenge = (codeVerifier: string): string =>
-  createHash("sha256").update(codeVerifier).digest("base64url");
+  hashSha256Base64Url(codeVerifier);
 
 /** Generates a random `state` parameter used to bind the callback to this login attempt. */
 export const createAuthorizationState = (): string =>

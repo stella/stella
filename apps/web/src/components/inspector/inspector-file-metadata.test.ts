@@ -13,7 +13,7 @@ test("file metadata updates are atomic and preserve field identity", () => {
     "file metadata updates are atomic and preserve field identity",
     fc.property(fc.string(), fc.string(), (label, fileName) => {
       const store = createStore<InspectorTabsStore>()(
-        immer((set) => createInspectorTabsSlice(set)),
+        immer((set, get) => createInspectorTabsSlice(set, get)),
       );
       store.getState().openFile({
         id: "field",
@@ -58,7 +58,7 @@ test("renamed file metadata keeps only supported attachment facets", () => {
       fc.constantFrom(undefined, "application/octet-stream", "message/rfc822"),
       (extension, mimeType) => {
         const store = createStore<InspectorTabsStore>()(
-          immer((set) => createInspectorTabsSlice(set)),
+          immer((set, get) => createInspectorTabsSlice(set, get)),
         );
         store.getState().openFile({
           id: "field",

@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 import type { ReviewFlag } from "@stll/api-contract";
 
-export type CellOverride = {
+type CellOverride = {
   manualFlags: ReviewFlag[];
   locked: boolean | undefined;
 };

@@ -5,7 +5,9 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import * as v from "valibot";
 
+import { generatedVisualPageSchema } from "@stll/api-contract/generated-visual";
 import { VISUAL_SANDBOX_PATH } from "@stll/api-contract/visual-sandbox";
 
 import type * as TreemapHelpers from "./visual-treemap.helpers";
@@ -34,6 +36,7 @@ const HELPER_EXPORTS = [
   "courtTierLabelsForLanguage",
   "escapeVisualJson",
   "sanitizeVisualHtml",
+  "visualOuterDocument",
 ] as const;
 
 const isTreemapHelpers = (value: unknown): value is typeof TreemapHelpers =>
@@ -80,6 +83,139 @@ test.beforeAll(async () => {
   );
 });
 
+test("treemap labels stay legible and tiles fit after narrowing the generated view", async ({
+  page,
+}) => {
+  const { visualOuterDocument } = helpers();
+  const visual = v.parse(
+    generatedVisualPageSchema,
+    JSON.parse(
+      readFileSync(
+        new URL(
+          "../src/handlers/visual-sandbox/fixtures/showcase/court-year-showcase.prepared.json",
+          import.meta.url,
+        ),
+        "utf-8",
+      ),
+    ),
+  );
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.route("https://showcase.test/", async (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: '<style>body{margin:0;padding:64px}</style><iframe title="Showcase" sandbox="allow-scripts" style="display:block;width:100%;height:1800px;border:0"></iframe>',
+    }),
+  );
+  await page.goto("https://showcase.test/");
+  await page.locator("iframe").evaluate(
+    (frame, srcdoc) => {
+      // safe-html: the API-owned shell composes the bundled runtime and its guest policy.
+      frame.setAttribute("srcdoc", srcdoc);
+    },
+    visualOuterDocument(["https://showcase.test"]),
+  );
+  const shell = page.frameLocator("iframe");
+  await expect(shell.locator("iframe")).toHaveCount(1);
+  const delivered = await page.locator("iframe").evaluate((frame, payload) => {
+    if (!(frame instanceof HTMLIFrameElement) || frame.contentWindow === null) {
+      return false;
+    }
+    frame.contentWindow.postMessage(
+      {
+        type: "render",
+        title: payload.title,
+        html: payload.html,
+        data: payload.data,
+        links: payload.links,
+      },
+      "*",
+    );
+    return true;
+  }, visual);
+  expect(delivered).toBe(true);
+  const guest = shell.frameLocator("iframe");
+  const chart = guest.locator("#chart");
+  await expect(chart.locator("svg text")).toHaveCount(2);
+  await guest.locator("html").evaluate(async () => {
+    await document.fonts.ready;
+  });
+  expect(
+    await chart
+      .locator("svg text")
+      .evaluateAll((labels) =>
+        labels.every(
+          (label) => Number.parseFloat(getComputedStyle(label).fontSize) >= 14,
+        ),
+      ),
+  ).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(async () =>
+      shell
+        .locator("html")
+        .evaluate((element) => element.scrollWidth - element.clientWidth),
+    )
+    .toBeLessThanOrEqual(1);
+  await expect
+    .poll(async () =>
+      guest
+        .locator("html")
+        .evaluate((element) => element.scrollWidth - element.clientWidth),
+    )
+    .toBeLessThanOrEqual(1);
+  await expect
+    .poll(async () =>
+      chart.evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        const tiles = Array.from(element.querySelectorAll("svg rect"));
+        return (
+          tiles.length > 0 &&
+          tiles.every((tile) => {
+            const tileBounds = tile.getBoundingClientRect();
+            return (
+              tileBounds.left >= bounds.left - 1 &&
+              tileBounds.right <= bounds.right + 1
+            );
+          })
+        );
+      }),
+    )
+    .toBe(true);
+  await expect
+    .poll(async () => chart.locator("svg text").count())
+    .toBeLessThan(2);
+  expect(
+    await chart
+      .locator("svg text")
+      .evaluateAll((labels) =>
+        labels.every(
+          (label) => Number.parseFloat(getComputedStyle(label).fontSize) >= 14,
+        ),
+      ),
+  ).toBe(true);
+  expect(
+    await chart.locator("svg text").evaluateAll((labels) =>
+      labels.every((label) => {
+        const bounds = label.getBoundingClientRect();
+        return Array.from(
+          label
+            .closest("svg")
+            ?.querySelectorAll('rect[fill]:not([data-ts-key="background"])') ??
+            [],
+        ).some((tile) => {
+          const cell = tile.getBoundingClientRect();
+          return (
+            bounds.left >= cell.left &&
+            bounds.right <= cell.right &&
+            bounds.top >= cell.top &&
+            bounds.bottom <= cell.bottom
+          );
+        });
+      }),
+    ),
+  ).toBe(true);
+});
+
 for (const direction of ["ltr", "rtl"] as const) {
   for (const colorScheme of ["light", "dark"] as const) {
     test(`visual treemap renders, drills and changes color in ${direction}/${colorScheme} without requests`, async ({
@@ -119,6 +255,7 @@ for (const direction of ["ltr", "rtl"] as const) {
       const document = composeVisualDocument({
         html,
         data: {},
+        renderId: crypto.randomUUID(),
         runtime,
         policy: policy
           .split(";")
@@ -218,6 +355,26 @@ for (const direction of ["ltr", "rtl"] as const) {
         categoryFills.set(court.tier, fill);
       }
       expect(new Set(categoryFills.values()).size).toBe(categoryFills.size);
+      // Charts retain their current model and callbacks while repainting
+      // concrete token values after a host theme update.
+      await guest.locator("#chart").evaluate((element) => {
+        for (let index = 1; index <= 8; index += 1) {
+          element.style.setProperty(`--chart-${index}`, "rgb(151, 91, 121)");
+        }
+      });
+      expect(await cellFills()).toEqual(initialFill);
+      await guest.locator("#chart").evaluate(() => {
+        window.dispatchEvent(new Event("stella-theme-change"));
+      });
+      await expect.poll(cellFills).not.toEqual(initialFill);
+      await expect(svg).toHaveAttribute("aria-label", treemapFixture.label);
+      await expect(guest.locator("#chart")).toHaveAttribute(
+        "data-selected",
+        "CZ:ns:2024",
+      );
+      await expect(
+        guest.locator('[data-color-mode="category"] > span > span').first(),
+      ).toHaveCSS("background-color", "rgb(151, 91, 121)");
       await guest.locator("#color").click();
       await expect(guest.locator('[data-color-mode="treatment"]')).toHaveText(
         "——",
@@ -242,6 +399,10 @@ for (const direction of ["ltr", "rtl"] as const) {
         "data-selected",
       );
       await guest.locator("#destroy").click();
+      await expect(guest.locator("#chart")).toBeEmpty();
+      await guest.locator("#chart").evaluate(() => {
+        window.dispatchEvent(new Event("stella-theme-change"));
+      });
       await expect(guest.locator("#chart")).toBeEmpty();
       expect(requests).toEqual([]);
       expect(errors).toEqual([]);

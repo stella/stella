@@ -68,7 +68,7 @@ export type MarkdownEditorComment = {
  * trigger an outbound request driven by its content. `"unrestricted"` renders
  * every image url as-is. Every host must pick one explicitly.
  */
-export type MarkdownImagePolicy = "data-only" | "unrestricted";
+type MarkdownImagePolicy = "data-only" | "unrestricted";
 
 export type MarkdownHybridEditorHandle = {
   /** Flush the current source and lock input before publication begins. */

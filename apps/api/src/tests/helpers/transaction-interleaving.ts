@@ -343,7 +343,7 @@ export const withInterleaving = async <State>({
           }
         }
       },
-      { closeTimeout: 0 },
+      { closeMode: "force" },
     );
     results.push(result);
     await invariant(result);

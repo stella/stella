@@ -33,6 +33,23 @@ export type QueryViewOptions<TData> = {
   isEmpty?: (items: TData) => boolean;
 };
 
+export const queryViewError = <TData, TError>(
+  view: QueryView<TData, TError>,
+): TError | undefined => {
+  switch (view.type) {
+    case "error":
+      return view.error;
+    case "items":
+      return view.refetchError;
+    case "pending":
+    case "empty":
+      return undefined;
+    default:
+      view satisfies never;
+      return panic("Unhandled query view status");
+  }
+};
+
 export const queryView = <TData, TError>(
   query: QueryViewQuery<TData, TError>,
   {

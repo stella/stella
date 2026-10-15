@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNull, like, or } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -73,7 +73,7 @@ export const loadBillingGuidelines = async ({
       .where(
         and(
           eq(billingGuidelineFiles.organizationId, organizationId),
-          eq(agentSkillResources.kind, "knowledge"),
+          like(agentSkillResources.path, "references/%"),
           clientIds.length === 0
             ? isNull(billingGuidelineFiles.clientId)
             : or(

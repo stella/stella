@@ -18,7 +18,7 @@ export type TemplateFieldMentionOption = MentionOption;
  * plain-text `aiPrompt` carries a reference the backend prompt consumer can
  * resolve against the manifest, while the chip shows the human label.
  */
-export const TemplateFieldMention = MentionExtension.extend({
+const TemplateFieldMention = MentionExtension.extend({
   renderText({ node }) {
     const path = typeof node.attrs["id"] === "string" ? node.attrs["id"] : "";
     return `{{${path}}}`;

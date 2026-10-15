@@ -4,7 +4,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { requestExtractionRunStore } from "@/api/lib/extraction-runs/request-run-store";
 import { WORKFLOW_START_STATUSES } from "@/api/lib/workflow-queue";
 import type { WorkflowStartStatus } from "@/api/lib/workflow-queue";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createWorkflowStart } from "./start";
@@ -28,11 +31,15 @@ const body = {
   serviceTier: "standard" as const,
 };
 
-const { scopedDb, safeDb } = createScopedDbMock({});
+const { scopedDb, safeDb } = createScopedDbMock(
+  {},
+  { visibleResources: { entity: [entityId] } },
+);
 
 const startWorkspaceWorkflow = async () =>
   await workflowStart.handler(
     createTestHandlerContext<WorkflowStartCtx>({
+      audit: NO_AUDIT,
       body,
       safeDb,
       scopedDb,

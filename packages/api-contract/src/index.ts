@@ -25,6 +25,16 @@ export type { ChatSkillContextNeed, ChatSkillDocument } from "./agent-skills";
 export { AI_ERROR_KINDS } from "./ai-errors";
 export type { AIErrorKind } from "./ai-errors";
 export {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_KEY_SOURCES,
+  CASE_LAW_ANALYSIS_UNAVAILABLE_CODES,
+} from "./case-law-analysis";
+export type {
+  CaseLawAnalysisFailureCode,
+  CaseLawAnalysisKeySource,
+  CaseLawAnalysisUnavailableCode,
+} from "./case-law-analysis";
+export {
   BROWSER_CONTROL_ACTION,
   BROWSER_CONTROL_CONTENT_TRUST,
   BROWSER_CONTROL_ERROR_CODE,
@@ -129,10 +139,13 @@ export {
 export type { ChatEditApplyMode, DocxEditRepresentation } from "./chat-edit";
 export {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
+  chatDecisionPassagesIn,
   parseChatDecisionPassageHref,
+  stampChatDecisionPassageHrefs,
   toChatDecisionPassageHref,
 } from "./chat-decision-passage-link";
 export type {
+  ChatDecisionPassage,
   ChatDecisionPassageHref,
   ChatDecisionPassageTarget,
 } from "./chat-decision-passage-link";
@@ -347,6 +360,7 @@ export type {
 } from "./flow-status";
 export {
   AGENT_SKILLS_CHAT_METADATA_MAX,
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
   CASE_LAW_CITATION_TIMELINE_MAX_YEARS,
   CASE_LAW_RESEARCH_COLUMNS_PER_ORGANIZATION_MAX,
   CASE_LAW_RESEARCH_RUN_DECISIONS_MAX,
@@ -385,6 +399,8 @@ export {
 } from "./matter-reference";
 export type { MatterReferenceToken } from "./matter-reference";
 export {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE,
@@ -394,12 +410,14 @@ export {
   MCP_LAW_HTTP_PATH,
   MCP_OAUTH_PROTOCOL_SCOPES,
   MCP_WRITE_ONLY_RESOURCE_SCOPES,
+  VERIFIED_OAUTH_CLIENT_BRANDS,
 } from "./mcp";
 export type {
   McpAnonymizedResourceScope,
   McpDefaultResourceScope,
   McpOAuthScope,
   McpWriteOnlyResourceScope,
+  VerifiedOAuthClientBrand,
 } from "./mcp";
 export { OCR_EXPORT_STATUSES } from "./ocr-export";
 export type { OcrExportStatus } from "./ocr-export";
@@ -925,6 +943,18 @@ export const buildVersionedApiUrl = (
 ): string =>
   `${origin.endsWith("/") ? origin.slice(0, -1) : origin}${STELLA_API_VERSION_PREFIX}${path}`;
 
+export {
+  decisionParagraphFragment,
+  decisionParagraphRangeSchema,
+  formatDecisionParagraphRange,
+  parseDecisionParagraphFragment,
+  parseDecisionParagraphRange,
+  DecisionParagraphRangeError,
+} from "./decision-paragraph-range";
+export type {
+  DecisionParagraphRange,
+  DecisionParagraphRangeErrorReason,
+} from "./decision-paragraph-range";
 export {
   RULING_IDENTITY_VERSION,
   foldRulingIdentity,

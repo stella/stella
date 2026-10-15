@@ -64,6 +64,7 @@ import type { ReviewTargetLanguage } from "@/api/lib/document-review/target-lang
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { buildGroundedReviewFix } from "@/api/lib/grounded-review-fix";
 import type { GroundedReviewFix } from "@/api/lib/grounded-review-fix";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { brandPersistedFieldId } from "@/api/lib/safe-id-boundaries";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type { PreparedDocxFile } from "@/api/lib/workflow/generate-batch";
@@ -710,6 +711,7 @@ export type GradeReferencePositionsArgs = {
   targetEntityVersionId: SafeId<"entityVersion">;
   referenceEntityVersionIds: readonly SafeId<"entityVersion">[];
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -732,6 +734,7 @@ export const gradeReferencePositions = async ({
   targetEntityVersionId,
   referenceEntityVersionIds,
   organizationId,
+  admission,
   workspaceId,
   orgAIConfig,
   managedAIResidency,
@@ -756,6 +759,7 @@ export const gradeReferencePositions = async ({
     feature: "document-review.references",
     modelRole: REFERENCE_GRADE_ROLE,
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       file_count: 1,
       organization_id: organizationId,
@@ -782,6 +786,7 @@ export const gradeReferencePositions = async ({
       orgAIConfig,
       managedAIResidency,
       organizationId,
+      admission,
       analytics: aiAnalytics,
       caching,
       serviceTier,

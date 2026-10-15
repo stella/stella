@@ -103,8 +103,7 @@ beforeAll(async () => {
       id: guidelineIds.firm,
       organizationId: ids.orgA,
       skillId: skillA,
-      path: "firm.md",
-      kind: "knowledge",
+      path: "references/firm.md",
       content: "Firm preamble\n# Narratives\nDescribe purpose",
       sizeBytes: 45,
     },
@@ -112,8 +111,7 @@ beforeAll(async () => {
       id: guidelineIds.client,
       organizationId: ids.orgA,
       skillId: skillA,
-      path: "client.md",
-      kind: "knowledge",
+      path: "references/client.md",
       content: "# Codes\nUse task codes",
       sizeBytes: 22,
     },
@@ -121,8 +119,7 @@ beforeAll(async () => {
       id: guidelineIds.unselectedClient,
       organizationId: ids.orgA,
       skillId: skillA,
-      path: "other-client.md",
-      kind: "knowledge",
+      path: "references/other-client.md",
       content: "# Other client",
       sizeBytes: 14,
     },
@@ -130,8 +127,7 @@ beforeAll(async () => {
       id: guidelineIds.otherFirm,
       organizationId: ids.orgB,
       skillId: skillB,
-      path: "other-firm.md",
-      kind: "knowledge",
+      path: "references/other-firm.md",
       content: "# Other firm",
       sizeBytes: 12,
     },
@@ -346,7 +342,7 @@ test("guideline context joins only firm and selected client files with rule sect
   expect(
     context.guidelines.find(({ fileId }) => fileId === guidelineIds.firm),
   ).toMatchObject({
-    fileName: "firm.md",
+    fileName: "references/firm.md",
     sections: ["Preamble", "Narratives"],
   });
   expect(
@@ -356,7 +352,7 @@ test("guideline context joins only firm and selected client files with rule sect
   expect(
     context.guidelines.find(({ fileId }) => fileId === guidelineIds.client),
   ).toMatchObject({
-    fileName: "client.md",
+    fileName: "references/client.md",
     sections: ["Preamble", "Codes"],
     matterIds: [ids.wsA1],
   });

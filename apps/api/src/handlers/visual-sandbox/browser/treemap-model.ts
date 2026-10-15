@@ -1,7 +1,11 @@
 import { panic } from "better-result";
 
+import { isPlausibleLocale } from "@stll/agent-input";
 import { courtTierLabelsForLanguage } from "@stll/api-contract/case-law-court-tier-locales";
 import type { CourtTierLabel } from "@stll/api-contract/case-law-court-tiers";
+
+export const createTreemapNumberFormatter = (language: string) =>
+  new Intl.NumberFormat(isPlausibleLocale(language) ? language : undefined);
 
 export const localizedTierLabel = (language: string, category: string) => {
   const locale = courtTierLabelsForLanguage(language);

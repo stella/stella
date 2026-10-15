@@ -16,6 +16,7 @@ import {
   parseBrowserControlResult,
   parseElementReference,
 } from "@stll/api-contract/browser-control";
+import { sleep } from "@stll/concurrency/sleep";
 
 import { browserControlError } from "./browser-control-result";
 import type { CommandBudget } from "./command-budget";
@@ -235,24 +236,6 @@ const readControlledTab = async (
   }
 };
 
-/** Waits `ms`, or less once `signal` aborts. */
-const sleep = async (ms: number, signal: AbortSignal): Promise<void> => {
-  if (signal.aborted) {
-    return;
-  }
-  await new Promise<void>((resolve) => {
-    const onAbort = () => {
-      clearTimeout(timeout);
-      resolve();
-    };
-    const timeout = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-};
-
 /** Resolves true when `promise` settles first, false after `ms` or on abort. */
 const settlesWithin = async (
   promise: Promise<unknown>,
@@ -268,7 +251,17 @@ const settlesWithin = async (
   try {
     return await Promise.race([
       promise.then(() => !isStopped(signal)),
-      sleep(ms, settled.signal).then(() => false),
+      sleep(ms, { signal: settled.signal })
+        .catch((error: unknown) => {
+          if (
+            settled.signal.aborted &&
+            Object.is(error, settled.signal.reason)
+          ) {
+            return;
+          }
+          throw error;
+        })
+        .then(() => false),
     ]);
   } finally {
     signal.removeEventListener("abort", onStop);
@@ -309,7 +302,12 @@ const waitForTab = async (
     if (deadline.expired()) {
       return false;
     }
-    await sleep(TAB_STATUS_POLL_MS, signal);
+    await sleep(TAB_STATUS_POLL_MS, { signal }).catch((error: unknown) => {
+      if (signal.aborted && Object.is(error, signal.reason)) {
+        return;
+      }
+      throw error;
+    });
   }
 };
 

@@ -1,3 +1,13 @@
+import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import type {
+  BlockContent,
+  Footnote,
+  Document as FolioDocument,
+  Paragraph,
+  ParagraphAlignment,
+} from "@stll/docx-core/model";
 /**
  * The Hungarian parser, twice over.
  *
@@ -7,31 +17,47 @@
  * served — one from each era — and asserts the AST they produce, which is the
  * only place the DOCX-versus-RTF difference is visible.
  */
-
-import { describe, expect, test } from "bun:test";
-
-import type {
-  BlockContent,
-  Footnote,
-  Document as FolioDocument,
-  Paragraph,
-  ParagraphAlignment,
-} from "@stll/docx-core/model";
 import { parseDocx, table } from "@stll/folio-core/server";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
   isDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
+import type { Block } from "@stll/legal-ast/document-ast";
+import { assertProperty } from "@stll/property-testing";
 
-import type { Block } from "@/api/handlers/case-law/document-ast";
 import {
   huDecisionDateFrom,
   huDecisionTypeFrom,
   huDocketFrom,
   parseHuBhgyDecision,
 } from "@/api/handlers/case-law/ingestion/parsers/hu-bhgy";
-import { readRtf } from "@/api/lib/legal-search/parsers/rtf-reader";
+import {
+  readRtfString,
+  readRtf as readRtfDocument,
+} from "@/api/lib/legal-search/parsers/rtf-reader";
+import {
+  VISIBLE_RUN_CASES,
+  VISIBLE_FIELD_DOCUMENT,
+  visibleRunDocument,
+} from "@/api/lib/legal-search/parsers/run-content-text.fixtures";
+
+import {
+  noteTableRtf,
+  furnitureRtf,
+  NOTE_PATHS,
+  LINE_BOUNDARIES,
+  notePathDocument,
+  assertNotePath,
+} from "./document-note-paths.fixtures";
+import { assertRtfLineParity } from "./rtf-line-parity.fixtures";
+import { inlinesToPlainText } from "./shared-inlines";
+
+const readRtf = (input: Uint8Array) => {
+  const document = readRtfDocument(input);
+  assertRtfLineParity(input, document);
+  return document;
+};
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -43,16 +69,25 @@ type LineSpec = {
   text: string;
   bold?: boolean;
   centered?: boolean;
+  footnotes?: readonly number[];
 };
 
-const paragraphOf = ({ bold, centered, text }: LineSpec): Paragraph => ({
+const paragraphOf = ({
+  bold,
+  centered,
+  text,
+  footnotes = [],
+}: LineSpec): Paragraph => ({
   type: "paragraph",
   ...(centered === true ? { formatting: { alignment: CENTERED } } : {}),
   content: [
     {
       type: "run",
       ...(bold === true ? { formatting: { bold: true } } : {}),
-      content: [{ type: "text", text }],
+      content: [
+        { type: "text", text },
+        ...footnotes.map((id) => ({ type: "footnoteRef" as const, id })),
+      ],
     },
   ],
 });
@@ -83,6 +118,64 @@ const parseDocument = (document: FolioDocument) =>
 
 const parse = (lines: readonly LineSpec[], footnotes?: readonly Footnote[]) =>
   parseDocument(documentOf(lines, footnotes));
+
+const visibleDocumentParagraph = (document: FolioDocument) =>
+  parseDocument({
+    package: {
+      ...document.package,
+      document: {
+        content: [
+          paragraphOf({ text: "Indokolás" }),
+          ...document.package.document.content,
+        ],
+      },
+    },
+  }).documentAst.blocks.find((block) => block.type === "paragraph");
+
+test("HU field results keep visible hyphens and omit instructions", () => {
+  const block = visibleDocumentParagraph(VISIBLE_FIELD_DOCUMENT);
+  expect(block?.type).toBe("paragraph");
+  if (block?.type !== "paragraph") {
+    return;
+  }
+  expect(block.plainText).toBe("word\u2011word");
+  expect(inlinesToPlainText(block.inlines)).toBe("word\u2011word");
+});
+
+test.each(Object.values(VISIBLE_RUN_CASES))(
+  "HU run kind $item.type preserves its visible characters",
+  ({ item, text }) => {
+    const block = visibleDocumentParagraph(visibleRunDocument(item));
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    expect(block.plainText).toBe(`word${text}word`);
+    expect(inlinesToPlainText(block.inlines)).toBe(`word${text}word`);
+  },
+);
+
+test.each(["  ", "\t", "\u00a0", " \t\u00a0"])(
+  "HU numbered paragraphs use the same normalized text axis after leading %j",
+  (leading) => {
+    const result = parse([
+      { text: "Indokolás" },
+      { text: `${leading}[31] Body  `, bold: true },
+    ]);
+    const block = result.documentAst.blocks.find(
+      (candidate) => candidate.type === "paragraph" && candidate.number === 31,
+    );
+    expect(block?.plainText).toBe("Body");
+    expect(
+      block?.type === "paragraph"
+        ? inlinesToPlainText(block.inlines)
+        : undefined,
+    ).toBe("Body");
+    expect(block?.type === "paragraph" ? block.inlines : undefined).toEqual([
+      { type: "bold", children: [{ type: "text", text: "Body" }] },
+    ]);
+  },
+);
 
 /** One paragraph whose lines a soft break joins, as a DOCX `w:br` does. */
 const softBrokenParagraph = (lines: readonly string[]): Paragraph => ({
@@ -616,7 +709,7 @@ describe("reading a document folio handed over", () => {
   test("a footnote's closing-shaped line after a soft break dates nothing", () => {
     const parsed = parseDocument(
       bodyOf(
-        [paragraphOf({ text: "[1] A Kúria döntése." })],
+        [paragraphOf({ text: "[1] A Kúria döntése.", footnotes: [1] })],
         [
           {
             type: "footnote",
@@ -654,14 +747,12 @@ describe("reading a document folio handed over", () => {
   });
 
   test("a footnote is apparatus carrying its mark, wherever the body left off", () => {
-    // The notes are walked after the body, which by then has reached the
-    // signature block, and one may read like the document's own structure.
-    // Both were classified as the line they are not, and the mark the note
-    // hangs from went with the classification.
+    // A note may read like the document's structure; its anchor controls order
+    // while its note membership keeps it out of body classification.
     const parsed = parse(
       [
         { text: "Indokolás" },
-        { text: "[1] A Kúria döntése." },
+        { text: "[1] A Kúria döntése.", footnotes: [3, 4] },
         { text: "Budapest, 2025. október 1." },
         { text: "Dr. Példa Anna s.k. a tanács elnöke" },
       ],
@@ -819,3 +910,182 @@ describe("a decision the publisher served", () => {
     ]);
   });
 });
+
+test("footnotes stay with their referenced paragraphs across Hungarian sections", () => {
+  const rtf = String.raw`{\rtf1 Rendelkez\u337? r\u233?sz\par Holding text{\footnote Holding note}\par Indokol\u225?s\par Reasoning text{\footnote Reasoning note one\par Reasoning note two}\par Closing text\par}`;
+  const parsed = parseDocument(readRtf(new TextEncoder().encode(rtf)));
+  expect(parsed.documentAst.blocks.map(({ plainText }) => plainText)).toEqual([
+    "Rendelkező rész",
+    "Holding text",
+    "Holding note",
+    "Indokolás",
+    "Reasoning text",
+    "Reasoning note one",
+    "Reasoning note two",
+    "Closing text",
+  ]);
+  const holding = parsed.sections.find(({ text }) =>
+    text.includes("Holding text"),
+  );
+  const reasoning = parsed.sections.find(({ text }) =>
+    text.includes("Reasoning text"),
+  );
+  const holdingNote = parsed.sections.find(({ text }) =>
+    text.includes("Holding note"),
+  );
+  expect(holdingNote?.index).toBeGreaterThanOrEqual(holding?.index ?? -1);
+  expect(holdingNote?.index).toBeLessThan(reasoning?.index ?? -1);
+  expect(holding?.text).not.toContain("Reasoning note");
+  expect(reasoning?.text).toContain("Reasoning note one");
+  expect(reasoning?.text).toContain("Reasoning note two");
+});
+
+const parseHuNoteHeading = (texts: readonly string[]) =>
+  parse(
+    [
+      { text: "Indokolás" },
+      { text: "Majority text", footnotes: [1] },
+      { text: "Later majority text" },
+    ],
+    [
+      {
+        type: "footnote",
+        id: 1,
+        content: texts.map((text) => paragraphOf({ text })),
+      },
+    ],
+  );
+
+test("a Hungarian note heading cannot change the following body section", () => {
+  const parsed = parseHuNoteHeading(["Rendelkező rész"]);
+  const note = parsed.documentAst.blocks.find(
+    (block) => block.plainText === "Rendelkező rész",
+  );
+  expect(note?.type).toBe("paragraph");
+  expect(note?.type === "paragraph" ? note.note?.type : undefined).toBe(
+    "footnote",
+  );
+  const majority = parsed.sections.find(({ text }) =>
+    text.includes("Later majority text"),
+  );
+  expect(majority?.text).toContain("Majority text");
+  expect(majority?.text).toContain("Rendelkező rész");
+  const last = parsed.documentAst.blocks.at(-1);
+  expect(last?.type === "paragraph" ? last.role : undefined).toBe(
+    "argumentation",
+  );
+});
+
+test("heading text inserted into any HU note never changes body structure or section attribution", () => {
+  const baseline = parseHuNoteHeading(["Neutral note"]);
+  assertProperty(
+    "heading text inserted into any HU note never changes body structure or section attribution",
+    fc.property(
+      fc.array(
+        fc.constantFrom(
+          "Rendelkező rész",
+          "Indokolás",
+          "Záradék:",
+          "végzést:",
+          "Kiadmány",
+          "Győr, 2009. június 30.",
+        ),
+        { minLength: 1, maxLength: 5 },
+      ),
+      (headings) => {
+        const parsed = parseHuNoteHeading(headings);
+        const body = (blocks: readonly Block[]) =>
+          blocks
+            .filter(
+              (block) => block.type !== "paragraph" || block.note === undefined,
+            )
+            .map((block) => ({
+              type: block.type,
+              text: block.plainText,
+              role: block.type === "image" ? undefined : block.role,
+            }));
+        expect(body(parsed.documentAst.blocks)).toEqual(
+          body(baseline.documentAst.blocks),
+        );
+        for (const text of ["Majority text", "Later majority text"]) {
+          expect(
+            parsed.sections.find((section) => section.text.includes(text))
+              ?.type,
+          ).toBe(
+            baseline.sections.find((section) => section.text.includes(text))
+              ?.type,
+          );
+        }
+        expect(parsed.decisionDate).toBe(baseline.decisionDate);
+      },
+    ),
+    { numRuns: 100 },
+  );
+});
+
+for (const path of NOTE_PATHS) {
+  test.each(LINE_BOUNDARIES)(
+    `typed note path ${path} with \\%s boundaries`,
+    (boundary) => {
+      const fixture = notePathDocument({
+        parser: "hu",
+        path,
+        boundary,
+        withNotes: true,
+      });
+      const baselineFixture = notePathDocument({
+        parser: "hu",
+        path,
+        boundary,
+        withNotes: false,
+      });
+      const parsePath = (document: FolioDocument) => {
+        const parsed = parseDocument(document);
+        return { blocks: parsed.documentAst.blocks, sections: parsed.sections };
+      };
+      assertNotePath({
+        ...fixture,
+        parsed: parsePath(fixture.document),
+        baseline: parsePath(baselineFixture.document),
+      });
+    },
+  );
+}
+
+const parseMatrixRtf = (source: string) => {
+  const parsed = parseDocument(readRtfString(source));
+  return { blocks: parsed.documentAst.blocks, sections: parsed.sections };
+};
+test.each(LINE_BOUNDARIES)(
+  "RTF table-row note keeps membership across \\%s",
+  (boundary) => {
+    assertNotePath({
+      parsed: parseMatrixRtf(noteTableRtf("hu", boundary, true)),
+      baseline: parseMatrixRtf(noteTableRtf("hu", boundary, false)),
+      anchorText: "Anchor text",
+      noteHeading: "Rendelkező rész",
+      nested: false,
+      excluded: false,
+    });
+  },
+);
+for (const destination of ["header", "footer"] as const) {
+  test.each(LINE_BOUNDARIES)(
+    `RTF ${destination} notes and \\%s stay outside body extraction`,
+    (boundary) => {
+      const parsed = parseMatrixRtf(furnitureRtf("hu", destination, boundary));
+      expect(
+        parsed.blocks.map((block) => block.plainText).join(" "),
+      ).not.toContain("Hidden");
+      expect(
+        parsed.blocks.filter(
+          (block) => block.type === "paragraph" && block.note !== undefined,
+        ),
+      ).toEqual([]);
+      expect(parsed.blocks.map((block) => block.plainText)).toEqual([
+        "Indokolás",
+        "Following body",
+      ]);
+    },
+  );
+}

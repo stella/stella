@@ -6,20 +6,6 @@ export type ContactData = NonNullable<
   Awaited<ReturnType<NonNullable<ReturnType<typeof contactOptions>["queryFn"]>>>
 >;
 
-export type ContactEmail = {
-  type: "work" | "personal" | "other";
-  address: string;
-  isPrimary: boolean;
-  label?: string;
-};
-
-export type ContactPhone = {
-  type: "mobile" | "office" | "home" | "fax" | "other";
-  number: string;
-  isPrimary: boolean;
-  label?: string;
-};
-
 export type ContactDataBox = {
   id: string;
   isPrimary: boolean;

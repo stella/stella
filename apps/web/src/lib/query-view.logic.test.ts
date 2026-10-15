@@ -6,7 +6,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { queryView } from "./query-view.logic";
+import { queryView, queryViewError } from "./query-view.logic";
 
 const FETCH_STATUSES: readonly FetchStatus[] = ["idle", "fetching", "paused"];
 const readError = new Error("Read failed");
@@ -262,7 +262,9 @@ describe("query view states", () => {
               { isEmpty },
             );
             expect(pending.type).toBe("pending");
+            expect(queryViewError(pending)).toBeUndefined();
             expect(failed).toEqual({ type: "error", error, retry: refetch });
+            expect(queryViewError(failed)).toBe(error);
             expect(cachedFailure).toEqual({
               type: "items",
               items: data,
@@ -272,7 +274,9 @@ describe("query view states", () => {
             if (cachedFailure.type === "items") {
               expect(cachedFailure.items).toBe(data);
             }
+            expect(queryViewError(cachedFailure)).toBe(error);
             expect(successful.type === "empty").toBe(empty);
+            expect(queryViewError(successful)).toBeUndefined();
             if (successful.type === "items") {
               expect(successful.items).toBe(data);
               expect(successful).not.toHaveProperty("refetchError");

@@ -4,6 +4,9 @@ export const MCP_CANARY_JOURNEY_CREDENTIALS = {
     environment: "all",
     env: {
       email: "APP_REVIEW_ACCOUNT_EMAIL",
+      // The API environment accepts the review email only together with its
+      // organization, and the canary loads that environment.
+      organizationId: "APP_REVIEW_ORGANIZATION_ID",
       password: "REVIEW_ACCOUNT_PASSWORD",
       configuredBaseUrl: "MCP_CANARY_CONFIGURED_BASE_URL",
     },

@@ -71,7 +71,7 @@ const LINKED_SEGMENT = /^(.*)<gh>(.+?)<\/gh>(.*)$/su;
  * marker to visitors; callers where the link is optional render the plain
  * value.
  */
-export const splitLinkedSegment = (value: string): LinkedSegment | null => {
+const splitLinkedSegment = (value: string): LinkedSegment | null => {
   const match = LINKED_SEGMENT.exec(value);
   if (!match) {
     return null;
@@ -110,7 +110,7 @@ export const localizePath = (path: string, locale: Locale): string => {
 };
 
 // Resolve the active locale from a URL pathname (first segment).
-export const localeFromPath = (pathname: string): Locale => {
+const localeFromPath = (pathname: string): Locale => {
   const first = pathname.split("/").find((segment) => segment.length > 0);
   if (!first) {
     return defaultLocale;

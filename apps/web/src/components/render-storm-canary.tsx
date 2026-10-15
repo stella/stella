@@ -7,10 +7,7 @@ import type {
   RenderStormMonitor,
   RenderStormPhase,
 } from "@/lib/render-storm-canary";
-import {
-  createRenderStormMonitor,
-  RENDER_COMMIT_COUNT_GLOBAL,
-} from "@/lib/render-storm-canary";
+import { createRenderStormMonitor } from "@/lib/render-storm-canary";
 
 const RENDER_STORM_CANARY_PROFILER_ID = "render-storm-canary";
 
@@ -127,12 +124,8 @@ const emitRenderStormError = (details: RenderStormDetails) => {
 
 /** Counts one commit of the app where an e2e spec can read it. */
 const countCommit = () => {
-  const counted: unknown = Reflect.get(globalThis, RENDER_COMMIT_COUNT_GLOBAL);
-  Reflect.set(
-    globalThis,
-    RENDER_COMMIT_COUNT_GLOBAL,
-    (typeof counted === "number" ? counted : 0) + 1,
-  );
+  const counted = globalThis.__stellaRenderCommitCount;
+  globalThis.__stellaRenderCommitCount = (counted ?? 0) + 1;
 };
 
 const RenderStormProfiler = ({ children }: PropsWithChildren) => {

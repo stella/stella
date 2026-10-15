@@ -1,11 +1,10 @@
 import { useTranslations } from "use-intl";
 
+import { HeadnoteBlock } from "@stll/decision-reader/headnote-block";
+import type { HeadnoteOrigin } from "@stll/decision-reader/headnote-block";
 import type { DecisionAnalysis } from "@stll/legal-ast/analysis";
 import { analysisLayersOf } from "@stll/legal-ast/analysis";
 import { BidiText } from "@stll/ui/bidi-text";
-
-import { HeadnoteBlock } from "@/features/case-law/components/case-viewer/headnote-block";
-import type { HeadnoteOrigin } from "@/features/case-law/components/case-viewer/headnote-block";
 
 /** Every block here was written by a model, and says so on each block. */
 const AI_ORIGIN = { type: "ai" } as const satisfies HeadnoteOrigin;

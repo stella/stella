@@ -36,7 +36,7 @@ import {
   createAuditRecorder,
 } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
-import { resolveMemberAuthorization } from "@/api/lib/auth";
+import { resolveWorkspaceMemberAccess } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
@@ -85,6 +85,7 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readWorkspaceOrganizationTimeZone } from "@/api/lib/organization-time-zone";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
@@ -154,6 +155,7 @@ export const executeFlowStep = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
   signal: AbortSignal,
   {
+    admission,
     database,
     generateTextForRole = generateTanStackTextForRole,
     makeScopedDb = createRootScopedDb,
@@ -165,6 +167,11 @@ export const executeFlowStep = async (
     taskFeatures = deployedTaskFeatures(),
     flushSearchRepairs = flushEntitySearchRepairs,
   }: {
+    /**
+     * The step job's admission. Null only when the worker found no tenant or
+     * actor for the run, which the scope check below refuses before any step.
+     */
+    admission: ModelDispatchAdmission | null;
     /** The worker's connection, for the run, step and scope reads. */
     database: Pick<typeof rootDb, "query">;
     /** External model-dispatch boundary; supplied by focused integration tests. */
@@ -239,7 +246,7 @@ export const executeFlowStep = async (
     ) {
       return null;
     }
-    const authorization = await resolveMemberAuthorization(
+    const workspace = await resolveWorkspaceMemberAccess(
       {
         organizationId: scope.organizationId,
         workspaceId: run.workspaceId,
@@ -247,7 +254,7 @@ export const executeFlowStep = async (
       },
       tx,
     );
-    if (!authorization?.workspace) {
+    if (workspace === null) {
       abortTransaction(
         new FlowStepError({
           message: "The workflow actor is no longer a member of this matter.",
@@ -287,6 +294,9 @@ export const executeFlowStep = async (
       return;
     case "ai": {
       const output = await runAiStep({
+        admission:
+          admission ??
+          panic("flow ai step reached without the step job's admission"),
         stepDef,
         stepIndex,
         run,
@@ -407,6 +417,7 @@ const resolveRunScope = async (
 // ── Step executors ──────────────────────────────────────
 
 type RunAiStepArgs = {
+  admission: ModelDispatchAdmission;
   stepDef: Extract<FlowStep, { kind: "ai" }>;
   stepIndex: number;
   run: LoadedRun;
@@ -423,6 +434,7 @@ const FLOW_AI_SYSTEM_PROMPT =
   "You are a legal-workflow step executor. Follow the step instruction using the provided prior outputs and documents. Respond in Markdown with only the requested content, no preamble.";
 
 const runAiStep = async ({
+  admission,
   stepDef,
   stepIndex,
   run,
@@ -465,6 +477,7 @@ const runAiStep = async ({
     feature: "flows.ai-step",
     modelRole: "chat",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       organization_id: organizationId,
       workspace_id: run.workspaceId,
@@ -489,6 +502,7 @@ const runAiStep = async ({
     dataClass: "customer",
     role: "chat",
     organizationId,
+    admission,
     tenantWorkspaceIds: [run.workspaceId],
     orgAIConfig,
     managedAIResidency,

@@ -1,3 +1,10 @@
+import { PDF, PdfArray, PdfString, PlaceholderError } from "@libpdf/core";
+import type {
+  DigestAlgorithm,
+  Signer,
+  SignWarning,
+  TimestampAuthority,
+} from "@libpdf/core";
 /**
  * Two-phase remote signing against LibPDF.
  *
@@ -24,17 +31,13 @@
  * signing time is therefore persisted in phase 1 and replayed in phase 2,
  * never re-read from the clock.
  */
-
-import { PDF, PdfArray, PdfString, PlaceholderError } from "@libpdf/core";
-import type {
-  DigestAlgorithm,
-  Signer,
-  SignWarning,
-  TimestampAuthority,
-} from "@libpdf/core";
 import { panic, Result, TaggedError } from "better-result";
 
+import { sha256Bytes as browserHashSha256Bytes } from "@stll/sha256/browser";
+import { sha256Bytes as hashSha256Bytes } from "@stll/sha256/bun";
+
 import type { PdfSigningKeyType } from "@/api/db/schema";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { isSignedPdf } from "@/api/lib/files/pdf-signatures";
 import type { PdfSigningSignatureAlgorithm } from "@/api/lib/files/pdf-signing/certificate";
@@ -206,10 +209,7 @@ const pinFileIdentifier = (pdf: PDF, source: Uint8Array) => {
     return;
   }
   const identifier = new Uint8Array(
-    new Bun.CryptoHasher("sha256")
-      .update(source)
-      .digest()
-      .subarray(0, FILE_IDENTIFIER_BYTES),
+    hashSha256Bytes(source).subarray(0, FILE_IDENTIFIER_BYTES),
   );
   trailer.set(
     "ID",
@@ -252,9 +252,9 @@ const prepareSignatureField = async (
  * hash on the same async boundary keeps both phases computing it identically.
  */
 const signedAttributesDigestHex = async (data: Uint8Array) =>
-  Buffer.from(
-    await crypto.subtle.digest("SHA-256", new Uint8Array(data)),
-  ).toString("hex");
+  Buffer.from(await browserHashSha256Bytes(new Uint8Array(data))).toString(
+    "hex",
+  );
 
 /**
  * What only phase 2 adds: trusted time. The timestamp is an unsigned
@@ -417,6 +417,7 @@ export const captureSigningDigest = async (
 };
 
 type ApplySignatureInvocation = SigningInvocation & {
+  permit: ThirdPartyOutboundPermit;
   expectedDigestHex: string;
   signature: Uint8Array;
   /** Tried in order; empty signs without trusted time. */
@@ -572,7 +573,8 @@ export const applySignature = async (
       invocation.timestampAuthorities,
     );
     const provider =
-      invocation.revocationProvider ?? createTrackedRevocationProvider();
+      invocation.revocationProvider ??
+      createTrackedRevocationProvider({ permit: invocation.permit });
     const signerChain = [
       invocation.certificate,
       ...invocation.certificateChain,
@@ -639,6 +641,7 @@ export const applySignature = async (
     // The timestamp's own chain, completed like the signer's: what the
     // token carries, then its issuers' AIA URLs through the guard.
     const timestampIssuers = await completeCertificateChain({
+      permit: invocation.permit,
       candidates: [
         ...timestamp.certificates,
         ...invocation.timestampTrustAnchors,

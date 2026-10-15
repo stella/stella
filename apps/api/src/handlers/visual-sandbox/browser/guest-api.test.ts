@@ -12,6 +12,7 @@ describe("visual page runtime API", () => {
       data: source,
       postMessage: () => undefined,
       measureSize: () => ({ width: 1200, height: 400 }),
+      takeGesture: () => false,
     });
     expect(Object.isFrozen(api)).toBe(true);
     expect(api.data).toEqual(source);
@@ -43,6 +44,7 @@ describe("visual page runtime API", () => {
         messages.push(message);
       },
       measureSize: () => ({ width: 1200, height: 400 }),
+      takeGesture: () => true,
     });
     api.drill({ court: "court-one", year: 2026 });
     api.openDecision("decision-one");
@@ -55,5 +57,50 @@ describe("visual page runtime API", () => {
     api.drill({ court: "", year: Number.NaN });
     api.openDecision("");
     expect(messages).toHaveLength(3);
+  });
+
+  test("sends sizing freely and one action per gesture token", () => {
+    const messages: VisualGuestMessage[] = [];
+    const tokens = { left: 0, taken: 0 };
+    const api = createVisualGuestApi({
+      data: null,
+      postMessage: (message) => {
+        messages.push(message);
+      },
+      measureSize: () => ({ width: 1200, height: 400 }),
+      takeGesture: () => {
+        tokens.taken += 1;
+        if (tokens.left === 0) {
+          return false;
+        }
+        tokens.left -= 1;
+        return true;
+      },
+    });
+    api.drill({ court: "court-one", year: 2026 });
+    api.openDecision("decision-one");
+    expect(messages).toEqual([]);
+    api.ready();
+    expect(messages).toEqual([
+      { kind: "ready", size: { width: 1200, height: 400 } },
+    ]);
+    tokens.left = 1;
+    api.drill({ court: "court-one", year: 2026 });
+    api.openDecision("decision-one");
+    api.drill({ court: "court-one", year: 2026 });
+    expect(messages).toEqual([
+      { kind: "ready", size: { width: 1200, height: 400 } },
+      { kind: "drill", court: "court-one", year: 2026 },
+    ]);
+    // A message the protocol refuses does not spend a token.
+    const taken = tokens.taken;
+    tokens.left = 1;
+    api.openDecision("");
+    expect(tokens.taken).toBe(taken);
+    api.openDecision("decision-one");
+    expect(messages.at(-1)).toEqual({
+      kind: "open-internal",
+      linkId: "decision-one",
+    });
   });
 });

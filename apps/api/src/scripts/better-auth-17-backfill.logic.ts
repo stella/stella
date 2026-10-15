@@ -2,9 +2,10 @@ import { Result, TaggedError } from "better-result";
 import { sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import { createSha256 } from "@stll/sha256/bun";
+
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
-import { predecessorOAuthResourceScopes } from "@/api/mcp/resource-policy-contract";
 import { readOAuthApplicationType } from "@/api/scripts/better-auth-migration-audit.logic";
 import type {
   BetterAuthExpectedOAuthResource,
@@ -152,8 +153,11 @@ export const lockBetterAuth17BackfillTables = async (
     `,
   );
 
-const deterministicId = (type: "link" | "resource", values: string[]) => {
-  const hasher = new Bun.CryptoHasher("sha256");
+export const deterministicId = (
+  type: "link" | "resource",
+  values: string[],
+) => {
+  const hasher = createSha256();
   for (const value of values) {
     hasher.update(value);
     hasher.update("\0");
@@ -366,14 +370,6 @@ export const seedOAuthResources = async (
       return existing;
     }
     const expectedScopes = [...resource.allowedScopes].toSorted();
-    // The predecessor set (without OAuth protocol scopes) is the expand half
-    // of the protocol-scope rollout; see `predecessorOAuthResourceScopes`.
-    const acceptedScopeSets = new Set([
-      JSON.stringify(expectedScopes),
-      JSON.stringify(
-        predecessorOAuthResourceScopes(resource.allowedScopes).toSorted(),
-      ),
-    ]);
     const row = existing.value.at(0);
     if (row !== undefined) {
       const name = isRecord(row) ? requiredString(row["name"]) : null;
@@ -383,7 +379,8 @@ export const seedOAuthResources = async (
       if (
         name !== resource.name ||
         allowedScopes === null ||
-        !acceptedScopeSets.has(JSON.stringify([...allowedScopes].toSorted()))
+        JSON.stringify([...allowedScopes].toSorted()) !==
+          JSON.stringify(expectedScopes)
       ) {
         return invalidSourceState();
       }

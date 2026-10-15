@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import type { CaseLawBrowseFacets } from "./queries/decisions";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law/cases/CZ" });
@@ -14,7 +16,7 @@ const { QueryClient, QueryClientProvider, useQuery, keepPreviousData } =
   await import("@tanstack/react-query");
 const { prefetchDecisionFacetsAfterSearch, useDecisionBrowseFacets } =
   await import("./decision-filter-facets");
-const { decisionFacetsOptions, decisionsInfiniteOptions } =
+const { decisionFacetsOptions, decisionsPageOptions } =
   await import("./queries/decisions");
 const { APIError, shouldRetryAPIRequest } = await import("@/lib/errors/api");
 
@@ -81,7 +83,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const fails of [false, true]) {
@@ -367,10 +369,9 @@ test("the shared 429 retry policy recovers the facet GET instead of caching rate
   expect(requests).toHaveLength(2);
   expect(decisionFacetsOptions("CZ").retry).toBe(shouldRetryAPIRequest);
   expect(
-    decisionsInfiniteOptions({
-      country: "CZ",
-      search: "fixture query",
-      excerpt: "short",
+    decisionsPageOptions({
+      filters: { country: "CZ", search: "fixture query", excerpt: "short" },
+      page: 1,
     }).retry,
   ).toBe(shouldRetryAPIRequest);
   for (const request of requests) {

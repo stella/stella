@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import { sleep } from "@stll/concurrency/sleep";
 import {
   combine,
   decideStart,
@@ -61,24 +62,6 @@ export type OnlineIndexGateOptions = {
   log?: (record: unknown) => void;
   cancelBackend?: (pid: number) => Promise<boolean>;
 };
-
-const waitForPoll = async (
-  milliseconds: number,
-  signal: AbortSignal,
-): Promise<void> =>
-  new Promise((resolve) => {
-    if (signal.aborted) {
-      resolve();
-      return;
-    }
-    const finish = () => {
-      clearTimeout(timer);
-      signal.removeEventListener("abort", finish);
-      resolve();
-    };
-    const timer = setTimeout(finish, milliseconds);
-    signal.addEventListener("abort", finish, { once: true });
-  });
 
 const parseProgress = (row: unknown): BuildProgress | undefined => {
   if (row === undefined) {
@@ -387,7 +370,13 @@ export const createOnlineIndexGate = ({
   clock = () => Temporal.Now.instant().epochMilliseconds,
   ebs,
   cancelBackend = cancelWithIndependentObserver,
-  wait = waitForPoll,
+  wait = async (milliseconds, signal) =>
+    await sleep(milliseconds, { signal }).catch((error: unknown) => {
+      if (signal.aborted && Object.is(error, signal.reason)) {
+        return;
+      }
+      throw error;
+    }),
   log = (record) => process.stderr.write(`${JSON.stringify(record)}\n`),
 }: CreateOnlineIndexGateOptions) => {
   const readBalance =

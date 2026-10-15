@@ -78,7 +78,6 @@
     "apps/api/src/lib/templates/suggest-template-fields.ts::suggestTemplateFieldsOrEmpty::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/templates/template-languages.ts::detectTemplateLanguagesFromDocx::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/templates/validate-template-output.ts::scanTemplateOutput::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/uploads/file-comparison/sweep.ts::sweepExpiredFileComparisonUploads::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/workflow-queue.ts::handleWorkflowJobFailed::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/mcp/case-law-court-filter.ts::loadCaseLawCourtNames::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/mcp/document-file-upload.ts::abortCreatedReservation::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",

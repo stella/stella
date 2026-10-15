@@ -1,3 +1,4 @@
+import type { PGlite } from "@electric-sql/pglite";
 /**
  * Each page of the expression id backfill must read a bounded, index-backed
  * slice of `legislation_documents`, however large the table grows: the page's
@@ -14,13 +15,13 @@
  * the table scaled to the synthetic profile's size, and the same statements
  * run against the fixture so the index path is also the correct answer.
  */
-
-import type { PGlite } from "@electric-sql/pglite";
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { inArray, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { Transaction } from "@/api/db/root";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
@@ -232,9 +233,9 @@ beforeAll(
         expressionNamespace: namespace,
       })),
     );
-    for (let start = 0; start < rows.length; start += INSERT_BATCH) {
+    for (const itemBatch of chunkItems(rows, INSERT_BATCH)) {
       await db.insert(legislationDocuments).values(
-        rows.slice(start, start + INSERT_BATCH).map((row) => ({
+        itemBatch.map((row) => ({
           id: row.id,
           sourceId: row.sourceId,
           eli: row.eli,

@@ -1,7 +1,9 @@
 import { Result } from "better-result";
-import { and, eq, gt, ilike, inArray, isNull, sql } from "drizzle-orm";
-import { t } from "elysia";
+import { and, eq, gt, ilike, inArray, isNull, like, sql } from "drizzle-orm";
+import { t, type Static } from "elysia";
 
+import type { Transaction } from "@/api/db/root";
+import { abortableTx, abortTransaction } from "@/api/db/safe-db";
 import {
   agentSkillResources,
   agentSkills,
@@ -18,16 +20,24 @@ import {
   loadBillingGuidelines,
   BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
 } from "@/api/lib/billing/billing-guidelines";
+import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, tPaginationCursor } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import {
+  timestampCasToken,
+  timestampMatchesCasToken,
+} from "@/api/lib/db/timestamp-cas";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
+import { expectedUpdatedAtSchema } from "@/api/lib/optimistic-concurrency";
 import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { enforceWritePrecondition } from "@/api/lib/write-contract";
 
 const permissions = {
   organizationSettings: ["update"],
@@ -38,6 +48,7 @@ const clientQuerySchema = t.Object({
 
 export const readBillingDraftConfiguration = createSafeRootHandler(
   {
+    contract: "patch",
     permissions,
     accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "auth_plumbing" },
@@ -49,7 +60,7 @@ export const readBillingDraftConfiguration = createSafeRootHandler(
       safeDb((tx) =>
         tx.query.organizationSettings.findFirst({
           where: { organizationId: { eq: organizationId } },
-          columns: { aiBillingDraftsMode: true },
+          columns: { aiBillingDraftsMode: true, updatedAt: true },
         }),
       ),
     );
@@ -75,6 +86,7 @@ export const readBillingDraftConfiguration = createSafeRootHandler(
       : undefined;
     return Result.ok({
       mode: settings?.aiBillingDraftsMode ?? "disabled",
+      updatedAt: (settings?.updatedAt ?? new Date(0)).toISOString(),
       files,
       timeBillingFormat: client?.timeBillingFormat ?? "categories",
     });
@@ -93,29 +105,147 @@ const CONFIGURATION_FAILURES = {
     message:
       "Billing guidelines must be team knowledge files in this organization",
   },
+  stale: {
+    status: 409,
+    message: "Billing draft settings changed; reload and try again",
+  },
 } as const;
+
+type ResourceValidationOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  resourceIds: SafeId<"agentSkillResource">[];
+};
+
+const validateBillingResources = async ({
+  tx,
+  organizationId,
+  resourceIds,
+}: ResourceValidationOptions) => {
+  if (resourceIds.length === 0) {
+    return true;
+  }
+  const resources = await tx
+    .select({ id: agentSkillResources.id })
+    .from(agentSkillResources)
+    .innerJoin(agentSkills, eq(agentSkills.id, agentSkillResources.skillId))
+    .where(
+      and(
+        eq(agentSkillResources.organizationId, organizationId),
+        eq(agentSkills.organizationId, organizationId),
+        eq(agentSkills.scope, "team"),
+        inArray(agentSkills.origin, EDITABLE_AGENT_SKILL_ORIGINS),
+        like(agentSkillResources.path, "references/%"),
+        inArray(agentSkillResources.id, resourceIds),
+      ),
+    )
+    .limit(BILLING_GUIDELINE_MAX_FILES_PER_CLIENT);
+  return resources.length === resourceIds.length;
+};
+
+type BillingFileBindingOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  clientId?: SafeId<"contact">;
+};
+
+const loadBillingFileBindings = async ({
+  tx,
+  organizationId,
+  clientId,
+}: BillingFileBindingOptions) => {
+  const oldFiles = await tx
+    .select({ resourceId: billingGuidelineFiles.resourceId })
+    .from(billingGuidelineFiles)
+    .where(
+      and(
+        eq(billingGuidelineFiles.organizationId, organizationId),
+        clientId
+          ? eq(billingGuidelineFiles.clientId, clientId)
+          : isNull(billingGuidelineFiles.clientId),
+      ),
+    )
+    .limit(BILLING_GUIDELINE_MAX_FILES_PER_CLIENT);
+  const firmFiles = clientId
+    ? await tx
+        .select({ resourceId: billingGuidelineFiles.resourceId })
+        .from(billingGuidelineFiles)
+        .where(
+          and(
+            eq(billingGuidelineFiles.organizationId, organizationId),
+            isNull(billingGuidelineFiles.clientId),
+          ),
+        )
+        .limit(1)
+    : oldFiles;
+  return { oldFiles, firmFiles };
+};
+
+const billingDraftConfigurationBodySchema = t.Object(
+  {
+    expectedUpdatedAt: expectedUpdatedAtSchema,
+    mode: t.Optional(t.Enum(AI_BILLING_DRAFTS_MODE)),
+    clientId: t.Optional(tSafeId("contact")),
+    resourceIds: t.Optional(
+      t.Array(tSafeId("agentSkillResource"), {
+        maxItems: BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
+        uniqueItems: true,
+      }),
+    ),
+    timeBillingFormat: t.Optional(
+      t.Union([t.Literal("categories"), t.Literal("ledes")]),
+    ),
+  },
+  { additionalProperties: false },
+);
+
+type BillingDraftAuditChangesOptions = {
+  body: Static<typeof billingDraftConfigurationBodySchema>;
+  previousMode: Static<typeof billingDraftConfigurationBodySchema>["mode"];
+  previousResourceIds: SafeId<"agentSkillResource">[];
+  previousClientFormat: string | null;
+};
+
+const billingDraftAuditChanges = ({
+  body,
+  previousMode,
+  previousResourceIds,
+  previousClientFormat,
+}: BillingDraftAuditChangesOptions) => ({
+  ...(body.mode !== undefined
+    ? {
+        aiBillingDraftsMode: {
+          old: previousMode ?? "disabled",
+          new: body.mode,
+        },
+      }
+    : {}),
+  ...(body.resourceIds !== undefined
+    ? {
+        billingGuidelineResourceIds: {
+          old: previousResourceIds,
+          new: body.resourceIds,
+        },
+      }
+    : {}),
+  ...(body.timeBillingFormat !== undefined
+    ? {
+        timeBillingFormat: {
+          old: previousClientFormat,
+          new: body.timeBillingFormat,
+        },
+      }
+    : {}),
+});
 
 export const updateBillingDraftConfiguration = createSafeRootHandler(
   {
+    contract: "replace",
+    precondition: { type: "updatedAt", field: "expectedUpdatedAt" },
     permissions,
     accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "auth_plumbing" },
-    body: t.Object(
-      {
-        mode: t.Optional(t.Enum(AI_BILLING_DRAFTS_MODE)),
-        clientId: t.Optional(tSafeId("contact")),
-        resourceIds: t.Optional(
-          t.Array(tSafeId("agentSkillResource"), {
-            maxItems: BILLING_GUIDELINE_MAX_FILES_PER_CLIENT,
-            uniqueItems: true,
-          }),
-        ),
-        timeBillingFormat: t.Optional(
-          t.Union([t.Literal("categories"), t.Literal("ledes")]),
-        ),
-      },
-      { additionalProperties: false },
-    ),
+    body: billingDraftConfigurationBodySchema,
   },
   async function* ({ safeDb, session, body, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
@@ -133,58 +263,35 @@ export const updateBillingDraftConfiguration = createSafeRootHandler(
       );
     }
     const result = yield* Result.await(
-      safeDb(async (tx) => {
-        if (body.resourceIds && body.resourceIds.length > 0) {
-          const resources = await tx
-            .select({ id: agentSkillResources.id })
-            .from(agentSkillResources)
-            .innerJoin(
-              agentSkills,
-              eq(agentSkills.id, agentSkillResources.skillId),
-            )
-            .where(
-              and(
-                eq(agentSkillResources.organizationId, organizationId),
-                eq(agentSkills.organizationId, organizationId),
-                eq(agentSkills.scope, "team"),
-                inArray(agentSkills.origin, EDITABLE_AGENT_SKILL_ORIGINS),
-                eq(agentSkillResources.kind, "knowledge"),
-                inArray(agentSkillResources.id, body.resourceIds),
-              ),
-            )
-            .limit(BILLING_GUIDELINE_MAX_FILES_PER_CLIENT);
-          if (resources.length !== body.resourceIds.length) {
-            return { type: "invalid_files" } as const;
-          }
+      abortableTx(safeDb, async (tx) => {
+        await withAggregateLock({
+          aggregate: "organization",
+          id: organizationId,
+          tx,
+          mode: "update",
+        });
+        if (
+          body.resourceIds !== undefined &&
+          !(await validateBillingResources({
+            tx,
+            organizationId,
+            resourceIds: body.resourceIds,
+          }))
+        ) {
+          return { type: "invalid_files" } as const;
         }
-        // Serialize attachment replacement and its bound against concurrent admins.
-        let orgRows = await tx
-          .select({
-            id: organizationSettings.id,
-            mode: organizationSettings.aiBillingDraftsMode,
-          })
-          .from(organizationSettings)
-          .where(eq(organizationSettings.organizationId, organizationId))
-          .for("update")
-          .limit(1);
-        if (orgRows.length === 0) {
+        const settingsRow = (
           await tx
-            .insert(organizationSettings)
-            .values({
-              id: createSafeId<"organizationSettings">(),
-              organizationId,
-            })
-            .onConflictDoNothing();
-          orgRows = await tx
             .select({
               id: organizationSettings.id,
               mode: organizationSettings.aiBillingDraftsMode,
+              updatedAt: organizationSettings.updatedAt,
+              updatedAtToken: timestampCasToken(organizationSettings.updatedAt),
             })
             .from(organizationSettings)
             .where(eq(organizationSettings.organizationId, organizationId))
-            .for("update")
-            .limit(1);
-        }
+            .limit(1)
+        ).at(0);
         let previousClientFormat: string | null = null;
         if (body.clientId) {
           const client = await tx
@@ -196,62 +303,98 @@ export const updateBillingDraftConfiguration = createSafeRootHandler(
                 eq(contacts.id, body.clientId),
               ),
             )
-            .for("update")
             .limit(1);
           if (client.length === 0) {
             return { type: "invalid_client" } as const;
           }
           previousClientFormat = client.at(0)?.format ?? null;
         }
-        const oldFiles = await tx
-          .select({ resourceId: billingGuidelineFiles.resourceId })
-          .from(billingGuidelineFiles)
-          .where(
-            and(
-              eq(billingGuidelineFiles.organizationId, organizationId),
-              body.clientId
-                ? eq(billingGuidelineFiles.clientId, body.clientId)
-                : isNull(billingGuidelineFiles.clientId),
-            ),
-          )
-          .limit(BILLING_GUIDELINE_MAX_FILES_PER_CLIENT);
-        const firmFiles = body.clientId
-          ? await tx
-              .select({ resourceId: billingGuidelineFiles.resourceId })
-              .from(billingGuidelineFiles)
-              .where(
-                and(
-                  eq(billingGuidelineFiles.organizationId, organizationId),
-                  isNull(billingGuidelineFiles.clientId),
-                ),
-              )
-              .limit(1)
-          : oldFiles;
+        const { oldFiles, firmFiles } = await loadBillingFileBindings({
+          tx,
+          organizationId,
+          ...(body.clientId === undefined ? {} : { clientId: body.clientId }),
+        });
         const nextFirmFiles = body.clientId
           ? firmFiles
           : (body.resourceIds ?? firmFiles);
         if (
-          (body.mode ?? orgRows.at(0)?.mode ?? "disabled") === "enabled" &&
+          (body.mode ?? settingsRow?.mode ?? "disabled") === "enabled" &&
           nextFirmFiles.length === 0
         ) {
           return { type: "firm_guideline_required" } as const;
         }
-        if (body.mode !== undefined) {
-          await tx
-            .update(organizationSettings)
-            .set({ aiBillingDraftsMode: body.mode })
-            .where(eq(organizationSettings.organizationId, organizationId));
+        if (
+          enforceWritePrecondition({
+            type: "updatedAt",
+            field: "expectedUpdatedAt",
+            storedUpdatedAt: settingsRow?.updatedAt ?? new Date(0),
+            expectedUpdatedAt: body.expectedUpdatedAt,
+            resource: "Billing draft settings",
+          })
+        ) {
+          return { type: "stale" } as const;
+        }
+        const updatedAt = new Date();
+        const claimedSettings = settingsRow
+          ? (
+              await tx
+                .update(organizationSettings)
+                .set({
+                  ...(body.mode === undefined
+                    ? {}
+                    : { aiBillingDraftsMode: body.mode }),
+                  updatedAt,
+                })
+                .where(
+                  and(
+                    eq(organizationSettings.id, settingsRow.id),
+                    eq(organizationSettings.organizationId, organizationId),
+                    timestampMatchesCasToken(
+                      organizationSettings.updatedAt,
+                      settingsRow.updatedAtToken,
+                    ),
+                  ),
+                )
+                .returning({ updatedAt: organizationSettings.updatedAt })
+            ).at(0)
+          : (
+              await tx
+                .insert(organizationSettings)
+                .values({
+                  id: createSafeId<"organizationSettings">(),
+                  organizationId,
+                  ...(body.mode === undefined
+                    ? {}
+                    : { aiBillingDraftsMode: body.mode }),
+                  updatedAt,
+                })
+                .onConflictDoNothing()
+                .returning({ updatedAt: organizationSettings.updatedAt })
+            ).at(0);
+        if (!claimedSettings) {
+          return abortTransaction(
+            new HandlerError(CONFIGURATION_FAILURES.stale),
+          );
         }
         if (body.timeBillingFormat !== undefined && body.clientId) {
-          await tx
+          const updatedClients = await tx
             .update(contacts)
             .set({ timeBillingFormat: body.timeBillingFormat })
             .where(
               and(
                 eq(contacts.id, body.clientId),
                 eq(contacts.organizationId, organizationId),
+                previousClientFormat === null
+                  ? isNull(contacts.timeBillingFormat)
+                  : eq(contacts.timeBillingFormat, previousClientFormat),
               ),
+            )
+            .returning({ id: contacts.id });
+          if (updatedClients.length === 0) {
+            return abortTransaction(
+              new HandlerError(CONFIGURATION_FAILURES.stale),
             );
+          }
         }
         if (body.resourceIds !== undefined) {
           await tx
@@ -278,38 +421,24 @@ export const updateBillingDraftConfiguration = createSafeRootHandler(
           action: AUDIT_ACTION.UPDATE,
           resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
           resourceId: organizationId,
-          changes: {
-            ...(body.mode !== undefined
-              ? {
-                  aiBillingDraftsMode: {
-                    old: orgRows.at(0)?.mode ?? "disabled",
-                    new: body.mode,
-                  },
-                }
-              : {}),
-            ...(body.resourceIds !== undefined
-              ? {
-                  billingGuidelineResourceIds: {
-                    old: oldFiles.map((file) => file.resourceId),
-                    new: body.resourceIds,
-                  },
-                }
-              : {}),
-            ...(body.timeBillingFormat !== undefined
-              ? {
-                  timeBillingFormat: {
-                    old: previousClientFormat,
-                    new: body.timeBillingFormat,
-                  },
-                }
-              : {}),
-          },
+          changes: billingDraftAuditChanges({
+            body,
+            previousMode: settingsRow?.mode,
+            previousResourceIds: oldFiles.map(({ resourceId }) => resourceId),
+            previousClientFormat,
+          }),
         });
-        return { type: "updated" } as const;
+        return {
+          type: "updated",
+          updatedAt: claimedSettings.updatedAt,
+        } as const;
       }),
     );
     if (result.type === "updated") {
-      return Result.ok({ updated: true });
+      return Result.ok({
+        updated: true,
+        updatedAt: result.updatedAt.toISOString(),
+      });
     }
     const failure = CONFIGURATION_FAILURES[result.type];
     return Result.err(new HandlerError(failure));
@@ -318,6 +447,7 @@ export const updateBillingDraftConfiguration = createSafeRootHandler(
 
 export const listBillingKnowledgeFiles = createSafeRootHandler(
   {
+    contract: "patch",
     permissions,
     accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "auth_plumbing" },
@@ -365,7 +495,7 @@ export const listBillingKnowledgeFiles = createSafeRootHandler(
               eq(agentSkills.organizationId, session.activeOrganizationId),
               eq(agentSkills.scope, "team"),
               inArray(agentSkills.origin, EDITABLE_AGENT_SKILL_ORIGINS),
-              eq(agentSkillResources.kind, "knowledge"),
+              like(agentSkillResources.path, "references/%"),
               afterResourceId
                 ? gt(agentSkillResources.id, sql`${afterResourceId}`)
                 : undefined,
@@ -394,6 +524,7 @@ export const listBillingKnowledgeFiles = createSafeRootHandler(
 
 export const readBillingKnowledgeFile = createSafeRootHandler(
   {
+    contract: "patch",
     permissions,
     accountAccess: ACCOUNT_ACCESS.accountControl,
     mcp: { type: "internal", reason: "auth_plumbing" },
@@ -418,7 +549,7 @@ export const readBillingKnowledgeFile = createSafeRootHandler(
               ),
               eq(agentSkills.organizationId, session.activeOrganizationId),
               eq(agentSkills.scope, "team"),
-              eq(agentSkillResources.kind, "knowledge"),
+              like(agentSkillResources.path, "references/%"),
             ),
           )
           .limit(1),

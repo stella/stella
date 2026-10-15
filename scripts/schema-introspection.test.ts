@@ -110,6 +110,40 @@ describe("schema-only dependency validation", () => {
     );
   });
 
+  test("distinguishes error query metadata and console dispatch from database calls", () => {
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst error = { query: "shape", params: [] }; const shape = error["query"]; console[level](shape);`,
+      ),
+    ).toEqual([]);
+    const queryAliases = [
+      "const query = connection.query; query();",
+      "const query = connection.query; (query)();",
+      "const query = connection.query; const run = query; run();",
+      "const query = ((connection.query)); const middle = (query); const run = ((middle)); run();",
+      "((connection.query))();",
+      "const query = connection.query; let run; run = query; run();",
+      "let query; query = connection.query; const run = query; run();",
+    ];
+    for (const source of queryAliases) {
+      expect(validate(`${FULL_IMPORT}\n${source}`)).toContain(
+        "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: query",
+      );
+    }
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst query = error.query; const run = query; function invoke(run: () => void) { run(); }`,
+      ),
+    ).toEqual([]);
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst run = (console: Record<string, () => void>, level: string) => console[level]();`,
+      ),
+    ).toContain(
+      "apps/api/src/inventory.ts: unresolved runtime call in apps/api/src/inventory.ts",
+    );
+  });
+
   test("reports method aliases and malformed runtime sources", () => {
     expect(
       validate(
@@ -178,13 +212,62 @@ describe("schema-only dependency validation", () => {
   test("distinguishes bound collection and hash operations", () => {
     expect(
       validate(
-        `${FULL_IMPORT}\nimport { createHash } from "node:crypto"; const keys = new Map(); keys.delete("a"); createHash("sha256").update("a"); const hash = new Bun.CryptoHasher("sha256"); hash.update("a");`,
+        `${FULL_IMPORT}\nimport { createHash } from "node:crypto"; const keys = new Map(); keys.delete("a"); createHash("sha256").update("a"); const hash = new Bun.CryptoHasher("sha256"); hash.update("a"); const localHash = () => new Bun.CryptoHasher("sha256"); localHash().update("a");`,
       ),
     ).toEqual([]);
     expect(
       validate(`${FULL_IMPORT}\nconst keys = new Map(); keys.select();`),
     ).toContain(
       "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: select",
+    );
+  });
+
+  for (const runtime of ["bun", "node"]) {
+    test(`recognizes aliased SHA-256 ${runtime} owners without permitting database calls`, () => {
+      const dependencies = {
+        "node_modules/@stll/sha256/package.json": JSON.stringify({
+          name: "@stll/sha256",
+          exports: { [`./${runtime}`]: `./${runtime}.ts` },
+        }),
+        [`node_modules/@stll/sha256/${runtime}.ts`]:
+          "export const createSha256 = () => new Bun.CryptoHasher('sha256');",
+      };
+      const imported = `${FULL_IMPORT}\nimport { createSha256 as makeHash } from "@stll/sha256/${runtime}";`;
+      expect(
+        validate(
+          `${imported} const hash = makeHash(); hash.update("a"); makeHash().update("b");`,
+          dependencies,
+        ),
+      ).toEqual([]);
+      expect(
+        validate(`${imported} makeHash().select();`, dependencies),
+      ).toContain(
+        "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: select",
+      );
+    });
+  }
+
+  test("does not exempt local factories returning database receivers", () => {
+    expect(
+      validate(
+        `${FULL_IMPORT}\nconst connection = {}; const createSha256 = () => connection; createSha256().update(schema.tables);`,
+      ),
+    ).toContain(
+      "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: update",
+    );
+  });
+
+  test("does not trust a factory solely by its name", () => {
+    expect(
+      validate(
+        `${FULL_IMPORT}\nimport { createSha256 } from "./connection"; createSha256().update(schema.tables);`,
+        {
+          "apps/api/src/connection.ts":
+            "export const createSha256 = () => ({});",
+        },
+      ),
+    ).toContain(
+      "apps/api/src/inventory.ts: database operation in apps/api/src/inventory.ts: update",
     );
   });
 

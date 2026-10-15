@@ -33,7 +33,7 @@ const parseSemver = (version: string): readonly number[] => {
 };
 
 /** Negative when `a` precedes `b`, positive when it follows, zero when equal. */
-export const compareSemver = (a: string, b: string): number => {
+const compareSemver = (a: string, b: string): number => {
   const left = parseSemver(a);
   const right = parseSemver(b);
   for (const [index, leftPart] of left.entries()) {

@@ -35,6 +35,7 @@ import {
 } from "@/api/lib/chat/compaction-tokens";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 export const COMPACTION_SUMMARY_MESSAGE_ID = "stella-chat-compaction-summary";
@@ -151,6 +152,8 @@ type ComputeThreadContextUsageOptions = {
   /** Tool-catalog estimate (the read.* API surface in the system prompt).
    *  Supplied by the caller; defaults to 0. */
   toolTokens?: number | undefined;
+  /** Per-turn context appended to the system prompt, outside its cached prefix. */
+  conversationContextTokens?: number | undefined;
   triggerTokens?: number | undefined;
 };
 
@@ -168,6 +171,7 @@ export const computeThreadContextUsage = ({
   summary,
   promptTokens = 0,
   toolTokens = 0,
+  conversationContextTokens = 0,
   triggerTokens = DEFAULT_TRIGGER_TOKENS,
 }: ComputeThreadContextUsageOptions): ThreadContextUsage => {
   const summaryTokens = summary
@@ -179,7 +183,7 @@ export const computeThreadContextUsage = ({
       )
     : 0;
 
-  let conversationTokens = 0;
+  let conversationTokens = conversationContextTokens;
   let attachmentTokens = 0;
   for (const message of messages) {
     const messageAttachmentTokens =
@@ -434,6 +438,7 @@ type CompactChatMessagesForModelOptions = PlanChatCompactionOptions & {
   modelId?: string | undefined;
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   reasoningEffort?: ReasoningEffort | undefined;
@@ -448,6 +453,7 @@ type CompactModelMessagesForModelOptions = {
   messages: ModelMessage[];
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   preserveTokens?: number | undefined;
@@ -466,6 +472,7 @@ export const compactChatMessagesForModel = async ({
   modelId,
   onSummaryError,
   organizationId,
+  admission,
   orgAIConfig,
   managedAIResidency,
   reasoningEffort,
@@ -497,6 +504,7 @@ export const compactChatMessagesForModel = async ({
             ...COMPACTION_GENERATION_POLICY,
             modelId,
             organizationId,
+            admission,
             orgAIConfig,
             managedAIResidency,
             reasoningEffort,
@@ -533,6 +541,7 @@ export const compactModelMessagesForModel = async ({
   messages,
   onSummaryError,
   organizationId,
+  admission,
   orgAIConfig,
   managedAIResidency,
   preserveTokens,
@@ -566,6 +575,7 @@ export const compactModelMessagesForModel = async ({
             ...COMPACTION_GENERATION_POLICY,
             modelId,
             organizationId,
+            admission,
             orgAIConfig,
             managedAIResidency,
             prompt: [

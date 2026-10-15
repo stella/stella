@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { toChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
@@ -32,15 +34,15 @@ import {
 } from "@/api/handlers/chat/tools/web-search-tools";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import {
-  createFeatureAccessSnapshot,
-  decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
 import {
   authorizedMemberRole,
   roleForDisplay,
@@ -92,7 +94,7 @@ const editableActiveSkillContext: ActiveChatSkillContext = {
   id: toSafeId<"agentSkill">("66666666-6666-4666-8666-666666666666"),
   origin: "authored",
   requiredTools: [],
-  resources: [{ kind: "knowledge", path: "knowledge/checklist.md" }],
+  resources: [{ path: "references/checklist.md" }],
   source: "installed",
   toolName: "closing-review",
   version: null,
@@ -362,6 +364,7 @@ test("pending feature-bound write approvals use current caller access for valida
     type: "tool-call",
     id: "feature-write-call",
     name: toolName,
+    metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
     input: canonicalInput,
     arguments: JSON.stringify(canonicalInput),
     state: "approval-requested",

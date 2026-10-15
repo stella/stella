@@ -10,8 +10,8 @@ import type { AccountAccess } from "@/api/lib/api-handlers";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import type {
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ALL_RESOURCE_SCOPES,
-  MCP_DEFAULT_RESOURCE_SCOPES,
 } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpErrorCode, McpValidationIssue } from "@/api/mcp/error-codes";
@@ -148,6 +148,13 @@ export type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
   title: string;
 };
 
+/** Human-readable reasons for each client safety hint, kept with the registry contract. */
+export type McpToolAnnotationReasons = Readonly<{
+  destructiveHint: string;
+  openWorldHint: string;
+  readOnlyHint: string;
+}>;
+
 export type McpReadClass = "tenant" | "public" | "both";
 
 export type McpReadClassResolver = (
@@ -179,8 +186,7 @@ export type McpToolAccessBranch =
     }
   | {
       access: "write";
-      /** Generic dispatch may invoke a read target despite its own write access. */
-      readClass?: McpReadClassResolver;
+      readClass?: never;
       annotations: McpToolAnnotations & { readOnlyHint: false };
       /**
        * The member authority every call needs; discovery and dispatch enforce
@@ -207,9 +213,8 @@ export type McpToolDestructiveBehavior =
 
 /**
  * A call that sends workspace-authored content outside the workspace. It
- * destroys nothing, so `destructiveHint` stays false and clients must not
- * render it as a deletion, but it is irreversible in the sense that matters to
- * a human: the content is gone from their control once it lands. The transport
+ * is irreversible in the sense that matters to a human: the content is gone
+ * from their control once it lands, so `destructiveHint` is true. The transport
  * gate treats it exactly like a destructive call and refuses without
  * `confirm: true`; `reason` is what the refusal tells the model it is about to
  * do.
@@ -225,21 +230,20 @@ type McpToolDestructiveBranch =
   | {
       annotations: McpToolAnnotations & { destructiveHint: false };
       destructiveBehavior?: undefined;
-    }
-  | {
-      annotations: McpToolAnnotations & { destructiveHint: false };
-      destructiveBehavior: Extract<
-        McpToolConfirmationBehavior,
-        { type: "outbound" }
-      >;
+      /** Why a broader update grant does not imply this handler modifies data. */
+      nonDestructiveReason?: string;
     }
   | {
       annotations: McpToolAnnotations & { destructiveHint: true };
-      destructiveBehavior: McpToolDestructiveBehavior;
+      // Updating existing data needs the client hint even when the server
+      // requires no irreversible-action confirmation.
+      destructiveBehavior?: McpToolConfirmationBehavior;
+      nonDestructiveReason?: never;
     };
 
 export type McpToolDefinition = McpToolAccessBranch &
   McpToolDestructiveBranch & {
+    annotationReasons: McpToolAnnotationReasons;
     /**
      * Host-extension metadata served verbatim through `tools/list`. Keep it on
      * the canonical definition so MCP Apps and host-specific transports cannot
@@ -263,6 +267,12 @@ export type McpToolDefinition = McpToolAccessBranch &
      */
     feature?: DeploymentFeatureFlag;
     featureId?: FeatureId;
+    featureInput?: {
+      featureId: FeatureId;
+      usesFeature: (args: unknown) => boolean;
+      projectInputSchema: (schema: McpToolInputSchema) => McpToolInputSchema;
+      unavailableDescription: string;
+    };
     inputSchema: McpToolInputSchema;
     /**
      * Optional session-member visibility predicate, enforced centrally for both
@@ -276,13 +286,14 @@ export type McpToolDefinition = McpToolAccessBranch &
     scope: ToolScope;
   };
 
-type DefaultMcpResourceScope = (typeof MCP_DEFAULT_RESOURCE_SCOPES)[number];
+type DefaultMcpResourceScope = (typeof MCP_ADVANCED_RESOURCE_SCOPES)[number];
 
 type BareMcpResourceScope<TScope extends `stella:${string}`> =
   TScope extends `stella:${infer TName}` ? TName : never;
 
 const MCP_CLI_TOOL_SCOPE_BY_RESOURCE_SCOPE = {
   "stella:read": "read",
+  "stella:law_read": "law_read",
   "stella:contacts_write": "contacts_write",
   "stella:matters_write": "matters_write",
   "stella:chat": "chat",
@@ -318,6 +329,7 @@ export type McpCliDiscriminatorSubcommand = {
 };
 
 export type McpCliToolAnnotation = {
+  feature?: DeploymentFeatureFlag;
   featureId?: FeatureId;
   command: readonly string[];
   additionalScopes?: readonly McpCliToolScope[];
@@ -361,9 +373,8 @@ export type McpCliToolAnnotation = {
    */
   localFileBase64Prop?: string;
   /**
-   * The tool is not destructive itself but gates SOME calls behind its `confirm`
-   * arg (per-target destructiveness, e.g. `invoke_capability` where the invoked
-   * capability's catalog flag decides). The CLI leaf then accepts `--yes`
+   * Some calls require the `confirm` arg in addition to host approval
+   * (e.g. write_capability checks the invoked capability's catalog flag). The CLI leaf then accepts `--yes`
    * (injecting `confirm: true` upfront) and, on a `confirmation_required`
    * envelope at a TTY, prompts and retries once with `confirm: true`.
    */

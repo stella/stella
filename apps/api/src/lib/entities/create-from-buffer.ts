@@ -2,6 +2,7 @@ import { Result, TaggedError, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
@@ -204,7 +205,7 @@ export const createEntityFromBuffer = async ({
     mimeType,
   });
 
-  const sha256Hex = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+  const sha256Hex = hashSha256Hex(bytes);
 
   // Check for file property before uploading to avoid
   // orphaned S3 files if the property doesn't exist.
@@ -335,10 +336,16 @@ export const createEntityFromBuffer = async ({
           organizationId,
           objectKey: s3Key,
           sizeBytes: bytes.byteLength,
-          write: async () =>
+          content: bytes,
+          write: async ({ content, objectKey }) =>
             await withTimeout(
               async (signal) =>
-                await putS3ObjectWithSignal(s3Key, bytes, mimeType, signal),
+                await putS3ObjectWithSignal(
+                  objectKey,
+                  content,
+                  mimeType,
+                  signal,
+                ),
               {
                 label: "buffer-entity-writer-put",
                 timeoutMs: BUFFER_INTENT_WRITE_TIMEOUT_MS,

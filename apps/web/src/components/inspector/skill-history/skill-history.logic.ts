@@ -32,7 +32,7 @@ export type SkillCommentRow = Awaited<
  */
 const NO_MEMBERS: readonly never[] = [];
 
-export const SKILL_PROPOSAL_STATUSES = [
+const SKILL_PROPOSAL_STATUSES = [
   "draft",
   "proposed",
   "accepted",

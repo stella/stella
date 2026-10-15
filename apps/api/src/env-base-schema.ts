@@ -1,3 +1,4 @@
+// parser-output-unchanged: Database login admission configuration does not change parsed ingestion records.
 // parser-output-unchanged: The public corpus search address budget affects admission only, not parsed records.
 // parser-output-unchanged: Minimum public corpus request budgets affect admission only, not parsed records.
 // parser-output-unchanged: Search ranking and query variant configuration do not change ingestion parser output.
@@ -28,6 +29,7 @@ import {
   corpusStorageInvariantViolation,
   resolveCorpusStorageMode,
 } from "@/api/lib/corpus-storage-mode";
+import { featureAccessGrantsEnvSchema } from "@/api/lib/feature-access/grants-schema";
 import { CORPUS_MEMBER_LAYOUTS } from "@/api/lib/legal-search/corpus-member-layout";
 import { CORPUS_INDEX_QUERY_VARIANTS } from "@/api/lib/legal-search/corpus-query-variant-policy";
 import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
@@ -117,11 +119,13 @@ const isSecureOrPrivateQ09MutationEndpoint = (value: string) => {
 };
 
 export const envBaseServerSchema = {
+  API_FEATURE_ACCESS_GRANTS: featureAccessGrantsEnvSchema,
   STELLA_VERSION: v.optional(v.string()),
   STELLA_COMMIT_SHA: v.optional(v.string()),
   STELLA_WORKER_DIR: v.optional(v.string()),
   STELLA_OCR_PDF_FONT_PATH: v.optional(v.string()),
   STELLA_YARA_RULES_DIR: v.optional(v.string()),
+  STELLA_ALLOW_PRIVILEGED_DB_LOGIN_FOR_LOCAL_DEV: v.optional(v.string()),
   SKIP_MIGRATION_CHECK: v.optional(v.pipe(v.string(), v.parseBoolean())),
   INGESTION_USER_AGENT: v.optional(v.string()),
   SANCTIONS_EU_XML_URL: v.optional(v.pipe(v.string(), v.url())),

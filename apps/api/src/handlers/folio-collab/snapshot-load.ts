@@ -15,6 +15,7 @@ import {
 import { authorizeFolioCollabService } from "./service-credentials";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   contentDelivery: {
     type: "none",
@@ -42,7 +43,7 @@ const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
       resolveFolioCollabServiceRoom(validatedBody.value.roomId),
     );
 
-    const snapshot = await loadFolioCollabSnapshot(value);
+    const snapshot = yield* Result.await(loadFolioCollabSnapshot(value));
     if (snapshot === null) {
       return Result.err(
         new HandlerError({

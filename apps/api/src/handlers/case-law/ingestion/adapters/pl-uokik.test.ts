@@ -1,3 +1,4 @@
+import { PDF } from "@libpdf/core";
 /**
  * pl-uokik against rows and pages the register actually served.
  *
@@ -8,11 +9,11 @@
  * and answers `Start`, `Count` and `NavigateReverse` the way Domino does. The
  * decision pages and the PDF are the register's own responses.
  */
-
-import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
+
+import { sha256Hex as legacySha256Hex } from "@stll/sha256/node";
 
 import {
   decodeSourceRawEnvelope,
@@ -46,11 +47,14 @@ import {
   plUokikPreviousSlice,
   plUokikRawPartsOf,
   plUokikRulingId,
+  plUokikQuarantineId,
   plUokikSortKey,
   readPlUokikView,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { PL_UOKIK_RULING_UNREAD } from "@/api/handlers/case-law/ingestion/parsers/pl-uokik";
+import { CITATION_STORAGE_WIDTHS } from "@/api/lib/case-law/citation-storage-bounds";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -268,7 +272,11 @@ const parkedYesterday = (cursor: string): string =>
   });
 
 /** A made-up dated row, as the view states one, for rows the register adds. */
-const syntheticEntry = (unid: string, printed: string): Entry => ({
+const syntheticEntry = (
+  unid: string,
+  printed: string,
+  number = "DKK-999/2026",
+): Entry => ({
   "@position": "1",
   "@unid": unid,
   "@noteid": "1",
@@ -278,7 +286,7 @@ const syntheticEntry = (unid: string, printed: string): Entry => ({
       "@columnnumber": "0",
       "@name": "$7",
       text: {
-        "0": `[<B>Numer decyzji: </B>DKK-999/2026<BR><b>]Data decyzji:      [</B>${printed}<BR>][<A HREF=/bp/dec_prez.nsf/0/${unid}?OpenDocument   title='opis dokumentu'>Spółka</A>][<BR>]Kontrola koncentracji[<BR>]`,
+        "0": `[<B>Numer decyzji: </B>${number}<BR><b>]Data decyzji:      [</B>${printed}<BR>][<A HREF=/bp/dec_prez.nsf/0/${unid}?OpenDocument   title='opis dokumentu'>Spółka</A>][<BR>]Kontrola koncentracji[<BR>]`,
       },
     },
   ],
@@ -358,6 +366,11 @@ describe("a decision", () => {
         { name, status: PL_UOKIK_FILE_STATUS.READ, bytes: await pdfBytes() },
       ]),
     );
+    const sourceRaw =
+      decision.sourceRaw ?? panic("decision source envelope missing");
+    expect(decision.rawHash).toBe(
+      legacySha256Hex(`${sourceRaw}\n${legacySha256Hex(await pdfBytes())}`),
+    );
     expect(decision.sourceDocumentId).toBe(WITH_RULINGS);
     expect(decision.caseNumber === "DOK-9/2011").toBe(true);
     expect(decision.court === PRESIDENT).toBe(true);
@@ -414,6 +427,61 @@ describe("a decision", () => {
     expect(decision.caseNumber === NUMBERLESS).toBe(true);
     expect(decision.caseNumberIsPlaceholder).toBe(true);
     expect(decision.decisionDate).toBeUndefined();
+  });
+
+  test("numbers at the storage boundary retain exact text or the exact document identity", async () => {
+    const page = await pageOf(FILELESS);
+    const width = CITATION_STORAGE_WIDTHS.caseNumber;
+    for (const token of ["x", "é", "𐐀"]) {
+      for (const length of [width - 1, width, width + 1]) {
+        const number = token.repeat(length);
+        const entry = syntheticEntry(FILELESS, "22.09.2026", number);
+        for (const detail of [
+          undefined,
+          page.replaceAll("DIH-4/2009", () => number),
+        ]) {
+          const decision = decisionOf(await buildFrom(entry, detail));
+          expect(decision.sourceDocumentId).toBe(FILELESS);
+          expect(length > width ? FILELESS : number).toBe(decision.caseNumber);
+          expect(decision.caseNumberIsPlaceholder === true).toBe(
+            length > width,
+          );
+          expect(
+            decision.metadata["caseNumberFallbackReason"] ===
+              (length > width ? "overlong-number" : undefined),
+          ).toBe(true);
+          expect(decision.metadata["decisionNumber"] === number).toBe(true);
+          if (length > width || token === "𐐀") {
+            expect(decision.identifiers).toBeUndefined();
+          }
+          expect(
+            decision.metadata["identifierStorageReason"] ===
+              (length <= width && token === "𐐀"
+                ? "unrepresentable-identifier"
+                : undefined),
+          ).toBe(true);
+          expect(sanitizeResult(decision).caseNumber).toBe(decision.caseNumber);
+        }
+      }
+    }
+    const registerLine = Array.from(
+      { length: width },
+      (_, index) => `DKK-${index}/2026`,
+    ).join("; ");
+    const decision = decisionOf(
+      await buildFrom(
+        syntheticEntry(FILELESS, "22.09.2026", registerLine),
+        undefined,
+      ),
+    );
+    expect(FILELESS).toBe(decision.caseNumber);
+    expect(decision.caseNumberIsPlaceholder).toBe(true);
+    expect(decision.metadata["decisionNumberAsListed"] === registerLine).toBe(
+      true,
+    );
+    expect(
+      decision.metadata["caseNumberFallbackReason"] === "overlong-number",
+    ).toBe(true);
   });
 
   test("is identified by its number as the register prints it and as prose cites it", async () => {
@@ -941,6 +1009,17 @@ describe("the court rulings a decision page attaches", () => {
     const { decisions } = await walkCrawl(null);
     expect(decisions).toHaveLength(4);
     const appeal = rulingNamed(decisions, "Wyrok VI ACa 527_08.pdf");
+    const kept =
+      appeal.sourceRawObjects?.["ruling-file"]?.bytes ??
+      panic("ruling bytes missing");
+    expect(appeal.metadata["attachmentSha256"] === legacySha256Hex(kept)).toBe(
+      true,
+    );
+    const sourceRaw =
+      appeal.sourceRaw ?? panic("appeal source envelope missing");
+    expect(appeal.rawHash).toBe(
+      legacySha256Hex(`${sourceRaw}\n${legacySha256Hex(kept)}`),
+    );
     expect(appeal.court === "Sąd Apelacyjny w Warszawie").toBe(true);
     expect(appeal.caseNumber === "VI ACa 527/08").toBe(true);
     expect(appeal.decisionDate).toBe("2008-09-29");
@@ -1147,9 +1226,9 @@ describe("the court rulings a decision page attaches", () => {
   });
 
   test("a file name too long to key on is keyed by its digest", () => {
-    const long = `${"a".repeat(400)}.pdf`;
+    const long = `${"Zażółć gęślą jaźń e\u0301".repeat(40)}.pdf`;
     const id = plUokikRulingId(APPEALED_TO_SUPREME, long);
-    expect(id.startsWith(`${APPEALED_TO_SUPREME}/sha256:`)).toBe(true);
+    expect(id).toBe(`${APPEALED_TO_SUPREME}/sha256:${legacySha256Hex(long)}`);
     expect(plUokikRulingId(APPEALED_TO_SUPREME, long)).toBe(id);
   });
 });
@@ -1455,4 +1534,20 @@ test("competition metadata ignores excluded HTML in every label and value", asyn
   const expected = parsePlUokikDetail(html);
   expect(expected).not.toBeNull();
   expect(parsePlUokikDetail(contaminated)).toEqual(expected);
+});
+
+test("quarantine column identities retain legacy bytes including empty and Unicode", async () => {
+  const entry = entryOf(await capturedEntries(), WITH_RULINGS);
+  const row = normalizePlUokikRow(entry);
+  for (const column of [
+    "",
+    "ordinary",
+    "Zażółć gęślą jaźń",
+    "e\u0301",
+    "<A HREF=/removed>Łódź</A>",
+  ]) {
+    expect(plUokikQuarantineId({ ...row, column })).toBe(
+      `pl-uokik-quarantine:${legacySha256Hex(column.replaceAll(/HREF=[^\s>]*/gu, "HREF="))}`,
+    );
+  }
 });

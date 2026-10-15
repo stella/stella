@@ -30,7 +30,11 @@ export type BillingDraftValidationContext = {
     entryId: string;
   })[];
   matters: readonly { matterId: string; ledesEnabled: boolean }[];
-  earlierEntries: readonly { id: string; matterId: string }[];
+  earlierEntries: readonly {
+    id: string;
+    matterId: string;
+    dateWorked: string;
+  }[];
   guidelines: readonly {
     fileId: string;
     fileName: string;
@@ -276,9 +280,15 @@ export const validateBillingDraftResult = (
       return refuse("Earlier entry references must be unique");
     }
     for (const id of matchedIds) {
-      if (earlierEntries.get(id)?.matterId !== entry.matterId) {
+      const earlier = earlierEntries.get(id);
+      if (earlier?.matterId !== entry.matterId) {
         return refuse(
           "Earlier entry reference is outside the caller's matter context",
+        );
+      }
+      if (earlier.dateWorked > entry.date) {
+        return refuse(
+          "History matches cannot be dated after the selected entry",
         );
       }
     }

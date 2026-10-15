@@ -6,6 +6,7 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
 import { propertyTestTimeout } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -75,6 +76,7 @@ const cassettes = loadProviderWireCassettes();
 
 /** One value per part type, each a name the catalog lists. */
 const PLANTED = {
+  activity: "Adelina Fairbourne",
   audio: "Aurelio Quintbury",
   document: "Dorotea Framwell",
   image: "Imogen Castlereagh",
@@ -127,6 +129,15 @@ const textFile = (text: string) =>
 
 /** How each stored part type reaches a provider. */
 const STORED_PART_WIRE = {
+  activity: {
+    part: {
+      type: "activity",
+      activityType: "progress",
+      content: { text: PLANTED.activity },
+    },
+    readBy: NO_PROVIDER,
+    reason: UI_ONLY,
+  },
   audio: {
     part: {
       type: "audio",
@@ -196,6 +207,7 @@ const STORED_PART_WIRE = {
   "tool-call": {
     part: {
       type: "tool-call",
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
       id: "call_stored_1",
       name: "mcp__test__search_documents",
       arguments: JSON.stringify({ query: PLANTED["tool-call"] }),
@@ -252,6 +264,7 @@ type StoredPartType = keyof typeof STORED_PART_WIRE;
  */
 const HISTORIES = {
   assistant: [
+    "activity",
     "text",
     "thinking",
     "tool-call",
@@ -430,14 +443,24 @@ const converse = async ({
     const entry: StoredPartWire = STORED_PART_WIRE[type];
     return "part" in entry ? entry.part : panic(`${type} is never stored`);
   });
-  await testDb.insert(chatMessages).values({
-    content: toPersistedChatMessageContentV3({ data: parts }),
-    id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-    role: history === "image" ? "user" : "assistant",
-    threadId,
-    userId: ids.userA1,
-    workspaceId: null,
-  });
+  const stored = (
+    await testDb
+      .insert(chatMessages)
+      .values({
+        content: toPersistedChatMessageContentV3({ data: parts }),
+        id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+        role: history === "image" ? "user" : "assistant",
+        threadId,
+        userId: ids.userA1,
+        workspaceId: null,
+      })
+      .returning({ content: chatMessages.content })
+  ).at(0);
+  if (history === "assistant") {
+    expect(stored?.content).toMatchObject({
+      data: expect.arrayContaining([STORED_PART_WIRE.activity.part]),
+    });
+  }
 
   const second = await openSession(provider, threadId);
   try {

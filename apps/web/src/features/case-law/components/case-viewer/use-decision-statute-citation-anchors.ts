@@ -1,20 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 
+import { locateStatuteCitations } from "@stll/decision-reader/fallback-legal-anchors";
+import type { DecisionStatuteCitationAnchor } from "@stll/decision-reader/reader-types";
 import type { Block } from "@stll/legal-ast/document-ast";
 
-import type { CitedStatuteTarget } from "@/components/legal-reader/cited-statute-link";
-import { locateStatuteCitations } from "@/features/case-law/fallback-legal-anchors";
-import type { StatuteCitationAnchor } from "@/features/case-law/fallback-legal-anchors";
 import {
   citedWorkAtDateKey,
   statuteByCitedWork,
   statutesResolveOptions,
 } from "@/features/case-law/queries/provisions";
 import { decisionDateToIso } from "@/lib/decision-date";
-
-export type DecisionStatuteCitationAnchor = StatuteCitationAnchor & {
-  target: CitedStatuteTarget;
-};
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /** Work-level citations resolve to the wording applicable on the decision date. */
 export const useDecisionStatuteCitationAnchors = (
@@ -25,7 +21,7 @@ export const useDecisionStatuteCitationAnchors = (
   const asOf = decisionDateToIso(decisionDate);
   // Every cited work resolves in one request, however many the text names;
   // the query deduplicates repeated citations of one act.
-  const { data: resolved } = useQuery(
+  const resolvedQuery = useQuery(
     statutesResolveOptions(
       asOf === null
         ? []
@@ -36,6 +32,10 @@ export const useDecisionStatuteCitationAnchors = (
           })),
     ),
   );
+  const resolvedView = useQueryView(resolvedQuery);
+  useQueryViewError(resolvedView);
+  const resolved =
+    resolvedView.type === "items" ? resolvedView.items : undefined;
   const statuteByWork = statuteByCitedWork(resolved);
 
   return references.flatMap((reference) => {
@@ -52,7 +52,7 @@ export const useDecisionStatuteCitationAnchors = (
     if (statute === undefined) {
       return [];
     }
-    const target: CitedStatuteTarget = {
+    const target = {
       document: {
         country: statute.country,
         eli: statute.eli,

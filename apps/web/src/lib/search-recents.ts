@@ -2,7 +2,11 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { isSafeIdValue } from "@stll/api-contract";
+import { RECENT_FILES_STORAGE_KEY } from "@stll/api-contract/browser-storage";
+import type { RecentFile as StoredRecentFile } from "@stll/api-contract/browser-storage";
 import { Temporal } from "@stll/time";
+import type { DocumentIdentity } from "@stll/ui/document-identity-badge.logic";
+import { COURT_TIER_WEIGHT } from "@stll/ui/document-identity-badge.logic";
 
 import { getStorageKey } from "@/consts";
 import { browserStateStorage } from "@/lib/account/browser-storage";
@@ -14,7 +18,6 @@ import type { StorageOwner } from "@/lib/account/user-scoped-storage";
 import { readStoredJson, writeStoredJson } from "@/lib/stored-json";
 
 const RECENT_SEARCHES_KEY = getStorageKey("search-recent-searches");
-const RECENT_FILES_KEY = getStorageKey("search-recent-files");
 const MAX_RECENT_SEARCHES = 6;
 const MAX_RECENT_FILES = 6;
 
@@ -29,19 +32,11 @@ export type RecentSearch = {
   searchedAt: string;
 };
 
-export type RecentFile = {
-  entityId: string;
-  fileFieldId?: string | null | undefined;
-  filePropertyId?: string | null | undefined;
-  workspaceId: string;
-  workspaceName: string;
-  title: string;
-  mimeType?: string | null | undefined;
-  openedAt: string;
-  updatedAt?: string | undefined;
+export type RecentFileWithIdentity = StoredRecentFile & {
+  documentIdentity?: DocumentIdentity | undefined;
 };
 
-type RecentFileInput = Omit<RecentFile, "openedAt">;
+type RecentFileInput = Omit<RecentFileWithIdentity, "openedAt">;
 
 const getStorage = (): Storage | null => browserStateStorage("local");
 
@@ -66,9 +61,39 @@ const isRecentSearch = (value: unknown): value is RecentSearch =>
   typeof value["query"] === "string" &&
   typeof value["searchedAt"] === "string";
 
-const isRecentFile = (value: unknown): value is RecentFile =>
+const isRecentDocumentIdentity = (
+  value: unknown,
+): value is DocumentIdentity => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  switch (value["kind"]) {
+    case "unknown":
+      return true;
+    case "statute":
+      return (
+        (value["number"] === null || typeof value["number"] === "string") &&
+        (value["year"] === null || typeof value["year"] === "string")
+      );
+    case "decision":
+      return (
+        (value["courtAbbreviation"] === undefined ||
+          value["courtAbbreviation"] === null ||
+          typeof value["courtAbbreviation"] === "string") &&
+        (value["courtTier"] === undefined ||
+          (typeof value["courtTier"] === "string" &&
+            Object.hasOwn(COURT_TIER_WEIGHT, value["courtTier"])))
+      );
+    default:
+      return false;
+  }
+};
+
+const isRecentFile = (value: unknown): value is RecentFileWithIdentity =>
   isRecord(value) &&
   isResourceId(value["entityId"]) &&
+  (value["documentIdentity"] === undefined ||
+    isRecentDocumentIdentity(value["documentIdentity"])) &&
   (value["fileFieldId"] === undefined ||
     value["fileFieldId"] === null ||
     typeof value["fileFieldId"] === "string") &&
@@ -155,16 +180,20 @@ export const recordRecentSearch = (
 export const readRecentFiles = (
   scope: SearchRecentsScope,
   storage: Storage | null = getStorage(),
-): RecentFile[] =>
+): RecentFileWithIdentity[] =>
   isSearchRecentsScopeCurrent(scope)
-    ? readList(scopedKey(RECENT_FILES_KEY, scope), isRecentFile, storage)
+    ? readList(
+        scopedKey(RECENT_FILES_STORAGE_KEY, scope),
+        isRecentFile,
+        storage,
+      )
     : [];
 
 export const recordRecentFile = (
   file: RecentFileInput,
   scope: SearchRecentsScope,
   storage: Storage | null = getStorage(),
-): RecentFile[] => {
+): RecentFileWithIdentity[] => {
   if (!isSearchRecentsScopeCurrent(scope)) {
     return [];
   }
@@ -188,6 +217,6 @@ export const recordRecentFile = (
     ),
   ].slice(0, MAX_RECENT_FILES);
 
-  writeList(scopedKey(RECENT_FILES_KEY, scope), next, storage);
+  writeList(scopedKey(RECENT_FILES_STORAGE_KEY, scope), next, storage);
   return next;
 };

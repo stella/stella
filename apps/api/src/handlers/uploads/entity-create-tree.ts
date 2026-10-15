@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { sha256HexToBase64 } from "@stll/sha256";
+
 import type { Transaction } from "@/api/db/root";
 import {
   pendingUploads,
@@ -43,7 +45,6 @@ import {
 } from "@/api/lib/uploads/entity-create";
 import {
   PRESIGN_URL_EXPIRY_SECONDS,
-  sha256HexToBase64,
   tmpUploadKey,
 } from "@/api/lib/uploads/runtime";
 
@@ -538,6 +539,7 @@ const createPendingRows = async ({
 // The purpose is fixed at entity_create, so the grant that purpose spends is
 // the static gate; nothing is left for the handler to authorize.
 const config = {
+  contract: "patch",
   permissions: { entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: entityUploadRealtimeUpdates,

@@ -6,7 +6,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { OpenPlaybookRunResult } from "@/api/lib/document-review/open-playbook-run";
 import { PLAYBOOK_RUN_FAILURE_CODE } from "@/api/lib/document-review/playbook-run-refusal";
 import { mapHandlerResult } from "@/api/mcp/capability-tools";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 const loadLatestApprovedVersionsMock = mock();
@@ -57,7 +60,11 @@ const runAutoRun = async () => {
     query: { playbookDefinitions: { findMany: async () => [] } },
   });
   return await autoRunPlaybooks.handler(
-    createTestHandlerContext<AutoRunCtx>({ safeDb, scopedDb }),
+    createTestHandlerContext<AutoRunCtx>({
+      audit: NO_AUDIT,
+      safeDb,
+      scopedDb,
+    }),
   );
 };
 

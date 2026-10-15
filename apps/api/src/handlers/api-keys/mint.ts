@@ -4,6 +4,7 @@ import type { Static } from "elysia";
 import * as v from "valibot";
 
 import { getAuth } from "@/api/lib/auth";
+import type { UpdateApiKey } from "@/api/lib/auth/api-key-endpoints";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -105,7 +106,12 @@ export const machineApiKeyAudienceSchema = t.Optional(
   // `t.Union` of literals rather than `t.UnionEnum`: the latter coerces an
   // absent field to its first member, which would silently bind every key that
   // named no audience to the default one instead of leaving it unbound.
-  t.Union([t.Literal("default"), t.Literal("documents"), t.Literal("law")]),
+  t.Union([
+    t.Literal("advanced"),
+    t.Literal("default"),
+    t.Literal("documents"),
+    t.Literal("law"),
+  ]),
 );
 
 // The literal list mirrors MACHINE_API_KEY_GRANTABLE_AUDIENCES: a member on
@@ -528,10 +534,7 @@ export const disableMachineApiKey = async (
     keyId: string;
     ownerUserId: string;
   },
-  updateApiKey: (
-    ...args: Parameters<ReturnType<typeof getAuth>["api"]["updateApiKey"]>
-  ) => ReturnType<ReturnType<typeof getAuth>["api"]["updateApiKey"]> = getAuth()
-    .api.updateApiKey,
+  updateApiKey: UpdateApiKey = getAuth().api.updateApiKey,
 ): Promise<Result<void, HandlerError>> => {
   const updated = await Result.tryPromise({
     try: async () =>

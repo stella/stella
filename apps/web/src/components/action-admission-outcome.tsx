@@ -1,12 +1,12 @@
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { getTranslator } from "@/i18n/translator";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 export const ActionAdmissionOutcome = ({
   error,

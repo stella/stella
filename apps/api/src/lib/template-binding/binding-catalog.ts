@@ -40,7 +40,7 @@ type CatalogRef = { value: AttorneyRef; labelKey: CatalogLabelKey };
  * carries `roles`, `attorney` carries `refs`, and the rest carry neither. A new
  * kind then fails typecheck at every consumer instead of silently defaulting.
  */
-export type CatalogSource =
+type CatalogSource =
   | { kind: "contact"; labelKey: CatalogLabelKey; fields: CatalogField[] }
   | {
       kind: "party";
@@ -128,7 +128,7 @@ const SOURCE_LABELS = {
  * message catalog — a stale or values-bearing key fails the web typecheck
  * instead of needing a runtime cast.
  */
-export type CatalogLabelKey =
+type CatalogLabelKey =
   | (typeof SOURCE_LABELS)[CatalogSource["kind"]]
   | (typeof CONTACT_FIELD_LABELS)[ContactField]
   | (typeof MATTER_FIELD_LABELS)[MatterField]

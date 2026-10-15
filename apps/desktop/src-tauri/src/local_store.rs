@@ -31,6 +31,61 @@ struct EncryptedEnvelope {
   version: u8,
 }
 
+fn read_envelope(
+  path: &Path,
+  label: &str,
+) -> Result<Option<EncryptedEnvelope>, EncryptedReadError> {
+  let raw = match fs::read(path) {
+    Ok(raw) => raw,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+    Err(error) => {
+      return Err(EncryptedReadError::Unavailable(format!(
+        "{label} store read failed: {error}"
+      )));
+    }
+  };
+  let metadata: serde_json::Value = serde_json::from_slice(&raw).map_err(|error| {
+    EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
+  })?;
+  let object = metadata.as_object().ok_or_else(|| {
+    EncryptedReadError::Unreadable(format!("{label} envelope is not an object"))
+  })?;
+  if object.get("version").and_then(serde_json::Value::as_u64)
+    != Some(u64::from(ENVELOPE_VERSION))
+  {
+    return Err(EncryptedReadError::Incompatible(format!(
+      "{label} store version is unsupported"
+    )));
+  }
+  serde_json::from_slice(&raw).map(Some).map_err(|error| {
+    EncryptedReadError::Unreadable(format!("{label} envelope is invalid: {error}"))
+  })
+}
+
+pub(crate) fn check_envelope_compatibility(
+  path: &Path,
+  label: &str,
+) -> Result<(), EncryptedReadError> {
+  read_envelope(path, label).map(|_| ())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum EncryptedReadError {
+  Unavailable(String),
+  Unreadable(String),
+  Incompatible(String),
+}
+
+impl std::fmt::Display for EncryptedReadError {
+  fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Unavailable(message)
+      | Self::Unreadable(message)
+      | Self::Incompatible(message) => formatter.write_str(message),
+    }
+  }
+}
+
 /// One JSON value encrypted under a store key. `associated_data` binds the
 /// ciphertext to its purpose (for example the day a file holds), so a file
 /// moved to another name fails to decrypt instead of reading as that name.
@@ -68,28 +123,33 @@ impl EncryptedJsonFile {
   }
 
   pub fn load<T: DeserializeOwned>(&self) -> Result<Option<T>, String> {
+    self.load_checked().map_err(|error| error.to_string())
+  }
+
+  pub fn load_checked<T: DeserializeOwned>(
+    &self,
+  ) -> Result<Option<T>, EncryptedReadError> {
     let label = self.label;
-    let raw = match fs::read_to_string(&self.path) {
-      Ok(raw) => raw,
-      Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-      Err(error) => return Err(format!("{label} store read failed: {error}")),
+    let Some(envelope) = read_envelope(&self.path, label)? else {
+      return Ok(None);
     };
-    let envelope: EncryptedEnvelope = serde_json::from_str(&raw)
-      .map_err(|error| format!("{label} envelope is invalid: {error}"))?;
-    if envelope.version != ENVELOPE_VERSION {
-      return Err(format!("{label} store version is unsupported"));
-    }
-    let nonce = hex::decode(envelope.nonce)
-      .map_err(|error| format!("{label} nonce is invalid: {error}"))?;
+    let nonce = hex::decode(envelope.nonce).map_err(|error| {
+      EncryptedReadError::Unreadable(format!("{label} nonce is invalid: {error}"))
+    })?;
     if nonce.len() != NONCE_BYTES {
-      return Err(format!("{label} nonce has an invalid length"));
+      return Err(EncryptedReadError::Unreadable(format!(
+        "{label} nonce has an invalid length"
+      )));
     }
-    let nonce = Nonce::try_from(nonce.as_slice())
-      .map_err(|_| format!("{label} nonce has an invalid length"))?;
-    let ciphertext = hex::decode(envelope.ciphertext)
-      .map_err(|error| format!("{label} ciphertext is invalid: {error}"))?;
+    let nonce = Nonce::try_from(nonce.as_slice()).map_err(|_| {
+      EncryptedReadError::Unreadable(format!("{label} nonce has an invalid length"))
+    })?;
+    let ciphertext = hex::decode(envelope.ciphertext).map_err(|error| {
+      EncryptedReadError::Unreadable(format!("{label} ciphertext is invalid: {error}"))
+    })?;
     let plaintext = self
-      .cipher()?
+      .cipher()
+      .map_err(EncryptedReadError::Unavailable)?
       .decrypt(
         &nonce,
         Payload {
@@ -97,10 +157,14 @@ impl EncryptedJsonFile {
           aad: &self.associated_data,
         },
       )
-      .map_err(|_| format!("{label} store could not be decrypted"))?;
+      .map_err(|_| {
+        EncryptedReadError::Unreadable(format!("{label} store could not be decrypted"))
+      })?;
     serde_json::from_slice(&plaintext)
       .map(Some)
-      .map_err(|error| format!("{label} store is invalid: {error}"))
+      .map_err(|error| {
+        EncryptedReadError::Incompatible(format!("{label} store is invalid: {error}"))
+      })
   }
 
   pub fn persist<T: Serialize>(&self, value: &T) -> Result<(), String> {
@@ -172,10 +236,12 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     use std::os::unix::fs::OpenOptionsExt;
     options.mode(0o600);
   }
-  let write = options
+  let mut temporary = options
     .open(&temp_path)
-    .and_then(|mut file| file.write_all(bytes));
-  if let Err(error) = write {
+    .map_err(|error| error.to_string())?;
+  let written = temporary.write_all(bytes);
+  drop(temporary);
+  if let Err(error) = written {
     return match fs::remove_file(&temp_path) {
       Ok(()) => Err(error.to_string()),
       Err(cleanup) if cleanup.kind() == std::io::ErrorKind::NotFound => {
@@ -185,8 +251,15 @@ pub fn write_private_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     };
   }
   if let Err(error) = fs::rename(&temp_path, path) {
-    let _ = fs::remove_file(&temp_path);
-    return Err(format!("replace failed: {error}"));
+    return match fs::remove_file(&temp_path) {
+      Ok(()) => Err(format!("replace failed: {error}")),
+      Err(cleanup) if cleanup.kind() == std::io::ErrorKind::NotFound => {
+        Err(format!("replace failed: {error}"))
+      }
+      Err(cleanup) => Err(format!(
+        "replace failed: {error}; temporary file cleanup failed: {cleanup}"
+      )),
+    };
   }
   Ok(())
 }
@@ -262,9 +335,129 @@ pub fn debug_build_is_memory_only(_env: &str) -> bool {
 mod tests {
   use super::*;
 
+  /// A store path in its own fresh directory, so `persist` restricts that
+  /// directory rather than the shared temp directory.
   fn unique_path() -> PathBuf {
     std::env::temp_dir()
-      .join(format!("stella-local-store-{}.json", uuid::Uuid::new_v4()))
+      .join(format!("stella-local-store-{}", uuid::Uuid::new_v4()))
+      .join("store.json")
+  }
+
+  #[test]
+  fn checked_reads_distinguish_unreadable_envelopes_from_unavailable_storage() {
+    let path = unique_path();
+    let file = EncryptedJsonFile::new([9; 32], path.clone(), "fixture");
+    file.persist(&serde_json::json!({ "saved": true })).unwrap();
+    let wrong_key = EncryptedJsonFile::new([8; 32], path.clone(), "fixture");
+    assert!(matches!(
+      wrong_key.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Unreadable(_))
+    ));
+    fs::write(&path, b"malformed envelope").unwrap();
+    assert!(matches!(
+      file.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Unreadable(_))
+    ));
+    fs::remove_file(&path).unwrap();
+    fs::create_dir(&path).unwrap();
+    assert!(matches!(
+      file.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Unavailable(_))
+    ));
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  fn remove_store(path: &Path) {
+    fs::remove_dir_all(path.parent().unwrap()).unwrap();
+  }
+
+  #[test]
+  fn newer_envelopes_and_decryptable_unknown_variants_are_incompatible() {
+    #[derive(Debug, Deserialize)]
+    enum SavedState {
+      Ready,
+    }
+    let _ = SavedState::Ready;
+    let path = unique_path();
+    let file = EncryptedJsonFile::new([9; 32], path.clone(), "fixture");
+    file.persist(&"FutureState").unwrap();
+    let original = fs::read(&path).unwrap();
+    assert!(matches!(
+      file.load_checked::<SavedState>(),
+      Err(EncryptedReadError::Incompatible(_))
+    ));
+    assert_eq!(fs::read(&path).unwrap(), original);
+    let mut envelope: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    envelope["version"] = serde_json::json!(ENVELOPE_VERSION + 1);
+    fs::write(&path, serde_json::to_vec(&envelope).unwrap()).unwrap();
+    assert!(matches!(
+      file.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Incompatible(_))
+    ));
+    remove_store(&path);
+  }
+
+  #[test]
+  fn envelope_version_999_is_incompatible_before_decoding_changed_fields() {
+    let path = unique_path();
+    let file = EncryptedJsonFile::new([9; 32], path.clone(), "fixture");
+    file.persist(&true).unwrap();
+    let original = br#"{"version":999,"futureCiphertext":{"data":"saved"}}"#;
+    fs::write(&path, original).unwrap();
+    assert!(matches!(
+      file.load_checked::<serde_json::Value>(),
+      Err(EncryptedReadError::Incompatible(_))
+    ));
+    assert!(matches!(
+      check_envelope_compatibility(&path, "fixture"),
+      Err(EncryptedReadError::Incompatible(_))
+    ));
+    assert_eq!(fs::read(&path).unwrap(), original);
+    remove_store(&path);
+  }
+
+  #[test]
+  fn object_envelopes_without_a_supported_integer_version_are_incompatible() {
+    let path = unique_path();
+    let file = EncryptedJsonFile::new([7; 32], path.clone(), "fixture");
+    file.persist(&true).unwrap();
+    for raw in [
+      "{}",
+      r#"{"futureCiphertext":"saved"}"#,
+      r#"{"version":null}"#,
+      r#"{"version":"1"}"#,
+      r#"{"version":1.5}"#,
+      r#"{"version":-1}"#,
+      r#"{"version":999}"#,
+    ] {
+      fs::write(&path, raw).unwrap();
+      assert!(
+        matches!(
+          file.load_checked::<serde_json::Value>(),
+          Err(EncryptedReadError::Incompatible(_))
+        ),
+        "{raw}"
+      );
+      assert!(
+        matches!(
+          check_envelope_compatibility(&path, "fixture"),
+          Err(EncryptedReadError::Incompatible(_))
+        ),
+        "{raw}"
+      );
+      assert_eq!(fs::read_to_string(&path).unwrap(), raw);
+    }
+    for raw in ["invalid json", "null", "1", "[]", r#""text""#] {
+      fs::write(&path, raw).unwrap();
+      assert!(
+        matches!(
+          file.load_checked::<serde_json::Value>(),
+          Err(EncryptedReadError::Unreadable(_))
+        ),
+        "{raw}"
+      );
+    }
+    remove_store(&path);
   }
 
   #[test]
@@ -295,8 +488,16 @@ mod tests {
         fs::metadata(&path).unwrap().permissions().mode() & 0o777,
         0o600
       );
+      assert_eq!(
+        fs::metadata(path.parent().unwrap())
+          .unwrap()
+          .permissions()
+          .mode()
+          & 0o777,
+        0o700
+      );
     }
-    fs::remove_file(path).unwrap();
+    remove_store(&path);
   }
 
   #[cfg(unix)]
@@ -354,7 +555,7 @@ mod tests {
         .unwrap(),
       Some(1)
     );
-    fs::remove_file(path).unwrap();
+    remove_store(&path);
   }
 
   #[test]
@@ -362,6 +563,17 @@ mod tests {
     // Envelopes written before associated data existed were encrypted with
     // the plain AEAD call; an empty AAD must stay byte-compatible with it.
     let path = unique_path();
+    let parent = path.parent().unwrap();
+    assert!(!parent.exists());
+    create_private_dir(parent).unwrap();
+    #[cfg(unix)]
+    {
+      use std::os::unix::fs::PermissionsExt;
+      assert_eq!(
+        fs::metadata(parent).unwrap().permissions().mode() & 0o777,
+        0o700
+      );
+    }
     let nonce = Nonce::generate();
     let ciphertext = Aes256Gcm::new_from_slice(&[7; 32])
       .unwrap()
@@ -384,7 +596,7 @@ mod tests {
         .unwrap(),
       Some(42)
     );
-    fs::remove_file(path).unwrap();
+    remove_store(&path);
   }
 
   #[test]

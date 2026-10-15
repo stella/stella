@@ -14,7 +14,7 @@ import { citationTextMatches } from "@/api/lib/workflow/citation-normalize";
 type DocxFolioJustificationCitation =
   DocxFolioJustificationBlock["statements"][number]["citations"][number];
 
-export type JustificationFilename = {
+type JustificationFilename = {
   original: string;
   simplified: string;
   fileFieldId: SafeId<"field">;

@@ -22,6 +22,10 @@ import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import {
+  requireChatToolModelAdmission,
+  type ModelDispatchAdmission,
+} from "@/api/lib/rate-limit/model-dispatch-admission";
+import {
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
 } from "@/api/lib/safe-id-boundaries";
@@ -379,6 +383,7 @@ const mapCitation = ({
 type CreateFolderConsistencyReviewToolsProps = {
   createAbortSignal: () => AbortSignal;
   extractAskContentsFn?: typeof extractAskContents | undefined;
+  modelAdmission: ModelDispatchAdmission | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -393,6 +398,7 @@ type CreateFolderConsistencyReviewToolsProps = {
 export const createFolderConsistencyReviewTools = ({
   createAbortSignal,
   extractAskContentsFn = extractAskContents,
+  modelAdmission,
   organizationId,
   orgAIConfig,
   managedAIResidency,
@@ -493,6 +499,7 @@ export const createFolderConsistencyReviewTools = ({
         ],
         resolvedFiles: snapshot.reviewDocuments.map(({ file }) => file),
         abortSignal: createAbortSignal(),
+        admission: requireChatToolModelAdmission(modelAdmission),
         organizationId,
         workspaceId: target.workspaceId,
         entityVersionId:

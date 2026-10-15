@@ -8,12 +8,17 @@ import { buildPromptImprovementModelInput } from "@/api/handlers/chat/improve-pr
 import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const config = {
+  contract: "patch",
   actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -39,6 +44,7 @@ const improvePrompt = createSafeRootHandler(
     body,
     orgAIConfig,
     managedAIResidency,
+    modelAdmission,
     promptCachingEnabled,
     request,
     safeDb,
@@ -77,6 +83,7 @@ const improvePrompt = createSafeRootHandler(
       feature: "chat.improve_prompt",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: session.activeOrganizationId },
       traceId: Bun.randomUUIDv7(),
     });
@@ -104,6 +111,7 @@ const improvePrompt = createSafeRootHandler(
             messages: modelInput.messages,
             maxOutputTokens: IMPROVE_PROMPT_MAX_OUTPUT_TOKENS,
             organizationId: session.activeOrganizationId,
+            admission: configuredModelAdmission({ modelAdmission }),
             orgAIConfig,
             managedAIResidency,
             role: "fast",

@@ -123,10 +123,8 @@ export type CycleProductivity =
  * unchanged, or failed), so the sum separates "fetched decisions and wrote
  * none" from "found nothing to fetch".
  */
-export const cycleDecisionsProcessed = ({
-  inserted,
-  skipped,
-}: CycleResult): number => inserted + skipped;
+const cycleDecisionsProcessed = ({ inserted, skipped }: CycleResult): number =>
+  inserted + skipped;
 
 export const classifyCycleProductivity = (
   cycle: CycleResult,
@@ -250,7 +248,7 @@ const cadenceForStreaks = ({
 };
 
 /** Telemetry payload for a re-scan that has crossed the threshold. */
-export type UnproductiveRescanSignal = {
+type UnproductiveRescanSignal = {
   unproductiveCycles: number;
   decisionsProcessed: number;
   decisionsWritten: number;

@@ -6,7 +6,9 @@ import {
   mkdirSync,
   mkdtempSync,
   rmSync,
+  writeFileSync,
 } from "node:fs";
+import { builtinModules } from "node:module";
 import path from "node:path";
 import ts from "typescript";
 import * as v from "valibot";
@@ -162,12 +164,15 @@ export const copySource = (
   }
 };
 
-const importCache = new Map<string, { source: string; imports: string[] }>();
+const importCache = new Map<
+  string,
+  { source: string; imports: string[]; unresolved: string[] }
+>();
 
-const runtimeImports = (file: string, source: string): string[] => {
+const readRuntimeImports = (file: string, source: string) => {
   const cached = importCache.get(file);
   if (cached?.source === source) {
-    return cached.imports;
+    return cached;
   }
   const parsed = ts.createSourceFile(
     file,
@@ -176,6 +181,7 @@ const runtimeImports = (file: string, source: string): string[] => {
     false,
   );
   const imports: string[] = [];
+  const unresolved: string[] = [];
   const visit = (node: ts.Node) => {
     if (
       ts.isImportDeclaration(node) &&
@@ -221,15 +227,28 @@ const runtimeImports = (file: string, source: string): string[] => {
           ts.isNoSubstitutionTemplateLiteral(argument))
       ) {
         imports.push(argument.text);
+      } else {
+        const line =
+          parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1;
+        unresolved.push(`${file}:${line}: nonliteral runtime import`);
       }
     }
     ts.forEachChild(node, visit);
   };
   visit(parsed);
   // Literal edges depend on file content; their resolution still uses each stage.
-  importCache.set(file, { source, imports });
-  return imports;
+  const result = { source, imports, unresolved };
+  importCache.set(file, result);
+  return result;
 };
+
+const runtimeImports = (file: string, source: string): string[] =>
+  readRuntimeImports(file, source).imports;
+
+export const unresolvedRuntimeImports = (
+  file: string,
+  source: string,
+): readonly string[] => readRuntimeImports(file, source).unresolved;
 
 const configurationOptions = (
   root: string,
@@ -392,6 +411,31 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
     // No directoryExists: TypeScript probes virtual files directly.
   };
   const optionsFor = configurationOptions(root, tree, physical);
+  // TypeScript resolves module extensions only, so a workspace export naming
+  // an asset (`@stll/x/reader.css`) is read from the stage's own manifest.
+  const workspaceAsset = (specifier: string, name: string) => {
+    const directory = workspaces.get(name);
+    const manifest =
+      directory === undefined
+        ? undefined
+        : tree.get(`${directory}/package.json`);
+    if (directory === undefined || manifest === undefined) {
+      return undefined;
+    }
+    const { exports } = v.parse(
+      v.object({ exports: v.optional(v.unknown()) }),
+      JSON.parse(text(root, manifest)),
+    );
+    const target =
+      typeof exports === "object" && exports !== null
+        ? Reflect.get(exports, `.${specifier.slice(name.length)}`)
+        : undefined;
+    if (typeof target !== "string" || modulePattern.test(target)) {
+      return undefined;
+    }
+    const file = path.posix.join(directory, target);
+    return sourceAvailable(file) ? file : undefined;
+  };
   return (entries: readonly string[], seen = new Set<string>()): string[] => {
     const problems: string[] = [];
     const pending = [...entries];
@@ -485,7 +529,8 @@ const sourceClosureChecker = (root: string, tree: SourceTree) => {
         const resolved =
           aliasTargets.find(sourceAvailable) ??
           ts.resolveModuleName(clean, file, options, host).resolvedModule
-            ?.resolvedFileName;
+            ?.resolvedFileName ??
+          workspaceAsset(clean, name ?? "");
         if (resolved === undefined) {
           problems.push(
             `${origin} imports ${specifier}, unavailable in Docker stage`,
@@ -505,6 +550,110 @@ export const sourceClosureProblems = (
   entries: readonly string[],
   seen = new Set<string>(),
 ): string[] => sourceClosureChecker(root, tree)(entries, seen);
+
+type InstallToolingCopiesOptions = {
+  root: string;
+  files: SourceTree;
+  entry: string;
+};
+
+export const installToolingCopies = ({
+  root,
+  files,
+  entry,
+}: InstallToolingCopiesOptions): string => {
+  const seen = new Set<string>();
+  const problems = sourceClosureProblems(root, files, [entry], seen);
+  for (const file of seen) {
+    const origin = files.get(file);
+    if (origin === undefined) {
+      continue;
+    }
+    const source = text(root, origin);
+    problems.push(...unresolvedRuntimeImports(file, source));
+    for (const specifier of runtimeImports(file, source)) {
+      if (
+        !specifier.startsWith(".") &&
+        specifier !== "bun" &&
+        !builtinModules.includes(specifier.replace(/^node:/u, ""))
+      ) {
+        problems.push(
+          `${origin}: install tooling requires a relative import or builtin: ${specifier}`,
+        );
+      }
+    }
+  }
+  if (problems.length > 0) {
+    panic(problems.join("\n"));
+  }
+  return [...seen]
+    .toSorted()
+    .map((file) => {
+      const origin = files.get(file);
+      if (origin === undefined || !/^[\w./-]+$/u.test(origin)) {
+        panic(`Invalid install tooling COPY source: ${file}`);
+      }
+      return `COPY ${origin} ${origin}`;
+    })
+    .join("\n");
+};
+
+const INSTALL_TOOLING_GENERATOR = "api-image-install-tooling";
+
+export const updateInstallToolingCopies = (root: string, write: boolean) => {
+  const generator = GENERATORS.find(
+    ({ id }) => id === INSTALL_TOOLING_GENERATOR,
+  );
+  const block = generator?.blocks?.at(0);
+  if (generator === undefined || block === undefined) {
+    panic("Missing API install tooling generator block");
+  }
+  const tracked = Bun.spawnSync(["git", "ls-files", "-z"], { cwd: root });
+  if (tracked.exitCode !== 0) {
+    panic("Cannot enumerate install tooling sources");
+  }
+  const files = new Map(
+    tracked.stdout
+      .toString()
+      .split("\0")
+      .filter(Boolean)
+      .map((file) => [`/app/${file}`, file]),
+  );
+  const copies = installToolingCopies({
+    root,
+    files,
+    entry: "/app/scripts/ci-install.ts",
+  });
+  const undeclared = copies
+    .split("\n")
+    .map((line) => line.split(" ")[1])
+    .filter(
+      (origin): origin is string =>
+        origin !== undefined && !generator.inputs.includes(origin),
+    );
+  if (undeclared.length > 0) {
+    panic(
+      `API install tooling closure files missing from ${INSTALL_TOOLING_GENERATOR} inputs: ${undeclared.join(", ")}`,
+    );
+  }
+  const file = path.join(root, block.path);
+  const source = readFileSync(file, "utf-8");
+  const begin = source.indexOf(block.begin);
+  const end = source.indexOf(block.end, begin + block.begin.length);
+  if (begin === -1 || end === -1) {
+    panic("Missing API install tooling COPY block");
+  }
+  const generated = `${source.slice(0, begin)}${block.begin}\n${copies}\n${source.slice(end)}`;
+  if (write) {
+    writeFileSync(file, generated);
+    return;
+  }
+  if (source !== generated) {
+    panic(
+      "API install tooling COPY closure drifted; run bun scripts/docker-source-closure.ts --write-install-tooling",
+    );
+  }
+};
 
 type EnvironmentValue = { type: "known"; value: string } | { type: "unknown" };
 
@@ -599,7 +748,7 @@ type BunFlagPolicy =
   | "workspace"
   | "unsupported";
 
-// Bun 1.4.2 CLI help owns this census; tests reject new undocumented decisions.
+// Bun 1.4.3 CLI help owns this census; tests reject new undocumented decisions.
 const runtimeBunFlags = {
   "--silent": "switch",
   "--elide-lines": "value",
@@ -617,6 +766,7 @@ const runtimeBunFlags = {
   "--watch-kill-signal": "value",
   "--hot": "switch",
   "--no-clear-screen": "switch",
+  "--check": "unsupported",
   "--smol": "switch",
   "--interactive": "switch",
   "-r": "preload",
@@ -719,6 +869,8 @@ export const BUN_FLAGS = {
     "--production": "switch",
     "--compile": "switch",
     "--compile-exec-argv": "value",
+    "--bytecode-order": "unsupported",
+    "--compile-jit-policy": "value",
     "--compile-autoload-dotenv": "switch",
     "--no-compile-autoload-dotenv": "switch",
     "--compile-autoload-bunfig": "switch",
@@ -731,6 +883,7 @@ export const BUN_FLAGS = {
     "--asset": "unsupported",
     "--bytecode": "switch",
     "--bytecode-depth": "value",
+    "--no-optimize-bytecode": "switch",
     "--watch": "switch",
     "--no-clear-screen": "switch",
     "--target": "value",
@@ -1712,12 +1865,6 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
     panic("Cannot enumerate Docker sources");
   }
   const files = tracked.stdout.toString().split("\0").filter(Boolean);
-  const ignore = text(root, ".dockerignore");
-  const context: SourceTree = new Map(
-    files
-      .filter((file) => inDockerContext(file, ignore))
-      .map((file) => [`/${file}`, file]),
-  );
   const dockerfiles = files.filter((file) =>
     /(?:^|\/)(?:Dockerfile|[^/]+\.Dockerfile)$/u.test(file),
   );
@@ -1729,6 +1876,18 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
   );
   try {
     for (const file of dockerfiles) {
+      const specificIgnore = `${file}.dockerignore`;
+      const ignore = text(
+        root,
+        existsSync(path.join(root, specificIgnore))
+          ? specificIgnore
+          : ".dockerignore",
+      );
+      const context: SourceTree = new Map(
+        files
+          .filter((entry) => inDockerContext(entry, ignore))
+          .map((entry) => [`/${entry}`, entry]),
+      );
       const source = text(root, file);
       const scopes = dockerPruneScopes(source);
       if (scopes.length > 1) {
@@ -1773,6 +1932,17 @@ export const checkRepositoryDockerSources = (root: string): string[] => {
 };
 
 if (import.meta.main) {
+  const mode = process.argv.at(2);
+  if (
+    mode === "--write-install-tooling" ||
+    mode === "--check-install-tooling"
+  ) {
+    updateInstallToolingCopies(
+      path.resolve(import.meta.dir, ".."),
+      mode === "--write-install-tooling",
+    );
+    process.exit(0);
+  }
   const start = performance.now();
   const problems = checkRepositoryDockerSources(
     path.resolve(import.meta.dir, ".."),

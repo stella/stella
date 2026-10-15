@@ -18,10 +18,10 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
-
-import { readWorkspaceListRows } from "./list-query";
+import { readWorkspaceListRows } from "@/api/lib/workspaces/list-query";
 
 const config = {
+  contract: "patch",
   description: "List the matters you can access.",
   permissions: {
     workspace: ["read"],

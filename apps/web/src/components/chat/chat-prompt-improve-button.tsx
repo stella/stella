@@ -8,7 +8,8 @@ import {
   CHAT_PROMPT_IMPROVEMENT_STRATEGY,
   type ChatPromptImprovementStrategy,
 } from "@stll/api-contract/chat";
-import { Loader2Icon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { MenuItem, MenuPopup } from "@stll/ui/menu";
 import { SplitButton } from "@stll/ui/split-button";
 import { stellaToast } from "@stll/ui/toast";
@@ -167,7 +168,7 @@ export const ChatPromptImproveButton = ({
       }
     >
       {isPending ? (
-        <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
       ) : (
         <AiActionIcon aria-hidden="true" className="size-3.5" />
       )}

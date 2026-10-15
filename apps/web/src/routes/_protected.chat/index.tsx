@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 
 import {
   useInfiniteQuery,
@@ -52,21 +53,27 @@ import {
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import {
+  ChatThreadDecisionLabel,
+  drawableChatThreadDecision,
+  useOpenChatThreadDecision,
+} from "@/components/chat/chat-thread-decision";
 import { ChatThreadOriginPrefix } from "@/components/chat/chat-thread-origin-prefix";
 import { useChatModelSelection } from "@/components/chat/use-chat-model-selection";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { UserIdentityAvatar } from "@/components/user-avatar";
 import { MatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
 import { useChatDraftMeta } from "@/features/chat/hooks/use-chat-draft-meta";
 import { useChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { startNewThreadCommandHandoff } from "@/features/chat/lib/start-new-thread-command-handoff";
 import {
-  acquireChatRuntime,
   applyChatModelChange,
   chatThreadOptions,
   groupedChatThreadsOptions,
@@ -74,6 +81,7 @@ import {
   listChatHistoryItems,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import type { ChatHistoryItem } from "@/features/chat/queries";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -105,12 +113,13 @@ import {
 import { formatRelativeTime } from "@/lib/relative-time";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { ChatFileStack } from "@/routes/_protected.chat/-components/chat-file-stack";
-import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
+import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 
 export const Route = createFileRoute("/_protected/chat/")({
   loader: ({ context }) => {
@@ -224,16 +233,24 @@ function ChatIndex() {
   const userId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.id,
   });
-  const { data: workspacesData } = useQuery(
+  const workspacesDataQuery = useQuery(
     workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
   );
+  const workspacesDataView = useQueryView(workspacesDataQuery);
+  const workspacesData =
+    workspacesDataView.type === "items" ? workspacesDataView.items : undefined;
   const workspaces = workspacesData?.workspaces;
-  const { data: groupedThreadPages } = useInfiniteQuery(
+  const groupedThreadPagesQuery = useInfiniteQuery(
     groupedChatThreadsOptions({ activeOrganizationId, userId }),
   );
+  const groupedThreadPagesView = useQueryView(groupedThreadPagesQuery);
+  const groupedThreadPages =
+    groupedThreadPagesView.type === "items"
+      ? groupedThreadPagesView.items
+      : undefined;
   const groupedThreads = useMemo(
     () => mergeGroupedChatThreadPages(groupedThreadPages?.pages),
     [groupedThreadPages?.pages],
@@ -383,13 +400,17 @@ function ChatIndex() {
 
   const visibleMatters =
     pinnedMatters.length > 0 ? pinnedMatters : lastAccessedMatters;
-  const { data: memberPreviews } = useQuery(
+  const memberPreviewsQuery = useQuery(
     workspaceMemberPreviewsOptions({
       organizationId: activeOrganizationId,
       userId,
       workspaceIds: visibleMatters.map((matter) => matter.id),
     }),
   );
+  const memberPreviewsView = useQueryView(memberPreviewsQuery);
+  useQueryViewError(memberPreviewsView);
+  const memberPreviews =
+    memberPreviewsView.type === "items" ? memberPreviewsView.items : undefined;
   const mattersHeading =
     pinnedMatters.length > 0
       ? t("chat.landing.pinnedMatters")
@@ -399,6 +420,11 @@ function ChatIndex() {
     () => listChatHistoryItems(groupedThreads).slice(0, 5),
     [groupedThreads],
   );
+  const openChatThreadDecision = useOpenChatThreadDecision();
+  const openDecisionChatOnClick =
+    (chat: ChatHistoryItem) => (event: MouseEvent<HTMLAnchorElement>) => {
+      openChatThreadDecision(event, chat);
+    };
   const storedMatterColor = (workspaceId: string) =>
     workspaces?.find(({ id }) => id === workspaceId)?.color ?? null;
 
@@ -536,7 +562,7 @@ function ChatIndex() {
     // TanStack boundary fails before appending, this
     // throws here so the composer restores the draft
     // instead of navigating to an empty thread.
-    chat.startRouteHandoffMessage(message);
+    await chat.startRouteHandoffMessage(message);
 
     await navigate({
       to: "/chat/$threadId",
@@ -576,7 +602,7 @@ function ChatIndex() {
               </Button>
             }
           />
-          <ThreadsSheet />
+          <ChatHistoryLink />
         </ChromeHeaderActions>
       }
       hero={
@@ -654,83 +680,99 @@ function ChatIndex() {
     >
       <LandingSection
         heading={
-          <Link className={LANDING_SECTION_HEADING_CLASS} to="/workspaces">
+          <Tooltip
+            content={t("chat.landing.openAllMatters")}
+            render={
+              <Link
+                className={LANDING_SECTION_HEADING_CLASS}
+                to="/workspaces"
+              />
+            }
+          >
             {pinnedMatters.length > 0 ? (
               <PinIcon className="size-4" />
             ) : (
               <MatterIcon className="size-4" variant="all" />
             )}
             {mattersHeading}
-          </Link>
+          </Tooltip>
         }
       >
-        {visibleMatters.length > 0 ? (
-          visibleMatters.map((matter) => (
-            <MatterContextMenu
-              className="contents"
-              key={matter.id}
-              target={{
-                id: matter.id,
-                name: matter.name,
-                color: matter.color,
-                client: matter.client,
-              }}
-            >
-              <Link
-                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
-                params={{ workspaceId: matter.id }}
-                to="/workspaces/$workspaceId"
+        <QueryViewFeedback view={workspacesDataView} />
+        {(workspacesDataView.type === "items" ||
+          workspacesDataView.type === "empty") &&
+          (visibleMatters.length > 0 ? (
+            visibleMatters.map((matter) => (
+              <MatterContextMenu
+                className="contents"
+                key={matter.id}
+                target={{
+                  id: matter.id,
+                  name: matter.name,
+                  color: matter.color,
+                  client: matter.client,
+                }}
               >
-                <span className="min-w-0 flex-1">
-                  <LandingItemText
-                    icon={
-                      <MatterIcon
-                        className="size-4"
-                        matter={{ id: matter.id, color: matter.color }}
-                      />
-                    }
-                    iconTone="matter"
-                    meta={formatRelativeTime(matter.lastActivityAt)}
-                    title={matter.name}
-                  />
-                </span>
-                <MatterColleagues
-                  currentUserId={userId}
-                  preview={memberPreviews?.previews.find(
-                    (preview) => preview.workspaceId === matter.id,
-                  )}
-                />
-              </Link>
-            </MatterContextMenu>
-          ))
-        ) : (
-          <LandingEmpty>
-            <div className="flex flex-col items-start gap-2.5">
-              {t("chat.landing.noMatters")}
-              {canCreateMatter && (
-                <Button
-                  onClick={() => openCreateMatter()}
-                  size="sm"
-                  variant="outline"
+                <Link
+                  className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+                  params={{ workspaceId: matter.id }}
+                  to="/workspaces/$workspaceId"
                 >
-                  <PlusIcon className="size-4" />
-                  {t("workspaces.createNewWorkspace")}
-                </Button>
-              )}
-            </div>
-          </LandingEmpty>
-        )}
+                  <span className="min-w-0 flex-1">
+                    <LandingItemText
+                      icon={
+                        <MatterIcon
+                          className="size-4"
+                          matter={{ id: matter.id, color: matter.color }}
+                        />
+                      }
+                      iconTone="matter"
+                      meta={formatRelativeTime(matter.lastActivityAt)}
+                      title={matter.name}
+                    />
+                  </span>
+                  <MatterColleagues
+                    currentUserId={userId}
+                    preview={memberPreviews?.previews.find(
+                      (preview) => preview.workspaceId === matter.id,
+                    )}
+                  />
+                </Link>
+              </MatterContextMenu>
+            ))
+          ) : (
+            <LandingEmpty>
+              <div className="flex flex-col items-start gap-2.5">
+                {t("chat.landing.noMatters")}
+                {canCreateMatter && (
+                  <Button
+                    onClick={() => openCreateMatter()}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <PlusIcon className="size-4" />
+                    {t("workspaces.createNewWorkspace")}
+                  </Button>
+                )}
+              </div>
+            </LandingEmpty>
+          ))}
       </LandingSection>
       <LandingSection
         heading={
-          <Link
-            className={LANDING_SECTION_HEADING_CLASS}
-            search={{ kind: "skill" }}
-            to="/knowledge/tools"
+          <Tooltip
+            content={t("chat.landing.openSkillsLibrary")}
+            render={
+              <Link
+                className={LANDING_SECTION_HEADING_CLASS}
+                search={{ kind: "skill" }}
+                to="/knowledge/tools"
+              />
+            }
           >
             <SkillIcon className="size-4" />
             {t("chat.landing.skills")}
-          </Link>
+          </Tooltip>
         }
       >
         {suggestedSkills.length > 0 ? (
@@ -747,101 +789,126 @@ function ChatIndex() {
       </LandingSection>
       <LandingSection
         heading={
-          <ThreadsSheet
-            icon={<HistoryIcon className="size-4" />}
-            label={t("chat.landing.recentChats")}
-            triggerVariant="section"
-          />
+          <Tooltip
+            content={t("chat.landing.openChatHistory")}
+            render={
+              <Link
+                className={LANDING_SECTION_HEADING_CLASS}
+                to="/chat/history"
+              />
+            }
+          >
+            <HistoryIcon className="size-4" />
+            {t("chat.landing.recentChats")}
+          </Tooltip>
         }
       >
-        {recentChats.length > 0 ? (
-          recentChats.map((chat) =>
-            chat.scope === "workspace" ? (
-              <Link
-                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
-                key={chat.id}
-                params={{
-                  workspaceId: chat.workspaceId,
-                  threadId: chat.id,
-                }}
-                to="/chat/workspaces/$workspaceId/$threadId"
-              >
-                <span className="min-w-0 flex-1">
-                  <LandingItemText
-                    meta={
-                      <>
-                        <ChatThreadOriginPrefix origin={chat.origin} />
-                        <span
-                          aria-hidden="true"
-                          // Centred on the cap height, not the x-height:
-                          // `align-middle` reads low beside capitals.
-                          className="me-1.5 inline-block size-1.5 rounded-full align-[0.1em]"
-                          style={{
-                            backgroundColor: resolveMatterColor(
-                              chat.workspaceId,
-                              storedMatterColor(chat.workspaceId),
-                            ),
-                          }}
-                        />
-                        <BidiText>{chat.workspaceName}</BidiText>
-                        {" · "}
-                        {formatRelativeTime(chat.updatedAt)}
-                      </>
-                    }
-                    title={
-                      isPlaceholderThreadTitle(chat.title)
-                        ? t("chat.newChat")
-                        : chat.title
-                    }
-                  />
-                </span>
-                <ChatFileStack attachedFiles={chat.context} />
-              </Link>
-            ) : (
-              <Link
-                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
-                key={chat.id}
-                params={{ threadId: chat.id }}
-                to="/chat/$threadId"
-              >
-                <span className="min-w-0 flex-1">
-                  <LandingItemText
-                    meta={
-                      <>
-                        <ChatThreadOriginPrefix origin={chat.origin} />
-                        {formatRelativeTime(chat.updatedAt)}
-                      </>
-                    }
-                    title={
-                      isPlaceholderThreadTitle(chat.title)
-                        ? t("chat.newChat")
-                        : chat.title
-                    }
-                  />
-                </span>
-                <ChatFileStack attachedFiles={chat.context} />
-              </Link>
-            ),
-          )
-        ) : (
-          <LandingEmpty>
-            <div className="flex flex-col items-start gap-2.5">
-              {t("chat.landing.noRecentChats")}
-              <Button
-                onClick={() => focusThread(threadRef)}
-                size="sm"
-                variant="outline"
-              >
-                <NewChatIcon className="size-4" />
-                {t("chat.newChat")}
-              </Button>
-            </div>
-          </LandingEmpty>
-        )}
+        <QueryViewFeedback view={groupedThreadPagesView} />
+        {(groupedThreadPagesView.type === "items" ||
+          groupedThreadPagesView.type === "empty") &&
+          (recentChats.length > 0 ? (
+            recentChats.map((chat) =>
+              chat.scope === "workspace" ? (
+                <Link
+                  className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+                  key={chat.id}
+                  onClick={openDecisionChatOnClick(chat)}
+                  params={{
+                    workspaceId: chat.workspaceId,
+                    threadId: chat.id,
+                  }}
+                  to="/chat/workspaces/$workspaceId/$threadId"
+                >
+                  <span className="min-w-0 flex-1">
+                    <LandingItemText
+                      meta={
+                        <>
+                          <ChatThreadOriginPrefix origin={chat.origin} />
+                          <span
+                            aria-hidden="true"
+                            // Centred on the cap height, not the x-height:
+                            // `align-middle` reads low beside capitals.
+                            className="me-1.5 inline-block size-1.5 rounded-full align-[0.1em]"
+                            style={{
+                              backgroundColor: resolveMatterColor(
+                                chat.workspaceId,
+                                storedMatterColor(chat.workspaceId),
+                              ),
+                            }}
+                          />
+                          <BidiText>{chat.workspaceName}</BidiText>
+                          {" · "}
+                          <ChatDecisionMetaPrefix chat={chat} />
+                          {formatRelativeTime(chat.updatedAt)}
+                        </>
+                      }
+                      title={
+                        isPlaceholderThreadTitle(chat.title)
+                          ? t("chat.newChat")
+                          : chat.title
+                      }
+                    />
+                  </span>
+                  <ChatFileStack attachedFiles={chat.context} />
+                </Link>
+              ) : (
+                <Link
+                  className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
+                  key={chat.id}
+                  onClick={openDecisionChatOnClick(chat)}
+                  params={{ threadId: chat.id }}
+                  to="/chat/$threadId"
+                >
+                  <span className="min-w-0 flex-1">
+                    <LandingItemText
+                      meta={
+                        <>
+                          <ChatThreadOriginPrefix origin={chat.origin} />
+                          <ChatDecisionMetaPrefix chat={chat} />
+                          {formatRelativeTime(chat.updatedAt)}
+                        </>
+                      }
+                      title={
+                        isPlaceholderThreadTitle(chat.title)
+                          ? t("chat.newChat")
+                          : chat.title
+                      }
+                    />
+                  </span>
+                  <ChatFileStack attachedFiles={chat.context} />
+                </Link>
+              ),
+            )
+          ) : (
+            <LandingEmpty>
+              <div className="flex flex-col items-start gap-2.5">
+                {t("chat.landing.noRecentChats")}
+                <Button
+                  onClick={() => focusThread(threadRef)}
+                  size="sm"
+                  variant="outline"
+                >
+                  <NewChatIcon className="size-4" />
+                  {t("chat.newChat")}
+                </Button>
+              </div>
+            </LandingEmpty>
+          ))}
       </LandingSection>
     </LandingLayout>
   );
 }
+
+/** A decision chat's decision, leading its row's time; nothing for others. */
+const ChatDecisionMetaPrefix = ({ chat }: { chat: ChatHistoryItem }) => {
+  const decision = drawableChatThreadDecision(chat);
+  return decision === null ? null : (
+    <>
+      <ChatThreadDecisionLabel decision={decision} />
+      {" · "}
+    </>
+  );
+};
 
 type SuggestedSkillRowProps = {
   onSelect: () => void;

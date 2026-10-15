@@ -278,7 +278,7 @@ const lockLegislationProjectionSource = async (
 };
 
 /** Take the source-policy half of the canonical projection lock order. */
-export const lockCorpusProjectionSourceTx = async (
+const lockCorpusProjectionSourceTx = async (
   tx: Transaction,
   subject: CorpusIndexProjectionSubject,
 ): Promise<void> => {
@@ -296,7 +296,7 @@ export const lockCorpusProjectionSourceTx = async (
 };
 
 /** Lock source policy before inserting a canonical subject that has no row yet. */
-export const lockCorpusProjectionSourceByIdTx = async (
+const lockCorpusProjectionSourceByIdTx = async (
   tx: Transaction,
   source: CorpusIndexProjectionSource,
 ): Promise<void> => {

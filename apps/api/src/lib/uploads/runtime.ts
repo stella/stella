@@ -56,14 +56,6 @@ export const tmpUploadKeys = (props: TmpUploadKeyProps): string[] => [
   legacyTmpUploadKey(props.uploadId),
 ];
 
-/** Convert lowercase hex SHA-256 to base64 (S3's checksum API expects base64). */
-export const sha256HexToBase64 = (hex: string): string =>
-  Buffer.from(hex, "hex").toString("base64");
-
-/** Convert base64 SHA-256 (as returned by S3 HEAD) to lowercase hex. */
-export const sha256Base64ToHex = (base64: string): string =>
-  Buffer.from(base64, "base64").toString("hex");
-
 export class UploadFinalizeError extends TaggedError("UploadFinalizeError")<{
   code?: string;
   status: 400 | 404 | 409 | 422 | 500;

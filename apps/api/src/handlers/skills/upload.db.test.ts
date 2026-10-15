@@ -3,13 +3,18 @@ import { and, eq } from "drizzle-orm";
 import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+import { writeZipEntry } from "@stll/docx-utils";
 import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -44,6 +49,8 @@ const memberSafeDb = (): SafeDb =>
 const upload = async (file: File) =>
   await uploadSkill.handler(
     createTestHandlerContext<Parameters<typeof uploadSkill.handler>[0]>({
+      scopedDb: NO_DB,
+      audit: auditRecorderDouble(),
       memberRole: sessionMemberRole("member"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -92,12 +99,17 @@ test("a pack the file scan rejects is refused and nothing is installed", async (
 test("a pack with a binary asset is installed and the response lists the file left out", async () => {
   const name = `binary-asset-${Bun.randomUUIDv7().slice(-8)}`;
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "SKILL.md",
     `---\nname: ${name}\ndescription: Upload scan test.\n---\n\nUse the logo.\n`,
   );
-  zip.file("references/brand.md", "# Brand");
-  zip.file("assets/logo.png", new Uint8Array([0x89, 0x50, 0xff, 0xfe]));
+  writeZipEntry(zip, "references/brand.md", "# Brand");
+  writeZipEntry(
+    zip,
+    "assets/logo.png",
+    new Uint8Array([0x89, 0x50, 0xff, 0xfe]),
+  );
   const bytes = await zip.generateAsync({ type: "arraybuffer" });
 
   const result = await upload(

@@ -50,6 +50,11 @@ export const statements = {
   // A reader's own stored search: their criteria, their matters, capped per
   // user, and audited like any other stored query.
   savedSearch: ["create", "update", "delete"],
+  // A user's own search history: what they searched for and opened, private
+  // to them. Held by every role, an external collaborator included: it is a
+  // trace of their own reading that nobody else sees, not work they leave in
+  // the organization.
+  searchHistory: ["read", "create", "delete"],
   // The member's own link between their account and an outside system: an
   // MCP server they connect, a SharePoint sign-in, an agent client bound to
   // them, a desktop registry key. What the organization permits to be linked
@@ -100,6 +105,7 @@ const externalStellaGrants = {
   caseLawResearch: [],
   legalReaderAnnotation: [],
   savedSearch: [],
+  searchHistory: ["read", "create", "delete"],
   integration: [],
 } satisfies StellaPermissionMap;
 
@@ -147,6 +153,7 @@ const memberStellaGrants = {
   caseLawResearch: ["create", "update", "delete", "run"],
   legalReaderAnnotation: ["create", "update", "delete"],
   savedSearch: ["create", "update", "delete"],
+  searchHistory: ["read", "create", "delete"],
   integration: ["create", "update", "delete"],
 } satisfies StellaPermissionMap;
 

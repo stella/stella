@@ -26,7 +26,7 @@ export type VerdictTier = (typeof VERDICT_TIERS)[number];
 // gray swatch (it is not a risk signal); the review surface distinguishes the
 // two neutrals visually (a dashed chip for not-applicable vs the solid muted
 // chip for missing).
-export const VERDICT_TIER_COLORS = {
+const VERDICT_TIER_COLORS = {
   compliant: "green",
   fallback: "amber",
   deviation: "red",

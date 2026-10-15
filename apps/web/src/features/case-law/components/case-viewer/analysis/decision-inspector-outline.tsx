@@ -3,6 +3,7 @@ import { useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { readerBlockByAnchor } from "@stll/decision-reader/reader-landing";
 import { Button } from "@stll/ui/button";
 import { ListTreeIcon } from "@stll/ui/icons";
 import {
@@ -12,8 +13,6 @@ import {
   PopoverTrigger,
 } from "@stll/ui/popover";
 import { ScrollArea } from "@stll/ui/scroll-area";
-
-import { readerBlockByAnchor } from "@/components/legal-reader/reader-landing";
 
 import { flattenAnalysisHeadings, getHeadingDisplayAnchorId } from "./types";
 import type { AnalysisState } from "./use-decision-analysis";

@@ -4,7 +4,8 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Loader2Icon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
@@ -36,7 +37,7 @@ type ChatTitleSuggestButtonProps = {
 
 /**
  * The magic-wand "suggest a title" trigger, shared by every rename surface
- * (rename editors, the inspector tab header, threads-sheet rows) so the
+ * (rename editors, the inspector tab header, chat history rows) so the
  * icon, pending spinner, and disabled explanations stay identical.
  */
 export const ChatTitleSuggestButton = ({
@@ -74,7 +75,7 @@ export const ChatTitleSuggestButton = ({
       variant="muted"
     >
       {isPending ? (
-        <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+        <Loader className="size-3.5" label={t("common.loading")} size="sm" />
       ) : (
         <AiActionIcon aria-hidden="true" className="size-3.5" />
       )}
@@ -114,7 +115,7 @@ type ChatTitleRenameProps = {
   ownsRenameCommand: boolean;
   /**
    * Surface-specific view-mode content. Defaults to the click-to-edit title
-   * button the breadcrumb established. The threads sheet substitutes its
+   * button the breadcrumb established. The chat history page substitutes its
    * navigation row and triggers editing from its own wand.
    */
   renderView?:

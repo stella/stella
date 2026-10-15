@@ -345,7 +345,7 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
           survivor.release();
         }
       },
-      { closeTimeout: 0 },
+      { closeMode: "force" },
     );
   });
 });

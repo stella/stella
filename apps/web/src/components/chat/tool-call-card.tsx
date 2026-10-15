@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import type { QueryClient } from "@tanstack/react-query";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 import { Button } from "@stll/ui/button";
@@ -25,16 +25,19 @@ import {
 } from "@/components/chat/tool-call-timing.logic";
 import { UnrestoredFieldsNotice } from "@/components/chat/unrestored-fields-notice";
 import {
+  BUILT_IN_SKILL_ORIGIN,
   parseSkillResourceSource,
   type SkillResourceSource,
 } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
-import { findSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
+import { findInstalledSkillDisplayName } from "@/components/inspector/skill-display-name.logic";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 type ToolPart = ChatToolCallPart;
 
@@ -337,28 +340,57 @@ const findCatalogEntry = ({
   };
 };
 
-// The skills list is cached per user; without a signed-in user (the dev
-// playground) there is no cache to read.
-const readCachedSkillPages = ({
+// A built-in's title follows the reader's language, so only an installed
+// skill's tab stores one. The chat routes load the skills list, so its title
+// is read from the cache, which is kept per user; without a signed-in user
+// (the dev playground) or the cache, the tab shows the slug.
+const skillResourceTabSource = ({
   organizationId,
   queryClient,
+  source,
   user,
 }: {
   organizationId: string;
   queryClient: QueryClient;
+  source: SkillResourceSource;
   user: AuthenticatedUser | null;
-}) =>
-  user === null
-    ? undefined
-    : queryClient.getQueryData(skillsOptions(organizationId, user.id).queryKey)
-        ?.pages;
+}) => {
+  if (source.origin === BUILT_IN_SKILL_ORIGIN || user === null) {
+    return source;
+  }
+  const skillDisplayName = findInstalledSkillDisplayName({
+    pages: queryClient.getQueryData(
+      skillsOptions(organizationId, user.id).queryKey,
+    )?.pages,
+    skillId: source.skillId,
+  });
+  return skillDisplayName === undefined
+    ? source
+    : { ...source, skillDisplayName };
+};
+
+/** A follow-up a tool row offers once its call completed, such as opening
+ *  what the call saved. */
+export type ToolCallAction = { label: string; onClick: () => void };
+
+export const toolFailureLabelKey = (
+  rawErrorDetails: ReturnType<typeof getToolOutputError>,
+  state: ToolPart["state"],
+) => {
+  if (rawErrorDetails !== undefined) {
+    return "chat.toolCall.failed";
+  }
+  return state === "error" ? "chat.toolCall.interrupted" : undefined;
+};
 
 export const ToolCallCard = ({
+  action,
   activeOrganizationId,
   durationMs,
   part,
   showDetails,
 }: {
+  action?: ToolCallAction | undefined;
   activeOrganizationId: string;
   /** Known elapsed time, used by persisted callers and visual fixtures. */
   durationMs?: number;
@@ -372,10 +404,14 @@ export const ToolCallCard = ({
   const user = useMaybeAuthenticatedUser();
   const name = part.name;
   const mcpToolInfo = getMcpToolInfo(name);
-  const { data: catalogData } = useQuery({
+  const catalogDataQuery = useQuery({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: mcpToolInfo !== null,
   });
+  const catalogDataView = useQueryView(catalogDataQuery);
+  useQueryViewError(catalogDataView);
+  const catalogData =
+    catalogDataView.type === "items" ? catalogDataView.items : undefined;
   const connectors = catalogData ? catalogData.connectors : [];
   const catalogEntry = findCatalogEntry({
     toolName: name,
@@ -433,12 +469,9 @@ export const ToolCallCard = ({
   // never produced an `output.error`) still reads as failed via a generic
   // interrupted label.
   const rawErrorDetails = getToolOutputError(part.output);
-  let errorMessage: string | undefined;
-  if (rawErrorDetails !== undefined) {
-    errorMessage = t("chat.toolCall.failed");
-  } else if (part.state === "error") {
-    errorMessage = t("chat.toolCall.interrupted");
-  }
+  const failureLabelKey = toolFailureLabelKey(rawErrorDetails, part.state);
+  const errorMessage =
+    failureLabelKey === undefined ? undefined : t(failureLabelKey);
   const hasError = errorMessage !== undefined;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
@@ -466,7 +499,6 @@ export const ToolCallCard = ({
           <div
             className={cn(
               "group/tool-step hover:bg-muted/35 focus-within:bg-muted/35 flex max-w-full items-center rounded-lg",
-              expanded && "bg-muted/25 rounded-b-none",
               hasError &&
                 "bg-destructive/10 text-destructive hover:bg-destructive/15",
             )}
@@ -482,21 +514,14 @@ export const ToolCallCard = ({
           )}
           onClick={() => {
             if (skillResourceOutput) {
-              // The chat routes load the skills list, so its title is read
-              // from the cache; without it the tab shows the slug.
-              const skillDisplayName = findSkillDisplayName({
-                pages: readCachedSkillPages({
+              useInspectorTabsStore.getState().openSkillResourceTab({
+                ...skillResourceTabSource({
                   organizationId: activeOrganizationId,
                   queryClient,
+                  source: skillResourceOutput.source,
                   user,
                 }),
                 skillName: skillResourceOutput.skillName,
-                source: skillResourceOutput.source,
-              });
-              useInspectorTabsStore.getState().openSkillResourceTab({
-                ...skillResourceOutput.source,
-                skillName: skillResourceOutput.skillName,
-                ...(skillDisplayName === undefined ? {} : { skillDisplayName }),
                 resourcePath: skillResourceOutput.path,
                 mimeType: skillResourceOutput.mimeType,
                 content: skillResourceOutput.content,
@@ -540,6 +565,17 @@ export const ToolCallCard = ({
             </span>
           )}
         </button>
+        {action !== undefined && (
+          <Button
+            className="me-1 shrink-0"
+            onClick={action.onClick}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            {action.label}
+          </Button>
+        )}
         {mcpToolInfo !== null && (
           <Popover>
             <PopoverTrigger
@@ -592,97 +628,99 @@ export const ToolCallCard = ({
           showCodeToolOutput ||
           toolInput !== undefined ||
           hasOutput) && (
-          <div className="bg-muted/25 space-y-3 rounded-b-lg px-3 pt-1 pb-3">
+          <div className="space-y-1 ps-2 pt-1 pb-2">
             {showMcpExactCall && (
-              <div>
-                <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                  {t("chat.toolCall.exactCall")}
-                </div>
-                <ToolCallCodeBlock
-                  code={JSON.stringify(
-                    { input: toolInput, tool: name },
-                    null,
-                    2,
-                  )}
-                  language="json"
-                />
-              </div>
+              <ToolCallCodeBlock
+                code={JSON.stringify({ input: toolInput, tool: name }, null, 2)}
+                label={t("chat.toolCall.exactCall")}
+                language="json"
+                tone="call"
+              />
             )}
             {!showMcpExactCall &&
               codeToolSource === undefined &&
               toolInput !== undefined && (
-                <div>
-                  <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                    {t("chat.toolCall.input")}
-                  </div>
-                  <ToolCallCodeBlock
-                    code={JSON.stringify(toolInput, null, 2)}
-                    language="json"
-                  />
-                </div>
+                <ToolCallCodeBlock
+                  code={JSON.stringify(toolInput, null, 2)}
+                  label={t("chat.toolCall.input")}
+                  language="json"
+                  tone="call"
+                />
               )}
             {codeToolSource !== undefined && (
-              <div>
-                <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                  {t("chat.toolCall.sourceCode")}
-                </div>
-                <ToolCallCodeBlock
-                  code={codeToolSource}
-                  language="typescript"
-                  lineNumbers
-                />
-              </div>
+              <ToolCallCodeBlock
+                code={codeToolSource}
+                label={t("chat.toolCall.sourceCode")}
+                language="typescript"
+                lineNumbers
+                tone="call"
+              />
             )}
             {codeToolLogs.length > 0 && (
-              <div>
-                <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                  {t("chat.toolCall.consoleLogs")}
-                </div>
-                <ToolCallCodeBlock
-                  code={codeToolLogs.join("\n")}
-                  language="text"
-                />
-              </div>
+              <ToolCallCodeBlock
+                code={codeToolLogs.join("\n")}
+                label={t("chat.toolCall.consoleLogs")}
+                language="text"
+                tone="result"
+              />
             )}
             {hasOutput && "output" in part && (
-              <div>
-                <div className="text-muted-foreground text-2xs mb-1 font-medium">
-                  {t("chat.toolCall.output")}
-                </div>
-                <ToolCallCodeBlock
-                  code={JSON.stringify(part.output, null, 2)}
-                  language="json"
-                />
-              </div>
+              <ToolCallCodeBlock
+                code={JSON.stringify(part.output, null, 2)}
+                label={t("chat.toolCall.output")}
+                language="json"
+                tone="result"
+              />
             )}
           </div>
         )}
       {hasError && errorMessage && (
-        <div className="max-w-xl py-1">
-          <p className="text-destructive text-2xs leading-relaxed">
-            {errorMessage}
-          </p>
-          {rawErrorDetails !== undefined && (
-            <details className="group">
-              <summary className="text-muted-foreground hover:text-foreground text-2xs cursor-pointer">
-                <span className="group-open:hidden">
-                  {t("common.showDetails")}
-                </span>
-                <span className="hidden group-open:inline">
-                  {t("common.hideDetails")}
-                </span>
-              </summary>
-              <ToolCallCodeBlock code={rawErrorDetails} language="text" />
-            </details>
-          )}
-        </div>
+        <ToolCallFailureDetails
+          errorMessage={errorMessage}
+          rawErrorDetails={rawErrorDetails}
+        />
       )}
       <UnrestoredFieldsNotice output={part.output} />
     </div>
   );
 };
 
-const getToolOutputError = (output: unknown): string | undefined => {
+/** The short human failure line, with the raw tool error (written for the
+ *  model, not for people) behind a collapsed disclosure for debugging. */
+export const ToolCallFailureDetails = ({
+  errorMessage,
+  rawErrorDetails,
+}: {
+  errorMessage: string;
+  rawErrorDetails: string | undefined;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="max-w-xl py-1">
+      <p className="text-destructive text-2xs leading-relaxed">
+        {errorMessage}
+      </p>
+      {rawErrorDetails !== undefined && (
+        <details className="group">
+          <summary className="text-muted-foreground hover:text-foreground text-2xs cursor-pointer">
+            <span className="group-open:hidden">{t("common.showDetails")}</span>
+            <span className="hidden group-open:inline">
+              {t("common.hideDetails")}
+            </span>
+          </summary>
+          <ToolCallCodeBlock
+            code={rawErrorDetails}
+            label={t("chat.toolCall.output")}
+            language="text"
+            tone="result"
+          />
+        </details>
+      )}
+    </div>
+  );
+};
+
+export const getToolOutputError = (output: unknown): string | undefined => {
   if (typeof output === "string") {
     return undefined;
   }

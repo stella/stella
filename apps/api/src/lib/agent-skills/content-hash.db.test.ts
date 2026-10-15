@@ -21,6 +21,7 @@ import uploadSkillResource from "@/api/handlers/skills/resources/upload";
 import updateSkill from "@/api/handlers/skills/update";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -163,7 +164,7 @@ const skillEditTools = (skillId: SafeId<"agentSkill">) =>
       id: skillId,
       origin: "authored",
       requiredTools: [],
-      resources: [{ kind: "reference", path: "references/checklist.md" }],
+      resources: [{ path: "references/checklist.md" }],
       source: "installed",
       toolName: "fixture",
       version: null,
@@ -333,7 +334,7 @@ const MUTATION_PATHS = {
       await uploadSkillResource.handler(
         context(uploadSkillResource.handler, {
           body: {
-            path: "knowledge/uploaded.md",
+            path: "references/uploaded.md",
             file: new File(["Uploaded knowledge."], "uploaded.md", {
               type: "text/markdown",
             }),
@@ -370,7 +371,7 @@ const MUTATION_PATHS = {
     await runSkillEditTool({
       skillId,
       toolName: "create-current-skill-resource",
-      input: { path: "knowledge/from-chat.md", content: "Created from chat." },
+      input: { path: "references/from-chat.md", content: "Created from chat." },
     });
     return skillId;
   },
@@ -396,10 +397,11 @@ describe("skill content hash", () => {
       });
     const fetched = await fetchSkillPackageFromUrl(
       `https://skills.example/${name}/SKILL.md`,
-      createSkillPackageFetchContext(
-        { deadlineAt: Date.now() + 30_000, maxRequests: 4 },
-        serve,
-      ),
+      createSkillPackageFetchContext({
+        fetchBytes: serve,
+        limits: { deadlineAt: Date.now() + 30_000, maxRequests: 4 },
+        permit: grantThirdPartyOutboundPermit(),
+      }),
     );
     if (Result.isError(fetched)) {
       throw fetched.error;

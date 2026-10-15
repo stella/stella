@@ -5,7 +5,7 @@
  * (AWS SES, SMTP, etc.) behind a uniform API so the rest
  * of the codebase never couples to a vendor SDK.
  */
-export type EmailMessage = {
+type EmailMessage = {
   from: string;
   to: string;
   subject: string;

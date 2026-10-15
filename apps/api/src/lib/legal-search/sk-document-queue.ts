@@ -30,7 +30,7 @@ export const DOCUMENT_TIER = {
   REMAINING: "remaining",
 } as const;
 
-export type DocumentTier = (typeof DOCUMENT_TIER)[keyof typeof DOCUMENT_TIER];
+type DocumentTier = (typeof DOCUMENT_TIER)[keyof typeof DOCUMENT_TIER];
 
 /** A decision to fetch, and which tier it came from. */
 type QueuedDocument = {

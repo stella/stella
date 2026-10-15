@@ -2,7 +2,7 @@ import type { REGION_BY_COUNTRY } from "@/features/case-law/case-law-jurisdictio
 import {
   isPublicStatuteCountry,
   type StatuteCountry,
-} from "@/lib/statute-route";
+} from "@/lib/statutes/statute-route";
 
 /** The two corpora the home dispatches an entry to. */
 export type LawScope = "decisions" | "statutes";
@@ -44,7 +44,7 @@ const LAW_HOME_EXAMPLES = {
 } as const satisfies Record<LawHomeJurisdiction, LawHomeDescriptor["examples"]>;
 
 /** Expects the corpus form (`CZE`), which `fromCaseLawCountryParam` produces. */
-export const isLawHomeJurisdiction = (
+const isLawHomeJurisdiction = (
   country: string,
 ): country is LawHomeJurisdiction => Object.hasOwn(LAW_HOME_EXAMPLES, country);
 

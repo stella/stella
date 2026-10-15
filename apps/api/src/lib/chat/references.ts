@@ -1,19 +1,7 @@
 import type { ResourceRef } from "@stll/api-contract";
 
-export {
-  CHAT_MENTION_CATEGORIES,
-  CHAT_MENTION_HREF_PREFIXES,
-  CHAT_REFERENCE_CATEGORIES,
-  CHAT_REFERENCE_HREF_PREFIXES,
-} from "@stll/api-contract";
-export type {
-  ChatMentionCategory,
-  ChatMentionHref,
-  ChatMentionHrefPrefix,
-  ChatMentionHrefPrefixMap,
-  ChatReferenceCategory,
-  ChatReferenceHrefPrefix,
-} from "@stll/api-contract";
+export { CHAT_REFERENCE_HREF_PREFIXES } from "@stll/api-contract";
+export type { ChatMentionHref } from "@stll/api-contract";
 
 type BaseChatMention = {
   id: string;

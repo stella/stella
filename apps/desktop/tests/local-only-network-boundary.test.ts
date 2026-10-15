@@ -44,7 +44,7 @@ const expectFixedMessageLogs = (file: string, source: string) => {
     /(?:tracing|log)::(?:trace|debug|info|warn|error)!\([\s\S]*?\);/gu,
   )) {
     expect(log[0], file).toMatch(
-      /^(?:tracing|log)::(?:trace|debug|info|warn|error)!\(\s*"(?:\\.|[^"\\])*"\s*,?\s*\);$/u,
+      /^(?:tracing|log)::(?:trace|debug|info|warn|error)!\(\s*"(?:\\.|[^"\\{}])*"\s*,?\s*\);$/u,
     );
   }
 };
@@ -57,6 +57,7 @@ describe("local-only network boundary", () => {
     );
     for (const source of [
       'let payload = &segment.window_title; tracing::warn!(?payload, "debug");',
+      'tracing::warn!("window: {title}");',
       'tracing::warn!(error = %error, "activity day is unreadable");',
       'use tracing::warn; warn!("{}", document);',
       'println!("{}", document);',
@@ -74,7 +75,7 @@ describe("local-only network boundary", () => {
         ...(await nativeFiles()).filter((file) =>
           isFeatureModule(feature, file),
         ),
-        ...feature.nativeModules,
+        ...feature.nativeModules.map(({ file }) => file),
       ];
       expect(files.length).toBeGreaterThan(0);
       for (const file of files) {
@@ -144,7 +145,7 @@ describe("local-only network boundary", () => {
           ...(await nativeFiles()).filter((name) =>
             isFeatureModule(feature, name),
           ),
-          ...feature.nativeModules,
+          ...feature.nativeModules.map(({ file }) => file),
           ...feature.commandOwners.map(({ module }) => path.basename(module)),
         ]),
       ];
@@ -158,7 +159,11 @@ describe("local-only network boundary", () => {
       for (const file of featureFiles) {
         const source = await readNative(file);
         expectFixedMessageLogs(file, source);
-        if (feature.nativeModules.some((module) => module === file)) {
+        if (
+          feature.nativeModules.some(
+            (module) => module.file === file && module.logging === "none",
+          )
+        ) {
           expect(source, file).not.toMatch(
             /\b(?:println|eprintln|dbg)!|\b(?:tracing|log)::/u,
           );

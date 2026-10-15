@@ -22,6 +22,11 @@ and coordinate development.
 5. (Optional) Set up the documentation MCP server: `bun run setup:mcp`
 6. Start the dev environment: `bun run dev`
 
+For machines running many agent sessions, the documentation MCP server also has
+an opt-in shared HTTP mode (`bun run serve:http` in `.claude/mcp`). Point an MCP
+client that supports HTTP servers at `http://127.0.0.1:8765/mcp` in its
+user-level configuration; the existing per-session setup remains the default.
+
 `bun run dev` now prepares the local stack for the current checkout,
 including worktree-aware `.env` linking and automatic port offsets when
 the default ports are already taken. Use `bun run dev:web` or
@@ -40,6 +45,22 @@ server requests still use the API port directly. These computed values override
 
 See the [README](README.md) for the full tech stack and project
 structure.
+
+### Typechecking
+
+Run `bun run typecheck` for workspace checks or `bun run typecheck:repo` for
+repository tooling. These commands use Bun 1.4.3’s native checker locally and in
+CI. For a direct project check, use
+`bun check --no-pretty --all --project=<tsconfig path>`; add `--build` for a
+solution config with project references. `bun run check:typecheck-parity` compares
+TypeScript and Bun diagnostics on repository code and seeded cases. CI runs full
+parity when the Bun pin or resolved TypeScript compiler versions change, and
+nightly or on manual dispatch. Every PR retains Bun checks and a seeded-error
+probe.
+
+Editors continue to use the TypeScript language service: Bun provides no LSP.
+Keep the TypeScript dependency and its compatibility alias for compiler-API tools
+such as dependency-cruiser and for declaration generation.
 
 ### Claude Code LSP (experimental)
 
@@ -82,25 +103,59 @@ to explore the codebase.
 1. Create a branch from `main` for your changes.
 2. Make your changes, following the conventions below.
 3. Run checks before pushing:
+
    ```bash
    bun run autofix
    bun run verify
    ```
+
    `autofix` regenerates the derived files your change affects, applies
    safe lint fixes and formats the changed files. CI does this on
    same-repository pull requests but not on pull requests from forks, so
    from a fork run it and commit the result.
-   `verify` mirrors CI's package checks (lint, format, typecheck, tests,
-   i18n, dependency hygiene) against the canonical repository's `main`.
-   A pass covers the package checks, not all of `ci-result`: the web and
-   landing builds run in CI, and browser, e2e and service-backed suites
-   run in the merge queue. Use `bun run verify --all` to check every
-   package instead of only those affected by your branch.
+   `verify` derives cheap pre-push checks from the `STELLA_VERIFY` steps in
+   `.github/workflows/ci.yml`: affected lint and typecheck, type-cost,
+   ratchets, design backlog, test weights and policy guards. `--fix` runs
+   the workflow's safe changed-file fixes first; `--all` checks all packages,
+   and `--list` prints the derived plan. Expensive suites remain in CI.
+
+   Hosts with resource admission configure `~/.config/stella/verify.json`:
+   Command settings are argument arrays: `localGate` defaults to
+   `["load-admit", "--"]`, `remote` to `["remote-check"]`, and `installer`
+   to `["serial-install"]`. The gate receives the derived workflow command
+   arguments after its configured prefix (`0` admits, `75` refuses, `64`
+   reports usage errors). Configure the separator in `localGate`; verification
+   adds none. Put executables on `PATH`, or use absolute paths on each host.
+   Command arguments cannot contain NUL bytes. On local refusal, the command probes
+   remote admission and runs there. Remote fix patches are checked against the
+   local tree before applying. If both hosts refuse, it prints that CI will
+   validate and exits `75`. The exact-base type-cost fallback uses the configured
+   serialized installer. Remote execution still requests local admission and
+   uses `REMOTE_CHECK=1` to prevent recursive offload.
+
 4. Open a pull request against `main`.
 5. Fill in the PR template and link a related issue.
 
-> In a fresh git worktree run `bun run setup:worktree` once (else `typecheck`
-> fails on a missing compiler binary). `bun run lint:changed` lints only your
+### Reading a CI failure
+
+When CI fails, the `ci-result` check lists every failed step as one
+annotation: job, step, kind (`infra`, `test`, `typecheck`, `lint`, `ratchet`,
+`policy`, `build` or `other`) and the first error lines with `file:line`.
+Only steps that actually failed are listed. One call fetches them for a
+pull request (replace `123`):
+
+```bash
+gh api graphql -F owner=stella -F repo=stella -F pr=123 -f query='query($owner: String!, $repo: String!, $pr: Int!) { repository(owner: $owner, name: $repo) { pullRequest(number: $pr) { commits(last: 1) { nodes { commit { checkSuites(first: 50) { nodes { checkRuns(first: 1, filterBy: {checkName: "ci-result"}) { nodes { annotations(first: 20) { nodes { annotationLevel path location { start { line } } title message } } } } } } } } } } } }' \
+  --jq '[.. | .annotations? | .nodes? // empty | .[] | select(.annotationLevel == "FAILURE")]'
+```
+
+The same records are in the run's `ci-failures` artifact
+(`gh run download <run-id> -n ci-failures`) and its job summary. A failing
+test step also ends its log with the failing tests and their errors. CI logs
+carry no colour codes.
+
+> In a fresh git worktree run `bun run setup:worktree` once to prepare dependencies.
+> `bun run lint:changed` lints only your
 > changed files in seconds; CI still runs the full `lint`.
 
 ## AI Commands

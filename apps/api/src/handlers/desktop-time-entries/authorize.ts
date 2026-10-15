@@ -4,9 +4,9 @@ import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
-import { isFeatureEnabled } from "@/api/lib/auth/feature-access/policy";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isFeatureEnabled } from "@/api/lib/feature-access/policy";
 
 const REQUIRED_FEATURE_IDS = [
   "activity-timeline",

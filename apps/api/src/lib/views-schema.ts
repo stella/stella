@@ -4,7 +4,6 @@ import * as v from "valibot";
 
 import {
   VIEW_FILTERS_MAX,
-  VIEW_LAYOUT_TYPES,
   type ViewLayoutType as ContractViewLayoutType,
   VIEW_SORTS_MAX,
 } from "@stll/api-contract";
@@ -25,7 +24,7 @@ const v1 = v.literal(1);
 
 const strictObjectOptions = { additionalProperties: false } as const;
 
-export const viewSortSchema = v.strictObject({
+const viewSortSchema = v.strictObject({
   propertyId: v.pipe(v.string(), v.minLength(1)),
   desc: v.boolean(),
 });
@@ -45,14 +44,12 @@ export const tViewSortSchema = t.Object(
  * column header, the table under the property's column. Optional, so a view
  * that has never chosen one stores nothing.
  */
-export const viewCalculationSchema = v.strictObject({
+const viewCalculationSchema = v.strictObject({
   propertyId: v.pipe(v.string(), v.minLength(1)),
   kind: v.picklist(CALCULATION_KINDS),
 });
 
-export type ViewCalculation = v.InferOutput<typeof viewCalculationSchema>;
-
-export const tViewCalculationSchema = t.Object(
+const tViewCalculationSchema = t.Object(
   {
     propertyId: t.String({ minLength: 1 }),
     kind: t.UnionEnum([...CALCULATION_KINDS]),
@@ -442,26 +439,3 @@ export const tUpdateViewBodySchema = t.Object(
   },
   strictObjectOptions,
 );
-
-export const updateViewInputSchema = v.strictObject({
-  viewId: v.string(),
-  name: v.optional(v.string()),
-  layout: v.optional(viewLayoutSchema),
-});
-
-export type UpdateViewInput = v.InferInput<typeof updateViewInputSchema>;
-
-const viewLayoutTypeSchema = v.picklist(VIEW_LAYOUT_TYPES);
-
-export const convertViewInputSchema = v.strictObject({
-  viewId: v.string(),
-  targetType: viewLayoutTypeSchema,
-});
-
-export type ConvertViewInput = v.InferInput<typeof convertViewInputSchema>;
-
-export const reorderViewsInputSchema = v.strictObject({
-  viewIds: v.array(v.string()),
-});
-
-export type ReorderViewsInput = v.InferInput<typeof reorderViewsInputSchema>;

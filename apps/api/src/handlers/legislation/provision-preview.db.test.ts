@@ -112,6 +112,7 @@ beforeAll(
         sourceId: openSourceId,
         eli: "CZ/2012/89",
         title: "Civil Code",
+        slug: "89-2012-sb",
         country: "CZE",
         language: "cs",
         documentAst: statuteAst(),
@@ -206,6 +207,16 @@ describe("reading one provision preview", () => {
     );
 
     expect(blockIds(preview)).toEqual(["b-4", "b-5", "b-6"]);
+  });
+
+  test("links the exact cited provision in its canonical consolidation", async () => {
+    const preview = await readPreview(civilCode, "par_898", "par_898-odst_2");
+    if (!("blocks" in preview)) {
+      throw new TypeError("Expected a public provision preview");
+    }
+    expect(preview.appUrl).toBe(
+      "http://localhost:3000/law/cze/statutes/89-2012-sb/v/2020-01-01#par_898-odst_2",
+    );
   });
 
   test("carries the language its text renders in", async () => {

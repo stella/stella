@@ -5,6 +5,10 @@ import type { RouteComponent } from "@tanstack/react-router";
 import { plugin } from "bun";
 import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 // A DOM for this file only: the frames and sections mount, fetch and react to
 // session changes, which a static render cannot show. Everything that touches
 // the DOM is loaded after it exists.
@@ -171,6 +175,17 @@ globalThis.fetch = Object.assign(
       }
       return Response.json(sessionBody());
     }
+    if (
+      path === "/v1/me/professional-use" &&
+      (askedAs === "org-a" || askedAs === "org-b")
+    ) {
+      return Response.json({
+        status: "accepted",
+        statementVersion: "2026-10",
+        termsVersion: "2026-10",
+        acceptedAt: "2026-10-01T00:00:00.000Z",
+      });
+    }
     if (path === "/v1/public/knowledge/template-packs") {
       return Response.json({
         items: templateCatalogue === "missing" ? [] : [CATALOGUE_PACK],
@@ -244,7 +259,6 @@ const { HotkeysProvider } = await import("@tanstack/react-hotkeys");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { refreshAuthQueries } = await import("@/lib/auth-queries");
-const { discardBootPrefetch } = await import("@/boot-prefetch");
 const { AppFrameHost } = await import("@/routes/-app-frame-host");
 const { Route: KnowledgeLayoutRoute } =
   await import("@/routes/knowledge/route");
@@ -391,15 +405,11 @@ const MEMBER_WAIT = { timeout: 10_000 };
 
 const settle = async () => {
   await testing.act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
 };
 
 beforeAll(() => {
-  // The page did not boot here, so there is no early session read to reuse.
-  discardBootPrefetch();
   requests.length = 0;
 });
 
@@ -407,7 +417,7 @@ afterAll(async () => {
   // Let React's scheduled work drain before the DOM goes away.
   await settle();
   globalThis.fetch = originalFetch;
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("Knowledge for every visitor, on one live client", () => {
@@ -559,9 +569,7 @@ describe("Knowledge for every visitor, on one live client", () => {
         respond();
       }
       await refetchForA;
-      await new Promise((resolve) => {
-        setTimeout(resolve, 20);
-      });
+      await sleep(20);
     });
     expect(
       cachedKeys(queryClient).filter((key) => key.includes("org-a")),

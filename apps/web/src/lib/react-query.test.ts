@@ -1,6 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, mock, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   CriticalQueryTimeoutError,
   ROUTE_QUERY_STALE_TIME_MS,
@@ -10,11 +12,6 @@ import {
   prefetchNonCriticalQuery,
   routeQueryOptions,
 } from "@/lib/react-query";
-
-const wait = async (ms: number) =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 describe("ensureCriticalQueryData", () => {
   test("cancels timed-out critical queries and reports the query key", async () => {
@@ -60,7 +57,7 @@ describe("ensureCriticalQueryData", () => {
     expect(caughtError.queryKey).toEqual(queryKey);
     expect(caughtError.message).toContain(JSON.stringify(queryKey));
 
-    await wait(0);
+    await sleep(0);
 
     expect(abortReceived).toBe(true);
     expect(queryClient.getQueryCache().find({ queryKey })?.state).toMatchObject(
@@ -90,7 +87,7 @@ describe("ensureCriticalQueryData", () => {
       { timeoutMs: 1 },
     );
 
-    await wait(5);
+    await sleep(5);
 
     expect(result).toBe("ok");
     expect(abortReceived).toBe(false);
@@ -108,14 +105,22 @@ describe("routeQueryOptions", () => {
     expect(options.staleTime).toBe(ROUTE_QUERY_STALE_TIME_MS);
   });
 
-  test("preserves explicit stale time overrides", () => {
-    const options = routeQueryOptions({
-      queryKey: ["route-query", "explicit"],
-      queryFn: async () => "ok",
-      staleTime: Number.POSITIVE_INFINITY,
-    });
+  test("preserves every explicit stale time policy", () => {
+    for (const staleTime of [
+      0,
+      1000,
+      Number.POSITIVE_INFINITY,
+      "static",
+      () => Number.POSITIVE_INFINITY,
+    ]) {
+      const options = routeQueryOptions({
+        queryKey: ["route-query", "explicit"],
+        queryFn: async () => "ok",
+        staleTime,
+      });
 
-    expect(options.staleTime).toBe(Number.POSITIVE_INFINITY);
+      expect(options.staleTime).toBe(staleTime);
+    }
   });
 });
 

@@ -764,7 +764,12 @@ const TableFileField = ({
           mimeType={content.mimeType}
           thumbnail={thumbnail}
         />
-        <BidiText as="span" className="min-w-0 truncate text-start">
+        {/* The name, not the icon, sets the chip's baseline, so a wrapped
+            row lines the name up with its neighbours' first lines. */}
+        <BidiText
+          as="span"
+          className="min-w-0 self-baseline truncate text-start"
+        >
           <HighlightedText columnId={propertyId} text={content.fileName} />
         </BidiText>
       </Tooltip>
@@ -784,7 +789,7 @@ const TableFileField = ({
         mimeType={content.mimeType}
         thumbnail={thumbnail}
       />
-      <BidiText as="span" className="min-w-0 truncate text-start">
+      <BidiText as="span" className="min-w-0 self-baseline truncate text-start">
         <HighlightedText columnId={propertyId} text={content.fileName} />
       </BidiText>
     </Tooltip>

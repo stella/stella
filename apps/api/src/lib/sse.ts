@@ -50,7 +50,7 @@ type WorkspaceConnectionAuthorizationLookup = {
   workspaceId: SafeId<"workspace">;
 };
 
-export type WorkspaceConnectionAuthorizer = (
+type WorkspaceConnectionAuthorizer = (
   lookup: WorkspaceConnectionAuthorizationLookup,
 ) => Promise<ReadonlySet<SafeId<"user">>>;
 
@@ -60,7 +60,7 @@ export type WorkspaceConnectionAuthorizer = (
  * table, so this is the only membership question it has to ask — no workspace
  * bucket is scanned to find a user's streams.
  */
-export type UserConnectionAuthorizer = (lookup: {
+type UserConnectionAuthorizer = (lookup: {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
 }) => Promise<boolean>;

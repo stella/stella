@@ -33,6 +33,10 @@ import {
   configuredPaymentRetry,
 } from "@/api/lib/usage/configured-access";
 import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
+import {
+  FREE_TIER_OFF,
+  resolveOrganizationAccess,
+} from "@/api/lib/usage/organization-access";
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 import {
   allowsInstanceModels,
@@ -44,7 +48,11 @@ import {
   assertUsageAvailable,
 } from "@/api/lib/usage/usage-ledger";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -314,6 +322,8 @@ const readLaneBudgets = async ({
       const context = createTestHandlerContext<
         Parameters<typeof getLane.handler>[0]
       >({
+        audit: NO_AUDIT,
+        scopedDb: NO_DB,
         session: { activeOrganizationId: organizationId },
         user: { id: userId },
         safeDb: createSafeDb(
@@ -341,15 +351,19 @@ const readLaneBudgets = async ({
   return enabled;
 };
 
+const accessOf = (
+  snapshot: Awaited<ReturnType<typeof readOrganizationAccessSnapshot>>,
+  now: Date,
+) => resolveOrganizationAccess({ snapshot, now, freeTier: FREE_TIER_OFF });
+
 const expectEnabled = (
   snapshot: Awaited<ReturnType<typeof readAccess>>["snapshot"],
   now: Date,
   enabled: boolean,
 ) => {
-  expect(allowsInstanceModels(snapshot, now)).toBe(enabled);
+  expect(allowsInstanceModels(accessOf(snapshot, now))).toBe(enabled);
   const resolved = resolveOrganizationActionBudget({
-    state: snapshot,
-    now,
+    access: accessOf(snapshot, now),
     periodMs: 23_000,
     evaluationActions: 7,
     selfManagedActions: 19,
@@ -632,6 +646,8 @@ describe.skipIf(!runPostgresTests)(
               const context = createTestHandlerContext<
                 Parameters<typeof getAccess.handler>[0]
               >({
+                audit: NO_AUDIT,
+                scopedDb: NO_DB,
                 memberRole: sessionMemberRole("member"),
                 session: { activeOrganizationId: organizationId },
                 safeDb: createSafeDb(
@@ -692,7 +708,11 @@ describe.skipIf(!runPostgresTests)(
         // The unconfigured SafeDb from the helper panics if queried: off must not read.
         expect(
           await getAccess.handler(
-            createTestHandlerContext<Parameters<typeof getAccess.handler>[0]>(),
+            createTestHandlerContext<Parameters<typeof getAccess.handler>[0]>({
+              audit: NO_AUDIT,
+              safeDb: NO_DB,
+              scopedDb: NO_DB,
+            }),
           ),
         ).toEqual({ paymentRetry: { status: "none" } });
       });
@@ -716,9 +736,7 @@ describe.skipIf(!runPostgresTests)(
             fixture.organizationId,
           );
           expect(snapshot?.state).toBe(CONFIGURED_ACCESS_STATE);
-          expect(snapshot && allowsInstanceModels(snapshot, at(999))).toBe(
-            true,
-          );
+          expect(allowsInstanceModels(accessOf(snapshot, at(999)))).toBe(true);
           for (const configuredAccess of [false, true]) {
             env.FEATURE_CONFIGURED_ACCESS = configuredAccess;
             for (const asOf of [at(999), currentPeriodStart]) {
@@ -1026,8 +1044,7 @@ describe.skipIf(!runPostgresTests)(
               fixture.organizationId,
             );
             const budgetBefore = resolveOrganizationActionBudget({
-              state: before.snapshot,
-              now: START,
+              access: accessOf(before.snapshot, START),
               periodMs: 23_000,
               evaluationActions: 7,
               selfManagedActions: 19,
@@ -1059,8 +1076,7 @@ describe.skipIf(!runPostgresTests)(
             );
             expect(
               resolveOrganizationActionBudget({
-                state: off.snapshot,
-                now: START,
+                access: accessOf(off.snapshot, START),
                 periodMs: 23_000,
                 evaluationActions: 7,
                 selfManagedActions: 19,

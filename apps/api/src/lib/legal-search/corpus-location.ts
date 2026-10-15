@@ -18,7 +18,7 @@ import { panic } from "better-result";
  * request for the pack's footer. Anything that does not start with `pack:`
  * is a plain object key.
  */
-export type ObjectCorpusLocation = { type: "object"; key: string };
+type ObjectCorpusLocation = { type: "object"; key: string };
 
 export type PackedCorpusLocation = {
   type: "packed";

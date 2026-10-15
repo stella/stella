@@ -206,6 +206,27 @@ describe("API environment", () => {
     }
   });
 
+  test("the free tier refuses to boot alongside usage enforcement", () => {
+    const freeTier = {
+      ...baseEnv,
+      FEATURE_FREE_TIER: "true",
+      FEATURE_ORG_ACCESS_STATE: "true",
+      FEATURE_ORG_SERVICE_BUDGETS: "true",
+      FEATURE_ACTION_ADMISSION: "true",
+      ORG_EVALUATION_PERIOD_DAYS: "11",
+    };
+    const booted = bootApiEnvironment(freeTier);
+    expect(booted.exitCode, booted.stderr.toString()).toBe(0);
+    const enforced = bootApiEnvironment({
+      ...freeTier,
+      USAGE_ENFORCEMENT_ENABLED: "true",
+    });
+    expect(enforced.exitCode).not.toBe(0);
+    expect(enforced.stderr.toString()).toContain(
+      "FEATURE_FREE_TIER requires USAGE_ENFORCEMENT_ENABLED to be off.",
+    );
+  });
+
   test("infers SMTP provider from complete SMTP settings", () => {
     expect(
       readEnvProvider({

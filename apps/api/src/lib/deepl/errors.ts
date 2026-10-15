@@ -39,11 +39,3 @@ export class DeepLTimeoutError extends TaggedError("DeepLTimeoutError")<{
   documentId: string;
   elapsedMs: number;
 }> {}
-
-export type DeepLError =
-  | DeepLAuthError
-  | DeepLQuotaError
-  | DeepLRateLimitError
-  | DeepLDocumentError
-  | DeepLUpstreamError
-  | DeepLTimeoutError;

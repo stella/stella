@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql, TransactionRollbackError } from "drizzle-orm";
+import { eq, inArray, sql, TransactionRollbackError } from "drizzle-orm";
 import fc from "fast-check";
 
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
@@ -28,11 +28,15 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_POLAR_API_VERSION } from "@/api/lib/hosted-usage-provider/polar/contract";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
 } from "@/api/tests/helpers/auth-provider-id";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 import createHostedSetup from "./create-hosted-setup";
 
@@ -48,6 +52,8 @@ type Fixture = {
   userId: SafeId<"user">;
   policyId: SafeId<"usagePolicy">;
   policyRef: string;
+  /** A per-seat subscription, so a start can carry a seat count. */
+  seatPolicyId: SafeId<"usagePolicy">;
 };
 
 const seedFixture = async (
@@ -57,6 +63,7 @@ const seedFixture = async (
   const userId = mintAuthProviderId<"user">();
   const policyId = createSafeId<"usagePolicy">();
   const policyRef = `product_${Bun.randomUUIDv7()}`;
+  const seatPolicyId = createSafeId<"usagePolicy">();
   await tx.insert(organization).values({
     id: organizationId,
     name: "Hosted checkout fixture",
@@ -84,7 +91,17 @@ const seedFixture = async (
     hostedPolicyRef: policyRef,
     visibility: "public",
   });
-  return { organizationId, userId, policyId, policyRef };
+  await tx.insert(usagePolicies).values({
+    id: seatPolicyId,
+    policyKey: `checkout_${Bun.randomUUIDv7()}`,
+    displayName: "Hosted seat checkout fixture",
+    kind: "subscription",
+    monthlyUsageUnits: 100,
+    hostedPolicyRef: `product_${Bun.randomUUIDv7()}`,
+    visibility: "public",
+    priceBasis: "per_seat",
+  });
+  return { organizationId, userId, policyId, policyRef, seatPolicyId };
 };
 
 type FakeProvider = {
@@ -131,6 +148,15 @@ const sessionResponse = (call: number) =>
     expires_at: PROVIDER_SESSION_EXPIRY.toISOString(),
   });
 
+const FIRST_SESSION = {
+  hostedSessionId: "checkout_1",
+  url: "https://buy.provider.test/1",
+};
+const SECOND_SESSION = {
+  hostedSessionId: "checkout_2",
+  url: "https://buy.provider.test/2",
+};
+
 const withHostedEnv = async (fn: () => Promise<void>) => {
   const previous = {
     FEATURE_USAGE: env.FEATURE_USAGE,
@@ -156,15 +182,28 @@ const withHostedEnv = async (fn: () => Promise<void>) => {
   }
 };
 
+type CheckoutRequest = {
+  usagePolicyId: SafeId<"usagePolicy">;
+  seats?: number;
+};
+
 type StartCheckoutOptions = {
   fixture: Fixture;
   safeDb: SafeDb;
+  /** Defaults to the fixture's flat subscription without a seat count. */
+  request?: CheckoutRequest;
 };
 
-const startCheckout = async ({ fixture, safeDb }: StartCheckoutOptions) =>
+const startCheckout = async ({
+  fixture,
+  safeDb,
+  request = { usagePolicyId: fixture.policyId },
+}: StartCheckoutOptions) =>
   await createHostedSetup.handler(
     createTestHandlerContext<Parameters<typeof createHostedSetup.handler>[0]>({
-      body: { usagePolicyId: fixture.policyId },
+      scopedDb: NO_DB,
+      audit: auditRecorderDouble(),
+      body: request,
       session: { activeOrganizationId: fixture.organizationId },
       user: { id: fixture.userId },
       safeDb,
@@ -312,14 +351,15 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("hosted subscription checkout claims (postgres)", () => {
-    test("concurrent starts for one organization create exactly one provider session", async () => {
+    test("concurrent identical starts share exactly one provider session", async () => {
       await withHostedEnv(async () => {
         await assertProperty(
-          "concurrent starts for one organization create exactly one provider session",
+          "concurrent identical starts share exactly one provider session",
           fc.asyncProperty(
             fc.integer({ min: 2, max: 6 }),
             fc.constantFrom("none", "expired"),
-            async (starters, priorClaim) => {
+            fc.constantFrom("created", "failed"),
+            async (starters, priorClaim, providerOutcome) => {
               await withGatedTestClients(
                 databaseUrl,
                 async ({ openClient }) => {
@@ -327,7 +367,11 @@ if (!databaseUrl || !runPostgresTests) {
                   const fixture = await setup.db.transaction(
                     async (tx) => await seedFixture(tx),
                   );
-                  const provider = installFakeProvider(sessionResponse);
+                  const provider = installFakeProvider((call) =>
+                    providerOutcome === "created"
+                      ? sessionResponse(call)
+                      : new Response("unavailable", { status: 503 }),
+                  );
                   try {
                     const staleClaimId = createSafeId<"hostedCheckoutClaim">();
                     if (priorClaim === "expired") {
@@ -362,34 +406,34 @@ if (!databaseUrl || !runPostgresTests) {
                       }),
                     );
 
-                    const started = responses.flatMap((response) => {
-                      const session = startedSession(response);
-                      return session === null ? [] : [session];
-                    });
-                    expect(started).toEqual([
-                      {
-                        hostedSessionId: "checkout_1",
-                        url: "https://buy.provider.test/1",
-                      },
-                    ]);
-                    expect(provider.calls()).toBe(1);
-                    for (const response of responses) {
-                      if (startedSession(response) === null) {
-                        expect(response).toMatchObject(
-                          refusal(HOSTED_CHECKOUT_REFUSAL_CODE.checkoutOpen),
-                        );
-                      }
-                    }
                     const claims = await readClaims(
                       setup.db,
                       fixture.organizationId,
                     );
-                    expect(claims).toHaveLength(1);
-                    expect(claims.at(0)?.hostedSessionId).toBe("checkout_1");
-                    expect(claims.at(0)?.claimId).not.toBe(staleClaimId);
-                    expect(claims.at(0)?.expiresAt).toEqual(
-                      PROVIDER_SESSION_EXPIRY,
+                    if (providerOutcome === "failed") {
+                      // A start that reaches the claim after a failed one
+                      // released it may try the provider again itself.
+                      expect(provider.calls()).toBeGreaterThanOrEqual(1);
+                      expect(provider.calls()).toBeLessThanOrEqual(starters);
+                      for (const response of responses) {
+                        expect(response).toMatchObject({ code: 502 });
+                      }
+                      expect(claims).toEqual([]);
+                      return;
+                    }
+                    expect(provider.calls()).toBe(1);
+                    expect(responses).toEqual(
+                      Array.from({ length: starters }, () => FIRST_SESSION),
                     );
+                    expect(claims).toHaveLength(1);
+                    expect(claims.at(0)).toMatchObject({
+                      hostedSessionId: FIRST_SESSION.hostedSessionId,
+                      hostedCheckoutUrl: FIRST_SESSION.url,
+                      usagePolicyId: fixture.policyId,
+                      seats: null,
+                      expiresAt: PROVIDER_SESSION_EXPIRY,
+                    });
+                    expect(claims.at(0)?.claimId).not.toBe(staleClaimId);
                   } finally {
                     provider.restore();
                     await setup.db
@@ -400,7 +444,12 @@ if (!databaseUrl || !runPostgresTests) {
                       .where(eq(user.id, fixture.userId));
                     await setup.db
                       .delete(usagePolicies)
-                      .where(eq(usagePolicies.id, fixture.policyId));
+                      .where(
+                        inArray(usagePolicies.id, [
+                          fixture.policyId,
+                          fixture.seatPolicyId,
+                        ]),
+                      );
                   }
                 },
               );
@@ -411,24 +460,146 @@ if (!databaseUrl || !runPostgresTests) {
       });
     }, 120_000);
 
-    test("an open claim refuses a start without calling the provider", async () => {
+    test("a repeated start reopens the open session without calling the provider", async () => {
       await withRolledBackFixture(async (tx, fixture) => {
+        const provider = installFakeProvider(sessionResponse);
+        try {
+          const safeDb = scopedSafeDb(tx, fixture);
+          expect(await startCheckout({ fixture, safeDb })).toEqual(
+            FIRST_SESSION,
+          );
+          const opened = await readClaims(tx, fixture.organizationId);
+          expect(opened).toHaveLength(1);
+          expect(await startCheckout({ fixture, safeDb })).toEqual(
+            FIRST_SESSION,
+          );
+          expect(provider.calls()).toBe(1);
+          expect(await readClaims(tx, fixture.organizationId)).toEqual(opened);
+        } finally {
+          provider.restore();
+        }
+      });
+    });
+
+    const SUPERSEDING_REQUESTS = {
+      "another policy": (fixture: Fixture) => ({
+        first: { usagePolicyId: fixture.policyId },
+        second: { usagePolicyId: fixture.seatPolicyId, seats: 1 },
+      }),
+      "another seat count": (fixture: Fixture) => ({
+        first: { usagePolicyId: fixture.seatPolicyId, seats: 2 },
+        second: { usagePolicyId: fixture.seatPolicyId, seats: 3 },
+      }),
+      "a seat count where none was given": (fixture: Fixture) => ({
+        first: { usagePolicyId: fixture.seatPolicyId },
+        second: { usagePolicyId: fixture.seatPolicyId, seats: 1 },
+      }),
+    } satisfies Record<
+      string,
+      (fixture: Fixture) => { first: CheckoutRequest; second: CheckoutRequest }
+    >;
+
+    test.each(Object.entries(SUPERSEDING_REQUESTS))(
+      "a start for %s supersedes the open session",
+      async (_name, requestsFor) => {
+        await withRolledBackFixture(async (tx, fixture) => {
+          const requests = requestsFor(fixture);
+          const provider = installFakeProvider(sessionResponse);
+          try {
+            const safeDb = scopedSafeDb(tx, fixture);
+            expect(
+              await startCheckout({ fixture, safeDb, request: requests.first }),
+            ).toEqual(FIRST_SESSION);
+            const [first] = await readClaims(tx, fixture.organizationId);
+            expect(
+              await startCheckout({
+                fixture,
+                safeDb,
+                request: requests.second,
+              }),
+            ).toEqual(SECOND_SESSION);
+            expect(provider.calls()).toBe(2);
+            const claims = await readClaims(tx, fixture.organizationId);
+            expect(claims).toHaveLength(1);
+            expect(claims.at(0)).toMatchObject({
+              hostedSessionId: SECOND_SESSION.hostedSessionId,
+              hostedCheckoutUrl: SECOND_SESSION.url,
+              usagePolicyId: requests.second.usagePolicyId,
+              seats: requests.second.seats,
+            });
+            expect(claims.at(0)?.claimId).not.toBe(first?.claimId);
+          } finally {
+            provider.restore();
+          }
+        });
+      },
+    );
+
+    // A claim without a session is a start whose provider call is in flight.
+    const IN_FLIGHT_CLAIMS = {
+      "for another request": {
+        policy: "seat",
+        createdAt: sql`now()`,
+      },
+      "past the wait for its provider call": {
+        policy: "flat",
+        createdAt: sql`now() - interval '1 minute'`,
+      },
+    } as const;
+
+    test.each(Object.entries(IN_FLIGHT_CLAIMS))(
+      "a claim in flight %s refuses the start without calling the provider",
+      async (_name, claim) => {
+        await withRolledBackFixture(async (tx, fixture) => {
+          const claimId = createSafeId<"hostedCheckoutClaim">();
+          await tx.insert(hostedCheckoutClaims).values({
+            organizationId: fixture.organizationId,
+            claimId,
+            usagePolicyId:
+              claim.policy === "seat" ? fixture.seatPolicyId : fixture.policyId,
+            expiresAt: sql`now() + interval '1 minute'`,
+            createdAt: claim.createdAt,
+          });
+          const provider = installFakeProvider(sessionResponse);
+          try {
+            const response = await startCheckout({
+              fixture,
+              safeDb: scopedSafeDb(tx, fixture),
+            });
+            expect(response).toMatchObject(
+              refusal(HOSTED_CHECKOUT_REFUSAL_CODE.checkoutOpen),
+            );
+            expect(provider.calls()).toBe(0);
+            const claims = await readClaims(tx, fixture.organizationId);
+            expect(claims.map((row) => row.claimId)).toEqual([claimId]);
+          } finally {
+            provider.restore();
+          }
+        });
+      },
+    );
+
+    test("an expired claim gives the same request a new session", async () => {
+      await withRolledBackFixture(async (tx, fixture) => {
+        const expiredClaimId = createSafeId<"hostedCheckoutClaim">();
         await tx.insert(hostedCheckoutClaims).values({
           organizationId: fixture.organizationId,
-          claimId: createSafeId<"hostedCheckoutClaim">(),
-          hostedSessionId: "checkout_open",
-          expiresAt: sql`now() + interval '1 minute'`,
+          claimId: expiredClaimId,
+          hostedSessionId: "checkout_expired",
+          hostedCheckoutUrl: "https://buy.provider.test/expired",
+          usagePolicyId: fixture.policyId,
+          expiresAt: sql`now() - interval '1 minute'`,
         });
         const provider = installFakeProvider(sessionResponse);
         try {
-          const response = await startCheckout({
-            fixture,
-            safeDb: scopedSafeDb(tx, fixture),
-          });
-          expect(response).toMatchObject(
-            refusal(HOSTED_CHECKOUT_REFUSAL_CODE.checkoutOpen),
-          );
-          expect(provider.calls()).toBe(0);
+          expect(
+            await startCheckout({ fixture, safeDb: scopedSafeDb(tx, fixture) }),
+          ).toEqual(FIRST_SESSION);
+          expect(provider.calls()).toBe(1);
+          const claims = await readClaims(tx, fixture.organizationId);
+          expect(claims).toHaveLength(1);
+          expect(claims.at(0)?.claimId).not.toBe(expiredClaimId);
+          expect(claims.at(0)?.hostedCheckoutUrl).toBe(FIRST_SESSION.url);
         } finally {
           provider.restore();
         }

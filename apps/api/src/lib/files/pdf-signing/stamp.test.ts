@@ -10,6 +10,7 @@ import type { PdfObject } from "@libpdf/core";
 import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   applySignature,
   captureSigningDigest,
@@ -274,6 +275,7 @@ const signWithStamp = async (
   const applied = await settled(
     applySignature({
       ...invocation,
+      permit: grantThirdPartyOutboundPermit(),
       certificateChainComplete: true,
       expectedDigestHex: first.digestHex,
       signature: new Uint8Array(signature),

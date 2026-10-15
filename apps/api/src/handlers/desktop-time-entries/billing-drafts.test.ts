@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { afterEach, beforeEach, expect, test } from "bun:test";
+import { beforeEach, expect, test } from "bun:test";
 import Elysia from "elysia";
 
 import { desktopBillingDraftResponseSchema } from "@stll/api-contract/desktop-billing-drafts";
@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -32,11 +33,10 @@ const GUIDELINE_ID = toSafeId<"agentSkillResource">(
 );
 const USER_ID = toSafeId<"user">("billing-drafter");
 const ORGANIZATION_ID = toSafeId<"organization">("billing-firm");
-const previousGrants = env.API_FEATURE_ACCESS_GRANTS;
-const previousTimeBilling = env.FEATURE_TIME_BILLING;
+const testState = createTestState({ file: import.meta.path, config: env });
 beforeEach(() => {
-  env.FEATURE_TIME_BILLING = true;
-  env.API_FEATURE_ACCESS_GRANTS = {
+  testState.setConfig("FEATURE_TIME_BILLING", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "activity-timeline": [
       {
         type: "member",
@@ -44,11 +44,7 @@ beforeEach(() => {
         email: "billing@example.test",
       },
     ],
-  };
-});
-afterEach(() => {
-  env.FEATURE_TIME_BILLING = previousTimeBilling;
-  env.API_FEATURE_ACCESS_GRANTS = previousGrants;
+  });
 });
 const body: DesktopBillingDraftRequest = {
   entries: [
@@ -87,7 +83,7 @@ const context = {
   guidelines: [
     {
       fileId: GUIDELINE_ID,
-      fileName: "knowledge/billing.md",
+      fileName: "references/billing.md",
       content: "# Narratives\nDescribe the purpose.",
       sections: ["Narratives"],
     },
@@ -108,7 +104,7 @@ const fixture: DesktopBillingDraftResponse = {
           text: "Describe the purpose",
           ruleRef: {
             fileId: GUIDELINE_ID,
-            fileName: "knowledge/billing.md",
+            fileName: "references/billing.md",
             section: "Narratives",
           },
         },
@@ -118,7 +114,7 @@ const fixture: DesktopBillingDraftResponse = {
     },
   ],
   checkedGuidelines: [
-    { fileId: GUIDELINE_ID, fileName: "knowledge/billing.md" },
+    { fileId: GUIDELINE_ID, fileName: "references/billing.md" },
   ],
 };
 
@@ -286,7 +282,7 @@ test("unknown model references return a bounded failure", async () => {
   const unknownReference = {
     ...fixture,
     checkedGuidelines: [
-      { fileId: "unknown-reference", fileName: "knowledge/billing.md" },
+      { fileId: "unknown-reference", fileName: "references/billing.md" },
     ],
   };
   const { response, calls } = await exercise({ output: unknownReference });

@@ -111,6 +111,24 @@ describe("capabilityCommandPath", () => {
 });
 
 describe("deriveCapabilityLeaf: flags", () => {
+  test.each([undefined, "required", "conditional"] as const)(
+    "preserves deployment ownership independently from caller access %s",
+    (featureAccess) => {
+      const source = entry({
+        id: "example.read",
+        feature: "FEATURE_EXAMPLE",
+        ...(featureAccess === undefined
+          ? {}
+          : { featureId: "example", featureAccess }),
+      });
+      const { spec } = deriveCapabilityLeaf(source);
+      expect(spec.feature).toBe(source.feature);
+      expect(spec.featureId).toBe(
+        featureAccess === "required" ? source.featureId : undefined,
+      );
+    },
+  );
+
   test("carries the catalog's finite transport deadline to the executable leaf", () => {
     const { spec } = deriveCapabilityLeaf(
       entry({ id: "documents.compare", requestTimeoutMs: 600_000 }),

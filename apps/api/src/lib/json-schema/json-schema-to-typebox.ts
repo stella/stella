@@ -46,17 +46,8 @@ export const jsonSchemaToTypeBox = (schema: JsonSchema | boolean): TSchema => {
     return unionOf(schema.anyOf.map(jsonSchemaToTypeBox), options);
   }
   if (schema.const !== undefined) {
-    if (schema.const === null) {
-      return Type.Null(options);
-    }
-    if (
-      typeof schema.const === "string" ||
-      typeof schema.const === "number" ||
-      typeof schema.const === "boolean"
-    ) {
-      return Type.Literal(schema.const, options);
-    }
-    return panic("The TypeBox adapter requires primitive constant values");
+    const { const: constant, ...rest } = schema;
+    return jsonSchemaToTypeBox({ ...rest, enum: [constant] });
   }
   if (schema.enum) {
     return unionOf(

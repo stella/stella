@@ -2,6 +2,83 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeId } from "./safe-id";
 
+/** Pasted attachments stay native text so every text processing boundary applies. */
+export const CHAT_TEXT_ATTACHMENT_TYPE = { pastedText: "pasted_text" } as const;
+
+export type ChatPastedTextPart = {
+  type: "text";
+  content: string;
+  metadata: { type: typeof CHAT_TEXT_ATTACHMENT_TYPE.pastedText };
+};
+
+export const createChatPastedTextPart = (
+  content: string,
+): ChatPastedTextPart => ({
+  type: "text",
+  content,
+  metadata: { type: CHAT_TEXT_ATTACHMENT_TYPE.pastedText },
+});
+
+export const isChatPastedTextPart = (
+  part: unknown,
+): part is ChatPastedTextPart => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    !("type" in part) ||
+    part.type !== "text" ||
+    !("content" in part) ||
+    typeof part.content !== "string" ||
+    !("metadata" in part)
+  ) {
+    return false;
+  }
+  const { metadata } = part;
+  return (
+    typeof metadata === "object" &&
+    metadata !== null &&
+    "type" in metadata &&
+    metadata.type === CHAT_TEXT_ATTACHMENT_TYPE.pastedText
+  );
+};
+
+export const ASK_USER_TOOL_NAME = "ask-user";
+export const CREATE_DOCUMENT_TOOL_NAME = "create-document";
+
+/** Executor recorded from the tool definition, independent of input readiness. */
+export const CHAT_TOOL_EXECUTOR_METADATA_KEY = "stellaToolExecutor";
+
+/** Ownership is recorded by the runtime and does not depend on later tool sets. */
+export const chatToolExecutor = (part: unknown): "server" | "client" | null => {
+  if (
+    typeof part !== "object" ||
+    part === null ||
+    !("type" in part) ||
+    part.type !== "tool-call"
+  ) {
+    return null;
+  }
+  if (
+    "metadata" in part &&
+    typeof part.metadata === "object" &&
+    part.metadata !== null &&
+    CHAT_TOOL_EXECUTOR_METADATA_KEY in part.metadata
+  ) {
+    switch (part.metadata[CHAT_TOOL_EXECUTOR_METADATA_KEY]) {
+      case "server":
+        return "server";
+      case "client":
+        return "client";
+      default:
+        break;
+    }
+  }
+  return null;
+};
+
+export const isServerChatToolCall = (part: unknown): boolean =>
+  chatToolExecutor(part) === "server";
+
 /**
  * Title a thread is persisted with until its first message generates a real
  * one. Deliberately untranslated: it is a sentinel both sides compare

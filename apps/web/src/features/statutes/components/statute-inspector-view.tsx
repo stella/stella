@@ -23,7 +23,7 @@ import { ViewerOverlayBar } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import { LegalReaderAIChat } from "@/components/legal-reader/legal-reader-ai-chat";
 import { OpenOriginalButton } from "@/components/legal-reader/open-original-button";
-import { useReaderTextScale } from "@/components/legal-reader/use-reader-text-scale";
+import { useWebReaderTextScale as useReaderTextScale } from "@/components/legal-reader/use-web-reader-text-scale";
 import Tooltip from "@/components/tooltip";
 import { StatuteReaderBody } from "@/features/statutes/components/statute-reader-body";
 import {
@@ -37,7 +37,8 @@ import {
 } from "@/features/statutes/statute-reader-blocks";
 import { optionalArray } from "@/lib/arrays";
 import { detached } from "@/lib/detached";
-import { createStatuteLinkTarget } from "@/lib/statute-route";
+import { createStatuteLinkTarget } from "@/lib/statutes/statute-route";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 
 /**
  * The act a decision cites, beside the decision: the consolidation that
@@ -59,9 +60,11 @@ export const StatuteInspectorView = ({
   } = useQuery(statuteOptions(payload.documentId));
   // A provision opened from a heading offers its drafting history only where
   // the work has more than one consolidation, and the count is what says so.
-  const { data: versions } = useQuery(
-    statuteVersionsOptions(payload.documentId),
-  );
+  const versionsQuery = useQuery(statuteVersionsOptions(payload.documentId));
+  const versionsView = useQueryView(versionsQuery);
+  useQueryViewError(versionsView);
+  const versions =
+    versionsView.type === "items" ? versionsView.items : undefined;
   const versionCount = Math.max(optionalArray(versions).length, 1);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);

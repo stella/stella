@@ -162,7 +162,10 @@ describe("docx suggestion resolve/revert state transitions", () => {
         body: { status: "accepted", appliedMode: "direct" },
       },
     );
-    expect(result).toEqual({ updated: false });
+    expect(result).toMatchObject({
+      code: 404,
+      response: { message: "Not found" },
+    });
 
     const row = await readSuggestion(suggestionId);
     expect(row?.status).toBe("pending");

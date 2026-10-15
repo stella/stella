@@ -109,7 +109,10 @@ export const Route = createFileRoute(
           ensureRouteInfiniteQueryData(
             queryClient,
             overviewActivityOptions({
-              activeOrganizationId: context.user.activeOrganizationId,
+              viewer: {
+                userId: context.user.id,
+                organizationId: context.user.activeOrganizationId,
+              },
               filters: DEFAULT_MATTER_ACTIVITY_FILTERS,
               workspaceId,
             }),

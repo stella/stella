@@ -43,6 +43,7 @@ import {
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // `spawn-subagents-tool.ts` calls `runSubagent` (a real provider/model call
@@ -196,6 +197,7 @@ const buildToolDefinition = (
   createSpawnSubagentsTool({
     buildSubagentToolset,
     organizationId,
+    modelAdmission: testModelAdmission(organizationId),
     orgAIConfig: null,
     managedAIResidency: "eu" as const,
     safeDb: passthroughSafeDb,

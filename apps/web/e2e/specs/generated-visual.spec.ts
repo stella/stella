@@ -17,13 +17,18 @@ import {
 } from "../helpers/docked-chat-legal-fixtures";
 import { expect, test } from "../helpers/test";
 
+// Trace snapshots run script inside every frame, and Chromium counts that
+// as a user gesture in the frame. This spec checks which actions need a
+// gesture, so it runs without tracing.
+test.use({ trace: "off" });
+
 const threadId = "019a0000-0000-7000-8000-000000000001";
 const fileId = "019a0000-0000-7000-8000-000000000003";
 const externalUrl = "https://example.test/decision?language=cs&year=2026";
 const title = "Court timeline";
 const visual = v.parse(generatedVisualPageSchema, {
   title,
-  html: `<section class="stella-card"><button id="drill">Court year</button><button id="internal">Open decision</button><a href="${externalUrl}">Decision source</a></section><script>const bucket=stella.data.courtYear.buckets[0];document.querySelector('#drill').addEventListener('click',()=>stella.drill({court:bucket.court,year:bucket.year}));document.querySelector('#internal').addEventListener('click',()=>stella.openDecision('decision'));stella.drill({court:bucket.court,year:bucket.year});stella.openDecision('decision');document.querySelector('a').click();document.body.dataset.initialActions='sent';stella.ready();</script>`,
+  html: `<section class="stella-card"><p id="note">Decisions by court</p><div id="space" style="height:480px"></div><button id="drill">Court year</button><button id="internal">Open decision</button><a href="${externalUrl}">Decision source</a></section><script>const bucket=stella.data.courtYear.buckets[0];document.querySelector('#drill').addEventListener('click',()=>stella.drill({court:bucket.court,year:bucket.year}));document.querySelector('#internal').addEventListener('click',()=>stella.openDecision('decision'));document.querySelector('#note').addEventListener('click',()=>setTimeout(()=>{stella.drill({court:bucket.court,year:bucket.year});document.querySelector('#space').style.height='800px';document.body.dataset.laterDrill='sent';},1500),{once:true});stella.drill({court:bucket.court,year:bucket.year});stella.openDecision('decision');document.querySelector('a').click();document.body.dataset.initialActions='sent';stella.ready();</script>`,
   data: { courtYear: { buckets: [{ court: "CZ:ns", year: 2026 }] } },
   links: [{ id: "decision", decisionId: DOCKED_CHAT_LEGAL_ROUTES.decision.id }],
   literalLinks: [externalUrl],
@@ -39,7 +44,7 @@ const part = v.parse(generatedVisualPartSchema, {
   toolName: VISUAL_PREVIEW_TOOL_NAME,
 });
 
-test("generated view activates, reloads and offers user-controlled chat actions", async ({
+test("generated view is live inline, reloads, and acts only on user gestures", async ({
   page,
   context,
 }) => {
@@ -91,37 +96,92 @@ test("generated view activates, reloads and offers user-controlled chat actions"
   await page.goto(`/chat/${threadId}`, { waitUntil: "commit" });
   const outer = page.locator(`iframe[title="${title}"]`);
   await expect(outer).toHaveAttribute("sandbox", "allow-scripts");
-  await expect(outer).toHaveAttribute("inert", "");
-  const guest = page
-    .frameLocator(`iframe[title="${title}"]`)
-    .frameLocator("iframe");
-  await expect(guest.locator("body")).toHaveAttribute(
-    "data-initial-actions",
-    "sent",
-  );
+  // Live from the start: no activation step, nothing inert.
+  await expect(outer).not.toHaveAttribute("inert");
+  const card = outer.locator("xpath=ancestor::section[1]");
+  await expect(card.getByRole("button")).toHaveCount(0);
+  await expect(card.locator("header")).toContainText(title);
   const composer = page.locator('[role="textbox"][contenteditable="true"]');
-  await expect(composer.locator('[data-source="prompt"]')).toHaveCount(0);
+  const prompts = composer.locator('[data-source="prompt"]');
+  // Initial sizing confirms the view is ready before direct interaction.
+  await expect
+    .poll(async () =>
+      outer.evaluate((element) => element.getBoundingClientRect().height),
+    )
+    .toBeGreaterThan(480);
+  await expect(prompts).toHaveCount(0);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(`/chat/${threadId}$`, "u"));
   expect(popups).toEqual([]);
-  const card = outer.locator("xpath=ancestor::section[1]");
-  await card
-    .getByRole("button")
-    .first()
-    .evaluate((element) => {
-      if (element instanceof HTMLElement) {
-        element.click();
-      }
-    });
-  await expect(outer).toHaveAttribute("inert", "");
-  // The frame keeps its document and its URL until something reloads it.
-  const initialSrc = await outer.getAttribute("src");
-  await card.getByRole("button").first().click();
-  await expect(outer).not.toHaveAttribute("inert", "");
-  await expect(outer).toBeFocused();
-  await expect(outer).toHaveAttribute("src", initialSrc ?? "");
+  const guest = page
+    .frameLocator(`iframe[title="${title}"]`)
+    .frameLocator("iframe");
+  await expect
+    .poll(
+      async () =>
+        outer.evaluate((element) => {
+          const section = element.closest("section");
+          const message = element.closest("[data-chat-message-id]");
+          if (section === null || message === null) {
+            return false;
+          }
+          return (
+            Math.abs(
+              section.getBoundingClientRect().width -
+                message.getBoundingClientRect().width,
+            ) <= 1
+          );
+        }),
+      { message: "generated view fills the chat content column" },
+    )
+    .toBe(true);
+  // Text in the view can be selected without activating anything.
+  await guest.locator("#note").click({ clickCount: 3 });
+  expect(
+    await guest
+      .locator("body")
+      .evaluate(() => window.getSelection()?.toString().trim()),
+  ).toBe("Decisions by court");
+  // A gesture backs one action only while it is recent: script that acts
+  // on a timer more than a second after the selection reaches nothing. The
+  // view resizes right after that action, and the view's messages arrive in
+  // order, so the new height shows the action would have arrived by now.
+  await expect(guest.locator("body")).toHaveAttribute(
+    "data-later-drill",
+    "sent",
+  );
+  await expect
+    .poll(async () =>
+      outer.evaluate((element) => element.getBoundingClientRect().height),
+    )
+    .toBeGreaterThan(800);
+  await expect(prompts).toHaveCount(0);
+  // A real click inside the view acts at once.
+  await guest.locator("#drill").click();
+  await expect(prompts).toHaveCount(1);
+  await expect(prompts).toContainText("CZ:ns");
+  await expect(prompts).toContainText("2026");
+  expect(sends).toEqual([]);
+  await guest.getByRole("link", { name: "Decision source" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toContainText(externalUrl);
+  await expect(dialog.locator("strong")).toHaveText("?language=cs&year=2026");
+  expect(popups).toEqual([]);
+  const popupReady = page.waitForEvent("popup");
+  await dialog
+    .getByRole("button", { name: messages.inspector.external.openLink })
+    .click();
+  const popup = await popupReady;
+  await expect(popup).toHaveURL(externalUrl);
+  expect(await popup.evaluate(() => window.opener === null)).toBe(true);
+  expect(reads).toBe(1);
+  expect(sends).toEqual([]);
+  await popup.close();
+  // The frame keeps its document and its URL until something reloads it. A
+  // reloaded shell starts a new handshake under a new URL and renders again.
   // Assigning the same URL only navigates to its fragment, so the shell is
   // reloaded by loading another document first and then the same URL again.
+  const initialSrc = await outer.getAttribute("src");
   await outer.evaluate(async (element) => {
     if (!(element instanceof HTMLIFrameElement)) {
       return;
@@ -139,45 +199,7 @@ test("generated view activates, reloads and offers user-controlled chat actions"
     "data-initial-actions",
     "sent",
   );
-  await expect(outer).toHaveAttribute("inert", "");
-  await expect(composer.locator('[data-source="prompt"]')).toHaveCount(0);
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await card.getByRole("button").first().click();
-  await expect(outer).not.toHaveAttribute("inert", "");
-  // The guest's own drill on render starts the sandbox's one-per-second drill
-  // limit, so a click inside that second is dropped by design. Each attempt
-  // waits longer than the limit, so an accepted click shows its prompt before
-  // another click could be accepted.
-  await expect(async () => {
-    await guest.locator("#drill").click();
-    await expect(composer.locator('[data-source="prompt"]')).not.toHaveCount(
-      0,
-      { timeout: 1500 },
-    );
-  }).toPass({ intervals: [100], timeout: 6000 });
-  await expect(composer.locator('[data-source="prompt"]')).toHaveCount(1);
-  await expect(composer.locator('[data-source="prompt"]')).toContainText(
-    "CZ:ns",
-  );
-  await expect(composer.locator('[data-source="prompt"]')).toContainText(
-    "2026",
-  );
-  expect(sends).toEqual([]);
-  await guest.getByRole("link", { name: "Decision source" }).click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toContainText(externalUrl);
-  await expect(dialog.locator("strong")).toHaveText("?language=cs&year=2026");
-  expect(popups).toEqual([]);
-  const popupReady = page.waitForEvent("popup");
-  await dialog
-    .getByRole("button", { name: messages.inspector.external.openLink })
-    .click();
-  const popup = await popupReady;
-  await expect(popup).toHaveURL(externalUrl);
-  expect(await popup.evaluate(() => window.opener === null)).toBe(true);
   expect(reads).toBe(1);
-  expect(sends).toEqual([]);
-  await popup.close();
   await page.setViewportSize({ width: 640, height: 900 });
   await guest.getByRole("button", { name: "Open decision" }).click();
   await expect(page).toHaveURL(

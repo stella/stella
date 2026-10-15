@@ -45,8 +45,8 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     path: () => `/chat/${randomUUID()}`,
   },
   staticRoute("/chat/new", { expectation: { kind: "settles" } }),
+  staticRoute("/chat/history"),
   staticRoute("/contacts"),
-  staticRoute("/dev/autocomplete", { expectation: { kind: "settles" } }),
   staticRoute("/knowledge"),
   staticRoute("/knowledge/clauses"),
   // Reachable in dev/staging (playbooks preview gate is open there); redirects

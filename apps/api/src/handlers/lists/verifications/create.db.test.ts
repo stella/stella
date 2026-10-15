@@ -1,3 +1,4 @@
+// The STELLA_RUN_POSTGRES_TESTS runner also executes this verification suite.
 import {
   afterAll,
   beforeAll,
@@ -15,7 +16,11 @@ import { env } from "@/api/env";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { AI_CONFIG_UNREADABLE_ERROR_CODE } from "@/api/lib/ai-config-response";
 import { createSafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -63,6 +68,7 @@ describe("verification creation requires complete AI admission", () => {
       const previousDeployment = env.FEATURE_LEGAL_LISTS;
       env.FEATURE_LEGAL_LISTS = true;
       env.API_FEATURE_ACCESS_GRANTS = {
+        "legal-lists": [{ type: "organization", organizationId: ids.orgA }],
         "list-verification": [
           { type: "organization", organizationId: ids.orgA },
         ],
@@ -78,6 +84,8 @@ describe("verification creation requires complete AI admission", () => {
           createTestHandlerContext<
             Parameters<typeof createVerification.handler>[0]
           >({
+            audit: NO_AUDIT,
+            scopedDb: NO_DB,
             workspaceId: ids.wsA1,
             session: { activeOrganizationId: ids.orgA },
             user: { id: ids.userA1 },
@@ -86,8 +94,8 @@ describe("verification creation requires complete AI admission", () => {
             orgAIConfigStatus: status,
             body: {
               listId: createSafeId<"legalList">(),
-              entityId: createSafeId<"entity">(),
-              fileFieldId: createSafeId<"field">(),
+              entityId: ids.entityA1,
+              fileFieldId: ids.fileFieldA1,
             },
           }),
         );
@@ -98,8 +106,8 @@ describe("verification creation requires complete AI admission", () => {
             expect(result.response).toHaveProperty("code", expectedCode);
           }
         }
-        // Admission reads the requester once; no document, run or queue work follows.
-        expect(transactions).toBe(1);
+        // Identity and resource preflight settle before document, run or queue work.
+        expect(transactions).toBe(2);
       } finally {
         env.API_FEATURE_ACCESS_GRANTS = previous;
         env.FEATURE_LEGAL_LISTS = previousDeployment;

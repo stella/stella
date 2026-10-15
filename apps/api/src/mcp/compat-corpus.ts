@@ -15,14 +15,13 @@ import {
   type SearchPaginationOutcome,
 } from "@stll/api-contract/search";
 import { mapWithConcurrency } from "@stll/concurrency";
-import {
-  hasUsableAst,
-  parseUsableDocumentAst,
-} from "@stll/legal-ast/document-ast";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
 import { documentHydrationFor } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
@@ -43,11 +42,16 @@ import {
   isSearchCaseLawSuccess,
   isStatuteDocument,
 } from "@/api/mcp/public-law-handlers";
-import type { McpCompatSearchResult } from "@/api/mcp/tool-types";
+import type {
+  InternalToolErrorResult,
+  McpCompatSearchResult,
+} from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
+  errorResult,
   legalCitationLinkFields,
   buildLegislationDocumentAppUrl,
+  searchIndexUnavailableResult,
   toPlainCorpusText,
 } from "@/api/mcp/tool-utils";
 
@@ -193,7 +197,7 @@ type CorpusPage = {
 
 type CorpusPageOutcome =
   | { type: "page"; page: CorpusPage }
-  | { type: "failed"; message: string };
+  | { type: "failed"; result: InternalToolErrorResult };
 
 const EMPTY_PAGE: CorpusPage = {
   results: [],
@@ -345,8 +349,11 @@ const searchDecisions = async ({
     }
     // A country that failed sinks the corpus half rather than reading as "no
     // law there": those are different answers to the same question.
+    if (isSearchIndexUnavailable(result)) {
+      return { type: "failed", result: searchIndexUnavailableResult(result) };
+    }
     if (!isSearchCaseLawSuccess(result)) {
-      return { type: "failed", message: "Case-law search failed" };
+      return { type: "failed", result: errorResult("Case-law search failed") };
     }
     page.cursors[country] = result.nextCursor;
     if (result.paginationOutcome.type === "truncated") {
@@ -454,8 +461,14 @@ const searchStatutes = async ({
       page.cursors[jurisdiction] = null;
       continue;
     }
+    if (isSearchIndexUnavailable(result)) {
+      return { type: "failed", result: searchIndexUnavailableResult(result) };
+    }
     if (!isLegislationSearchSuccess(result)) {
-      return { type: "failed", message: "Legislation search failed" };
+      return {
+        type: "failed",
+        result: errorResult("Legislation search failed"),
+      };
     }
     page.cursors[jurisdiction] = result.nextCursor;
     if (result.paginationOutcome.type === "truncated") {
@@ -499,7 +512,7 @@ export type CompatCorpusSearchOutcome =
       cursors: CompatCorpusCursors;
       paginationOutcome: SearchPaginationOutcome;
     }
-  | { type: "failed"; message: string };
+  | { type: "failed"; result: InternalToolErrorResult };
 
 /**
  * One page of the corpus for a compat `search`: decisions first, then
@@ -630,7 +643,7 @@ export const readCompatDecision = async ({
     type: "read",
     text:
       toPlainCorpusText({
-        blocks: parseUsableDocumentAst(decision.documentAst)?.blocks ?? null,
+        blocks: parseCaseLawDecisionAst(decision.documentAst)?.blocks ?? null,
         fulltext: decision.fulltext,
       }) ?? "",
     title: caseLawDecisionHeading({

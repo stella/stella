@@ -9,6 +9,7 @@ import type { ChatInputMentionSource } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import messages from "@/i18n/langs/en.json";
 import type { McpConnectorsResponse } from "@/lib/knowledge/queries";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -28,6 +29,8 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { ChatThreadTestRouter } = await import("@/lib/chat-thread-test-router");
+const { aiAvailabilityOptions } =
+  await import("@/lib/organization/ai-config-queries");
 const { contextMentionSearchKey } = await import("./composer-plus-menu.logic");
 const { toChatThreadId, getChatThreadKey } =
   await import("@/lib/chat-thread-ref");
@@ -41,7 +44,7 @@ const { ComposerSkillsMenu, ComposerContextMenu, ComposerMcpSubmenu } =
 afterEach(cleanup);
 afterAll(async () => {
   await act(async () => {});
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
   if (previousApiUrl === undefined) {
     delete process.env["VITE_API_URL"];
   } else {
@@ -70,12 +73,21 @@ const host = {
   onClose: () => {},
   side: "top",
 } as const;
-const createClient = () =>
-  new QueryClient({
+const createClient = () => {
+  const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, retryOnMount: false, staleTime: Infinity },
     },
   });
+  client.setQueryData(aiAvailabilityOptions({ organizationId }).queryKey, {
+    available: true,
+    deferredServiceTierAvailable: false,
+    instanceProvisioned: false,
+    mockAnswers: false,
+    orgConfigured: true,
+  });
+  return client;
+};
 const markFailed = (
   client: InstanceType<typeof QueryClient>,
   queryKey: readonly unknown[],

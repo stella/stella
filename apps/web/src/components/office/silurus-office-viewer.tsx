@@ -17,7 +17,7 @@ export type OfficeViewerStatus =
   | { type: "ready" }
   | { type: "failed"; error: Error };
 
-export type OfficeViewerResourceLimits = {
+type OfficeViewerResourceLimits = {
   maxArchiveEntries?: number;
   maxArchiveEntryBytes?: number;
   maxTotalInflatedBytes?: number;

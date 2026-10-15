@@ -1,7 +1,8 @@
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+
 import { orderDecisionJudges } from "@/features/case-law/decision-judges";
 import type { DecisionJudge } from "@/features/case-law/decision-judges";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;

@@ -67,11 +67,18 @@ type ScriptedStep = {
   reasoning?: string | undefined;
   /**
    * Where the provider goes quiet and stays quiet until the run is aborted
-   * (a model call the user stops, or one whose connection drops): once the
+   * (a model call the user stops): once the
    * first tool call's arguments have streamed but before the call ends, or
    * once every tool call has ended but before the step finishes.
    */
   quietUntilAborted?: "after-tool-end" | "before-tool-end" | undefined;
+  /** Holds a live producer at a deterministic delivery boundary. */
+  pause?: {
+    at: "after-tool-end" | "before-tool-end";
+    wait: () => Promise<void>;
+  };
+  /** Splits text into enough chunks to exercise delivery batching. */
+  textChunks?: readonly string[];
   text?: string | undefined;
   toolCalls: readonly {
     arguments: string;
@@ -199,7 +206,12 @@ async function* scriptedStepChunks({
       timestamp,
       delta: "",
       content: step.reasoning,
-      signature: `signature-${stepId}`,
+      // The harness resolves OpenAI models: replay requires encrypted content,
+      // rather than an opaque signature or an id whose stored copy may be gone.
+      signature: JSON.stringify({
+        id: `rs_${blockId}`,
+        encrypted_content: `encrypted-${stepId}`,
+      }),
     };
     yield {
       type: EventType.REASONING_MESSAGE_END,
@@ -222,13 +234,15 @@ async function* scriptedStepChunks({
       model,
       timestamp,
     };
-    yield {
-      type: EventType.TEXT_MESSAGE_CONTENT,
-      messageId,
-      delta: step.text,
-      model,
-      timestamp,
-    };
+    for (const delta of step.textChunks ?? [step.text]) {
+      yield {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta,
+        model,
+        timestamp,
+      };
+    }
     yield { type: EventType.TEXT_MESSAGE_END, messageId, model, timestamp };
   }
   for (const call of step.toolCalls) {
@@ -246,6 +260,9 @@ async function* scriptedStepChunks({
       model,
       timestamp,
     };
+    if (step.pause?.at === "before-tool-end") {
+      await step.pause.wait();
+    }
     if (step.quietUntilAborted === "before-tool-end") {
       await untilAborted(signal);
       return;
@@ -262,6 +279,9 @@ async function* scriptedStepChunks({
             toolName: call.toolName,
           }),
     };
+  }
+  if (step.pause?.at === "after-tool-end") {
+    await step.pause.wait();
   }
   if (step.quietUntilAborted === "after-tool-end") {
     await untilAborted(signal);

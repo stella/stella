@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The desktop clipboard folder chips reorder with the same closest-edge hitbox as workspace view tabs, so apps/desktop declares @atlaskit/pragmatic-drag-and-drop-hitbox at the range web and workspace-ui already use."
+}

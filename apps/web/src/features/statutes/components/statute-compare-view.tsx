@@ -6,6 +6,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import {
   parseDocumentAst,
   resolveDocumentHeadingAnchor,
@@ -16,17 +17,15 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { ArrowDownIcon, ArrowUpIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
+// The move flash is the reader's own `[data-highlight]` animation.
+import "@stll/decision-reader/reader.css";
 import { cn } from "@stll/ui/utils";
 
-// The move flash is the reader's own `[data-highlight]` animation.
-import "@/components/legal-reader/reader.css";
-import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
 import {
   StatuteBlock,
   StatuteMasthead,
 } from "@/features/statutes/components/statute-text";
 import { StatuteValidityIndicator } from "@/features/statutes/components/statute-validity-indicator";
-import { provisionInVersionOptions } from "@/features/statutes/queries/provision-preview";
 import { statuteOptions } from "@/features/statutes/queries/statutes";
 import type {
   PublicStatute,
@@ -59,11 +58,12 @@ import type {
 } from "@/features/statutes/statute-compare-search";
 import { compareText, markSide } from "@/features/statutes/statute-diff-marks";
 import type { StatuteCompareSide } from "@/features/statutes/statute-diff-marks";
-import { formatValidityDate } from "@/features/statutes/statute-format";
 import { prepareStatuteReader } from "@/features/statutes/statute-reader-blocks";
 import type { StatuteMasthead as StatuteMastheadData } from "@/features/statutes/statute-reader-blocks";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
+import { provisionInVersionOptions } from "@/lib/statutes/provision-preview";
+import { formatValidityDate } from "@/lib/statutes/statute-format";
 
 const READER_STYLE = {
   fontFamily: "var(--reader-body-font)",

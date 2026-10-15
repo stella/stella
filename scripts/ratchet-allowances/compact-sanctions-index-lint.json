@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 2,
+  "reason": "Compact sanctions index hot paths: power-of-two column and shard masks (no-bitwise) and a UTF-16 code-unit shard hash (prefer-code-point); equality stays Map-owned, so the hash choice cannot change results."
+}

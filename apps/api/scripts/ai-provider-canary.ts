@@ -15,6 +15,8 @@ import {
 } from "@stll/ai-catalog";
 import type { ModelRole } from "@stll/ai-catalog";
 import type { AIErrorKind } from "@stll/api-contract";
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
+import { sanitizeQueryErrorText } from "@stll/errors";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
@@ -22,6 +24,7 @@ import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { buildBudgetEdgeSchema } from "@/api/lib/structured-output-budget-probe";
 import {
   abortControllerFromSignal,
@@ -259,6 +262,9 @@ const PROVIDER_CALL_ERROR_RETRYABILITY = {
   model_unavailable: false,
   provider_unavailable: true,
   provider_stream_incomplete: true,
+  output_incomplete: true,
+  output_invalid: false,
+  deadline_exceeded: true,
   loop_detected: false,
   empty_completion: false,
   unknown: false,
@@ -796,7 +802,12 @@ export const runCanaryProbe = async ({
       ) {
         return { attempts: attempt, error, signal, status: "failed" };
       }
-      await wait(retryDelayMs * CANARY_PROBE_RETRY_BACKOFF ** (attempt - 1));
+      await wait(
+        backoffDelay(attempt - 1, {
+          baseMs: retryDelayMs,
+          factor: CANARY_PROBE_RETRY_BACKOFF,
+        }),
+      );
     }
   }
 
@@ -951,8 +962,9 @@ type PdfCanarySelection = {
 export const pdfCanarySelection = (
   provider: CanaryProvider,
 ): PdfCanarySelection | null => {
-  if (isBYOKProviderRoleSupported({ provider, role: "pdf" })) {
-    return { modelId: DEFAULT_MODELS[provider].pdf, role: "pdf" };
+  const defaultModelId = DEFAULT_MODELS[provider].pdf;
+  if (defaultModelId !== null) {
+    return { modelId: defaultModelId, role: "pdf" };
   }
 
   const modelId = CHAT_PDF_ATTACHMENT_MODEL_OPTIONS[provider].at(0);
@@ -1003,6 +1015,7 @@ const capabilityProbes = [
           role: CAPABILITY_ROLE,
         }),
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         outputMode: "generative",
         outputSchema: structuredOutputSchema,
@@ -1042,6 +1055,7 @@ const capabilityProbes = [
           propertyCount: edge.propertyCount,
         }),
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         outputSchema: edge.outputSchema,
         prompt:
@@ -1107,6 +1121,7 @@ const capabilityProbes = [
           role: CAPABILITY_ROLE,
         }),
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
         orgAIConfig: config,
         prompt: SYNTHETIC_PROMPT,
         role: CAPABILITY_ROLE,
@@ -1167,6 +1182,7 @@ const runModelRoleProbe = async ({
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: probeConfig,
     role: selection.role,
   });
@@ -1189,6 +1205,7 @@ const runModelRoleProbe = async ({
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: probeConfig,
     role: selection.role,
     serviceTier: "standard",
@@ -1202,15 +1219,20 @@ const runStructuredOutputModelRoleProbe = async ({
   role,
   signal,
 }: RunModelRoleProbeOptions): Promise<void> => {
+  const modelId = DEFAULT_MODELS[provider][role];
+  if (modelId === null) {
+    return panic("Unsupported role must not run a structured output canary");
+  }
   await generateTanStackObjectForRole({
     dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
-      modelId: DEFAULT_MODELS[provider][role],
+      modelId,
       role,
     }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     outputSchema: nestedStructuredOutputSchema,
     prompt: "Return an object with an empty entries array.",
@@ -1234,6 +1256,7 @@ const runWeeklyModelRoleProbe = async ({
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     role,
   });
@@ -1256,6 +1279,7 @@ const runWeeklyModelRoleProbe = async ({
       ? { messages: createPdfCanaryMessages() }
       : { prompt: SYNTHETIC_PROMPT }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     role,
     serviceTier: "standard",
@@ -1278,6 +1302,7 @@ const runWeeklyStructuredOutputModelRoleProbe = async ({
       role,
     }),
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: rotatedConfig,
     outputSchema: nestedStructuredOutputSchema,
     prompt: "Return an object with an empty entries array.",
@@ -1434,6 +1459,7 @@ const runToolProbe = async ({
   const model = await resolveTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     role,
   });
@@ -1495,12 +1521,17 @@ const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
       ? rotatedModelId
       : DEFAULT_MODELS[provider][role];
 
-  return {
-    fast: { provider, modelId: modelIdForRole("fast") },
-    chat: { provider, modelId: modelIdForRole("chat") },
-    reasoning: { provider, modelId: modelIdForRole("reasoning") },
-    pdf: { provider, modelId: modelIdForRole("pdf") },
-  };
+  const selections: [
+    ModelRole,
+    { provider: CanaryProvider; modelId: string },
+  ][] = [];
+  for (const role of MODEL_ROLES) {
+    const modelId = modelIdForRole(role);
+    if (modelId !== null) {
+      selections.push([role, { provider, modelId }]);
+    }
+  }
+  return Object.fromEntries(selections);
 };
 
 /**
@@ -1513,7 +1544,10 @@ const modelSelections = (provider: CanaryProvider, rotatedModelId?: string) => {
 export const catalogModelIds = (provider: CanaryProvider): string[] => {
   const ids = new Set<string>();
   for (const role of MODEL_ROLES) {
-    ids.add(DEFAULT_MODELS[provider][role]);
+    const modelId = DEFAULT_MODELS[provider][role];
+    if (modelId !== null) {
+      ids.add(modelId);
+    }
   }
   for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
     ids.add(modelId);
@@ -1694,7 +1728,9 @@ const recordProbeResult = ({
   }
 
   console.error(
-    `[ai-canary] ${provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+    sanitizeQueryErrorText(
+      `[ai-canary] ${provider}/${label}: failed${attemptSummary(result.attempts)} (${errorSummary(result.error, result.signal)})`,
+    ),
   );
   return 1;
 };
@@ -1858,6 +1894,7 @@ const runCatalogModelProbe = async ({
   const model = await resolveTanStackTextModel({
     dataClass: "public_corpus",
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     role: CATALOG_PROBE_ROLE,
   });
@@ -1878,6 +1915,7 @@ const runCatalogModelProbe = async ({
     }),
     prompt: SYNTHETIC_PROMPT,
     organizationId: null,
+    admission: NO_ORGANIZATION_MODEL_DISPATCH,
     orgAIConfig: config,
     role: CATALOG_PROBE_ROLE,
     serviceTier: "standard",
@@ -2019,7 +2057,7 @@ if (import.meta.main) {
   await run().catch((error: unknown) => {
     // Never print provider errors: bodies can echo request content or headers.
     const message = CanaryError.is(error) ? error.message : "Canary failed.";
-    console.error(`[ai-canary] ${message}`);
+    console.error(sanitizeQueryErrorText(`[ai-canary] ${message}`));
     process.exitCode = 1;
   });
 }

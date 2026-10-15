@@ -20,8 +20,10 @@ for (const [locale, { dialog: strings }] of Object.entries({ en, ar })) {
       );
       await page.addInitScript(() => {
         Reflect.set(window, "__TAURI_INTERNALS__", {
-          invoke: (_command: string, args: unknown) =>
-            Reflect.get(window, "recordResponse")(args),
+          invoke: (command: string, args: unknown) =>
+            command === "fit_static_dialog"
+              ? Promise.resolve(null)
+              : Reflect.get(window, "recordResponse")(args),
         });
       });
       await page.route("**/handoff-dialog-test", async (route) => {

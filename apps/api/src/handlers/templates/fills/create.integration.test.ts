@@ -21,6 +21,7 @@ import {
 import { and, eq } from "drizzle-orm";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -89,11 +90,13 @@ const gatedDocx = async () => {
     (text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`,
   ).join("");
   const zip = new JSZip();
-  zip.file(
+  writeZipEntry(
+    zip,
     "word/document.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
   );
@@ -157,7 +160,7 @@ describe("fill to workspace records the completion decision", () => {
           user: { id: ids.userA1 },
           safeDb: toSafeDbMock(scopedDb),
           scopedDb,
-          recordAuditEvent: recordNothing,
+          audit: recordNothing,
           // The handler rebinds its recorder to the validated workspace.
           createAuditRecorder: () => recordTemplateEvents,
           orgAIConfig: null,

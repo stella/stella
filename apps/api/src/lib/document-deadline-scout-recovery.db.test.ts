@@ -7,17 +7,27 @@
  * Driven against a real (PGlite) database with a stubbed queue.
  */
 
+import { Result } from "better-result";
 import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import type { rootDb } from "@/api/db/root";
-import { documentProcessingRuns } from "@/api/db/schema";
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+
+import type { rootDb, Transaction } from "@/api/db/root";
+import { documentProcessingRuns, extractedContent } from "@/api/db/schema";
+import type { RlsDatabase } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { encryptContent } from "@/api/lib/content-encryption";
 import { DOCUMENT_OCR_PROCESSOR_VERSION } from "@/api/lib/document-processing-contract";
 import { enqueueDocumentDeadlineScoutJob } from "@/api/lib/document-processing-enqueue";
 import type { DocumentDeadlineScoutJobData } from "@/api/lib/document-processing-enqueue";
 import { recoverDocumentDeadlineScoutDispatches } from "@/api/lib/document-processing-queue";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import {
+  runDocumentDeadlineScout,
+  skipDeadlineScan,
+} from "@/api/lib/scouts/document-deadlines";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -228,4 +238,177 @@ test("does not reset a claim taken between the select and the update", async () 
   // a row it did not move.
   expect(result.count).toBe(0);
   expect(added).toEqual([]);
+});
+
+test("a scan skipped for an exhausted period is not dispatched before the period ends, then once", async () => {
+  const runId = await insertPendingScoutRun();
+  const claimedAt = new Date();
+  await testDb
+    .update(documentProcessingRuns)
+    .set({
+      deadlineScoutAttemptCount: 1,
+      deadlineScoutClaimedAt: claimedAt,
+      deadlineScoutStatus: "running",
+    })
+    .where(eq(documentProcessingRuns.id, runId));
+  const periodEnd = new Date(claimedAt.getTime() + 60 * 60 * 1000);
+
+  await skipDeadlineScan({
+    db: asTestRaw<typeof rootDb>(testDb),
+    runId,
+    skippedUntil: periodEnd,
+  });
+
+  const [skipped] = await testDb
+    .select({
+      attemptCount: documentProcessingRuns.deadlineScoutAttemptCount,
+      claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+      errorCode: documentProcessingRuns.deadlineScoutErrorCode,
+      skippedUntil: documentProcessingRuns.deadlineScoutSkippedUntil,
+      status: documentProcessingRuns.deadlineScoutStatus,
+    })
+    .from(documentProcessingRuns)
+    .where(eq(documentProcessingRuns.id, runId));
+  expect(skipped).toEqual({
+    // The refused claim gives its attempt back.
+    attemptCount: 0,
+    claimedAt: null,
+    errorCode: ACTION_ADMISSION_CODES.periodExhausted,
+    skippedUntil: periodEnd,
+    status: "pending",
+  });
+
+  // Repeated sweeps inside the period enqueue nothing: no retry loop.
+  expect((await sweep()).count).toBe(0);
+  expect((await sweep()).count).toBe(0);
+  expect(added).toEqual([]);
+
+  await testDb
+    .update(documentProcessingRuns)
+    .set({ deadlineScoutSkippedUntil: new Date(Date.now() - 1) })
+    .where(eq(documentProcessingRuns.id, runId));
+  expect((await sweep()).count).toBe(1);
+  expect(added.map(({ data }) => data)).toEqual([{ sourceRunId: runId }]);
+});
+
+test("a period refusal inside the scout run skips the scan until the period ends, keeping its attempt", async () => {
+  const runId = await insertPendingScoutRun();
+  const text = `The response is due by 2099-01-15. ${"Clause text. ".repeat(40)}`;
+  const encrypted = await encryptContent(ids.orgA, text);
+  // One extraction per entity: the scan's source replaces the fixture's.
+  const fixtureExtraction = await testDb
+    .delete(extractedContent)
+    .where(eq(extractedContent.entityId, ids.entityA1))
+    .returning();
+  await testDb.insert(extractedContent).values({
+    charCount: text.length,
+    ciphertext: encrypted.ciphertext,
+    entityId: ids.entityA1,
+    extractedAt: new Date(),
+    iv: encrypted.iv,
+    ocrPayloadCiphertext: Buffer.from("ocr-payload"),
+    ocrPayloadIv: Buffer.from("ocr-iv"),
+    ocrProcessorVersion: DOCUMENT_OCR_PROCESSOR_VERSION,
+    ocrRunId: runId,
+    organizationId: ids.orgA,
+    sourceEntityVersionId: ids.entityVersionA1,
+    sourceFieldId: ids.fileFieldA1,
+    sourceFileId: ids.fileObjectA1,
+    sourceSha256Hex: "c".repeat(64),
+    workspaceId: ids.wsA1,
+  });
+  // The refusal names its own period's reset, whichever budget refused.
+  const resetAtMs = Date.UTC(2099, 0, 1);
+  const admitted: string[] = [];
+  try {
+    await runDocumentDeadlineScout({
+      db: asTestRaw<typeof rootDb>(testDb),
+      database: asTestRaw<RlsDatabase<Transaction>>(testDb),
+      sourceRunId: runId,
+      // The member's period is exhausted: admission refuses the scan before
+      // any model call.
+      admit: async ({ periodIdentity }) => {
+        admitted.push(periodIdentity?.actionKind ?? "none");
+        return await Promise.resolve(
+          Result.err(
+            new ActionAdmissionError({
+              message: "Period exhausted",
+              reason: "period_exhausted",
+              retryAtMs: resetAtMs,
+            }),
+          ),
+        );
+      },
+    });
+
+    expect(admitted).toEqual(["documents.scan-deadlines"]);
+    const [settled] = await testDb
+      .select({
+        attemptCount: documentProcessingRuns.deadlineScoutAttemptCount,
+        claimedAt: documentProcessingRuns.deadlineScoutClaimedAt,
+        errorCode: documentProcessingRuns.deadlineScoutErrorCode,
+        skippedUntil: documentProcessingRuns.deadlineScoutSkippedUntil,
+        status: documentProcessingRuns.deadlineScoutStatus,
+      })
+      .from(documentProcessingRuns)
+      .where(eq(documentProcessingRuns.id, runId));
+    expect(settled).toMatchObject({
+      // The refused claim gives its attempt back.
+      attemptCount: 0,
+      claimedAt: null,
+      errorCode: ACTION_ADMISSION_CODES.periodExhausted,
+      status: "pending",
+    });
+    // Skipped until the end of the period that refused it.
+    expect(settled?.skippedUntil?.getTime()).toBe(resetAtMs);
+    expect((await sweep()).count).toBe(0);
+  } finally {
+    await testDb
+      .delete(extractedContent)
+      .where(eq(extractedContent.entityId, ids.entityA1));
+    if (fixtureExtraction.length > 0) {
+      await testDb.insert(extractedContent).values(fixtureExtraction);
+    }
+  }
+});
+
+test("a skip applies only to a running scan, and only a pending scan may carry one", async () => {
+  const runId = await insertPendingScoutRun();
+  await skipDeadlineScan({
+    db: asTestRaw<typeof rootDb>(testDb),
+    runId,
+    skippedUntil: new Date(Date.now() + 60_000),
+  });
+  const [untouched] = await testDb
+    .select({ skippedUntil: documentProcessingRuns.deadlineScoutSkippedUntil })
+    .from(documentProcessingRuns)
+    .where(eq(documentProcessingRuns.id, runId));
+  expect(untouched?.skippedUntil).toBeNull();
+
+  const writeSkipWithStatus = async (
+    deadlineScoutStatus: "running" | "succeeded" | "not_requested",
+  ) =>
+    await Result.tryPromise(
+      async () =>
+        await testDb
+          .update(documentProcessingRuns)
+          .set({
+            deadlineScoutClaimedAt:
+              deadlineScoutStatus === "running" ? new Date() : null,
+            deadlineScoutErrorCode: null,
+            deadlineScoutSkippedUntil: new Date(),
+            deadlineScoutStatus,
+          })
+          .where(eq(documentProcessingRuns.id, runId)),
+    );
+  const writes = [
+    await writeSkipWithStatus("running"),
+    await writeSkipWithStatus("succeeded"),
+    await writeSkipWithStatus("not_requested"),
+  ];
+  expect(writes.map((write) => Result.isError(write))).toEqual([
+    true,
+    true,
+    true,
+  ]);
 });

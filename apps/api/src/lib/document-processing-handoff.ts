@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
+
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
@@ -27,15 +29,10 @@ export const handoffCommittedDocumentProcessingRuns = async ({
   runIds,
   timeoutMs = DOCUMENT_PROCESSING_HANDOFF_TIMEOUT_MS,
 }: DocumentProcessingHandoffOptions): Promise<void> => {
-  for (
-    let start = 0;
-    start < runIds.length;
-    start += DOCUMENT_PROCESSING_HANDOFF_CONCURRENCY
-  ) {
-    const batch = runIds.slice(
-      start,
-      start + DOCUMENT_PROCESSING_HANDOFF_CONCURRENCY,
-    );
+  for (const batch of chunkItems(
+    runIds,
+    DOCUMENT_PROCESSING_HANDOFF_CONCURRENCY,
+  )) {
     await Promise.all(
       batch.map(async (runId) => {
         const result = await Result.tryPromise({

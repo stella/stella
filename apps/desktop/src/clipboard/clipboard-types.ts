@@ -1,4 +1,4 @@
-export type ClipboardSourcePage = {
+type ClipboardSourcePage = {
   host: string;
   origin: string;
   url: string;
@@ -85,17 +85,17 @@ export type ClipboardGroup = {
   name: string;
 };
 
-export type ClipboardPersistence =
+type ClipboardPersistence =
   | { status: "initializing" }
   | { imageCleanup: "idle" | "pendingRetry"; status: "encrypted" }
   | { status: "memoryOnly" }
   | { status: "deletionOnly" };
 
-export type ClipboardWelcomeStatus = "initializing" | "pending" | "completed";
+type ClipboardWelcomeStatus = "initializing" | "pending" | "completed";
 
 export const CLIPBOARD_SCREEN_CAPTURES = ["hidden", "visible"] as const;
 
-export type ClipboardScreenCapture = (typeof CLIPBOARD_SCREEN_CAPTURES)[number];
+type ClipboardScreenCapture = (typeof CLIPBOARD_SCREEN_CAPTURES)[number];
 
 const isClipboardScreenCapture = (
   value: unknown,
@@ -233,7 +233,7 @@ const isPersistence = (value: unknown): value is ClipboardPersistence => {
   );
 };
 
-export const CLIPBOARD_COPY_ERROR_KINDS = ["copy", "hide", "history"] as const;
+const CLIPBOARD_COPY_ERROR_KINDS = ["copy", "hide", "history"] as const;
 
 export type ClipboardCopyErrorKind =
   (typeof CLIPBOARD_COPY_ERROR_KINDS)[number];

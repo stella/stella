@@ -10,6 +10,7 @@ import type {
   PublicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 import type { UiLocale } from "@stll/locales";
+import { normalizeUnicode } from "@stll/text-normalize";
 
 const DEFAULT_COUNTRY_BY_LOCALE = {
   ar: null,
@@ -63,7 +64,7 @@ export const decodeCaseLawDecisionRef = (value: string): string =>
     .trim();
 
 const normalizeDecisionRef = (value: string): string =>
-  value.normalize("NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
+  normalizeUnicode(value, "NFKC").toLowerCase().replace(/\s+/gu, " ").trim();
 
 export const pickCaseLawDecisionHit = <THit extends DecisionRefCandidate>(
   decisionRef: string,

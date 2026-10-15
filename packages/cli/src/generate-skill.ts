@@ -16,6 +16,7 @@ import {
   RouteGenerationError,
 } from "./generate-route-map.js";
 import { DOCUMENT_VERSION_UPLOAD_TRANSPORT } from "./generated/document-version-upload-transport.js";
+import { MCP_CAPABILITY_EXECUTORS } from "./generated/mcp-contract.js";
 import {
   buildCompactInputUnionHints,
   buildInputContractHelp,
@@ -241,7 +242,7 @@ const renderExitCodeTable = (): string =>
 
 /** The capability-tree facts the skill documents (spec 049 deliverable 4). */
 export type CapabilitySkillSummary = {
-  /** Count of generated `invoke_capability`-backed leaf commands. */
+  /** Count of generated capability-executor-backed leaf commands. */
   commandCount: number;
   /** Domain segments actually present in the merged tree, see `capabilityDomainsOf`. */
   domains: readonly string[];
@@ -363,15 +364,16 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     "",
     `Beyond the curated commands above, the CLI generates ${summary.commandCount}`,
     "capability commands from the server's capability catalog: every safe handler",
-    "that is not a curated tool, reached through the generic `invoke_capability`",
-    `path. Every generated command lives at \`stella ${CAPABILITY_NAMESPACE} <domain> <action>\`;`,
+    `that is not a curated tool, reached through \`${MCP_CAPABILITY_EXECUTORS.read}\` or \`${MCP_CAPABILITY_EXECUTORS.write}\``,
+    `paths. Every generated command lives at \`stella ${CAPABILITY_NAMESPACE} <domain> <action>\`;`,
     "multi-segment capability actions are flattened with hyphens into `<action>`.",
     "",
     "- **Discover**: `stella capability list [--domain <d>] [--access read|write]`",
-    "  enumerates them (paginated); `stella capability describe <id>` prints one",
+    "  enumerates them (paginated); `stella capability describe --capability <id>` prints one",
     "  capability's full input schema, scope, and flags.",
-    "- **Invoke by id** (forward-compatible with any server): `stella capability",
-    "  invoke <id> --input '<json>'`, where the JSON is `{ body?, params?, query? }`.",
+    "- **Invoke by id**: `stella capability read --capability <id> --input '<json>'` or",
+    "  `stella capability write --capability <id> --input '<json>'` for writes.",
+    "  The JSON is `{ body?, params?, query? }`.",
     "- **Flags**: each capability command derives flags from its input schema;",
     "  matter-scoped capabilities take a required `--matter-id <id>`. Deep or",
     "  ambiguous payloads use `--input` (the whole `{ body?, params?, query? }`).",
@@ -392,7 +394,7 @@ const renderCapabilitySection = (summary: CapabilitySkillSummary): string => {
     "  keys, snake_case (`matter_id`, `contact_id`). A capability command's",
     "  `--input` JSON uses the handler schema's own keys, camelCase (`fieldId`,",
     "  `matterId`). Run `stella <command> --help` or `stella capability describe",
-    "  <id>` and copy the field paths it prints.",
+    "  --capability <id>` and copy the field paths it prints.",
   ].join("\n");
 };
 

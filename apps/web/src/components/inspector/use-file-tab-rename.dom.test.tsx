@@ -17,6 +17,7 @@ import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
 import { userStorageKey } from "@/lib/account/user-scoped-storage";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { InspectorTabsStore } from "./inspector-store-types";
 
@@ -195,10 +196,26 @@ afterAll(async () => {
   await new Promise<void>((resolve) => {
     setImmediate(resolve);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 describe("confirmed file rename state", () => {
+  test("edits the base name and sends a typed extension once", async () => {
+    const target = file("A");
+    useInspectorTabsStore.getState().openFile(target);
+    const { result } = mount();
+
+    act(() => result.current.fileRename.startRename(target));
+    expect(result.current.fileRename.editValue).toBe("A");
+
+    act(() => result.current.fileRename.setEditValue("minutes.MD"));
+    act(() => result.current.fileRename.commitRename(target));
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(requests.at(0)?.name).toBe("minutes.MD");
+    success(0, "A", "minutes.MD");
+    await waitFor(() => expect(tab("A")?.label).toBe("minutes.MD"));
+  });
+
   test("optimistic labels rollback by entity identity after version replacement", async () => {
     useInspectorTabsStore.getState().openFile(file("A"));
     const { result, client } = mount();
@@ -228,7 +245,7 @@ describe("confirmed file rename state", () => {
 
   test("a second window's confirmed rename survives the first window's refusal", async () => {
     const otherStore = createStore<InspectorTabsStore>()(
-      immer((set) => createInspectorTabsSlice(set)),
+      immer((set, get) => createInspectorTabsSlice(set, get)),
     );
     const scope = { organizationId: "two-windows", userId: "rename-user" };
     const stopFirst = broadcast(useInspectorTabsStore, scope);

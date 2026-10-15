@@ -1,3 +1,5 @@
+// The STELLA_RUN_POSTGRES_TESTS runner includes this PGlite suite alongside
+// the verification suites; it also remains available in the ordinary DB lane.
 import {
   afterAll,
   beforeAll,

@@ -7,6 +7,10 @@ import {
   expenseCategorySchema,
   timeEntryStatusSchema,
 } from "@/api/db/billing-validators";
+import {
+  entityContextId,
+  entityContextReference,
+} from "@/api/db/entity-feature-policies";
 import { expenses } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -39,6 +43,7 @@ const readExpensesQuerySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "List expenses in a matter, earliest date first, with cursor pagination. " +
     "Filter by userId, work item (matterId), a date-incurred range " +
@@ -136,7 +141,8 @@ const readExpenses = createSafeHandler(
           .select({
             id: expenses.id,
             userId: expenses.userId,
-            matterId: expenses.matterId,
+            matterId: entityContextId(expenses.matterId),
+            matterReference: entityContextReference(expenses.matterId),
             dateIncurred: expenses.dateIncurred,
             amount: expenses.amount,
             currency: expenses.currency,
@@ -197,6 +203,7 @@ const readExpenses = createSafeHandler(
         id: row.id,
         userId: row.userId,
         matterId: row.matterId,
+        matterReference: row.matterReference,
         dateIncurred: row.dateIncurred,
         amount: row.amount,
         currency: row.currency,

@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import {
+  API_FILE_SECURITY_REJECTED_ERROR_CODE,
+  CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+} from "@stll/api-contract";
+
 import { env } from "@/env";
 import { INGESTION_REQUIRED_KEYS } from "@/lib/analytics/posthog-ingestion";
 import { WEB_ANALYTICS_EVENTS } from "@/lib/analytics/types";
@@ -355,7 +360,8 @@ describe("PostHog browser analytics adapter", () => {
 
   test.each([
     "ai_config_provider_validation_failed",
-    "chat_continuation_rejected",
+    CHAT_CONTINUATION_REJECTED_ERROR_CODE,
+    API_FILE_SECURITY_REJECTED_ERROR_CODE,
   ])("drops the expected API outcome %s", (code) => {
     expect(
       isNoiseException(

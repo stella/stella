@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
 import { chunkDocument } from "@/api/lib/corpus-index/chunking";
@@ -181,9 +182,7 @@ describe("readCorpusPassages", () => {
       concurrency: 2,
     });
     // A macrotask turn, so every read the pool starts has reached the gate.
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await sleep(0);
     release();
     await results;
 

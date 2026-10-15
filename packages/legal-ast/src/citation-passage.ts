@@ -9,7 +9,7 @@
  * quoted from another.
  */
 
-import { escapeRegExp } from "@stll/text-normalize";
+import { normalizeUnicode, escapeRegExp } from "@stll/text-normalize";
 
 import {
   CITATION_PREFIX_SOURCE,
@@ -49,8 +49,8 @@ const MIN_ANCHOR_TEXT_LENGTH = 5;
  * carries both spellings and the text is left exactly as it is.
  */
 const eitherNormalization = (literal: string): string =>
-  Array.from(literal.normalize("NFC"), (character) => {
-    const decomposed = character.normalize("NFD");
+  Array.from(normalizeUnicode(literal, "NFC"), (character) => {
+    const decomposed = normalizeUnicode(character, "NFD");
     return decomposed === character
       ? escapeRegExp(character)
       : `(?:${escapeRegExp(character)}|${escapeRegExp(decomposed)})`;
@@ -73,7 +73,7 @@ const patternFor = (citationText: string): RegExp | null => {
   // Composed for the length test, so the same number does not clear the
   // threshold in one normalization form and fail it in the other.
   const bare = stripCitationPrefix(citationText);
-  if (bare.normalize("NFC").length < MIN_ANCHOR_TEXT_LENGTH) {
+  if (normalizeUnicode(bare, "NFC").length < MIN_ANCHOR_TEXT_LENGTH) {
     return null;
   }
   const source = bare.split(/\s+/u).map(eitherNormalization).join("\\s+");

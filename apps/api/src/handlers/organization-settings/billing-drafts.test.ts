@@ -98,7 +98,19 @@ describe("billing draft configuration authorization", () => {
       Value.Check(updateBillingDraftConfiguration.config.body, {
         mode: "enabled",
         resourceIds: [resourceId],
+        expectedUpdatedAt: new Date(0).toISOString(),
       }),
     ).toBe(true);
+    expect(
+      Value.Check(updateBillingDraftConfiguration.config.body, {
+        mode: "enabled",
+        resourceIds: [resourceId],
+      }),
+    ).toBe(false);
+    expect(updateBillingDraftConfiguration.config.contract).toBe("replace");
+    expect(updateBillingDraftConfiguration.config.precondition).toEqual({
+      type: "updatedAt",
+      field: "expectedUpdatedAt",
+    });
   });
 });

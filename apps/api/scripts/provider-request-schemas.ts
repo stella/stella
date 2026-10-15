@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 // Extracts the request schema of every provider API the chat adapters call
 // from the provider's own published specification, as a self-contained JSON
 // Schema (draft 2020-12) under src/tests/fixtures/provider-request-schemas.
@@ -18,8 +19,6 @@
 // becomes a `null` type. Google's discovery format and the AWS service model
 // are translated keyword by keyword; the notes in each sidecar say where the
 // translation reads more than the format states.
-
-import { panic } from "better-result";
 import {
   appendFileSync,
   existsSync,
@@ -29,6 +28,8 @@ import {
 } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
@@ -218,9 +219,7 @@ export const canonicalJson = (value: unknown): unknown => {
  * differently on every download, so the bytes alone would never match.
  */
 export const specificationSha256 = (spec: JsonObject): string =>
-  new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify(canonicalJson(spec)))
-    .digest("hex");
+  hashSha256Hex(JSON.stringify(canonicalJson(spec)));
 
 /** A specification as JSON, whichever of JSON or YAML it is written in. */
 export const parseSpecification = (text: string): JsonObject => {
@@ -854,7 +853,7 @@ const writeAll = async () => {
       "oxfmt",
       "-c",
       ".oxfmtrc.json",
-      path.relative(REPOSITORY_ROOT, PROVIDER_REQUEST_SCHEMA_DIR),
+      repoRelativePath(REPOSITORY_ROOT, PROVIDER_REQUEST_SCHEMA_DIR),
     ],
     { cwd: REPOSITORY_ROOT, stderr: "inherit", stdout: "ignore" },
   );

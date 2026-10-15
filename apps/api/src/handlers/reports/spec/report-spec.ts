@@ -21,13 +21,10 @@ export const ROOT_INTERPOLATION_KEYS = [
   "generatedAt",
 ] as const;
 /** Placeholders a `grouped` heading may interpolate, on top of the root set. */
-export const GROUP_INTERPOLATION_KEYS = [
+const GROUP_INTERPOLATION_KEYS = [
   ...ROOT_INTERPOLATION_KEYS,
   "group.documentType",
 ] as const;
-
-export type RootInterpolationKey = (typeof ROOT_INTERPOLATION_KEYS)[number];
-export type GroupInterpolationKey = (typeof GROUP_INTERPOLATION_KEYS)[number];
 
 /** `{{ key }}`; the key is trimmed in code rather than by `\s*` in the
  *  pattern, which would make the match backtrack quadratically. */
@@ -76,7 +73,7 @@ const promptSchema = v.union([
   v.strictObject({ ref: v.pipe(v.string(), v.regex(/^[\w-]+$/u)) }),
 ]);
 
-export const FINDING_COLUMNS = [
+const FINDING_COLUMNS = [
   "severity",
   "contract",
   "documentType",
@@ -87,17 +84,15 @@ export const FINDING_COLUMNS = [
 ] as const;
 export type FindingColumn = (typeof FINDING_COLUMNS)[number];
 
-export const FINDING_PARTS = [
+const FINDING_PARTS = [
   "rationale",
   "matchedRef",
   "idealText",
   "guidance",
   "negotiation",
 ] as const;
-export type FindingPart = (typeof FINDING_PARTS)[number];
 
-export const CITATION_MODES = ["endnote", "inline", "none"] as const;
-export type CitationMode = (typeof CITATION_MODES)[number];
+const CITATION_MODES = ["endnote", "inline", "none"] as const;
 
 const coverSection = v.strictObject({
   kind: v.literal("cover"),
@@ -166,7 +161,7 @@ const perContractSection = v.strictObject({
   heading: v.optional(v.string()),
 });
 
-export const MATRIX_COLUMNS = ["all", "graded"] as const;
+const MATRIX_COLUMNS = ["all", "graded"] as const;
 export type MatrixColumns = (typeof MATRIX_COLUMNS)[number];
 
 const matrixSection = v.strictObject({
@@ -227,7 +222,7 @@ const sectionSchema = v.variant("kind", [
   appendixSection,
 ]);
 
-export const reportSpecSchema = v.strictObject({
+const reportSpecSchema = v.strictObject({
   version: v.literal(1),
   name: v.pipe(v.string(), v.minLength(1)),
   description: v.optional(v.string()),
@@ -238,8 +233,6 @@ export const reportSpecSchema = v.strictObject({
 
 export type ReportSpec = v.InferOutput<typeof reportSpecSchema>;
 export type ReportSection = v.InferOutput<typeof sectionSchema>;
-export type GroupChildSection = v.InferOutput<typeof groupChildSchema>;
-export type ReportSectionKind = ReportSection["kind"];
 
 /** Every section kind the schema accepts; the renderer's dispatch map is
  *  checked total against this list. */

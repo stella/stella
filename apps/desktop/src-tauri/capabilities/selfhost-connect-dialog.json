@@ -1,6 +1,9 @@
 {
   "identifier": "selfhost-connect-dialog",
-  "description": "Minimal capabilities for the native connection approval prompts; it only invokes the self_host_connect_dialog_respond command",
+  "description": "Scoped response and content-size permissions for this native prompt",
   "windows": ["selfhost-connect-dialog"],
-  "permissions": ["allow-self-host-connect-dialog-respond"]
+  "permissions": [
+    "allow-self-host-connect-dialog-respond",
+    "allow-fit-static-dialog"
+  ]
 }

@@ -38,7 +38,11 @@ const staticPropertyName = (node: unknown): string | null => {
   return getPropertyName(node.property);
 };
 
-type ChainShape = { negated: boolean; rootedAtExpect: boolean };
+type ChainShape = {
+  negated: boolean;
+  rootedAtExpect: boolean;
+  asyncCallback: boolean;
+};
 
 // Walk the member chain beneath the matcher. `expect(x).rejects.toThrow` has
 // `.rejects` under the matcher and the `expect(x)` call at the root.
@@ -53,7 +57,17 @@ const describeChain = (start: unknown): ChainShape => {
     current = current.object;
   }
 
-  return { negated, rootedAtExpect: isCallTo(current, EXPECT_CALLEE) };
+  const rootedAtExpect = isCallTo(current, EXPECT_CALLEE);
+  const argument =
+    isAstNode(current) && Array.isArray(current.arguments)
+      ? current.arguments.at(0)
+      : undefined;
+  const asyncCallback =
+    isAstNode(argument) &&
+    (argument.type === "ArrowFunctionExpression" ||
+      argument.type === "FunctionExpression") &&
+    argument.async === true;
+  return { negated, rootedAtExpect, asyncCallback };
 };
 
 export default eslintCompatPlugin({
@@ -68,14 +82,15 @@ export default eslintCompatPlugin({
             "so it stops guarding the failure it was written for. Name the " +
             "expected error: a message substring, a regex, an error class, " +
             "or an object with `message`.",
+          asyncThrow:
+            "An async callback turns a synchronous throw into a rejected " +
+            "promise. Use a synchronous callback for `{{matcher}}`, or " +
+            "capture the rejection with `rejectionOf`.",
         },
       },
       createOnce(context) {
         return {
           CallExpression(node) {
-            if (node.arguments.length > 0) {
-              return;
-            }
             const matcher = staticPropertyName(node.callee);
             if (matcher === null || !THROW_MATCHERS.has(matcher)) {
               return;
@@ -83,10 +98,21 @@ export default eslintCompatPlugin({
             if (!isAstNode(node.callee)) {
               return;
             }
-            const { negated, rootedAtExpect } = describeChain(
+            const { negated, rootedAtExpect, asyncCallback } = describeChain(
               node.callee.object,
             );
-            if (negated || !rootedAtExpect) {
+            if (!rootedAtExpect) {
+              return;
+            }
+            if (asyncCallback) {
+              context.report({
+                node,
+                messageId: "asyncThrow",
+                data: { matcher },
+              });
+              return;
+            }
+            if (negated || node.arguments.length > 0) {
               return;
             }
             context.report({

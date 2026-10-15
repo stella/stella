@@ -15,7 +15,6 @@ import { API_TEST_TIMEOUT_MS } from "../src/tests/test-timeouts";
 import { buildApiTestCommand } from "./api-test-command";
 import {
   listApiTestPaths,
-  MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
   planApiTestBatches,
   TEST_ROOTS,
   type ComposedTestBatches,
@@ -36,12 +35,12 @@ import {
 } from "./test-batch-plan";
 import {
   acquireCurrentSnapshot,
+  exitAfterSnapshotFailure,
   snapshotCacheDir,
   snapshotDigest,
   snapshotKey,
   SnapshotBuildError,
 } from "./test-db-snapshot-cache";
-import durations from "./test-durations.json";
 import {
   API_TEST_SHARD_ENV,
   restrictApiTestFiles,
@@ -58,6 +57,13 @@ import {
   TestProcessSupervisor,
   testProcessBudgets,
 } from "./test-process-supervisor";
+import {
+  API_TEST_DURATIONS_FILE_ENV,
+  API_TEST_DURATIONS_HASH_ENV,
+  assertTestDurationsIdentity,
+  loadTestDurationWeights,
+  testFileDurationWeights,
+} from "./test-timings";
 
 const PROPERTY_FLAG = "--property";
 const TEST_ROOT_SET = new Set<string>(TEST_ROOTS);
@@ -78,12 +84,20 @@ const allTestPaths = restrictApiTestFiles(
   listApiTestPaths(apiRoot),
   process.env["API_TEST_FILES"],
 );
+const durationWeights = loadTestDurationWeights({
+  files: allTestPaths,
+  path: process.env[API_TEST_DURATIONS_FILE_ENV],
+});
 const { testPaths, shard } = selectApiTestFiles({
   files: allTestPaths,
-  durations,
+  durations: durationWeights,
   shardValue: process.env[API_TEST_SHARD_ENV],
 });
 if (shard !== null) {
+  assertTestDurationsIdentity({
+    path: process.env[API_TEST_DURATIONS_FILE_ENV],
+    hash: process.env[API_TEST_DURATIONS_HASH_ENV],
+  });
   console.log(
     `API test shard ${shard.index}/${shard.count}: ${testPaths.length}/${allTestPaths.length} files`,
   );
@@ -331,6 +345,7 @@ const composedBatches = await planApiTestBatches({
 });
 const plannedBatches = orderBatchesForLanes(
   composedBatches.flatMap((group) => planBatches(group)),
+  testFileDurationWeights(allTestPaths, durationWeights),
 );
 
 const testProcessEnv: Record<string, string | undefined> = {
@@ -342,18 +357,15 @@ const testProcessEnv: Record<string, string | undefined> = {
 if (
   plannedBatches.some(
     ({ kind }) =>
-      kind === TEST_BATCH_KIND.db || kind === TEST_BATCH_KIND.moduleMock,
+      kind === TEST_BATCH_KIND.db ||
+      kind === TEST_BATCH_KIND.heavyDb ||
+      kind === TEST_BATCH_KIND.moduleMock,
   )
 ) {
   try {
     testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
   } catch (error) {
-    if (error instanceof SnapshotBuildError) {
-      printError(error.message);
-      process.exitCode = error.exitCode;
-      throw error;
-    }
-    throw error;
+    exitAfterSnapshotFailure(error);
   }
 }
 
@@ -365,7 +377,9 @@ const testLanes =
         env: process.env,
         // At most one heavy batch runs at a time, so sizing every lane for the
         // heavy budget over-reserves; that slack covers the runner's own processes.
-        laneMemoryBudgetMb: MAX_HEAVY_LOGIC_BATCH_PEAK_RSS_MB,
+        laneMemoryBudgetMb: Math.max(
+          ...composedBatches.map(({ maxPeakRssMb }) => maxPeakRssMb),
+        ),
         totalMemoryBytes: totalmem(),
       });
 // Concurrent children writing to the inherited terminal would interleave

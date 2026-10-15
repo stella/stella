@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import releaseDates from "../data/changelog-release-dates.json";
-import { getReleaseKind, groupMaintenanceReleases } from "./changelog-release";
+import { groupMaintenanceReleases } from "./changelog-release";
 
 export type ChangelogRelease = {
   description: string;
@@ -30,7 +30,7 @@ const CHANGELOG_DIR = resolveRepoPath(
 );
 const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
 
-export const releaseAnchorId = (tagName: string) =>
+const releaseAnchorId = (tagName: string) =>
   tagName
     .toLowerCase()
     .replaceAll(".", "-")
@@ -97,14 +97,6 @@ export const getChangelogReleaseEntries = () =>
     getChangelogReleases(),
     (release) => release.heading,
   );
-
-export const getLatestFeatureRelease = (): ChangelogRelease | undefined => {
-  const tagName = listReleaseTags().find(
-    (tag) => getReleaseKind(tag) !== "patch",
-  );
-
-  return tagName ? readRelease(tagName) : undefined;
-};
 
 const findHeading = (markdown: string, level: 1 | 2) => {
   const marker = "#".repeat(level);

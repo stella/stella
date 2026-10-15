@@ -22,6 +22,8 @@ const decision = {
   caseNumberType: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
   country: "CZ",
   court: "Ústavní soud",
+  courtAbbreviation: "ÚS",
+  sourceUrl: null,
   decisionDate: "2026-01-01",
   decisionType: null,
   ecli: null,
@@ -69,10 +71,14 @@ describe("partial citation summaries", () => {
     for (const direction of ["incoming", "outgoing"] as const) {
       test(`${locale}: capped ${direction} keeps its lower bound and partial notice visible`, () => {
         for (const count of [0, 2048]) {
+          const capped = {
+            incoming: direction === "incoming",
+            outgoing: direction === "outgoing",
+          };
           const summary = {
-            capped: {
-              incoming: direction === "incoming",
-              outgoing: direction === "outgoing",
+            precision: {
+              status: "bounded",
+              capped,
             },
             incoming: {
               ...counts,
@@ -99,7 +105,10 @@ describe("partial citation summaries", () => {
           );
           expect(
             render(
-              { ...summary, capped: { incoming: false, outgoing: false } },
+              {
+                ...summary,
+                precision: { status: "exact" },
+              },
               locale,
             ),
           ).not.toContain(messages.caseLaw.citation.partialSummary);

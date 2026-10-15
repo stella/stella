@@ -1,23 +1,44 @@
-// The guest owns these semantic tokens; its classes need no authored stylesheet.
-const PRESENTATION = `
-:root { color-scheme: light dark; --background:light-dark(#fff,#1c1c1c); --foreground:light-dark(#262626,#f5f5f5); --muted:light-dark(#f5f5f5,#262626); --muted-foreground:light-dark(#737373,#a3a3a3); --border:light-dark(#e5e5e5,#404040); --primary:var(--foreground); --primary-foreground:var(--background); font-family:system-ui,sans-serif; color:var(--foreground); background:var(--background) }
-body { margin:0; padding:1rem; box-sizing:border-box }
-.stella-light { color-scheme:light }
-.stella-dark { color-scheme:dark }
-.stella-stack { display:flex; flex-direction:column; gap:1rem }
-.stella-row { display:flex; flex-wrap:wrap; align-items:center; gap:.75rem }
-.stella-card { padding:1rem; border:1px solid var(--border); border-radius:.5rem; background:var(--background) }
-.stella-muted { color:var(--muted-foreground) }
-.stella-chart { min-block-size:20rem; inline-size:100% }
-.stella-table { inline-size:100%; border-collapse:collapse }
-.stella-table th,.stella-table td { padding-block:.5rem; padding-inline:.75rem; text-align:start; border-block-end:1px solid var(--border) }
-a[data-stella-link] { text-decoration:underline; cursor:pointer }
-button,input,select { font:inherit; color:inherit }
-:focus-visible { outline:2px solid var(--primary); outline-offset:2px }
-`;
+import type { VisualTheme } from "@stll/api-contract/visual-theme";
+
+import { VISUAL_PRESENTATION_CSS } from "./presentation-css";
+
+declare const STELLA_VISUAL_FONT_FACES: string;
 
 export const installVisualPresentation = (document: Document) => {
   const style = document.createElement("style");
-  style.textContent = PRESENTATION;
-  document.head.append(style);
+  style.textContent = `${typeof STELLA_VISUAL_FONT_FACES === "string" ? STELLA_VISUAL_FONT_FACES : ""}${VISUAL_PRESENTATION_CSS}`;
+  document.head.prepend(style);
+};
+
+type ThemeStyle = { id: string; textContent: string | null };
+
+// Only the members the theme writer touches, so tests pass a plain object.
+type ThemeDocument<Style extends ThemeStyle> = {
+  createElement: (tagName: "style") => Style;
+  head: { prepend: (style: Style) => void };
+  defaultView: { dispatchEvent: (event: Event) => unknown } | null;
+};
+
+// Authored markup may reuse any id, so the runtime keeps its own reference.
+const themeStyles = new WeakMap<object, ThemeStyle>();
+
+export const applyVisualTheme = <Style extends ThemeStyle>(
+  document: ThemeDocument<Style>,
+  theme: VisualTheme,
+) => {
+  let style = themeStyles.get(document);
+  if (style === undefined) {
+    const created = document.createElement("style");
+    created.id = "stella-theme";
+    document.head.prepend(created);
+    themeStyles.set(document, created);
+    style = created;
+  }
+  // The caller validates host messages with the shared theme schema.
+  style.textContent = `:root{color-scheme:${theme.appearance};${Object.entries(
+    theme.variables,
+  )
+    .map(([name, value]) => `${name}:${value}`)
+    .join(";")}}`;
+  document.defaultView?.dispatchEvent(new Event("stella-theme-change"));
 };

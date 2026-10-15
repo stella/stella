@@ -8,10 +8,6 @@
 
 import { useState } from "react";
 
-import {
-  draggable,
-  dropTargetForElements,
-} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
@@ -28,13 +24,19 @@ import {
   withDragAnnouncementData,
   withDropAnnouncementData,
 } from "@/components/drag-and-drop-live-region.logic";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@/lib/drag-and-drop/element-registration";
 import { unwrapEden } from "@/lib/errors/api";
 import { documentTypesOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { useQueryView } from "@/lib/use-query-view";
 import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
 
 const DOCUMENT_TYPE_DRAG_TYPE = "stella/document-type";
@@ -57,7 +59,11 @@ export const DocumentTypesCard = () => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
 
-  const { data } = useQuery(documentTypesOptions(activeOrganizationId));
+  const settingsQuery = useQuery(documentTypesOptions(activeOrganizationId));
+  const settingsView = useQueryView(settingsQuery, {
+    isEmpty: (data) => data.items.length === 0,
+  });
+  const data = settingsView.type === "items" ? settingsView.items : undefined;
   const items = data ? data.items : [];
 
   const [newLabel, setNewLabel] = useState("");
@@ -105,8 +111,13 @@ export const DocumentTypesCard = () => {
     createMutation.mutate(label);
   };
 
+  if (settingsView.type === "pending" || settingsView.type === "error") {
+    return <QueryViewFeedback view={settingsView} />;
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      <QueryViewFeedback view={settingsView} />
       {items.length > 0 && (
         <ul className="flex flex-col gap-2">
           {items.map((item) => (

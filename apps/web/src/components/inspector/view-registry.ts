@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import { panic } from "better-result";
 
@@ -76,7 +76,7 @@ export type StructuredCloneable<T> = [T] extends [StructuredCloneLeaf]
  * rail-icon functions. Mirrors `InspectorTab` but typed against the
  * registration's payload so callers don't have to re-narrow.
  */
-export type InspectorViewTab<P> = {
+type InspectorViewTab<P> = {
   id: string;
   label: string;
   payload: P;
@@ -93,10 +93,16 @@ export type InspectorRailIconProps<P> = {
   active: boolean;
 };
 
+export type InspectorRailLabelProps<P> = {
+  tab: InspectorViewTab<P>;
+  renderLabel: (label: string) => ReactElement;
+};
+
 export type InspectorViewRegistration<P = unknown> = {
   type: InspectorViewKind;
   render: (props: InspectorViewRenderProps<P>) => ReactNode;
   railIcon: (props: InspectorRailIconProps<P>) => ReactNode;
+  railLabel?: ((props: InspectorRailLabelProps<P>) => ReactNode) | undefined;
   /**
    * How the rail cell draws `railIcon` on an inactive tab. The registration
    * is the only place that knows whether its icon is a picture or small type,
@@ -111,6 +117,15 @@ export type InspectorViewRegistration<P = unknown> = {
    * for view kinds whose tabs are never broadcast.
    */
   validate: (payload: unknown) => payload is P;
+  beforeLeave?:
+    | ((args: {
+        tabId: string;
+        payload: P;
+        nextPayload: unknown;
+        proceed: () => void;
+      }) => void)
+    | undefined;
+  onClose?: ((tabId: string) => void) | undefined;
   canRename?: boolean | undefined;
   ariaLabel?: ((tab: InspectorViewTab<P>) => string) | undefined;
   /**
@@ -158,10 +173,6 @@ class InspectorViewRegistry {
     return this.registrations.get(type);
   }
 
-  kinds() {
-    return [...this.registrations.keys()];
-  }
-
   registerPersistence(
     type: InspectorViewKind,
     persistence: InspectorPersistenceReference,
@@ -198,6 +209,7 @@ export const registerInspectorView = <P>(
 ): void => {
   const Render = registration.render;
   const RailIcon = registration.railIcon;
+  const RailLabel = registration.railLabel;
   const stored: StoredRegistration = {
     ...registration,
     render: ({ tab, onClose }) => {
@@ -218,6 +230,17 @@ export const registerInspectorView = <P>(
         active,
       });
     },
+    railLabel: RailLabel
+      ? ({ tab, renderLabel }) => {
+          if (!registration.validate(tab.payload)) {
+            return renderLabel(tab.label);
+          }
+          return createElement(RailLabel, {
+            tab: { ...tab, payload: tab.payload },
+            renderLabel,
+          });
+        }
+      : undefined,
     // Set unconditionally (function or undefined) so it replaces the
     // `InspectorViewTab<P>`-typed ariaLabel carried in by `...registration`;
     // a conditional spread would leave that narrower signature in the type and
@@ -228,6 +251,20 @@ export const registerInspectorView = <P>(
             ? (registration.ariaLabel?.({ ...tab, payload: tab.payload }) ?? "")
             : ""
       : undefined,
+    beforeLeave: registration.beforeLeave
+      ? ({ tabId, payload, nextPayload, proceed }) => {
+          if (!registration.validate(payload)) {
+            proceed();
+            return;
+          }
+          registration.beforeLeave?.({
+            tabId,
+            payload,
+            nextPayload,
+            proceed,
+          });
+        }
+      : undefined,
     validate: (payload): payload is unknown => registration.validate(payload),
   };
   registry.register(registration.type, stored);
@@ -236,7 +273,3 @@ export const registerInspectorView = <P>(
 export const getInspectorView = (
   type: InspectorViewKind,
 ): StoredRegistration | undefined => registry.get(type);
-
-export const getRegisteredKinds = (): readonly InspectorViewKind[] => [
-  ...registry.kinds(),
-];

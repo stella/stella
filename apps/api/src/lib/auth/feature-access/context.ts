@@ -1,24 +1,25 @@
-import { Result } from "better-result";
-import { and, eq, isNull } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { featureEnrolments } from "@/api/db/schema";
 import { env } from "@/api/env";
-import {
-  createFeatureAccessSnapshot,
-  decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import type {
-  FeatureAccessDecision,
-  FeatureAccessSnapshot,
-} from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";
+import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
+import type {
+  FeatureAccessSnapshot,
+  FeatureAccessDecision,
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import type { FeatureRegistry } from "@/api/lib/feature-access/registry";
+import {
+  buildFeatureAccessSnapshot,
+  featureAccessReadPlan,
+} from "@/api/lib/feature-access/snapshot";
+import { typedPgArray } from "@/api/lib/search/sql";
 
 type ResolveFeatureAccessSnapshotOptions = {
   tx: Pick<Transaction, "select">;
@@ -28,61 +29,6 @@ type ResolveFeatureAccessSnapshotOptions = {
   grants?: FeatureAccessGrants;
 };
 
-type FeatureAccessIdentity = { email: string; emailVerified: boolean };
-
-type BuildFeatureAccessSnapshotOptions = {
-  organizationId: SafeId<"organization">;
-  userId: string | null;
-  /** The caller's membership identity, or null when they are not a live member. */
-  identity: FeatureAccessIdentity | null;
-  enrolments: readonly FeatureAccessEnrolment[];
-  registry?: FeatureRegistry;
-  grants?: FeatureAccessGrants;
-};
-
-type FeatureAccessEnrolment = {
-  featureId: string;
-  organizationId: string;
-  userId: string;
-};
-
-/**
- * Decide every registered feature for one caller from identity and enrolment
- * facts already read. The request's member lookup supplies them, so a gated
- * route resolves feature access without a query of its own.
- */
-export const buildFeatureAccessSnapshot = ({
-  organizationId,
-  userId,
-  identity,
-  enrolments,
-  registry = FEATURE_REGISTRY,
-  grants = env.API_FEATURE_ACCESS_GRANTS,
-}: BuildFeatureAccessSnapshotOptions): FeatureAccessSnapshot => {
-  const decisions = new Map<string, FeatureAccessDecision>();
-  for (const featureId of Object.keys(registry)) {
-    const deploymentFeature = registry[featureId]?.deploymentFeature;
-    decisions.set(
-      featureId,
-      decideFeatureAccess({
-        registry,
-        grants,
-        featureId,
-        organizationId,
-        userId,
-        user: identity,
-        membership: identity !== null,
-        enrolments,
-        // The snapshot owns the deployment switch AND the per-caller decision.
-        deploymentEnabled:
-          deploymentFeature === undefined ||
-          isDeploymentFeatureEnabled(deploymentFeature),
-      }),
-    );
-  }
-  return createFeatureAccessSnapshot({ organizationId, userId, decisions });
-};
-
 export const resolveFeatureAccessSnapshot = async ({
   tx,
   organizationId,
@@ -90,17 +36,29 @@ export const resolveFeatureAccessSnapshot = async ({
   registry = FEATURE_REGISTRY,
   grants = env.API_FEATURE_ACCESS_GRANTS,
 }: ResolveFeatureAccessSnapshotOptions): Promise<FeatureAccessSnapshot> => {
-  const featureIds = Object.keys(registry);
-  const decisions = new Map<string, FeatureAccessDecision>();
-  if (featureIds.length === 0) {
-    return createFeatureAccessSnapshot({ organizationId, userId, decisions });
-  }
+  const { candidates, enrolmentFeatureIds } = featureAccessReadPlan({
+    organizationId,
+    registry,
+    grants,
+  });
+  const enrolledFeatureIds =
+    enrolmentFeatureIds.length === 0
+      ? sql<string[]>`'{}'::text[]`
+      : sql<
+          string[]
+        >`coalesce((select array_agg(${featureEnrolments.featureId}) from ${featureEnrolments}
+        where ${featureEnrolments.organizationId} = ${member.organizationId} and ${featureEnrolments.userId} = ${member.userId}
+          and ${featureEnrolments.featureId} = ANY(${typedPgArray(enrolmentFeatureIds, "text")})), '{}')`;
   const identity =
-    userId === null
+    userId === null || candidates.length === 0
       ? undefined
       : (
           await tx
-            .select({ email: user.email, emailVerified: user.emailVerified })
+            .select({
+              email: user.email,
+              emailVerified: user.emailVerified,
+              enrolledFeatureIds,
+            })
             .from(member)
             .innerJoin(user, eq(user.id, member.userId))
             .where(
@@ -112,32 +70,17 @@ export const resolveFeatureAccessSnapshot = async ({
             )
             .limit(1)
         ).at(0);
-  const enrolments =
-    userId === null ||
-    identity === undefined ||
-    !Object.values(registry).some(
-      (definition) => definition.enrolment === "self-serve",
-    )
-      ? []
-      : await tx
-          .select({
-            featureId: featureEnrolments.featureId,
-            organizationId: featureEnrolments.organizationId,
-            userId: featureEnrolments.userId,
-          })
-          .from(featureEnrolments)
-          .where(
-            and(
-              eq(featureEnrolments.organizationId, organizationId),
-              eq(featureEnrolments.userId, userId),
-            ),
-          )
-          .limit(featureIds.length);
   return buildFeatureAccessSnapshot({
     organizationId,
     userId,
     identity: identity ?? null,
-    enrolments,
+    enrolments: (identity === undefined ? [] : identity.enrolledFeatureIds).map(
+      (featureId) => ({
+        featureId,
+        organizationId,
+        userId: userId ?? panic("Feature enrolments require a user"),
+      }),
+    ),
     registry,
     grants,
   });

@@ -34,8 +34,8 @@ import Tooltip from "@/components/tooltip";
  * text, no box) or the source-chip tray above message bodies
  * (different shell shape and lives outside the prose flow).
  */
-export type InlinePillTone = "accent" | "info" | "success";
-export type InlinePillSize = "chip" | "inherit";
+type InlinePillTone = "accent" | "info" | "success";
+type InlinePillSize = "chip" | "inherit";
 
 type InlinePillProps = {
   tone?: InlinePillTone;

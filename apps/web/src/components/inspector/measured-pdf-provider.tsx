@@ -42,7 +42,7 @@ export const MeasuredPdfProvider = ({
       updateWidth(container.clientWidth);
 
       const observer = new ResizeObserver((entries) => {
-        const entry = entries.at(0);
+        const entry = entries.at(-1);
         if (!entry) {
           return;
         }

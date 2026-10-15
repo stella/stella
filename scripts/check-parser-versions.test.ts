@@ -270,6 +270,262 @@ test("a marker in another changed file does not exempt an unmarked parser change
   );
 });
 
+const deletedFacade = (facadeSource: string) => {
+  const base = fixture();
+  const facade = `${PARSERS}facade.ts`;
+  const parser = `${PARSERS}parser-a.ts`;
+  base.set(facade, facadeSource);
+  base.set(
+    parser,
+    'import { helper } from "./facade";\nexport const parseA = () => helper();\n',
+  );
+  const head = new Map(base);
+  head.delete(facade);
+  head.set(
+    parser,
+    "// parser-output-unchanged: imports helper directly from its owner\n" +
+      'import { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+  );
+  return { base, head, facade, parser };
+};
+
+const movedHelper = ({
+  changedOutput = false,
+  keepCounterpart = true,
+} = {}) => {
+  const base = fixture({ adapters: ["A"] });
+  const head = new Map(base);
+  const original = `${PARSERS}shared-helper.ts`;
+  const destination = `${PARSERS}moved-helper.ts`;
+  head.delete(original);
+  if (keepCounterpart) {
+    head.set(
+      destination,
+      changedOutput
+        ? "export const helper = () => 'changed';\n"
+        : `${base.get(original) ?? ""}// parser-output-unchanged: file moved without output changes\n`,
+    );
+  }
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    [
+      "// parser-output-unchanged: helper moved without output changes",
+      keepCounterpart
+        ? 'import { helper } from "./moved-helper";'
+        : "const helper = () => 'base';",
+      "export const parseA = () => helper();",
+    ].join("\n"),
+  );
+  return { base, head };
+};
+
+test("verbatim parser source moves do not require a version bump", () => {
+  const { base, head } = movedHelper();
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("moving non-code assets does not enter parser-source move detection", () => {
+  const base = fixture({ adapters: ["A"] });
+  const head = new Map(base);
+  const assets = new Map([
+    [`${PARSERS}assets/manifest.json`, '{"schema":"v1"}\n'],
+    [
+      `${PARSERS}assets/frame.html`,
+      '<!doctype html><html><head><meta charset="utf-8"></head></html>\n',
+    ],
+  ]);
+  for (const [original, source] of assets) {
+    const destination = original.replace("/assets/", "/assets-v2/");
+    base.set(original, source);
+    head.delete(original);
+    head.set(destination, source);
+  }
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("verbatim parser source moves require equivalent resolved dependencies", () => {
+  const base = fixture({ adapters: ["A"] });
+  const originalDirectory = `${PARSERS}original`;
+  const destinationDirectory = `${PARSERS}destination`;
+  const helperSource =
+    'import { dependency } from "./dependency";\nexport const helper = () => dependency();\n';
+  base.set(`${originalDirectory}/helper.ts`, helperSource);
+  base.set(
+    `${originalDirectory}/dependency.ts`,
+    "export const dependency = () => 'base';\n",
+  );
+  base.set(
+    `${destinationDirectory}/dependency.ts`,
+    "export const dependency = () => 'different';\n",
+  );
+  base.set(
+    `${PARSERS}parser-a.ts`,
+    'import { helper } from "./original/helper";\nexport const parseA = () => helper();\n',
+  );
+  const head = new Map(base);
+  head.delete(`${originalDirectory}/helper.ts`);
+  head.set(`${destinationDirectory}/helper.ts`, helperSource);
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    '// parser-output-unchanged: helper moved\nimport { helper } from "./destination/helper";\nexport const parseA = () => helper();\n',
+  );
+
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("verbatim moves of location-dependent parser sources still require a version bump", () => {
+  const base = fixture({ adapters: ["A"] });
+  const helperSource = "export const helper = () => import.meta.url;\n";
+  base.set(`${PARSERS}original/helper.ts`, helperSource);
+  base.set(
+    `${PARSERS}parser-a.ts`,
+    'import { helper } from "./original/helper";\nexport const parseA = () => helper();\n',
+  );
+  const head = new Map(base);
+  head.delete(`${PARSERS}original/helper.ts`);
+  head.set(`${PARSERS}destination/helper.ts`, helperSource);
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    '// parser-output-unchanged: helper moved\nimport { helper } from "./destination/helper";\nexport const parseA = () => helper();\n',
+  );
+
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("verbatim moves that swap dependency bindings still require a version bump", () => {
+  const base = fixture({ adapters: ["A"] });
+  const helperSource =
+    'import { value as a } from "./a";\nimport { value as b } from "./b";\nexport const helper = () => a() + b();\n';
+  const aSource = "export const value = () => 'a';\n";
+  const bSource = "export const value = () => 'b';\n";
+  base.set(`${PARSERS}original/helper.ts`, helperSource);
+  base.set(`${PARSERS}original/a.ts`, aSource);
+  base.set(`${PARSERS}original/b.ts`, bSource);
+  base.set(
+    `${PARSERS}parser-a.ts`,
+    'import { helper } from "./original/helper";\nexport const parseA = () => helper();\n',
+  );
+  const head = new Map(base);
+  for (const name of ["helper", "a", "b"]) {
+    head.delete(`${PARSERS}original/${name}.ts`);
+  }
+  head.set(`${PARSERS}destination/helper.ts`, helperSource);
+  head.set(`${PARSERS}destination/a.ts`, bSource);
+  head.set(`${PARSERS}destination/b.ts`, aSource);
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    '// parser-output-unchanged: helper moved\nimport { helper } from "./destination/helper";\nexport const parseA = () => helper();\n',
+  );
+
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("a verbatim parser folder move preserves moved dependencies", () => {
+  const base = fixture({ adapters: ["A"] });
+  const head = new Map(base);
+  const originalDirectory = `${PARSERS}original`;
+  const destinationDirectory = `${PARSERS}destination`;
+  const movedFiles = new Map([
+    [
+      "helper.ts",
+      'import { dependency } from "./dependency";\nexport const helper = () => dependency();\n',
+    ],
+    ["dependency.ts", "export const dependency = () => 'base';\n"],
+  ]);
+  for (const [file, source] of movedFiles) {
+    base.set(`${originalDirectory}/${file}`, source);
+    head.set(`${destinationDirectory}/${file}`, source);
+  }
+  base.set(
+    `${PARSERS}parser-a.ts`,
+    'import { helper } from "./original/helper";\nexport const parseA = () => helper();\n',
+  );
+  head.delete(`${originalDirectory}/helper.ts`);
+  head.delete(`${originalDirectory}/dependency.ts`);
+  head.set(
+    `${PARSERS}parser-a.ts`,
+    '// parser-output-unchanged: helper folder moved\nimport { helper } from "./destination/helper";\nexport const parseA = () => helper();\n',
+  );
+
+  expect(changed(base, head)).toEqual([]);
+});
+
+test("parser source moves with logic changes still require a version bump", () => {
+  const { base, head } = movedHelper({ changedOutput: true });
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("parser source deletions without a counterpart still require a version bump", () => {
+  const { base, head } = movedHelper({ keepCounterpart: false });
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("deleted modules containing only reexports need no parser version bump", () => {
+  for (const source of [
+    'export { helper } from "./shared-helper";\n',
+    '// facade\nexport { helper as helper } from "./shared-helper";\n',
+    '/* types too */\nexport type { Helper } from "./shared-helper";\nexport { helper } from "./shared-helper";\n',
+    'export * from "./shared-helper";\n',
+    'export type * from "./shared-helper";\nexport { helper } from "./shared-helper";\n',
+    'export /* const local = 1 */ { helper } /* comment */ from "./shared-helper";\n',
+    'export { type Helper, helper, } from "./shared-helper";\n',
+    'export type { Helper as Renamed } from "./shared-helper";\nexport { helper } from "./shared-helper";\n',
+
+    'export {\n helper,\n} from "./shared-helper"\n\n// trailing comment\n',
+  ]) {
+    const { base, head } = deletedFacade(source);
+    expect(changed(base, head)).toEqual([]);
+  }
+});
+
+test("deleted reexport modules with any local code still need a bump", () => {
+  for (const localCode of [
+    "export const local = 1;",
+    "const local = 1;",
+    "type Local = string;",
+    "export type Local = string;",
+    "declare const local: string;",
+    "const unused = '/* export */';",
+    "export default 1;",
+
+    "interface Local { value: string }",
+    'import "./shared-helper";',
+    "export { helper };",
+    'void "export * from ./shared-helper";',
+  ]) {
+    const { base, head, facade } = deletedFacade(
+      `export { helper } from "./shared-helper";\n${localCode}\n`,
+    );
+    expect(changed(base, head)).toEqual([
+      `test-a: parser version 1 must exceed base 1; changed: ${facade}`,
+    ]);
+  }
+});
+
+test("deleting a reexport module cannot exempt another unmarked parser change", () => {
+  const { base, head, parser } = deletedFacade(
+    'export { helper } from "./shared-helper";\n',
+  );
+  head.set(
+    parser,
+    'import { helper } from "./shared-helper";\nexport const parseA = () => helper();\n',
+  );
+  expect(changed(base, head)).toEqual([
+    `test-a: parser version 1 must exceed base 1; changed: ${parser}`,
+  ]);
+});
+
 test("registry additions are discovered automatically and still require versions", () => {
   const withoutC = fixture();
   const addedC = fixture({ adapters: ["A", "B", "C"] });

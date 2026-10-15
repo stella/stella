@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Backstop merge-bar's repository-variable hold on the queued tree.
+# Enforce the repository-variable hold on the queued tree.
 set -euo pipefail
 
 if [[ "${EVENT_NAME:-}" != "merge_group" || -z "${STELLA_MERGE_HOLD:-}" ]]; then

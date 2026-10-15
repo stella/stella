@@ -1,3 +1,4 @@
+// parser-output-unchanged: a module-private constant lost its export; no parser output depends on it.
 const LOOPBACK_HOSTNAMES = new Set(["localhost", "127.0.0.1", "[::1]"]);
 // Railway encrypts *.railway.internal traffic inside one project environment.
 const RAILWAY_PRIVATE_HOST_SUFFIX = ".railway.internal";
@@ -33,7 +34,7 @@ export const isTlsOrLoopbackUrl = (
 };
 
 /** Origin of the Gotenberg service the generated Compose file publishes. */
-export const SELFHOST_GOTENBERG_ORIGIN = "http://gotenberg:3000/";
+const SELFHOST_GOTENBERG_ORIGIN = "http://gotenberg:3000/";
 
 /**
  * Whether a deployed Gotenberg endpoint stays on a channel its basic-auth

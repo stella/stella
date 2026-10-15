@@ -47,6 +47,12 @@ import {
   type TrackedRule,
 } from "./lint-suppressions";
 import {
+  isApiProductionModule,
+  isOutboundProductionModule,
+  LOCAL_MODULE_CAPABILITIES,
+  outboundTransportReferences,
+} from "./outbound-transport-ownership";
+import {
   ROOT_CONNECTION_DOORS,
   STATUS_TRANSITION_OWNERSHIP,
 } from "./ownership";
@@ -1081,31 +1087,6 @@ const countAdHocRelativeTimeFormatting: FileCounter = (content, { file }) => {
   );
 };
 
-const countDirectAuditLogInserts: FileCounter = (content, { file }) => {
-  if (!content.includes(".insert")) {
-    return 0;
-  }
-  const code = stripComments({ content, file });
-  const auditLogBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "@/api/db/schema",
-    importedName: "auditLogs",
-  });
-  return [...auditLogBindings].reduce(
-    (total, binding) =>
-      total +
-      countMatches(
-        code,
-        new RegExp(
-          "\\.insert\\s*\\(\\s*" + escapeRegExp(binding) + "\\s*\\)",
-          "gu",
-        ),
-      ),
-    0,
-  );
-};
-
 // Every hand-written API module, not only `src`: a script or eval that reaches
 // an owner-level handle is as much a use of it as a lib module.
 const API_OWNER_HANDLE_GLOBS = [
@@ -1134,6 +1115,32 @@ const ROOT_CONNECTION_DOOR_FILES: ReadonlySet<string> = new Set(
 // `audit: skip` directives: occurrences in comments only, found as the
 // occurrences that stripping comments removes.
 const AUDIT_SKIP_DIRECTIVE = /\baudit:\s*skip\b/giu;
+
+export const countPublicCorpusMembership: FileCounter = (content, { file }) => {
+  const source = parseSource({ fileName: file, text: content });
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        !ts.isIdentifier(declaration.name) ||
+        declaration.name.text !== "PUBLIC_CORPUS_BOOKKEEPING_TABLES"
+      ) {
+        continue;
+      }
+      const initializer = declaration.initializer;
+      if (
+        initializer === undefined ||
+        !ts.isArrayLiteralExpression(initializer)
+      ) {
+        panic("Corpus membership must be an explicit array literal");
+      }
+      return initializer.elements.length;
+    }
+  }
+  return 0;
+};
 
 const countAuditSkipDirectives: FileCounter = (content, { file }) =>
   countMatches(content, AUDIT_SKIP_DIRECTIVE) -
@@ -1212,58 +1219,6 @@ const countWeakMcpProjectionTies: FileCounter = (content, { file }) => {
     node.forEachChild(visit);
   };
   visit(source);
-  return total;
-};
-
-const BOUNDARY_HELPER = "pgTimestampCursorBoundary";
-
-const countRepeatedTimestampCursorBoundaries: FileCounter = (
-  content,
-  { file },
-) => {
-  if (!mayNameIdentifier(content, BOUNDARY_HELPER)) {
-    return 0;
-  }
-  const code = stripComments({ content, file });
-  const sourceFile = parseSource({ fileName: file, text: code });
-  const boundaryBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "@/api/lib/db-pagination",
-    importedName: BOUNDARY_HELPER,
-  });
-  const orBindings = importedLocalBindings({
-    content: code,
-    file,
-    moduleName: "drizzle-orm",
-    importedName: "or",
-  });
-
-  const countBoundaries = (node: ts.Node): number => {
-    let count =
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      boundaryBindings.has(node.expression.text)
-        ? 1
-        : 0;
-    node.forEachChild((child) => {
-      count += countBoundaries(child);
-    });
-    return count;
-  };
-
-  let total = 0;
-  const visit = (node: ts.Node) => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      orBindings.has(node.expression.text)
-    ) {
-      total += Math.max(0, countBoundaries(node) - 1);
-    }
-    node.forEachChild(visit);
-  };
-  visit(sourceFile);
   return total;
 };
 
@@ -1704,7 +1659,7 @@ const countTruncatedCapabilitySchemas = (content: string): number => {
 // A capability suppressed from the generic transport by its `transport`
 // disposition: it returns bytes (`file-response`/`file-both`), or it REQUIRES a
 // file input. Suppressed entries are dropped from the CLI tree
-// (`insertCapabilities`) and refused pre-execution by `invoke_capability`, so
+// (`insertCapabilities`) and refused pre-execution by capability executors, so
 // each one is a capability an agent surface simply cannot reach. This metric
 // freezes that count: a newly file-shaped capability cannot silently disappear
 // from both clients, and the burn-down is a reviewed baseline bump rather than a
@@ -1802,7 +1757,7 @@ const countDomainActionVerbs: RoleSensitiveFileCounter = (
 /**
  * Namespaces where a curated, hand-written command still shares a top-level name
  * with generated capability commands, so `stella <namespace> …` mixes the named
- * MCP tool path and the generic `invoke_capability` path. Must reach zero.
+ * MCP tool path and the generic capability executors path. Must reach zero.
  */
 const countShadowedNamespaces = (content: string): number => {
   const block =
@@ -2423,6 +2378,27 @@ const countParserValidatorLedgerEntries: FileCounter = (content) => {
   return parsed.length;
 };
 
+const countOutboundIndirectAccessExceptions = (
+  context: ScanContext,
+): RepoMetricResult => {
+  const flagged = scanRepoFiles(context, [
+    "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "apps/{web,collab}/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+    "packages/*/src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+  ]).filter(
+    (file) =>
+      isOutboundProductionModule(file) &&
+      outboundTransportReferences({
+        file,
+        text: readSource(context, file),
+      }).includes("indirect:transport"),
+  );
+  const files: Record<string, number> = Object.fromEntries(
+    flagged.map((file) => [file, 1]),
+  );
+  return { count: flagged.length, files };
+};
+
 // --- Repo-scope counters ----------------------------------------------------
 // Duplication is invisible to a per-file counter: the second copy of a helper
 // is a perfectly ordinary file. These counters compare files against each
@@ -2978,6 +2954,51 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "repo",
+    id: "outbound-indirect-access-exceptions",
+    description:
+      "Unclassified indirect transport acquisition outside the bounded local module owner; each owner only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: countOutboundIndirectAccessExceptions,
+  },
+  {
+    scope: "repo",
+    id: "api-legacy-outbound-transports",
+    description:
+      "Raw transport and client capabilities acquired by each classified API owner; each file's capability set only shrinks",
+    perFile: true,
+    growth: "shrink-only",
+    count: (context) => {
+      const keys: string[] = [];
+      for (const file of scanRepoFiles(context, [
+        "apps/api/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts}",
+      ])) {
+        if (
+          !isApiProductionModule(file) ||
+          file === "apps/api/src/lib/safe-outbound-fetch.ts"
+        ) {
+          continue;
+        }
+        for (const capability of outboundTransportReferences({
+          file,
+          text: readSource(context, file),
+        })) {
+          if (
+            capability !== "permit:grant" &&
+            !LOCAL_MODULE_CAPABILITIES.has(capability)
+          ) {
+            keys.push(`${file}#${capability}`);
+          }
+        }
+      }
+      return {
+        count: keys.length,
+        files: Object.fromEntries(keys.map((key) => [key, 1])),
+      };
+    },
+  },
+  {
+    scope: "repo",
     id: "schema-introspection-files",
     description:
       "Shared schema introspection paths, gated independently; additions require a justified allowance and pass the schema-only dependency guard",
@@ -3181,16 +3202,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
-    id: "direct-audit-log-insert",
-    description:
-      "direct .insert(auditLogs) calls outside the audit-log recorder module",
-    include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) || file === "apps/api/src/lib/audit-log.ts",
-    count: countDirectAuditLogInserts,
-  },
-  {
-    scope: "file",
     id: "direct-root-connection-imports",
     description:
       "runtime references to the owner-level database handles (`rootDb`, `rlsDb` from apps/api/src/db/root.ts) anywhere in the API outside tests, one per handle named: named, renamed and namespace imports, re-exports, `import = require` and dynamic imports (scripts/root-connection-shapes.ts). An allowlist gated per file: a new file, a file naming one more handle, or a type-only import turned into a value import fails even when another file dropped one",
@@ -3232,6 +3243,15 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "public-corpus-audit-membership",
+    description:
+      "Reviewed table admissions that exempt public corpus bookkeeping from mutation audit; membership growth requires an explicit budget decision",
+    include: ["apps/api/src/lib/db/public-corpus-audit/membership.ts"],
+    exclude: () => false,
+    count: countPublicCorpusMembership,
+  },
+  {
+    scope: "file",
     id: "audit-skip-directives",
     description:
       "`// audit: skip - <reason>` comments in API source, each marking a database write that records no audit event (in handlers, an exemption from require-audit-on-mutation); the fix is an audit recorder call in the same transaction. Counted across all API source, so moving a write out of the handler tree does not retire its exemption",
@@ -3259,19 +3279,6 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       file === "apps/api/src/lib/db-pagination.ts" ||
       file === "apps/api/src/handlers/case-law/citation-authority.ts",
     count: countInlineTimestampCursorSql,
-  },
-  {
-    scope: "file",
-    id: "repeated-timestamp-cursor-boundary",
-    description:
-      "pgTimestampCursorBoundary calls beyond the first per API source file (fuzzy proxy for hand-built timestamp/id disjunctions; explicit heterogeneous/range owners excluded)",
-    include: ["apps/api/src/**/*.{ts,tsx}"],
-    exclude: (file) =>
-      isExcludedSource(file) ||
-      file === "apps/api/src/lib/db-pagination.ts" ||
-      file === "apps/api/src/lib/entities/list-cursor.ts" ||
-      file === "apps/api/src/lib/workflow-target-queries.ts",
-    count: countRepeatedTimestampCursorBoundaries,
   },
   ...RESULT_BOUNDARY_METRICS,
   ...PER_RULE_SUPPRESSION_METRICS,
@@ -3375,7 +3382,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "capability-file-transport-suppressed",
     description:
-      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by invoke_capability, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
+      "capabilities whose transport disposition suppresses them from the generic transport (a file response, or a REQUIRED file input): dropped from the CLI tree and refused by capability executors, so no agent surface can reach them. An OPTIONAL file input is not counted — its JSON modes stay invokable",
     include: ["packages/cli/capabilities/*.json"],
     // Generated artifacts are the subject here, so the shared source
     // exclusions (which skip `.gen.`/generated paths) must not apply.
@@ -4137,12 +4144,24 @@ const revisionOption = (flag: "--base" | "--head"): string | undefined => {
 const resolveCommit = (ref: string): string =>
   readGit(["rev-parse", "--verify", "--end-of-options", `${ref}^{commit}`]);
 
-const comparisonBase = (): string =>
-  resolveCommit(
-    revisionOption("--base") ??
-      process.env["RATCHET_BASE_REF"] ??
-      readGit(["merge-base", "origin/main", "HEAD"]),
+const comparisonBase = (headRef?: string): string => {
+  const explicitBase =
+    revisionOption("--base") ?? process.env["RATCHET_BASE_REF"];
+  if (explicitBase !== undefined) {
+    return resolveCommit(explicitBase);
+  }
+  if (headRef !== undefined) {
+    readGit([
+      "fetch",
+      "--no-tags",
+      "origin",
+      "+refs/heads/main:refs/remotes/origin/main",
+    ]);
+  }
+  return resolveCommit(
+    readGit(["merge-base", "origin/main", headRef ?? "HEAD"]),
   );
+};
 
 const ALLOWANCE_DIRECTORY = "scripts/ratchet-allowances";
 
@@ -4416,7 +4435,7 @@ const runCheck = (): number => {
   const head = scanCheckedHead(headRef);
   const current = head.snapshot;
   const headFinished = performance.now();
-  const base = comparisonBase();
+  const base = comparisonBase(headRef);
   const baseline = scanMergeBase({ ref: base, previous: head });
   console.log(
     `ratchet timing: head ${(headFinished - started).toFixed(0)}ms; base export + scan ${(performance.now() - headFinished).toFixed(0)}ms (${base})`,
@@ -4745,7 +4764,6 @@ const SHARED_API_HELPER_FIXTURE_LINES = [
   "// value::timestamp AT TIME ZONE 'UTC' must not count.",
 ];
 const SELF_TEST_SHARED_API_HELPERS = `${SHARED_API_HELPER_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_DIRECT_AUDIT_LOG_INSERTS = 1;
 
 // One of each shape the implicit-root counter owns (the exhaustive cases live
 // in scripts/root-connection-shapes.test.ts); the same content written to a
@@ -4825,29 +4843,6 @@ const SELF_TEST_AUDIT_SKIP_DIRECTIVES = `${AUDIT_SKIP_FIXTURE_LINES.join("\n")}\
 // The final directive catches TSX parsing swallowing a .ts generic arrow.
 const EXPECTED_AUDIT_SKIP_DIRECTIVES = 4;
 const EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL = 2;
-
-const TIMESTAMP_BOUNDARY_FIXTURE_LINES = [
-  'import { or as anyOf } from "drizzle-orm";',
-  'import { pgTimestampCursorBoundary as cursorBoundary } from "@/api/lib/db-pagination";',
-  [
-    "const manual = or(",
-    "lt(column, pgTimestampCursorBoundary(first)), ",
-    "eq(column, pgTimestampCursorBoundary(first))",
-    ");",
-  ].join(""),
-  [
-    "const aliased = anyOf(",
-    "lt(column, cursorBoundary(second)), ",
-    "eq(column, cursorBoundary(second))",
-    ");",
-  ].join(""),
-  "const first = pgTimestampCursorBoundary(cursor.timestamp);",
-  "const second = pgTimestampCursorBoundary(other.timestamp);",
-  "const unrelated = buildTimestampBoundary(value);",
-  "// or(pgTimestampCursorBoundary(a), pgTimestampCursorBoundary(b))",
-];
-const SELF_TEST_TIMESTAMP_BOUNDARIES = `${TIMESTAMP_BOUNDARY_FIXTURE_LINES.join("\n")}\n`;
-const EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES = 2;
 
 const DIRECT_ERROR_FIXTURE_LINES = [
   "stellaToast.add({ title: error instanceof Error ? error.message : fallback });",
@@ -5403,9 +5398,9 @@ const EXPECTED_CROSS_APP_LIB_PATH_COPIES = 2;
 const EXPECTED_CROSS_WORKSPACE_DUPLICATE_EXPORT_NAMES = 3;
 // apps/api/src/lib children: api-handlers.ts, result-catches.ts,
 // result-throws.ts, shared/ (from the earlier fixtures), plus alpha/, copied/,
-// api-only-helper.ts and shared-names.ts. The two `.test.ts` files, the
+// api-only-helper.ts, shared-names.ts and db/ (the corpus membership fixture). The two `.test.ts` files, the
 // `.type-test.ts` file, __fixtures__/, tests/ and __tests__/ are excluded.
-const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 9;
+const EXPECTED_API_LIB_TOP_LEVEL_ENTRIES = 10;
 // apps/web/src/lib children: index.tsx (from the earlier fixtures), plus
 // beta/, copied/, mirrored-names.ts and second-definition.ts. The `.test.ts`
 // companion is excluded.
@@ -5958,6 +5953,10 @@ const ledgerSelfTestFailures = (snapshot: Baseline): string[] => {
       id: "internal-module-mock-ledger-entries",
       expected: EXPECTED_INTERNAL_MODULE_MOCK_LEDGER_ENTRIES,
     },
+    {
+      id: "outbound-indirect-access-exceptions",
+      expected: 1,
+    },
   ]) {
     const metric = requireSnapshot(snapshot, id);
     if (metric.count !== expected) {
@@ -6447,11 +6446,6 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
-      "apps/api/src/timestamp-boundaries.ts",
-      SELF_TEST_TIMESTAMP_BOUNDARIES,
-    );
-    writeFixture(
-      root,
       "apps/api/src/super-linear-regexes.ts",
       SELF_TEST_SUPER_LINEAR_REGEXES,
     );
@@ -6593,6 +6587,11 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/web/src/runtime.ts",
+      "const module = await import(mod);",
+    );
+    writeFixture(
+      root,
       "apps/landing/src/components/CopySnippet.astro",
       SELF_TEST_INLINE_CLIPBOARD,
     );
@@ -6708,6 +6707,11 @@ const runSelfTest = (): number => {
     // literal, and a test-file copy the scan excludes outright.
     writeFixture(root, "apps/api/src/clone-origin.ts", SELF_TEST_CLONE_BLOCK);
     writeFixture(root, "apps/web/src/clone-copy.ts", SELF_TEST_CLONE_BLOCK);
+    writeFixture(
+      root,
+      "apps/api/src/lib/db/public-corpus-audit/membership.ts",
+      "export const PUBLIC_CORPUS_BOOKKEEPING_TABLES = [{}, {}];\n",
+    );
     writeFixture(root, "apps/api/src/clone-unique.ts", SELF_TEST_UNIQUE_BLOCK);
     writeFixture(
       root,
@@ -6856,17 +6860,13 @@ const runSelfTest = (): number => {
         "ad-hoc-relative-time-formatting",
         EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING,
       ],
-      ["direct-audit-log-insert", EXPECTED_DIRECT_AUDIT_LOG_INSERTS],
       ["audit-skip-directives", EXPECTED_AUDIT_SKIP_DIRECTIVES],
+      ["public-corpus-audit-membership", 2],
       [
         "implicit-root-connection-shapes",
         EXPECTED_IMPLICIT_ROOT_CONNECTION_SHAPES,
       ],
       ["inline-timestamp-cursor-sql", EXPECTED_INLINE_TIMESTAMP_CURSOR_SQL],
-      [
-        "repeated-timestamp-cursor-boundary",
-        EXPECTED_REPEATED_TIMESTAMP_CURSOR_BOUNDARIES,
-      ],
     ] as const;
     for (const [id, expected] of sharedHelperMetricExpectations) {
       const metric = requireSnapshot(snapshot, id);
@@ -7181,6 +7181,29 @@ const runSelfTest = (): number => {
 
 // --- Entry ------------------------------------------------------------------
 
+const USAGE = `Usage: bun scripts/ratchet.ts [mode] [options]
+
+Modes:
+  (no mode)       Report current metric counts against the comparison base.
+  --check         Exit nonzero when an increase lacks an exact allowance.
+  --self-test     Run the ratchet's counter and gate checks.
+
+Options:
+  --base <commit> Compare against this revision instead of the merge base.
+  --head <commit> Measure this revision instead of the working tree.
+  --details       Include per-file counts in report mode.
+  -h, --help      Print this usage and exit.
+
+Allowances:
+  Add scripts/ratchet-allowances/<slug>.json in the measured head with:
+  { "metric": "<metric-id>", "delta": <positive integer>, "reason": "<justification>" }
+  Per-file metrics also require "file": "<repository-relative path>".
+  The total allowance must exactly match the measured increase.`;
+
+const printUsage = (write: (message: string) => void = console.log): void => {
+  write(USAGE);
+};
+
 const main = (): number => {
   const supportedFlags = new Set([
     "--check",
@@ -7189,9 +7212,15 @@ const main = (): number => {
     "--head",
     "--details",
   ]);
+  if (process.argv.includes("--help") || process.argv.includes("-h")) {
+    printUsage();
+    return 0;
+  }
   for (const argument of process.argv.slice(2)) {
-    if (argument.startsWith("--") && !supportedFlags.has(argument)) {
-      return panic(`unsupported ratchet option: ${argument}`);
+    if (argument.startsWith("-") && !supportedFlags.has(argument)) {
+      console.error(`unsupported ratchet option: ${argument}\n`);
+      printUsage(console.error);
+      return 1;
     }
   }
   if (process.argv.includes("--self-test")) {

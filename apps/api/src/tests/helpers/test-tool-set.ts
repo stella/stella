@@ -1,4 +1,3 @@
-import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 
 /**
@@ -40,23 +39,6 @@ export const readTestJson = async <T>(resp: Response): Promise<T> =>
   // doesn't match.
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   (await resp.json()) as T;
-
-/**
- * Build a `ChatMessage["parts"][number]` fixture from a literal object.
- *
- * The persisted UI message-parts union is a discriminated union over
- * ~12 variants (text, file, tool, dynamic-tool, ...); building one in
- * a test fixture from a literal misses the discriminator narrowing
- * unless the literal exactly matches one variant's shape. This helper
- * absorbs the resulting cast in one place so tests can express the
- * fixture inline.
- */
-export const asChatPart = (part: object): ChatMessage["parts"][number] =>
-  // SAFETY: each call site spells out the variant's discriminator
-  // (type, state) explicitly; the helper widens that literal back to
-  // the canonical persisted-part union.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  part as unknown as ChatMessage["parts"][number];
 
 type TestFetchMock =
   | (() => Promise<Response>)

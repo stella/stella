@@ -3,7 +3,10 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createSafeDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import {
   createTestIds,
@@ -36,6 +39,7 @@ const reader = createReadUserFileVisual(async () =>
 );
 const read = async (
   fileId: Parameters<typeof reader.handler>[0]["params"]["fileId"],
+  fileReader = reader,
 ) => {
   const request = new Request("https://example.test/visual");
   const record = createAuditRecorder({
@@ -45,15 +49,15 @@ const read = async (
     request,
     server: null,
   });
-  return await reader.handler(
+  return await fileReader.handler(
     createTestHandlerContext<Parameters<typeof reader.handler>[0]>({
+      scopedDb: NO_DB,
       params: { fileId },
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
       workspaceId: ids.wsA1,
       safeDb: createSafeDb(database, [ids.wsA1], ids.orgA, ids.userA1),
-      recordAuditEvent: record,
-      createAuditRecorder: () => record,
+      audit: record,
       request,
     }),
   );
@@ -76,3 +80,19 @@ test("returns not found for an unknown file id", async () => {
     response: { message: "User file not found" },
   });
 });
+
+test.each(["Ordinary text attachment", JSON.stringify({ title: "Example" })])(
+  "returns a typed 422 envelope for a stored attachment without a generated view (%s)",
+  async (content) => {
+    const fileReader = createReadUserFileVisual(async () =>
+      testScannedFile({
+        bytes: new TextEncoder().encode(content).buffer,
+        mimeType: "text/plain",
+      }),
+    );
+    expect(await read(ids.userFileWorkspaceA1, fileReader)).toMatchObject({
+      code: 422,
+      response: { message: "The attachment is not a generated view" },
+    });
+  },
+);

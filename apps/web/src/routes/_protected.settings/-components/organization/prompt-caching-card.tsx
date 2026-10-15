@@ -5,48 +5,41 @@ import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Frame, FramePanel } from "@stll/ui/frame";
 
-import { api } from "@/lib/api";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { unwrapEden } from "@/lib/errors/api";
-import {
-  organizationSettingsKeys,
-  organizationSettingsOptions,
-} from "@/lib/organization/settings-queries";
-import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-settings-mutation";
+import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
+import { useQueryView } from "@/lib/use-query-view";
 
-export const PromptCachingCard = () => {
+import { AISettingsSectionFeedback } from "./ai-settings-section";
+import type { ToggleSettingsSectionProps } from "./ai-settings-section";
+
+export const PromptCachingCard = ({
+  value,
+  onChange,
+  disabled,
+  feedback,
+}: ToggleSettingsSectionProps) => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
-  const { data: settings } = useQuery(
+  const settingsQuery = useQuery(
     organizationSettingsOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
   );
-
-  const mutation = useSettingsMutation({
-    // Send only the prompt-caching field so a stale matter-numbering
-    // value from `settings` cannot roll back a concurrent admin's
-    // matter-numbering change.
-    mutationFn: async (nextEnabled: boolean) =>
-      unwrapEden(
-        await api["organization-settings"].post({
-          promptCachingEnabled: nextEnabled,
-        }),
-      ),
-    invalidate: organizationSettingsKeys.all,
-    successToast: { title: t("success.promptCachingUpdated") },
-    errorToast: { title: t("errors.actionFailed") },
-  });
+  const settingsView = useQueryView(settingsQuery);
+  const settings =
+    settingsView.type === "items" ? settingsView.items : undefined;
 
   if (!settings) {
-    return null;
+    return <QueryViewFeedback view={settingsView} />;
   }
 
-  const enabled = settings.promptCachingEnabled;
+  const enabled = value ?? settings.promptCachingEnabled;
 
   return (
     <Frame>
+      <QueryViewFeedback view={settingsView} />
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
           <h2 className="text-sm font-medium">
@@ -58,15 +51,14 @@ export const PromptCachingCard = () => {
           <Field className="flex-row items-center gap-2">
             <Checkbox
               checked={enabled}
-              disabled={mutation.isPending}
-              onCheckedChange={(next) => {
-                mutation.mutate(next);
-              }}
+              disabled={disabled}
+              onCheckedChange={onChange}
             />
             <FieldLabel>
               {t("settings.organization.promptCaching.toggleLabel")}
             </FieldLabel>
           </Field>
+          <AISettingsSectionFeedback feedback={feedback} />
         </div>
       </FramePanel>
     </Frame>

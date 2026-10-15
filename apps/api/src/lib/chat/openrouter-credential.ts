@@ -2,6 +2,7 @@ import { GetWebIdentityTokenCommand, STSClient } from "@aws-sdk/client-sts";
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { fetchWithTimeout } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
@@ -151,7 +152,7 @@ class ManagedOpenRouterCredentialProvider {
     fetchExchange = fetchWithTimeout,
     now = () => Temporal.Now.instant().epochMilliseconds,
     monotonicNow = () => performance.now(),
-    sleep = async (delayMs) => await Bun.sleep(delayMs),
+    sleep = Bun.sleep,
     random = Math.random,
     timeoutMs = REQUEST_TIMEOUT_MS,
   }: CredentialProviderOptions) {
@@ -315,7 +316,15 @@ class ManagedOpenRouterCredentialProvider {
           return this.unavailable();
         }
       }
-      const backoff = 250 * 2 ** attempt * (0.5 + random());
+      const backoff = backoffDelay(attempt, {
+        baseMs: 250,
+        jitter: {
+          type: "multiplicative",
+          random: random(),
+          minFactor: 0.5,
+          maxFactor: 1.5,
+        },
+      });
       const wait = Math.max(delay ?? 0, backoff);
       if (attempt === MAX_ATTEMPTS - 1 || wait > MAX_RETRY_DELAY_MS) {
         return this.unavailable();

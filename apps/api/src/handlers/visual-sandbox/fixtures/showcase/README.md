@@ -21,3 +21,18 @@ must separately exercise the real chart, frame bridge and composer chip.
 The page calls only `stella` APIs. The host owns the opaque shell's nonce
 handshake, including source/origin checks and a fresh handshake on reload;
 authored pages do not send raw bridge messages or manage frame nonces.
+
+`court-year-showcase.prepared.json` is the page `prepareGeneratedVisual` returns
+for this fixture. Browser captures read it from disk; `showcase.test.ts` fails
+when it drifts from the sanitizer output.
+
+# Change-of-control exposure
+
+`change-of-control-exposure.html` and `change-of-control-exposure.json` are the
+generated view the seeded marketing agent thread shows in its final turn
+(`apps/api/scripts/seed-marketing-agent-thread.ts`). The page uses only HTML,
+kit classes and theme tokens: position totals, a value split bar and a
+counterparty matrix. Its counterparties are the seeded Project Atlas data
+room's own aggregates: `seed-marketing-agent-thread.test.ts` fails when they
+drift from the seed, and `change-of-control-exposure.test.ts` runs the
+sanitized page.

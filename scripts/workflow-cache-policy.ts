@@ -24,10 +24,20 @@ const triggers = (on: unknown): string[] => {
 // and a reusable workflow they call must be one reviewed for that.
 const DEFAULT_SCOPE_EVENTS = ["pull_request_target", "workflow_run"];
 const REVIEWED_REUSABLE_WORKFLOWS: Record<string, string> = {
-  "stella/.github/.github/workflows/pr-lint.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776":
+  "stella/.github/.github/workflows/pr-lint.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8":
     "title, label, size and assignee actions only; no cache",
-  "stella/.github/.github/workflows/npm-independent-release.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776":
-    "checkout, artifact download, setup-node with Bun manifests and no cache input, hardened publish action; no cache",
+  "stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8":
+    "checkout, artifact download, setup-node without a cache input, hardened publish action; no cache",
+};
+const DESKTOP_WINDOWS_BUILD_CACHE_USE =
+  "baptiste0928/cargo-install caches installed Rust binaries";
+const REVIEWED_LOCAL_ACTIONS: Record<string, string> = {
+  "./.github/actions/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
+  "./.github/actions/ci-install":
+    "exact scoped store restore; save only after a successful frozen install on main",
+  // release-desktop restores the same action from the workflow revision
+  // because the pinned release checkout replaces the workspace.
+  "./.release-tooling/desktop-windows-build": DESKTOP_WINDOWS_BUILD_CACHE_USE,
 };
 
 export const MAIN_ONLY_BUN_CACHE_SAVE = `\${{ github.ref == 'refs/heads/main' }}`;
@@ -39,8 +49,11 @@ const cacheSave = (step: Record<string, unknown>): string | null => {
   if (uses === "") {
     return null;
   }
-  if (uses.startsWith("./")) {
-    return `local action ${uses} is not reviewed for cache use`;
+  const localUses = uses.startsWith("$/") ? `./${uses.slice(2)}` : uses;
+  if (localUses.startsWith("./")) {
+    return localUses in REVIEWED_LOCAL_ACTIONS
+      ? null
+      : `local action ${uses} is not reviewed for cache use`;
   }
   if (/^actions\/cache(\/save)?@/u.test(uses)) {
     return `${uses} saves a cache`;
@@ -224,12 +237,28 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
           ];
     }
     const steps = flattenWorkflowSteps(job["steps"] ?? []);
+    const scopedInstall = steps.some(
+      (step) =>
+        step["uses"] === "$/.github/actions/ci-install" ||
+        step["uses"] === "./.github/actions/ci-install",
+    );
     return steps.flatMap((step: unknown) => {
       if (!isRecord(step)) {
         return [];
       }
       const uses = typeof step["uses"] === "string" ? step["uses"] : "";
       const inputs = isRecord(step["with"]) ? step["with"] : {};
+      if (
+        [
+          "$/.github/actions/ci-install",
+          "./.github/actions/ci-install",
+        ].includes(uses) &&
+        policy !== "install-cache"
+      ) {
+        return [
+          `job '${name}': scoped install cache is forbidden by ${policy} policy`,
+        ];
+      }
       if (
         uses.startsWith("stella/.github/actions/setup-bun-cached@") &&
         inputs["save"] !== MAIN_ONLY_BUN_CACHE_SAVE
@@ -265,7 +294,7 @@ export const workflowCacheProblems = (workflow: unknown): string[] => {
         return [`job '${name}': Bun install cache saves must be main-only`];
       }
       if (policy === "install-cache") {
-        return uses.startsWith("oven-sh/setup-bun@")
+        return uses.startsWith("oven-sh/setup-bun@") && !scopedInstall
           ? [
               `job '${name}': raw Bun setup needs the shared install-cache action`,
             ]

@@ -326,7 +326,13 @@ describe("search recents", () => {
           [],
         );
         expect(recordRecentFile(file, scope, storage)).toEqual([]);
-        expect(storage.length).toBe(0);
+        // Only user-1's own searches wait for them; the files list (fetched
+        // organization data) is gone.
+        expect(
+          Array.from({ length: storage.length }, (_, index) =>
+            storage.key(index),
+          ),
+        ).toEqual(["stella-search-recent-searches:org-1::u:user-1"]);
       }
 
       const refreshedScope = {
@@ -338,7 +344,7 @@ describe("search recents", () => {
         recordRecentSearch("fresh account A", refreshedScope, storage).map(
           (item) => item.query,
         ),
-      ).toEqual(["fresh account A"]);
+      ).toEqual(["fresh account A", "account A"]);
       expect(
         recordRecentFile(file, refreshedScope, storage).map(
           (item) => item.title,
@@ -394,3 +400,28 @@ describe("search recents", () => {
     expect(storage.length).toBe(0);
   });
 });
+
+test.each([
+  { kind: "statute", number: "172", year: "2026" },
+  { kind: "decision", courtAbbreviation: "ÚS", courtTier: "constitutional" },
+  { kind: "decision", courtAbbreviation: null },
+] as const)(
+  "recents retain resolved document identity through storage: %j",
+  (documentIdentity) => {
+    const storage = new MemoryStorage();
+    recordRecentFile(
+      {
+        entityId: "file_identity",
+        workspaceId: "matter_identity",
+        workspaceName: "Civil proceeding",
+        title: "Legal instrument",
+        documentIdentity,
+      },
+      scope,
+      storage,
+    );
+    expect(readRecentFiles(scope, storage).at(0)?.documentIdentity).toEqual(
+      documentIdentity,
+    );
+  },
+);

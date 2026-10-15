@@ -2,6 +2,9 @@ import { Result } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeOutboundFetchResponse } from "@/api/lib/safe-outbound-fetch";
 import {
   createSkillPackageFetchContext,
@@ -58,7 +61,7 @@ const respond = (
 
 const serveGithub: Parameters<
   typeof createSkillPackageFetchContext
->[1] = async ({ url }) => {
+>[0]["fetchBytes"] = async ({ url }) => {
   const requestUrl = typeof url === "string" ? new URL(url) : url;
   if (requestUrl.hostname === "raw.githubusercontent.com") {
     const path = requestUrl.pathname.split(`/${COMMIT_SHA}/`).at(1) ?? "";
@@ -79,12 +82,15 @@ const serveGithub: Parameters<
 };
 
 const fetchContext = (
-  serve: Parameters<typeof createSkillPackageFetchContext>[1],
+  serve: NonNullable<
+    Parameters<typeof createSkillPackageFetchContext>[0]["fetchBytes"]
+  >,
 ) =>
-  createSkillPackageFetchContext(
-    { deadlineAt: Date.now() + 30_000, maxRequests: 100 },
-    serve,
-  );
+  createSkillPackageFetchContext({
+    fetchBytes: serve,
+    limits: { deadlineAt: Date.now() + 30_000, maxRequests: 100 },
+    permit: grantThirdPartyOutboundPermit(),
+  });
 
 const byPath = <T extends { path: string }>(items: readonly T[]) =>
   items.toSorted((a, b) => (a.path < b.path ? -1 : 1));
@@ -130,10 +136,10 @@ describe("files a URL import leaves out", () => {
 
   test("a zip package at a URL reports the files it leaves out", async () => {
     const zip = new JSZip();
-    zip.file("pack/SKILL.md", SKILL_SOURCE);
-    zip.file("pack/scripts/helper.ts", "export const helper = true;");
-    zip.file("pack/references/latin1.txt", NOT_UTF8);
-    zip.file("pack/notes/todo.md", "Later.");
+    writeZipEntry(zip, "pack/SKILL.md", SKILL_SOURCE);
+    writeZipEntry(zip, "pack/scripts/helper.ts", "export const helper = true;");
+    writeZipEntry(zip, "pack/references/latin1.txt", NOT_UTF8);
+    writeZipEntry(zip, "pack/notes/todo.md", "Later.");
     const bytes = await zip.generateAsync({ type: "uint8array" });
 
     const result = await fetchSkillPackageFromUrl(

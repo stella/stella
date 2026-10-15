@@ -30,6 +30,7 @@ export {
   ScreeningQueryError,
   ScreeningWorkLimitError,
   buildScreeningIndex,
+  buildScreeningIndexCooperatively,
   screen,
 } from "./screening";
 export type {

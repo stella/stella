@@ -1,3 +1,5 @@
+import { MCP_CAPABILITY_EXECUTORS } from "@stll/api-contract/mcp-capability-executors";
+
 import { isRecord } from "@/api/lib/type-guards";
 import type { CompareToolInput } from "@/api/mcp/document-compare-tool";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
@@ -102,7 +104,7 @@ export const WRITE_TOOL_SCOPES = {
   create_template: organization,
   configure_template_fields: organization,
   // Each catalog capability enforces its own workspace access.
-  invoke_capability: organization,
+  [MCP_CAPABILITY_EXECUTORS.write]: organization,
   submit_feedback: organization,
 } as const satisfies Record<McpWriteToolName, WriteToolScope>;
 

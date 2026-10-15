@@ -13,6 +13,11 @@
  * for use in tests or monitoring endpoints.
  */
 
+import { inspect } from "node:util";
+
+import { sanitizeErrorForOutput } from "@stll/errors";
+import { runScriptWithErrorOutput } from "@stll/errors/script-error";
+
 import type {
   IngestionResult,
   SourceAdapter,
@@ -28,7 +33,7 @@ const writeStdoutLine = (message = ""): void => {
 
 type LoadResult =
   | { adapter: SourceAdapter; key: string }
-  | { key: string; importError: string };
+  | { key: string; importError: unknown };
 
 const loadAllAdapters = async (): Promise<LoadResult[]> =>
   await Promise.all(
@@ -45,7 +50,7 @@ const loadAllAdapters = async (): Promise<LoadResult[]> =>
       } catch (error) {
         return {
           key,
-          importError: error instanceof Error ? error.message : String(error),
+          importError: error,
         };
       }
     }),
@@ -67,7 +72,7 @@ export type HealthResult = {
   hasNextCursor: boolean;
   fields: FieldCheck[];
   durationMs: number;
-  error?: string;
+  error?: unknown;
 };
 
 /** Fields that every decision must have. */
@@ -155,7 +160,7 @@ export const checkAdapterHealth = async (
         hasNextCursor: false,
         fields: [],
         durationMs,
-        error: result.error.message,
+        error: result.error,
       };
     }
 
@@ -195,7 +200,7 @@ export const checkAdapterHealth = async (
       hasNextCursor: false,
       fields: [],
       durationMs: Math.round(performance.now() - start),
-      error: error instanceof Error ? error.message : String(error),
+      error,
     };
   }
 };
@@ -217,7 +222,7 @@ export const checkAllAdapters = async (
         hasNextCursor: false,
         fields: [],
         durationMs: 0,
-        error: `Import failed: ${entry.importError}`,
+        error: entry.importError,
       });
       continue;
     }
@@ -250,8 +255,8 @@ export const formatHealthReport = (
         `Time: ${r.durationMs}ms`,
     );
 
-    if (r.error) {
-      lines.push(`  Error: ${r.error}`);
+    if (r.error !== undefined) {
+      lines.push(`  Error: ${inspect(sanitizeErrorForOutput(r.error))}`);
     }
 
     // Show field coverage
@@ -276,14 +281,16 @@ export const formatHealthReport = (
 
 // Run as standalone script
 if (import.meta.main) {
-  writeStdoutLine("Running adapter health checks...");
-  writeStdoutLine();
-  const results = await checkAllAdapters();
-  writeStdoutLine(formatHealthReport(results));
-  const failed = results.filter(
-    (r) => r.status === "down" || r.status === "degraded",
-  );
-  if (failed.length > 0) {
-    process.exit(1);
-  }
+  await runScriptWithErrorOutput(async () => {
+    writeStdoutLine("Running adapter health checks...");
+    writeStdoutLine();
+    const results = await checkAllAdapters();
+    writeStdoutLine(formatHealthReport(results));
+    const failed = results.filter(
+      (r) => r.status === "down" || r.status === "degraded",
+    );
+    if (failed.length > 0) {
+      process.exit(1);
+    }
+  });
 }

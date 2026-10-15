@@ -42,6 +42,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { parseArgs } from "node:util";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 const CHECK = "fix-tests-on-base";
 
 /** Conventional Commit `fix` type, scoped or not, breaking or not. */
@@ -130,7 +132,7 @@ const apiRunner: TestRunner = {
         process.execPath,
         "run",
         "test",
-        path.relative(API_ROOT, file),
+        repoRelativePath(API_ROOT, file),
         "--reporter=junit",
         `--reporter-outfile=${junitPath}`,
       ],
@@ -280,7 +282,10 @@ const readAttributes = (tag: string): ReadonlyMap<string, string> =>
   );
 
 /** Bun's JUnit report, reduced to what the verdict needs. */
-export const parseJunit = (xml: string): JunitReport => {
+export const parseJunit = (
+  xml: string,
+  onFailure?: (file: string | undefined) => void,
+): JunitReport => {
   const cases: TestCase[] = [];
   for (const match of xml.matchAll(
     /<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/gu,
@@ -292,6 +297,7 @@ export const parseJunit = (xml: string): JunitReport => {
     let status: TestCaseStatus = "pass";
     if (/<(?:failure|error)\b/u.test(inner)) {
       status = "fail";
+      onFailure?.(attributes.get("file"));
     } else if (/<skipped\b/u.test(inner)) {
       status = "skip";
     }

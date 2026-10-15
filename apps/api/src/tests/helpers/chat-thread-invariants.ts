@@ -313,7 +313,3 @@ export const threadInvariantViolationsOf = (
   unownedPendingInteractions: unownedPendingInteractionsOf(snapshot),
   unsettledToolCalls: unsettledToolCallsOf(snapshot),
 });
-
-export const findThreadInvariantViolations = async (
-  options: ReadThreadInvariantSnapshotOptions,
-) => threadInvariantViolationsOf(await readThreadInvariantSnapshot(options));

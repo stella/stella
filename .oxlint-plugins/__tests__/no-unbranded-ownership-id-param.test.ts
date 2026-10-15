@@ -33,7 +33,7 @@ test("accepts authenticated framework context and contextual execute handlers", 
   expect(
     await lintSingleRule(
       "no-unbranded-ownership-id-param",
-      "createSafeHandler(({ userId, workspaceId }) => userId);\ncreateSafeRootHandler(({ organizationId }) => organizationId);\nconst operation = { execute: ({ userId }) => userId };",
+      'import { createSafeHandler, createSafeRootHandler } from "@/api/lib/api-handlers";\ncreateSafeHandler(({ userId, workspaceId }) => userId);\ncreateSafeRootHandler(({ organizationId }) => organizationId);\nconst operation = { execute: ({ userId }: { userId: SafeId<"user"> }) => userId };',
     ),
   ).toEqual([]);
 });
@@ -46,4 +46,13 @@ test("honors configured ID names without retaining default names", async () => {
       { ruleOptions: { names: ["tenantId"] } },
     ),
   ).toEqual([1]);
+});
+
+test("requires brands in unrelated execution properties", async () => {
+  expect(
+    await lintSingleRule(
+      "no-unbranded-ownership-id-param",
+      "const operation = { execute: ({ userId }) => userId };\nconst explicit = { execute: ({ userId }: { userId: string }) => userId };",
+    ),
+  ).toEqual([1, 2]);
 });

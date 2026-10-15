@@ -50,6 +50,24 @@ port.on("message", (request: SanctionsMatcherMessage) => {
     } satisfies SanctionsMatcherReply);
     return;
   }
+  if (request.type === "index") {
+    if (
+      assembly === null ||
+      assembly.source !== request.source ||
+      assembly.editionId !== request.editionId
+    ) {
+      panic("Invalid sanctions entry transfer owner");
+    }
+    indexes.set(request.source, {
+      editionId: request.editionId,
+      index: buildScreeningIndex([
+        { version: request.version, entries: assembly.entries },
+      ]),
+    });
+    assembly = null;
+    port.postMessage({ status: "indexed" } satisfies SanctionsMatcherReply);
+    return;
+  }
   let cached = indexes.get(request.source);
   if (cached?.editionId !== request.editionId) {
     // Drop the previous edition before allocating its replacement.

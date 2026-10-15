@@ -2,6 +2,13 @@ import { describe, expect, test, expectTypeOf } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import {
+  DECISION_IDENTIFIER_MAX_LENGTH,
+  DECISION_IDENTIFIER_TYPES,
+  decisionIdentifierSchema,
+  reporterCitationIdentifierSchema,
+} from "@stll/legal-ast/decision-identifier";
+import { blockSchema } from "@stll/legal-ast/document-ast";
 import { propertyConfig } from "@stll/property-testing";
 
 import type { McpToolHandler } from "@/api/mcp/tool-types";
@@ -604,5 +611,56 @@ describe("Valibot-backed MCP tool definitions", () => {
     ).toThrow(
       "A native MCP tool input schema must reject unknown root properties",
     );
+  });
+});
+
+describe("legal AST output identifiers", () => {
+  test("canonical identifier outputs publish bounded strings and retain runtime content checks", () => {
+    const source = v.strictObject({
+      identifier: decisionIdentifierSchema,
+      reporter: reporterCitationIdentifierSchema,
+    });
+    const contract = defineMcpToolOutput(source);
+    expect(contract.outputSchema).toMatchObject({
+      properties: {
+        reporter: {
+          properties: {
+            value: {
+              type: "string",
+              maxLength: DECISION_IDENTIFIER_MAX_LENGTH,
+            },
+          },
+        },
+      },
+    });
+    const parse = (visible: string, searchable: string) =>
+      v.safeParse(contract.outputSchemaSource, {
+        identifier: {
+          type: DECISION_IDENTIFIER_TYPES.CASE_NUMBER,
+          value: visible,
+        },
+        reporter: {
+          type: DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
+          value: searchable,
+        },
+      });
+    expect(parse("48 Cdo 1/2026", "Sb. NS 1/2026").success).toBe(true);
+    expect(parse("\u200B", "Sb. NS 1/2026").success).toBe(false);
+    expect(parse("48 Cdo 1/2026", "...").success).toBe(false);
+    expect(() =>
+      defineMcpToolOutput(
+        v.strictObject({
+          value: v.pipe(
+            v.string(),
+            v.check(() => false),
+          ),
+        }),
+      ),
+    ).toThrow('The "check" action cannot be converted to JSON Schema.');
+  });
+  test("full recursive AST block output schemas compile without accepting arbitrary checks", () => {
+    expect(() =>
+      defineMcpToolOutput(v.strictObject({ blocks: v.array(blockSchema) })),
+    ).not.toThrow();
   });
 });

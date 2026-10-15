@@ -9,7 +9,11 @@ import { request as undiciRequest } from "undici";
 import { fetchWithTimeout as unrelatedFetch } from "unrelated-fetch";
 import SocketClient from "ws";
 
-import { fetchWithTimeout } from "@stll/fetch";
+import {
+  fetchWithTimeout,
+  fetchWithTimeout as aliasedFetch,
+  fetchWithTimeout as webFetch,
+} from "@stll/fetch";
 
 import { env } from "@/api/env";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
@@ -17,15 +21,14 @@ import {
   fetchPublisher,
   fetchWithRetry,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
-import { fetchWithTimeout as aliasedFetch } from "@/api/lib/fetch";
-import * as http from "@/api/lib/fetch";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { getCorpusS3, getS3 } from "@/api/lib/s3";
 import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 
-import { fetchWithTimeout as relativeFetch } from "../../apps/api/src/lib/fetch.ts";
-import { fetchWithTimeout as webFetch } from "../../apps/web/src/lib/fetch.ts";
+import * as http from "../../packages/fetch/src/index.ts";
+
+const relativeFetch = http.fetchWithTimeout;
 
 const STATIC_BASE = "https://api.example.com";
 const STATIC_ALIAS = STATIC_BASE;
@@ -303,7 +306,7 @@ export const mustFlagDynamicTargets = async (inputUrl: string) => {
     });
   }
 
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: a re-exporting module's wrapper
+  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: an aliased package import
   await webFetch(inputUrl, { timeoutMs: 1000 });
 
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- fixture: undici request

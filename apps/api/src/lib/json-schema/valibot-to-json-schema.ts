@@ -5,7 +5,10 @@ import {
 } from "@valibot/to-json-schema";
 import type { GenericSchema } from "valibot";
 
+import { DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS } from "@stll/api-contract/decision-paragraph-range";
 import { keepUnicodePatternSource } from "@stll/api-contract/json-schema-regex";
+import { DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS } from "@stll/legal-ast/decision-identifier";
+import { DOCUMENT_AST_RUNTIME_ONLY_ACTIONS } from "@stll/legal-ast/document-ast";
 
 /** The `v.metadata` keys that are JSON Schema annotations. */
 const JSON_SCHEMA_METADATA_KEYS = new Set(["title", "description", "examples"]);
@@ -40,6 +43,38 @@ const stripInternalMetadata: NonNullable<
   );
 };
 
+/**
+ * Actions, by identity, that their owners declare runtime-only: the
+ * published node keeps every other action's keywords (bounds, pattern) and
+ * the action still runs on every parse. Any other unsupported action stays
+ * an error.
+ */
+const RUNTIME_ONLY_ACTIONS: ReadonlySet<unknown> = new Set([
+  ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
+  ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
+  ...DOCUMENT_AST_RUNTIME_ONLY_ACTIONS,
+]);
+
+const RUNTIME_ONLY_CHECK_REQUIREMENTS: ReadonlySet<unknown> = new Set(
+  [
+    ...DECISION_IDENTIFIER_RUNTIME_ONLY_CHECKS,
+    ...DECISION_PARAGRAPH_RANGE_RUNTIME_ONLY_CHECKS,
+  ].map(({ requirement }) => requirement),
+);
+
+/** Whether a Valibot issue was raised by a check declared runtime-only. */
+export const isRuntimeOnlyCheckIssue = (issue: {
+  type: string;
+  requirement?: unknown;
+}): boolean =>
+  issue.type === "check" &&
+  RUNTIME_ONLY_CHECK_REQUIREMENTS.has(issue.requirement);
+
+const keepRuntimeOnlyAction: NonNullable<
+  ConversionConfig["overrideAction"]
+> = ({ valibotAction, jsonSchema }) =>
+  RUNTIME_ONLY_ACTIONS.has(valibotAction) ? jsonSchema : undefined;
+
 type ValibotJsonSchemaConfig = Omit<ConversionConfig, "overrideAction">;
 
 /**
@@ -53,5 +88,7 @@ export const toJsonSchema = (
   convertToJsonSchema(schema, {
     ...config,
     overrideAction: (context) =>
-      stripInternalMetadata(context) ?? keepUnicodePatternSource(context),
+      stripInternalMetadata(context) ??
+      keepUnicodePatternSource(context) ??
+      keepRuntimeOnlyAction(context),
   });

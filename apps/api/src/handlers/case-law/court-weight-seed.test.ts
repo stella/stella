@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import { courtAbbreviation } from "@stll/api-contract/case-law-court-abbreviations";
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 import { US_COURTS } from "@stll/api-contract/us-courts";
 
@@ -13,7 +14,6 @@ import {
   seededCourtWeightEntries,
   type CourtWeightSeedRow,
 } from "@/api/handlers/case-law/court-weight-seed";
-import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
 import { SK_ECLI_COURTS } from "@/api/lib/case-law/ecli-court-codes";
 import {
   HIGHEST_COURT_TIER,

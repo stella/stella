@@ -59,7 +59,10 @@ test("projects preview as a model image with bounded text diagnostics", () => {
 });
 
 test("projects unavailable preview as text while preserving publishing success", async () => {
-  const result = await previewVisual({ document: "", functionArn: undefined });
+  const result = await previewVisual({
+    document: "<body>Example</body>",
+    functionArn: undefined,
+  });
   expect(Result.isError(result)).toBe(true);
   if (!Result.isError(result)) {
     return;
@@ -121,7 +124,7 @@ describe("visual preview invocation", () => {
   });
   test("reports absent configuration without invoking", async () => {
     const result = await previewVisual({
-      document: "",
+      document: "<body>Example</body>",
       functionArn: undefined,
       invoke: async () => {
         throw new Error("Invocation should not happen");
@@ -135,7 +138,7 @@ describe("visual preview invocation", () => {
   test("aborts on deadline even when the transport does not settle", async () => {
     let signal: AbortSignal | undefined;
     const result = await previewVisual({
-      document: "",
+      document: "<body>Example</body>",
       functionArn,
       timeoutMs: 5,
       invoke: async ({ signal: invocationSignal }) => {
@@ -153,7 +156,7 @@ describe("visual preview invocation", () => {
     "grades unsuccessful Lambda invocations as unavailable",
     async (reply) => {
       const result = await previewVisual({
-        document: "",
+        document: "<body>Example</body>",
         functionArn,
         invoke: async () => reply,
       });
@@ -178,7 +181,7 @@ describe("visual preview invocation", () => {
     new Uint8Array([255]),
   ])("rejects replies outside the shared contract", async (reply) => {
     const result = await previewVisual({
-      document: "",
+      document: "<body>Example</body>",
       functionArn,
       invoke: async () => ({ payload: reply }),
     });
@@ -202,7 +205,7 @@ describe("visual preview invocation", () => {
   });
   test("propagates transport failure without including payload or cause", async () => {
     const result = await previewVisual({
-      document: "",
+      document: "<body>Example</body>",
       functionArn,
       invoke: async () => {
         throw new Error("Private content");
@@ -215,3 +218,23 @@ describe("visual preview invocation", () => {
     }
   });
 });
+
+test.each(["", " \n\t"])(
+  "returns a typed result for an empty preview document (%s)",
+  async (document) => {
+    let invoked = false;
+    const result = await previewVisual({
+      document,
+      functionArn,
+      invoke: async () => {
+        invoked = true;
+        return { payload: payload(output) };
+      },
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.code).toBe("invalid-input");
+    }
+    expect(invoked).toBe(false);
+  },
+);

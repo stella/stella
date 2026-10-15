@@ -16,6 +16,7 @@ test("previews the canonical composed sandbox document unchanged", async () => {
   const document = composeVisualDocument({
     data: {},
     html,
+    renderId: crypto.randomUUID(),
     runtime,
     policy: VISUAL_INNER_POLICY,
   });

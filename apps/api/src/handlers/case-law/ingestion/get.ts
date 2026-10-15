@@ -501,6 +501,7 @@ export const getIngestionStatus = async (
 };
 
 const config = {
+  contract: "patch",
   description:
     "Report case-law corpus ingestion health for operators. Per source: " +
     "adapter key and whether an adapter is still registered for it, enabled " +
@@ -514,7 +515,7 @@ const config = {
   // by owner/admin (see `packages/permissions`), matching the admin/owner gate
   // this route used to carry as a route-level `onBeforeHandle`. Declaring it in
   // the handler config means the safe-handler wrapper enforces it for BOTH the
-  // REST route and the generic `invoke_capability` path, so neither bypasses the
+  // REST route and the generic capability executors path, so neither bypasses the
   // gate. Keep this as the single source of the role check for this endpoint.
   permissions: { auditLog: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

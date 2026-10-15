@@ -1,4 +1,7 @@
+import type { LegalResolveResponse } from "./legal-resolve";
+
 export const APP_SEARCH_FIXTURE = {
+  headnotes: "included" as const,
   facets: {
     court: [
       {
@@ -44,48 +47,60 @@ export const APP_SEARCH_FIXTURE = {
       language: "cs",
       matchedQueries: [0],
       matchingPassages: 1,
-      snippet: "Náhrada škody: <b>právní jistota</b>.",
       sourceUrl: "https://example.test/decision",
+      snippet: "Náhrada škody: <b>právní jistota</b>.",
+      keywords: {
+        type: "keywords" as const,
+        items: ["Náhrada škody", "Příčinná souvislost"],
+        omitted: 0,
+      },
+      headnote: {
+        type: "present" as const,
+        text: "Právo na náhradu škody vyžaduje posouzení příčinné souvislosti.",
+        truncated: false,
+      },
     },
   ],
   total: { type: "exact" as const, count: 1 },
   nextStep: "Use the returned cursor to continue.",
 };
 
-const identity = {
-  appUrl: "https://stll.app/case-law/fixture-decision",
-  url: "https://stll.app/case-law/fixture-decision",
-  caseNumber: "I. ÚS 123/24",
-  court: "Ústavní soud",
-  courtAbbreviation: "ÚS",
-  decisionDate: "2024-04-15",
-  decisionId: "fixture-decision",
-  ecli: "ECLI:CZ:US:2024:1.US.123.24.1",
-  resourceName: "case-law/fixture-decision",
-};
-
-export const APP_LOOKUP_FIXTURE = {
-  items: [
-    { identifier: "I. ÚS 123/24", ...identity, status: "found" as const },
-    {
-      identifier: "123/24",
-      candidates: [identity],
-      message: "Choose a court.",
-      status: "ambiguous" as const,
+export const APP_RESOLVE_FIXTURE = {
+  status: "resolved" as const,
+  document: {
+    kind: "decision" as const,
+    decisionId: "00000000-0000-4000-8000-0000000d0041",
+    identifier: "ECLI:CZ:US:2024:1.US.123.24.1",
+    country: "CZE",
+    caseNumber: "I. ÚS 123/24",
+    ecli: "ECLI:CZ:US:2024:1.US.123.24.1",
+    court: "Ústavní soud",
+    decisionDate: "2024-04-15",
+    readerUrl: "https://stll.app/case-law/fixture-decision",
+    text: {
+      status: "readable",
+      blocks: [],
+      extent: { type: "complete" },
     },
-    {
-      identifier: "124/24",
-      hint: "Search case law.",
-      message: "No matching decision.",
-      status: "not_found" as const,
-    },
-    {
-      identifier: "125/24",
-      message: "Lookup unavailable.",
-      status: "lookup_failed" as const,
-    },
-  ],
-};
+  },
+} satisfies LegalResolveResponse;
+export const APP_RESOLVE_STATUS_FIXTURES = [
+  APP_RESOLVE_FIXTURE,
+  {
+    status: "ambiguous" as const,
+    candidates: [
+      {
+        decisionId: APP_RESOLVE_FIXTURE.document.decisionId,
+        identifier: "I. ÚS 123/24",
+        label: "Ústavní soud, 2024-04-15",
+        readerUrl: APP_RESOLVE_FIXTURE.document.readerUrl,
+      },
+    ],
+  },
+  { status: "not_found" as const, reason: "no_exact_identity" as const },
+  { status: "incomplete_identifier" as const, missing: ["sheet"] },
+  { status: "country_unavailable" as const },
+] satisfies LegalResolveResponse[];
 
 export const APP_UNAVAILABLE_FIXTURE = {
   code: "public_country_unavailable" as const,

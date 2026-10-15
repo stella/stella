@@ -8,15 +8,21 @@ import {
   TIME_ENTRY_ACTIVITY_GROUPS,
   type InvoiceStatus,
 } from "@stll/api-contract";
+import {
+  DESKTOP_TIME_ENTRY_BATCH_STATUSES,
+  type DesktopTimeEntryBatchResponse,
+} from "@stll/api-contract/desktop-time-entries";
 import type { TimeEntrySuggestionEvidence } from "@stll/api-contract/time-entry-types";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { VAT_TREATMENTS } from "@stll/invoicing";
 import { ORGANIZATION_MANAGEMENT_ROLES } from "@stll/permissions";
 
+import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
 import { timeEntryPolicies } from "@/api/db/rls";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import { reviewResetOwnerPolicies } from "../review-reset-policies";
 import { BILLING_ARRANGEMENT_MODES } from "./billing-arrangements";
 import {
   EXPENSE_CATEGORIES,
@@ -72,6 +78,7 @@ export const timeDailyTargets = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_daily_targets"),
     p.primaryKey({ columns: [table.organizationId, table.userId] }),
     p
       .foreignKey({
@@ -191,6 +198,10 @@ export const timeEntries = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([[table.workItemId, { target: "entities", kind: "context" }]]),
+    ),
     p.check(
       "time_entries_invoice_attachment_check",
       sql`${table.invoiceAttachment} IN (${sql.join(
@@ -387,6 +398,7 @@ export const timeTimers = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_timers"),
     p.foreignKey({
       columns: [table.workspaceId, table.organizationId],
       foreignColumns: [workspaces.id, workspaces.organizationId],
@@ -460,6 +472,7 @@ export const timeTimerConfirmations = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_timer_confirmations"),
     p
       .index("time_timer_confirmations_owner_idx")
       .on(table.organizationId, table.userId),
@@ -496,6 +509,7 @@ export const savedTimeNarratives = p.pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("saved_time_narratives"),
     p
       .index("saved_time_narratives_owner_name_id_idx")
       .on(table.organizationId, table.userId, table.name, table.id),
@@ -603,7 +617,7 @@ export const billingCodes = p.pgTable(
     p
       .uniqueIndex("billing_codes_ws_type_code_uidx")
       .on(table.workspaceId, table.type, table.code),
-    ...wsOrganizationPolicies("billing_codes"),
+    ...wsOrganizationPolicies("billing_codes", { columns: table }),
   ],
 );
 
@@ -807,7 +821,7 @@ export const rateTables = p.pgTable(
       .index("rate_tables_ws_default_idx")
       .on(table.workspaceId, table.isDefault),
     p.index("rate_tables_ws_client_idx").on(table.workspaceId, table.clientId),
-    ...wsOrganizationPolicies("rate_tables"),
+    ...wsOrganizationPolicies("rate_tables", { columns: table }),
   ],
 );
 
@@ -849,7 +863,7 @@ export const rateEntries = p.pgTable(
       )})`,
     ),
     p.index("rate_entries_workspace_id_idx").on(table.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 
@@ -889,6 +903,10 @@ export const expenses = p.pgTable(
     updatedAt: timestamptz("updated_at").defaultNow(),
   },
   (table) => [
+    ...entityFeaturePolicies(
+      table,
+      new Map([[table.matterId, { target: "entities", kind: "context" }]]),
+    ),
     p
       .foreignKey({
         columns: [table.workspaceId, table.organizationId],
@@ -904,7 +922,12 @@ export const expenses = p.pgTable(
       .on(table.workspaceId, table.userId, table.dateIncurred),
     p.index("expenses_invoice_idx").on(table.invoiceId),
     p.check("expenses_amount_positive_check", sql`${table.amount} > 0`),
-    ...wsOrganizationPolicies("expenses"),
+    ...wsOrganizationPolicies("expenses", {
+      columns: table,
+      references: new Map([
+        [table.matterId, { target: "entities", kind: "context" }],
+      ]),
+    }),
   ],
 );
 
@@ -1007,7 +1030,7 @@ export const invoices = p.pgTable(
     p
       .uniqueIndex("invoices_ws_number_uidx")
       .on(table.workspaceId, table.invoiceNumber),
-    ...wsOrganizationPolicies("invoices"),
+    ...wsOrganizationPolicies("invoices", { columns: table }),
   ],
 );
 
@@ -1131,7 +1154,7 @@ export const invoiceLines = p.pgTable(
       "invoice_lines_description_check",
       sql`length(${table.description}) between 1 and 10000`,
     ),
-    ...wsOrganizationPolicies("invoice_lines"),
+    ...wsOrganizationPolicies("invoice_lines", { columns: table }),
   ],
 );
 
@@ -1228,6 +1251,7 @@ export const timeEntryTimerStates = p.pgTable(
     state: p.text("state", { enum: TIME_TIMER_STATES }).notNull(),
   },
   (table) => [
+    ...reviewResetOwnerPolicies("time_entry_timer_states"),
     p
       .index("time_entry_timer_states_org_entry_idx")
       .on(table.organizationId, table.entryId),
@@ -1251,5 +1275,48 @@ export const timeEntryTimerStates = p.pgTable(
       using: TIMER_SIGNAL_WRITER_CHECK,
       withCheck: sql`(${TIMER_SIGNAL_WRITER_CHECK} AND ${TIMER_SIGNAL_TRUTH_CHECK})`,
     }),
+  ],
+);
+
+// Receipts survive edits or deletion of individual drafts so a network retry
+// cannot recreate a reviewed batch. Only the authenticated owner can read it.
+export const desktopTimeEntryBatches = p.pgTable(
+  "desktop_time_entry_batches",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    idempotencyKey: p.varchar("idempotency_key", { length: 128 }).notNull(),
+    requestFingerprint: p.varchar("request_fingerprint", { length: 64 }),
+    status: p
+      .text({ enum: DESKTOP_TIME_ENTRY_BATCH_STATUSES })
+      .notNull()
+      .default(DESKTOP_TIME_ENTRY_BATCH_STATUSES[0]),
+    result: p.jsonb().$type<DesktopTimeEntryBatchResponse>(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      name: "desktop_time_entry_batches_pkey",
+      columns: [table.organizationId, table.userId, table.idempotencyKey],
+    }),
+    p.check(
+      "desktop_time_entry_batches_key_check",
+      sql`length(${table.idempotencyKey}) > 0`,
+    ),
+    p.check(
+      "desktop_time_entry_batches_fingerprint_check",
+      sql`${table.requestFingerprint} ~ '^[0-9a-f]{64}$'`,
+    ),
+    p.check(
+      "desktop_time_entry_batches_status_check",
+      sql`(${table.status} = 'committed' AND ${table.requestFingerprint} IS NOT NULL AND ${table.result} IS NOT NULL) OR (${table.status} = 'cancelled' AND ${table.requestFingerprint} IS NULL AND ${table.result} IS NULL)`,
+    ),
+    ...userOrganizationPolicies(),
+    ...reviewResetOwnerPolicies("desktop_time_entry_batches"),
   ],
 );

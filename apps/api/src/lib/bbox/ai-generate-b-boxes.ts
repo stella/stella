@@ -13,6 +13,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -24,6 +25,7 @@ type GenerateBBoxDataProps = {
   abortSignal: AbortSignal;
   justificationId: string;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   pageNumber: number;
   workspaceId: SafeId<"workspace">;
   orgAIConfig?: OrgAIConfig | null;
@@ -41,6 +43,7 @@ export const generateBBoxData = async ({
   abortSignal,
   justificationId,
   organizationId,
+  admission,
   pageNumber,
   workspaceId,
   orgAIConfig,
@@ -61,6 +64,7 @@ export const generateBBoxData = async ({
     modelRole: "pdf",
     organizationId,
     orgAIConfig: orgAIConfig ?? null,
+    modelTier: admission.modelTier,
     properties: {
       justification_id: justificationId,
       organization_id: organizationId,
@@ -88,6 +92,7 @@ export const generateBBoxData = async ({
         orgAIConfig,
         managedAIResidency,
         organizationId,
+        admission,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
         caching,

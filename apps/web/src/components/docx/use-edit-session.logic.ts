@@ -39,7 +39,7 @@ export type EditSessionErrorReason =
   | "downloadFailed"
   | "unknown";
 
-export type EditSessionErrorSource = "open" | "download" | "finalize";
+type EditSessionErrorSource = "open" | "download" | "finalize";
 
 const SESSION_TAKEN_OVER_STATUS = 409;
 

@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type {
-  Block,
-  ParagraphBlock,
-} from "@/api/handlers/case-law/document-ast";
+import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
+
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 import type { ParseRegionalInput } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
 
@@ -327,23 +325,70 @@ describe("parseRegionalDecision", () => {
   // ── Justification classification ──────────────────────────
 
   describe("justification paragraph classification", () => {
-    test("strips numbered prefix from paragraphs", () => {
+    test("moves the court's numbers into the paragraphs' number", () => {
       const input = baseInput({
-        justification: [makePara("1. Žalobce podal žalobu dne 1. 1. 2025.")],
-        justificationText: "Žalobce podal žalobu dne 1. 1. 2025.",
+        justification: [
+          makePara("1. Žalobce podal žalobu dne 1. 1. 2025."),
+          makePara("2. Žalovaný se nevyjádřil."),
+        ],
+        justificationText:
+          "1. Žalobce podal žalobu dne 1. 1. 2025. 2. Žalovaný se nevyjádřil.",
       });
 
       const { documentAst } = parseRegionalDecision(input);
 
-      // Find the justification paragraph (not the heading)
       const justBlocks = documentAst.blocks.filter(
         (b) => b.type === "paragraph" && !("role" in b && b.role),
       );
-      // Should strip "1. " prefix
-      const stripped = justBlocks.find((b) =>
-        b.plainText.startsWith("Žalobce"),
-      );
-      expect(stripped).toBeDefined();
+      expect(
+        justBlocks.map((b) => [
+          b.type === "paragraph" ? b.number : undefined,
+          b.plainText,
+        ]),
+      ).toEqual([
+        [1, "Žalobce podal žalobu dne 1. 1. 2025."],
+        [2, "Žalovaný se nevyjádřil."],
+      ]);
+    });
+
+    test("a numbered paragraph naming the judge is the court's paragraph, not a signature", () => {
+      const input = baseInput({
+        justification: [
+          makePara("1. Žalobce podal žalobu dne 1. 1. 2025."),
+          makePara("2. Žalovaný se nevyjádřil."),
+          makePara("3. Věc projednala samosoudkyně."),
+          makePara("4. Žaloba je důvodná."),
+          makePara("Mgr. Jana Nová samosoudkyně"),
+        ],
+      });
+
+      const { documentAst } = parseRegionalDecision(input);
+
+      expect(
+        documentAst.blocks
+          .filter(isParagraph)
+          .filter((b) => b.number !== undefined || b.role === "signature")
+          .map((b) => [b.number ?? null, b.role ?? null, b.plainText]),
+      ).toEqual([
+        [1, null, "Žalobce podal žalobu dne 1. 1. 2025."],
+        [2, null, "Žalovaný se nevyjádřil."],
+        [3, null, "Věc projednala samosoudkyně."],
+        [4, null, "Žaloba je důvodná."],
+        [null, "signature", "Mgr. Jana Nová samosoudkyně"],
+      ]);
+    });
+
+    test("a lone '1.' is a list item, not a numbering, and stays as printed", () => {
+      const input = baseInput({
+        justification: [makePara("1. Žalobce podal žalobu dne 1. 1. 2025.")],
+        justificationText: "1. Žalobce podal žalobu dne 1. 1. 2025.",
+      });
+
+      const { documentAst } = parseRegionalDecision(input);
+
+      expect(
+        documentAst.blocks.find((b) => b.plainText.includes("Žalobce")),
+      ).toMatchObject({ plainText: "1. Žalobce podal žalobu dne 1. 1. 2025." });
     });
 
     test("classifies closing formula", () => {

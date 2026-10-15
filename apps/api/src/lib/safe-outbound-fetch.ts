@@ -9,6 +9,10 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
+import {
+  assertThirdPartyOutboundPermit,
+  type ThirdPartyOutboundPermit,
+} from "@/api/lib/auth/third-party-outbound-permit";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { withTimeout } from "@/api/lib/with-timeout";
 
@@ -128,6 +132,7 @@ export const fetchWithResolvedAddress = async ({
   body,
   headers,
   maxBytes,
+  permit,
   method = "GET",
   redirect = "error",
   signal,
@@ -138,12 +143,14 @@ export const fetchWithResolvedAddress = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
+  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
+  assertThirdPartyOutboundPermit(permit);
   const primaryAddress = addresses.at(0);
   if (!primaryAddress) {
     return Result.err(
@@ -253,6 +260,7 @@ export const fetchStreamWithResolvedAddress = async ({
   body,
   headers,
   maxBytes,
+  permit,
   method = "GET",
   redirect = "error",
   signal,
@@ -263,6 +271,7 @@ export const fetchStreamWithResolvedAddress = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
+  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
@@ -271,6 +280,7 @@ export const fetchStreamWithResolvedAddress = async ({
 }): Promise<
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
+  assertThirdPartyOutboundPermit(permit);
   const primaryAddress = addresses.at(0);
   if (!primaryAddress) {
     return Result.err(
@@ -677,6 +687,7 @@ export const safeOutboundFetchBytes = async ({
   body,
   headers,
   maxBytes,
+  permit,
   method,
   redirect,
   signal,
@@ -686,12 +697,14 @@ export const safeOutboundFetchBytes = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
+  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
   timeoutMs: number;
   url: string | URL;
 }): Promise<Result<SafeOutboundFetchResponse, SafeOutboundFetchError>> => {
+  assertThirdPartyOutboundPermit(permit);
   const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, { signal, timeoutMs });
   if (Result.isError(target)) {
@@ -710,6 +723,7 @@ export const safeOutboundFetchBytes = async ({
     body,
     headers,
     maxBytes,
+    permit,
     method,
     redirect,
     signal,
@@ -722,6 +736,7 @@ export const safeOutboundFetchStream = async ({
   body,
   headers,
   maxBytes,
+  permit,
   method,
   redirect,
   signal,
@@ -731,6 +746,7 @@ export const safeOutboundFetchStream = async ({
   body?: SafeOutboundFetchBody | undefined;
   headers?: SafeOutboundHeaders | undefined;
   maxBytes: number;
+  permit: ThirdPartyOutboundPermit;
   method?: string | undefined;
   redirect?: SafeOutboundRedirectMode | undefined;
   signal?: AbortSignal | undefined;
@@ -739,6 +755,7 @@ export const safeOutboundFetchStream = async ({
 }): Promise<
   Result<SafeOutboundFetchStreamResponse, SafeOutboundFetchError>
 > => {
+  assertThirdPartyOutboundPermit(permit);
   const startedAt = Temporal.Now.instant().epochMilliseconds;
   const target = await validateOutboundFetchTarget(url, { signal, timeoutMs });
   if (Result.isError(target)) {
@@ -757,6 +774,7 @@ export const safeOutboundFetchStream = async ({
     body,
     headers,
     maxBytes,
+    permit,
     method,
     redirect,
     signal,

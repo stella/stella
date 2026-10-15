@@ -4,7 +4,11 @@ import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import {
+  NO_AUDIT,
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 
 import readAIAvailability from "./get";
 
@@ -39,6 +43,9 @@ const readAvailability = async (
   try {
     const result = await readAIAvailability.handler(
       createTestHandlerContext<ReadContext>({
+        audit: NO_AUDIT,
+        safeDb: NO_DB,
+        scopedDb: NO_DB,
         orgAIConfig,
         orgAIConfigStatus,
       }),

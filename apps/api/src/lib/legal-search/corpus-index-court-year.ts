@@ -35,7 +35,7 @@ export const courtYearAggregation = ({
   },
 });
 
-export type CorpusCourtYearBucket = {
+type CorpusCourtYearBucket = {
   court: string;
   year: number;
   count: number;

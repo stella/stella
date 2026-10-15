@@ -480,6 +480,113 @@ class StaticTree {
 export const sourceOwners = (files: SourceTree): SourceOwnersResult =>
   new StaticTree(files).owners();
 
+// Match the original source rather than transpiled output: local types and
+// unused imports can be erased, but deleting them still needs a version decision.
+const isReexportOnlyModule = (source: string): boolean => {
+  const tokenPattern =
+    /\s+|\/\/[^\r\n]*|\/\*[\s\S]*?\*\/|"(?:\\[\s\S]|[^"\\\r\n])*"|'(?:\\[\s\S]|[^'\\\r\n])*'|[$_\p{ID_Start}][$_\u200c\u200d\p{ID_Continue}]*|[{}*,;]/uy;
+  const tokens: string[] = [];
+  let offset = 0;
+  while (offset < source.length) {
+    tokenPattern.lastIndex = offset;
+    const token = tokenPattern.exec(source)?.at(0);
+    if (token === undefined) {
+      return false;
+    }
+    offset = tokenPattern.lastIndex;
+    if (
+      /^\s/u.test(token) ||
+      token.startsWith("//") ||
+      token.startsWith("/*")
+    ) {
+      continue;
+    }
+    tokens.push(
+      token.startsWith('"') || token.startsWith("'") ? '"specifier"' : token,
+    );
+  }
+  const identifier = "[$_\\p{ID_Start}][$_\\u200c\\u200d\\p{ID_Continue}]*";
+  const name = `(?:${identifier}|"specifier")`;
+  const binding = `(?:type )?${name}(?: as ${name})?`;
+  const bindings = `\\{(?: ${binding}(?: , ${binding})*(?: ,)?)? \\}`;
+  const reexport = `export (?:type )?(?:\\*|${bindings}) from "specifier"(?: ;)?`;
+  return new RegExp(`^(?:${reexport}(?: |$))*$`, "u").test(tokens.join(" "));
+};
+
+const withoutOutputUnchangedMarkers = (source: string): string =>
+  source
+    .split("\n")
+    .filter((line) => !OUTPUT_UNCHANGED.test(line))
+    .join("\n");
+
+const LOCATION_DEPENDENT = /\bimport\.meta\b|\b__dirname\b|\b__filename\b/u;
+const SOURCE_MODULE = /\.[cm]?[jt]sx?$/u;
+
+const movedParserSources = (
+  baseTree: StaticTree,
+  headTree: StaticTree,
+): ReadonlySet<string> => {
+  const base = baseTree.files;
+  const head = headTree.files;
+  const addedBySource = new Map<string, string[]>();
+  for (const [file, source] of head) {
+    if (base.has(file) || !SOURCE_MODULE.test(file)) {
+      continue;
+    }
+    const comparable = withoutOutputUnchangedMarkers(source);
+    const paths = addedBySource.get(comparable) ?? [];
+    paths.push(file);
+    addedBySource.set(comparable, paths);
+  }
+
+  const moveDestinations = new Map<string, readonly string[]>();
+  for (const [file, source] of base) {
+    // Code that reads its own location can change output when moved, so it
+    // never qualifies as a verbatim move.
+    if (
+      head.has(file) ||
+      !SOURCE_MODULE.test(file) ||
+      LOCATION_DEPENDENT.test(source)
+    ) {
+      continue;
+    }
+    const destinations = addedBySource.get(
+      withoutOutputUnchangedMarkers(source),
+    );
+    if (destinations === undefined) {
+      continue;
+    }
+    moveDestinations.set(file, destinations);
+  }
+
+  const moved = new Set<string>();
+  for (const [file, destinations] of moveDestinations) {
+    // The text is identical, so both sides scan the same specifiers; each must
+    // resolve to the module its base target moved to (or the same module).
+    const specifiers = (file.endsWith("x") ? jsxTranspiler : transpiler)
+      .scanImports(base.get(file) ?? "")
+      .map(({ path: specifier }) => specifier);
+    for (const destination of destinations) {
+      const sameBindings = specifiers.every((specifier) => {
+        const baseTarget = baseTree.resolve(file, specifier);
+        const headTarget = headTree.resolve(destination, specifier);
+        if (baseTarget === undefined || headTarget === undefined) {
+          return baseTarget === headTarget;
+        }
+        return (moveDestinations.get(baseTarget) ?? [baseTarget]).includes(
+          headTarget,
+        );
+      });
+      if (!sameBindings) {
+        continue;
+      }
+      moved.add(file);
+      moved.add(destination);
+    }
+  }
+  return moved;
+};
+
 type CheckParserVersionsOptions = { base: SourceTree; head: SourceTree };
 
 export const checkParserVersions = ({
@@ -491,6 +598,13 @@ export const checkParserVersions = ({
   const before = baseTree.owners();
   const after = headTree.owners();
   const errors = [...before.errors, ...after.errors];
+  const movedSources = movedParserSources(baseTree, headTree);
+  const deletedReexports = new Set<string>();
+  for (const [file, source] of base) {
+    if (!head.has(file) && isReexportOnlyModule(source)) {
+      deletedReexports.add(file);
+    }
+  }
   for (const [key, current] of after.owners) {
     const previous = before.owners.get(key);
     if (previous === undefined) {
@@ -512,6 +626,9 @@ export const checkParserVersions = ({
       continue;
     }
     const unexempted = changed.filter((file) => {
+      if (movedSources.has(file) || deletedReexports.has(file)) {
+        return false;
+      }
       const baseLines = new Set((base.get(file) ?? "").split("\n"));
       return !(head.get(file) ?? "").split("\n").some((line) => {
         if (baseLines.has(line)) {

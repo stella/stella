@@ -1,3 +1,4 @@
+import { describe, expect, test } from "bun:test";
 /**
  * The detector over the whole class: text in each language, written in each
  * charset that can hold it and read as each one that cannot be right.
@@ -17,10 +18,9 @@
  * foreign names look like, and is below what the detector claims to find
  * from letters alone; garbled words need fewer (`detect.test.ts`).
  */
-
-import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import {
   propertyConfig,
   propertySeed,
@@ -242,8 +242,7 @@ describe("every pair of a language's own letters", () => {
     );
     // In texts short enough to be weighed whole: a longer one would stop at
     // the detector's bounds and prove nothing.
-    for (let start = 0; start < pairs.length; start += PAIRS_PER_TEXT) {
-      const chunk = pairs.slice(start, start + PAIRS_PER_TEXT);
+    for (const chunk of chunkItems(pairs, PAIRS_PER_TEXT)) {
       const text = [UDHR_ARTICLE_1[language], ...chunk, ...chunk].join(" ");
       expect(checkTextEncoding(text, language)).toEqual({ status: "clean" });
     }

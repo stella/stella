@@ -6,7 +6,7 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { broadcastSessionEvent } from "@/api/lib/sse";
 
-export const DESKTOP_EDIT_SESSION_CLOSE_SIGNAL =
+const DESKTOP_EDIT_SESSION_CLOSE_SIGNAL =
   REALTIME_EVENT_TYPE.DESKTOP_EDIT_SESSION_CLOSED;
 
 export const desktopEditSessionClosedEvent = (

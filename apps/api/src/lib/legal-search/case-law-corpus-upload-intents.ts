@@ -1,6 +1,7 @@
 import { Result, panic } from "better-result";
 import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 
+import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { Temporal, DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
@@ -668,10 +669,10 @@ export const completeCaseLawCorpusUploadIntentCleanups = async ({
 };
 
 export const corpusUploadCleanupDelayMs = (attemptCount: number): number =>
-  Math.min(
-    CLEANUP_RETRY_UNIT_MS * 2 ** Math.min(attemptCount, 11),
-    CLEANUP_RETRY_MAX_DELAY_MS,
-  );
+  backoffDelay(Math.min(attemptCount, 11), {
+    baseMs: CLEANUP_RETRY_UNIT_MS,
+    maxMs: CLEANUP_RETRY_MAX_DELAY_MS,
+  });
 
 type ReconcileCaseLawCorpusUploadIntentsOptions = {
   /** Test seam; production reclaims through the corpus bucket client. */

@@ -40,7 +40,7 @@ type WorkspacePrimaryNavItem = {
     }
 );
 
-export const WORKSPACE_PRIMARY_NAV_ITEMS = [
+const WORKSPACE_PRIMARY_NAV_ITEMS = [
   {
     icon: SearchIcon,
     id: "search",

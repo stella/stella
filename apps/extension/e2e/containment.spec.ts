@@ -1,6 +1,7 @@
 import { expect, type Page, test } from "@playwright/test";
 
 import { BROWSER_CONTROL_ERROR_CODE } from "@stll/api-contract/browser-control";
+import { sleep } from "@stll/concurrency/sleep";
 
 import {
   createCommandSender,
@@ -35,9 +36,7 @@ const routeFixtures = async ({ context }: Harness) => {
   ) => {
     const { pathname } = new URL(route.request().url());
     if (pathname === "/slow.html") {
-      await new Promise((resolve) => {
-        setTimeout(resolve, SLOW_RESPONSE_MS);
-      });
+      await sleep(SLOW_RESPONSE_MS);
       await route
         .fulfill({ body: "<p>Slow page</p>", contentType: "text/html" })
         // swallow-ok: delayed response races deliberate navigation cancellation in the containment stop test

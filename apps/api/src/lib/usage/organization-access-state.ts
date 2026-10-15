@@ -13,6 +13,7 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
@@ -21,41 +22,35 @@ import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import {
-  CONFIGURED_ACCESS_STATE,
-  configuredAccessDeadline,
-} from "@/api/lib/usage/configured-access";
+  MANAGED_MODEL_TIER,
+  MANAGED_MODEL_TIER_BY_ACCESS,
+  type ManagedModelTier,
+} from "@/api/lib/usage/managed-model-tier";
 import {
-  readOrganizationAccessSnapshot,
-  type OrganizationAccessSnapshot,
-} from "@/api/lib/usage/organization-access-snapshot";
+  readFreeTier,
+  resolveOrganizationAccess,
+  type OrganizationAccess,
+} from "@/api/lib/usage/organization-access";
+import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 
 /**
  * Whether an organization without its own AI config may run on the instance
- * provider. A missing row fails closed: every organization gets its row at
- * creation or from the migration snapshot, so absence is a fault, not a
- * default.
+ * provider. An unresolvable standing (a missing state row or free policy)
+ * fails closed: absence is a fault, not a default.
  */
-export const allowsInstanceModels = (
-  row: OrganizationAccessSnapshot | undefined,
-  now: Date,
-): boolean => {
-  if (!row) {
-    return false;
-  }
-  switch (row.state) {
-    case ORGANIZATION_ACCESS_STATE.selfManagedKeys:
-    case ORGANIZATION_ACCESS_STATE.evaluationEnded:
+export const allowsInstanceModels = (access: OrganizationAccess): boolean => {
+  switch (access.type) {
+    case "paid":
+    case "evaluation":
+    case "free":
+      return true;
+    case "self_managed_keys":
+    case "ended":
+    case "unavailable":
       return false;
-    case CONFIGURED_ACCESS_STATE: {
-      const deadline = configuredAccessDeadline(row.configuredAccess);
-      return deadline !== null && deadline > now;
-    }
-    case ORGANIZATION_ACCESS_STATE.evaluationPeriod:
-      return row.evaluationEndsAt !== null && row.evaluationEndsAt > now;
-    default: {
-      row satisfies never;
-      return panic("Unhandled organization access state");
-    }
+    default:
+      access satisfies never;
+      return panic("Unhandled organization access");
   }
 };
 
@@ -70,9 +65,43 @@ export const mayUseInstanceModels = async (
   if (!isDeploymentFeatureEnabled("FEATURE_ORG_ACCESS_STATE")) {
     return true;
   }
-  const row = await readOrganizationAccessSnapshot(db, organizationId);
-  return allowsInstanceModels(row, new Date());
+  const snapshot = await readOrganizationAccessSnapshot(db, organizationId);
+  const freeTier = await readFreeTier(db);
+  return allowsInstanceModels(
+    resolveOrganizationAccess({ snapshot, now: new Date(), freeTier }),
+  );
 };
+
+/**
+ * The organization's managed model tier now, inside a transaction the caller
+ * holds. Standard without a query while `FEATURE_FREE_TIER` is off: no
+ * organization can stand on the free floor then.
+ */
+export const readManagedModelTierOnTx = async (
+  tx: Pick<Transaction, "select">,
+  organizationId: SafeId<"organization">,
+): Promise<ManagedModelTier> => {
+  if (!isDeploymentFeatureEnabled("FEATURE_FREE_TIER")) {
+    return MANAGED_MODEL_TIER.standard;
+  }
+  const access = resolveOrganizationAccess({
+    snapshot: await readOrganizationAccessSnapshot(tx, organizationId),
+    now: new Date(),
+    freeTier: await readFreeTier(tx),
+  });
+  return MANAGED_MODEL_TIER_BY_ACCESS[access.type];
+};
+
+/** {@link readManagedModelTierOnTx}, opening no transaction while the flag is off. */
+export const readManagedModelTier = async (
+  scopedDb: ScopedDb,
+  organizationId: SafeId<"organization">,
+): Promise<ManagedModelTier> =>
+  isDeploymentFeatureEnabled("FEATURE_FREE_TIER")
+    ? await scopedDb(
+        async (tx) => await readManagedModelTierOnTx(tx, organizationId),
+      )
+    : MANAGED_MODEL_TIER.standard;
 
 type OrganizationAccessStateChange = {
   organizationId: SafeId<"organization">;

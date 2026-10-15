@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   EDGE_HEADERS,
   STAGING_API_URL,
@@ -23,11 +25,6 @@ const READINESS_LOG_INTERVAL_MS = 30_000;
 // single new-commit hit does not mean later browser traffic avoids the
 // draining task. Consecutive matches signal the old task has drained.
 const READINESS_STABLE_SAMPLES = 3;
-
-const sleep = async (ms: number) =>
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, ms);
-  });
 
 type Origin = {
   label: string;

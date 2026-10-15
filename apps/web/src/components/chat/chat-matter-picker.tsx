@@ -21,6 +21,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { COMPOSER_LIST_VIEWPORT_CLASS_NAME } from "@/components/chat/composer-submenu-search";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { useFormatter, useLocale } from "@/i18n/formatting-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -411,12 +412,19 @@ export const ChatMatterPicker = ({
           />
         )}
       </MenuTrigger>
-      <MenuPopup align="start" className="w-72" sideOffset={6}>
-        <MatterPickerSearch
-          search={search}
-          onChange={setSearch}
-          searchRef={searchRef}
-        />
+      <MenuPopup
+        align="start"
+        className="w-72"
+        header={
+          <MatterPickerSearch
+            search={search}
+            onChange={setSearch}
+            searchRef={searchRef}
+          />
+        }
+        sideOffset={6}
+        viewportClassName={COMPOSER_LIST_VIEWPORT_CLASS_NAME}
+      >
         <div className="flex flex-col py-1">
           <QueryViewFeedback view={workspacesView} />
           {/* "All matters" sits above the per-matter rows so users

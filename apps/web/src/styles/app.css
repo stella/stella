@@ -25,3 +25,5 @@
   --untinted-background: var(--background);
   --untinted-sidebar: var(--sidebar);
 }
+
+@source "../../../../packages/decision-reader/src/**/*.{ts,tsx}";

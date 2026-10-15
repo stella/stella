@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { ScrollArea } from "@stll/ui/scroll-area";
 
@@ -13,7 +14,6 @@ import type {
   StructureError,
 } from "@/features/knowledge/views/templates/template-preview-view";
 import type { KnowledgeCatalogueTemplate } from "@/features/knowledge/views/templates/templates-seam";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 /** The rendered preview, or where it stands. */
 export type CatalogueTemplatePreview =

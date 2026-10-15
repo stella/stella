@@ -19,7 +19,11 @@ import * as v from "valibot";
 
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
-import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  ACCOUNT_ACCESS,
+  configuredModelAdmission,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -85,6 +89,8 @@ ${numbered}`;
 };
 
 const config = {
+  contract: "patch",
+  actionAdmission: { type: "handler", actionKind: "clauses.rewrite" },
   description:
     "Rewrite the prose of a clause body with the model, following a " +
     "free-text instruction plus the clause title and usage notes when " +
@@ -109,6 +115,7 @@ const config = {
 const rewriteClause = createSafeRootHandler(
   config,
   async function* ({
+    modelAdmission,
     session,
     body,
     safeDb,
@@ -145,6 +152,7 @@ const rewriteClause = createSafeRootHandler(
       feature: "clauses.rewrite",
       modelRole: "fast",
       orgAIConfig,
+      modelTier: configuredModelAdmission({ modelAdmission }).modelTier,
       properties: { organization_id: organizationId },
       traceId: Bun.randomUUIDv7(),
     });
@@ -154,6 +162,7 @@ const rewriteClause = createSafeRootHandler(
         try: async () =>
           await generateTanStackObjectForRole({
             dataClass: "customer",
+            admission: configuredModelAdmission({ modelAdmission }),
             role: "fast",
             orgAIConfig,
             managedAIResidency,

@@ -1,21 +1,29 @@
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
-import type { DesktopMatter } from "@stll/api-contract/desktop-time-entries";
+import type {
+  DesktopMatter,
+  DesktopTimeEntryMatterCandidate,
+} from "@stll/api-contract/desktop-time-entries";
 
 import {
   ACTIVITY_CHANGED_EVENT,
   isActivityDaySnapshot,
 } from "../../src/activity/activity-types";
 import type { ActivityDaySnapshot } from "../../src/activity/activity-types";
+import previewApps from "../../src/activity/preview-apps.json" with { type: "json" };
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
 
 const SNAPSHOT = {
   date: "2026-10-07",
   draftedEntries: [],
+  manualAssignments: [],
+  pendingBatch: null,
+  deletionStatus: "available",
   timeBillingEnabled: true,
   earliestDate: "2026-10-01",
+  latestDate: "2026-10-07",
   excludedApps: [],
   otherAccountHistoryDays: 0,
   captureDetails: false,
@@ -31,6 +39,7 @@ const SNAPSHOT = {
     {
       appIdentifier: "com.example.editor",
       appName: "Example Editor",
+      matterId: "matter-1",
       start: "2026-10-07T09:00:00Z",
       end: "2026-10-07T09:30:00Z",
     },
@@ -39,28 +48,71 @@ const SNAPSHOT = {
   unreadable: false,
 } satisfies ActivityDaySnapshot;
 
+const PENDING_BATCH = {
+  idempotencyKey: "stored-recovery-key",
+  entries: [
+    {
+      matterId: "matter-1",
+      dateWorked: SNAPSHOT.date,
+      timezoneId: "Europe/Prague",
+      durationMinutes: 30,
+      narrative: "Stored confirmed narrative",
+      billable: false,
+    },
+  ],
+  ranges: [[{ start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" }]],
+} satisfies NonNullable<ActivityDaySnapshot["pendingBatch"]>;
+
 type InstallNativeBoundaryOptions = {
   page: Page;
   snapshot?: ActivityDaySnapshot;
+  additionalSnapshots?: ActivityDaySnapshot[];
   language?: "en" | "ar";
+  batchValidation?: "accept" | "reject-first" | "hold-first";
+  batchReceipt?: "save" | "fail-first" | "keep-pending";
+  historyDeletion?:
+    | "available"
+    | "keyMissing"
+    | "unreadable"
+    | "mixed"
+    | "incompatible";
 };
 
 const installNativeBoundary = async ({
   page,
   snapshot = SNAPSHOT,
+  additionalSnapshots = [],
   language = "en",
+  batchValidation = "accept",
+  batchReceipt = "save",
+  historyDeletion = "available",
 }: InstallNativeBoundaryOptions) => {
   expect(isActivityDaySnapshot(snapshot)).toBe(true);
+  await page.clock.setFixedTime(new Date(`${snapshot.today}T10:00:00Z`));
   await page.addInitScript(
     ({
       snapshot: initialSnapshot,
+      additionalSnapshots: otherDays,
       changedEvent,
       language: desktopLanguage,
+      batchValidation: validation,
+      batchReceipt: receipt,
+      historyDeletion: historyState,
     }) => {
+      // Playwright's Date clock does not change native Temporal's clock.
+      const nativeTemporal: unknown = Reflect.get(window, "Temporal");
+      if (typeof nativeTemporal === "object" && nativeTemporal !== null) {
+        const now = Reflect.get(nativeTemporal, "Now");
+        const instant = Reflect.get(nativeTemporal, "Instant");
+        Reflect.set(now, "instant", () =>
+          Reflect.get(instant, "fromEpochMilliseconds")(Date.now()),
+        );
+      }
       const callbacks = new Map<number, (data: unknown) => unknown>();
       const invocations: { args: Record<string, unknown>; command: string }[] =
         [];
       let nextCallbackId = 1;
+      let batchAttempts = 0;
       let activitySnapshot = initialSnapshot;
       Reflect.set(window, "__STELLA_TEST_INVOCATIONS__", invocations);
       const emitActivityChanged = () => {
@@ -79,6 +131,14 @@ const installNativeBoundary = async ({
         "__STELLA_TEST_ACTIVITY_CHANGED__",
         emitActivityChanged,
       );
+      Reflect.set(
+        window,
+        "__STELLA_TEST_SET_SNAPSHOT__",
+        (next: typeof initialSnapshot) => {
+          activitySnapshot = next;
+          emitActivityChanged();
+        },
+      );
       Reflect.set(window, "__TAURI_EVENT_PLUGIN_INTERNALS__", {
         unregisterListener: () => undefined,
       });
@@ -88,12 +148,47 @@ const installNativeBoundary = async ({
         invoke: async (command: string, args: Record<string, unknown> = {}) => {
           invocations.push({ args, command });
           if (command === "activity_get_day") {
+            const daySnapshot =
+              otherDays.find((day) => day.date === args["date"]) ??
+              activitySnapshot;
             return {
-              ...activitySnapshot,
+              ...daySnapshot,
               date: args["date"] ?? activitySnapshot.date,
             };
           }
+          if (
+            command === "activity_delete_all" &&
+            args["recovery"] === "discardUnreadable" &&
+            activitySnapshot.unreadable
+          ) {
+            activitySnapshot = {
+              ...activitySnapshot,
+              segments: [],
+              pendingBatch: null,
+              unreadable: false,
+              deletionStatus: "available",
+            };
+            emitActivityChanged();
+            return undefined;
+          }
           if (command === "activity_delete_other_account_history") {
+            if (
+              args["recovery"] !== "preserve" &&
+              args["recovery"] !== "discardUnrecoverable"
+            ) {
+              throw new TypeError("Unsupported history recovery mode");
+            }
+            if (
+              historyState !== "available" &&
+              args["recovery"] === "preserve"
+            ) {
+              throw Object.assign(
+                new Error("Activity history key is missing"),
+                {
+                  type: historyState === "mixed" ? "keyMissing" : historyState,
+                },
+              );
+            }
             activitySnapshot = {
               ...activitySnapshot,
               otherAccountHistoryDays: 0,
@@ -173,8 +268,76 @@ const installNativeBoundary = async ({
               },
             ] satisfies DesktopMatter[];
           }
-          if (command === "time_entry_submit_confirmed") {
-            return { id: "draft-1", markerSaved: true };
+          if (command === "time_entry_candidates") {
+            return [
+              {
+                id: "matter-1",
+                name: "Example matter",
+                reference: "M-001",
+                color: "--option-emerald",
+                clientName: "Example client",
+                signals: {
+                  lastWorkedAt: "2026-10-06",
+                  newlyAssignedAt: null,
+                  upcomingDeadline: null,
+                },
+              },
+            ] satisfies DesktopTimeEntryMatterCandidate[];
+          }
+          if (command === "time_entry_discard_pending_batch_confirmed") {
+            if (
+              activitySnapshot.timeBillingEnabled ||
+              activitySnapshot.pendingBatch?.idempotencyKey !==
+                args["idempotencyKey"]
+            ) {
+              throw new TypeError("Pending discard is unavailable");
+            }
+            activitySnapshot = {
+              ...activitySnapshot,
+              pendingBatch: null,
+              deletionStatus: "available",
+            };
+            emitActivityChanged();
+            return undefined;
+          }
+          if (command === "time_entry_submit_batch_confirmed") {
+            batchAttempts += 1;
+            if (validation === "hold-first" && batchAttempts === 1) {
+              return new Promise((_resolve, reject) => {
+                Reflect.set(window, "__STELLA_TEST_REJECT_BATCH__", () =>
+                  reject(
+                    Object.assign(new Error("Response unavailable"), {
+                      type: "uncertain",
+                    }),
+                  ),
+                );
+              });
+            }
+            if (validation === "reject-first" && batchAttempts === 1) {
+              throw Object.assign(
+                new Error("Activity range validation failed"),
+                {
+                  type: "rejected",
+                },
+              );
+            }
+            const markerSaved = receipt !== "fail-first" || batchAttempts !== 1;
+            if (
+              markerSaved &&
+              receipt !== "keep-pending" &&
+              activitySnapshot.pendingBatch !== null
+            ) {
+              activitySnapshot = {
+                ...activitySnapshot,
+                pendingBatch: null,
+                deletionStatus: "available",
+              };
+              emitActivityChanged();
+            }
+            return {
+              entries: [{ id: "draft-1", matterId: "matter-1" }],
+              markerSaved,
+            };
           }
           if (command === "get_desktop_language") {
             return desktopLanguage;
@@ -206,18 +369,59 @@ const installNativeBoundary = async ({
         unregisterCallback: (id: number) => callbacks.delete(id),
       });
     },
-    { snapshot, changedEvent: ACTIVITY_CHANGED_EVENT, language },
+    {
+      snapshot,
+      additionalSnapshots,
+      changedEvent: ACTIVITY_CHANGED_EVENT,
+      language,
+      batchValidation,
+      batchReceipt,
+      historyDeletion,
+    },
   );
   await page.goto("/");
-  await expect(
-    page.getByRole("heading", {
-      name: (language === "ar" ? arMessages : enMessages).activity.title,
-      exact: true,
-    }),
-  ).toBeVisible();
+  const messages = language === "ar" ? arMessages : enMessages;
+  if (snapshot.persistence === "deletionOnly") {
+    await expect(
+      page.getByText(
+        {
+          keyMissing: messages.activity.deletionOnly,
+          unreadable: messages.activity.unreadableEraseNotice,
+          available: messages.activity.errorRead,
+          pending: messages.activity.errorRead,
+          unavailable: messages.activity.errorRead,
+          incompatible: messages.activity.incompatibleActivity,
+        }[snapshot.deletionStatus],
+      ),
+    ).toBeVisible();
+  } else if (
+    snapshot.recordingStatus === "off" &&
+    snapshot.pendingBatch === null &&
+    snapshot.deletionStatus !== "pending"
+  ) {
+    await expect(
+      page.getByRole("heading", {
+        name: messages.activity.welcomeTitle,
+        exact: true,
+      }),
+    ).toBeVisible();
+  } else {
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+  }
+  if (
+    (snapshot.recordingStatus !== "off" ||
+      snapshot.pendingBatch !== null ||
+      snapshot.deletionStatus === "pending") &&
+    snapshot.persistence !== "deletionOnly"
+  ) {
+    await page
+      .locator("summary")
+      .filter({ hasText: messages.activity.settings })
+      .click();
+  }
 };
 
-const invocations = (page: Page) =>
+const invocations = async (page: Page) =>
   page.evaluate(() => {
     const calls: unknown = Reflect.get(window, "__STELLA_TEST_INVOCATIONS__");
     return calls;
@@ -269,101 +473,747 @@ test("canceling exclusion leaves recording and history unchanged", async ({
   );
 });
 
-test("only explicit confirmation creates a draft with the editable billing fields", async ({
+for (const language of ["en", "ar"] as const) {
+  test(`${language}: timeline segment click selects its range without treating jitter as a drag`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({ page, language });
+    const messages = language === "ar" ? arMessages : enMessages;
+    const start = page.getByRole("group", {
+      name: messages.activity.rangeStart,
+      exact: true,
+    });
+    const end = page.getByRole("group", {
+      name: messages.activity.rangeEnd,
+      exact: true,
+    });
+    const segment = page.locator("button[data-activity-segment]").first();
+    const sample = SNAPSHOT.segments.at(0);
+    if (!sample) {
+      throw new TypeError("Timeline fixture must contain a segment");
+    }
+    const expected = await page.evaluate(
+      ({ start: segmentStart, end: segmentEnd }) =>
+        [segmentStart, segmentEnd].map((instant) => {
+          const value = new Date(instant);
+          return [value.getHours(), value.getMinutes()];
+        }),
+      sample,
+    );
+    await expect(start).toHaveCount(0);
+    await segment.click();
+    await expect(start).toBeVisible();
+    await expect(end).toBeVisible();
+    await expect(start.getByRole("spinbutton").nth(0)).toHaveValue(
+      String(expected.at(0)?.at(0)),
+    );
+    await expect(start.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(0)?.at(1)),
+    );
+    await expect(end.getByRole("spinbutton").nth(0)).toHaveValue(
+      String(expected.at(1)?.at(0)),
+    );
+    await expect(end.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(1)?.at(1)),
+    );
+    await page
+      .getByRole("button", { name: messages.activity.cancel, exact: true })
+      .click();
+    await segment.scrollIntoViewIfNeeded();
+    const box = await segment.boundingBox();
+    if (!box) {
+      throw new TypeError("Timeline segment must have bounds");
+    }
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 1, box.y + box.height / 2);
+    await page.mouse.up();
+    await expect(start).toBeVisible();
+    await expect(start.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(0)?.at(1)),
+    );
+    await expect(end.getByRole("spinbutton").nth(1)).toHaveValue(
+      String(expected.at(1)?.at(1)),
+    );
+  });
+
+  test(`${language}: timeline segment drag selects a subrange and keeps keyboard selection available`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({ page, language });
+    const messages = language === "ar" ? arMessages : enMessages;
+    const segment = page.locator("button[data-activity-segment]").first();
+    await segment.scrollIntoViewIfNeeded();
+    const box = await segment.boundingBox();
+    if (!box) {
+      throw new TypeError("Timeline segment must have bounds");
+    }
+    await page.mouse.move(box.x + box.width * 0.2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.8, box.y + box.height / 2, {
+      steps: 6,
+    });
+    await page.mouse.up();
+    const start = page.getByRole("group", {
+      name: messages.activity.rangeStart,
+      exact: true,
+    });
+    const end = page.getByRole("group", {
+      name: messages.activity.rangeEnd,
+      exact: true,
+    });
+    await expect(start).toBeVisible();
+    await expect(end).toBeVisible();
+    const selectedStart =
+      Number(await start.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await start.getByRole("spinbutton").nth(1).inputValue());
+    const selectedEnd =
+      Number(await end.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await end.getByRole("spinbutton").nth(1).inputValue());
+    expect(selectedEnd - selectedStart).toBeGreaterThan(0);
+    expect(selectedEnd - selectedStart).toBeLessThan(30);
+    await segment.focus();
+    await segment.press("Enter");
+    const keyboardStart =
+      Number(await start.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await start.getByRole("spinbutton").nth(1).inputValue());
+    const keyboardEnd =
+      Number(await end.getByRole("spinbutton").nth(0).inputValue()) * 60 +
+      Number(await end.getByRole("spinbutton").nth(1).inputValue());
+    expect(keyboardEnd - keyboardStart).toBe(30);
+  });
+}
+
+test("only explicit batch creation sends the edited billing fields and prevents recreation", async ({
   page,
 }) => {
   await installNativeBoundary({ page });
-  const createDraft = page.getByRole("button", {
-    name: enMessages.activity.createDraftEntry,
-  });
-  await createDraft.click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog).toBeVisible();
   await expect(
-    dialog.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
-  ).toHaveValue("");
-  await expect(
-    dialog.getByRole("spinbutton", { name: enMessages.activity.entryDuration }),
-  ).toHaveValue("30");
-  await expect(
-    dialog.getByRole("checkbox", { name: enMessages.activity.entryBillable }),
-  ).toBeChecked();
-  const matterButton = dialog.getByRole("button", {
-    name: "Example matter (M-001)",
-  });
-  await expect(matterButton.locator("svg")).toHaveAttribute(
-    "style",
-    "color: var(--option-emerald);",
-  );
-  await matterButton.click();
-  await expect(
-    dialog
-      .locator("p")
-      .filter({ hasText: "Example matter (M-001)" })
-      .locator("svg"),
-  ).toHaveAttribute("style", "color: var(--option-emerald);");
-  const matterSearch = dialog.getByRole("searchbox", {
-    name: enMessages.activity.entryMatter,
-  });
-  await matterSearch.fill("Example");
-  await matterSearch.press("Enter");
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_confirmed" }),
-  );
-  await dialog
-    .getByRole("button", { name: enMessages.activity.cancel })
-    .click();
-  await expect(dialog).toBeHidden();
-  expect(await invocations(page)).not.toContainEqual(
-    expect.objectContaining({ command: "time_entry_submit_confirmed" }),
-  );
-
-  await createDraft.click();
-  await expect(
-    dialog.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
-  ).toHaveValue("");
-  await dialog
-    .getByRole("textbox", { name: enMessages.activity.entryNarrative })
-    .fill("Draft-only confidential narrative 71f3");
-  await dialog.getByRole("button", { name: "Example matter (M-001)" }).click();
-  await dialog
-    .getByRole("button", { name: enMessages.activity.confirmDraftEntry })
-    .click();
-  await expect(
-    dialog.getByText(enMessages.activity.entryCreated, { exact: true }),
+    page.getByText(enMessages.activity.strongMatch, { exact: true }),
   ).toBeVisible();
+  const narrative = page.getByRole("textbox", {
+    name: enMessages.activity.entryNarrative,
+  });
+  await expect(narrative).toHaveValue("Work in Example Editor");
+  await expect(
+    page.getByRole("switch", { name: enMessages.activity.entryBillable }),
+  ).toBeChecked();
+  const include = page.getByRole("checkbox", {
+    name: "Include Example matter",
+  });
+  await include.uncheck();
+  await expect(
+    page.getByRole("button", { name: "Create 0 drafts", exact: true }),
+  ).toBeDisabled();
+  await include.check();
+  await narrative.fill("Draft-only confidential narrative 71f3");
+  const callsBefore = await invocations(page);
+  expect(callsBefore).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
+  );
+  expect(callsBefore).not.toContainEqual(
+    expect.objectContaining({ command: "activity_copy_text" }),
+  );
+  await page
+    .getByRole("button", { name: "Create 1 draft", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
   const timezoneId = await page.evaluate(
     () => Intl.DateTimeFormat().resolvedOptions().timeZone,
   );
   const calls = await invocations(page);
   expect(calls).toContainEqual({
-    command: "time_entry_search_matters",
-    args: { query: "" },
-  });
-  expect(calls).toContainEqual({
-    command: "time_entry_submit_confirmed",
+    command: "time_entry_submit_batch_confirmed",
     args: {
-      block: {
+      request: {
         date: "2026-10-07",
-        start: "2026-10-07T09:00:00Z",
-        end: "2026-10-07T09:30:00Z",
-      },
-      entry: {
-        workspaceId: "matter-1",
-        dateWorked: "2026-10-07",
-        timezoneId,
-        durationMinutes: 30,
-        narrative: "Draft-only confidential narrative 71f3",
-        billable: true,
+        idempotencyKey: expect.any(String),
+        items: [
+          {
+            entry: {
+              matterId: "matter-1",
+              dateWorked: "2026-10-07",
+              timezoneId,
+              durationMinutes: 30,
+              narrative: "Draft-only confidential narrative 71f3",
+              billable: true,
+            },
+            ranges: [
+              { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
+            ],
+          },
+        ],
       },
     },
   });
-  expect(calls).not.toContainEqual(
-    expect.objectContaining({ command: "activity_copy_text" }),
+  // The local native boundary receives receipts, without app identities or raw segments.
+  const submissions = Array.isArray(calls)
+    ? calls.filter(
+        (call: unknown) =>
+          typeof call === "object" &&
+          call !== null &&
+          "command" in call &&
+          call.command === "time_entry_submit_batch_confirmed",
+      )
+    : [];
+  expect(submissions).toHaveLength(1);
+  expect(JSON.stringify(submissions)).not.toContain("Example Editor");
+  expect(JSON.stringify(submissions)).not.toContain("appIdentifier");
+  expect(JSON.stringify(submissions)).not.toContain("windowTitle");
+  expect(JSON.stringify(submissions)).not.toContain('"segments"');
+  await expect(
+    page.getByRole("button", { name: "Create 0 drafts", exact: true }),
+  ).toBeDisabled();
+});
+
+test("more than 100 selected matters keep the review editable until the selection is reduced", async ({
+  page,
+}) => {
+  const startMs = Date.parse("2026-10-07T09:00:00Z");
+  const manualAssignments = Array.from({ length: 101 }, (_, index) => ({
+    start: new Date(startMs + index * 60_000).toISOString(),
+    end: new Date(startMs + (index + 1) * 60_000).toISOString(),
+    matterId: `manual-matter-${index}`,
+    matter: {
+      id: `manual-matter-${index}`,
+      name: `Manual matter ${index}`,
+      reference: null,
+      color: null,
+      clientName: null,
+    },
+  }));
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      manualAssignments,
+      segments: [
+        {
+          appIdentifier: "com.example.editor",
+          appName: "Example Editor",
+          start: "2026-10-07T09:00:00Z",
+          end: "2026-10-07T10:41:00Z",
+        },
+      ],
+    },
+  });
+  const includes = page.getByRole("checkbox", {
+    name: /^Include Manual matter /u,
+  });
+  await expect(includes).toHaveCount(101);
+  await expect(
+    page.getByRole("button", { name: "Create 101 drafts", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.batchLimitExceeded.replace("{limit}", "100"),
   );
-  expect(calls).not.toContainEqual(
-    expect.objectContaining({ command: expect.stringContaining("clipboard_") }),
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
   );
+  const include = page.getByRole("checkbox", {
+    name: "Include Manual matter 0",
+    exact: true,
+  });
+  await expect(include).toBeEnabled();
+  await expect(
+    page
+      .getByRole("textbox", { name: enMessages.activity.entryNarrative })
+      .first(),
+  ).toBeEnabled();
+  await include.uncheck();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Create 100 drafts", exact: true }),
+  ).toBeEnabled();
+  await include.check();
+  await expect(
+    page.getByRole("button", { name: "Create 101 drafts", exact: true }),
+  ).toBeDisabled();
+});
+
+test("native validation rejection leaves the review editable and a corrected selection uses a new batch key", async ({
+  page,
+}) => {
+  const finalStart = "2026-10-07T09:30:00Z";
+  const finalEnd = "2026-10-07T09:36:00Z";
+  await installNativeBoundary({
+    page,
+    batchValidation: "reject-first",
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [
+        ...SNAPSHOT.segments,
+        {
+          appIdentifier: "com.example.editor",
+          appName: "Example Editor",
+          matterId: "corrected-matter",
+          start: finalStart,
+          end: finalEnd,
+        },
+      ],
+      manualAssignments: [
+        {
+          start: finalStart,
+          end: finalEnd,
+          matterId: "corrected-matter",
+          matter: {
+            id: "corrected-matter",
+            name: "Corrected matter",
+            reference: null,
+            color: null,
+            clientName: null,
+          },
+        },
+      ],
+    },
+  });
+  await page
+    .getByRole("button", { name: "Create 2 drafts", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.batchFailed,
+  );
+  const include = page.getByRole("checkbox", {
+    name: "Include Example matter",
+    exact: true,
+  });
+  await expect(include).toBeEnabled();
+  await expect(
+    page
+      .getByRole("textbox", { name: enMessages.activity.entryNarrative })
+      .first(),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await include.uncheck();
+  await page
+    .getByRole("button", { name: "Create 1 draft", exact: true })
+    .click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  const submitted = await page.evaluate(() => {
+    const calls: unknown = Reflect.get(window, "__STELLA_TEST_INVOCATIONS__");
+    if (!Array.isArray(calls)) {
+      throw new TypeError("Native invocations are missing");
+    }
+    return calls.flatMap((call: unknown) => {
+      if (
+        typeof call !== "object" ||
+        call === null ||
+        !("command" in call) ||
+        call.command !== "time_entry_submit_batch_confirmed"
+      ) {
+        return [];
+      }
+      if (
+        !("args" in call) ||
+        typeof call.args !== "object" ||
+        call.args === null ||
+        !("request" in call.args) ||
+        typeof call.args.request !== "object" ||
+        call.args.request === null ||
+        !("idempotencyKey" in call.args.request) ||
+        typeof call.args.request.idempotencyKey !== "string" ||
+        !("items" in call.args.request) ||
+        !Array.isArray(call.args.request.items)
+      ) {
+        throw new TypeError("Batch request is missing");
+      }
+      return [
+        {
+          key: call.args.request.idempotencyKey,
+          matterIds: call.args.request.items.map((item: unknown) => {
+            if (
+              typeof item !== "object" ||
+              item === null ||
+              !("entry" in item) ||
+              typeof item.entry !== "object" ||
+              item.entry === null ||
+              !("matterId" in item.entry) ||
+              typeof item.entry.matterId !== "string"
+            ) {
+              throw new TypeError("Batch entry is missing");
+            }
+            return item.entry.matterId;
+          }),
+        },
+      ];
+    });
+  });
+  expect(submitted).toHaveLength(2);
+  expect(submitted.at(0)?.matterIds).toEqual(["matter-1", "corrected-matter"]);
+  expect(submitted.at(1)?.matterIds).toEqual(["corrected-matter"]);
+  expect(submitted.at(1)?.key).not.toBe(submitted.at(0)?.key);
+});
+
+test("unresolved draft creation protects activity deletion and retains its batch key", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchValidation: "hold-first",
+    snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 1 },
+  });
+  await page
+    .getByRole("button", { name: "Create 1 draft", exact: true })
+    .click();
+  for (const name of [
+    enMessages.activity.deleteDay,
+    enMessages.activity.deleteAll,
+    enMessages.activity.deleteOtherAccountHistory,
+  ]) {
+    await expect(
+      page.getByRole("button", { name, exact: true }),
+    ).toBeDisabled();
+  }
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.previousDay }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.excludeApp.replace("{name}", "Example Editor"),
+    }),
+  ).toBeDisabled();
+  await page.evaluate(() => {
+    const changed = Reflect.get(window, "__STELLA_TEST_ACTIVITY_CHANGED__");
+    const reject = Reflect.get(window, "__STELLA_TEST_REJECT_BATCH__");
+    if (typeof changed !== "function" || typeof reject !== "function") {
+      throw new TypeError("Native recovery controls are missing");
+    }
+    changed();
+    reject();
+  });
+  const retry = page.getByRole("button", {
+    name: enMessages.activity.pendingRetry,
+    exact: true,
+  });
+  await expect(retry).toBeEnabled();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteDay,
+      exact: true,
+    }),
+  ).toBeDisabled();
+  const before = await invocations(page);
+  await retry.click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  const after = await invocations(page);
+  const submissions = (calls: unknown) => {
+    if (!Array.isArray(calls)) {
+      throw new TypeError("Native invocations are missing");
+    }
+    return calls.filter(
+      (call: unknown) =>
+        typeof call === "object" &&
+        call !== null &&
+        "command" in call &&
+        call.command === "time_entry_submit_batch_confirmed",
+    );
+  };
+  expect(submissions(before)).toHaveLength(1);
+  expect(submissions(after)).toHaveLength(2);
+  expect(submissions(after).at(0)).toEqual(submissions(after).at(1));
+  for (const command of [
+    "activity_delete_day",
+    "activity_delete_all",
+    "activity_delete_other_account_history",
+    "activity_exclude_app",
+  ]) {
+    expect(after).not.toContainEqual(expect.objectContaining({ command }));
+  }
+});
+
+for (const recoveryState of ["empty", "unreadable", "off"] as const) {
+  test(`stored pending drafts can be retried from ${recoveryState} activity`, async ({
+    page,
+  }) => {
+    const entry = {
+      matterId: "matter-1",
+      dateWorked: SNAPSHOT.date,
+      timezoneId: "Europe/Prague",
+      durationMinutes: 30,
+      narrative: "Stored confirmed narrative",
+      billable: false,
+    };
+    const ranges = [
+      { start: "2026-10-07T09:00:00Z", end: "2026-10-07T09:30:00Z" },
+    ];
+    await installNativeBoundary({
+      page,
+      snapshot: {
+        ...SNAPSHOT,
+        segments: [],
+        unreadable: recoveryState === "unreadable",
+        recordingStatus: recoveryState === "off" ? "off" : "recording",
+        pendingBatch: {
+          idempotencyKey: "stored-recovery-key",
+          entries: [entry],
+          ranges: [ranges],
+        },
+      },
+    });
+    await page
+      .getByRole("button", {
+        name: enMessages.activity.pendingRetry,
+        exact: true,
+      })
+      .click();
+    await expect(page.getByRole("status")).toContainText("1 draft created");
+    expect(await invocations(page)).toContainEqual({
+      command: "time_entry_submit_batch_confirmed",
+      args: {
+        request: {
+          date: SNAPSHOT.date,
+          idempotencyKey: "stored-recovery-key",
+          items: [{ entry, ranges }],
+        },
+      },
+    });
+  });
+}
+
+for (const recordingStatus of ["recording", "off"] as const) {
+  test(`pending drafts on another day protect deletion while ${recordingStatus} and permit recovery navigation`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({
+      page,
+      snapshot: {
+        ...SNAPSHOT,
+        segments: [],
+        recordingStatus,
+        deletionStatus: "pending",
+      },
+    });
+    await expect(
+      page.getByRole("button", {
+        name: enMessages.activity.deleteAll,
+        exact: true,
+      }),
+    ).toBeDisabled();
+    await expect(
+      page.getByRole("button", { name: enMessages.activity.previousDay }),
+    ).toBeEnabled();
+    await page
+      .getByRole("button", { name: enMessages.activity.previousDay })
+      .click();
+    expect(await invocations(page)).toContainEqual({
+      command: "activity_get_day",
+      args: { date: "2026-10-06" },
+    });
+  });
+}
+
+test("stored pending drafts stay immutable after a rejected retry until cancellation is confirmed", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchValidation: "reject-first",
+    snapshot: {
+      ...SNAPSHOT,
+      pendingBatch: PENDING_BATCH,
+      deletionStatus: "pending",
+    },
+  });
+  const retry = page.getByRole("button", {
+    name: enMessages.activity.pendingRetry,
+    exact: true,
+  });
+  await retry.click();
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.batchFailed,
+  );
+  await expect(retry).toBeEnabled();
+  await expect(
+    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
+  ).toBeDisabled();
+  await page.evaluate((next) => {
+    const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+    if (typeof update !== "function") {
+      throw new TypeError("Snapshot control is missing");
+    }
+    update(next);
+  }, SNAPSHOT);
+  await expect(retry).toHaveCount(0);
+  await expect(
+    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
+  ).toBeEnabled();
+});
+
+test("unreadable saved activity explains why deletion is unavailable", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      persistence: "deletionOnly",
+      recordingStatus: "off",
+      deletionStatus: "unavailable",
+      otherAccountHistoryDays: 3,
+    },
+  });
+  await expect(
+    page.getByText(enMessages.activity.errorRead, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteAll,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    }),
+  ).toBeDisabled();
+});
+
+test("stored pending drafts remain visible without billing capability and cannot be submitted", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      pendingBatch: PENDING_BATCH,
+      timeBillingEnabled: false,
+      deletionStatus: "pending",
+    },
+  });
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toBeDisabled();
+  await expect(page.getByRole("status")).toContainText(
+    enMessages.activity.batchUnavailable,
+  );
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
+  );
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.previousDay }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: enMessages.activity.previousDay })
+    .click();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_get_day",
+    args: { date: "2026-10-06" },
+  });
+});
+
+test("empty recovery keeps its saved receipt visible until navigating to another day", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      pendingBatch: PENDING_BATCH,
+      deletionStatus: "pending",
+    },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: enMessages.activity.previousDay })
+    .click();
+  await expect(page.getByRole("status")).toHaveCount(0);
+  await expect(
+    page.getByText(enMessages.activity.empty, { exact: true }),
+  ).toBeVisible();
+});
+
+test("a saved draft receipt remains saved while its snapshot refresh is pending", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchReceipt: "keep-pending",
+    snapshot: {
+      ...SNAPSHOT,
+      pendingBatch: PENDING_BATCH,
+      deletionStatus: "pending",
+    },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.previousDay }),
+  ).toBeEnabled();
+});
+
+test("a failed draft receipt remains retryable with the same stored batch key", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchReceipt: "fail-first",
+    snapshot: {
+      ...SNAPSHOT,
+      pendingBatch: PENDING_BATCH,
+      deletionStatus: "pending",
+    },
+  });
+  const retry = page.getByRole("button", {
+    name: enMessages.activity.pendingRetry,
+    exact: true,
+  });
+  await retry.click();
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.draftMarkerFailed,
+  );
+  await expect(retry).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.previousDay }),
+  ).toBeEnabled();
+  await retry.click();
+  await expect(page.getByRole("status")).toContainText("1 draft created");
+  const calls = await invocations(page);
+  const expected = {
+    command: "time_entry_submit_batch_confirmed",
+    args: {
+      request: {
+        date: SNAPSHOT.date,
+        idempotencyKey: PENDING_BATCH.idempotencyKey,
+        items: [
+          { entry: PENDING_BATCH.entries[0], ranges: PENDING_BATCH.ranges[0] },
+        ],
+      },
+    },
+  };
   expect(
     Array.isArray(calls)
       ? calls.filter(
@@ -371,40 +1221,581 @@ test("only explicit confirmation creates a draft with the editable billing field
             typeof call === "object" &&
             call !== null &&
             "command" in call &&
-            call.command === "time_entry_submit_confirmed",
+            call.command === "time_entry_submit_batch_confirmed",
         )
       : [],
-  ).toHaveLength(1);
-  await dialog
-    .getByRole("button", { name: enMessages.activity.closeEntry })
-    .click();
-  await expect(dialog).toBeHidden();
-  await expect(
-    page.getByText(enMessages.activity.draftedEntry, { exact: true }),
-  ).toBeVisible();
-  await expect(createDraft).toHaveCount(0);
-  await page
-    .getByRole("button", { name: enMessages.activity.copySummary })
-    .click();
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.copied }),
-  ).toBeVisible();
-  const callsAfterCopy = await invocations(page);
-  expect(callsAfterCopy).toContainEqual({
-    command: "activity_copy_text",
-    args: { text: expect.stringContaining("Example Editor") },
-  });
-  for (const draftField of [
-    "Draft-only confidential narrative 71f3",
-    "Example matter",
-    "M-001",
-    "draft-1",
-  ]) {
-    expect(callsAfterCopy).not.toContainEqual({
-      command: "activity_copy_text",
-      args: { text: expect.stringContaining(draftField) },
+  ).toEqual([expected, expected]);
+});
+
+for (const currentKeyStatus of ["available", "keyMissing"] as const) {
+  test(`inactive missing-key history requires confirmation with current key ${currentKeyStatus}`, async ({
+    page,
+  }) => {
+    await installNativeBoundary({
+      page,
+      historyDeletion: "keyMissing",
+      snapshot: {
+        ...SNAPSHOT,
+        otherAccountHistoryDays: 3,
+        deletionStatus: currentKeyStatus,
+        persistence:
+          currentKeyStatus === "keyMissing" ? "deletionOnly" : "encrypted",
+      },
     });
+    await page
+      .getByRole("button", {
+        name: enMessages.activity.deleteOtherAccountHistory,
+        exact: true,
+      })
+      .click();
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: enMessages.activity.delete, exact: true })
+      .click();
+    await expect(page.getByRole("dialog")).toContainText(
+      enMessages.activity.unrecoverableOtherHistoryConfirmation,
+    );
+    expect(await invocations(page)).toContainEqual({
+      command: "activity_delete_other_account_history",
+      args: { recovery: "preserve" },
+    });
+    expect(await invocations(page)).not.toContainEqual(
+      expect.objectContaining({ command: "activity_delete_all" }),
+    );
+    expect(await invocations(page)).not.toContainEqual({
+      command: "activity_delete_other_account_history",
+      args: { recovery: "discardUnrecoverable" },
+    });
+    await page
+      .getByRole("dialog")
+      .getByRole("button", { name: enMessages.activity.delete, exact: true })
+      .click();
+    expect(await invocations(page)).toContainEqual({
+      command: "activity_delete_other_account_history",
+      args: { recovery: "discardUnrecoverable" },
+    });
+  });
+}
+
+test("billing-disabled pending recovery can be discarded locally only after confirmation", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      pendingBatch: PENDING_BATCH,
+      timeBillingEnabled: false,
+      deletionStatus: "pending",
+    },
+  });
+  const discard = page.getByRole("button", {
+    name: enMessages.activity.discardPendingRecovery,
+    exact: true,
+  });
+  await discard.click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.discardPendingConfirmation,
+  );
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({
+      command: "time_entry_discard_pending_batch_confirmed",
+    }),
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.cancel, exact: true })
+    .click();
+  await expect(discard).toBeVisible();
+  await discard.click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.empty, { exact: true }),
+  ).toBeVisible();
+  expect(await invocations(page)).toContainEqual({
+    command: "time_entry_discard_pending_batch_confirmed",
+    args: { date: SNAPSHOT.date, idempotencyKey: PENDING_BATCH.idempotencyKey },
+  });
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "time_entry_submit_batch_confirmed" }),
+  );
+});
+
+test("pending drafts dated after today remain reachable after the clock moves backward", async ({
+  page,
+}) => {
+  const futureDate = "2026-10-08";
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      latestDate: futureDate,
+      deletionStatus: "pending",
+    },
+    additionalSnapshots: [
+      {
+        ...SNAPSHOT,
+        date: futureDate,
+        latestDate: futureDate,
+        segments: [],
+        deletionStatus: "pending",
+        pendingBatch: {
+          ...PENDING_BATCH,
+          entries: PENDING_BATCH.entries.map((entry) => ({
+            ...entry,
+            dateWorked: futureDate,
+          })),
+        },
+      },
+    ],
+  });
+  const next = page.getByRole("button", { name: enMessages.activity.nextDay });
+  await expect(next).toBeEnabled();
+  await next.click();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toBeEnabled();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_get_day",
+    args: { date: futureDate },
+  });
+  await expect(next).toBeDisabled();
+});
+
+test("discarding an old recovery key cannot unlock a later uncertain batch", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    batchValidation: "hold-first",
+    snapshot: {
+      ...SNAPSHOT,
+      pendingBatch: PENDING_BATCH,
+      timeBillingEnabled: false,
+      deletionStatus: "pending",
+    },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.discardPendingRecovery,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await page.evaluate((next) => {
+    const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+    if (typeof update !== "function") {
+      throw new TypeError("Snapshot control is missing");
+    }
+    update(next);
+  }, SNAPSHOT);
+  await page
+    .getByRole("button", { name: "Create 1 draft", exact: true })
+    .click();
+  await page.evaluate(() => {
+    const reject = Reflect.get(window, "__STELLA_TEST_REJECT_BATCH__");
+    if (typeof reject !== "function") {
+      throw new TypeError("Pending batch control is missing");
+    }
+    reject();
+  });
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.batchFailed,
+  );
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toBeEnabled();
+  await expect(
+    page.getByRole("checkbox", { name: "Include Example matter", exact: true }),
+  ).toBeDisabled();
+  expect(await invocations(page)).toContainEqual(
+    expect.objectContaining({
+      command: "time_entry_submit_batch_confirmed",
+      args: expect.objectContaining({
+        request: expect.objectContaining({
+          idempotencyKey: expect.not.stringContaining(
+            PENDING_BATCH.idempotencyKey,
+          ),
+        }),
+      }),
+    }),
+  );
+});
+
+test("pending discard confirmation becomes unavailable when billing capability returns", async ({
+  page,
+}) => {
+  const snapshot = {
+    ...SNAPSHOT,
+    pendingBatch: PENDING_BATCH,
+    timeBillingEnabled: false,
+    deletionStatus: "pending",
+  } satisfies ActivityDaySnapshot;
+  await installNativeBoundary({ page, snapshot });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.discardPendingRecovery,
+      exact: true,
+    })
+    .click();
+  await page.evaluate(
+    (next) => {
+      const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+      if (typeof update !== "function") {
+        throw new TypeError("Snapshot control is missing");
+      }
+      update(next);
+    },
+    { ...snapshot, timeBillingEnabled: true },
+  );
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByRole("button", { name: enMessages.activity.delete, exact: true }),
+  ).toBeDisabled();
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({
+      command: "time_entry_discard_pending_batch_confirmed",
+    }),
+  );
+});
+
+test("stored pending retry permits confirmed unreadable repair while ordinary deletion stays blocked", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      segments: [],
+      pendingBatch: PENDING_BATCH,
+      timeBillingEnabled: false,
+      unreadable: true,
+      deletionStatus: "unreadable",
+    },
+  });
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.discardPendingRecovery,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteDay,
+      exact: true,
+    }),
+  ).toBeDisabled();
+  const repair = page.getByRole("button", {
+    name: enMessages.activity.unreadableEraseAction,
+    exact: true,
+  });
+  await expect(repair).toBeEnabled();
+  await repair.click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.unreadableEraseConfirmation,
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.empty, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.pendingRetry,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_delete_all",
+    args: { recovery: "discardUnreadable" },
+  });
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({
+      command: "time_entry_discard_pending_batch_confirmed",
+    }),
+  );
+});
+
+test("unreadable activity erase requires confirmation of lost pending recovery", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: { ...SNAPSHOT, unreadable: true, deletionStatus: "unreadable" },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.unreadableEraseAction,
+      exact: true,
+    })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.unreadableEraseConfirmation,
+  );
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_delete_all" }),
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_delete_all",
+    args: { recovery: "discardUnreadable" },
+  });
+});
+
+test("inactive unreadable history reaches its dedicated confirmed recovery path", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    historyDeletion: "unreadable",
+    snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.unrecoverableOtherHistoryConfirmation,
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_delete_other_account_history",
+    args: { recovery: "discardUnrecoverable" },
+  });
+});
+
+test("mixed inactive recovery failures use one confirmation and one discard mode", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    historyDeletion: "mixed",
+    snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.unrecoverableOtherHistoryConfirmation,
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const calls = await invocations(page);
+  expect(
+    Array.isArray(calls)
+      ? calls.filter(
+          (call: unknown) =>
+            typeof call === "object" &&
+            call !== null &&
+            "command" in call &&
+            call.command === "activity_delete_other_account_history",
+        )
+      : [],
+  ).toEqual([
+    {
+      command: "activity_delete_other_account_history",
+      args: { recovery: "preserve" },
+    },
+    {
+      command: "activity_delete_other_account_history",
+      args: { recovery: "discardUnrecoverable" },
+    },
+  ]);
+});
+
+test("incompatible saved activity asks for an app update and exposes no erase action", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      persistence: "deletionOnly",
+      recordingStatus: "off",
+      deletionStatus: "incompatible",
+    },
+  });
+  await expect(
+    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.deleteAll,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.unreadableEraseAction,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("healthy current activity shows incompatible history guidance and protects deletion", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      deletionStatus: "incompatible",
+      otherAccountHistoryDays: 3,
+    },
+  });
+  await expect(
+    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
+  ).toBeVisible();
+  for (const name of [
+    enMessages.activity.deleteDay,
+    enMessages.activity.deleteAll,
+    enMessages.activity.deleteOtherAccountHistory,
+  ]) {
+    await expect(
+      page.getByRole("button", { name, exact: true }),
+    ).toBeDisabled();
   }
+  await expect(
+    page.getByRole("button", {
+      name: enMessages.activity.unreadableEraseAction,
+      exact: true,
+    }),
+  ).toHaveCount(0);
+});
+
+test("an open erase dialog disappears safely when saved history becomes incompatible", async ({
+  page,
+}) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  await installNativeBoundary({ page });
+  await page
+    .getByRole("button", { name: enMessages.activity.deleteDay, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.evaluate(
+    (next) => {
+      const update = Reflect.get(window, "__STELLA_TEST_SET_SNAPSHOT__");
+      if (typeof update !== "function") {
+        throw new TypeError("Snapshot control is missing");
+      }
+      update(next);
+    },
+    { ...SNAPSHOT, deletionStatus: "incompatible" },
+  );
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
+  ).toBeVisible();
+  expect(pageErrors).toEqual([]);
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_delete_day" }),
+  );
+});
+
+test("inactive incompatible history closes consent and requests an app update", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    historyDeletion: "incompatible",
+    snapshot: { ...SNAPSHOT, otherAccountHistoryDays: 3 },
+  });
+  await page
+    .getByRole("button", {
+      name: enMessages.activity.deleteOtherAccountHistory,
+      exact: true,
+    })
+    .click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toContainText(
+    enMessages.activity.incompatibleActivity,
+  );
+  expect(await invocations(page)).not.toContainEqual({
+    command: "activity_delete_other_account_history",
+    args: { recovery: "discardUnrecoverable" },
+  });
+});
+
+test("missing-key erase requires explicit confirmation that draft recovery will be lost", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      persistence: "deletionOnly",
+      recordingStatus: "off",
+      deletionStatus: "keyMissing",
+    },
+  });
+  await page
+    .getByRole("button", { name: enMessages.activity.deleteAll, exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toContainText(
+    enMessages.activity.missingKeyEraseConfirmation,
+  );
+  expect(await invocations(page)).not.toContainEqual(
+    expect.objectContaining({ command: "activity_delete_all" }),
+  );
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: enMessages.activity.delete, exact: true })
+    .click();
+  expect(await invocations(page)).toContainEqual({
+    command: "activity_delete_all",
+    args: { recovery: "discardMissingKey" },
+  });
 });
 
 test("only an explicit summary copy publishes activity to the clipboard", async ({
@@ -461,7 +1852,6 @@ test("only an explicit summary copy publishes activity to the clipboard", async 
 for (const state of [
   { persistence: "encrypted", recordingStatus: "recording" },
   { persistence: "encrypted", recordingStatus: "off" },
-  { persistence: "deletionOnly", recordingStatus: "off" },
 ] as const) {
   test(`other-account history is count-only and deletion is confirmed in ${state.persistence}/${state.recordingStatus}`, async ({
     page,
@@ -512,7 +1902,7 @@ for (const state of [
     await expect(openDelete).toBeHidden();
     expect(await invocations(page)).toContainEqual({
       command: "activity_delete_other_account_history",
-      args: {},
+      args: { recovery: "preserve" },
     });
   });
 }
@@ -549,6 +1939,10 @@ test("detail capture is unchecked in welcome and recording starts without enabli
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
+  await page
+    .locator("summary")
+    .filter({ hasText: enMessages.activity.settings })
+    .click();
   await expect(details).not.toBeChecked();
   expect(await invocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_set_capture_details" }),
@@ -577,6 +1971,10 @@ test("detail capture changes only on explicit choice and can be turned off in se
   await expect(
     page.getByRole("button", { name: enMessages.activity.pause, exact: true }),
   ).toBeVisible();
+  await page
+    .locator("summary")
+    .filter({ hasText: enMessages.activity.settings })
+    .click();
   await details.uncheck();
   await expect(details).not.toBeChecked();
   expect(await invocations(page)).toContainEqual({
@@ -739,7 +2137,7 @@ for (const prerequisite of ["globalOff", "appNameOnly"] as const) {
   });
 }
 
-test("titles and document names render locally, with full paths only on hover and explicit copying", async ({
+test("document names render locally without publishing full paths", async ({
   page,
 }) => {
   const document = "/private/synthetic/memo.docx";
@@ -756,14 +2154,16 @@ test("titles and document names render locally, with full paths only on hover an
       })),
     },
   });
-  await expect(page.getByText("memo.docx", { exact: true })).toHaveCount(2);
+  await expect(page.getByText(/memo\.docx/u).first()).toBeVisible();
   await expect(page.getByText(document, { exact: true })).toHaveCount(0);
-  await expect(
-    page.locator('[title="/private/synthetic/memo.docx"]'),
-  ).toHaveCount(2);
-  await expect(page.getByText("Synthetic title", { exact: true })).toHaveCount(
-    2,
-  );
+  await page
+    .getByRole("button", { name: /Example Editor$/u })
+    .first()
+    .hover();
+  const tooltip = page.locator('[data-slot="tooltip-popup"]');
+  await expect(tooltip).toBeVisible();
+  await expect(tooltip).toContainText("memo.docx");
+  await expect(tooltip).not.toContainText(document);
   expect(await invocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_copy_text" }),
   );
@@ -783,17 +2183,20 @@ test("titles and document names render locally, with full paths only on hover an
   });
 });
 
-test("short activity stays in the timeline and total without a proposed block", async ({
+test("short matched activity counts toward its matter draft", async ({
   page,
 }) => {
+  const sample = SNAPSHOT.segments.at(0);
+  if (!sample) {
+    throw new TypeError("Activity fixture must contain a segment");
+  }
   await installNativeBoundary({
     page,
     snapshot: {
       ...SNAPSHOT,
       segments: [
         {
-          appIdentifier: "com.example.editor",
-          appName: "Example Editor",
+          ...sample,
           start: "2026-10-07T09:00:00Z",
           end: "2026-10-07T09:02:59Z",
         },
@@ -802,32 +2205,20 @@ test("short activity stays in the timeline and total without a proposed block", 
   });
   await expect(
     page.getByRole("heading", {
-      name: enMessages.activity.timeline,
+      name: enMessages.activity.reviewToday,
       exact: true,
     }),
   ).toBeVisible();
   await expect(
-    page.getByRole("heading", {
-      name: enMessages.activity.totalActive,
-      exact: true,
-    }),
+    page.getByRole("button", { name: "Create 1 draft", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByText(enMessages.activity.roundedSixMinutes, { exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("heading", {
-      name: enMessages.activity.proposedBlocks,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.copySummary }),
-  ).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: enMessages.activity.createDraftEntry }),
-  ).toHaveCount(0);
 });
 
 for (const language of ["en", "ar"] as const) {
-  test(`welcome preview is static and privacy details disclose on request in ${language}`, async ({
+  test(`welcome privacy details disclose on request in ${language}`, async ({
     page,
   }, testInfo) => {
     const messages = language === "ar" ? arMessages : enMessages;
@@ -837,22 +2228,16 @@ for (const language of ["en", "ar"] as const) {
       snapshot: { ...SNAPSHOT, recordingStatus: "off" },
       language,
     });
-    const preview = page.locator('[data-slot="preview-pane"]');
-    await expect(preview).toBeVisible();
-    await expect(preview).toHaveAttribute("aria-hidden", "true");
-    await expect(preview.locator("button, input, [tabindex]")).toHaveCount(0);
-    await expect(preview).toContainText("Microsoft Word");
-    await expect(preview).toContainText(messages.activity.welcomePreviewMatter);
-    await expect(preview.locator("svg[style]")).toHaveAttribute(
-      "style",
-      "color: var(--option-emerald);",
-    );
     await expect(
       page.getByText(messages.activity.welcomeDetails, { exact: true }),
     ).toBeHidden();
     await expect(page.locator("html")).toHaveAttribute(
       "dir",
       language === "ar" ? "rtl" : "ltr",
+    );
+    await expect(page.locator("[data-activity-preview-matter]")).toHaveCSS(
+      "opacity",
+      "1",
     );
     await page.screenshot({
       path: testInfo.outputPath(`welcome-${language}.png`),
@@ -893,21 +2278,169 @@ test("timeline and totals reuse local app visuals and keep a neutral fallback", 
       ],
     },
   });
-  for (const heading of [
-    enMessages.activity.byApp,
-    enMessages.activity.timeline,
-  ]) {
-    const section = page
-      .getByRole("heading", { name: heading, exact: true })
-      .locator("..");
-    const editor = section
-      .getByRole("listitem")
-      .filter({ hasText: "Example Editor" });
-    await expect(editor.locator("img")).toHaveAttribute("src", iconDataUrl);
-    const fallback = section
-      .getByRole("listitem")
-      .filter({ hasText: "Preview" });
-    await expect(fallback.locator("img")).toHaveCount(0);
-    await expect(fallback.locator("svg").first()).toBeVisible();
+  const totals = page
+    .getByRole("heading", { name: enMessages.activity.byApp, exact: true })
+    .locator("..");
+  const editor = totals
+    .getByRole("listitem")
+    .filter({ hasText: "Example Editor" });
+  await expect(editor.locator("img")).toHaveAttribute("src", iconDataUrl);
+  const fallback = totals.getByRole("listitem").filter({ hasText: "Preview" });
+  await expect(fallback.locator("img")).toHaveCount(0);
+  await expect(fallback.locator("svg").first()).toBeVisible();
+  const lane = page.getByRole("region", {
+    name: enMessages.activity.reviewToday,
+  });
+  await expect(
+    lane.getByRole("button", { name: /Example Editor$/u }).locator("img"),
+  ).toHaveAttribute("src", iconDataUrl);
+  await expect(
+    lane
+      .getByRole("button", { name: /Preview$/u })
+      .locator("svg")
+      .first(),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Stop recording Example Editor" })
+    .click();
+  await expect(
+    page.getByRole("dialog").getByRole("heading").locator("img"),
+  ).toHaveAttribute("src", iconDataUrl);
+});
+
+for (const motion of ["no-preference", "reduce"] as const) {
+  test(`welcome sample completes once with ${motion} motion`, async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: motion });
+    await installNativeBoundary({
+      page,
+      snapshot: { ...SNAPSHOT, recordingStatus: "off", segments: [] },
+    });
+    const preview = page.locator("[data-activity-preview]");
+    await expect(preview).toHaveAttribute("aria-hidden", "true");
+    await expect(preview).toHaveAttribute("inert", "");
+    await expect(
+      preview.getByText(enMessages.activity.timelineHint, { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      preview.getByRole("button", {
+        name: enMessages.activity.selectRange,
+        includeHidden: true,
+      }),
+    ).toHaveCount(0);
+    const matterSegments = preview.locator(
+      "[data-activity-matter-lane] [data-activity-segment]",
+    );
+    await expect(matterSegments).toHaveCount(previewApps.length);
+    for (const segment of await matterSegments.all()) {
+      expect(
+        await segment.evaluate((element) =>
+          element instanceof HTMLElement ? element.style.backgroundColor : null,
+        ),
+      ).toBe("var(--option-emerald)");
+    }
+    const proposed = preview.locator("[data-activity-preview-matter]");
+    if (motion === "reduce") {
+      await expect(proposed).toHaveCSS("animation-name", "none");
+      await expect(
+        preview.locator("[data-activity-preview-duration-before]"),
+      ).toBeHidden();
+    } else {
+      await expect(proposed).toHaveCSS("animation-duration", "0.2s");
+      await expect(proposed).toHaveCSS("animation-delay", "2.4s");
+      await expect(proposed).toHaveCSS("animation-iteration-count", "1");
+    }
+    await expect(proposed).toHaveCSS("opacity", "1");
+    await expect(
+      preview.locator("[data-activity-preview-duration-after]"),
+    ).toContainText("18");
+    expect(
+      await preview.evaluate(
+        (node) =>
+          node
+            .getAnimations({ subtree: true })
+            .filter((animation) => animation.playState === "running").length,
+      ),
+    ).toBe(0);
+    await page
+      .getByRole("button", { name: enMessages.activity.welcomeStart })
+      .click();
+    await expect(preview).toHaveCount(0);
+  });
+}
+
+test("welcome uses native icons for sample apps without recorded activity", async ({
+  page,
+}) => {
+  const iconDataUrl =
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jB1sAAAAASUVORK5CYII=";
+  const missing = previewApps.at(-1);
+  await installNativeBoundary({
+    page,
+    snapshot: {
+      ...SNAPSHOT,
+      recordingStatus: "off",
+      segments: [],
+      sourceAppVisuals: previewApps
+        .filter(({ appIdentifier }) => appIdentifier !== missing?.appIdentifier)
+        .map(({ appIdentifier }) => ({
+          key: appIdentifier,
+          iconDataUrl,
+          color: null,
+        })),
+    },
+  });
+  const preview = page.locator("[data-activity-preview]");
+  for (const { appIdentifier, appName } of previewApps) {
+    const total = preview.locator("li").filter({ hasText: appName });
+    if (appIdentifier === missing?.appIdentifier) {
+      await expect(total.locator("img")).toHaveCount(0);
+      await expect(total.locator("svg")).toBeVisible();
+    } else {
+      await expect(total.locator("img")).toHaveAttribute("src", iconDataUrl);
+      const timelineApp = preview.getByRole("button", {
+        name: new RegExp(`${appName}$`, "u"),
+        includeHidden: true,
+      });
+      await expect(timelineApp.locator("img")).toHaveAttribute(
+        "src",
+        iconDataUrl,
+      );
+    }
   }
+});
+
+test("invalid range endpoints remain editable until their order is repaired", async ({
+  page,
+}) => {
+  await installNativeBoundary({ page });
+  await page.locator("button[data-activity-segment]").first().click();
+  const start = page.getByRole("group", {
+    name: enMessages.activity.rangeStart,
+    exact: true,
+  });
+  const end = page.getByRole("group", {
+    name: enMessages.activity.rangeEnd,
+    exact: true,
+  });
+  const startMinutes = start.getByRole("spinbutton").nth(1);
+  const endMinutes = end.getByRole("spinbutton").nth(1);
+  await startMinutes.fill("0");
+  await end
+    .getByRole("spinbutton")
+    .nth(0)
+    .fill(await start.getByRole("spinbutton").nth(0).inputValue());
+  await endMinutes.fill("0");
+  await expect(start).toBeVisible();
+  await expect(end).toBeVisible();
+  await expect(endMinutes).toHaveAttribute("aria-invalid", "true");
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.assignRange }),
+  ).toBeDisabled();
+  await endMinutes.fill("30");
+  await expect(endMinutes).toHaveAttribute("aria-invalid", "false");
+  await expect(
+    page.getByRole("button", { name: enMessages.activity.assignRange }),
+  ).toBeEnabled();
 });

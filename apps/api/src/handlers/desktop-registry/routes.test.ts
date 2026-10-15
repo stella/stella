@@ -11,14 +11,26 @@ import createPdfSigningHandoff from "@/api/handlers/entities/pdf-signing-handoff
 import {
   authorizeDesktopAccount,
   authorizeDesktopRegistry,
+  authorizeDesktopMember,
 } from "@/api/lib/business-registries/desktop/auth";
 import {
   DESKTOP_ACCOUNT_PERMISSION,
   DESKTOP_REGISTRY_PERMISSION,
 } from "@/api/lib/business-registries/desktop/config";
+import {
+  DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX,
+  DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE,
+  DESKTOP_REGISTRY_REQUEST_PATH,
+  DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+  DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE,
+  desktopRegistryNativeRequestHeaders,
+  desktopRegistryRequestBody,
+  desktopRegistryRequestHeaders,
+} from "@/api/lib/business-registries/desktop/request-contract";
 import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import {
   hasMemberPermission,
+  roleForDisplay,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 
@@ -34,6 +46,52 @@ test("registering desktop routes preserves the grant authorization contract", ()
 });
 
 describe("the desktop request body union", () => {
+  test("binds the public route and native headers to the owning contract", () => {
+    expect(DESKTOP_REGISTRY_REQUEST_PATH).toBe("/v1/desktop-registry/request");
+    const route = desktopRegistryRoute.routes.find(
+      ({ method, path }) =>
+        method === "POST" && path === "/desktop-registry/request",
+    );
+    expect(route?.hooks.body).toBe(desktopRegistryRequestBody);
+    expect(route?.hooks.headers).toBe(desktopRegistryRequestHeaders);
+    expect(request.config.body).toBe(desktopRegistryRequestBody);
+    expect(
+      Value.Check(desktopRegistryNativeRequestHeaders, {
+        authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}transport_smoke`,
+        "content-type": DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE,
+        "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+      }),
+    ).toBe(true);
+    expect(
+      Value.Check(desktopRegistryNativeRequestHeaders, {
+        authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}transport_smoke`,
+        "content-type": `${DESKTOP_REGISTRY_REQUEST_CONTENT_TYPE}; charset=utf-8`,
+        "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+      }),
+    ).toBe(false);
+  });
+
+  test("accepts JSON media-type parameters before authentication", async () => {
+    const response = await desktopRegistryRoute.handle(
+      new Request("http://localhost/desktop-registry/request", {
+        method: "POST",
+        headers: {
+          authorization: `${DESKTOP_REGISTRY_REQUEST_AUTHORIZATION_PREFIX}unknown`,
+          "content-type": "application/json; charset=utf-8",
+          "user-agent": DESKTOP_REGISTRY_REQUEST_USER_AGENT,
+        },
+        body: JSON.stringify({ type: "config" }),
+      }),
+    );
+
+    expect(response.status).toBe(
+      DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.status,
+    );
+    expect(await response.json()).toEqual(
+      DESKTOP_REGISTRY_UNKNOWN_TOKEN_RESPONSE.body,
+    );
+  });
+
   test("accepts each request the desktop sends", () => {
     for (const body of [
       { type: "config" },
@@ -102,6 +160,7 @@ test("desktop account linking preserves document access for each supported role"
     expect(
       canWriteWorkspaceEntities({
         organizationRole: role,
+        workspaceClientId: null,
         workspaceMemberId: "member-fixture",
       }),
     ).toBe(webWriteAllowed);
@@ -128,4 +187,36 @@ test("desktop request authorization follows each operation", () => {
   expect(desktopRequestAuthorization.setDefaultFormat).toBe(
     authorizeDesktopRegistry,
   );
+});
+
+test("a role without the permission is forbidden, not disconnected", () => {
+  const deniedCases = [
+    { member: null, permission: DESKTOP_ACCOUNT_PERMISSION, status: 401 },
+    {
+      member: { role: "not-a-role" },
+      permission: DESKTOP_ACCOUNT_PERMISSION,
+      status: 401,
+    },
+    {
+      member: { role: "external" },
+      permission: DESKTOP_REGISTRY_PERMISSION,
+      status: 403,
+    },
+  ] as const;
+  for (const { member, permission, status } of deniedCases) {
+    const result = authorizeDesktopMember(member, permission);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.status).toBe(status);
+    }
+  }
+  // External members may link the desktop but not search registries.
+  const allowedCases = [
+    { member: { role: "external" }, permission: DESKTOP_ACCOUNT_PERMISSION },
+    { member: { role: "owner" }, permission: DESKTOP_REGISTRY_PERMISSION },
+  ] as const;
+  for (const { member, permission } of allowedCases) {
+    const result = authorizeDesktopMember(member, permission);
+    expect(roleForDisplay(result.unwrap())).toBe(member.role);
+  }
 });

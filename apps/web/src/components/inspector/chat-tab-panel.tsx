@@ -69,7 +69,6 @@ import {
 } from "@/components/inspector/chat-context-label.logic";
 import { useDecisionChatPrompts } from "@/components/inspector/decision-chat-prompts";
 import { useInspectorCommandStore } from "@/components/inspector/inspector-command-store";
-import { skillLabel } from "@/components/inspector/inspector-store-types";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import type { ChatTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
@@ -109,9 +108,11 @@ import {
 } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
+import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
 import type { PromptSuggestion } from "@/lib/prompts/types";
 import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 
 type ChatTabPanelProps = {
@@ -192,15 +193,21 @@ export const ChatTabPanel = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const contextLabel = useChatContextLabel(tab, activeOrganizationId);
 
-  const { openChat, resetChatTabId, setChatContext, updateLabel } =
-    useInspectorTabsStore(
-      useShallow((s) => ({
-        openChat: s.openChat,
-        resetChatTabId: s.resetChatTabId,
-        setChatContext: s.setChatContext,
-        updateLabel: s.updateLabel,
-      })),
-    );
+  const {
+    markChatStarted,
+    openChat,
+    resetChatTabId,
+    setChatContext,
+    updateLabel,
+  } = useInspectorTabsStore(
+    useShallow((s) => ({
+      markChatStarted: s.markChatStarted,
+      openChat: s.openChat,
+      resetChatTabId: s.resetChatTabId,
+      setChatContext: s.setChatContext,
+      updateLabel: s.updateLabel,
+    })),
+  );
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -237,8 +244,10 @@ export const ChatTabPanel = ({
   });
 
   const {
+    activitySession,
     error,
     messages,
+    refreshAnswers,
     loadOlder,
     olderCursor,
     isLoadingOlder,
@@ -257,12 +266,17 @@ export const ChatTabPanel = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
@@ -272,6 +286,7 @@ export const ChatTabPanel = ({
     getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
     workspaceId: tabWorkspaceId,
   });
@@ -359,6 +374,13 @@ export const ChatTabPanel = ({
   // surface. Pre-first-message renames stay label-only, as before.
   const renameThread = useRenameChatThread(threadRef);
   const hasThreadMessages = messages.length > 0;
+  // The tab store keeps a document's chat across reloads only once its
+  // conversation exists on the server.
+  useExternalSyncEffect(() => {
+    if (hasThreadMessages && tab.started !== true) {
+      markChatStarted(tab.id);
+    }
+  }, [hasThreadMessages, markChatStarted, tab.id, tab.started]);
   // The optimistic label write needs its own rollback: the mutation's
   // onError restores the query caches but cannot reach this local tabs
   // store, and a failed PATCH must not leave the tab showing a title the
@@ -543,6 +565,10 @@ export const ChatTabPanel = ({
           handleAlwaysAllow,
           handleApprove,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
         }}
       >
         <ChatTabPanelChrome
@@ -599,6 +625,11 @@ export const ChatTabPanel = ({
                 />
               ) : (
                 <ChatThreadMessages
+                  activitySession={activitySession}
+                  onAnswerEdited={refreshAnswers}
+                  answerRewriteAvailability={
+                    data.usedAnonymization ? "anonymized" : "available"
+                  }
                   approvalPendingMessageId={approvalPendingMessageId}
                   branchSource={{
                     contextMatterIds: tab.contextMatterIds,
@@ -617,6 +648,7 @@ export const ChatTabPanel = ({
                   onCreateDocumentResolve={handleCreateDocumentResolve}
                   onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
                   onOpenCreatedDocument={handleOpenCreatedDocument}
+                  onOpenPlaybook={handleOpenPlaybook}
                   onResend={resendLatestMessage}
                   onSendWithoutAnonymization={sendWithoutAnonymization}
                   queuedMessageActions={{
@@ -725,13 +757,17 @@ const useBoundLegalDocumentLabel = (tab: ChatTab): string | undefined => {
 
 const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
   const t = useTranslations();
+  const skillLabel = useSkillLabel();
   const { id: userId } = useAuthenticatedUser();
-  const { data } = useQuery(
+  const dataQuery = useQuery(
     workspacesNavigationOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
   );
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   const workspaces = data?.workspaces ?? [];
   const matterNames = tab.contextMatterIds
@@ -801,6 +837,7 @@ const ChatTabPanelChrome = ({
   children,
 }: ChatTabPanelChromeProps) => {
   const t = useTranslations();
+  const skillLabel = useSkillLabel();
   const boundDocumentLabel = useBoundLegalDocumentLabel(tab);
   // New-chat is not a header action: it lives in the composer's status
   // row (`ChatComposerDock`), uniform with every other chat surface.
@@ -818,11 +855,18 @@ const ChatTabPanelChrome = ({
   return (
     <div
       className="relative flex min-w-0 flex-1 flex-col"
+      // Which conversation the pane shows, for tests that need to tell a
+      // restored thread from a freshly minted one.
+      data-chat-thread-id={tab.id}
       data-slot="inspector-chat-panel"
     >
       <InspectorTabHeader
         actions={actions}
         label={chatTabHeaderLabel({
+          activeSkillName:
+            tab.activeSkill === undefined
+              ? undefined
+              : skillLabel(tab.activeSkill),
           boundDocumentLabel,
           newChatLabel: t("chat.newChat"),
           tabLabel: tab.label,

@@ -10,12 +10,19 @@ import {
   authorizedMemberRole,
   sessionMemberRole,
 } from "@/api/lib/permission-authorization";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
+import { createDesktopMatterCandidatesEndpoint } from "./candidates";
 import { createDesktopTimeEntryEndpoint } from "./create";
 import { createDesktopMattersEndpoint } from "./matters";
 import { desktopTimeEntriesRoute } from "./routes";
 
+const testState = createTestState({ file: import.meta.path, config: env });
 const WORKSPACE_ID = "00000000-0000-4000-8000-000000000001";
 const ORGANIZATION_ID = "org_test";
 const USER_ID = "user_test";
@@ -29,17 +36,32 @@ const BODY = {
 
 test("desktop time entry endpoints require desktop account credentials", async () => {
   const app = new Elysia().use(desktopTimeEntriesRoute);
-  for (const path of ["matters", `time-entries/${WORKSPACE_ID}`]) {
+  for (const path of [
+    "matters",
+    "matter-candidates",
+    `time-entries/${WORKSPACE_ID}`,
+    "time-entries/batch",
+    "time-entries/batch/status",
+  ]) {
+    let body = JSON.stringify(BODY);
+    if (path === "time-entries/batch/status") {
+      body = JSON.stringify({ idempotencyKey: "test" });
+    } else if (path === "time-entries/batch") {
+      body = JSON.stringify({
+        idempotencyKey: "test",
+        entries: [{ matterId: WORKSPACE_ID, ...BODY }],
+      });
+    }
     const response = await app.handle(
       new Request(
         `http://localhost/v1/desktop/${path}`,
-        path === "matters"
-          ? {}
-          : {
+        path.startsWith("time-entries/")
+          ? {
               method: "PUT",
               headers: { "content-type": "application/json" },
-              body: JSON.stringify(BODY),
-            },
+              body,
+            }
+          : {},
       ),
     );
     expect(response.status).toBe(401);
@@ -52,6 +74,7 @@ const exercise = async ({
   extra,
   missingMatter,
   picker,
+  candidates,
   color = "--option-emerald",
 }: {
   hidden?: "activity-timeline" | "time-billing";
@@ -59,6 +82,7 @@ const exercise = async ({
   extra?: Record<string, unknown>;
   missingMatter?: boolean;
   picker?: boolean;
+  candidates?: boolean;
   color?: string | null;
 }) => {
   const inserted: unknown[] = [];
@@ -79,8 +103,30 @@ const exercise = async ({
           ],
         },
         organizationSettings: { findFirst: async () => DEFAULT_TIME_POLICY },
-        rateTables: { findFirst: async () => undefined },
+        rateTables: { findMany: async () => [] },
       },
+      select: () => ({
+        from: () => ({
+          leftJoin: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: async () => [
+                  {
+                    id: WORKSPACE_ID,
+                    name: "Matter",
+                    reference: "M-1",
+                    color,
+                    clientName: "Client",
+                    lastWorkedAt: "2026-10-08",
+                    newlyAssignedAt: null,
+                    upcomingDeadline: "2026-10-12",
+                  },
+                ],
+              }),
+            }),
+          }),
+        }),
+      }),
       execute: async () => {},
       $count: async () => 0,
       insert: (table: unknown) => ({
@@ -105,15 +151,25 @@ const exercise = async ({
             : [
                 {
                   featureId: "time-billing",
-                  organizationId: ORGANIZATION_ID,
+                  organizationId: toSafeId<"organization">(ORGANIZATION_ID),
                   userId: USER_ID,
                 },
               ],
       },
     },
   );
-  const authorizeAccount = async () =>
+  const device = await createDesktopDeviceSigner();
+  const authorizeAccount = async (request: Request) =>
     Result.ok({
+      consumedProof: await claimFixtureDeviceProof({
+        request: await device.signRequest({
+          request,
+          credential: "fixture-credential",
+        }),
+        deviceJkt: device.deviceJkt,
+        keyId: "desktop-key",
+        credential: "fixture-credential",
+      }),
       scopedDb,
       organizationId: toSafeId<"organization">(ORGANIZATION_ID),
       userId: toSafeId<"user">(USER_ID),
@@ -130,7 +186,12 @@ const exercise = async ({
     });
   const create = createDesktopTimeEntryEndpoint(authorizeAccount);
   const matters = createDesktopMattersEndpoint(authorizeAccount);
+  const candidateEndpoint =
+    createDesktopMatterCandidatesEndpoint(authorizeAccount);
   const endpointApp = new Elysia({ normalize: false })
+    .get("/v1/desktop/matter-candidates", candidateEndpoint.handler, {
+      response: candidateEndpoint.config.response,
+    })
     .put("/v1/desktop/time-entries/:workspaceId", create.handler, {
       body: create.config.body,
       params: create.config.params,
@@ -141,41 +202,39 @@ const exercise = async ({
       response: matters.config.response,
     });
   const app = new Elysia().use(endpointApp);
-  const previous = env.API_FEATURE_ACCESS_GRANTS;
-  const previousDeployment = env.FEATURE_TIME_BILLING;
-  env.FEATURE_TIME_BILLING = true;
-  env.API_FEATURE_ACCESS_GRANTS = {
+  testState.setConfig("FEATURE_TIME_BILLING", true);
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "activity-timeline":
       hidden === "activity-timeline"
         ? []
         : [
             {
               type: "member",
-              organizationId: ORGANIZATION_ID,
+              organizationId: toSafeId<"organization">(ORGANIZATION_ID),
               email: "desktop@example.test",
             },
           ],
-  };
-  try {
-    const response = await app.handle(
-      new Request(
-        picker
-          ? "http://localhost/v1/desktop/matters?query=Matter"
-          : `http://localhost/v1/desktop/time-entries/${WORKSPACE_ID}`,
-        picker
-          ? {}
-          : {
-              method: "PUT",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ ...BODY, ...extra }),
-            },
-      ),
-    );
-    return { status: response.status, body: await response.json(), inserted };
-  } finally {
-    env.API_FEATURE_ACCESS_GRANTS = previous;
-    env.FEATURE_TIME_BILLING = previousDeployment;
+  });
+  let url = `http://localhost/v1/desktop/time-entries/${WORKSPACE_ID}`;
+  if (picker) {
+    url = "http://localhost/v1/desktop/matters?query=Matter";
   }
+  if (candidates) {
+    url = "http://localhost/v1/desktop/matter-candidates";
+  }
+  const response = await app.handle(
+    new Request(
+      url,
+      picker || candidates
+        ? {}
+        : {
+            method: "PUT",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ ...BODY, ...extra }),
+          },
+    ),
+  );
+  return { status: response.status, body: await response.json(), inserted };
 };
 
 test("either hidden feature refuses creation", async () => {
@@ -237,5 +296,30 @@ test("picker preserves stored and fallback matter colors in its display projecti
     expect((await exercise({ picker: true, color })).body).toEqual({
       matters: [{ id: WORKSPACE_ID, name: "Matter", reference: "M-1", color }],
     });
+  }
+});
+
+test("candidate endpoint preserves bounded caller-scoped matching signals and feature authorization", async () => {
+  const result = await exercise({ candidates: true });
+  expect(result.status).toBe(200);
+  expect(result.body).toEqual({
+    matters: [
+      {
+        id: WORKSPACE_ID,
+        name: "Matter",
+        reference: "M-1",
+        color: "--option-emerald",
+        clientName: "Client",
+        signals: {
+          lastWorkedAt: "2026-10-08",
+          newlyAssignedAt: null,
+          upcomingDeadline: "2026-10-12",
+        },
+      },
+    ],
+  });
+  expect(result.inserted).toEqual([]);
+  for (const hidden of ["activity-timeline", "time-billing"] as const) {
+    expect((await exercise({ candidates: true, hidden })).status).toBe(403);
   }
 });

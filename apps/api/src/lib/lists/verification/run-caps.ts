@@ -1,6 +1,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
+
 import type { Transaction } from "@/api/db/root";
 import { legalListVerificationBudgets } from "@/api/db/schema";
 import { env } from "@/api/env";
@@ -23,9 +25,13 @@ export class ListVerificationRunCapError extends TaggedError(
   "ListVerificationRunCapError",
 )<{
   message: string;
-  reason: "active" | "daily";
+  reason: keyof typeof VERIFICATION_RUN_CAP_CODES;
   hint: string;
-}> {}
+}> {
+  get code() {
+    return VERIFICATION_RUN_CAP_CODES[this.reason];
+  }
+}
 
 export const getVerificationRunCaps = (): VerificationRunCaps => ({
   active: env.LIST_VERIFICATION_ACTIVE_RUNS_MAX,

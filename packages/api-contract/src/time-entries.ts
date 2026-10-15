@@ -1,4 +1,7 @@
+import * as v from "valibot";
+
 import { TIME_ENTRY_SOURCES } from "./billing";
+import { ENTITY_CONTEXT_REFERENCE_SCHEMA } from "./entity-reference";
 import type {
   TimeEntry,
   TimeEntryListPage,
@@ -77,6 +80,7 @@ type UnknownRecord = Record<string, unknown> & {
   userName?: unknown;
   viewerTotalMinutes?: unknown;
   workItemId?: unknown;
+  workItemReference?: unknown;
 };
 
 const isRecord = (input: unknown): input is UnknownRecord =>
@@ -99,6 +103,28 @@ const isTimeEntrySource = (input: unknown): input is TimeEntrySource =>
 
 const isStringArray = (input: unknown): input is string[] =>
   Array.isArray(input) && input.every((item) => typeof item === "string");
+
+const parseContextReference = (
+  workItemId: string | null,
+  referenceInput: unknown,
+) => {
+  let wireReference = referenceInput;
+  if (wireReference === undefined) {
+    wireReference =
+      workItemId === null ? null : { type: "available", id: workItemId };
+  }
+  // A rolling deployment can still serve the preceding additive wire contract.
+  const reference = v.safeParse(ENTITY_CONTEXT_REFERENCE_SCHEMA, wireReference);
+  if (
+    !reference.success ||
+    (reference.output?.type === "available" &&
+      reference.output.id !== workItemId) ||
+    (reference.output?.type !== "available" && workItemId !== null)
+  ) {
+    return { valid: false } as const;
+  }
+  return { valid: true, reference: reference.output } as const;
+};
 
 const parseTimeEntry = (input: unknown): TimeEntry | null => {
   if (
@@ -129,6 +155,13 @@ const parseTimeEntry = (input: unknown): TimeEntry | null => {
   ) {
     return null;
   }
+  const reference = parseContextReference(
+    input.workItemId,
+    input.workItemReference,
+  );
+  if (!reference.valid) {
+    return null;
+  }
   return {
     activityCode: input.activityCode,
     billable: input.billable,
@@ -153,6 +186,7 @@ const parseTimeEntry = (input: unknown): TimeEntry | null => {
     userId: input.userId,
     userName: input.userName,
     workItemId: input.workItemId,
+    workItemReference: reference.reference,
   };
 };
 

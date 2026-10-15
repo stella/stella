@@ -1,0 +1,7 @@
+# Classifying corpus engine hit identities
+
+Generated from `scripts/ownership/corpus-hit-classification.ts`. See [Module ownership](../module-ownership.md).
+
+| Capability                                                             | Owner                                                     | Enforcement                                                                      | Summary                                                                                                                                                                                               |
+| ---------------------------------------------------------------------- | --------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `corpus-hit-classification` — Classifying corpus engine hit identities | `apps/api/src/lib/legal-search/corpus-hit-disposition.ts` | call `extractId()` in `apps/api/src/lib/legal-search/`, `apps/api/src/handlers/` | The identity reader runs through one typed disposition owner in native, scored, BM25 and highlight modes. Malformed hits are counted separately from repeated passages and physical highlight copies. |

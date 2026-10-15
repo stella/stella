@@ -39,7 +39,7 @@ export type InspectorChatRequest = {
  * after the pre-filled content. The chat's rail tab flashes, so the eye finds
  * where it opened even when the pane was already showing.
  */
-export const useOpenChatInInspector = () => {
+const useOpenChatInInspector = () => {
   const { focusThread, insertMentionIntoThread, insertPastedTextIntoThread } =
     useChatEditorManager();
   const openChat = useInspectorTabsStore((s) => s.openChat);

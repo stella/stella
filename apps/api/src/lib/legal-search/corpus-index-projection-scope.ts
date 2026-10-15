@@ -18,7 +18,7 @@ type CorpusProjectionEntityId<Family extends CorpusFamily> = Extract<
   { family: Family }
 >["entityId"];
 
-export type CorpusProjectionWorkScope<Family extends CorpusFamily> =
+type CorpusProjectionWorkScope<Family extends CorpusFamily> =
   | typeof CORPUS_PROJECTION_GENERATION_SCOPE
   | {
       type: "subjects";

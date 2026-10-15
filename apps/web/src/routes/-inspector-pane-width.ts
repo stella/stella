@@ -14,7 +14,6 @@ import { SIDEBAR_WIDTH_PX } from "@/components/sidebar-sizing";
 export {
   INSPECTOR_CONTENT_MIN_WIDTH,
   INSPECTOR_EDITOR_MIN_WIDTH,
-  INSPECTOR_PANE_DEFAULT_WIDTH,
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
   resolveInspectorPaneMaxWidth,

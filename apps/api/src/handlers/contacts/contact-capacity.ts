@@ -1,7 +1,6 @@
-import { sql } from "drizzle-orm";
-
 import type { Transaction } from "@/api/db/root";
 import type { SafeId } from "@/api/lib/branded-types";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 
 /**
  * Serialize every contact writer for one organization before checking the
@@ -12,7 +11,9 @@ export const lockContactCapacity = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
 ): Promise<void> => {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext('contact_capacity'), hashtext(${organizationId}))`,
-  );
+  await withAggregateLock({
+    aggregate: "contactCapacity",
+    id: { organizationId },
+    tx,
+  });
 };

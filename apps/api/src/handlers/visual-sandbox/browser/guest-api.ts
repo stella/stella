@@ -25,16 +25,25 @@ type CreateVisualGuestApiOptions = {
   data: unknown;
   postMessage: (message: VisualGuestMessage) => void;
   measureSize: () => { width: number; height: number };
+  /** Spends the token of the latest trusted gesture, if one is left. */
+  takeGesture: () => boolean;
 };
 
 export const createVisualGuestApi = ({
   data,
   postMessage,
   measureSize,
+  takeGesture,
 }: CreateVisualGuestApiOptions) => {
   const emit = (message: VisualGuestMessage) => {
     const validated = v.safeParse(visualGuestMessageSchema, message);
-    if (validated.success) {
+    if (!validated.success) {
+      return;
+    }
+    // Sizing is free; every other message is an action and needs a gesture.
+    const sizing =
+      validated.output.kind === "resize" || validated.output.kind === "ready";
+    if (sizing || takeGesture()) {
       postMessage(validated.output);
     }
   };

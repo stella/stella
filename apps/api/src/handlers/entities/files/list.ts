@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { entityContextId } from "@/api/db/entity-feature-policies";
 import type { SafeDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
@@ -50,7 +51,7 @@ const listFilesHandler = async function* ({
           entityId: entities.id,
           fieldId: fields.id,
           name: entities.name,
-          parentId: entities.parentId,
+          parentId: entityContextId(entities.parentId),
           fieldContent: fields.content,
         })
         .from(entities)
@@ -120,6 +121,7 @@ const listFilesHandler = async function* ({
 };
 
 const config = {
+  contract: "patch",
   description:
     "List every document in a matter that has an uploaded file, oldest first " +
     "with cursor pagination, each with its entity id, name, parent folder, " +

@@ -6,7 +6,7 @@ import { Temporal, todayFor } from "@stll/time";
  * user time-zone preference exists, so this is the zone a user-facing "today"
  * is read in.
  */
-export const viewerTimeZone = (): string => Temporal.Now.timeZoneId();
+const viewerTimeZone = (): string => Temporal.Now.timeZoneId();
 
 /** The viewer's calendar day now. */
 export const appToday = (): Temporal.PlainDate => todayFor(viewerTimeZone());

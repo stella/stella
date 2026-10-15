@@ -15,6 +15,7 @@ import {
   type SessionSnapshot,
   type TrustedSelfHostConnection,
 } from "../src/shared/rpc";
+import { BRIDGE_VERSION } from "./bridge-version";
 
 // Golden-fixture contract for the desktop bridge RPC surface.
 //
@@ -42,6 +43,13 @@ const FIXTURE_DIR = path.join(import.meta.dir, "../fixtures/rpc");
 
 const readFixture = (name: string): unknown =>
   JSON.parse(readFileSync(path.join(FIXTURE_DIR, name), "utf-8"));
+
+test("snapshot fixture advertises the native bridge contract revision", () => {
+  expect(
+    readFixtureRecord("app-snapshot.json")["bridgeVersion"],
+    "apps/desktop/fixtures/rpc/app-snapshot.json bridgeVersion must match BRIDGE_VERSION in apps/desktop/src-tauri/src/types.rs; update the recorded fixture after a bridge version bump",
+  ).toBe(BRIDGE_VERSION);
+});
 
 // Fixtures are hand-authored JSON objects (never arrays or primitives); this
 // guard narrows the parsed `unknown` before mutating tests spread/drop keys,
@@ -80,8 +88,8 @@ const CAMEL_CASE = /^[a-z][a-zA-Z0-9]*$/u;
 // runtime `toEqual` is the on-disk half.
 const appSnapshot = {
   bridgePort: 45_901,
-  bridgeVersion: 16,
-  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v3"],
+  bridgeVersion: BRIDGE_VERSION,
+  capabilities: ["office-edit.v1", "self-host.connect", "account-link.v5"],
   notificationPreferences: {
     documentReady: true,
     revisionCreated: true,

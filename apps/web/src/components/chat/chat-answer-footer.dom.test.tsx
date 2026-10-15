@@ -3,9 +3,11 @@ import type { ReactNode } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { testChatApprovalContextValue } from "@/components/chat/chat-approval-context.test-fixtures";
 import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
 import messages from "@/i18n/langs/en.json";
 import type { ChatSourceDocument } from "@/lib/api-contract";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const previousApiUrl = process.env["VITE_API_URL"];
@@ -36,7 +38,7 @@ afterEach(async () => {
   });
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
   if (previousApiUrl === undefined) {
     delete process.env["VITE_API_URL"];
   } else {
@@ -54,17 +56,7 @@ const renderWithProviders = (children: ReactNode) => {
           <ChatMattersContext
             value={{ createDocumentMattersView: { type: "empty" } }}
           >
-            <ChatApprovalContext
-              value={{
-                activeOrganizationId: "test-active-organization",
-                alwaysApprovedTools: new Set(),
-                conversationApprovedTools: new Set(),
-                handleAllowInConversation: () => {},
-                handleAlwaysAllow: () => {},
-                handleApprove: () => {},
-                handleDeny: () => {},
-              }}
-            >
+            <ChatApprovalContext value={testChatApprovalContextValue}>
               <ChatEditorProvider>{children}</ChatEditorProvider>
             </ChatApprovalContext>
           </ChatMattersContext>
@@ -86,6 +78,7 @@ const renderAssistant = (sourceDocuments?: readonly ChatSourceDocument[]) => {
 
   return renderWithProviders(
     <ChatThreadMessages
+      activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
       approvalPendingMessageId={null}
       messages={[message]}
       onResend={() => {}}

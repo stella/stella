@@ -223,7 +223,7 @@ const IDENTITY_EXTRAS = {
  * What the source's stated ECLI said about an observation no publisher id
  * resolved. `adopted` names the id the matched row was stored under.
  */
-export type EcliIdentityMatch =
+type EcliIdentityMatch =
   | { type: "not-applicable" }
   | { type: "unmatched" }
   | {

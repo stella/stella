@@ -255,7 +255,7 @@ type AddMemberDialogProps = {
   showTriggerLabel?: boolean | undefined;
 };
 
-export const AddMemberDialog = ({
+const AddMemberDialog = ({
   workspaceId,
   triggerClassName,
   triggerSize = "sm",

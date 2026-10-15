@@ -35,8 +35,8 @@ export type SnapshotBlock = {
   previewRuns?: FolioAIEditSnapshot["blocks"][number]["previewRuns"];
 };
 
-export const PREVIEW_CONTEXT_CHARS = 60;
-export const PREVIEW_ANCHOR_CHARS = 80;
+const PREVIEW_CONTEXT_CHARS = 60;
+const PREVIEW_ANCHOR_CHARS = 80;
 
 /**
  * The stored one-line summary of an operation, in the reader's language.

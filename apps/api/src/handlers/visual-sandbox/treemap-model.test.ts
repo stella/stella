@@ -10,6 +10,7 @@ import { assertProperty } from "@stll/property-testing";
 import { courtYearFixture, treemapFixture } from "./browser/treemap-fixture";
 import {
   createTreemapModel,
+  createTreemapNumberFormatter,
   localizedTierLabel,
   treemapColorDomain,
   treemapCategoryValue,
@@ -28,6 +29,24 @@ const bucket = (id: string, count = 1) =>
     court: "court",
     year: 2024,
   }) as const satisfies VisualTreemapTree;
+
+test.each(["unknown", "not_a_locale", "", "i", "en--US"])(
+  "numeric legends use default formatting for locale %j",
+  (language) => {
+    const formatter = createTreemapNumberFormatter(language);
+    const fallback = new Intl.NumberFormat();
+    expect(formatter.resolvedOptions().locale).toBe(
+      fallback.resolvedOptions().locale,
+    );
+    expect(formatter.format(12_345.6)).toBe(fallback.format(12_345.6));
+  },
+);
+
+test("numeric legends preserve an available authored locale", () => {
+  expect(createTreemapNumberFormatter("cs-CZ").format(12_345.6)).toBe(
+    new Intl.NumberFormat("cs-CZ").format(12_345.6),
+  );
+});
 
 test.each([
   ["cs", "cs"],

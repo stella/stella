@@ -130,3 +130,15 @@ describe("visual preview tool output boundary", () => {
     );
   });
 });
+
+test.each(["", " \n\t"])(
+  "rejects an empty preview document (%s)",
+  (document) => {
+    expect(
+      v.safeParse(visualPreviewInputSchema, {
+        document,
+        viewport: { width: 1200 },
+      }).success,
+    ).toBe(false);
+  },
+);

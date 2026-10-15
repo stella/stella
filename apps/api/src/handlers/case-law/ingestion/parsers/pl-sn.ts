@@ -18,9 +18,10 @@
 import { PDF } from "@libpdf/core";
 import { panic } from "better-result";
 
+// parser-output-unchanged: imports the document AST from its package owner
+import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { collapseSpacedLetters } from "@stll/text-normalize";
 
-import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
   buildBoldRanges,

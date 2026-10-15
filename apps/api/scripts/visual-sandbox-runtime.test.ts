@@ -3,8 +3,12 @@ import { readFileSync } from "node:fs";
 
 import { inspectBrowserRuntimeSafety } from "@stll/scripts/src/browser-runtime-safety";
 
+import { VISUAL_BLOCKED_GLOBALS } from "../src/handlers/visual-sandbox/blocked-globals";
 import { escapeVisualScript } from "../src/handlers/visual-sandbox/srcdoc";
-import { VISUAL_RUNTIME_BUILD_OPTIONS } from "./visual-sandbox-build-options";
+import {
+  VISUAL_RUNTIME_BUILD_OPTIONS,
+  VISUAL_RUNTIME_BYTE_BUDGET,
+} from "./visual-sandbox-build-options";
 
 const runtimePath = new URL(
   "../src/handlers/visual-sandbox/generated/runtime.js.txt",
@@ -12,6 +16,19 @@ const runtimePath = new URL(
 );
 
 describe("visual sandbox runtime asset", () => {
+  test("embeds every blocked global from the source inventory", () => {
+    const runtime = readFileSync(runtimePath, "utf-8");
+    const missing = VISUAL_BLOCKED_GLOBALS.filter(
+      (name) => !runtime.includes(JSON.stringify(name)),
+    );
+    expect(missing).toEqual([]);
+  });
+
+  test("stays within the guest runtime byte budget", () => {
+    const bytes = readFileSync(runtimePath).byteLength;
+    expect(bytes).toBeLessThanOrEqual(VISUAL_RUNTIME_BYTE_BUDGET);
+  });
+
   test("contains charts without dynamic code and confines markup parsing to templates", async () => {
     const built = await Bun.build({
       ...VISUAL_RUNTIME_BUILD_OPTIONS,

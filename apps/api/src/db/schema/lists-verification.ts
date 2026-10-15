@@ -21,6 +21,12 @@ import type {
 import { DEFAULT_VERIFICATION_RUN_CAPS } from "@/api/lib/lists/verification/run-cap-config";
 
 import {
+  entityFeatureGateChecks,
+  entityFeatureGateColumns,
+  entityFeatureOrganizationGateColumns,
+} from "../entity-feature-gate-columns";
+import { entityFeaturePolicies } from "../entity-feature-policies";
+import {
   jsonb,
   organization,
   p,
@@ -123,6 +129,7 @@ export const legalListVerificationBudgets = p.pgTable.withRLS(
 export const legalListVerificationRuns = p.pgTable(
   "legal_list_verification_runs",
   {
+    ...entityFeatureGateColumns(),
     id: pUuid<"legalListVerificationRun">().primaryKey(),
     // The worker rebuilds its tenant scope from the row, so the organization
     // is recorded rather than looked up.
@@ -155,6 +162,13 @@ export const legalListVerificationRuns = p.pgTable(
     finishedAt: timestamptz("finished_at"),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.entityId, { target: "entities", kind: "owned-content" }],
+      ]),
+    ),
     p
       .foreignKey({
         name: "legal_list_verification_runs_entity_fk",
@@ -216,7 +230,9 @@ export const legalListVerificationRuns = p.pgTable(
         name: "legal_list_verification_runs_workspace_organization_fk",
       })
       .onDelete("cascade"),
-    ...wsOrganizationPolicies("legal_list_verification_runs"),
+    ...wsOrganizationPolicies("legal_list_verification_runs", {
+      columns: table,
+    }),
     p.pgPolicy("legal_list_verification_runs_owner_access", {
       for: "all",
       to: "public",
@@ -232,6 +248,7 @@ export const legalListVerificationRuns = p.pgTable(
 export const legalListVerificationReadReceipts = p.pgTable(
   "legal_list_verification_read_receipts",
   {
+    ...entityFeatureGateColumns(),
     organizationId: safeOrganizationId("organization_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
@@ -242,6 +259,7 @@ export const legalListVerificationReadReceipts = p.pgTable(
     auditedDay: p.date("audited_day", { mode: "string" }).notNull(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.primaryKey({
       name: "verification_read_receipts_pk",
       columns: [
@@ -272,6 +290,15 @@ export const legalListVerificationReadReceipts = p.pgTable(
       .index("verification_read_receipts_run_idx")
       .on(table.workspaceId, table.runId),
     p.index("verification_read_receipts_user_idx").on(table.userId),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [
+          table.runId,
+          { kind: "owned-by-parent", parent: legalListVerificationRuns },
+        ],
+      ]),
+    ),
     ...wsOrganizationUserPolicies("legal_list_verification_read_receipts"),
   ],
 );
@@ -280,6 +307,8 @@ export const legalListVerificationReadReceipts = p.pgTable(
 export const legalListVerificationBlocks = p.pgTable(
   "legal_list_verification_blocks",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureOrganizationGateColumns(),
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     ordinal: p.smallint().notNull(),
@@ -289,6 +318,7 @@ export const legalListVerificationBlocks = p.pgTable(
     text: p.text().notNull(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p.primaryKey({ columns: [table.runId, table.ordinal] }),
     p
       .foreignKey({
@@ -316,7 +346,15 @@ export const legalListVerificationBlocks = p.pgTable(
       sql`(${table.kind} = 'docx-block' AND ${table.pageNumber} IS NULL)
         OR (${table.kind} = 'pdf-page' AND ${table.pageNumber} > 0)`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.runId,
+          { kind: "owned-by-parent", parent: legalListVerificationRuns },
+        ],
+      ]),
+    }),
   ],
 );
 
@@ -328,6 +366,8 @@ export const legalListVerificationBlocks = p.pgTable(
 export const legalListClaims = p.pgTable(
   "legal_list_claims",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureOrganizationGateColumns(),
     id: pUuid<"legalListClaim">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
@@ -348,6 +388,7 @@ export const legalListClaims = p.pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "legal_list_claims_run_fk",
@@ -410,7 +451,15 @@ export const legalListClaims = p.pgTable(
       "legal_list_claims_position_check",
       sql`${table.position} >= 0 AND ${table.position} < ${sql.raw(String(VERIFICATION_LIMITS.CLAIMS_PER_RUN_MAX))}`,
     ),
-    ...wsPolicies(),
+    ...wsPolicies({
+      columns: table,
+      references: new Map([
+        [
+          table.runId,
+          { kind: "owned-by-parent", parent: legalListVerificationRuns },
+        ],
+      ]),
+    }),
   ],
 );
 
@@ -422,6 +471,8 @@ export const legalListClaims = p.pgTable(
 export const legalListClaimReviewEvents = p.pgTable(
   "legal_list_claim_review_events",
   {
+    ...entityFeatureGateColumns(),
+    ...entityFeatureOrganizationGateColumns(),
     id: pUuid<"legalListClaimReviewEvent">().primaryKey(),
     workspaceId: safeWorkspaceId("workspace_id").notNull(),
     runId: safeUuid<"legalListVerificationRun">("run_id").notNull(),
@@ -439,6 +490,7 @@ export const legalListClaimReviewEvents = p.pgTable(
       .default(sql`clock_timestamp()`),
   },
   (table) => [
+    ...entityFeatureGateChecks(table),
     p
       .foreignKey({
         name: "legal_list_claim_review_events_claim_fk",
@@ -463,6 +515,12 @@ export const legalListClaimReviewEvents = p.pgTable(
       "legal_list_claim_review_events_payload_kind_check",
       sql`${table.payload}->>'kind' = ${table.kind}`,
     ),
+    ...entityFeaturePolicies(
+      table,
+      new Map([
+        [table.claimId, { kind: "owned-by-parent", parent: legalListClaims }],
+      ]),
+    ),
     p.pgPolicy("workspace_select", {
       for: "select",
       to: stella,
@@ -485,5 +543,8 @@ export const legalListClaimReviewEvents = p.pgTable(
       to: stella,
       using: sql`false`,
     }),
+    p
+      .index("legal_list_claim_review_events_ef_claim_id_idx")
+      .on(table.workspaceId, table.claimId),
   ],
 );

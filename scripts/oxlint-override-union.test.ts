@@ -18,10 +18,7 @@ import { expect, test } from "bun:test";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import config, {
-  API_PROVIDER_ADAPTER_MODULES,
-  LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES,
-} from "../oxlint.config.ts";
+import config, { API_PROVIDER_ADAPTER_MODULES } from "../oxlint.config.ts";
 import {
   isRecord,
   lintedRepoFiles,
@@ -103,13 +100,12 @@ const DELIBERATE_NARROWINGS = [
   },
   {
     rule: "no-restricted-imports",
-    scope:
-      "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
+    scope: "apps/web/src/lib/drag-and-drop/element-registration.ts",
     drops: [
       "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
     ],
     reason:
-      "This is the web kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly, behind its conflict-guarded attachElementDropTarget.",
+      "This is the web element-registration owner: all element registrations share its conflict registry.",
   },
   {
     rule: "no-restricted-imports",
@@ -119,15 +115,6 @@ const DELIBERATE_NARROWINGS = [
     ],
     reason:
       "This is the @stll/ui kanban drag-and-drop owner: the one module that may call the adapter's draggable/dropTargetForElements directly.",
-  },
-  {
-    rule: "no-restricted-imports",
-    scope: LEGACY_PRAGMATIC_DRAG_REGISTRATION_FILES.join(", "),
-    drops: [
-      "path:@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter#draggable,dropTargetForElements",
-    ],
-    reason:
-      "Shrink-only migration exceptions: each listed surface registers only its own elements, untouched by another registration owner.",
   },
 ] as const;
 
@@ -493,6 +480,19 @@ test("new web and UI surfaces cannot import element registration outside an owne
     (scope) => "no-restricted-imports" in scope.rules,
   );
   for (const file of [
+    "apps/web/src/components/matter-target-picker.tsx",
+    "apps/web/src/components/app-sidebar.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx",
+    "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
+    "apps/web/src/routes/knowledge/-components/position-editor.tsx",
+    "apps/web/src/routes/_protected.settings/-components/organization/document-types-card.tsx",
+    "apps/web/src/components/pdf/page-organizer.tsx",
+    "apps/web/src/components/workspaces/table/workspace-table/header-cells.tsx",
+    "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts",
+    "apps/web/src/lib/drag-and-drop/another-registration.ts",
     "apps/web/src/components/new-drag-surface.tsx",
     "packages/ui/src/new-drag-surface.tsx",
   ]) {

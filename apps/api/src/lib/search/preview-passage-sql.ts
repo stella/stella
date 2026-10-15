@@ -9,7 +9,7 @@ import {
   workspacePreviewPassageScopeSql,
 } from "@/api/lib/search/preview-passage-scope-sql";
 
-export type PreviewPassageTable =
+type PreviewPassageTable =
   | "case-law"
   | "chat"
   | "contact"

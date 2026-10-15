@@ -38,6 +38,7 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
 import type { SafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import {
   clearContactImportRequest,
   resolveContactImportRequest,
@@ -142,14 +143,14 @@ const IS_MULTILINE_IMPORT_FIELD = {
   tax_id: false,
 } as const satisfies Record<ImportEditableTextField, boolean>;
 
-export type ImportReviewSeedRow = {
+type ImportReviewSeedRow = {
   candidate: ImportCandidate;
   issues: ImportIssue[];
   /** Position in the source, kept stable while rows are edited or removed. */
   rowNumber: number;
 };
 
-export type ImportReviewRow = ImportReviewSeedRow & {
+type ImportReviewRow = ImportReviewSeedRow & {
   /** The contact id the commit will use; stable so a retry replays. */
   id: SafeId<"contact">;
 };
@@ -293,7 +294,7 @@ export const useImportReview = ({
     setRows(
       seedRows.map((row) => ({
         ...row,
-        id: toSafeId<"contact">(crypto.randomUUID()),
+        id: toSafeId<"contact">(createUuid()),
       })),
     );
   };

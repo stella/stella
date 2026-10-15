@@ -3,14 +3,8 @@
  * and the typeahead match key live in the sibling `.logic.ts`.
  */
 
-import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import {
-  DOCUMENT_TRANSLATION_SOURCE_LANGUAGES,
-  isDocumentTranslationSourceLanguageCode,
-  type DocumentTranslationSourceLanguageCode,
-} from "@stll/api-contract/document-translation";
 import { compareByLocale } from "@stll/collation";
 import {
   Combobox,
@@ -108,27 +102,4 @@ type DocumentLanguagePickerProps = Omit<LanguagePickerProps, "languages">;
 
 export const DocumentLanguagePicker = (props: DocumentLanguagePickerProps) => (
   <LanguagePicker {...props} languages={DEEPL_TARGET_LANGUAGES} />
-);
-
-type DocumentSourceLanguagePickerProps = {
-  id: string;
-  label: string;
-  value: DocumentTranslationSourceLanguageCode | null;
-  onChange: (code: DocumentTranslationSourceLanguageCode) => void;
-  disabled?: boolean | undefined;
-};
-
-export const DocumentSourceLanguagePicker = ({
-  onChange,
-  ...props
-}: DocumentSourceLanguagePickerProps) => (
-  <LanguagePicker
-    {...props}
-    languages={DOCUMENT_TRANSLATION_SOURCE_LANGUAGES}
-    onChange={(code) =>
-      isDocumentTranslationSourceLanguageCode(code)
-        ? onChange(code)
-        : panic("Source-language picker returned a target-only language")
-    }
-  />
 );

@@ -713,6 +713,17 @@ impl SessionManager {
     }
   }
 
+  /// Resolve an exact local edit path. The activity matcher accepts its opaque
+  /// matter ID only when it belongs to the current caller's candidate set.
+  pub(crate) fn activity_matter_for_document(&self, document: &str) -> Option<String> {
+    let session = self
+      .sessions
+      .values()
+      .find(|session| session.file_path == document)?;
+    self.linked_account.as_ref()?;
+    Some(session.workspace_id.clone())
+  }
+
   /// Expose the HTTP client so callers can download outside the lock.
   pub fn http_client(&self) -> &DesktopHttpClient {
     &self.http_client
@@ -1088,6 +1099,16 @@ impl SessionManager {
       .trusted_self_host_connections
       .iter()
       .any(|connection| connection.api_base_url == normalized_api_base_url)
+  }
+
+  pub fn trusted_self_host_web_origin(&self, api_base_url: &str) -> Option<String> {
+    let normalized_api_base_url =
+      config::normalize_self_host_api_base_url(api_base_url).ok()?;
+    self
+      .trusted_self_host_connections
+      .iter()
+      .find(|connection| connection.api_base_url == normalized_api_base_url)
+      .map(|connection| connection.web_origin.clone())
   }
 
   pub fn is_trusted_self_host_connection(

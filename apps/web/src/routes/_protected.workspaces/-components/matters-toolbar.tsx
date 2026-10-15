@@ -26,8 +26,10 @@ import {
 import { Separator } from "@stll/ui/separator";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
+import { useQueryView } from "@/lib/use-query-view";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesRouteOptions } from "@/lib/workspaces/queries";
 import type { MattersColumnId } from "@/lib/workspaces/types";
@@ -191,11 +193,16 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
   const activeOrganizationId = routeApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data } = useQuery(workspacesRouteOptions(activeOrganizationId));
+  const dataQuery = useQuery(workspacesRouteOptions(activeOrganizationId));
+  const dataView = useQueryView(dataQuery);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
 
-  if (!data || !canCreate) {
+  if (!canCreate) {
     return null;
+  }
+  if (!data) {
+    return <QueryViewFeedback view={dataView} />;
   }
 
   const isLimitReached =
@@ -205,16 +212,19 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
   }
 
   return (
-    <Button
-      aria-label={t("common.newMatter")}
-      className={className}
-      onClick={() => openCreateMatter()}
-      size="xs"
-      title={t("common.newMatter")}
-    >
-      <PlusIcon />
-      <span className="hidden sm:inline">{t("common.newMatter")}</span>
-    </Button>
+    <>
+      <QueryViewFeedback view={dataView} />
+      <Button
+        aria-label={t("common.newMatter")}
+        className={className}
+        onClick={() => openCreateMatter()}
+        size="xs"
+        title={t("common.newMatter")}
+      >
+        <PlusIcon />
+        <span className="hidden sm:inline">{t("common.newMatter")}</span>
+      </Button>
+    </>
   );
 };
 

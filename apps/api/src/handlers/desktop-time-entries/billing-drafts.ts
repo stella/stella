@@ -19,7 +19,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import {
   ACCOUNT_ACCESS,
   admitFiniteAction,
-  assertUsageAvailableForHandler,
+  authorizeHandlerUsage,
   createSafeBoundedPublicHandler,
   safePublicHandlerResponseSchemasWithStatusText,
 } from "@/api/lib/api-handlers";
@@ -225,6 +225,36 @@ const prepareBillingDraftPrompt = ({
   return { refs, prompt };
 };
 
+type CanonicalBillingDraftResultOptions = {
+  restored: DesktopBillingDraftResponse;
+  matters: PrepareBillingDraftPromptOptions["context"]["matters"];
+};
+
+const canonicalBillingDraftResult = ({
+  restored,
+  matters,
+}: CanonicalBillingDraftResultOptions) => {
+  const matterNames = new Map(
+    matters.map(({ matterId, name }) => [String(matterId), name]),
+  );
+  return {
+    ...restored,
+    drafts: restored.drafts.map((draft) => ({
+      ...draft,
+      operations: draft.operations.map((operation) =>
+        operation.type === "move"
+          ? {
+              ...operation,
+              targetMatterName:
+                matterNames.get(operation.targetMatterId) ??
+                panic("Validated billing move lost its target matter"),
+            }
+          : operation,
+      ),
+    })),
+  };
+};
+
 export const createDesktopBillingDraftEndpoint = ({
   authorizeAccount = authorizeDesktopAccount,
   loadContext = loadBillingDraftContext,
@@ -233,6 +263,7 @@ export const createDesktopBillingDraftEndpoint = ({
 }: BillingDraftEndpointOptions = {}) =>
   createSafeBoundedPublicHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
@@ -301,122 +332,113 @@ export const createDesktopBillingDraftEndpoint = ({
           }),
         );
       }
-      const preflight = await assertUsageAvailableForHandler({
-        metering: { actionType: "chat", modelRole: "chat" },
-        ...account,
-        orgAIConfig: context.orgAIConfig,
-        workspaceId: null,
-      });
-      if (preflight) {
-        return Result.err(preflight);
-      }
-      const analytics = createTanStackAIAnalyticsCallbacks({
-        dataClass: "customer",
-        feature: "billing.activity_drafts",
-        modelRole: "chat",
-        orgAIConfig: context.orgAIConfig,
-        properties: {},
-        traceId: Bun.randomUUIDv7(),
-        usageMetering: {
+      const authorization = yield* Result.await(
+        authorizeHandlerUsage({
+          metering: { actionType: "chat", modelRole: "chat" },
           ...account,
-          actionType: "chat",
-          serviceTier: "standard",
+          orgAIConfig: context.orgAIConfig,
           workspaceId: null,
-        },
-      });
-      return yield* admitFiniteAction({
-        actionKind: "billing.activity-drafts",
-        ctx: {
-          ...ctx,
-          user: { id: account.userId },
-          session: { activeOrganizationId: account.organizationId },
-          scopedDb: account.scopedDb,
-          actionSignal: request.signal,
-        },
-        ...(admit ? { admit } : {}),
-        async *handler({ actionSignal }) {
-          const result = yield* Result.await(
-            Result.tryPromise({
-              try: async () =>
-                await generateObjectForRole({
-                  dataClass: "customer",
-                  organizationId: account.organizationId,
-                  orgAIConfig: context.orgAIConfig,
-                  managedAIResidency: context.managedAIResidency,
-                  role: "chat",
-                  serviceTier: "standard",
-                  analytics,
-                  caching: resolveCaching({
-                    promptCachingEnabled: context.promptCachingEnabled,
-                    role: "chat",
-                    scopeKey: null,
-                  }),
-                  tenantWorkspaceIds: context.matters.map(
-                    ({ matterId }) => matterId,
-                  ),
-                  abortSignal: AbortSignal.any([
-                    actionSignal,
-                    AbortSignal.timeout(BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs),
-                  ]),
-                  system: SYSTEM_PROMPT,
-                  systemPromptOrigin: "server-built",
-                  prompt,
-                  outputSchema: desktopBillingDraftResponseSchema,
-                  maxOutputTokens: 16_000,
-                }),
-              catch: (error) => {
-                analytics.captureError(error);
-                return aiHandlerError(error, {
-                  status: 502,
-                  message: "Billing draft generation failed",
-                });
+        }),
+      );
+      return await authorization.execute(
+        async () =>
+          await Result.gen(async function* () {
+            return yield* admitFiniteAction({
+              actionKind: "billing.activity-drafts",
+              ctx: {
+                ...ctx,
+                user: { id: account.userId },
+                session: { activeOrganizationId: account.organizationId },
+                scopedDb: account.scopedDb,
+                actionSignal: request.signal,
               },
-            }),
-          );
-          const validation = refs.restore(result).andThen((restored) => {
-            const checked = validateBillingDraftResult(
-              restored,
-              validationContext,
-            );
-            if (checked.isErr()) {
-              return Result.err(checked.error);
-            }
-            return Result.ok(restored);
-          });
-          if (validation.isErr()) {
-            analytics.captureError(validation.error);
-            return Result.err(
-              new HandlerError({
-                status: 502,
-                message: "Billing draft proposals failed validation",
-              }),
-            );
-          }
-          const restored = validation.value;
-          const matterNames = new Map(
-            context.matters.map(({ matterId, name }) => [
-              String(matterId),
-              name,
-            ]),
-          );
-          return Result.ok({
-            ...restored,
-            drafts: restored.drafts.map((draft) => ({
-              ...draft,
-              operations: draft.operations.map((operation) =>
-                operation.type === "move"
-                  ? {
-                      ...operation,
-                      targetMatterName:
-                        matterNames.get(operation.targetMatterId) ??
-                        panic("Validated billing move lost its target matter"),
-                    }
-                  : operation,
-              ),
-            })),
-          });
-        },
-      });
+              ...(admit ? { admit } : {}),
+              async *handler({ actionSignal, modelAdmission }) {
+                const analytics = createTanStackAIAnalyticsCallbacks({
+                  dataClass: "customer",
+                  feature: "billing.activity_drafts",
+                  modelRole: "chat",
+                  modelTier: modelAdmission.modelTier,
+                  orgAIConfig: context.orgAIConfig,
+                  properties: {},
+                  traceId: Bun.randomUUIDv7(),
+                  usageMetering: {
+                    ...account,
+                    actionType: "chat",
+                    serviceTier: "standard",
+                    workspaceId: null,
+                  },
+                });
+                const result = yield* Result.await(
+                  Result.tryPromise({
+                    try: async () =>
+                      await generateObjectForRole({
+                        dataClass: "customer",
+                        admission: modelAdmission,
+                        organizationId: account.organizationId,
+                        orgAIConfig: context.orgAIConfig,
+                        managedAIResidency: context.managedAIResidency,
+                        role: "chat",
+                        serviceTier: "standard",
+                        analytics,
+                        caching: resolveCaching({
+                          promptCachingEnabled: context.promptCachingEnabled,
+                          role: "chat",
+                          scopeKey: null,
+                        }),
+                        tenantWorkspaceIds: context.matters.map(
+                          ({ matterId }) => matterId,
+                        ),
+                        abortSignal: AbortSignal.any([
+                          actionSignal,
+                          AbortSignal.timeout(
+                            BILLING_DRAFT_CONTEXT_LIMITS.timeoutMs,
+                          ),
+                        ]),
+                        system: SYSTEM_PROMPT,
+                        systemPromptOrigin: "server-built",
+                        prompt,
+                        outputSchema: desktopBillingDraftResponseSchema,
+                        maxOutputTokens: 16_000,
+                      }),
+                    catch: (error) => {
+                      analytics.captureError(error);
+                      return aiHandlerError(error, {
+                        status: 502,
+                        message: "Billing draft generation failed",
+                      });
+                    },
+                  }),
+                );
+                const validation = refs.restore(result).andThen((restored) => {
+                  const checked = validateBillingDraftResult(
+                    restored,
+                    validationContext,
+                  );
+                  if (checked.isErr()) {
+                    return Result.err(checked.error);
+                  }
+                  return Result.ok(restored);
+                });
+                if (validation.isErr()) {
+                  analytics.captureError(validation.error);
+                  return Result.err(
+                    new HandlerError({
+                      status: 502,
+                      message: "Billing draft proposals failed validation",
+                    }),
+                  );
+                }
+                return Result.ok(
+                  canonicalBillingDraftResult({
+                    restored: validation.value,
+                    matters: context.matters,
+                  }),
+                );
+              },
+            });
+          }),
+      );
     },
   );
 

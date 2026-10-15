@@ -102,8 +102,7 @@ export const BILINGUAL_GLOSSARY_ORIGINS = [
   "proposed",
   "user",
 ] as const;
-export type BilingualGlossaryOrigin =
-  (typeof BILINGUAL_GLOSSARY_ORIGINS)[number];
+type BilingualGlossaryOrigin = (typeof BILINGUAL_GLOSSARY_ORIGINS)[number];
 
 /** One defined term and the rendering every row must use for it. Inflected
  *  forms let the consistency check match declined languages. */

@@ -14,6 +14,7 @@ import { cn } from "@stll/ui/utils";
 
 import { DatePickerPopover as DatePickerPopoverBase } from "@/components/date-picker-popover";
 import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/components/date-picker-popover";
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { UserIdentity } from "@/components/user-avatar";
 import {
   PRIORITY_COLORS,
@@ -27,6 +28,7 @@ import {
   WORK_TYPES,
 } from "@/components/workspaces/tasks/task-detail-constants";
 import { useLocale } from "@/i18n/formatting-context";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import {
   useAddTaskAssignee,
   useRemoveTaskAssignee,
@@ -251,7 +253,10 @@ export const OwnerPicker = ({
 }: OwnerPickerProps) => {
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
-  const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
+  const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
+  const membersView = useQueryView(membersQuery);
+  useQueryViewError(membersView);
+  const members = membersView.type === "items" ? membersView.items : undefined;
   const selectableMembers = members?.filter(
     (member) => member.user && member.user.id !== owner?.id,
   );
@@ -282,6 +287,7 @@ export const OwnerPicker = ({
         )}
       </PopoverTrigger>
       <PopoverPopup className="w-64" padding="sm" side="bottom">
+        <QueryViewFeedback view={membersView} />
         <div className="flex flex-col gap-2">
           <div className="flex max-h-56 flex-col overflow-y-auto">
             {selectableMembers?.map((member) => {
@@ -338,7 +344,10 @@ export const AssigneePicker = ({
 }: AssigneePickerProps) => {
   const t = useTranslations("tasks");
   const tCommon = useTranslations("common");
-  const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
+  const membersQuery = useQuery(workspaceMembersOptions(workspaceId));
+  const membersView = useQueryView(membersQuery);
+  useQueryViewError(membersView);
+  const members = membersView.type === "items" ? membersView.items : undefined;
 
   const assignedIds = new Set(assignees.map((a) => a.user.id));
 
@@ -351,6 +360,7 @@ export const AssigneePicker = ({
 
   return (
     <div className="flex flex-col gap-1">
+      <QueryViewFeedback view={membersView} />
       {assignees.map((a) => (
         <div
           className="group/assignee flex items-center gap-1.5 rounded-md px-1.5 py-0.5"

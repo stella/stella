@@ -90,7 +90,7 @@ export const workspaceViews = p.pgTable(
       .uniqueIndex(WORKSPACE_VIEWS_CORRESPONDENCE_INDEX)
       .on(table.workspaceId)
       .where(sql`(${table.layout} ->> 'type') = 'correspondence'`),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: table }),
   ],
 );
 

@@ -196,8 +196,8 @@ const CONFIGURED_RESOURCES = buildBetterAuthOAuthResources(
 
 /**
  * Stored scope sets for every configured resource, keyed by what the row holds.
- * `predecessor` is what the previous release wrote and still requires exactly;
- * `configured` is what this release issues with. Everything else is foreign.
+ * Only `configured` passes: the deploy repair has upgraded every `predecessor`
+ * row, so one still stored means the repair did not run.
  */
 const STORED_SCOPE_SETS = {
   configured: (allowedScopes: readonly string[]) => [...allowedScopes],
@@ -215,7 +215,7 @@ const STORED_SCOPE_SETS = {
   empty: () => [],
 } as const;
 
-const ACCEPTED_SCOPE_SETS = new Set<string>(["configured", "predecessor"]);
+const ACCEPTED_SCOPE_SETS = new Set<string>(["configured"]);
 
 const givenStoredResources = async (
   transaction: TestDatabaseTransaction,
@@ -271,20 +271,19 @@ test.each(Object.entries(STORED_SCOPE_SETS))(
   },
 );
 
-test("the boot census accepts predecessor and configured rows side by side", async () => {
-  // A deploy that adds an audience inserts it with the configured set while
-  // existing audiences keep the predecessor set.
+test("the boot census rejects a predecessor row beside configured rows", async () => {
   try {
     await database.transaction(async (transaction) => {
       await givenStoredResources(transaction, (allowedScopes, index) =>
         index === 0
-          ? [...allowedScopes]
-          : predecessorOAuthResourceScopes(allowedScopes),
+          ? predecessorOAuthResourceScopes(allowedScopes)
+          : [...allowedScopes],
       );
-      await assertBetterAuthOAuthPolicyCensus(
-        transaction,
-        CONFIGURED_RESOURCES,
-      );
+      expect(
+        await captureCensusRejection(
+          assertBetterAuthOAuthPolicyCensus(transaction, CONFIGURED_RESOURCES),
+        ),
+      ).toMatchObject({ failedChecks: ["resources-match"] });
       transaction.rollback();
     });
   } catch (error) {

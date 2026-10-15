@@ -5,9 +5,9 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
 import { env } from "@/api/env";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import {
   InMemoryRateLimitContext,
-  type RateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
 import type { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
@@ -246,6 +246,7 @@ const createBudgetApp = () => {
       const counter = sharedContext.increment(key, duration, requestTime);
       return { ...counter, count: counter.count * API_RATE_LIMITS.api.max };
     },
+    complete: (key) => sharedContext.complete(key),
     decrement: (key) => sharedContext.decrement(key),
     kill: () => sharedContext.kill(),
   };
@@ -255,6 +256,7 @@ const createBudgetApp = () => {
       searchKeys.push(key);
       return searchContext.increment(key, duration, requestTime);
     },
+    complete: (key) => searchContext.complete(key),
     decrement: (key) => searchContext.decrement(key),
     kill: () => searchContext.kill(),
   };

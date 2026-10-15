@@ -6,14 +6,6 @@ export class ClientOperationError extends TaggedError("ClientOperationError")<{
   cause?: unknown;
 }> {}
 
-export class ClientCapabilityError extends TaggedError(
-  "ClientCapabilityError",
-)<{
-  capability: string;
-  message: string;
-  cause?: unknown;
-}> {}
-
 export class ClientUnknownError extends TaggedError("ClientUnknownError")<{
   message: string;
 }> {}

@@ -1,13 +1,12 @@
-import { renderToStaticMarkup } from "react-dom/server";
-
 import { describe, expect, test } from "bun:test";
 
+import { InlineContent } from "@stll/decision-reader/document-ast-text";
+import type { TextAnchor } from "@stll/decision-reader/document-ast-text";
+import type { ReaderSearchMatchRange } from "@stll/decision-reader/reader-search";
+import { SourceLinkPolicyProvider } from "@stll/decision-reader/source-link-policy";
 import type { Inline } from "@stll/legal-ast/document-ast";
 
-import { InlineContent } from "@/components/legal-reader/document-ast-text";
-import type { TextAnchor } from "@/components/legal-reader/document-ast-text";
-import type { SearchMatchRange } from "@/components/legal-reader/reader-search";
-import { SourceLinkPolicyProvider } from "@/components/legal-reader/source-link-policy";
+import { renderReaderFixture as renderToStaticMarkup } from "../../../../../packages/decision-reader/src/decision-text.test";
 
 /**
  * A source document's own hyperlinks render only for the publisher that
@@ -39,7 +38,7 @@ const render = ({
 }: {
   activeMatchIndex?: number;
   anchors: TextAnchor[];
-  ranges: SearchMatchRange[];
+  ranges: ReaderSearchMatchRange[];
 }) =>
   renderToStaticMarkup(
     <InlineContent

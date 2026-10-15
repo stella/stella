@@ -1,10 +1,11 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
+
 import { LanguagePicker } from "@/components/language-picker";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { ThemePicker } from "@/components/theme-picker";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { loadAuthContext } from "@/routes/-auth-context";
 
 const landingUrl = "https://stll.app";

@@ -17,15 +17,18 @@ import { panic } from "better-result";
  */
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
 import type {
   Block,
   DocumentAst,
   ParagraphBlock,
-} from "@/api/handlers/case-law/document-ast";
-import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
+import { createSha256 } from "@stll/sha256/bun";
+
+import type { Transaction } from "@/api/db/root";
+import type { ScopedDb } from "@/api/db/safe-db";
+import { caseLawDecisionSupplements, caseLawDecisions } from "@/api/db/schema";
 import type {
   DecisionSupplementTarget,
   EmptyAst,
@@ -609,7 +612,7 @@ const compositeHash = (
   judgment: IngestionResult,
   supplements: readonly StoredSupplement[],
 ): string => {
-  const hasher = new Bun.CryptoHasher("sha256");
+  const hasher = createSha256();
   hasher.update(
     JSON.stringify({
       judgment: judgment.rawHash,

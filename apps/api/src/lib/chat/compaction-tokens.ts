@@ -7,7 +7,7 @@
  * a thread cannot drift apart on the numbers that matter.
  */
 
-export const ESTIMATED_CHARS_PER_TOKEN = 4;
+const ESTIMATED_CHARS_PER_TOKEN = 4;
 export const MESSAGE_OVERHEAD_TOKENS = 12;
 export const FILE_PART_ESTIMATED_TOKENS = 8000;
 export const DEFAULT_TRIGGER_TOKENS = 64_000;

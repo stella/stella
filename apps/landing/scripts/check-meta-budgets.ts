@@ -4,6 +4,8 @@ import { YAML } from "bun";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import { products } from "../src/data/products/registry";
 import { type Locale, localeCodes } from "../src/i18n/config";
 import { catalogs } from "../src/i18n/utils";
@@ -132,6 +134,7 @@ const staticPageFiles = [
   { page: "/press", file: "src/pages/press.astro" },
   { page: "/privacy", file: "src/pages/privacy.astro" },
   { page: "/security", file: "src/pages/security.astro" },
+  { page: "/support", file: "src/pages/support.astro" },
   { page: "/terms", file: "src/pages/terms.astro" },
 ];
 
@@ -179,10 +182,7 @@ const publishedBlogPages = (): BlogPagesResult => {
   const pages: PageMeta[] = [];
   const violations: string[] = [];
   for (const file of markdownFiles(BLOG_ROOT).toSorted()) {
-    const relativePath = path
-      .relative(BLOG_ROOT, file)
-      .split(path.sep)
-      .join("/");
+    const relativePath = repoRelativePath(BLOG_ROOT, file);
     const page = `/blog/${relativePath.slice(0, -3)}`;
     const source = readFileSync(file, "utf-8");
     const close = source.indexOf(FRONTMATTER_CLOSE, FRONTMATTER_OPEN.length);

@@ -1,6 +1,8 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/document" });
 const originalFetch = globalThis.fetch;
 globalThis.fetch = Object.assign(async () => Response.json(null), {
@@ -16,6 +18,10 @@ const { IntlProvider } = await import("use-intl");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const messages = (await import("@/i18n/langs/en.json")).default;
 const { TranslateDocumentDialog } = await import("./translate-document-dialog");
+const { ActionCapabilitiesProvider } =
+  await import("@/lib/organization/feature-access/capability-actions");
+const { resolveActionCapabilities } =
+  await import("@/lib/organization/feature-access/action-capabilities.logic");
 const { deepLAvailabilityOptions } = await import("@/lib/deepl/queries");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
@@ -28,7 +34,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 afterAll(async () => {
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 for (const controlled of [true, false]) {
@@ -134,9 +140,20 @@ for (const controlled of [true, false]) {
       const view = render(
         <QueryClientProvider client={client}>
           <IntlProvider locale="en" messages={messages} timeZone="UTC">
-            <FormattingProvider locale="en" timeZone="UTC">
-              <router.RouterProvider router={appRouter} />
-            </FormattingProvider>
+            <ActionCapabilitiesProvider
+              value={resolveActionCapabilities({
+                role: "member",
+                ai: true,
+                deepl: true,
+                ocr: true,
+                desktop: "current",
+                settings: undefined,
+              })}
+            >
+              <FormattingProvider locale="en" timeZone="UTC">
+                <router.RouterProvider router={appRouter} />
+              </FormattingProvider>
+            </ActionCapabilitiesProvider>
           </IntlProvider>
         </QueryClientProvider>,
       );

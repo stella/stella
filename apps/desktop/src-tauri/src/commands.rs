@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Manager, State};
 use tauri_plugin_opener::OpenerExt;
 use tokio::sync::Mutex;
 
@@ -8,12 +8,10 @@ use crate::types::{AppSnapshot, DesktopNotificationPreferences};
 
 pub type AppState = Arc<Mutex<SessionManager>>;
 
-const STELLA_DESKTOP_ACCOUNT_URL: &str = "https://my.stll.app/settings/account/desktop";
-
 fn stella_account_url(linked_self_host_origin: Option<&str>) -> String {
-  linked_self_host_origin.map_or_else(
-    || STELLA_DESKTOP_ACCOUNT_URL.to_string(),
-    |origin| format!("{origin}/settings/account/desktop"),
+  format!(
+    "{}/settings/account/desktop",
+    linked_self_host_origin.unwrap_or(crate::config::PRODUCTION_WEB_ORIGIN)
   )
 }
 
@@ -42,7 +40,10 @@ pub async fn open_stella_account(
       return Err("Reconnect the self-hosted desktop server to select its API".into());
     }
     let (api_base_url, origin) = selected_self_host.as_ref().map_or(
-      ("https://api.stll.app", "https://my.stll.app"),
+      (
+        crate::config::PRODUCTION_API_BASE_URL,
+        crate::config::PRODUCTION_WEB_ORIGIN,
+      ),
       |connection| {
         (
           connection.api_base_url.as_str(),
@@ -50,7 +51,7 @@ pub async fn open_stella_account(
         )
       },
     );
-    return crate::account::open_browser_connection(&app, api_base_url, origin);
+    return crate::account::open_browser_connection(&app, api_base_url, origin).await;
   }
   let web_origin = linked.as_ref().map(|account| account.web_origin.as_str());
   app
@@ -123,6 +124,44 @@ pub async fn takeover_dialog_respond(
   crate::session_manager::set_takeover_response(&label, approved);
   let _ = window.close();
   Ok(())
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticDialogBounds {
+  max_width: f64,
+  max_height: f64,
+}
+
+#[tauri::command]
+pub async fn fit_static_dialog(
+  window: tauri::WebviewWindow,
+  width: f64,
+  height: f64,
+) -> Result<StaticDialogBounds, String> {
+  if !matches!(
+    window.label(),
+    "selfhost-connect-dialog" | "pdf-sign-dialog"
+  ) {
+    return Err("Only static approval dialogs can request content sizing".into());
+  }
+  if !width.is_finite() || !height.is_finite() || width <= 0.0 || height <= 0.0 {
+    return Err("Invalid dialog content size".into());
+  }
+  let area = crate::window_placement::target_work_area(window.app_handle());
+  let max_width = area.map_or(720.0, |area| (area.width - 64.0).min(720.0));
+  let max_height = area.map_or(960.0, |area| (area.height - 64.0).min(960.0));
+  let size = tauri::LogicalSize::new(width.min(max_width), height.min(max_height));
+  window.set_size(size).map_err(|error| error.to_string())?;
+  if let Some(area) = area {
+    window
+      .set_position(crate::window_placement::centered_origin(area, size))
+      .map_err(|error| error.to_string())?;
+  }
+  Ok(StaticDialogBounds {
+    max_width,
+    max_height,
+  })
 }
 
 #[tauri::command]
@@ -231,6 +270,9 @@ mod tests {
       stella_account_url(Some("https://stella.example")),
       "https://stella.example/settings/account/desktop"
     );
-    assert_eq!(stella_account_url(None), STELLA_DESKTOP_ACCOUNT_URL);
+    assert_eq!(
+      stella_account_url(None),
+      "https://my.stll.app/settings/account/desktop"
+    );
   }
 }

@@ -30,6 +30,8 @@ import { TaggedError } from "better-result";
 import type { Static } from "elysia";
 import * as v from "valibot";
 
+import { sleep } from "@stll/concurrency/sleep";
+import { printError, sanitizeErrorForOutput } from "@stll/errors";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
@@ -392,11 +394,6 @@ const readHealth = async (baseUrl: string): Promise<EvaluatedCheck> => {
   });
 };
 
-const sleep = async (ms: number): Promise<void> =>
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-
 const writeReadinessLog = (message: string): void => {
   process.stdout.write(`[api-readiness] ${message}\n`);
 };
@@ -571,8 +568,10 @@ const resolveBaseUrl = (): string => {
   return raw.replace(/(?<!\/)\/+$/u, "");
 };
 
-const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+const errorMessage = (error: unknown): string => {
+  const safeError = sanitizeErrorForOutput(error);
+  return safeError instanceof Error ? safeError.message : String(safeError);
+};
 
 /**
  * `SMOKE_AI_JOURNEY` picks what runs: unset runs everything, `skip` only the
@@ -692,7 +691,7 @@ const main = async (): Promise<void> => {
 
 if (import.meta.main) {
   main().catch((error: unknown) => {
-    process.stderr.write(`${errorMessage(error)}\n`);
+    printError(error);
     process.exit(1);
   });
 }

@@ -1,12 +1,15 @@
 import { eq } from "drizzle-orm";
 
 import {
+  CASE_LAW_ANALYSIS_FAILURE_CODES,
+  CASE_LAW_ANALYSIS_KEY_SOURCES,
   CASE_LAW_RESEARCH_ANSWER_FAILURE_REASONS,
   CASE_LAW_RESEARCH_ANSWER_STATES,
   CASE_LAW_RESEARCH_ANSWER_TYPES,
 } from "@stll/api-contract";
 import type { CaseLawResearchColumnTool } from "@stll/api-contract";
 import { DECISION_JUDGE_ROLES } from "@stll/api-contract/case-law-judges";
+import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   APPLIED_VERSION_BASES,
   STATED_DATE_RELATIONS,
@@ -21,7 +24,7 @@ import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier
 
 import { CITATION_AUTHORITY_SWEEP_SCOPES } from "@/api/handlers/case-law/citation-authority-sweep-scope";
 import { CITATION_DECISION_TYPE_HINTS } from "@/api/handlers/case-law/citation-decision-type-hint";
-import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind";
+import { CITATION_KINDS } from "@/api/handlers/case-law/citation-kind-values";
 import {
   CITATION_AMBIGUITY_SHAPES,
   CITATION_CENSUS_ROW_KINDS,
@@ -43,6 +46,9 @@ import { CITATION_SHEET_NUMBER_MAX_LENGTH } from "@/api/handlers/case-law/citati
 import { PORTRAIT_SOURCES } from "@/api/handlers/case-law/judges/consts";
 import type { JudgeExternalRefs } from "@/api/handlers/case-law/judges/consts";
 import {
+  AI_CITATION_REVIEW_ORIGINS,
+  CITATION_REVIEW_ORIGIN,
+  CITATION_REVIEW_ORIGINS,
   POLARITIES,
   REVIEWABLE_POLARITIES,
   RULE_SOURCE,
@@ -53,11 +59,13 @@ import type {
   ReviewablePolarity,
   RuleSource,
 } from "@/api/handlers/case-law/polarity/consts";
+import { CITATION_DIRECTIONS } from "@/api/lib/case-law/citation-vocabulary";
 import {
   CASE_LAW_DECISION_COURT_ID_CONSTRAINT,
   DECISION_COURT_ID_MAX_LENGTH,
   decisionCourtIdByCountrySql,
 } from "@/api/lib/case-law/decision-court-id-sql";
+import { publishedUnredactedCaseLawDecisionFor } from "@/api/lib/case-law/published-decisions-sql";
 import { redistributableCaseLawSourceFor } from "@/api/lib/case-law/redistribution-sql";
 import type {
   CaseLawResearchAnswerRun,
@@ -214,6 +222,14 @@ const REVIEWABLE_POLARITY_SQL_VALUES = REVIEWABLE_POLARITIES.map((polarity) =>
   sql.raw(`'${polarity}'`),
 );
 
+const CITATION_REVIEW_ORIGIN_SQL_VALUES = CITATION_REVIEW_ORIGINS.map(
+  (origin) => sql.raw(`'${origin}'`),
+);
+
+const AI_CITATION_REVIEW_ORIGIN_SQL_VALUES = AI_CITATION_REVIEW_ORIGINS.map(
+  (origin) => sql.raw(`'${origin}'`),
+);
+
 const CITATION_KIND_SQL_VALUES = CITATION_KINDS.map((kind) =>
   sql.raw(`'${kind}'`),
 );
@@ -331,6 +347,10 @@ const DECISION_IDENTIFIER_TYPE_SQL_VALUES = Object.values(
 const DECISION_PRIMARY_REFERENCE_TYPE_SQL_VALUES =
   DECISION_PRIMARY_REFERENCE_TYPES.map((type) => sql.raw(`'${type}'`));
 
+const CASE_LAW_SOURCE_LEASE_PURPOSES = ["ingestion", "decision-merge"] as const;
+const CASE_LAW_SOURCE_LEASE_PURPOSE_SQL_VALUES =
+  CASE_LAW_SOURCE_LEASE_PURPOSES.map((purpose) => sql.raw(`'${purpose}'`));
+
 export const caseLawSources = p.pgTable(
   "case_law_sources",
   {
@@ -350,6 +370,16 @@ export const caseLawSources = p.pgTable(
       .notNull(),
     ingestionLeaseToken: p.uuid("ingestion_lease_token"),
     ingestionLeaseExpiresAt: timestamptz("ingestion_lease_expires_at"),
+    ingestionLeasePurpose: p
+      .text("ingestion_lease_purpose", { enum: CASE_LAW_SOURCE_LEASE_PURPOSES })
+      .default("ingestion")
+      .notNull(),
+    // Advances on every decision-merge claim, so a document writer detects a
+    // merge that started and finished while it was not looking.
+    decisionMergeEpoch: p
+      .bigint("decision_merge_epoch", { mode: "bigint" })
+      .default(0n)
+      .notNull(),
     config: jsonb().$type<Record<string, unknown>>().default({}),
     // License / redistribution terms. null = legacy source (public
     // court records, treated as redistributable); see corpus-source.ts. A
@@ -401,6 +431,10 @@ export const caseLawSources = p.pgTable(
     p.check(
       "case_law_sources_ingestion_lease_pair",
       sql`(${t.ingestionLeaseToken} IS NULL) = (${t.ingestionLeaseExpiresAt} IS NULL)`,
+    ),
+    p.check(
+      "case_law_sources_ingestion_lease_purpose_valid",
+      sql`${t.ingestionLeasePurpose} IN (${sql.join(CASE_LAW_SOURCE_LEASE_PURPOSE_SQL_VALUES, sql`, `)})`,
     ),
     p.check(
       "case_law_sources_reported_total_trio",
@@ -813,6 +847,12 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_arrivals_idx")
       .on(t.sourceId, t.createdAt)
       .where(storedObservationHasDetail(t.metadata)),
+    // Exact coverage bounds per source: two endpoint probes, independent of
+    // the display-sized year facet.
+    p
+      .index("case_law_decisions_source_decision_date_coverage_idx")
+      .on(t.sourceId, t.decisionDate, t.id)
+      .where(publishedUnredactedCaseLawDecisionFor(t)),
     // The sitemap shard refresh: the public countries' published decisions,
     // counted per month and bucket with their newest `updated_at`.
     // Partial on the publication gate so the gate costs nothing per row, and
@@ -2370,6 +2410,44 @@ export const caseLawBrowseFacetCounts = p.pgTable(
 );
 
 /**
+ * What became public for each source in the seven days before `counted_at`,
+ * replaced as one snapshot by the scheduler so the coverage page never counts
+ * a week of arrivals on the request path.
+ */
+export const caseLawSourceArrivals = p.pgTable(
+  "case_law_source_arrivals",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .primaryKey()
+      .references(() => caseLawSources.id, { onDelete: "cascade" }),
+    addedLastWeek: p.integer("added_last_week").notNull(),
+    countedAt: timestamptz("counted_at").notNull(),
+  },
+  (t) => [
+    p.check(
+      "case_law_source_arrivals_added_nonnegative",
+      sql`${t.addedLastWeek} >= 0`,
+    ),
+    p.pgPolicy("case_law_source_arrival_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_source_arrivals'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_source_arrivals'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1
+        FROM ${caseLawSources} AS arrival_source
+        WHERE arrival_source.id = ${t.sourceId}
+          AND ${redistributableCaseLawSourceFor(sql`arrival_source.descriptor`)}
+      )`,
+    }),
+  ],
+);
+
+/**
  * Where the standing resolution walk had got to.
  *
  * The walk is correct without this: settled rows leave the pending predicate,
@@ -2630,6 +2708,19 @@ export const caseLawCitationReviews = p.pgTable(
       .notNull(),
     /** Opaque reference to where the review is recorded. */
     reviewRef: p.varchar("review_ref", { length: 200 }).notNull(),
+    /**
+     * Who produced the label; decides which review stands when another
+     * arrives (`CITATION_REVIEW_ORIGIN_PRECEDENCE`). The provenance columns
+     * below are set exactly when a model produced it.
+     */
+    origin: p.text("origin", { enum: CITATION_REVIEW_ORIGINS }).notNull(),
+    model: p.text("model"),
+    promptVersion: p.text("prompt_version"),
+    promptSha256: p.varchar("prompt_sha256", { length: 64 }),
+    /** Digest of the passage the label was read from. */
+    evidenceSha256: p.varchar("evidence_sha256", { length: 64 }),
+    runId: p.text("run_id"),
+    producedAt: timestamptz("produced_at"),
     /** When the current review was made; a changed review moves it. */
     reviewedAt: timestamptz("reviewed_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at").defaultNow().notNull(),
@@ -2654,6 +2745,21 @@ export const caseLawCitationReviews = p.pgTable(
       sql`${t.citationKey} <> ''`,
     ),
     p.check("citation_reviews_review_ref_non_empty", sql`${t.reviewRef} <> ''`),
+    p.check(
+      "citation_reviews_origin_values",
+      sql`${t.origin} IN (${sql.join(CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})`,
+    ),
+    p.check(
+      "citation_reviews_origin_provenance",
+      sql`(${t.origin} IN (${sql.raw(`'${CITATION_REVIEW_ORIGIN.HUMAN_REVIEW}'`)})
+        AND ${t.model} IS NULL AND ${t.promptVersion} IS NULL
+        AND ${t.promptSha256} IS NULL AND ${t.evidenceSha256} IS NULL
+        AND ${t.runId} IS NULL AND ${t.producedAt} IS NULL)
+      OR (${t.origin} IN (${sql.join(AI_CITATION_REVIEW_ORIGIN_SQL_VALUES, sql.raw(","))})
+        AND ${t.model} IS NOT NULL AND ${t.promptVersion} IS NOT NULL
+        AND ${t.promptSha256} IS NOT NULL AND ${t.evidenceSha256} IS NOT NULL
+        AND ${t.runId} IS NOT NULL AND ${t.producedAt} IS NOT NULL)`,
+    ),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
@@ -2684,7 +2790,7 @@ export const caseLawMatterLinks = p.pgTable(
       .uniqueIndex("case_law_matter_links_decision_ws_idx")
       .on(t.decisionId, t.workspaceId),
     p.index("case_law_matter_links_workspace_idx").on(t.workspaceId),
-    ...wsPolicies(),
+    ...wsPolicies({ columns: t }),
   ],
 );
 
@@ -2964,6 +3070,63 @@ export const caseLawSearchBackfillFailures = p.pgTable(
   ],
 );
 
+const CASE_LAW_ANALYSIS_FAILURE_CODE_SQL_VALUES =
+  CASE_LAW_ANALYSIS_FAILURE_CODES.map((code) => sql.raw(`'${code}'`));
+
+/**
+ * How a reader's last analysis run of a decision failed, one row per decision
+ * and reader key. Kept apart from the decision row, which every reader
+ * shares: a failure under one key must stay recorded while another reader
+ * runs with theirs. Only the owner connection that runs the analysis reads or
+ * writes it.
+ */
+export const caseLawAnalysisFailures = p.pgTable.withRLS(
+  "case_law_analysis_failures",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    keyTag: p.text("key_tag").notNull(),
+    inputFingerprint: p.text("input_fingerprint").notNull(),
+    code: p.text({ enum: CASE_LAW_ANALYSIS_FAILURE_CODES }).notNull(),
+    keySource: p
+      .text("key_source", { enum: CASE_LAW_ANALYSIS_KEY_SOURCES })
+      .notNull(),
+    provider: p.text(),
+    /** Redacted provider reason, visible only to the organization whose run failed. */
+    providerDiagnostic: p
+      .jsonb("provider_diagnostic")
+      .$type<ProviderDiagnostic>(),
+    recordedAt: timestamptz("recorded_at").notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "case_law_analysis_failures_pkey",
+      columns: [t.decisionId, t.keyTag],
+    }),
+    p
+      .foreignKey({
+        name: "case_law_analysis_failure_decision_fk",
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("cascade"),
+    p.index("case_law_analysis_failures_recorded_at_idx").on(t.recordedAt),
+    p.check(
+      "case_law_analysis_failures_code_values",
+      sql`${t.code} IN (${sql.join(CASE_LAW_ANALYSIS_FAILURE_CODE_SQL_VALUES, sql`, `)})`,
+    ),
+    p.check(
+      "case_law_analysis_failures_key_shape",
+      sql`(${t.keySource} = 'organization' AND ${t.provider} IS NOT NULL) OR (${t.keySource} = 'platform' AND ${t.provider} IS NULL)`,
+    ),
+    p.pgPolicy("case_law_analysis_failure_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_analysis_failures'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_analysis_failures'::regclass)`,
+    }),
+  ],
+);
+
 export const caseLawSearchDocumentPreviewPassages = p.pgTable(
   "case_law_search_document_preview_passages",
   {
@@ -3128,3 +3291,108 @@ export const caseLawIndexJobs = p.pgTable(
 // draft. Shares the object-storage + corpus index substrate via the
 // `legislation` corpus family.
 // ---------------------------------------------------------------------------
+
+export const DECISION_CITATION_STATS_STATUSES = ["pending", "exact"] as const;
+
+/** Aggregates retain the far source and country so read policy changes are immediate. */
+export const caseLawDecisionCitationStats = p.pgTable(
+  "case_law_decision_citation_stats",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").notNull(),
+    direction: p.text({ enum: CITATION_DIRECTIONS }).notNull(),
+    relatedYear: p.integer("related_year").notNull(),
+    relatedCountry: p.varchar("related_country", { length: 3 }),
+    relatedSourceId: p.uuid("related_source_id"),
+    polarity: p.varchar({ length: 16, enum: POLARITIES }).notNull(),
+    count: p.bigint({ mode: "number" }).notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "decision_citation_stats_decision_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .unique("case_law_decision_citation_stats_bucket_key")
+      .on(
+        t.decisionId,
+        t.direction,
+        t.relatedYear,
+        t.relatedCountry,
+        t.relatedSourceId,
+        t.polarity,
+      )
+      .nullsNotDistinct(),
+    p.check(
+      "case_law_decision_citation_stats_target_shape",
+      sql`
+      (${t.relatedSourceId} IS NULL AND ${t.relatedCountry} IS NULL AND ${t.direction} = 'outgoing' AND ${t.relatedYear} = 0)
+      OR (${t.relatedSourceId} IS NOT NULL AND ${t.relatedCountry} IS NOT NULL AND (${t.direction} = 'incoming' OR ${t.relatedYear} = 0))
+    `,
+    ),
+    p.check(
+      "case_law_decision_citation_stats_direction",
+      sql`${t.direction} IN (${sql.join(
+        CITATION_DIRECTIONS.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_decision_citation_stats_nonnegative",
+      sql`${t.count} >= 0`,
+    ),
+    p.check(
+      "case_law_decision_citation_stats_polarity",
+      sql`${t.polarity} IN (${sql.join(
+        POLARITIES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    ...globalCaseLawPolicies(),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`CASE WHEN ${t.relatedSourceId} IS NULL THEN true ELSE EXISTS (
+        SELECT 1 FROM ${caseLawSources} AS citation_stats_source
+        WHERE citation_stats_source.id = ${t.relatedSourceId}
+          AND ${redistributableCaseLawSourceFor(sql`citation_stats_source.descriptor`)}
+      ) END`,
+    }),
+  ],
+);
+
+/** Missing state means pending; an empty exact projection is a truthful zero. */
+export const caseLawDecisionCitationStatsState = p.pgTable(
+  "case_law_decision_citation_stats_state",
+  {
+    decisionId: safeUuid<"caseLawDecision">("decision_id").primaryKey(),
+    status: p
+      .text({ enum: DECISION_CITATION_STATS_STATUSES })
+      .default("pending")
+      .notNull(),
+  },
+  (t) => [
+    p
+      .foreignKey({
+        columns: [t.decisionId],
+        foreignColumns: [caseLawDecisions.id],
+        name: "decision_citation_stats_state_decision_fk",
+      })
+      .onDelete("cascade"),
+    p.check(
+      "case_law_decision_citation_stats_state_status",
+      sql`${t.status} IN (${sql.join(
+        DECISION_CITATION_STATS_STATUSES.map((value) => sql.raw(`'${value}'`)),
+        sql`, `,
+      )})`,
+    ),
+    ...globalCaseLawPolicies(),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`true`,
+    }),
+  ],
+);

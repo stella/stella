@@ -1550,7 +1550,7 @@ export const registerLoopItemPatchValues = (
  * flattening nested objects into dot-joined keys so that
  * deep paths like `{{sellers.address.city}}` resolve.
  */
-export const registerItemPatchValues = (
+const registerItemPatchValues = (
   patchValues: Record<string, RichPatchValue>,
   item: Record<string, unknown>,
   arrayPath: string,
@@ -1905,7 +1905,7 @@ const directEachBodyMask = (
  * `{{path.field}}` placeholders are disjoint, so the order of the two rewrites
  * does not matter.
  */
-export const rewriteIterationTokensInText = (
+const rewriteIterationTokensInText = (
   text: string,
   index: number,
   count: number,

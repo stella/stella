@@ -2,7 +2,15 @@ import { panic, Result, TaggedError } from "better-result";
 import { appendFileSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import { printError } from "@stll/errors";
 import { childExitStatus } from "@stll/scripts/src/child-exit-status";
+import {
+  createProcessMemoryReader,
+  testInvocationMemoryLimit,
+  watchTestProcessMemory,
+} from "@stll/scripts/src/process-memory";
+import { spawnTestProcess } from "@stll/scripts/src/process-spawn";
+import type { WindowsProcessOwnership } from "@stll/scripts/src/windows-process-ownership";
 
 // A measured CI solo batch (254 chat turn tests) took 250.9s. Ten minutes
 // gives it more than twice that headroom, while bounding imports, snapshot
@@ -80,6 +88,7 @@ type ActiveProcess = {
   child: Bun.Subprocess;
   tail: Buffer;
   cancelStreams: () => void;
+  windowsProcesses: WindowsProcessOwnership | undefined;
 };
 
 type SupervisorOptions = {
@@ -91,6 +100,8 @@ type SupervisorOptions = {
   childTimeoutMs?: number;
   deadlineMs?: number;
   stopGraceMs?: number;
+  memoryLimitBytes?: number;
+  memorySampleIntervalMs?: number;
   maxLogBytes?: number;
   tailBytes?: number;
 };
@@ -113,6 +124,8 @@ export class TestProcessSupervisor {
   private stopped(): boolean {
     return this.signal.aborted;
   }
+  private readonly memoryReader = createProcessMemoryReader();
+  private readonly memoryLimitBytes: number;
   private readonly active = new Map<number, ActiveProcess>();
   private readonly deadline: ReturnType<typeof setTimeout>;
   private escalation: ReturnType<typeof setTimeout> | undefined;
@@ -126,16 +139,22 @@ export class TestProcessSupervisor {
 
   constructor(options: SupervisorOptions) {
     this.options = options;
+    this.memoryLimitBytes =
+      options.memoryLimitBytes ?? testInvocationMemoryLimit(process.env);
     this.childTimeoutMs = options.childTimeoutMs ?? CHILD_TIMEOUT_MS;
     this.stopGraceMs = options.stopGraceMs ?? CHILD_STOP_GRACE_MS;
     this.maxLogBytes = options.maxLogBytes ?? MAX_LOG_BYTES;
     this.tailBytes = options.tailBytes ?? TAIL_BYTES;
     for (const limit of [
+      this.memoryLimitBytes,
       this.childTimeoutMs,
       this.stopGraceMs,
       this.maxLogBytes,
       this.tailBytes,
       options.deadlineMs ?? RUNNER_DEADLINE_MS,
+      ...(options.memorySampleIntervalMs === undefined
+        ? []
+        : [options.memorySampleIntervalMs]),
     ]) {
       if (!Number.isSafeInteger(limit) || limit < 2) {
         panic("Test process limits must be integers of at least two");
@@ -175,22 +194,25 @@ export class TestProcessSupervisor {
       catch: operationError,
     });
     if (reported.isErr()) {
-      process.stderr.write(
-        `${text}\nDiagnostic callback failed: ${reported.error.message}\n`,
-      );
+      printError(text, "Diagnostic callback failed:", reported.error);
     }
   }
 
   private signalProcess(
-    { child, pid }: ActiveProcess,
+    { pid, windowsProcesses }: ActiveProcess,
     signal: NodeJS.Signals,
   ): void {
+    if (windowsProcesses !== undefined) {
+      const signalled = windowsProcesses.signal(signal);
+      if (signalled.isErr()) {
+        this.diagnose(
+          `Could not send ${signal} to Windows process tree ${pid}: ${signalled.error.message}`,
+        );
+      }
+      return;
+    }
     const signalled = Result.try({
       try: () => {
-        if (process.platform === "win32") {
-          child.kill(signal);
-          return;
-        }
         // Each POSIX child starts its own session, so this group belongs to
         // this invocation, including descendants that retain the output pipes.
         process.kill(-pid, signal);
@@ -261,18 +283,26 @@ export class TestProcessSupervisor {
     if (this.signal.aborted) {
       return { exitCode: TIMEOUT_EXIT_CODE, usage: undefined, output: "" };
     }
+    const readBytes = await this.memoryReader;
+    if (this.stopped()) {
+      return { exitCode: TIMEOUT_EXIT_CODE, usage: undefined, output: "" };
+    }
     const id = ++this.sequence;
     const logPath = path.join(this.options.directory, `${id}.log`);
     const junitPath = path.join(this.options.directory, `${id}.xml`);
     writeFileSync(logPath, "", { mode: 0o600 });
-    const child = Bun.spawn({
-      cmd: command(junitPath),
-      cwd,
-      env,
-      detached: process.platform !== "win32",
-      stdin: mode === "stream" ? "inherit" : "ignore",
-      stdout: "pipe",
-      stderr: "pipe",
+    const { child, windowsProcesses } = spawnTestProcess({
+      limitBytes: this.memoryLimitBytes,
+      command: command(junitPath),
+      options: {
+        cwd,
+        env,
+        detached: process.platform !== "win32",
+        stdin: mode === "stream" ? "inherit" : "ignore",
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+      onWarning: (message) => this.diagnose(message),
     });
     const stdout = child.stdout.getReader();
     const stderr = child.stderr.getReader();
@@ -296,6 +326,7 @@ export class TestProcessSupervisor {
       child,
       tail: Buffer.alloc(0),
       cancelStreams,
+      windowsProcesses,
     };
     this.active.set(id, entry);
 
@@ -373,6 +404,7 @@ export class TestProcessSupervisor {
         `${identity.kind} ${identity.label} exceeded ${this.childTimeoutMs}ms wall-clock budget`,
       );
     }, this.childTimeoutMs);
+    let memoryWatchdog: ReturnType<typeof watchTestProcessMemory> | undefined;
     const streams: Promise<void>[] = [];
     try {
       this.writeRegistry("active.json");
@@ -384,7 +416,22 @@ export class TestProcessSupervisor {
         collect(stdout, this.options.onStdout),
         collect(stderr, this.options.onStderr),
       );
+      memoryWatchdog = watchTestProcessMemory({
+        windowsProcesses: entry.windowsProcesses,
+        child,
+        limitBytes: this.memoryLimitBytes,
+        readBytes,
+        ...(this.options.memorySampleIntervalMs === undefined
+          ? {}
+          : { intervalMs: this.options.memorySampleIntervalMs }),
+        file: () => identity.files.join(", ") || identity.label,
+        onFailure: (message) => this.stop(message),
+        onWarning: (message) => this.diagnose(message),
+      });
       await Promise.all([child.exited, ...streams]);
+      // Surviving workers can breach the cap after the last periodic sample.
+      // Finalize accounting before success is captured in the returned result.
+      await memoryWatchdog.stop();
       const result = {
         exitCode:
           this.failure === null ? childExitStatus(child) : TIMEOUT_EXIT_CODE,
@@ -400,8 +447,12 @@ export class TestProcessSupervisor {
       throw error;
     } finally {
       clearTimeout(watchdog);
+      await memoryWatchdog?.stop();
       // A stopped leader may exit before its descendants, which still need escalation.
       if (!this.stopped()) {
+        if (entry.windowsProcesses !== undefined) {
+          this.signalProcess(entry, "SIGKILL");
+        }
         this.active.delete(id);
       }
       const saved = Result.try({

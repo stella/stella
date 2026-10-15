@@ -42,6 +42,7 @@ import JSZip from "jszip";
 import { writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig, formatDate } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -58,6 +59,7 @@ import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,
   systemPromptsPatch,
@@ -117,8 +119,9 @@ const P = (text: string): string =>
 // types, package relationship).
 const makeDocx = async (documentXml: string): Promise<Buffer> => {
   const zip = new JSZip();
-  zip.file("word/document.xml", documentXml);
-  zip.file(
+  writeZipEntry(zip, "word/document.xml", documentXml);
+  writeZipEntry(
+    zip,
     "[Content_Types].xml",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -128,7 +131,8 @@ const makeDocx = async (documentXml: string): Promise<Buffer> => {
       "</Types>",
     ].join(""),
   );
-  zip.file(
+  writeZipEntry(
+    zip,
     "_rels/.rels",
     [
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
@@ -1118,6 +1122,7 @@ const resolveModels = async (
         managedAIResidency: "eu",
         role: "fast",
         organizationId: null,
+        admission: NO_ORGANIZATION_MODEL_DISPATCH,
       }),
     })),
   );

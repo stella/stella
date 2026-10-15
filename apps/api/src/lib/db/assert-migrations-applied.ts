@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import nodePath from "node:path";
 
 import { rootDb } from "@/api/db/root";
+import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
 import {
   type AppliedMigration,
   assertMigrationHistory,
@@ -10,8 +11,6 @@ import {
 import {
   type ApplicationRlsRolePosture,
   applicationRlsRolePostureViolation,
-  type DatabaseLoginPosture,
-  databaseLoginPostureNotes,
   type IngestionRolePosture,
   ingestionRolePostureViolation,
 } from "@/api/lib/db/rls-role-posture";
@@ -26,8 +25,10 @@ import {
 const MIGRATIONS_DIR = nodePath.resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 
-export const assertApplicationRlsRolePosture = async (): Promise<void> => {
-  const result = await rootDb.execute<ApplicationRlsRolePosture>(sql`
+export const assertApplicationRlsRolePosture = async (
+  database: typeof rootDb,
+): Promise<void> => {
+  const result = await database.execute<ApplicationRlsRolePosture>(sql`
     SELECT
       app_role.rolbypassrls AS "bypassesRls",
       pg_has_role(CURRENT_USER, app_role.oid, 'SET') AS "canAssumeRole",
@@ -61,39 +62,6 @@ const assertIngestionRolePosture = async (): Promise<void> => {
   }
 };
 
-/** Reads the connecting login's role attributes and logs the notable ones. */
-export const reportDatabaseLoginPosture = async (): Promise<
-  DatabaseLoginPosture | undefined
-> => {
-  const result = await rootDb.execute<DatabaseLoginPosture>(sql`
-    SELECT
-      login.rolname AS "loginName",
-      login.rolbypassrls AS "bypassesRls",
-      login.rolsuper AS "isSuperuser",
-      (
-        SELECT count(*)::int
-        FROM pg_catalog.pg_class relation
-        WHERE relation.relowner = login.oid
-          AND relation.relkind IN ('r', 'p')
-          AND relation.relrowsecurity
-      ) AS "ownedPolicyTables"
-    FROM pg_catalog.pg_roles login
-    WHERE login.rolname = CURRENT_USER
-  `);
-  const posture = result.at(0);
-  if (posture === undefined) {
-    return undefined;
-  }
-  const notes = databaseLoginPostureNotes(posture);
-  if (notes.length > 0) {
-    logger.warn("startup.database_login_posture", {
-      login: posture.loginName,
-      notes: notes.join("; "),
-    });
-  }
-  return posture;
-};
-
 const queryAppliedRows = async (): Promise<readonly AppliedMigration[]> => {
   const result = await rootDb.execute<AppliedMigration>(
     sql`SELECT name, hash FROM drizzle.__drizzle_migrations`,
@@ -102,9 +70,9 @@ const queryAppliedRows = async (): Promise<readonly AppliedMigration[]> => {
 };
 
 export const assertMigrationsApplied = async (): Promise<void> => {
-  await assertApplicationRlsRolePosture();
+  await assertDatabaseLoginPosture(rootDb);
+  await assertApplicationRlsRolePosture(rootDb);
   await assertIngestionRolePosture();
-  await reportDatabaseLoginPosture();
   if (process.env[ESCAPE_HATCH_ENV] === "true") {
     logger.warn("startup.migration_check_disabled", {
       escape_hatch_env: ESCAPE_HATCH_ENV,

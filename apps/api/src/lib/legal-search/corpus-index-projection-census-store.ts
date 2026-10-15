@@ -9,6 +9,7 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import {
   lockRegisteredCorpusProjectionManifestForMutation,
@@ -20,6 +21,7 @@ import {
   corpusProjectionAppendIsPublished,
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { brandValidatedCorpusIndexProjectionIntentId } from "@/api/lib/safe-id-boundaries";
+import { isRecord } from "@/api/lib/type-guards";
 
 type ProjectionRevision = SafeId<"corpusIndexProjectionIntent">;
 
@@ -304,6 +306,80 @@ export const repairAppliedCorpusProjectionDriftTx = async (
     return panic("Corpus projection census repair lost its state fence");
   }
   return retired.length;
+};
+
+type CorpusProjectionCensusScope = Pick<
+  CorpusProjectionCensusPageOptions,
+  "family" | "generation"
+>;
+
+/**
+ * Every index a full census of the generation covers: each index an applied
+ * projection names, and each index a settled revision was written to. A loose
+ * index scan over the two census indexes reads one row per distinct index id,
+ * never the generation; the partial-index predicates are spelled as literals
+ * so the planner can match them.
+ */
+export const readCorpusProjectionCensusIndexIdsTx = async (
+  tx: Transaction,
+  { family, generation }: CorpusProjectionCensusScope,
+): Promise<string[]> => {
+  const states = corpusIndexProjectionStates;
+  const intents = corpusIndexProjectionIntents;
+  const appliedScope = sql`${states.family} = ${family}
+    AND ${states.generation} = ${generation}
+    AND ${states.appliedAction} = 'upsert'
+    AND ${states.appliedRevision} IS NOT NULL`;
+  const settledScope = sql`${intents.family} = ${family}
+    AND ${intents.generation} = ${generation}
+    AND ${intents.status} = 'settled'`;
+  const result: unknown = await tx.execute(sql`
+    WITH RECURSIVE applied_index(index_id) AS (
+      (
+        SELECT ${states.appliedIndexId} FROM ${states}
+        WHERE ${appliedScope}
+        ORDER BY ${states.appliedIndexId}
+        LIMIT 1
+      )
+      UNION ALL
+      SELECT (
+        SELECT ${states.appliedIndexId} FROM ${states}
+        WHERE ${appliedScope}
+          AND ${states.appliedIndexId} > applied_index.index_id
+        ORDER BY ${states.appliedIndexId}
+        LIMIT 1
+      )
+      FROM applied_index
+      WHERE applied_index.index_id IS NOT NULL
+    ),
+    settled_index(index_id) AS (
+      (
+        SELECT ${intents.indexId} FROM ${intents}
+        WHERE ${settledScope}
+        ORDER BY ${intents.indexId}
+        LIMIT 1
+      )
+      UNION ALL
+      SELECT (
+        SELECT ${intents.indexId} FROM ${intents}
+        WHERE ${settledScope}
+          AND ${intents.indexId} > settled_index.index_id
+        ORDER BY ${intents.indexId}
+        LIMIT 1
+      )
+      FROM settled_index
+      WHERE settled_index.index_id IS NOT NULL
+    )
+    SELECT index_id AS "indexId" FROM applied_index WHERE index_id IS NOT NULL
+    UNION
+    SELECT index_id AS "indexId" FROM settled_index WHERE index_id IS NOT NULL
+    ORDER BY "indexId"
+  `);
+  return executedRows(result).map((row) =>
+    isRecord(row) && typeof row["indexId"] === "string"
+      ? row["indexId"]
+      : panic("Corpus projection census index probe returned malformed row"),
+  );
 };
 
 /** Bounded retired revisions that the engine must no longer contain. */

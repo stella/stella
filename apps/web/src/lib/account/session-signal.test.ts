@@ -1,6 +1,8 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterAll, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import {
   listenForSessionChange,
   signalSessionChange,
@@ -21,9 +23,7 @@ afterAll(() => {
 });
 
 const settle = async () => {
-  await new Promise((resolve) => {
-    setTimeout(resolve, 20);
-  });
+  await sleep(20);
 };
 
 /** What another tab would receive on the channel. */

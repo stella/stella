@@ -62,14 +62,14 @@ const linkedAccountSchema = t.Nullable(
   }),
 );
 
-export const createDesktopEditHandoffBodySchema = t.Object({
+const createDesktopEditHandoffBodySchema = t.Object({
   entityId: tSafeId("entity"),
   force: t.Optional(t.Boolean()),
   linkedAccount: linkedAccountSchema,
   propertyId: tSafeId("property"),
 });
 
-export const desktopEditHandoffStatusParamsSchema = workspaceParams({
+const desktopEditHandoffStatusParamsSchema = workspaceParams({
   handoffId: tSafeId("desktopEditHandoff"),
 });
 
@@ -117,6 +117,7 @@ const buildDesktopEditHandoffDeepLink = ({
 };
 
 const createConfig = {
+  contract: "patch",
   body: createDesktopEditHandoffBodySchema,
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -184,6 +185,7 @@ export const createDesktopEditHandoff = createSafeHandler(
 );
 
 const statusConfig = {
+  contract: "patch",
   params: desktopEditHandoffStatusParamsSchema,
   permissions: { entity: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

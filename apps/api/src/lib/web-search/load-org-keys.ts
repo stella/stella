@@ -43,7 +43,7 @@ export type OrgWebSearchKeyRow = {
  * read), instead of issuing this module's own `organizationSettings`
  * lookup. Used by callers that already hold the row.
  */
-export const resolveWebSearchKeysFromRow = async (
+const resolveWebSearchKeysFromRow = async (
   organizationId: SafeId<"organization">,
   row: OrgWebSearchKeyRow | null | undefined,
 ): Promise<WebSearchKeys> => {

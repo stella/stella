@@ -18,7 +18,6 @@ import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import type { EditorView } from "@tiptap/pm/view";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 
 import { CHAT_SKILL_DOCUMENT } from "@stll/api-contract";
 import {
@@ -56,7 +55,7 @@ import type {
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { COMPOSER_TEXT_CLASS } from "@stll/ui/composer";
-import { LoaderCircleIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -112,6 +111,7 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { createUuid } from "@/lib/uuid";
 import { inputTypeValueKind } from "@/lib/value-types";
 import { useTemplateStudioStore } from "@/routes/knowledge/-components/template-studio-store";
 import {
@@ -156,22 +156,26 @@ type TemplateStudioChatProps = {
 };
 
 // The thread card docks in the composer's column; the stack ties them.
-export const TemplateStudioChat = (props: TemplateStudioChatProps) => (
-  <DockedChatStackProvider>
-    <Suspense
-      fallback={
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
-        >
-          <LoaderCircleIcon className="text-muted-foreground size-4 animate-spin" />
-        </div>
-      }
-    >
-      <ResolvedTemplateStudioChat {...props} />
-    </Suspense>
-  </DockedChatStackProvider>
-);
+export const TemplateStudioChat = (props: TemplateStudioChatProps) => {
+  const t = useTranslations();
+
+  return (
+    <DockedChatStackProvider>
+      <Suspense
+        fallback={
+          <div
+            aria-busy="true"
+            className="pointer-events-none absolute inset-x-0 bottom-8 flex justify-center"
+          >
+            <Loader className="size-4" label={t("common.loading")} size="sm" />
+          </div>
+        }
+      >
+        <ResolvedTemplateStudioChat {...props} />
+      </Suspense>
+    </DockedChatStackProvider>
+  );
+};
 
 /**
  * Resolves the per-template thread mapping (org + user scoped,
@@ -191,7 +195,7 @@ type ScopedPresetSend = {
 
 const createTextChatMessage = (text: string): ChatUserMessageInput => ({
   content: text,
-  id: toSafeId<"chatMessage">(uuidv7()),
+  id: toSafeId<"chatMessage">(createUuid()),
 });
 
 const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
@@ -649,8 +653,10 @@ const TemplateStudioChatInner = ({
   });
 
   const {
+    activitySession,
     error,
     messages,
+    refreshAnswers,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -664,12 +670,17 @@ const TemplateStudioChatInner = ({
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
@@ -679,6 +690,7 @@ const TemplateStudioChatInner = ({
     conversationId: threadRef.threadId,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "on-request",
     threadRef,
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
@@ -1325,6 +1337,10 @@ const TemplateStudioChatInner = ({
           handleAlwaysAllow,
           handleApprove: handleApproveForTemplate,
           handleDeny,
+          handleRequestSecret,
+          continueRequestSecret,
+          resolveSecretTarget,
+          secretAvailabilityKey,
         }}
       >
         {threadVisible && (
@@ -1333,6 +1349,11 @@ const TemplateStudioChatInner = ({
             scrollRef={threadScrollRef}
           >
             <ChatThreadMessages
+              activitySession={activitySession}
+              onAnswerEdited={refreshAnswers}
+              answerRewriteAvailability={
+                data.usedAnonymization ? "anonymized" : "available"
+              }
               approvalPendingMessageId={approvalPendingMessageId}
               error={error}
               isGenerating={isGenerating}
@@ -1342,6 +1363,7 @@ const TemplateStudioChatInner = ({
               onCreateDocumentResolve={handleCreateDocumentResolve}
               onOpenCreateDocumentDraft={handleOpenCreateDocumentDraft}
               onOpenCreatedDocument={handleOpenCreatedDocument}
+              onOpenPlaybook={handleOpenPlaybook}
               onResend={resendLatestMessage}
               queuedMessageActions={{
                 remove: removeQueuedMessage,

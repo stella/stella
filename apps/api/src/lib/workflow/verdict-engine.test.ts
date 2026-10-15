@@ -13,6 +13,7 @@ import {
   gradeTierMatches,
   resolveMatchedRef,
 } from "@/api/lib/workflow/verdict-engine";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const tiers: ResolvedTiers = {
@@ -159,6 +160,7 @@ describe("computeVerdictBatch — pre-v2 verdict row without tiers", () => {
       // empty-tiers guard returns before any AI/analytics setup.
       abortSignal: AbortSignal.abort(),
       organizationId: toSafeId<"organization">("org_1"),
+      admission: testModelAdmission(toSafeId<"organization">("org_1")),
       workspaceId: toSafeId<"workspace">("ws_1"),
       scopedDb,
       entityVersionId: toSafeId<"entityVersion">("ev_1"),
@@ -206,6 +208,7 @@ describe("gradeTierMatches — batch grading", () => {
       // A pre-aborted signal proves no external call is attempted.
       abortSignal: AbortSignal.abort(),
       organizationId: toSafeId<"organization">("org_1"),
+      admission: testModelAdmission(toSafeId<"organization">("org_1")),
       workspaceId: toSafeId<"workspace">("ws_1"),
       entityVersionId: toSafeId<"entityVersion">("ev_1"),
       orgAIConfig: null,
@@ -232,6 +235,7 @@ describe("gradeTierMatch — empty-tier lifted row", () => {
       // returns before any AI/analytics setup.
       abortSignal: AbortSignal.abort(),
       organizationId: toSafeId<"organization">("org_1"),
+      admission: testModelAdmission(toSafeId<"organization">("org_1")),
       workspaceId: toSafeId<"workspace">("ws_1"),
       entityVersionId: toSafeId<"entityVersion">("ev_1"),
       propertyId: toSafeId<"property">("prop_1"),

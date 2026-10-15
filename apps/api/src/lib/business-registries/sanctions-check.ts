@@ -20,13 +20,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   screenSanctionsSubject,
   SANCTIONS_SUBJECT_ERROR_MESSAGES,
+  signedInScreening,
   unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
 import type {
-  SanctionsScreening,
   SanctionsScreeningSubject,
+  SignedInSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
-import type { SanctionsUnavailableReason } from "@/api/lib/lists/sanctions/screening-vocabulary";
+import type { SanctionsSignedInUnavailableReason } from "@/api/lib/lists/sanctions/screening-vocabulary";
 
 // The sanctions check of the counterparty check: resolves the subject the
 // caller named into a name to screen, reads the firm's practice
@@ -86,7 +87,7 @@ type SanctionsCheckedSubject =
       country: SanctionsCompanyIdCountry;
     };
 
-export type SanctionsCheckResult = SanctionsScreening & {
+export type SanctionsCheckResult = SignedInSanctionsScreening & {
   kind: "sanctions";
   subject: SanctionsCheckedSubject;
 };
@@ -130,7 +131,7 @@ type ResolvedName =
       subject: SanctionsScreeningSubject;
       checked: SanctionsCheckedSubject;
     }
-  | { type: "unresolved"; reason: SanctionsUnavailableReason };
+  | { type: "unresolved"; reason: SanctionsSignedInUnavailableReason };
 
 const resolveCompanyName = async ({
   value,
@@ -325,10 +326,12 @@ export const runSanctionsCheck = async ({
         value: subject.value.trim(),
         country: subject.country,
       },
-      ...unavailableSanctionsScreening({
-        reason: outcome.reason,
-        practiceJurisdictions,
-      }),
+      ...signedInScreening(
+        unavailableSanctionsScreening({
+          reason: outcome.reason,
+          practiceJurisdictions,
+        }),
+      ),
     });
   }
   const screened = await screen({
@@ -342,10 +345,12 @@ export const runSanctionsCheck = async ({
       return Result.ok({
         kind: "sanctions",
         subject: outcome.checked,
-        ...unavailableSanctionsScreening({
-          reason: "load-failed",
-          practiceJurisdictions,
-        }),
+        ...signedInScreening(
+          unavailableSanctionsScreening({
+            reason: "load-failed",
+            practiceJurisdictions,
+          }),
+        ),
       });
     }
     return invalidSubject(
@@ -355,6 +360,6 @@ export const runSanctionsCheck = async ({
   return Result.ok({
     kind: "sanctions",
     subject: outcome.checked,
-    ...screened.value,
+    ...signedInScreening(screened.value),
   });
 };

@@ -15,6 +15,7 @@
     "allow-clipboard-set-item-group",
     "allow-clipboard-save-editor-item",
     "allow-clipboard-close-editor",
+    "allow-account-record-use",
     "allow-desktop-report-error"
   ]
 }

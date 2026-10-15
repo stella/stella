@@ -164,6 +164,11 @@ describe("show visual", () => {
     })[VISUAL_PREVIEW_TOOL_NAME];
     expect(tool.description).toEndWith(VISUAL_SHOWCASE_GUIDANCE);
     expect(tool.description).toContain("facets.courtYear");
+    expect(tool.description).toContain(
+      "The host supplies the current app theme.",
+    );
+    expect(tool.description).not.toContain("stella-light");
+    expect(tool.description).not.toContain("stella-dark");
   });
 
   test("has a serializable input contract and emits its native resource", async () => {

@@ -488,7 +488,7 @@ export const TRIMMED_CORPUS_PAYLOAD_COLUMNS = {
 } as const satisfies CorpusPayloadColumns;
 
 /** What a settling write does with the Postgres payload columns. */
-export const CORPUS_PAYLOAD_DISPOSITIONS = [
+const CORPUS_PAYLOAD_DISPOSITIONS = [
   /** Keep them: they are still what a read falls back to. */
   "retain",
   /** Null them: object storage is confirmed to hold the payload. */

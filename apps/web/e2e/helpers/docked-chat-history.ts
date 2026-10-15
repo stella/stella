@@ -5,6 +5,7 @@ const THREAD_ID = toSafeId<"chatThread">(
 );
 const fixtureTime = new Date().toISOString();
 export const dockedChatMessagePage = {
+  activeSkill: null,
   activeTurnId: null,
   attachedFiles: { fileCount: 0, files: [] },
   forkProvenance: { type: "none" as const },
@@ -12,6 +13,8 @@ export const dockedChatMessagePage = {
     {
       id: toSafeId<"chatMessage">("019a0000-0000-7000-8000-000000000002"),
       role: "assistant" as const,
+      revision: 0,
+      edited: false,
       createdAt: fixtureTime,
       parts: [
         { type: "text" as const, content: "Saved geometry test answer." },

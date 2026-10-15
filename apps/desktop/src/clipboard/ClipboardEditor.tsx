@@ -361,7 +361,7 @@ const removeInlineFormat = (
 
   const unformatted = document.createDocumentFragment();
   let selectedParent: DocumentFragment | HTMLElement = unformatted;
-  for (const sharedAncestor of sharedAncestors.toReversed()) {
+  for (const sharedAncestor of [...sharedAncestors].reverse()) {
     const wrapper = shallowCloneElement(sharedAncestor);
     selectedParent.append(wrapper);
     selectedParent = wrapper;

@@ -55,6 +55,7 @@ const admissionReasons = {
   period_exhausted: true,
   daily_exhausted: true,
   not_enabled: true,
+  not_on_plan: true,
   unavailable: true,
 } as const satisfies Record<ActionAdmissionError["reason"], true>;
 
@@ -67,6 +68,7 @@ test("all admission refusals preserve the canonical contract through bounded wra
         reason === "period_exhausted" ||
         reason === "daily_exhausted" ||
         reason === "not_enabled" ||
+        reason === "not_on_plan" ||
         reason === "unavailable"
       )
     ) {

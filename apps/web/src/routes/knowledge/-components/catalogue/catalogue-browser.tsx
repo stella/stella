@@ -11,9 +11,9 @@ import {
   ChevronDownIcon,
   FileDownIcon,
   GraduationCapIcon,
-  LoaderIcon,
   PlusIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
 
@@ -101,7 +101,7 @@ const toRowDisplay = (entry: CatalogueDisplayEntry): CatalogueRowDisplay => ({
 
 /** The organization's tools: the shared catalogue view with the member's
  *  install state, detail inspector, and custom-tool tools in its slots. */
-export const CatalogueBrowser = ({
+const CatalogueBrowser = ({
   organizationId,
   initialKind,
   initialSlug,
@@ -414,7 +414,9 @@ const CatalogueEntryRow = ({
         type="button"
         variant="outline"
       >
-        {install.isPending && <LoaderIcon className="size-3.5 animate-spin" />}
+        {install.isPending && (
+          <Loader className="size-3.5" label={t("common.loading")} size="sm" />
+        )}
         {t("common.add")}
       </Button>
     );
@@ -431,7 +433,7 @@ const CatalogueEntryRow = ({
         variant="destructive-outline"
       >
         {uninstall.isPending && (
-          <LoaderIcon className="size-3.5 animate-spin" />
+          <Loader className="size-3.5" label={t("common.loading")} size="sm" />
         )}
         {t("common.remove")}
       </Button>

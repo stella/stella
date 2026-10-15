@@ -98,8 +98,8 @@ const featuredEntry = (slug: string): LoadedCatalogueEntry => {
   return entry;
 };
 
-const contractReview = featuredEntry("contract-review");
-const jurisRank = featuredEntry("jurisrank-csjn-analysis");
+const contractReview = featuredEntry("contract-review-anthropic");
+const jurisRank = featuredEntry("jurisrank");
 const ares = featuredEntry("ares");
 
 type PublicToolsIndexProps = {
@@ -207,7 +207,7 @@ export function PublicToolsIndex({
             {query.length > 0 && (
               <InputGroupAddon align="inline-end">
                 <Button
-                  aria-label={t("onboarding.catalogueClearSearch")}
+                  aria-label={t("common.clearSearch")}
                   onClick={() => setQuery("")}
                   size="icon-sm"
                   type="button"

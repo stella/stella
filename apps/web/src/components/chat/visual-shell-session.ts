@@ -6,7 +6,9 @@ import {
   visualShellReadySchema,
 } from "@stll/api-contract/visual-sandbox";
 
-type VisualShellSessionOptions = { url: string; newNonce: () => string };
+import { createRandomUuid } from "@/lib/uuid";
+
+type VisualShellSessionOptions = { url: string; newNonce?: () => string };
 type VisualShellSessionState =
   | { type: "uninitialized" }
   | { type: "awaiting-ready"; nonce: string }
@@ -38,11 +40,11 @@ const shellReadyNonce = (event: ShellEvent, frameWindow: ShellFrameWindow) => {
 // handshake loads a new shell document: a cross-origin frame fires a load
 // event even for a fragment-only change, so the URL also differs before its
 // fragment, and each handshake ends in exactly one document load.
-export const VISUAL_SHELL_LOAD_PARAMETER = "load";
+const VISUAL_SHELL_LOAD_PARAMETER = "load";
 
 export const createVisualShellSession = ({
   url,
-  newNonce,
+  newNonce = createRandomUuid,
 }: VisualShellSessionOptions) => {
   let state: VisualShellSessionState = { type: "uninitialized" };
   let loads = 0;

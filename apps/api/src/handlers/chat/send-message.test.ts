@@ -42,6 +42,7 @@ import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { actionAdmissionErrorFor } from "@/api/tests/helpers/action-admission-error";
 import { CHAT_ORACLE, violationsOf } from "@/api/tests/helpers/chat-oracles";
 import { testFileKey } from "@/api/tests/helpers/file-key";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -827,7 +828,7 @@ describe("send message disconnect handling", () => {
     expect(update).not.toHaveBeenCalled();
   });
 
-  test("terminalizes the claimed turn when compaction preflight disconnects", async () => {
+  test("keeps an accepted turn running through a compaction preflight disconnect", async () => {
     const abortController = new AbortController();
     const turnUpdates: unknown[] = [];
     let turnClaimed = false;
@@ -926,18 +927,18 @@ describe("send message disconnect handling", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
+      code: 500,
+      response: { message: "Failed to discover chat connectors" },
     });
     expect(turnUpdates).toContainEqual(
       expect.objectContaining({
-        interruptionReason: "client-disconnected",
-        status: "interrupted",
+        failureCode: "connector-discovery",
+        status: "failed",
       }),
     );
   });
 
-  test("terminalizes the claimed turn when context preparation disconnects", async () => {
+  test("keeps an accepted turn running through a context preparation disconnect", async () => {
     const abortController = new AbortController();
     let safeDbTransaction = 0;
     let acceptanceTransaction: number | null = null;
@@ -1040,16 +1041,16 @@ describe("send message disconnect handling", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before AI work started" },
+      code: 500,
+      response: { message: "Failed to discover chat connectors" },
     });
     expect(findOrganizationSettings).toHaveBeenCalledTimes(2);
     expect(acceptanceTransaction).not.toBeNull();
     expect(claimTransaction).toBe(acceptanceTransaction);
     expect(turnUpdates).toContainEqual(
       expect.objectContaining({
-        interruptionReason: "client-disconnected",
-        status: "interrupted",
+        failureCode: "connector-discovery",
+        status: "failed",
       }),
     );
   });
@@ -1270,6 +1271,7 @@ describe("send message disconnect handling", () => {
     period_exhausted: "period_exhausted",
     daily_exhausted: "daily_exhausted",
     not_enabled: "not_enabled",
+    not_on_plan: "not_on_plan",
     unavailable: "unavailable",
   } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
   for (const reason of Object.values(refusalReasons)) {
@@ -1372,6 +1374,7 @@ describe("send message disconnect handling", () => {
               release: async () => {
                 releases += 1;
               },
+              modelAdmission: testModelAdmission(options.organizationId),
               reservePeriod: async (identity: AdmittedActionIdentity) => {
                 expect(turnUpdates).toContainEqual({ runId: "run-test" });
                 expect(identity).toEqual({
@@ -1479,7 +1482,7 @@ describe("send message disconnect handling", () => {
     }
   }
 
-  test("stops before connector discovery when the client disconnects during persistence", async () => {
+  test("an accepted detached turn reaches connector discovery and surfaces its failure", async () => {
     const abortController = new AbortController();
     const insertValues = mock(() => ({
       onConflictDoNothing: () => ({
@@ -1567,16 +1570,16 @@ describe("send message disconnect handling", () => {
     );
 
     expect(result).toEqual({
-      code: 400,
-      response: { message: "Client disconnected before stream started" },
+      code: 500,
+      response: { message: "Failed to discover chat connectors" },
     });
-    // Turn acceptance, the user message, and the terminal interrupted
+    // Turn acceptance, the user message, and the terminal failed
     // assistant message each persist their own row; the user-message
-    // persist and the interrupt persist each touch the thread row once.
+    // persist and the failure persist each touch the thread row once.
     expect(insertValues).toHaveBeenCalledTimes(3);
     expect(updateWhere).toHaveBeenCalledTimes(2);
     expect(upsertChatThreadSearchDocumentMock).toHaveBeenCalledWith(threadId);
-    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
+    expect(loadExternalMcpToolsForUserMock).toHaveBeenCalledTimes(1);
   });
 });
 

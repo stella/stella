@@ -2,7 +2,8 @@ import type { Result } from "better-result";
 
 export type DesktopLinkOutcome =
   | { status: "connected"; email: string }
-  | { status: "started" };
+  | { status: "started" }
+  | { status: "update-required" };
 
 type DesktopConnectionOutcome = DesktopLinkOutcome | { status: "error" };
 

@@ -5,6 +5,7 @@ import { defaultConfig } from "@stll/db-load-gate/health";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import { createOnlineIndexGate } from "./online-index-gate";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import { terminateReserved } from "./sql-close";
 
 test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
   "isolated online-index runner process",
@@ -33,7 +34,7 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
           },
           release: () => connection.release(),
           terminate: async () => {
-            await connection.close({ timeout: 0 });
+            await terminateReserved(connection);
           },
         });
         const rows = await builder<
@@ -96,7 +97,7 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
           observer.release();
         }
       },
-      { closeTimeout: 0 },
+      { closeMode: "force" },
     );
   },
 );

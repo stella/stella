@@ -36,6 +36,7 @@ const billingDraftSettingsResponseSchema =
   );
 
 const settingsConfig = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "auth_plumbing" },
   cache: { kind: "none" },

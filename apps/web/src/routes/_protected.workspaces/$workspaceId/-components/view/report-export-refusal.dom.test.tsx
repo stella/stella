@@ -5,9 +5,11 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { sleep } from "@stll/concurrency/sleep";
 
 import messages from "@/i18n/langs/en.json";
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 import type { ReportExportRequest } from "./export-report-dialog.logic";
 
@@ -22,11 +24,9 @@ afterEach(cleanup);
 afterAll(async () => {
   cleanup();
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 test("only a refused AI export offers an explicit fallback preserving request fields", () => {

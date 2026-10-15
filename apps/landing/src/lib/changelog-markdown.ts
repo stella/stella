@@ -1,4 +1,4 @@
-export type ChangelogMarkdownBlock =
+type ChangelogMarkdownBlock =
   | { level: 1 | 2 | 3; text: string; type: "heading" }
   | { alt: string; src: string; type: "image" }
   | { items: string[]; type: "list" }

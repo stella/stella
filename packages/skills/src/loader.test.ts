@@ -1,16 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
+import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./format";
 import {
-  listSkillMetadata,
-  loadSkill,
   parseSkillFile,
   readDocumentedChatReads,
   readExcludedChatTools,
   readSkillDisplayName,
   SkillFileError,
-} from "./loader";
-import { SKILL_NAME_PATTERN, SKILL_PACKAGE_LIMITS } from "./package-limits";
-import { getSkillResourceKind } from "./resource-kinds";
+} from "./frontmatter";
+import { listSkillMetadata, loadSkill } from "./loader";
 import { GENERATED_SKILLS } from "./skills.gen";
 
 // Unwraps a parse for assertions; a refused file surfaces as its typed error.
@@ -389,13 +387,6 @@ description: ">not a block scalar"
 Body.`);
 
     expect(parsed.metadata.description).toBe(">not a block scalar");
-  });
-
-  test("classifies common Agent Skills resource roots", () => {
-    expect(getSkillResourceKind("references/checklist.md")).toBe("reference");
-    expect(getSkillResourceKind("assets/template.txt")).toBe("asset");
-    expect(getSkillResourceKind("scripts/helper.py")).toBe("script");
-    expect(getSkillResourceKind("unknown/file.md")).toBeNull();
   });
 });
 

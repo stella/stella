@@ -53,7 +53,7 @@ if (!databaseUrl || !runPostgresTests) {
           expect(secondHold.waitedMs).toBeGreaterThanOrEqual(250);
           await secondHold.release();
         },
-        { closeTimeout: 0 },
+        { closeMode: "force" },
       );
     });
 

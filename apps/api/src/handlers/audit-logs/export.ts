@@ -10,7 +10,10 @@ import {
   AUDIT_RESOURCE_TYPE,
   ORGANIZATION_AUDIT_LOG_RESOURCE_ID,
 } from "@/api/lib/audit-log";
-import { projectAuditReadChanges } from "@/api/lib/audit-log-details";
+import {
+  auditReadChangesSql,
+  projectAuditReadChanges,
+} from "@/api/lib/audit-log-details";
 import { escapeCSV } from "@/api/lib/csv";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -23,6 +26,7 @@ import {
 } from "./query";
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
   permissions: { auditLog: ["read"] },
@@ -61,7 +65,13 @@ const exportAuditLogs = createSafeRootHandler(
               action: auditLogs.action,
               resourceType: auditLogs.resourceType,
               resourceId: auditLogs.resourceId,
-              changes: auditLogs.changes,
+              changes: auditReadChangesSql({
+                featureAccessSnapshot,
+                principal: {
+                  organizationId: session.activeOrganizationId,
+                  userId: actor.id,
+                },
+              }),
               metadata: auditLogs.metadata,
             })
             .from(auditLogs)

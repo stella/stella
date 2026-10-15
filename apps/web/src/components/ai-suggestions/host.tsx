@@ -43,11 +43,11 @@ import {
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  LoaderCircleIcon,
   MessageSquareIcon,
   UserIcon,
   AiActionIcon,
 } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { OVERLAY_LAYER_CLASS_NAMES } from "@stll/ui/overlay-layer";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
@@ -497,6 +497,7 @@ export const PromptBar = (props: PromptBarProps) => {
     isEmpty,
     openFilePicker,
     removeFile,
+    expandPastedText,
   } = editorController;
 
   const {
@@ -759,6 +760,7 @@ export const PromptBar = (props: PromptBarProps) => {
               <ChatDraftAttachmentChips
                 files={attachments}
                 onRemove={removeFile}
+                onExpand={expandPastedText}
               />
             </div>
           )}
@@ -837,9 +839,10 @@ export const PromptBar = (props: PromptBarProps) => {
               "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
             )}
           >
-            <LoaderCircleIcon
-              aria-hidden="true"
-              className="size-3.5 shrink-0 animate-spin"
+            <Loader
+              className="size-3.5 shrink-0"
+              size="sm"
+              variant="decorative"
             />
             <span className="truncate">{t("chat.thinking")}</span>
           </div>
@@ -851,9 +854,10 @@ export const PromptBar = (props: PromptBarProps) => {
               "inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2",
             )}
           >
-            <LoaderCircleIcon
-              aria-hidden="true"
-              className="size-3.5 shrink-0 animate-spin"
+            <Loader
+              className="size-3.5 shrink-0"
+              size="sm"
+              variant="decorative"
             />
             <span className="truncate">
               {sendDisabledReason === "editor-loading"

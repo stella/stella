@@ -1,3 +1,9 @@
+import type {
+  DesktopMatter,
+  DesktopTimeEntryBatch,
+} from "@stll/api-contract/desktop-time-entries";
+
+import activityContract from "../../fixtures/activity-contract.json" with { type: "json" };
 import {
   type ClipboardSourceAppVisual,
   isClipboardSourceAppVisual,
@@ -14,8 +20,7 @@ export const ACTIVITY_RECORDING_STATUSES = [
   "recording",
   "paused",
 ] as const;
-export type ActivityRecordingStatus =
-  (typeof ACTIVITY_RECORDING_STATUSES)[number];
+type ActivityRecordingStatus = (typeof ACTIVITY_RECORDING_STATUSES)[number];
 
 const ACTIVITY_PERSISTENCE_STATUSES = [
   "initializing",
@@ -23,8 +28,7 @@ const ACTIVITY_PERSISTENCE_STATUSES = [
   "memoryOnly",
   "deletionOnly",
 ] as const;
-export type ActivityPersistenceStatus =
-  (typeof ACTIVITY_PERSISTENCE_STATUSES)[number];
+type ActivityPersistenceStatus = (typeof ACTIVITY_PERSISTENCE_STATUSES)[number];
 
 export const ACTIVITY_DETAILS_ACCESS = [
   "disabled",
@@ -37,6 +41,7 @@ export type ActivityDetailsAccess = (typeof ACTIVITY_DETAILS_ACCESS)[number];
 export type ActivitySegment = {
   appIdentifier: string;
   appName: string;
+  matterId?: string | null;
   windowTitle?: string | null;
   document?: string | null;
   /** RFC 3339 instants. */
@@ -49,12 +54,27 @@ export type ActivityAppExclusion = {
   name: string;
 };
 
+export type ActivityManualAssignment = {
+  start: string;
+  end: string;
+  matterId: string;
+  matter?: DesktopMatter & { clientName: string | null };
+};
+
 export type ActivityDaySnapshot = {
   /** Local calendar dates as `YYYY-MM-DD`. */
   date: string;
+  deletionStatus: keyof typeof activityContract.deletionStatuses;
+  pendingBatch: {
+    idempotencyKey: string;
+    entries: DesktopTimeEntryBatch["entries"];
+    ranges: { start: string; end: string }[][];
+  } | null;
+  manualAssignments: ActivityManualAssignment[];
   draftedEntries: { start: string; end: string; entryId: string }[];
   timeBillingEnabled: boolean;
   earliestDate: string;
+  latestDate: string;
   excludedApps: ActivityAppExclusion[];
   captureDetails: boolean;
   appNameOnlyApps: ActivityAppExclusion[];
@@ -74,6 +94,91 @@ export type ActivityDaySnapshot = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const isRange = (value: unknown): value is { start: string; end: string } => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { start, end } = value;
+  return typeof start === "string" && typeof end === "string";
+};
+const isAssignedMatter = (
+  value: unknown,
+): value is DesktopMatter & { clientName: string | null } => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { id, name, reference, color, clientName } = value;
+  return (
+    typeof id === "string" &&
+    typeof name === "string" &&
+    (reference === null || typeof reference === "string") &&
+    (color === null || typeof color === "string") &&
+    (clientName === null || typeof clientName === "string")
+  );
+};
+const isAssignment = (value: unknown): value is ActivityManualAssignment => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { matterId, matter } = value;
+  if (!isRange(value)) {
+    return false;
+  }
+  return (
+    typeof matterId === "string" &&
+    (matter === undefined ||
+      (isAssignedMatter(matter) && matter.id === matterId))
+  );
+};
+const isPendingEntry = (
+  value: unknown,
+): value is DesktopTimeEntryBatch["entries"][number] => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const {
+    matterId,
+    dateWorked,
+    timezoneId,
+    durationMinutes,
+    narrative,
+    billable,
+  } = value;
+  return (
+    typeof matterId === "string" &&
+    typeof dateWorked === "string" &&
+    typeof timezoneId === "string" &&
+    typeof durationMinutes === "number" &&
+    Number.isSafeInteger(durationMinutes) &&
+    durationMinutes > 0 &&
+    durationMinutes <= 1440 &&
+    typeof narrative === "string" &&
+    typeof billable === "boolean"
+  );
+};
+const isPendingBatch = (value: unknown) => {
+  if (value === null) {
+    return true;
+  }
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { idempotencyKey, entries, ranges } = value;
+  return (
+    typeof idempotencyKey === "string" &&
+    Array.isArray(entries) &&
+    entries.length > 0 &&
+    entries.length <= 100 &&
+    entries.every(isPendingEntry) &&
+    Array.isArray(ranges) &&
+    ranges.length === entries.length &&
+    ranges.every(
+      (group) =>
+        Array.isArray(group) && group.length > 0 && group.every(isRange),
+    )
+  );
+};
+
 const isOneOf = <T extends string>(
   values: readonly T[],
   value: unknown,
@@ -88,54 +193,118 @@ const isOptionalMetadata = (value: unknown) =>
     new TextEncoder().encode(value).byteLength <= MAX_ACTIVITY_METADATA_BYTES &&
     !/\p{Cc}/u.test(value));
 
-const isSegment = (value: unknown): value is ActivitySegment =>
-  isRecord(value) &&
-  typeof value["appIdentifier"] === "string" &&
-  typeof value["appName"] === "string" &&
-  typeof value["start"] === "string" &&
-  typeof value["end"] === "string" &&
-  isOptionalMetadata(value["windowTitle"]) &&
-  isOptionalMetadata(value["document"]);
+const isSegment = (value: unknown): value is ActivitySegment => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const {
+    appIdentifier,
+    appName,
+    start,
+    end,
+    windowTitle,
+    document,
+    matterId,
+  } = value;
+  return (
+    typeof appIdentifier === "string" &&
+    typeof appName === "string" &&
+    typeof start === "string" &&
+    typeof end === "string" &&
+    (matterId === undefined ||
+      matterId === null ||
+      typeof matterId === "string") &&
+    isOptionalMetadata(windowTitle) &&
+    isOptionalMetadata(document)
+  );
+};
 
-const isExclusion = (value: unknown): value is ActivityAppExclusion =>
-  isRecord(value) &&
-  typeof value["identifier"] === "string" &&
-  typeof value["name"] === "string";
+const isExclusion = (value: unknown): value is ActivityAppExclusion => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { identifier, name } = value;
+  return typeof identifier === "string" && typeof name === "string";
+};
+
+const isDraftedEntry = (value: unknown) => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const { entryId } = value;
+  if (!isRange(value)) {
+    return false;
+  }
+  return typeof entryId === "string";
+};
+
+const isReviewState = ({
+  pendingBatch,
+  manualAssignments,
+  draftedEntries,
+}: Record<string, unknown>) =>
+  isPendingBatch(pendingBatch) &&
+  Array.isArray(manualAssignments) &&
+  manualAssignments.every(isAssignment) &&
+  Array.isArray(draftedEntries) &&
+  draftedEntries.every(isDraftedEntry);
 
 export const isActivityDaySnapshot = (
   value: unknown,
-): value is ActivityDaySnapshot =>
-  isRecord(value) &&
-  typeof value["date"] === "string" &&
-  typeof value["today"] === "string" &&
-  typeof value["earliestDate"] === "string" &&
-  typeof value["unreadable"] === "boolean" &&
-  typeof value["timeBillingEnabled"] === "boolean" &&
-  Array.isArray(value["draftedEntries"]) &&
-  value["draftedEntries"].every(
-    (entry) =>
-      isRecord(entry) &&
-      typeof entry["start"] === "string" &&
-      typeof entry["end"] === "string" &&
-      typeof entry["entryId"] === "string",
-  ) &&
-  typeof value["captureDetails"] === "boolean" &&
-  isOneOf(ACTIVITY_DETAILS_ACCESS, value["detailsAccess"]) &&
-  Array.isArray(value["appNameOnlyApps"]) &&
-  value["appNameOnlyApps"].every(isExclusion) &&
-  Array.isArray(value["browserApps"]) &&
-  value["browserApps"].every(isExclusion) &&
-  Array.isArray(value["browserTitleApps"]) &&
-  value["browserTitleApps"].every(isExclusion) &&
-  typeof value["otherAccountHistoryDays"] === "number" &&
-  Number.isSafeInteger(value["otherAccountHistoryDays"]) &&
-  value["otherAccountHistoryDays"] >= 0 &&
-  isOneOf(ACTIVITY_PERSISTENCE_STATUSES, value["persistence"]) &&
-  isOneOf(ACTIVITY_RECORDING_STATUSES, value["recordingStatus"]) &&
-  isOneOf(ACTIVITY_RETENTIONS, value["retention"]) &&
-  Array.isArray(value["sourceAppVisuals"]) &&
-  value["sourceAppVisuals"].every(isClipboardSourceAppVisual) &&
-  Array.isArray(value["segments"]) &&
-  value["segments"].every(isSegment) &&
-  Array.isArray(value["excludedApps"]) &&
-  value["excludedApps"].every(isExclusion);
+): value is ActivityDaySnapshot => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const {
+    date,
+    today,
+    earliestDate,
+    latestDate,
+    unreadable,
+    timeBillingEnabled,
+    deletionStatus,
+    sourceAppVisuals,
+    captureDetails,
+    detailsAccess,
+    appNameOnlyApps,
+    browserApps,
+    browserTitleApps,
+    otherAccountHistoryDays,
+    persistence,
+    recordingStatus,
+    retention,
+    segments,
+    excludedApps,
+  } = value;
+  return (
+    typeof date === "string" &&
+    typeof today === "string" &&
+    typeof earliestDate === "string" &&
+    typeof latestDate === "string" &&
+    typeof unreadable === "boolean" &&
+    typeof timeBillingEnabled === "boolean" &&
+    typeof deletionStatus === "string" &&
+    Object.hasOwn(activityContract.deletionStatuses, deletionStatus) &&
+    isReviewState(value) &&
+    Array.isArray(sourceAppVisuals) &&
+    sourceAppVisuals.every(isClipboardSourceAppVisual) &&
+    typeof captureDetails === "boolean" &&
+    isOneOf(ACTIVITY_DETAILS_ACCESS, detailsAccess) &&
+    Array.isArray(appNameOnlyApps) &&
+    appNameOnlyApps.every(isExclusion) &&
+    Array.isArray(browserApps) &&
+    browserApps.every(isExclusion) &&
+    Array.isArray(browserTitleApps) &&
+    browserTitleApps.every(isExclusion) &&
+    typeof otherAccountHistoryDays === "number" &&
+    Number.isSafeInteger(otherAccountHistoryDays) &&
+    otherAccountHistoryDays >= 0 &&
+    isOneOf(ACTIVITY_PERSISTENCE_STATUSES, persistence) &&
+    isOneOf(ACTIVITY_RECORDING_STATUSES, recordingStatus) &&
+    isOneOf(ACTIVITY_RETENTIONS, retention) &&
+    Array.isArray(segments) &&
+    segments.every(isSegment) &&
+    Array.isArray(excludedApps) &&
+    excludedApps.every(isExclusion)
+  );
+};

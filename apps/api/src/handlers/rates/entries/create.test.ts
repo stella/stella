@@ -6,7 +6,11 @@ import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
+import { auditRecorderDouble } from "@/api/tests/helpers/audit-recorder-double";
+import {
+  NO_DB,
+  createTestHandlerContext,
+} from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { withTimeBillingEnrolment } from "@/api/tests/helpers/time-billing-enrolment";
 import {
@@ -47,6 +51,8 @@ const create = async (body: CreateContext["body"], tableId = rateTableId) =>
   await createRateEntry.handler(
     withTimeBillingEnrolment(
       createTestHandlerContext<CreateContext>({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -62,6 +68,8 @@ const update = async (body: UpdateContext["body"]) =>
   await updateRateEntry.handler(
     withTimeBillingEnrolment(
       createTestHandlerContext<UpdateContext>({
+        scopedDb: NO_DB,
+        audit: auditRecorderDouble(),
         workspaceId: ids.wsA1,
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
@@ -123,6 +131,8 @@ describe("effective-dated rate selectors", () => {
     const page = await readRateEntries.handler(
       withTimeBillingEnrolment(
         createTestHandlerContext<ListContext>({
+          scopedDb: NO_DB,
+          audit: auditRecorderDouble(),
           workspaceId: ids.wsA1,
           session: { activeOrganizationId: ids.orgA },
           safeDb: scopedSafeDb(),

@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
-import { createHash } from "node:crypto";
 
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { buildScreeningIndex, DEFAULT_CUTOFF, screen } from "@stll/sanctions";
 import type { ScreeningIndex } from "@stll/sanctions";
 import {
@@ -11,6 +11,7 @@ import {
   MONITORING_CONTACT_COUNT,
   MONITORING_ENTRY_COUNT,
 } from "@stll/sanctions/test-fixtures/monitoring-corpus";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { organization } from "@/api/db/auth-schema";
 import {
@@ -91,10 +92,8 @@ if (!runPostgresTests) {
             await db.insert(sanctionsEditions).values({
               id: editionId,
               sourceId: "eu",
-              markerKey: createHash("sha256").update(editionId).digest("hex"),
-              contentHash: createHash("sha256")
-                .update(`content-${editionId}`)
-                .digest("hex"),
+              markerKey: hashSha256Hex(editionId),
+              contentHash: hashSha256Hex(`content-${editionId}`),
               publishedAt: "2026-09-30",
               state: "ready",
               entryCount: ENTRY_COUNT,
@@ -109,9 +108,7 @@ if (!runPostgresTests) {
                   const index = offset + batchIndex;
                   const payload = syntheticMonitoringEntry(index);
                   return {
-                    contentHash: createHash("sha256")
-                      .update(JSON.stringify(payload))
-                      .digest("hex"),
+                    contentHash: hashSha256Hex(JSON.stringify(payload)),
                     payload,
                   };
                 },
@@ -182,6 +179,7 @@ if (!runPostgresTests) {
               },
             });
             await prepareMonitoringContacts({
+              sourceSelection: { type: "all" },
               db: scopedDb,
               contactRows: contactRows.slice(0, 1),
               now,
@@ -203,15 +201,18 @@ if (!runPostgresTests) {
             }
             const screeningMs = performance.now() - screenStarted;
             const combinedStarted = performance.now();
-            const commitAt = async (offset: number): Promise<void> => {
-              const batch = contactRows.slice(
-                offset,
-                offset + SANCTIONS_MONITORING_BATCH_SIZE,
-              );
-              if (batch.length === 0) {
+            const itemBatches = chunkItems(
+              contactRows,
+              SANCTIONS_MONITORING_BATCH_SIZE,
+            )[Symbol.iterator]();
+            const commitAt = async (): Promise<void> => {
+              const nextBatch = itemBatches.next();
+              if (nextBatch.done) {
                 return;
               }
+              const batch = nextBatch.value;
               const prepared = await prepareMonitoringContacts({
+                sourceSelection: { type: "all" },
                 db: scopedDb,
                 contactRows: batch,
                 now,
@@ -241,7 +242,7 @@ if (!runPostgresTests) {
               offset += SANCTIONS_MONITORING_BATCH_SIZE
             ) {
               // db-await-in-loop: sequential bounded pages measure scoped commit throughput without retaining previous page results
-              await commitAt(offset);
+              await commitAt();
             }
             const combinedMs = performance.now() - combinedStarted;
             if (CONTACT_COUNT < MONITORING_CONTACT_COUNT) {

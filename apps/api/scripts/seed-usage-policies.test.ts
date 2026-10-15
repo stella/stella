@@ -50,14 +50,18 @@ const runSeed = async (seeds: string, extraArgs: readonly string[] = []) => {
   return { exitCode, stdout, stderr, report };
 };
 
-test("empty usage policy configuration exits without database access", async () => {
+// Empty seeds still retire an active free policy, so they need the database.
+test("empty usage policy configuration fails when the database is unreachable", async () => {
   const result = await runSeed("[]");
   expect(result).toEqual({
-    exitCode: 0,
-    stdout: expect.stringContaining("usage policies: seeded=0 hidden=0\n"),
+    exitCode: 1,
+    stdout: expect.stringContaining("```jsonl\n\n```"),
     report: "",
-    stderr: "",
+    stderr: expect.stringContaining(
+      "Usage policy seed failed; check configuration, results path and database access.\n",
+    ),
   });
+  expect(result.stdout).not.toContain("usage policies: seeded=");
 });
 
 test.each([

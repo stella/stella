@@ -1,6 +1,15 @@
 import { expect, test } from "bun:test";
 
-import { lintSingleRule } from "./lint-single-rule.ts";
+import { lintSingleRule as lintRule } from "./lint-single-rule.ts";
+
+// The owner module declares the helper; it shares line 1 with each source so
+// reported lines stay put.
+const OWNER = "const configureReadTransaction = async tx => setup(tx); ";
+const lintSingleRule = async (
+  ruleName: string,
+  source: string,
+  options: Parameters<typeof lintRule>[2],
+) => lintRule(ruleName, `${OWNER}${source}`, options);
 
 test("rejects conditional or unawaited configuration", async () => {
   for (const source of [
@@ -70,4 +79,21 @@ test("accepts both configured deployment branches before invoking the callback",
       { plugin: "public-law-read-boundary" },
     ),
   ).toEqual([]);
+});
+
+test("requires configuration in every deployment transaction callback", async () => {
+  expect(
+    await lintSingleRule(
+      "require-configured-read-transaction",
+      [
+        "const publicLawReadDb = async fn => {",
+        "if (env.PUBLIC_LAW_DATABASE_URL) {",
+        "return external.transaction(async tx => { await configureReadTransaction(tx); return fn(tx); });",
+        "}",
+        "return primary.transaction(async tx => { return fn(tx); });",
+        "};",
+      ].join("\n"),
+      { plugin: "public-law-read-boundary" },
+    ),
+  ).toEqual([1]);
 });

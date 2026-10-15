@@ -15,6 +15,13 @@ export type SanctionsMatcherRequest = {
   limit: number;
 };
 
+/** One edition to index ahead of screening: its entries, then its version. */
+export type SanctionsMatcherLoad = {
+  source: SanctionsSource;
+  editionId: string;
+  list: ParsedList;
+};
+
 export type SanctionsMatcherMessage =
   | {
       type: "entries";
@@ -22,6 +29,12 @@ export type SanctionsMatcherMessage =
       editionId: string;
       offset: number;
       entries: SanctionsEntry[];
+    }
+  | {
+      type: "index";
+      source: SanctionsSource;
+      editionId: string;
+      version: ParsedList["version"];
     }
   | {
       type: "screen";
@@ -38,4 +51,5 @@ export type SanctionsMatcherReply =
   | { status: "screened"; result: ScreeningResult }
   | { status: "work-limit" }
   | { status: "unavailable" }
-  | { status: "entries-loaded" };
+  | { status: "entries-loaded" }
+  | { status: "indexed" };

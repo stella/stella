@@ -1,4 +1,4 @@
-export type Severity =
+type Severity =
   | "info"
   | "low"
   | "medium"

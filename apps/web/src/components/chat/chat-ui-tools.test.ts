@@ -4,9 +4,12 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { CHAT_TOOL_EXECUTOR_METADATA_KEY } from "@stll/api-contract/chat";
+import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 
 import {
   consumeDocumentDeletionToolCalls,
+  consumePlaybookSaveToolCalls,
   getChatAssistantTurnError,
   getChatToolTitleKey,
   getAwaitedAssistantMessageId,
@@ -37,8 +40,58 @@ import type {
   ChatPart,
   DocumentDeletionMessage,
   PersistedChatMessage,
+  PlaybookSaveMessage,
 } from "@/components/chat/chat-ui-tools";
+import { MCP_CHAT_TOOL_GRANT_POLICIES } from "@/lib/api-contract";
 import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
+
+describe("playbook save consumption", () => {
+  test("a reverse completion refreshes caches without following the older call", () => {
+    const handledToolCallIds = new Set<string>();
+    const saves = (olderState: "complete" | "input-complete") =>
+      [
+        {
+          id: "assistant-saves",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-call",
+              name: "save_playbook",
+              id: "save-a",
+              state: olderState,
+              output: { playbookId: "playbook-a" },
+            },
+            {
+              type: "tool-call",
+              name: "save_playbook",
+              id: "save-b",
+              state: "complete",
+              output: { playbookId: "playbook-b" },
+            },
+          ],
+        },
+      ] satisfies PlaybookSaveMessage[];
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("input-complete"),
+      }),
+    ).toEqual({ playbookId: "playbook-b" });
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("complete"),
+      }),
+    ).toEqual({ playbookId: null });
+    expect(handledToolCallIds).toEqual(new Set(["save-a", "save-b"]));
+    expect(
+      consumePlaybookSaveToolCalls({
+        handledToolCallIds,
+        messages: saves("complete"),
+      }),
+    ).toBeNull();
+  });
+});
 
 describe("assistant turn outcomes", () => {
   test("reloads every stored refusal with its canonical recovery actions", () => {
@@ -517,30 +570,27 @@ describe("isApprovalPart", () => {
 });
 
 describe("tool approval grants", () => {
-  test("keeps sensitive write approvals per call", () => {
+  test("keeps sensitive and update-capable write approvals per call", () => {
     expect(isApprovalOnceChatToolName("suggest_changes")).toBe(true);
     expect(isApprovalOnceChatToolName("manage_organization")).toBe(true);
-    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
+    expect(isApprovalOnceChatToolName("save_clause")).toBe(true);
   });
 
-  test("rejects persistent grants for destructive deletes and the approve-once writes, without the stronger never-auto bar", () => {
-    for (const name of [
-      "delete_clause",
-      "delete_contact",
-      "delete_document",
-      "delete_matter",
-      "delete_time_entry",
-      "manage_organization",
-      "suggest_changes",
-    ] as const) {
-      expect(isApprovalOnceChatToolName(name)).toBe(true);
-      expect(isNonPersistentGrantChatToolName(name)).toBe(false);
+  test("rejects persistent grants for every projected approve-once write", () => {
+    const approveOnceTools = Object.entries(
+      MCP_CHAT_TOOL_GRANT_POLICIES,
+    ).filter(([, policy]) => policy === "approve-once");
+    expect(approveOnceTools.length).toBeGreaterThan(0);
+    for (const [name] of approveOnceTools) {
+      expect(isNonPersistentGrantChatToolName(name)).toBe(true);
     }
   });
 
-  test("keeps an ordinary mutation grantable", () => {
-    expect(isApprovalOnceChatToolName("save_clause")).toBe(false);
-    expect(isNonPersistentGrantChatToolName("save_clause")).toBe(false);
+  test("keeps a create-only mutation grantable", () => {
+    expect(isApprovalOnceChatToolName("create_reader_annotation")).toBe(false);
+    expect(isNonPersistentGrantChatToolName("create_reader_annotation")).toBe(
+      false,
+    );
   });
 
   test("renders the registry-write summary only for tools opted into it", () => {
@@ -740,6 +790,33 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
 });
 
 describe("isUnresolvedFolioAgentDocToolCallPart", () => {
+  test("idle watchers select client folio calls and never deferred server calls", () => {
+    for (const name of [
+      FOLIO_AGENT_TOOL_NAMES.readDocument,
+      FOLIO_AGENT_TOOL_NAMES.suggestChanges,
+    ]) {
+      const client = {
+        arguments: "{}",
+        id: `client-${name}`,
+        input: {},
+        state: "input-complete",
+        name,
+        type: "tool-call",
+      } as const;
+      const server = {
+        ...client,
+        id: `server-${name}`,
+        metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+      } as const;
+      expect(isUnresolvedFolioAgentDocToolCallPart(server)).toBe(false);
+      if (!isUnresolvedFolioAgentDocToolCallPart(client)) {
+        expect.unreachable("The client fixture must be actionable");
+      }
+      expect(
+        selectUnresolvedFolioAgentDocToolCallParts([server, client], new Set()),
+      ).toEqual([client]);
+    }
+  });
   test("matches a completed read_document call awaiting a result", () => {
     const part = {
       arguments: "{}",
@@ -1078,6 +1155,39 @@ describe("sanitizeRunningToolCalls", () => {
     state: "input-complete",
     type: "tool-call",
   } satisfies ChatPart;
+
+  test("server calls waiting behind approval remain resumable only on an awaiting-user turn", () => {
+    const part = {
+      ...runningToolPart,
+      metadata: { [CHAT_TOOL_EXECUTOR_METADATA_KEY]: "server" },
+    };
+    const message = {
+      id: "deferred-message",
+      role: "assistant",
+      parts: [part],
+    } as const satisfies PersistedChatMessage;
+    const waiting = {
+      ...message,
+      metadata: {
+        turnOutcome: {
+          type: "awaiting-user",
+          interaction: { type: "approval", toolCallId: "approval-call" },
+        },
+      },
+    } as const satisfies PersistedChatMessage;
+    expect(sanitizeRunningToolCalls([waiting])).toEqual([waiting]);
+    expect(isChatTurnInFlight({ status: "ready", messages: [waiting] })).toBe(
+      false,
+    );
+    expect(
+      isChatTurnInFlight({ status: "streaming", messages: [waiting] }),
+    ).toBe(true);
+    expect(
+      sanitizeRunningToolCalls([message]).at(0)?.parts.at(0),
+    ).toMatchObject({
+      state: "error",
+    });
+  });
 
   test("rewrites a dead running tool call in the last assistant message to the terminal error state", () => {
     const messages: PersistedChatMessage[] = [

@@ -14,6 +14,8 @@ import path from "node:path";
 import { Script } from "node:vm";
 
 import { parseBunLockText } from "./bun-lock-text";
+import { rootCheckGate } from "./ci-root-check-gate";
+import { withoutStaticReuseCondition } from "./ci-static-checks.test-support";
 import { workflowJobSteps, workflowStepByName } from "./workflow-steps";
 
 const script = path.join(import.meta.dirname, "detect-e2e-changes.sh");
@@ -65,6 +67,20 @@ const marketingUpdateWorkflow = readFileSync(
   path.join(
     import.meta.dirname,
     "../.github/workflows/marketing-screenshots-update.yml",
+  ),
+  "utf-8",
+);
+const marketingCaptureWorkflow = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/workflows/marketing-screenshots-capture.yml",
+  ),
+  "utf-8",
+);
+const marketingPublishWorkflow = readFileSync(
+  path.join(
+    import.meta.dirname,
+    "../.github/workflows/marketing-screenshots-publish.yml",
   ),
   "utf-8",
 );
@@ -191,6 +207,22 @@ const marketingCheckout = (job: string) => {
   return requiredExpression(checkout.with?.["ref"]);
 };
 
+// Job bodies are sliced from the workflow text for text assertions, while
+// their steps come from the whole parsed workflow: a step may be a YAML alias
+// whose anchor sits in another job, which the slice alone cannot resolve.
+const parsedWorkflows = new Map<string, Record<string, unknown>>();
+const jobSlices = new Map<string, { source: string; jobId: string }>();
+
+const parsedJobs = (source: string): Record<string, unknown> => {
+  const cached = parsedWorkflows.get(source);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const jobs = contractRecord(contractRecord(Bun.YAML.parse(source))["jobs"]);
+  parsedWorkflows.set(source, jobs);
+  return jobs;
+};
+
 const jobOf = (source: string, jobId: string): string => {
   const marker = `\n  ${jobId}:\n`;
   const start = source.indexOf(marker);
@@ -199,9 +231,12 @@ const jobOf = (source: string, jobId: string): string => {
   }
   const bodyStart = start + marker.length;
   const nextJob = source.slice(bodyStart).search(/\n {2}[a-z][\w-]*:\n/u);
-  return nextJob === -1
-    ? source.slice(bodyStart)
-    : source.slice(bodyStart, bodyStart + nextJob);
+  const slice =
+    nextJob === -1
+      ? source.slice(bodyStart)
+      : source.slice(bodyStart, bodyStart + nextJob);
+  jobSlices.set(slice, { source, jobId });
+  return slice;
 };
 
 const workflowJob = (jobId: string): string => jobOf(workflow, jobId);
@@ -225,8 +260,12 @@ const stepOf = (source: string, stepName: string, indent: number): string => {
 };
 
 const workflowStepValue = (job: string, stepName: string) => {
-  const parsed = contractRecord(Bun.YAML.parse(`job:\n${job}`));
-  const parsedJob = contractRecord(parsed["job"]);
+  const origin = jobSlices.get(job);
+  const parsedJob = contractRecord(
+    origin === undefined
+      ? contractRecord(Bun.YAML.parse(`job:\n${job}`))["job"]
+      : parsedJobs(origin.source)[origin.jobId],
+  );
   return workflowStepByName(parsedJob["steps"], stepName);
 };
 
@@ -246,6 +285,7 @@ const detects = (
   files: string[],
 ) =>
   Bun.spawnSync(["bash", script, scope, ...files], {
+    cwd: path.resolve(import.meta.dirname, ".."),
     stdout: "pipe",
   })
     .stdout.toString()
@@ -314,7 +354,7 @@ describe("detect-e2e-changes", () => {
   test("keeps a landing-only change out of app E2E", () => {
     for (const file of [
       "apps/landing/src/pages/index.astro",
-      "apps/web/e2e/marketing/landing-navigation.spec.ts",
+      "apps/landing/e2e/landing-navigation.spec.ts",
     ]) {
       expect(detects("core", [file])).toBe("false");
       expect(detects("landing", [file])).toBe("true");
@@ -322,15 +362,15 @@ describe("detect-e2e-changes", () => {
   });
 
   test("the shared marketing config exercises the landing project", () => {
-    const files = ["apps/web/e2e/playwright.marketing.config.ts"];
+    const files = ["packages/playwright-tools/src/marketing-config.ts"];
     expect(detects("core", files)).toBe("false");
     expect(detects("landing", files)).toBe("true");
   });
 
-  test("the web package manifest exercises its core and landing commands", () => {
+  test("the web package manifest exercises its core commands", () => {
     const files = ["apps/web/package.json"];
     expect(detects("core", files)).toBe("true");
-    expect(detects("landing", files)).toBe("true");
+    expect(detects("landing", files)).toBe("false");
   });
 
   test("routes every input of a product screenshot through the marketing scope", () => {
@@ -383,6 +423,10 @@ describe("detect-e2e-changes", () => {
       ".github/actions/setup-production-e2e/action.yml",
       ".github/actions/build-e2e-web/action.yml",
       ".github/actions/setup-playwright/action.yml",
+      // Every E2E job installs through these files.
+      ".github/actions/ci-install/action.yml",
+      "scripts/ci-install.ts",
+      "scripts/ci-install-store.ts",
     ]) {
       expect(detects("core", [file])).toBe("true");
       expect(detects("landing", [file])).toBe("true");
@@ -391,18 +435,21 @@ describe("detect-e2e-changes", () => {
 
   test("plans trust and changed scopes in one security gate", () => {
     const plan = workflowJob("ci-plan");
+    const planStepNames = workflowJobSteps(ciWorkflow, "ci-plan").map(
+      (step) => step["name"],
+    );
     expect(workflow).not.toContain("\n  trust-check:\n");
     expect(workflow).not.toContain("\n  ci-changes:\n");
-    expect(plan.indexOf("Check if PR is trusted")).toBeLessThan(
-      plan.indexOf("Checkout"),
+    expect(planStepNames.indexOf("Check if PR is trusted")).toBeLessThan(
+      planStepNames.indexOf("Checkout"),
     );
-    expect(plan.indexOf("Checkout")).toBeLessThan(
-      plan.indexOf("Check changed file scope"),
+    expect(planStepNames.indexOf("Checkout")).toBeLessThan(
+      planStepNames.indexOf("Check changed file scope"),
     );
     expect(plan).toContain("persist-credentials: false");
     for (const stepName of [
       "Checkout",
-      "Resolve browser image",
+      "Resolve available CI images",
       "Plan release marketing screenshots",
       "Setup Bun for dependency scope",
       "Check changed file scope",
@@ -414,7 +461,7 @@ describe("detect-e2e-changes", () => {
     }
     expect(
       requiredExpression(
-        workflowStepValue(plan, "Resolve browser image")["if"],
+        workflowStepValue(plan, "Resolve available CI images")["if"],
       ),
     ).toBe(
       "steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch')",
@@ -448,7 +495,7 @@ describe("detect-e2e-changes", () => {
     );
     expect(requiredExpression(collabRedis["if"])).toBe(
       githubExpression(
-        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true'",
+        "!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' && (github.event_name != 'pull_request' || vars.CI_POSTGRES_PR_SELECTION == 'on') && (needs.ci-plan.outputs.suite_depth == 'full' || (needs.ci-plan.outputs.suite_depth == 'fast' && needs.ci-plan.outputs.service_suites_pr_required == 'true'))",
       ),
     );
     expect(requiredExpression(collabRedis["run"])).toBe(
@@ -499,7 +546,12 @@ describe("detect-e2e-changes", () => {
 
     // The route network baseline has a leg of its own, and the Playwright
     // shards skip it there.
-    expect(production).toContain("shard: [1, 2, network-baseline]");
+    expect(production).toContain(
+      `shard: ${githubExpression("fromJSON(needs.ci-plan.outputs.e2e_production_matrix).shard")}`,
+    );
+    expect(workflowJob("ci-plan")).toContain(
+      "matrix=$(bun scripts/e2e-spec-shards-core.ts all)",
+    );
     expect(
       requiredExpression(
         workflowStepValue(production, "Check route network baseline")["if"],
@@ -514,6 +566,78 @@ describe("detect-e2e-changes", () => {
         stepName,
       ).toContain("matrix.shard != 'network-baseline'");
     }
+  });
+
+  test("plans e2e outputs from selection and fallback semantics", () => {
+    const plan = workflowStepRun(
+      workflowJob("ci-plan"),
+      "Plan changed PR e2e shards",
+    );
+    const fullMatrix = '{"shard":["full"]}';
+    const selectedMatrix = '{"shard":["selected"]}';
+    const selectedSpecs = '["e2e/specs/selected.spec.ts"]';
+    const root = mkdtempSync(path.join(tmpdir(), "e2e-plan-outputs-"));
+    const output = path.join(root, "outputs");
+    try {
+      for (const event of [
+        "pull_request",
+        "merge_group",
+        "workflow_dispatch",
+      ]) {
+        for (const outcome of ["success", "failure", "skipped"]) {
+          for (const matrix of ["", '{"shard":[]}', selectedMatrix]) {
+            for (const required of ["true", "false"]) {
+              writeFileSync(output, "fixture=preserved\n");
+              const result = Bun.spawnSync(
+                [
+                  "/bin/bash",
+                  "-c",
+                  [
+                    'bun() { [[ "$*" == "scripts/e2e-spec-shards-core.ts all" ]] || return 91; printf "%s\\n" "$FULL_MATRIX"; }',
+                    plan,
+                  ].join("\n"),
+                ],
+                {
+                  cwd: root,
+                  env: {
+                    PATH: "/usr/bin:/bin",
+                    GITHUB_OUTPUT: output,
+                    EVENT_NAME: event,
+                    SELECTOR_OUTCOME: outcome,
+                    SELECTED_MATRIX: matrix,
+                    SELECTED_MODE: "selected",
+                    SELECTED_SPECS: selectedSpecs,
+                    E2E_PRODUCTION_REQUIRED: required,
+                    FULL_MATRIX: fullMatrix,
+                  },
+                  stdout: "pipe",
+                  stderr: "pipe",
+                },
+              );
+              expect(result.exitCode, result.stderr.toString()).toBe(0);
+              const usesSelection =
+                event === "pull_request" &&
+                outcome === "success" &&
+                matrix !== "";
+              const emptySelection = usesSelection && matrix === '{"shard":[]}';
+              expect(readFileSync(output, "utf-8").trim().split("\n")).toEqual([
+                "fixture=preserved",
+                `matrix=${usesSelection ? matrix : fullMatrix}`,
+                `mode=${usesSelection ? "selected" : "full"}`,
+                `specs=${usesSelection ? selectedSpecs : "[]"}`,
+                `selection_required=${String(!emptySelection)}`,
+                `required=${emptySelection ? "false" : required}`,
+              ]);
+            }
+          }
+        }
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+    expect(
+      ciContract.jobs["ci-plan"]?.outputs?.["e2e_production_required"],
+    ).toBe(githubExpression("steps.e2e-pr-plan.outputs.required"));
   });
 
   test("starts only infrastructure exercised by pull request E2E", () => {
@@ -544,17 +668,18 @@ describe("detect-e2e-changes", () => {
     expect(marketingCapture).toContain("extra-services: gotenberg");
   });
 
-  test("skips browser execution only for an explicit Docker Hub pull rate limit", () => {
-    expect(e2eStackSetup).toContain(
-      `value: ${githubExpression("steps.stack.outputs.status")}`,
+  test("a Docker Hub pull rate limit fails the job with a typed infrastructure reason", () => {
+    const rateLimit = e2eStackSetup.slice(
+      e2eStackSetup.indexOf("grep -Eqi 'toomanyrequests:.*pull rate limit'"),
     );
-    expect(e2eStackSetup).toContain(
-      "grep -Eqi 'toomanyrequests:.*pull rate limit'",
-    );
-    expect(e2eStackSetup).toContain(
-      'echo "status=rate-limited" >> "$GITHUB_OUTPUT"',
-    );
-    expect(e2eStackSetup).toContain('echo "status=ready" >> "$GITHUB_OUTPUT"');
+    expect(rateLimit).not.toBe(e2eStackSetup);
+    const branch = rateLimit.slice(0, rateLimit.indexOf("\n          fi"));
+    expect(branch).toContain("kind=infra class=e2e-stack-rate-limited");
+    expect(branch.trimEnd()).toEndWith("exit 1");
+    // No readiness output: a stack that is not ready fails the setup step.
+    expect(e2eStackSetup).not.toContain("outputs.status");
+    expect(e2eStackSetup).not.toContain("status=");
+    expect(productionE2eSetup).not.toContain("outputs.status");
     const action: unknown = Bun.YAML.parse(e2eStackSetup);
     if (
       !isRecord(action) ||
@@ -578,15 +703,30 @@ describe("detect-e2e-changes", () => {
     });
     const stackIndex = stackSteps.findIndex((step) => step.id === "stack");
     expect(stackIndex).toBeGreaterThanOrEqual(0);
+    const cleanupSteps = stackSteps.filter((step) =>
+      step.name?.startsWith("Log out of "),
+    );
+    expect(cleanupSteps.map(({ name }) => name)).toEqual([
+      "Log out of GitHub Container Registry",
+      "Log out of Docker Hub",
+    ]);
+    for (const cleanup of cleanupSteps) {
+      expect(cleanup.if, cleanup.name).toStartWith("always()");
+      const cleanupIndex = stackSteps.indexOf(cleanup);
+      expect(cleanupIndex, cleanup.name).toBeGreaterThan(stackIndex);
+      expect(cleanupIndex, cleanup.name).toBeLessThan(
+        stackSteps.findIndex(
+          (step) => step.name === "Prepare API runtime sources",
+        ),
+      );
+    }
     const afterStack = stackSteps
       .slice(stackIndex + 1)
-      .filter((step) => step.name !== "Log out of Docker Hub");
+      .filter((step) => !cleanupSteps.includes(step));
     expect(afterStack.length).toBeGreaterThan(0);
     const assertReady = (steps: typeof afterStack) => {
       for (const step of steps) {
-        expect(step.if, step.name).toBe(
-          "steps.stack.outputs.status == 'ready'",
-        );
+        expect(step.if, step.name).toBe("steps.stack.outcome == 'success'");
       }
     };
     assertReady(afterStack);
@@ -595,7 +735,7 @@ describe("detect-e2e-changes", () => {
         position === index ? { ...entry, if: "always()" } : entry,
       );
       expect(mutation.at(index)?.if).not.toBe(step.if);
-      expect(() => assertReady(mutation)).toThrow("steps.stack.outputs.status");
+      expect(() => assertReady(mutation)).toThrow("steps.stack.outcome");
     }
 
     for (const stepName of [
@@ -606,7 +746,7 @@ describe("detect-e2e-changes", () => {
       "Wait for production web server",
     ]) {
       expect(actionStep(productionE2eSetup, stepName)).toContain(
-        "steps.stack.outputs.status == 'ready'",
+        "steps.stack.outcome == 'success'",
       );
     }
     expect(
@@ -619,12 +759,17 @@ describe("detect-e2e-changes", () => {
     for (const stepName of [
       "Run Playwright shard",
       "Upload Playwright blob report",
-      "Upload server logs",
     ]) {
       expect(
         requiredExpression(workflowStepValue(productionJob, stepName)["if"]),
-      ).toContain("steps.e2e-stack.outputs.status == 'ready'");
+      ).toContain("steps.e2e-stack.outcome == 'success'");
     }
+    // A setup that fails after starting its servers still leaves logs.
+    expect(
+      requiredExpression(
+        workflowStepValue(productionJob, "Upload server logs")["if"],
+      ),
+    ).toBe("failure() && steps.e2e-stack.outcome != 'skipped'");
     const canary = workflowJob("e2e-vite-canary");
     expect(
       workflowStepValue(canary, "Start docker stack and API server")["id"],
@@ -637,32 +782,43 @@ describe("detect-e2e-changes", () => {
       "Guard against mid-test Vite re-optimize",
       "Stop web dev server",
       "Upload Playwright blob report",
-      "Upload server logs",
     ]) {
       expect(
         requiredExpression(workflowStepValue(canary, stepName)["if"]),
-      ).toContain("steps.e2e-stack.outputs.status == 'ready'");
+      ).toContain("steps.e2e-stack.outcome == 'success'");
     }
   });
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     const plan = workflowJob("ci-plan");
-    for (const leg of ["api", "web", "rest"]) {
-      const codeQuality = workflowJob(`code-quality-${leg}`);
+    for (const { leg, job, name } of [
+      { leg: "api", job: "code-quality-api", name: "Code quality" },
+      { leg: "web", job: "code-quality-web-rest", name: "Code quality (web)" },
+      {
+        leg: "rest",
+        job: "code-quality-web-rest",
+        name: "Code quality (rest)",
+      },
+    ]) {
+      const step = workflowStepByName(workflowJobSteps(ciWorkflow, job), name);
+      const env = contractRecord(step["env"]);
       expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
       expect(plan).toContain(
         "bun scripts/ci-package-scope.ts --package-checks",
       );
-      expect(codeQuality).toContain(
-        `EVENT_NAME: ${githubExpression("github.event_name")}`,
+      expect(env["EVENT_NAME"]).toBe(githubExpression("github.event_name"));
+      expect(env["CHECK_BASE_REF"]).toBe(
+        githubExpression("format('origin/{0}', github.base_ref || 'main')"),
       );
-      expect(codeQuality).toContain(
-        'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]',
-      );
-      expect(codeQuality).toContain(`bun run code-check -- --leg ${leg}\n`);
-      expect(codeQuality).not.toContain("bun run typecheck\n");
-      expect(codeQuality).toContain(
-        `bun run code-check:affected -- --leg ${leg} --base "origin/$BASE_REF"`,
+      expect(requiredExpression(step["run"])).toBe(
+        [
+          'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then',
+          `  bun run code-check -- --leg ${leg}`,
+          "  exit 0",
+          "fi",
+          `bun run code-check:affected -- --leg ${leg} --base "$CHECK_BASE_REF"`,
+          "",
+        ].join("\n"),
       );
     }
   });
@@ -679,7 +835,9 @@ describe("detect-e2e-changes", () => {
     expect(releaseTypecheck).toContain(
       "needs.ci-plan.outputs.release_typecheck_required == 'true'",
     );
-    expectPullRequestAndMergeGroup(releaseTypecheck);
+    // Release compiles gate merge groups (and heavy runs), never pull requests.
+    expect(releaseTypecheck).toContain("github.event_name != 'pull_request'");
+    expect(releaseTypecheck).toContain("(github.event_name == 'merge_group'");
     expect(releaseTypecheck).toContain(
       "run: bun run typecheck --concurrency=1 && bun run typecheck:repo",
     );
@@ -732,7 +890,9 @@ describe("detect-e2e-changes", () => {
     );
 
     const driftGuard = ciChecksRestStep("Model catalog snapshot drift check");
-    const driftGuardCondition = requiredExpression(driftGuard["if"]);
+    const driftGuardCondition = requiredExpression(
+      withoutStaticReuseCondition(driftGuard)["if"],
+    );
     const driftGuardRun = requiredExpression(driftGuard["run"]);
     expect(driftGuardCondition).toContain(
       "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",
@@ -749,7 +909,42 @@ describe("detect-e2e-changes", () => {
     expect(driftGuardCondition).toMatch(
       /needs\.ci-plan\.outputs\.package_checks_required == 'true'\s*&&\s*needs\.ci-plan\.outputs\.model_catalog_drift_required == 'true'/u,
     );
-    expect(driftGuardCondition).not.toContain("||");
+    expect(driftGuardCondition).toBe(
+      githubExpression(
+        `!cancelled() && steps.install.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && needs.ci-plan.outputs.model_catalog_drift_required == 'true') && ${rootCheckGate({ job: "ci-checks-rest", name: "Model catalog snapshot drift check" })}`,
+      ),
+    );
+  });
+
+  test("every root-check selection clause is the owner-generated required operand", () => {
+    const gatedSteps = Object.entries(ciContract.jobs).flatMap(
+      ([job, value]) =>
+        value.steps === undefined
+          ? []
+          : workflowJobSteps(ciWorkflow, job)
+              .filter(
+                (step) =>
+                  typeof step["if"] === "string" &&
+                  step["if"].includes("needs.ci-plan.outputs.root_checks"),
+              )
+              .map((step) => ({ job, step })),
+    );
+    expect(gatedSteps.length).toBeGreaterThan(0);
+    for (const { job, step } of gatedSteps) {
+      const condition = requiredExpression(
+        withoutStaticReuseCondition(step)["if"],
+      );
+      const gate = rootCheckGate({
+        job,
+        name: requiredExpression(step["name"]),
+      });
+      const operands = condition.split(` && ${gate}`);
+      expect(operands).toHaveLength(2);
+      expect(operands.at(1)).toBe(" }}");
+      const prerequisites = requiredExpression(operands.at(0));
+      expect(prerequisites).not.toContain("needs.ci-plan.outputs.root_checks");
+      expect(prerequisites).not.toContain("||");
+    }
   });
 
   test("checks shipped product screenshots on planned releases", () => {
@@ -787,6 +982,7 @@ describe("detect-e2e-changes", () => {
                 for (const cancelled of [false, true]) {
                   const context = {
                     github: { event_name: event },
+                    inputs: { pr_depth_only: false },
                     needs: {
                       "ci-plan": {
                         outputs: {
@@ -803,18 +999,20 @@ describe("detect-e2e-changes", () => {
                     always: () => true,
                     cancelled: () => cancelled,
                   };
-                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                  const certified =
                     event !== "pull_request" &&
-                      planned &&
-                      (trusted || event === "workflow_dispatch") &&
-                      (!buildRequired ||
-                        webResult === "success" ||
-                        heavyResult === "success") &&
-                      (event !== "merge_group" || !cancelled),
+                    planned &&
+                    (trusted || event === "workflow_dispatch") &&
+                    (!buildRequired ||
+                      webResult === "success" ||
+                      heavyResult === "success") &&
+                    (event !== "merge_group" || !cancelled);
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    certified,
                   );
                   context.needs["ci-plan"].outputs.queue_depth = "thin";
                   expect(Boolean(evaluateExpression(predicate, context))).toBe(
-                    false,
+                    certified,
                   );
                 }
               }
@@ -852,27 +1050,37 @@ describe("detect-e2e-changes", () => {
     expect(marketingUpdateWorkflow).toContain(
       `group: marketing-screenshots-update-${githubExpression("inputs.branch")}`,
     );
-    expect(marketingUpdateWorkflow).toContain(
-      `ref: ${githubExpression("inputs.branch")}`,
-    );
     expect(marketingUpdateWorkflow).not.toContain("--ref");
 
-    const update = jobOf(marketingWorkflow, "update");
+    // The dispatch on main only validates the branch and starts the capture
+    // on that branch's own ref; it runs no branch code and holds no key.
+    const update = jobOf(marketingUpdateWorkflow, "update");
     const validate = workflowStepRun(update, "Validate inputs");
     expect(validate).toContain('if [[ "$WORKFLOW_REF" != "main" ]]');
     expect(validate).toContain('if [[ "$BRANCH" == "main" ]]');
     expect(validate).toContain('"$BRANCH" =~ ^[A-Za-z0-9._/-]+$');
     expect(validate).toContain('"$BRANCH" == *".."*');
     expect(validate).toContain('"$BRANCH" == -*');
-    // Nothing is minted for a branch that does not exist here.
-    expect(update.indexOf("- name: Verify the branch exists")).toBeLessThan(
-      update.indexOf("- name: Mint App token"),
+    expect(update).toContain(
+      "workflow_id: 'marketing-screenshots-capture.yml'",
     );
+    // Workflow source text, not an env read of this process.
+    expect(update).toMatch(/ref: process\.env\.BRANCH,/u);
+    expect(marketingUpdateWorkflow).not.toContain("secrets.");
 
-    // Updates capture the named branch; ordinary checks keep the event's
-    // ref. Only the validated main-heavy caller selects an explicit SHA.
-    expect(workflowStepValue(update, "Checkout")["with"]).toMatchObject({
-      ref: githubExpression("inputs.ref"),
+    // The capture runs on the branch's ref and never on main; it holds no
+    // push credential. The publish run mints the token only after it has
+    // validated the PNGs.
+    const capture = jobOf(marketingCaptureWorkflow, "capture");
+    expect(capture).toContain("github.ref != 'refs/heads/main'");
+    expect(capture).not.toContain("Mint App token");
+    expect(capture).not.toContain("environment:");
+    const publish = jobOf(marketingPublishWorkflow, "publish");
+    expect(publish.indexOf("- name: Stage validated baselines")).toBeLessThan(
+      publish.indexOf("- name: Mint App token"),
+    );
+    expect(workflowStepValue(capture, "Checkout")["with"]).toMatchObject({
+      ref: githubExpression("github.sha"),
     });
     expect(checkoutRefs.length).toBeGreaterThan(0);
     for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
@@ -983,28 +1191,28 @@ describe("detect-e2e-changes", () => {
         }
       }
     }
-    expect(
-      evaluateExpression(marketingCheckout("update"), {
-        inputs: { ref: "named-branch" },
-      }),
-    ).toBe("named-branch");
     const validateSteps = mainHeavyContract.jobs["validate"]?.steps ?? [];
     expect(
       validateSteps.find(({ name }) => name === "Validate SHA format")?.run,
     ).toContain("^[0-9a-f]{40}$");
     expect(
       validateSteps.find(({ name }) => name === "Verify main ancestry")?.run,
-    ).toContain("git merge-base --is-ancestor");
+    ).toContain(
+      'bash "$RUNNER_TEMP/verify-release-tree-proof.sh" --allow-pr-head "$GITHUB_REPOSITORY" "$SHA" "$SHA"',
+    );
+    expect(
+      validateSteps.find(({ name }) => name === "Fetch main history")?.run,
+    ).toContain("show origin/main:scripts/verify-release-tree-proof.sh");
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
-    const push = workflowStepValue(update, "Push regenerated baselines");
+    const push = workflowStepValue(publish, "Push regenerated baselines");
     expect(push["uses"]).toContain(
       "stella/.github/.github/actions/signed-commit@",
     );
     expect(push["with"]).toMatchObject({
       mode: "append",
-      branch: githubExpression("inputs.ref"),
+      branch: githubExpression("steps.select.outputs.branch"),
     });
 
     // Nightly checks continue to use their triggering ref.
@@ -1013,53 +1221,203 @@ describe("detect-e2e-changes", () => {
 
   test("publishes regenerated baselines a fork pull request can commit itself", () => {
     const upload = workflowStepValue(
-      jobOf(marketingWorkflow, "update"),
+      jobOf(marketingCaptureWorkflow, "capture"),
       "Upload regenerated baselines",
     );
     expect(upload["uses"]).toBe(
       "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
     );
     expect(upload["with"]).toMatchObject({
-      name: `marketing-screenshots-${githubExpression("github.run_id")}`,
+      name: "marketing-screenshots",
       path: "apps/landing/public/media/products/*.png",
       "retention-days": 7,
     });
-    // Published before the push, so a run that cannot push still hands over
-    // the PNGs.
-    expect(
-      marketingWorkflow.indexOf("- name: Upload regenerated baselines"),
-    ).toBeLessThan(
-      marketingWorkflow.indexOf("- name: Push regenerated baselines"),
+    // The capture run's own artifact: a run that cannot push (a fork's
+    // change) still hands over the PNGs.
+    expect(marketingCaptureWorkflow).not.toContain(
+      "Push regenerated baselines",
     );
   });
 
+  // A setup action that reports "not ready" through an output and exits 0
+  // lets every test gated on that output skip while the job stays green.
+  // Setup actions fail instead, so no step may gate on their outputs.
+  const setupReadinessViolations = (
+    files: readonly { path: string; source: string }[],
+  ) =>
+    files.flatMap(({ path: file, source }) => {
+      const document: unknown = Bun.YAML.parse(source);
+      if (!isRecord(document)) {
+        return [`${file}: not a YAML mapping`];
+      }
+      const problems: string[] = [];
+      if (
+        /^\.github\/actions\/setup-[^/]+\/action\.ya?ml$/u.test(file) &&
+        document["outputs"] !== undefined
+      ) {
+        problems.push(`${file}: setup action declares outputs`);
+      }
+      const jobs = isRecord(document["jobs"])
+        ? Object.values(document["jobs"])
+        : [document["runs"]];
+      for (const job of jobs) {
+        if (!isRecord(job) || !Array.isArray(job["steps"])) {
+          continue;
+        }
+        const steps = job["steps"].filter(isRecord);
+        const setupIds = new Set(
+          steps
+            .filter(
+              (step) =>
+                typeof step["uses"] === "string" &&
+                step["uses"].startsWith("./.github/actions/setup-") &&
+                typeof step["id"] === "string",
+            )
+            .map((step) => String(step["id"])),
+        );
+        for (const step of steps) {
+          const condition = step["if"];
+          if (typeof condition !== "string") {
+            continue;
+          }
+          for (const id of setupIds) {
+            if (condition.includes(`steps.${id}.outputs.`)) {
+              problems.push(
+                `${file}: ${String(step["name"])} is gated on setup output steps.${id}.outputs`,
+              );
+            }
+          }
+        }
+      }
+      return problems;
+    });
+
+  test("no step is gated on a setup action's readiness output", () => {
+    const root = path.join(import.meta.dirname, "..");
+    const files = [".github/workflows/*.yml", ".github/actions/*/action.yml"]
+      .flatMap((pattern) => [
+        ...new Bun.Glob(pattern).scanSync({ cwd: root, dot: true }),
+      ])
+      .map((file) => ({
+        path: file,
+        source: readFileSync(path.join(root, file), "utf-8"),
+      }));
+    expect(files.length).toBeGreaterThan(10);
+    expect(setupReadinessViolations(files)).toEqual([]);
+  });
+
+  test("failure diagnostics run whenever the stack setup was attempted", () => {
+    const root = path.join(import.meta.dirname, "..");
+    const conditions = [
+      ...new Bun.Glob(".github/workflows/*.yml").scanSync({
+        cwd: root,
+        dot: true,
+      }),
+    ].flatMap((file) =>
+      [
+        ...readFileSync(path.join(root, file), "utf-8").matchAll(
+          /if: (failure\(\) && steps\.e2e-stack\.outcome [!=]= '\w+')/gu,
+        ),
+      ].map((match) => `${file}: ${match.at(1) ?? ""}`),
+    );
+    expect(conditions.length).toBeGreaterThan(0);
+    for (const condition of conditions) {
+      expect(condition).toEndWith("outcome != 'skipped'");
+    }
+  });
+
+  test("the setup readiness guard rejects a status-gated test step", () => {
+    const gatedWorkflow = [
+      "jobs:",
+      "  e2e:",
+      "    steps:",
+      "      - id: stack",
+      "        uses: ./.github/actions/setup-e2e-stack",
+      "      - name: Run browser tests",
+      "        if: steps.stack.outputs.status == 'ready'",
+      "        run: bun test:e2e",
+    ].join("\n");
+    const action = [
+      "outputs:",
+      "  status:",
+      "    value: ready",
+      "runs:",
+      "  using: composite",
+      "  steps: []",
+    ].join("\n");
+    expect(
+      setupReadinessViolations([
+        { path: ".github/workflows/ci.yml", source: gatedWorkflow },
+        { path: ".github/actions/setup-example/action.yml", source: action },
+      ]),
+    ).toEqual([
+      ".github/workflows/ci.yml: Run browser tests is gated on setup output steps.stack.outputs",
+      ".github/actions/setup-example/action.yml: setup action declares outputs",
+    ]);
+  });
+
+  test("the landing browser specs run in a gating collector", () => {
+    const job = workflowJob("e2e-landing");
+    const collector = workflowStepValue(job, "Check landing islands");
+    // Default success() gating, no pipe that could hide the exit status.
+    expect(collector["if"]).toBeUndefined();
+    const run = requiredExpression(collector["run"]);
+    expect(run).toEndWith("bun --filter @stll/landing test:e2e");
+    expect(run).not.toContain("|");
+    const landingPackage: unknown = JSON.parse(
+      readFileSync(
+        path.join(import.meta.dirname, "../apps/landing/package.json"),
+        "utf-8",
+      ),
+    );
+    const scripts = isRecord(landingPackage) ? landingPackage["scripts"] : {};
+    const command = isRecord(scripts) ? scripts["test:e2e"] : undefined;
+    // Playwright fails when no test matches unless told otherwise.
+    expect(command).toBe(
+      "playwright test --config e2e/playwright.config.ts --project landing",
+    );
+    const config = readFileSync(
+      path.join(
+        import.meta.dirname,
+        "../apps/landing/e2e/playwright.config.ts",
+      ),
+      "utf-8",
+    );
+    expect(config).toContain('testDir: "."');
+    for (const spec of [
+      "landing-anonymize-demo.spec.ts",
+      "landing-navigation.spec.ts",
+    ]) {
+      expect(
+        existsSync(path.join(import.meta.dirname, "../apps/landing/e2e", spec)),
+        spec,
+      ).toBe(true);
+    }
+    // Parse the whole workflow: the job reuses anchors defined in other jobs.
+    const result = contractRecord(parsedJobs(workflow)["ci-result"]);
+    expect(result["needs"]).toContain("e2e-landing");
+  });
+
   test("never passes the screenshot check without comparing a PNG", () => {
-    // setup-e2e-stack exits 0 with `status=rate-limited`, which the e2e suites
-    // treat as a skip. Here it would report success on assets nothing looked
-    // at, so the stack is mandatory.
-    const requireStack = actionStep(marketingCapture, "Require the stack");
-    expect(requireStack).toContain("steps.e2e-stack.outputs.status != 'ready'");
-    expect(requireStack).toContain("::error::");
-    expect(requireStack).toContain("exit 1");
-    expect(marketingCapture.indexOf("- name: Require the stack")).toBeLessThan(
-      marketingCapture.indexOf("- name: Start production web server"),
+    // The shared stack setup fails the job when the stack is not ready, so
+    // the capture needs no readiness gate of its own and no step may carry
+    // one that turns a missing stack into a skip.
+    expect(marketingCapture).toContain(
+      "uses: ./.github/actions/setup-e2e-stack",
     );
-    // No capture, upload, or push step may still carry the skip that step
-    // makes fatal; only `always()` cleanup and `failure()` diagnostics test it.
-    expect(marketingCapture).not.toContain(
-      "if: steps.e2e-stack.outputs.status == 'ready'",
-    );
+    expect(marketingCapture).not.toContain("outputs.status");
     expect(marketingWorkflow).not.toContain("steps.e2e-stack");
   });
 
   test("keeps one capture body behind both screenshot directions", () => {
     // The shared body is a composite action so check and update cannot drift;
     // only the checkout differs, because update captures a named branch.
-    expect(
-      marketingWorkflow.match(
-        /uses: \.\/\.github\/actions\/marketing-capture/gu,
-      ),
-    ).toHaveLength(2);
+    for (const source of [marketingWorkflow, marketingCaptureWorkflow]) {
+      expect(
+        source.match(/uses: \.\/\.github\/actions\/marketing-capture/gu),
+      ).toHaveLength(1);
+    }
+    expect(marketingPublishWorkflow).not.toContain("marketing-capture");
     expect(marketingWorkflow).not.toContain("test:e2e:marketing");
     expect(marketingCapture).toContain("test:e2e:marketing:update");
     // Cleanup stays inside the action so a failed capture still releases the
@@ -1067,12 +1425,12 @@ describe("detect-e2e-changes", () => {
     expect(
       actionStep(marketingCapture, "Stop production web server"),
     ).toContain("if: always()");
-    // An unrecognised mode must fail loudly: the check job runs on anything
-    // that is not update, so it reaches this validation instead of leaving
-    // both jobs skipped and green.
-    expect(jobOf(marketingWorkflow, "check")).toContain(
-      "if: inputs.mode != 'update'",
-    );
+    // An unrecognised mode must fail loudly: the check job always runs and
+    // requires check mode, instead of being skipped green.
+    expect(jobOf(marketingWorkflow, "check")).not.toContain("if: inputs.mode");
+    expect(
+      workflowStepRun(jobOf(marketingWorkflow, "check"), "Require check mode"),
+    ).toContain('if [[ "$MODE" != check ]]');
     expect(actionStep(marketingCapture, "Validate mode")).toContain(
       "Unknown marketing screenshot mode",
     );
@@ -1123,6 +1481,7 @@ describe("detect-e2e-changes", () => {
                       needs: {
                         "ci-plan": {
                           outputs: {
+                            coverage_profile: "normal-v1",
                             queue_depth: "full",
                             suite_depth: depth,
                             run_required: "true",
@@ -1137,7 +1496,6 @@ describe("detect-e2e-changes", () => {
                       cancelled: () => cancelled,
                     };
                     const certified =
-                      event !== "pull_request" &&
                       planned &&
                       (trusted || event === "workflow_dispatch") &&
                       (webResult === "success" || heavyResult === "success") &&
@@ -1147,18 +1505,18 @@ describe("detect-e2e-changes", () => {
                       Boolean(evaluateExpression(predicate, context)),
                       label,
                     ).toBe(certified);
-                    // A thin merge group keeps planned browser suites unless
-                    // the queue switch is off; no other event runs them thin.
+                    // Queue depth and browser configuration cannot bypass
+                    // a planned consumer's certification requirement.
                     context.needs["ci-plan"].outputs.queue_depth = "thin";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin`,
-                    ).toBe(event === "merge_group" && certified);
+                    ).toBe(certified);
                     context.vars.QUEUE_BROWSER_SUITES = "off";
                     expect(
                       Boolean(evaluateExpression(predicate, context)),
                       `${label}/thin/off`,
-                    ).toBe(false);
+                    ).toBe(certified);
                   }
                 }
               }
@@ -1292,7 +1650,7 @@ describe("detect-e2e-changes", () => {
       `image: ${githubExpression("needs.ci-plan.outputs.playwright_image")}`,
     );
     expect(workflowJob("ci-plan")).toContain(
-      "cat .github/actions/setup-playwright/image.txt",
+      "bun scripts/ci-service-images.ts --resolve",
     );
     const ciBrowser = workflowJob("ci-browser");
     const bunSetup = workflowStepValue(ciBrowser, "Setup Bun");
@@ -1305,9 +1663,7 @@ describe("detect-e2e-changes", () => {
       ciBrowser,
       "Restore Bun install cache",
     );
-    expect(cachedSetup["uses"]).toMatch(
-      /^stella\/\.github\/actions\/setup-bun-cached@/u,
-    );
+    expect(cachedSetup["uses"]).toMatch(/^oven-sh\/setup-bun@[a-f0-9]{40}$/u);
     expect(contractRecord(cachedSetup["with"])["bun-version-file"]).toBe(
       "package.json",
     );
@@ -1373,20 +1729,20 @@ describe("detect-e2e-changes", () => {
     // policy is main and release tags. A job that reads it without declaring
     // the environment would be a job the policy never sees, so the census
     // below covers every workflow rather than the two edited here.
-    expect(jobOf(marketingWorkflow, "update")).toContain(
+    expect(jobOf(marketingPublishWorkflow, "publish")).toContain(
       "environment: release-app",
+    );
+    expect(jobOf(marketingCaptureWorkflow, "capture")).not.toContain(
+      "environment:",
     );
     expect(jobOf(marketingWorkflow, "check")).not.toContain("environment:");
 
     // A job that calls a reusable workflow cannot declare an environment:
-    // GitHub allows only name, uses, with, secrets, needs, if, and
-    // permissions there. A local reusable declares it on its own job (walked
+    // GitHub allows only name, uses, with, secrets, strategy, needs, if,
+    // concurrency, and permissions there. A local reusable declares it on its own job (walked
     // below); a remote one must be handed the environment name. Pinned so
     // each caller stays a listed decision.
-    const forwardingCallers = new Set([
-      "marketing-screenshots-update.yml#update",
-      "publish-npm.yml#release",
-    ]);
+    const forwardingCallers = new Set(["publish-npm.yml#release"]);
     const seenCallers = new Set<string>();
 
     const workflowsDir = path.join(import.meta.dirname, "../.github/workflows");
@@ -1664,9 +2020,7 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     path.join(root, imageFile),
     readFileSync(path.resolve(import.meta.dirname, "..", imageFile), "utf-8"),
   );
-  mkdirSync(path.join(root, "apps/web/node_modules/@playwright/test"), {
-    recursive: true,
-  });
+  mkdirSync(path.join(root, "apps/web"), { recursive: true });
   const cache = path.join(directory, ".bun/install/cache");
   mkdirSync(cache, { recursive: true });
   writeFileSync(
@@ -1674,13 +2028,78 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     '#!/usr/bin/env bash\ncase "$*" in\n  "-p process.execPath") echo /native/bun ;;\n  "pm cache") printf "%s\\n" "$BUN_INSTALL_CACHE_DIR" ;;\n  *) exit 4 ;;\nesac\n',
     { mode: 0o755 },
   );
+  const credentialFile = path.join(directory, "registry-credential");
+  const dockerCalls = path.join(directory, "docker-calls");
+  mkdirSync(path.join(root, "scripts"), { recursive: true });
+  writeFileSync(
+    path.join(root, "scripts/retry.sh"),
+    '#!/usr/bin/env bash\n"$@"\n',
+  );
   writeFileSync(
     path.join(directory, "docker"),
-    '#!/usr/bin/env bash\nprintf "%s\\n" "$@"\nexit 17\n',
+    `#!/usr/bin/env bash
+set -euo pipefail
+case "$1" in
+  image)
+    [[ "$2" == inspect ]]
+    echo inspect >> "$DOCKER_CALLS"
+    [[ "$DOCKER_IMAGE_CACHED" == true ]]
+    ;;
+  pull)
+    echo pull >> "$DOCKER_CALLS"
+    exit "${shellExpansion("DOCKER_PULL_STATUS:-0")}"
+    ;;
+  logout)
+    [[ "$2" == ghcr.io ]]
+    echo logout >> "$DOCKER_CALLS"
+    rm -f "$DOCKER_CREDENTIAL_FILE"
+    ;;
+  run)
+    [[ ! -f "$DOCKER_CREDENTIAL_FILE" ]] || exit 99
+    echo run >> "$DOCKER_CALLS"
+    printf '%s\\n' "$@"
+    exit 17
+    ;;
+  *) exit 98 ;;
+esac
+`,
     { mode: 0o755 },
   );
+  const runnerEnv = {
+    PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+    GITHUB_WORKSPACE: root,
+    BUN_INSTALL_CACHE_DIR: cache,
+    CI: "true",
+    E2E_EXECUTION_PROFILE: "network-baseline",
+    E2E_EDGE_HEADER_VALUE: "fixture",
+    GH_TOKEN: "must-not-forward",
+    DOCKER_CALLS: dockerCalls,
+    DOCKER_CREDENTIAL_FILE: credentialFile,
+  };
   try {
-    for (const offline of [false, true]) {
+    for (const { offline, cached, packageDirectory } of [
+      { offline: false, cached: true },
+      { offline: false, cached: false },
+      { offline: true, cached: true },
+      { offline: true, cached: false },
+    ].flatMap((scenario) =>
+      ["apps/web", "apps/landing"].map((selectedDirectory) => ({
+        ...scenario,
+        packageDirectory: selectedDirectory,
+      })),
+    )) {
+      for (const workspace of ["apps/web", "apps/landing"]) {
+        rmSync(path.join(root, workspace, "node_modules"), {
+          recursive: true,
+          force: true,
+        });
+      }
+      mkdirSync(
+        path.join(root, packageDirectory, "node_modules/@playwright/test"),
+        { recursive: true },
+      );
+      writeFileSync(credentialFile, "fixture");
+      writeFileSync(dockerCalls, "");
       const result = Bun.spawnSync(
         [
           "bash",
@@ -1696,19 +2115,23 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
         {
           cwd: path.join(root, "apps/web"),
           env: {
-            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
-            GITHUB_WORKSPACE: root,
-            BUN_INSTALL_CACHE_DIR: cache,
-            CI: "true",
-            E2E_EXECUTION_PROFILE: "network-baseline",
-            E2E_EDGE_HEADER_VALUE: "fixture",
-            GH_TOKEN: "must-not-forward",
+            ...runnerEnv,
+            DOCKER_IMAGE_CACHED: String(cached),
+            ...(packageDirectory === "apps/landing"
+              ? { PLAYWRIGHT_PACKAGE_DIR: packageDirectory }
+              : {}),
           },
           stdout: "pipe",
           stderr: "pipe",
         },
       );
       expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(17);
+      expect(existsSync(credentialFile)).toBe(false);
+      expect(readFileSync(dockerCalls, "utf-8").trim().split("\n")).toEqual(
+        cached
+          ? ["inspect", "logout", "run"]
+          : ["inspect", "pull", "logout", "run"],
+      );
       const args = new TextDecoder().decode(result.stdout).trim().split("\n");
       expect(args.at(args.indexOf("--network") + 1)).toBe(
         offline ? "none" : "host",
@@ -1727,6 +2150,11 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
       expect(args).toContain("/native/bun:/usr/local/bin/bunx:ro");
       expect(args).toContain("PLAYWRIGHT_BROWSERS_PATH=/ms-playwright");
       expect(args).toContain("PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1");
+      if (packageDirectory === "apps/landing") {
+        expect(args).toContain("PLAYWRIGHT_PACKAGE_DIR");
+      } else {
+        expect(args).not.toContain("PLAYWRIGHT_PACKAGE_DIR");
+      }
       expect(args).toContain("E2E_EXECUTION_PROFILE");
       expect(args).toContain("E2E_EDGE_HEADER_VALUE");
       expect(args).not.toContain("GH_TOKEN");
@@ -1740,6 +2168,36 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
         "--",
         "--grep=spaces and $literal",
       ]);
+    }
+    for (const failure of ["validation", "pull"]) {
+      writeFileSync(credentialFile, "fixture");
+      writeFileSync(dockerCalls, "");
+      if (failure === "validation") {
+        writeFileSync(path.join(root, imageFile), "unpinned-browser:latest\n");
+      } else {
+        writeFileSync(
+          path.join(root, imageFile),
+          readFileSync(
+            path.resolve(import.meta.dirname, "..", imageFile),
+            "utf-8",
+          ),
+        );
+      }
+      const result = Bun.spawnSync(["bash", runner, "bun", "test:e2e"], {
+        cwd: path.join(root, "apps/web"),
+        env: {
+          ...runnerEnv,
+          DOCKER_IMAGE_CACHED: "false",
+          DOCKER_PULL_STATUS: "23",
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode).toBe(failure === "validation" ? 1 : 23);
+      expect(existsSync(credentialFile)).toBe(false);
+      expect(readFileSync(dockerCalls, "utf-8").trim().split("\n")).toEqual(
+        failure === "validation" ? ["logout"] : ["inspect", "pull", "logout"],
+      );
     }
   } finally {
     rmSync(directory, { recursive: true, force: true });

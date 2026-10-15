@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 // MCP tool-surface baseline.
 //
 // Measures what each audience advertises, per part, against a committed
@@ -32,11 +33,11 @@
 //                                               the file is not in its format
 //   bun run mcp:surface-baseline --self-test    prove the comparison and the
 //                                               format check fire
-
-import { panic, Result } from "better-result";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import * as v from "valibot";
+
+import { printError } from "@stll/errors";
 
 const BASELINE_REL = "apps/api/mcp-surface-baseline.json";
 const BASELINE_PATH = path.resolve(
@@ -1280,7 +1281,7 @@ const main = async (): Promise<number> => {
   if (process.argv.includes("--check")) {
     const baseline = readBaselineFile();
     if (!baseline.ok) {
-      console.error(baseline.error);
+      printError(baseline.error);
       return 1;
     }
     const drifts = diffMcpSurfaceBaseline(current, baseline.rows);

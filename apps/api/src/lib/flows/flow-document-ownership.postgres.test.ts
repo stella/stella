@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { executeFlowStep, FlowStepError } from "@/api/lib/flows/flow-executor";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -144,6 +145,7 @@ if (!databaseUrl || !enabled) {
                 { runId: f.runId, stepIndex: 1 },
                 new AbortController().signal,
                 {
+                  admission: testModelAdmission(f.organizationId),
                   database: connection.db,
                   makeScopedDb: () =>
                     createScopedDb(

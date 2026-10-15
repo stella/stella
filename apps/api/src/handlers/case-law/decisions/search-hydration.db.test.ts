@@ -1,31 +1,44 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { panic } from "better-result";
-import { afterAll, beforeAll, beforeEach, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { panic, Result } from "better-result";
+import { afterAll, beforeAll, beforeEach, expect, spyOn, test } from "bun:test";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
+
+import {
+  SEARCH_TOTAL_NOT_COUNTED,
+  DEFAULT_SEARCH_EXCERPT,
+  DEFAULT_SEARCH_SORT,
+} from "@stll/api-contract/search";
 
 import {
   caseLawDecisions,
   caseLawSources,
+  caseLawSearchDocuments,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
+  caseLawSearchPlan,
+  decisionHitsPage,
   candidateDecisionRowsQuery,
   candidateDecisionRowsStatement,
   pageDecisionRowsQuery,
   pageDecisionRowsStatement,
   readCaseLawPageDecisionRows,
   rehydrateCaseLawCandidates,
+  searchCorpusIndexDecisions,
 } from "@/api/handlers/case-law/decisions/search";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { resetPublicCaseLawConfigForTesting } from "@/api/lib/case-law/public-case-law-config";
 import { createCorpusHitDispositionCounter } from "@/api/lib/legal-search/corpus-hit-telemetry";
+import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { corpusIndexReadTarget } from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -64,6 +77,8 @@ const OTHER_INDEX_ID = corpusIndexId(OTHER_GENERATION, "CZE");
 const APPLIED_FINGERPRINT = "a".repeat(64);
 const DESIRED_FINGERPRINT = "b".repeat(64);
 const sourceId = createSafeId<"caseLawSource">();
+const withheldSourceId = createSafeId<"caseLawSource">();
+const withheldId = createSafeId<"caseLawDecision">();
 const closedSourceId = createSafeId<"caseLawSource">();
 const czechId = createSafeId<"caseLawDecision">();
 const slovakId = createSafeId<"caseLawDecision">();
@@ -150,6 +165,9 @@ beforeAll(
   async () => {
     client = await createTestPglite();
     const db = drizzle({ client });
+    await client.exec(
+      "CREATE TEXT SEARCH CONFIGURATION public.stella_unaccent (COPY = pg_catalog.simple)",
+    );
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) => {
@@ -168,6 +186,16 @@ beforeAll(
     await db.insert(caseLawSources).values([
       caseLawSourceRow({ adapterKey: "open", id: sourceId, name: "open" }),
       caseLawSourceRow({
+        adapterKey: "withheld",
+        id: withheldSourceId,
+        descriptor: {
+          allowsDerivedAi: false,
+          allowsRedistribution: true,
+          attribution: null,
+          license: "restricted",
+        },
+      }),
+      caseLawSourceRow({
         adapterKey: "closed",
         descriptor: {
           allowsDerivedAi: false,
@@ -180,6 +208,16 @@ beforeAll(
       }),
     ]);
     await db.insert(caseLawDecisions).values([
+      {
+        id: withheldId,
+        sourceId: withheldSourceId,
+        caseNumber: "12 Cdo 2/2026",
+        court: "Nejvyšší soud",
+        country: "CZE",
+        language: "cs",
+        fulltext: "sampleword",
+        metadata: { headnote: "sampleword summary" },
+      },
       {
         id: czechId,
         sourceId,
@@ -250,6 +288,16 @@ beforeAll(
       },
     ]);
 
+    await db.insert(caseLawSearchDocuments).values(
+      [czechId, withheldId].map((decisionId) => ({
+        decisionId,
+        language: "cs",
+        regconfig: "simple",
+        searchableText: "sampleword",
+        tsv: sql`to_tsvector('simple', 'sampleword')`,
+      })),
+    );
+
     await db.insert(corpusIndexGenerations).values(
       ([GENERATION, OTHER_GENERATION] as const).map((generation) => ({
         family: "case_law" as const,
@@ -264,6 +312,12 @@ beforeAll(
 
     // What a generation holds is stated by its projection state alone.
     const held = [
+      {
+        entityId: withheldId,
+        generation: GENERATION,
+        indexId: INDEX_ID,
+        intentId: createSafeId<"corpusIndexProjectionIntent">(),
+      },
       {
         entityId: czechId,
         generation: GENERATION,
@@ -364,6 +418,7 @@ test("the blend read carries what ranking and the fold need, and nothing a card 
   );
   for (const row of hydrated.values()) {
     expect(Object.keys(row ?? {}).toSorted()).toEqual([
+      "appliedRevision",
       "canRecur",
       "citationAuthority",
       "country",
@@ -440,6 +495,155 @@ test("an empty page reads nothing", async () => {
   expect(rows.size).toBe(0);
   expect(reads).toBe(0);
 });
+
+test.each(["unchanged", "refreshed"] as const)(
+  "the final search page exposes passages only while their applied revision is %s",
+  async (revisionState) => {
+    const db = drizzle({ client });
+    const manifest = CORPUS_INDEX_MANIFESTS.case_law_v7;
+    const indexId = corpusIndexId(manifest.generation, "CZE");
+    const originalRevision = createSafeId<"corpusIndexProjectionIntent">();
+    const refreshedRevision = createSafeId<"corpusIndexProjectionIntent">();
+    expect(originalRevision).not.toBe(refreshedRevision);
+    const projection = heldProjection({
+      entityId: czechId,
+      generation: manifest.generation,
+      indexId,
+      intentId: originalRevision,
+    });
+    await db
+      .insert(corpusIndexGenerations)
+      .values({
+        family: "case_law",
+        generation: manifest.generation,
+        cluster: manifest.cluster,
+        manifestDigest: corpusIndexManifestDigest(manifest),
+        status: "building",
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(corpusIndexProjectionIntents)
+      .values([
+        projection.intent,
+        { ...projection.intent, id: refreshedRevision, epoch: 2n },
+      ]);
+    await db.insert(corpusIndexProjectionStates).values(projection.state);
+    const resolution = corpusIndexReadTarget({
+      manifest,
+      jurisdiction: "CZE",
+      attestedGroups: new Set(),
+      enrolledGroups: new Set(),
+    });
+    if (resolution.type !== "ready") {
+      panic("Expected the Czech corpus group to be ready");
+    }
+    const anchorId = "revision-a-passage";
+    const snippet = "<b>Promlčení</b> podle původní úpravy.";
+    const headline = "<mark>Promlčení</mark> podle původní úpravy.";
+    let highlighted = 0;
+    const searchSpy = spyOn(
+      getCorpusIndexClient(manifest.cluster),
+      "search",
+    ).mockImplementation(async (options) => {
+      if (options.snippetFields?.includes("text")) {
+        highlighted += 1;
+        expect(options.query).toContain(originalRevision);
+        const candidateRows = await readCaseLawPageDecisionRows({
+          body: SEARCH_BODY,
+          caseLawDb,
+          generation: manifest.generation,
+          ids: [czechId],
+        });
+        expect(candidateRows.get(czechId)?.appliedRevision).toBe(
+          originalRevision,
+        );
+        if (revisionState === "refreshed") {
+          await db
+            .update(corpusIndexProjectionStates)
+            .set({
+              desiredEpoch: 2n,
+              appliedEpoch: 2n,
+              appliedRevision: refreshedRevision,
+            })
+            .where(
+              and(
+                eq(corpusIndexProjectionStates.entityId, czechId),
+                eq(corpusIndexProjectionStates.generation, manifest.generation),
+              ),
+            );
+        }
+      }
+      return Result.ok({
+        numHits: 1,
+        hits: [{ document_id: czechId, anchor_id: anchorId }],
+        snippets: options.snippetFields?.includes("text")
+          ? [{ text: [snippet] }]
+          : [],
+      });
+    });
+    resetPublicCaseLawConfigForTesting(caseLawDb);
+    try {
+      const result = await searchCorpusIndexDecisions({
+        body: { ...SEARCH_BODY, category: "A", limit: 1, sort: "newest" },
+        caseLawDb,
+        observer: "unobserved",
+        dependencies: {
+          configuredVariant: "off",
+          readServingTarget: async () =>
+            Result.ok({
+              ...resolution.target,
+              manifest,
+              serving: {
+                family: "case_law",
+                generation: manifest.generation,
+                cluster: manifest.cluster,
+              },
+            }),
+        },
+      });
+      if (!("hits" in result)) {
+        panic("Expected a successful indexed search page");
+      }
+      expect(highlighted).toBe(1);
+      expect(result.hits).toHaveLength(1);
+      const hit = result.hits.at(0) ?? panic("Expected the hydrated decision");
+      expect(hit.headline).toBe(
+        revisionState === "refreshed" ? null : headline,
+      );
+      expect(hit.anchorId).toBe(
+        revisionState === "refreshed" ? null : anchorId,
+      );
+      const finalRows = await readCaseLawPageDecisionRows({
+        body: SEARCH_BODY,
+        caseLawDb,
+        generation: manifest.generation,
+        ids: [czechId],
+      });
+      expect(finalRows.get(czechId)?.appliedRevision).toBe(
+        revisionState === "refreshed" ? refreshedRevision : originalRevision,
+      );
+    } finally {
+      searchSpy.mockRestore();
+      resetPublicCaseLawConfigForTesting();
+      await db
+        .delete(corpusIndexProjectionStates)
+        .where(
+          and(
+            eq(corpusIndexProjectionStates.entityId, czechId),
+            eq(corpusIndexProjectionStates.generation, manifest.generation),
+          ),
+        );
+      await db
+        .delete(corpusIndexProjectionIntents)
+        .where(
+          inArray(corpusIndexProjectionIntents.id, [
+            originalRevision,
+            refreshedRevision,
+          ]),
+        );
+    }
+  },
+);
 
 test("a generation admits exactly what its projection state holds", async () => {
   const scoped = {
@@ -756,6 +960,7 @@ test("provider scan counts retained omissions once as eligible candidates grow",
       hitDispositions,
       rankingMode: "off",
       snippetFields: ["text"],
+      projectionRevisionField: "projection_revision",
       extractId: (hit) =>
         typeof hit["document_id"] === "string" ? hit["document_id"] : null,
       extractSnippet: () => null,
@@ -785,4 +990,84 @@ test("provider scan counts retained omissions once as eligible candidates grow",
   } finally {
     restoreFetch();
   }
+});
+
+test("index search hits carry source text disposition and retain human excerpts", async () => {
+  const byId = await readCaseLawPageDecisionRows({
+    body: SEARCH_BODY,
+    caseLawDb,
+    generation: GENERATION,
+    ids: [czechId, withheldId],
+  });
+  const page = decisionHitsPage({
+    alternatesByGroupKey: { alternatesFor: () => [] },
+    anchorIdById: new Map(),
+    byId,
+    courtWeights,
+    facets: null,
+    headnotePresentation: undefined,
+    nextCursor: null,
+    pageRanked: [czechId, withheldId].map((id) => ({
+      id,
+      score: 1,
+      lexicalScore: 1,
+      citationAuthority: 0,
+    })),
+    passageCountById: new Map(),
+    snippetById: new Map([[withheldId, "sampleword excerpt"]]),
+    // The excerpt was read from the revision the row holds, so it is current.
+    snippetRevisionById: new Map(
+      [...byId].flatMap(([id, row]) =>
+        row.appliedRevision === null
+          ? []
+          : [[id, row.appliedRevision] as const],
+      ),
+    ),
+    total: SEARCH_TOTAL_NOT_COUNTED,
+  });
+  expect(
+    page.hits.map(({ decisionId, textWithheldReason }) => ({
+      decisionId,
+      textWithheldReason,
+    })),
+  ).toEqual([
+    { decisionId: czechId, textWithheldReason: null },
+    { decisionId: withheldId, textWithheldReason: "source_licence" },
+  ]);
+  expect(page.hits.find((hit) => hit.decisionId === withheldId)?.headline).toBe(
+    "sampleword excerpt",
+  );
+});
+
+test("full text search reads the source permission beside human excerpts", async () => {
+  const plan = caseLawSearchPlan({
+    body: { country: "CZE", query: "sampleword" },
+    configs: [
+      {
+        languages: ["cs"],
+        regconfig: "simple",
+        includeDefault: false,
+        useUnaccent: false,
+      },
+    ],
+    courtWeights,
+    excerpt: DEFAULT_SEARCH_EXCERPT,
+    limit: 10,
+    parsedCursor: null,
+    queryUsed: "sampleword",
+    sort: DEFAULT_SEARCH_SORT,
+  });
+  const result = await withPublicLawReaderRole(
+    drizzle({ client }),
+    async (tx) => await tx.execute(plan.hits),
+  );
+  const rows = result.rows;
+  const dispositions = new Map(
+    rows.map((row) => [row["decision_id"], row["allows_derived_ai"]]),
+  );
+  expect(dispositions.get(czechId)).toBe(true);
+  expect(dispositions.get(withheldId)).toBe(false);
+  expect(
+    rows.find((row) => row["decision_id"] === withheldId)?.["headline"],
+  ).toContain("sampleword");
 });

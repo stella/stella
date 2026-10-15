@@ -3,7 +3,11 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
-import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT,
+  resourceRef,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import {
@@ -12,26 +16,26 @@ import {
 } from "@stll/api-contract/case-law-launch-readiness";
 import {
   DECISION_TEXT_FIELD_KEYS,
+  DECISION_TEXT_SOURCE,
   TEXT_FIELD_TYPE,
 } from "@stll/api-contract/case-law-text-field";
-import {
-  type DecisionIdentityResolution,
-  parseDecisionQuery,
-  resolveDecisionIdentity,
-} from "@stll/api-contract/decision-query-intent";
+import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
 import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
+  SEARCH_PAGE_END,
   SEARCH_PAGINATION_COMPLETE,
   SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET,
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
-  SEARCH_TOTAL_TYPE,
+  searchPageEnd,
+  SEARCH_TOTAL_NOT_COUNTED,
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { mapWithConcurrency } from "@stll/concurrency";
 import { COUNTRY_CODES } from "@stll/country-codes";
+import { parseCaseLawDecisionAst } from "@stll/legal-ast/case-law-reader";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { parseUsableDocumentAst } from "@stll/legal-ast/document-ast";
+import { CASE_LAW_RESULTS_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import { workspaces } from "@/api/db/schema";
 import type {
@@ -50,10 +54,6 @@ import {
   type DecisionDocumentHydration,
   type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import {
-  decisionIdentityLocatorOf,
-  type DecisionIdentityRow,
-} from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
 import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
 import {
@@ -65,7 +65,6 @@ import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
-import { captureError } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -73,7 +72,6 @@ import {
   CITATION_READ_DIRECTIONS,
   CITATION_TREATMENTS,
 } from "@/api/lib/case-law/citation-vocabulary";
-import { DECISION_LOOKUP_STATUS } from "@/api/lib/case-law/decision-lookup-vocabulary";
 import { DECISION_READ_STATUS } from "@/api/lib/case-law/decision-read-vocabulary";
 import type { CaseLawSearchGuidanceMode } from "@/api/lib/case-law/search-guidance-mode";
 import {
@@ -86,7 +84,6 @@ import {
   LIST_MATTERS_DETAIL_PROJECTION,
   LIST_MATTERS_LIST_PROJECTION,
   LIST_MATTERS_PROJECTION,
-  LOOKUP_CASE_LAW_PROJECTION,
   CASE_LAW_COVERAGE_PROJECTION,
   READ_CASE_LAW_CITATIONS_PROJECTION,
   READ_CASE_LAW_DECISION_PROJECTION,
@@ -110,6 +107,7 @@ import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-
 import { tokenizeCorpusFreeText } from "@/api/lib/legal-search/corpus-query";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { corpusTokens } from "@/api/lib/legal-search/corpus-tokens";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { LIMITS } from "@/api/lib/limits";
 import { getAppBaseUrl } from "@/api/lib/mcp-connectors/app-urls";
 import {
@@ -138,6 +136,7 @@ import {
 } from "@/api/lib/usage/action-costs/context";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
+import { decisionBlockDeepLink } from "@/api/mcp/case-law-decision-link";
 import {
   decisionOutline,
   locateDecisionBlocks,
@@ -147,6 +146,7 @@ import {
   citationSummaryOutput,
   compactDecisionMetadata,
   decisionParagraphs,
+  decisionTextAllowances,
   decisionTextVersion,
   pageOfOffset,
   paragraphsMatching,
@@ -161,7 +161,6 @@ import {
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
-  defaultLookupDecisionsByIdentity,
   defaultReadCaseLawCoverageHandler,
   defaultReadGatedDecisionCitationDigest,
   defaultReadGatedDecisionCitations,
@@ -180,6 +179,7 @@ import {
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
 import type {
+  InternalToolErrorResult,
   McpTextFieldSpec,
   McpToolDefinition,
   McpToolHandler,
@@ -206,6 +206,7 @@ import {
   MCP_CONTENT_MAX_CHARS,
   notFoundResult,
   nullAsAbsent,
+  searchIndexUnavailableResult,
   structuredEgressPlan,
   structuredErrorResult,
   toolDataResult,
@@ -220,7 +221,7 @@ import {
 } from "@/api/mcp/valibot-tool-definition";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
-import { CASE_LAW_RESULTS_RESOURCE_URI } from "./apps/resource-uri";
+import { boundCaseLawSearchHeadnotes } from "./case-law-search-headnotes";
 
 const defaultReadWorkspaceHandler: typeof readWorkspaceHandler = async (
   input,
@@ -246,7 +247,6 @@ const defaultReadWorkspaceMembersHandler: typeof readWorkspaceMembersHandler =
 type StellaToolName =
   | "case_law_coverage"
   | "list_matters"
-  | "lookup_case_law"
   | "read_case_law_citations"
   | "read_case_law_decision"
   | "read_contact"
@@ -684,7 +684,6 @@ const SEARCH_CASE_LAW_TOOL = "search_case_law";
 
 /** What the engine answers for a cursor it cannot decode. */
 const INVALID_CURSOR_MESSAGE = "Invalid cursor";
-const LOOKUP_CASE_LAW_TOOL = "lookup_case_law";
 const SET_PRACTICE_JURISDICTIONS_TOOL = "set_practice_jurisdictions";
 
 /**
@@ -824,28 +823,6 @@ const searchCaseLawArgsSchema = nullAsAbsent(
   }),
 );
 
-const lookupCaseLawArgsSchema = nullAsAbsent(
-  v.strictObject({
-    identifiers: v.pipe(
-      v.array(
-        v.pipe(
-          v.string(),
-          v.minLength(1),
-          v.maxLength(LIMITS.caseLawIdentifierMaxLength),
-        ),
-      ),
-      v.minLength(1),
-      v.maxLength(LIMITS.caseLawLookupIdentifiersMax),
-      v.description(
-        `The references to resolve, at most ${LIMITS.caseLawLookupIdentifiersMax} per call: a docket number as the court writes it (the sheet number after it is ignored) or an ECLI. Each is answered on its own.`,
-      ),
-    ),
-    country: countryInputSchema(
-      `Required corpus country. Admitted: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
-    ),
-  }),
-);
-
 const readContentAcrossMattersArgsSchema = nullAsAbsent(
   v.strictObject({
     entity_id: uuidInputSchema("Entity ID"),
@@ -891,7 +868,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.minValue(1),
         v.maxValue(MCP_CONTENT_MAX_CHARS),
         v.description(
-          `Page size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. In a batch each decision gets its own page of this size, trimmed evenly so the call returns at most ${READ_DECISION_BATCH_MAX_TEXT_CHARS} characters; omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters.`,
+          `Requested page size per decision, 1–${MCP_CONTENT_MAX_CHARS} characters. A batch stays within ${READ_DECISION_BATCH_MAX_TEXT_CHARS} characters: each decision gets an even share, and unused characters finish other decisions in input order when one fits whole; a decision still cut keeps the even share. Omitted, the batch shares ${MCP_CONTENT_MAX_CHARS} characters the same way.`,
         ),
       ),
     ),
@@ -909,7 +886,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       v.pipe(
         v.boolean(),
         v.description(
-          `true returns the whole text in one page, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} characters (shared evenly by a batch); a longer text continues on page 2. Takes no max_chars.`,
+          `true returns the whole text in one page, up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} characters (shared by a batch; unused shares finish other decisions in input order when one fits whole); a longer text continues on page 2. Takes no max_chars.`,
         ),
       ),
     ),
@@ -927,7 +904,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         v.string(),
         v.maxLength(LIMITS.caseLawIdentifierMaxLength),
         v.description(
-          "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, paragraph number and deep link, instead of a page. Takes no page or full.",
+          "Words to find: returns only the paragraphs containing all of them (any inflection), each with its neighbours, 1-based position, publisher label (or null), verbatim enclosing headingPath and deep link, instead of a page. Takes no page or full.",
         ),
       ),
     ),
@@ -1067,7 +1044,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search case law",
       destructiveHint: false,
@@ -1112,7 +1089,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Report case-law availability, decision counts, year ranges and court breakdowns per jurisdiction. Use before concluding that a decision is missing from the corpus; in-preparation counts describe held decisions that public search cannot yet find.",
+      "Report case-law availability per jurisdiction and source: searchable year ranges, last sync, publisher-listed decisions awaiting text, recorded gaps, and court breakdowns. Use before concluding that a decision is missing; an unavailable jurisdiction is distinct from an empty searchable corpus.",
     inputSchema: caseLawCoverageArgsSchema,
     inputNormalization: {
       country: countryNormalization({
@@ -1126,50 +1103,6 @@ export const STELLA_TOOL_DEFINITIONS = [
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
     name: CASE_LAW_COVERAGE_TOOL,
-    scope: "stella:read",
-  }),
-  defineValibotMcpTool({
-    consumesServices: true,
-    annotations: {
-      title: "Look up case law by identifier",
-      destructiveHint: false,
-      readOnlyHint: true,
-      openWorldHint: false,
-    },
-    description:
-      "Resolve case references to decisions: docket numbers as the courts " +
-      "write them and ECLIs. Matches identity columns, not ranked text or citations. Each " +
-      "`identifiers[]` entry is answered on its own, in input order, under " +
-      "`status`: `found` carries that decision's id, resourceName, appUrl, " +
-      "caseNumber (citable reference, not always a docket), court, date and " +
-      "ECLI; `ambiguous` carries the candidates: a docket is unique per " +
-      "court, not per corpus, so none is picked; `not_found` says what to " +
-      "call instead; `lookup_failed`: the read did not complete; retry that " +
-      "entry. Use this when the user names a case; use search_case_law when " +
-      "they describe one. Pass a `found` decisionId to " +
-      "read_case_law_decision for the text and typed identifiers. " +
-      "Use `url` for the reader and `source_url` for the publisher.",
-    inputSchema: lookupCaseLawArgsSchema,
-    inputNormalization: {
-      country: countryNormalization({
-        spelling: "alpha-3",
-        admitted: PUBLIC_CASE_LAW_COUNTRIES,
-        tool: LOOKUP_CASE_LAW_TOOL,
-      }),
-    },
-    access: "read",
-    readClass: "public",
-    anonymized: { exposure: "passthrough" },
-    // Backed by the public case-law corpus (caseLawPublicReadDb), the same
-    // surface the public routes gate behind the same feature flag.
-    feature: "FEATURE_PUBLIC_LAW",
-    _meta: {
-      ui: {
-        resourceUri: CASE_LAW_RESULTS_RESOURCE_URI,
-        visibility: ["model", "app"],
-      },
-    },
-    name: LOOKUP_CASE_LAW_TOOL,
     scope: "stella:read",
   }),
   defineValibotMcpTool({
@@ -1199,7 +1132,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read case-law decision",
       destructiveHint: false,
@@ -1207,19 +1140,19 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read decisions by `decision_ids[]`, in input order. `page` N is the " +
-      "Nth window of `max_chars`; entries give page/pageCount. Pass a " +
-      "page's textVersion back as text_version; versionChanged flags a " +
-      "changed text. `full: true` (whole text, up to " +
-      `${READ_DECISION_FULL_MAX_TEXT_CHARS} chars) for reasoning or citation work; pages for skimming. ` +
-      "`query` returns matching paragraphs with neighbours. Page 1 adds " +
-      "details (`url` the reader, `source_url` the publisher), metadata, " +
-      "published textFields and a citation summary: citedBy count of citing " +
-      "references, polarity counts, top 5 citers, what it cites (decisionId " +
-      "where held). All citations: read_case_law_citations ({ decision_id: " +
-      "'<uuid>', direction: 'cited_by' }). One id gets an outline with " +
-      "pages; outline and query entries deep-link. `include` picks fields; " +
-      "[] returns text and identity only.",
+      "Read `decision_ids[]` in order. `page` selects a `max_chars` window; " +
+      "entries give page/pageCount and textSource (ast or fulltext). Pass " +
+      "textVersion as text_version; versionChanged flags changed text. " +
+      `\`full: true\` returns whole text up to ${READ_DECISION_FULL_MAX_TEXT_CHARS} chars. ` +
+      "`query` returns matches and neighbours with position, publisher label, " +
+      "verbatim headingPath and deep links. Page 1 adds details (`url` reader, " +
+      "`source_url` publisher), metadata, textFields and citation summaries " +
+      "(citedBy reference counts, polarity, top citers: exact " +
+      `or bounded by candidateWindow ${CASE_LAW_CITATION_SUMMARY_SCAN_LIMIT} edges; ` +
+      "cites with held decisionIds). " +
+      "All citations: read_case_law_citations ({ decision_id: '<uuid>', " +
+      "direction: 'cited_by' }). One id gets an outline with pages and links. " +
+      "`include` picks fields; [] returns text and identity only.",
     inputSchema: readCaseLawDecisionArgsSchema,
     inputNormalization: {
       max_chars: {
@@ -1239,7 +1172,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read case-law citations",
       destructiveHint: false,
@@ -1312,7 +1245,7 @@ export const STELLA_TOOL_DEFINITIONS = [
     // duplicate audit entry) in this compliance context.
     annotations: {
       title: "Set practice jurisdictions",
-      destructiveHint: false,
+      destructiveHint: true,
       idempotentHint: false,
       openWorldHint: false,
       readOnlyHint: false,
@@ -1592,8 +1525,12 @@ const readMatterOverview = async ({
       : [{ userId: member.user.id, name: member.user.name }],
   );
 
+  // The web overview's agenda is not part of the matter detail; agents read
+  // open tasks through the task tools.
+  const { upcomingAgenda: _upcomingAgenda, ...overviewWithoutAgenda } =
+    overview;
   const overviewWithoutAvatarUrls = {
-    ...overview,
+    ...overviewWithoutAgenda,
     recentEntities: overview.recentEntities.map(
       ({
         assignedToImage: _assignedToImage,
@@ -2164,6 +2101,37 @@ type CaseLawQueryOutcome =
   | { exhausted: true }
   | { exhausted: false; page: SearchCaseLawSuccess };
 
+type CaseLawSearchAnswer =
+  | { type: "page"; page: SearchCaseLawSuccess }
+  | { type: "failed"; result: InternalToolErrorResult };
+
+/** One query's handler answer read as its page or the tool's refusal. */
+const readCaseLawSearchAnswer = (
+  answer: Parameters<typeof isSearchCaseLawSuccess>[0],
+  cursor: string | undefined,
+): CaseLawSearchAnswer => {
+  if (isSearchIndexUnavailable(answer)) {
+    return { type: "failed", result: searchIndexUnavailableResult(answer) };
+  }
+  const resultMessage = handlerResultMessage(answer);
+  if (resultMessage === INVALID_CURSOR_MESSAGE) {
+    return {
+      type: "failed",
+      result: invalidCursorResult({
+        cursor: cursor ?? "",
+        tool: SEARCH_CASE_LAW_TOOL,
+      }),
+    };
+  }
+  if (resultMessage) {
+    return { type: "failed", result: errorResult(resultMessage) };
+  }
+  if (!isSearchCaseLawSuccess(answer)) {
+    return { type: "failed", result: errorResult("Case-law search failed") };
+  }
+  return { type: "page", page: answer };
+};
+
 const caseLawSearchRequestFilters = ({
   category,
   has_legal_sentence: hasLegalSentence,
@@ -2230,11 +2198,16 @@ type ManyRequiredTermsOptions = {
   guidance: CaseLawSearchGuidanceMode;
   /** The phrasing's cursor this call: `undefined` is its first page. */
   subCursor: string | null | undefined;
-  /** The cursor the page returned: non-null while results remain unread. */
-  nextCursor: string | null;
-  /** What the phrasing required, a fixed point of the tokenizer. */
-  queryUsed: string;
-  hitCount: number;
+  /**
+   * The page the phrasing returned. What follows it is read from everything
+   * the search answered (`searchPageEnd`): only `complete` proves the
+   * phrasing was exhausted. Its `queryUsed` is a fixed point of the
+   * tokenizer.
+   */
+  page: Pick<
+    SearchCaseLawSuccess,
+    "hits" | "nextCursor" | "pageReach" | "paginationOutcome" | "queryUsed"
+  >;
   /** The result slots the phrasing was given. */
   slots: number;
 };
@@ -2244,25 +2217,29 @@ type ManyRequiredTermsOptions = {
  * read from the page already returned. A continuation is not asked about: it
  * is short at the end of every result set. A short first page that still
  * carries a cursor (a ranked row gone before hydration) has unread results,
- * so it is not exhausted either. A quoted phrase requires each of its words.
+ * and one whose scan stopped on a budget may have them too, so neither is
+ * exhausted. A quoted phrase requires each of its words.
  */
 const manyRequiredTermsWarnings = ({
   guidance,
   subCursor,
-  nextCursor,
-  queryUsed,
-  hitCount,
+  page,
   slots,
 }: ManyRequiredTermsOptions): AgentCaseLawSearchWarning[] => {
+  const end = searchPageEnd({
+    nextCursor: page.nextCursor,
+    paginationOutcome: page.paginationOutcome,
+    reach: page.pageReach,
+  });
   if (
     !CASE_LAW_SEARCH_GUIDANCE_RAISES_MANY_REQUIRED_TERMS[guidance] ||
     subCursor !== undefined ||
-    nextCursor !== null ||
-    hitCount >= slots
+    end !== SEARCH_PAGE_END.COMPLETE ||
+    page.hits.length >= slots
   ) {
     return [];
   }
-  const tokens = tokenizeCorpusFreeText(queryUsed);
+  const tokens = tokenizeCorpusFreeText(page.queryUsed);
   const wordCount = tokens.reduce(
     (count, { value }) => count + value.split(" ").length,
     0,
@@ -2314,7 +2291,23 @@ const caseLawSearchResult = ({
     ecli: hit.ecli,
     language: hit.language,
     matchingPassages: hit.matchingPassages,
-    snippet: toPlainTextSnippet(hit.headline),
+    ...(hit.textWithheldReason === null
+      ? {
+          snippet: toPlainTextSnippet(hit.headline),
+          keywords: hit.keywords,
+          headnote:
+            hit.headnote.type === TEXT_FIELD_TYPE.PRESENT ? hit.headnote : null,
+        }
+      : {
+          excerpt: {
+            type: "withheld" as const,
+            reason: hit.textWithheldReason,
+          },
+          // Headnote and classifications are the source's own text: the
+          // licence that withholds the excerpt withholds them too.
+          keywords: null,
+          headnote: null,
+        }),
     sourceUrl: hit.sourceUrl,
   };
 };
@@ -2393,10 +2386,8 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   const search =
     context.testDependencies?.searchDecisionsHandler ??
     defaultSearchDecisionsHandler;
-  // One request per phrasing, assembled once. A phrasing whose cursor says it
-  // is exhausted runs nothing, and still has to report which of its words the
-  // search required, so the request it would have made is what answers that
-  // rather than a second reading of the filters.
+  // Exhausted phrasings echo their required words from the request without
+  // running the search again.
   const grammar = decisionDocketGrammarForCountry(publicCountry);
   const reporters = decisionReporterGrammarForJurisdiction(publicCountry);
   const requests = queries.map((query, index) => {
@@ -2407,6 +2398,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const body = {
       query,
       sentenceAlignedExcerpt: true,
+      headnotePresentation: "expanded" as const,
       limit: perQueryLimit,
       ...(typeof subCursor === "string" ? { cursor: subCursor } : {}),
       ...(courtFilter === undefined ? {} : { court: courtFilter }),
@@ -2452,20 +2444,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       pages.push({ exhausted: true });
       continue;
     }
-    const resultMessage = handlerResultMessage(outcome.result);
-    if (resultMessage === INVALID_CURSOR_MESSAGE) {
-      return invalidCursorResult({
-        cursor: cursor ?? "",
-        tool: SEARCH_CASE_LAW_TOOL,
-      });
+    const answer = readCaseLawSearchAnswer(outcome.result, cursor);
+    if (answer.type === "failed") {
+      return answer.result;
     }
-    if (resultMessage) {
-      return errorResult(resultMessage);
-    }
-    if (!isSearchCaseLawSuccess(outcome.result)) {
-      return errorResult("Case-law search failed");
-    }
-    pages.push({ exhausted: false, page: outcome.result });
+    pages.push({ exhausted: false, page: answer.page });
   }
 
   const merged = mergeCaseLawSearchHits(
@@ -2493,10 +2476,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     ({ interpretation, query, subCursor }, index) => {
       const outcome = pages.at(index);
       if (outcome === undefined || outcome.exhausted) {
-        // A phrasing its cursor declared exhausted ran nothing this call, so it
-        // carries no warning about a page. What it required is still what it
-        // required on the page that exhausted it, which is why `queryUsed`
-        // comes from the interpretation rather than from the phrasing as sent.
+        // Exhausted phrasings echo the prior interpretation without new warnings.
         return {
           query,
           queryUsed: interpretation.queryUsed,
@@ -2526,9 +2506,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
           ...manyRequiredTermsWarnings({
             guidance,
             subCursor,
-            nextCursor: outcome.page.nextCursor,
-            queryUsed: outcome.page.queryUsed,
-            hitCount: outcome.page.hits.length,
+            page: outcome.page,
             slots: perQueryLimit,
           }),
         ],
@@ -2536,26 +2514,23 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     },
   );
 
-  return toolDataResult(
-    projectionPayload(SEARCH_CASE_LAW_PROJECTION, {
-      facets: first.exhausted ? null : first.page.facets,
-      searches,
-      nextCursor: single === undefined ? mergedCursor : single.nextCursor,
-      paginationOutcome: pages.some(
-        (outcome) =>
-          !outcome.exhausted &&
-          outcome.page.paginationOutcome.type === "truncated",
-      )
-        ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
-        : SEARCH_PAGINATION_COMPLETE,
-      results: merged.map(caseLawSearchResult),
-      total:
-        single === undefined
-          ? { type: SEARCH_TOTAL_TYPE.NOT_COUNTED }
-          : single.total,
-      ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
-    }),
-  );
+  const payload = boundCaseLawSearchHeadnotes({
+    headnotes: "included",
+    facets: first.exhausted ? null : first.page.facets,
+    searches,
+    nextCursor: single === undefined ? mergedCursor : single.nextCursor,
+    paginationOutcome: pages.some(
+      (outcome) =>
+        !outcome.exhausted &&
+        outcome.page.paginationOutcome.type === "truncated",
+    )
+      ? SEARCH_PAGINATION_TRUNCATED_EXCLUSION_BUDGET
+      : SEARCH_PAGINATION_COMPLETE,
+    results: merged.map(caseLawSearchResult),
+    total: single?.total ?? SEARCH_TOTAL_NOT_COUNTED,
+    ...(merged.length === 0 ? await onboardingNextStep(context) : {}),
+  });
+  return toolDataResult(projectionPayload(SEARCH_CASE_LAW_PROJECTION, payload));
 };
 
 type GatedDecisionRead = Awaited<
@@ -2672,12 +2647,6 @@ const decisionIncludedFields = ({
   );
 };
 
-/** The reader's address for one block: the decision's page and its fragment. */
-const deepLink = (appUrl: string | null, anchorId: string | null) =>
-  appUrl === null || anchorId === null
-    ? {}
-    : { url: `${appUrl}#${encodeURIComponent(anchorId)}` };
-
 const caseLawDecisionAppUrlOf = (decision: {
   caseNumber: string;
   country: string;
@@ -2731,9 +2700,7 @@ const decisionTextPart = ({
 }: DecisionTextPartOptions): Partial<FoundDecision> => {
   const version = decisionTextVersion(text);
   const versioning = {
-    ...(starts.length > 1 || seenTextVersion !== undefined
-      ? { textVersion: version }
-      : {}),
+    textVersion: version,
     ...(seenTextVersion !== undefined && seenTextVersion !== version
       ? { versionChanged: true as const }
       : {}),
@@ -2751,10 +2718,12 @@ const decisionTextPart = ({
       matches: {
         hitCount: found.hitCount,
         paragraphs: found.paragraphs.map((paragraph) => ({
-          paragraph: paragraph.paragraph,
+          position: paragraph.position,
+          label: paragraph.label,
+          headingPath: paragraph.headingPath,
           text: paragraph.text,
           ...(paragraph.hit ? { hit: true as const } : {}),
-          ...deepLink(appUrl, paragraph.anchorId),
+          ...decisionBlockDeepLink({ appUrl, ...paragraph }),
         })),
         ...(found.truncated ? { truncated: true as const } : {}),
       },
@@ -2850,10 +2819,14 @@ const decisionStaticFields = ({
           ...(read.ecli === null ? {} : { ecli: read.ecli }),
         }
       : {}),
-    ...(includedFields.has("metadata") && Object.keys(metadata).length > 0
+    ...(read.source.allowsDerivedAi &&
+    includedFields.has("metadata") &&
+    Object.keys(metadata).length > 0
       ? { metadata }
       : {}),
-    ...(includedFields.has("textFields") && Object.keys(textFields).length > 0
+    ...(read.source.allowsDerivedAi &&
+    includedFields.has("textFields") &&
+    Object.keys(textFields).length > 0
       ? { textFields }
       : {}),
     ...(includedFields.has("source") && sourceName !== null
@@ -2926,12 +2899,18 @@ const decisionItemResult = ({
   // readable; allowsDerivedAi additionally gates feeding full text to a
   // model, which is exactly this tool's context.
   const aiTextAllowed = read.source.allowsDerivedAi;
-  const blocks = aiTextAllowed
-    ? (parseUsableDocumentAst(read.documentAst)?.blocks ?? null)
+  const parsedBlocks = aiTextAllowed
+    ? (parseCaseLawDecisionAst(read.documentAst)?.blocks ?? null)
     : null;
-  const plainText = aiTextAllowed
-    ? toPlainCorpusText({ blocks, fulltext: read.fulltext })
-    : null;
+  const astText =
+    parsedBlocks === null
+      ? null
+      : toPlainCorpusText({ blocks: parsedBlocks, fulltext: null });
+  const blocks = astText !== null && astText.length > 0 ? parsedBlocks : null;
+  // The reader renders AST blocks: use that same text for passage anchors
+  // and every verbatim outline heading. Empty AST text falls back to fulltext.
+  const readableText = blocks === null ? read.fulltext : astText;
+  const plainText = aiTextAllowed ? readableText : null;
   const text = plainText === null || plainText.length === 0 ? null : plainText;
   const appUrl = caseLawDecisionAppUrlOf(read);
 
@@ -2960,6 +2939,14 @@ const decisionItemResult = ({
           windowChars,
         });
 
+  const navigation =
+    outline === "include" &&
+    text !== null &&
+    starts !== null &&
+    includedFields.has("outline")
+      ? decisionOutline({ blocks, text })
+      : null;
+
   return {
     decisionId,
     ...(messages.length === 0 ? {} : { message: messages.join(" ") }),
@@ -2970,16 +2957,24 @@ const decisionItemResult = ({
       ...nonDocketReference(read),
       ...decisionStaticFields({ appUrl, digest, includedFields, read }),
       ...textPart,
-      ...(outline === "include" &&
-      text !== null &&
-      starts !== null &&
-      includedFields.has("outline")
+      ...(text === null
+        ? {}
+        : {
+            textSource:
+              blocks === null
+                ? DECISION_TEXT_SOURCE.FULLTEXT
+                : DECISION_TEXT_SOURCE.AST,
+          }),
+      ...(navigation !== null && starts !== null
         ? {
-            outline: decisionOutline({ blocks, text }).map((entry) => ({
+            outline: navigation.entries.map((entry) => ({
               title: entry.title,
               page: pageOfOffset(starts, entry.start),
-              ...deepLink(appUrl, entry.anchorId),
+              ...decisionBlockDeepLink({ appUrl, ...entry }),
             })),
+            ...(navigation.numberedEntriesTruncated
+              ? { outlineNumberedEntriesTruncated: true as const }
+              : {}),
           }
         : {}),
       ...decisionTextAbsence(read, readsSharedCorpus),
@@ -2988,13 +2983,12 @@ const decisionItemResult = ({
 };
 
 /**
- * Every entry's page size. An explicit max_chars sizes each entry's page on
- * its own; without one the default text budget is shared across the entries,
- * so a batch nobody sized cannot answer with twenty full pages. `full` reads
- * each decision whole up to its share of the full ceiling. Either way the
- * whole call stays within its ceiling, trimmed evenly.
+ * The fixed text budget for a call. An explicit max_chars contributes that
+ * much per entry until the batch ceiling; without one the entries share the
+ * default content budget. The allocator gives each entry an even first pass,
+ * then gives unused shares to entries they complete, without growing this cap.
  */
-const decisionWindowChars = ({
+const decisionTextCap = ({
   count,
   full,
   maxChars,
@@ -3004,15 +2998,31 @@ const decisionWindowChars = ({
   maxChars: number | undefined;
 }): number => {
   if (full) {
-    return Math.max(1, Math.floor(READ_DECISION_FULL_MAX_TEXT_CHARS / count));
+    return READ_DECISION_FULL_MAX_TEXT_CHARS;
   }
-  return Math.max(
-    1,
-    Math.min(
-      maxChars ?? Math.floor(MCP_CONTENT_MAX_CHARS / count),
-      Math.floor(READ_DECISION_BATCH_MAX_TEXT_CHARS / count),
-    ),
+  return Math.min(
+    maxChars === undefined ? MCP_CONTENT_MAX_CHARS : maxChars * count,
+    READ_DECISION_BATCH_MAX_TEXT_CHARS,
   );
+};
+
+const readableDecisionTextLength = (
+  read: GatedDecisionRead,
+  readsSharedCorpus: boolean,
+): number => {
+  if (
+    read === null ||
+    !isReadCaseLawDecisionSuccess(read) ||
+    isDecisionDocumentPending(read, readsSharedCorpus) ||
+    !read.source.allowsDerivedAi
+  ) {
+    return 0;
+  }
+  const blocks = parseCaseLawDecisionAst(read.documentAst)?.blocks ?? null;
+  const astText =
+    blocks === null ? null : toPlainCorpusText({ blocks, fulltext: null });
+  const text = astText !== null && astText.length > 0 ? astText : read.fulltext;
+  return text?.length ?? 0;
 };
 
 /** A typed refusal of one input combination, naming the field to change. */
@@ -3232,18 +3242,24 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
     }),
   );
 
-  const windowChars = decisionWindowChars({
+  const textCap = decisionTextCap({
     count: decisionIds.length,
     full,
     maxChars,
   });
+  const windowChars = decisionTextAllowances(
+    decisionIds.map((decisionId) =>
+      readableDecisionTextLength(readOf(decisionId), readsSharedCorpus),
+    ),
+    textCap,
+  );
 
   return toolDataResult(
     projectionPayload(READ_CASE_LAW_DECISION_PROJECTION, {
-      items: decisionIds.map((decisionId) =>
+      items: decisionIds.map((decisionId, index) =>
         decisionItemResult({
           decisionId,
-          windowChars,
+          windowChars: Math.max(1, windowChars[index] ?? 0),
           outline: decisionIds.length === 1 ? "include" : "omit",
           read: readOf(decisionId),
           digest: digests.get(decisionId),
@@ -3252,250 +3268,6 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
           position,
           includedFields,
           seenTextVersion,
-        }),
-      ),
-    }),
-  );
-};
-
-// --- lookup_case_law -------------------------------------------------------
-
-type DecisionLookupItem = Extract<
-  v.InferInput<typeof LOOKUP_CASE_LAW_PROJECTION>,
-  { items: unknown[] }
->["items"][number];
-
-const SEARCH_INSTEAD_HINT =
-  "Search the decision's text with search_case_law instead, or pass the docket exactly as the court wrote it.";
-
-const decisionIdentityOf = (row: DecisionIdentityRow) => ({
-  ...legalCitationLinkFields({
-    appUrl: buildCaseLawDecisionAppUrl({
-      caseNumber: row.caseNumber,
-      country: row.country,
-      court: row.court,
-      decisionId: row.id,
-      language: row.language,
-      languageAlternates: row.languageAlternates,
-      slug: row.slug,
-    }),
-    sourceUrl: null,
-  }),
-  caseNumber: row.caseNumber,
-  // As in search: the kind is named only where the reference is not a docket.
-  ...(row.caseNumberType === DECISION_IDENTIFIER_TYPES.CASE_NUMBER
-    ? {}
-    : { caseNumberType: row.caseNumberType }),
-  ...projectCaseLawCourt(row),
-  decisionDate: row.decisionDate,
-  decisionId: row.id,
-  ecli: row.ecli,
-  resourceName: serializeAuthorizedCorpusMcpResourceName(
-    resourceRef({
-      type: RESOURCE_TYPE.CASE_LAW_DECISION,
-      id: brandPersistedCaseLawDecisionId(row.id),
-    }),
-  ),
-});
-
-/**
- * What one identifier resolved to. A grammar declining the spelling is a
- * different answer from the corpus not holding it: both send the caller to a
- * text search, but only one of them is worth re-spelling first.
- */
-type DecisionLookupOutcome =
-  | { type: "not_an_identifier" }
-  | { type: "failed"; message: string }
-  | {
-      type: "resolved";
-      resolution: DecisionIdentityResolution<DecisionIdentityRow>;
-    };
-
-/** Why a lookup lists candidates instead of naming one, in the agent's terms. */
-const ambiguityReasonText = (
-  reason: Extract<
-    DecisionIdentityResolution<DecisionIdentityRow>,
-    { status: "ambiguous" }
-  >["reason"],
-  { count, single }: { count: string; single: boolean },
-): string => {
-  switch (reason) {
-    case "several":
-      return `${count} carry this identifier: decisions of one file, or the same number at different courts or in different languages.`;
-    case "selector_unmatched":
-      return `No decision here is known to carry the sheet or part this reference names; ${count} of its file ${single ? "is" : "are"} listed instead.`;
-    case "file_incomplete":
-      return `${count} of this file ${single ? "is" : "are"} listed rather than chosen: the corpus may hold other decisions of the same file under their sheet number.`;
-    default: {
-      reason satisfies never;
-      return panic(`Unhandled ambiguity: ${String(reason)}`);
-    }
-  }
-};
-
-const lookupItemResult = ({
-  identifier,
-  outcome,
-}: {
-  identifier: string;
-  outcome: DecisionLookupOutcome;
-}): DecisionLookupItem => {
-  if (outcome.type === "failed") {
-    return {
-      identifier,
-      message: `Resolving this reference failed: ${outcome.message}. Retry this reference; the entries beside it are unaffected.`,
-      status: DECISION_LOOKUP_STATUS.lookupFailed,
-    };
-  }
-  if (outcome.type === "not_an_identifier") {
-    return {
-      identifier,
-      hint: SEARCH_INSTEAD_HINT,
-      message:
-        "This is not a docket number or ECLI in a grammar the corpus's courts use.",
-      status: DECISION_LOOKUP_STATUS.notFound,
-    };
-  }
-
-  const { resolution } = outcome;
-  switch (resolution.status) {
-    case "none":
-      return {
-        identifier,
-        hint: SEARCH_INSTEAD_HINT,
-        message: "No decision in this corpus carries this identifier.",
-        status: DECISION_LOOKUP_STATUS.notFound,
-      };
-    case "unique":
-      return {
-        identifier,
-        ...decisionIdentityOf(resolution.decision),
-        status: DECISION_LOOKUP_STATUS.found,
-      };
-    case "ambiguous": {
-      // The cap lands here, on what survived the exact-identity filter: the
-      // identity read is bounded wider than the listed maximum precisely
-      // because that filter drops rows whose key merely collided.
-      const { candidates } = resolution;
-      const listed = candidates.slice(0, LIMITS.caseLawLookupCandidatesMax);
-      const count =
-        candidates.length > LIMITS.caseLawLookupCandidatesMax
-          ? `More than ${String(LIMITS.caseLawLookupCandidatesMax)} decisions`
-          : `${String(candidates.length)} ${candidates.length === 1 ? "decision" : "decisions"}`;
-      const why = ambiguityReasonText(resolution.reason, {
-        count,
-        single: candidates.length === 1,
-      });
-      return {
-        identifier,
-        candidates: listed.map(decisionIdentityOf),
-        message: `${why} Pick one by its court, date and ECLI and pass its decisionId to read_case_law_decision.`,
-        status: DECISION_LOOKUP_STATUS.ambiguous,
-      };
-    }
-    default: {
-      resolution satisfies never;
-      return panic(`Unhandled identity resolution: ${String(resolution)}`);
-    }
-  }
-};
-
-const handleLookupCaseLawTool: TypedMcpToolHandler<
-  v.InferInput<typeof LOOKUP_CASE_LAW_PROJECTION>
-> = async ({ args, context }) => {
-  const parsed = v.safeParse(lookupCaseLawArgsSchema, args);
-  if (!parsed.success) {
-    return validationErrorResult(parsed.issues);
-  }
-  const { country, identifiers } = parsed.output;
-  const unavailable = publicCountryUnavailable(country);
-  if (unavailable !== null) {
-    return toolDataResult(unavailable);
-  }
-  const publicCountry = publicCaseLawCountry(country);
-  if (publicCountry === null) {
-    return notFoundResult(
-      "Case-law country not found",
-      `Pass one of the admitted country codes: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
-    );
-  }
-
-  // The jurisdiction's own docket grammar, read the way `searchDecisionsHandler`
-  // reads it: `11 C 153/2025` is a docket in Czechia and not in Poland, and a
-  // lookup that classified an identifier differently from the search beside it
-  // would decline a reference that search resolves.
-  const grammar = decisionDocketGrammarForCountry(publicCountry);
-  const reporters = decisionReporterGrammarForJurisdiction(publicCountry);
-  const lookup =
-    context.testDependencies?.lookupDecisionsByIdentity ??
-    defaultLookupDecisionsByIdentity;
-
-  // One resolution per distinct identifier; a list naming the same decision
-  // twice resolves it once and answers both of its positions.
-  const uniqueIdentifiers = [...new Set(identifiers)];
-  const outcomes = new Map(
-    await mapWithConcurrency({
-      items: uniqueIdentifiers,
-      limit: LIMITS.caseLawLookupConcurrency,
-      operation: async (
-        identifier,
-      ): Promise<readonly [string, DecisionLookupOutcome]> => {
-        // The docket reads the whole case file; a sheet or part the
-        // reference printed is kept, and narrows it to one decision only
-        // where a decision is known to carry it.
-        const intent = parseDecisionQuery(identifier, {
-          grammar,
-          reporters,
-        });
-        if (intent.type !== "identifier") {
-          return [identifier, { type: "not_an_identifier" }];
-        }
-        // The identity columns, not the text index: a ranked page of the
-        // decisions that MENTION a docket can leave out the decision that IS
-        // it, and which provider a deployment runs decides whether the search
-        // handler has an identity branch at all.
-        const read = await Result.tryPromise({
-          try: async () =>
-            await lookup({
-              caseLawDb: caseLawPublicReadDb,
-              country: publicCountry,
-              locator: decisionIdentityLocatorOf(intent),
-            }),
-          catch: (cause) => cause,
-        });
-        if (Result.isError(read)) {
-          captureError(read.error);
-          return [
-            identifier,
-            { type: "failed", message: "the corpus read did not complete" },
-          ];
-        }
-        // A second guard, cheap and independent of the statement above: an
-        // entry only reports a decision that answers to the reference by one
-        // of its own identifiers, and only one when nothing else does.
-        return [
-          identifier,
-          {
-            type: "resolved",
-            resolution: resolveDecisionIdentity(intent, read.value, {
-              reporters,
-            }),
-          },
-        ];
-      },
-    }),
-  );
-
-  const outcomeOf = (identifier: string): DecisionLookupOutcome =>
-    outcomes.get(identifier) ??
-    panic(`No lookup ran for identifier ${identifier}`);
-
-  return toolDataResult(
-    projectionPayload(LOOKUP_CASE_LAW_PROJECTION, {
-      items: identifiers.map((identifier) =>
-        lookupItemResult({
-          identifier,
-          outcome: outcomeOf(identifier),
         }),
       ),
     }),
@@ -3548,6 +3320,7 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
       citations: read.page.items.map((item) => ({
         citationId: item.id,
         citationText: item.citationText,
+        textWithheldReason: item.textWithheldReason,
         polarity: item.treatment,
         decision:
           item.decision === null
@@ -3733,6 +3506,18 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             decisions: entry.stored.decisions,
             decisionYearFrom: null,
             decisionYearTo: null,
+            sources: entry.sources.map((source) => ({
+              adapterKey: source.adapterKey,
+              name: source.name,
+              lastSyncAt: source.lastSyncAt,
+              decisionYearFrom: source.decisionYearFrom,
+              decisionYearTo: source.decisionYearTo,
+              pendingTextCount: source.pendingTextCount,
+              knownGaps:
+                source.knownGaps.type === "known"
+                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                  : source.knownGaps,
+            })),
             courts: null,
           };
         case "searchable":
@@ -3742,6 +3527,18 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
             decisions: entry.searchable,
             decisionYearFrom: entry.decisionYearFrom,
             decisionYearTo: entry.decisionYearTo,
+            sources: entry.sources.map((source) => ({
+              adapterKey: source.adapterKey,
+              name: source.name,
+              lastSyncAt: source.lastSyncAt,
+              decisionYearFrom: source.decisionYearFrom,
+              decisionYearTo: source.decisionYearTo,
+              pendingTextCount: source.pendingTextCount,
+              knownGaps:
+                source.knownGaps.type === "known"
+                  ? { ...source.knownGaps, gaps: [...source.knownGaps.gaps] }
+                  : source.knownGaps,
+            })),
             courts:
               entry.courts === null
                 ? null
@@ -3760,8 +3557,12 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
                           courts: row.courts,
                           decisions: row.decisions,
                         };
-                      case "unlisted":
-                        return { type: row.type, decisions: row.decisions };
+                      case "other-courts":
+                        return {
+                          type: row.type,
+                          courts: row.courts,
+                          decisions: row.decisions,
+                        };
                       default: {
                         row satisfies never;
                         return panic("Unknown case-law coverage court row");
@@ -3781,7 +3582,6 @@ const handleCaseLawCoverageTool: TypedMcpToolHandler<
 export const STELLA_TOOL_HANDLERS = {
   case_law_coverage: handleCaseLawCoverageTool,
   list_matters: handleListMattersTool,
-  lookup_case_law: handleLookupCaseLawTool,
   read_case_law_citations: handleReadCaseLawCitationsTool,
   read_case_law_decision: handleReadCaseLawDecisionTool,
   read_contact: handleReadContactTool,
@@ -3799,9 +3599,6 @@ export const STELLA_TOOL_SET = defineMcpToolSet(
       CASE_LAW_COVERAGE_PROJECTION,
     ),
     list_matters: defineChatProjectionMcpToolOutput(LIST_MATTERS_PROJECTION),
-    lookup_case_law: defineChatProjectionMcpToolOutput(
-      LOOKUP_CASE_LAW_PROJECTION,
-    ),
     read_case_law_citations: defineChatProjectionMcpToolOutput(
       READ_CASE_LAW_CITATIONS_PROJECTION,
     ),

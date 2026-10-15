@@ -2,7 +2,6 @@ import type { TSchema } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import {
-  SERVER_EXECUTED_SUGGESTION_KINDS,
   SIGNAL_ORIGIN,
   SIGNAL_SEVERITY,
   SUGGESTION_KINDS,
@@ -88,8 +87,3 @@ export const acceptBodySchema = t.Object({
     }),
   ),
 });
-
-export const isServerExecutedSuggestionKind = (
-  kind: (typeof SUGGESTION_KINDS)[number],
-): kind is (typeof SERVER_EXECUTED_SUGGESTION_KINDS)[number] =>
-  SERVER_EXECUTED_SUGGESTION_KINDS.some((k) => k === kind);

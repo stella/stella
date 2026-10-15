@@ -459,7 +459,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
 );
 
 const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
-  consumesServices: true,
+  consumesServices: false,
   annotations: {
     title: "Search BOE legislation",
     destructiveHint: false,
@@ -1133,7 +1133,7 @@ const handleManageOrganizationTool: TypedMcpToolHandler<
   );
 };
 
-export const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
+const RESEARCH_ADMIN_TOOL_DEFINITIONS = [
   SEARCH_BOE_LEGISLATION_TOOL_DEFINITION,
   LIST_AUDIT_LOG_TOOL_DEFINITION,
   MANAGE_ORGANIZATION_TOOL_DEFINITION,

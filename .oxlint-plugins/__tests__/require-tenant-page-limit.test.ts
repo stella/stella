@@ -56,7 +56,7 @@ test("accepts anonymous factories only from the defining module", async () => {
   expect(
     await lintSingleRule(
       "require-tenant-page-limit",
-      'import { createSafePublicHandler as publicHandler } from "@/api/lib/api-handlers";\nfunction list(query) { const limit = query.limit; }',
+      'import { createSafePublicHandler as publicHandler } from "@/api/lib/api-handlers";\npublicHandler({}, ({ query }) => { const limit = query.limit; });',
       { sourcePath: "apps/api/src/handlers/entities/list.ts" },
     ),
   ).toEqual([]);
@@ -97,6 +97,36 @@ test("rejects normalization of only part of the resolved page expression", async
     await lintSingleRule(
       "require-tenant-page-limit",
       'import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";\nfunction list(query) { const limit = Math.min(normalizeTenantPageLimit(query.limit), 100); }',
+      { sourcePath: "apps/api/src/handlers/entities/list.ts" },
+    ),
+  ).toEqual([2]);
+});
+
+test("keeps tenant functions scoped beside an anonymous handler", async () => {
+  expect(
+    await lintSingleRule(
+      "require-tenant-page-limit",
+      'import { createSafePublicHandler as publicHandler } from "@/api/lib/api-handlers";\npublicHandler({}, ({ query }) => { const limit = query.limit; });\nfunction list(query) { const limit = query.limit; }',
+      { sourcePath: "apps/api/src/handlers/entities/list.ts" },
+    ),
+  ).toEqual([3]);
+});
+
+test("associates a named callback only with its canonical anonymous owner", async () => {
+  expect(
+    await lintSingleRule(
+      "require-tenant-page-limit",
+      'import { createSafePublicHandler as publicHandler } from "@/api/lib/api-handlers";\nfunction list(query) { const limit = query.limit; }\npublicHandler({}, list);\nfunction tenant(query) { const limit = query.limit; }',
+      { sourcePath: "apps/api/src/handlers/entities/list.ts" },
+    ),
+  ).toEqual([4]);
+});
+
+test("keeps shared anonymous and tenant callbacks in tenant scope", async () => {
+  expect(
+    await lintSingleRule(
+      "require-tenant-page-limit",
+      'import { createSafePublicHandler, createSafeRootHandler } from "@/api/lib/api-handlers";\nfunction list(query) { const limit = query.limit; }\ncreateSafePublicHandler({}, list);\ncreateSafeRootHandler({}, list);',
       { sourcePath: "apps/api/src/handlers/entities/list.ts" },
     ),
   ).toEqual([2]);

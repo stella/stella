@@ -4,6 +4,7 @@ import { rootDb } from "@/api/db/root";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { detached } from "@/api/lib/analytics/capture";
 import { createBullMqWorkerHost } from "@/api/lib/bullmq-queue";
+import { assertDatabaseLoginPosture } from "@/api/lib/db/assert-database-login-posture";
 import { countPendingDocumentProcessingJobs } from "@/api/lib/document-processing-enqueue";
 import {
   createIdleExitCheck,
@@ -75,11 +76,13 @@ const idleExitFields = (reason: IdleExitReason): LoggerAttributes => {
   }
 };
 
+await assertDatabaseLoginPosture(rootDb);
 await refreshS3();
 // The host owns the root connection and hands it to its worker.
 const documentProcessingWorkers = createBullMqWorkerHost(
   "document-processing-worker",
   { db: rootDb },
+  envDocumentProcessingWorker.SCHEDULED_JOBS_MODE,
   [initDocumentProcessingWorker],
 );
 

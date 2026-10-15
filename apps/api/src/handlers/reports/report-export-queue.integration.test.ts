@@ -18,6 +18,7 @@ import {
 import { eq } from "drizzle-orm";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { member } from "@/api/db/auth-schema";
@@ -39,7 +40,9 @@ import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
+import * as decisions from "@/api/lib/workflow/decisions/decide";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testModelAdmission } from "@/api/tests/helpers/model-dispatch-admission";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -98,6 +101,9 @@ const reportDataSpy = spyOn(reportData, "buildReportData");
 const textModelSpy = spyOn(modelTransport, "generateTanStackTextForRole");
 const objectModelSpy = spyOn(modelTransport, "generateTanStackObjectForRole");
 const chatObjectSpy = spyOn(chatRuntime, "generateChatObject");
+// Every model run resolves its model here, and every AI condition decides here.
+const resolveModelSpy = spyOn(modelTransport, "resolveTanStackTextModel");
+const decideSpy = spyOn(decisions, "decide");
 
 const readExport = async () =>
   (
@@ -116,7 +122,15 @@ beforeEach(async () => {
   textModelSpy.mockClear();
   objectModelSpy.mockClear();
   chatObjectSpy.mockClear();
-  for (const spy of [textModelSpy, objectModelSpy, chatObjectSpy]) {
+  resolveModelSpy.mockClear();
+  decideSpy.mockClear();
+  for (const spy of [
+    textModelSpy,
+    objectModelSpy,
+    chatObjectSpy,
+    resolveModelSpy,
+    decideSpy,
+  ]) {
     spy.mockImplementation(async () => panic("Unexpected model call"));
   }
   fakeS3.requests.length = 0;
@@ -150,12 +164,19 @@ afterAll(async () => {
   textModelSpy.mockRestore();
   objectModelSpy.mockRestore();
   chatObjectSpy.mockRestore();
+  resolveModelSpy.mockRestore();
+  decideSpy.mockRestore();
   fakeS3.stop();
   await releaseRlsFixture();
 });
 
 const expectStoppedBeforeReading = async () => {
-  await processReportExport(actor, { format: "docx", aiNarrative: true });
+  await processReportExport(actor, {
+    admission: testModelAdmission(actor.organizationId),
+    signal: new AbortController().signal,
+    format: "docx",
+    aiNarrative: true,
+  });
   expect(await readExport()).toMatchObject({
     status: "failed",
     error: "The report source is no longer available.",
@@ -186,7 +207,12 @@ describe("report export run", () => {
       .update(reportExports)
       .set({ aiNarrative: false })
       .where(eq(reportExports.id, exportId));
-    await processReportExport(actor, { format: "docx", aiNarrative: false });
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
     const row = await readExport();
     expect(row).toMatchObject({ status: "completed", error: null });
     expect(reportDataSpy).toHaveBeenCalledTimes(1);
@@ -213,11 +239,13 @@ describe("report export run", () => {
       .map((text) => `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>`)
       .join("");
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/document.xml",
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>`,
     );
-    zip.file(
+    writeZipEntry(
+      zip,
       "[Content_Types].xml",
       '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
     );
@@ -265,7 +293,12 @@ describe("report export run", () => {
         templateRef: { type: "stored", templateId },
       })
       .where(eq(reportExports.id, exportId));
-    await processReportExport(actor, { format: "docx", aiNarrative: false });
+    await processReportExport(actor, {
+      admission: testModelAdmission(actor.organizationId),
+      signal: new AbortController().signal,
+      format: "docx",
+      aiNarrative: false,
+    });
   };
 
   test("a stored template whose AI condition stays undecided fails the export with the condition named and no use recorded", async () => {
@@ -304,6 +337,41 @@ describe("report export run", () => {
         useCount: 0,
         lastUsedAt: null,
       });
+    } finally {
+      await testDb.delete(templates).where(eq(templates.id, templateId));
+    }
+  });
+
+  test("a deterministic export of a stored template with an AI condition calls no model", async () => {
+    const templateId = await insertStoredTemplate({
+      paragraphs: [
+        "Report.",
+        "{% if is_consumer %}",
+        "Consumer notice.",
+        "{% endif %}",
+      ],
+      conditions: [
+        {
+          path: "is_consumer",
+          label: "Consumer contract",
+          inputType: "boolean",
+          aiPrompt: "Is this a consumer contract?",
+        },
+      ],
+    });
+    try {
+      await exportStoredTemplate(templateId);
+
+      expect(await readExport()).toMatchObject({ status: "failed" });
+      for (const spy of [
+        textModelSpy,
+        objectModelSpy,
+        chatObjectSpy,
+        resolveModelSpy,
+        decideSpy,
+      ]) {
+        expect(spy).not.toHaveBeenCalled();
+      }
     } finally {
       await testDb.delete(templates).where(eq(templates.id, templateId));
     }

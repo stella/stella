@@ -23,6 +23,8 @@ export const createVisualStore =
     const document = composeVisualDocument({
       html: visual.html,
       data: visual.data,
+      // Only the size matters here; any id has the length of a real one.
+      renderId: Bun.randomUUIDv7(),
       runtime,
       policy: VISUAL_INNER_POLICY,
     });

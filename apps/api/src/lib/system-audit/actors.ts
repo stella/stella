@@ -12,6 +12,7 @@
 
 /** Each run actor with the counts one of its runs reports. */
 export const SYSTEM_RUN_ACTOR_COUNTS = {
+  "system:operator-activity": ["reads"],
   "system:sanctions-monitoring-fanout": [
     "freshnessQueued",
     "requestedOrganizations",
@@ -33,6 +34,8 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
   "system:case-law-sitemap-refresh": ["shards", "pages"],
   "system:statute-sitemap-refresh": ["shards"],
   "system:case-law-browse-facet-refresh": ["buckets"],
+  "system:legislation-facet-refresh": ["buckets"],
+  "system:case-law-source-arrivals-refresh": ["sources"],
   "system:case-law-raw-storage": [
     "sweptPrefixes",
     "failedSweeps",
@@ -85,6 +88,7 @@ export const SYSTEM_RUN_ACTOR_COUNTS = {
     "reviewRequired",
     "failed",
   ],
+  "system:corpus-generation-operator": ["registered", "promoted", "demoted"],
 } as const satisfies Record<`system:${string}`, readonly string[]>;
 
 export type SystemRunActor = keyof typeof SYSTEM_RUN_ACTOR_COUNTS;
@@ -99,6 +103,9 @@ export type SystemAuditCounts<A extends SystemRunActor> = Readonly<
 
 /** Actors stamped on organization audit rows no member performed. */
 export const TENANT_SYSTEM_ACTOR = {
+  serviceClientOperator: "system:service-client-operator",
+  serviceClient: "system:service-client",
+  folioCollaborationRecovery: "system:folio-collaboration-recovery",
   sanctionsMonitoringDrain: "system:sanctions-monitoring-drain",
   sanctionsMonitoringBackfill: "system:sanctions-monitoring-backfill",
   memoryCurator: "system:memory-curator",

@@ -6,7 +6,7 @@ import { reportExports, workspaces } from "@/api/db/schema";
 /** Bounds both one reconciliation query and the maximum outbound-email burst
  * per API replica. Atomic row claiming in the reports slice deduplicates
  * overlapping replicas. */
-export const REPORT_EXPORT_NOTIFICATION_RECONCILE_LIMIT = 20;
+const REPORT_EXPORT_NOTIFICATION_RECONCILE_LIMIT = 20;
 
 /**
  * Owner-level, cross-workspace scan for terminal exports left pending by a

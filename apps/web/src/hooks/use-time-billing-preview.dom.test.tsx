@@ -1,6 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 GlobalRegistrator.register({ url: "http://localhost:3000/workspaces" });
 Object.assign(import.meta.env, {
   VITE_API_URL: "http://localhost:3001",
@@ -53,11 +57,9 @@ afterEach(() => {
 
 afterAll(async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 50);
-    });
+    await sleep(50);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 /** Serves the caller's navigation decision and enrolments, recording requests. */
@@ -183,9 +185,7 @@ const renderShell = (queryClient: InstanceType<typeof QueryClient>) =>
 
 const settle = async () => {
   await act(async () => {
-    await new Promise((resolve) => {
-      setTimeout(resolve, 20);
-    });
+    await sleep(20);
   });
 };
 

@@ -4,12 +4,7 @@ import { toSafeId } from "@stll/api-contract/safe-id";
 import { createVisualActionGate } from "@stll/api-contract/visual-bridge-policy";
 import type { VisualGuestMessage } from "@stll/api-contract/visual-sandbox";
 
-import {
-  activateVisual,
-  advanceVisualHandshake,
-  parseVisualHostMessage,
-  pendingVisualHandshake,
-} from "./generated-visual.logic";
+import { parseVisualHostMessage } from "./generated-visual.logic";
 
 const outerOrigin = "null";
 const frameWindow = {};
@@ -42,7 +37,7 @@ describe("generated view parent messages", () => {
           event,
           frameWindow,
           outerOrigin,
-          interaction: { status: "interactive", activatedFrame: frameWindow },
+          userActivated: true,
           actionGate: gate(),
         }),
       ).toEqual(expect.objectContaining(data));
@@ -57,7 +52,7 @@ describe("generated view parent messages", () => {
             event: rejected,
             frameWindow,
             outerOrigin,
-            interaction: { status: "interactive", activatedFrame: frameWindow },
+            userActivated: true,
             actionGate: gate(),
           }),
         ).toBeNull();
@@ -68,7 +63,7 @@ describe("generated view parent messages", () => {
             event,
             frameWindow: missing,
             outerOrigin,
-            interaction: { status: "interactive", activatedFrame: frameWindow },
+            userActivated: true,
             actionGate: gate(),
           }),
         ).toBeNull();
@@ -78,13 +73,13 @@ describe("generated view parent messages", () => {
           event,
           frameWindow,
           outerOrigin,
-          interaction: { status: "interactive", activatedFrame: frameWindow },
+          userActivated: true,
           actionGate: null,
         }),
       ).toBeNull();
     }
   });
-  test("drops actions before parent activation without consuming their rate limit", () => {
+  test("drops actions without user activation, without consuming their rate limit", () => {
     const actionGate = gate();
     const actions = [
       { kind: "drill", court: "court-one", year: 2026 },
@@ -99,22 +94,10 @@ describe("generated view parent messages", () => {
         actionGate,
       };
       expect(
-        parseVisualHostMessage({
-          ...options,
-          interaction: { status: "preview" },
-        }),
+        parseVisualHostMessage({ ...options, userActivated: false }),
       ).toBeNull();
       expect(
-        parseVisualHostMessage({
-          ...options,
-          interaction: { status: "interactive", activatedFrame: {} },
-        }),
-      ).toBeNull();
-      expect(
-        parseVisualHostMessage({
-          ...options,
-          interaction: { status: "interactive", activatedFrame: frameWindow },
-        }),
+        parseVisualHostMessage({ ...options, userActivated: true }),
       ).toEqual(expect.objectContaining(data));
     }
     for (const data of [
@@ -127,7 +110,7 @@ describe("generated view parent messages", () => {
           frameWindow,
           outerOrigin,
           actionGate,
-          interaction: { status: "preview" },
+          userActivated: false,
         }),
       ).toEqual(expect.objectContaining(data));
     }
@@ -144,100 +127,10 @@ describe("generated view parent messages", () => {
           event: { source: frameWindow, origin: outerOrigin, data },
           frameWindow,
           outerOrigin,
-          interaction: { status: "interactive", activatedFrame: frameWindow },
+          userActivated: true,
           actionGate: gate(),
         }),
       ).toBeNull();
     }
-  });
-});
-
-describe("generated view activation", () => {
-  test("waits for the frame's first load", () => {
-    const loading = { status: "loading" } as const;
-    expect(activateVisual(loading, frameWindow)).toBe(loading);
-  });
-
-  test("activates a loaded preview for the frame's current window", () => {
-    expect(activateVisual({ status: "preview" }, frameWindow)).toEqual({
-      status: "interactive",
-      activatedFrame: frameWindow,
-    });
-  });
-
-  test("needs a frame window", () => {
-    const preview = { status: "preview" } as const;
-    expect(activateVisual(preview, null)).toBe(preview);
-    expect(activateVisual(preview, undefined)).toBe(preview);
-  });
-
-  test("keeps an active view bound to the window it activated", () => {
-    const interactive = {
-      status: "interactive",
-      activatedFrame: frameWindow,
-    } as const;
-    expect(activateVisual(interactive, {})).toBe(interactive);
-  });
-
-  test("ignores guest actions while the frame is loading", () => {
-    expect(
-      parseVisualHostMessage({
-        event: {
-          source: frameWindow,
-          origin: outerOrigin,
-          data: { kind: "drill", court: "court-one", year: 2026 },
-        },
-        frameWindow,
-        outerOrigin,
-        interaction: { status: "loading" },
-        actionGate: gate(),
-      }),
-    ).toBeNull();
-  });
-});
-
-describe("generated view frame handshake", () => {
-  test("settles once the document loaded and the payload was delivered, in either order", () => {
-    for (const order of [
-      ["load", "delivered"],
-      ["delivered", "load"],
-    ] as const) {
-      const [first, second] = order;
-      const afterFirst = advanceVisualHandshake(
-        pendingVisualHandshake(),
-        first,
-      );
-      expect(afterFirst.status).toBe("pending");
-      expect(advanceVisualHandshake(afterFirst, second)).toEqual({
-        status: "settled",
-      });
-    }
-  });
-
-  test("stays pending on repeats of the same event", () => {
-    const loadedTwice = advanceVisualHandshake(
-      advanceVisualHandshake(pendingVisualHandshake(), "load"),
-      "load",
-    );
-    expect(loadedTwice).toEqual({
-      status: "pending",
-      loaded: true,
-      delivered: false,
-    });
-    const deliveredTwice = advanceVisualHandshake(
-      advanceVisualHandshake(pendingVisualHandshake(), "delivered"),
-      "delivered",
-    );
-    expect(deliveredTwice).toEqual({
-      status: "pending",
-      loaded: false,
-      delivered: true,
-    });
-  });
-
-  test("stays settled", () => {
-    const settled = { status: "settled" } as const;
-    expect(advanceVisualHandshake(settled, "load")).toBe(settled);
-    expect(advanceVisualHandshake(settled, "delivered")).toBe(settled);
   });
 });

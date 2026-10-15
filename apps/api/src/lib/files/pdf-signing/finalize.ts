@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Phase 2 end to end: embed the stored signature and write the signed
  * version, classifying every failure as one a retry can fix or one it
@@ -5,11 +6,10 @@
  * exchange open and the second into a closed exchange, so no failure leaves
  * an exchange open that nothing can finish.
  */
-
-import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { pdfSigningSessions } from "@/api/db/schema";
 import type {
@@ -18,6 +18,7 @@ import type {
 } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentSource } from "@/api/lib/document-source";
 import { createEntityVersionFromBuffer } from "@/api/lib/entity-versions/create-entity-version-from-buffer";
@@ -137,9 +138,7 @@ const signatureSource = ({
 }): DocumentSource => ({
   kind: "signature",
   baseVersionId,
-  certificateSha256Hex: new Bun.CryptoHasher("sha256")
-    .update(prepared.signerCertificateDer)
-    .digest("hex"),
+  certificateSha256Hex: hashSha256Hex(prepared.signerCertificateDer),
   level: applied.level,
   signingTime: prepared.signingTime.toISOString(),
   timestampAuthorityUrl: applied.timestampAuthorityUrl,
@@ -149,6 +148,7 @@ const signatureSource = ({
 type FinalizeOptions = {
   /** The claimed attempt; only it may finalize the exchange. */
   attempt: number;
+  permit: ThirdPartyOutboundPermit;
   prepared: PreparedSigningState;
   recordAuditEvent: AuditRecorder;
   session: AuthorizedPdfSigningSession;
@@ -156,7 +156,7 @@ type FinalizeOptions = {
 };
 
 const embed = async (
-  { prepared, session, signature }: FinalizeOptions,
+  { permit, prepared, session, signature }: FinalizeOptions,
   basePdf: Uint8Array,
 ): Promise<Result<AppliedSignature, FinalizeFailure>> => {
   const certificateChain = decodeCertificateChain(
@@ -166,6 +166,7 @@ const embed = async (
     basePdf,
     certificate: new Uint8Array(prepared.signerCertificateDer),
     certificateChain,
+    permit,
     certificateChainComplete: chainReachesRoot(
       prepared.signerCertificateDer,
       certificateChain,
@@ -180,7 +181,7 @@ const embed = async (
       prepared.keyType === "RSA" ? "RSASSA-PKCS1-v1_5" : "ECDSA",
     signingTime: prepared.signingTime,
     stamp: session.stamp,
-    timestampAuthorities: configuredTimestampAuthorities(),
+    timestampAuthorities: configuredTimestampAuthorities(permit),
     timestampTrustAnchors: configuredTimestampTrustAnchors(),
   });
   if (Result.isOk(applied)) {

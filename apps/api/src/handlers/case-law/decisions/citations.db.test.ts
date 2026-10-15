@@ -8,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import {
   listIncomingDecisionCitations,
+  listOutgoingDecisionCitationRoutes,
   listOutgoingDecisionCitations,
 } from "@/api/handlers/case-law/decisions/citations";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
@@ -86,11 +87,14 @@ beforeAll(
         id: subjectId,
         sourceId: openSourceId,
       }),
-      decisionRow({
-        caseNumber: "open-related",
-        id: openRelatedId,
-        sourceId: openSourceId,
-      }),
+      {
+        ...decisionRow({
+          caseNumber: "open-related",
+          id: openRelatedId,
+          sourceId: openSourceId,
+        }),
+        slug: "open-related",
+      },
       decisionRow({
         caseNumber: "closed-related",
         id: closedRelatedId,
@@ -240,4 +244,40 @@ test("citation reads reject malformed cursors", async () => {
   );
 
   expect("items" in page).toBe(false);
+});
+
+test("reader citation URLs use canonical public identities and unresolved references have no URL", async () => {
+  const items: { citationText: string; appUrl: string | null }[] = [];
+  let cursor: string | undefined;
+  for (let request = 0; request < 3; request += 1) {
+    const pageCursor = cursor;
+    const page = await withReader(async (tx) =>
+      listOutgoingDecisionCitationRoutes({
+        tx,
+        cursor: pageCursor,
+        decisionId: subjectId,
+      }),
+    );
+    if (!("items" in page)) {
+      throw new TypeError("Expected a reader citation page");
+    }
+    items.push(...page.items);
+    cursor = page.nextCursor ?? undefined;
+    if (cursor === undefined) {
+      break;
+    }
+  }
+  expect(
+    items.filter(({ citationText }) => citationText.startsWith("restricted")),
+  ).toEqual([]);
+  const linked = items.filter(({ citationText }) =>
+    citationText.startsWith("outgoing"),
+  );
+  expect(linked).toHaveLength(55);
+  expect(new Set(linked.map(({ appUrl }) => appUrl))).toEqual(
+    new Set(["http://localhost:3000/law/cze/cases/court/open-related"]),
+  );
+  expect(
+    items.find(({ citationText }) => citationText === "unresolved")?.appUrl,
+  ).toBeNull();
 });

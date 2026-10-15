@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { sleep } from "@stll/concurrency/sleep";
+
 import { sortCommittedNavigation, sortNavigationTarget } from "./opened-tabs";
 import {
   containControlledTab,
@@ -99,9 +101,7 @@ describe("controlled tab containment", () => {
 
   test("a tab with no evidence of its owner stays confined, however long", async () => {
     const { state } = await startControl();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 1200);
-    });
+    await sleep(1200);
 
     expect(await readTabOwner(4)).toBe("unknown");
     expect(confines(state.rules, 4)).toBe(true);
@@ -131,9 +131,7 @@ describe("controlled tab containment", () => {
     // The user's evidence arrives first, the source report much later.
     await sortCommittedNavigation(typed(9));
     expect(await readTabOwner(9)).toBe("user");
-    await new Promise((resolve) => {
-      setTimeout(resolve, 1200);
-    });
+    await sleep(1200);
     await sortNavigationTarget({ sourceTabId: CONTROLLED, tabId: 9, url: "" });
 
     expect(await readTabOwner(9)).toBe("opened");

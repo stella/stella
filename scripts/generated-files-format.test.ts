@@ -67,6 +67,9 @@ describe("generated files under the autofix formatter", () => {
     // Outputs of both kinds, formatted by their generator and ignored by the
     // formatter, so an empty or narrowed set cannot pass vacuously.
     expect(outputs).toContain("docs/module-ownership.md");
+    expect(
+      outputs.some((file) => file.startsWith("docs/module-ownership/")),
+    ).toBe(true);
     expect(outputs).toContain("docs/self-hosting.md");
     expect(outputs).toContain(".agents/skills/conventions-db/SKILL.md");
 

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { ExternalLinkIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -18,7 +19,6 @@ import type {
 } from "@/features/case-law/components/case-viewer/decision-facts.logic";
 import { DecisionJudges } from "@/features/case-law/components/case-viewer/decision-judges";
 import type { TranslationKey } from "@/i18n/types";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 /**
  * How each fact is labelled and printed. One entry per fact kind, so a fact

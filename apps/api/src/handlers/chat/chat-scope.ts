@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -67,4 +67,24 @@ export const assertChatThreadScopeMatches = ({
     );
   }
   return Result.ok();
+};
+
+export type ChatWorkspaceAccess = (
+  workspaceId: SafeId<"workspace">,
+) => Promise<AccessibleWorkspace | null>;
+
+type HasChatWorkspaceAccessOptions = {
+  workspaceId: SafeId<"workspace"> | null;
+  getWorkspaceAccess: ChatWorkspaceAccess;
+};
+
+export const hasChatWorkspaceAccess = async ({
+  workspaceId,
+  getWorkspaceAccess,
+}: HasChatWorkspaceAccessOptions) => {
+  if (workspaceId === null) {
+    return true;
+  }
+  const workspace = await getWorkspaceAccess(workspaceId);
+  return workspace !== null && workspace.status !== "deleting";
 };

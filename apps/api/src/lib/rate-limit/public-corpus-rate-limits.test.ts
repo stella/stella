@@ -15,6 +15,7 @@ import {
   PUBLIC_CORPUS_ROUTE_POLICY,
 } from "@/api/public-corpus-policy";
 
+import type { RequestIpServer } from "./contracts";
 import {
   createPublicCorpusAddressRateLimitOptions,
   createPublicCorpusGlobalRateLimitOptions,
@@ -22,7 +23,6 @@ import {
 import {
   InMemoryRateLimitContext,
   rateLimit,
-  type RequestIpServer,
   scopedGenerator,
 } from "./rate-limit";
 import {
@@ -62,6 +62,7 @@ const createBindings = () => {
           );
           return context.increment(key, duration, requestTime);
         },
+        complete: (key) => context.complete(key),
         decrement: (key) => context.decrement(key),
         kill: () => context.kill(),
       },

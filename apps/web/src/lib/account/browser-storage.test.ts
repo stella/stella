@@ -116,7 +116,10 @@ describe("registered browser storage families", () => {
         continue;
       }
       const area = browserStateStorage(family.area);
-      expect(area.getItem(userStorageKey(family.prefix, account))).toBeNull();
+      // What is kept for its owner waits for them; the rest goes.
+      expect(area.getItem(userStorageKey(family.prefix, account))).toBe(
+        family.retention === "kept-for-owner" ? "account" : null,
+      );
       expect(area.getItem(userStorageKey(family.prefix, visitor))).toBe(
         "visitor",
       );

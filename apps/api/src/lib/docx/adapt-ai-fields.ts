@@ -18,6 +18,7 @@
  * the fill boundary injects the adapter (see `buildAiOccurrenceAdapter`).
  */
 
+import { writeZipEntry } from "@stll/docx-utils";
 import { placeholderPattern, resolvePath } from "@stll/template-conditions";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -36,7 +37,7 @@ export const AI_FIELD_ADAPTATION_FAILURE_MESSAGE =
 /** Characters of surrounding document text captured around each occurrence. */
 const CONTEXT_RADIUS = 400;
 
-export type MarkerOccurrence = {
+type MarkerOccurrence = {
   /** Surrounding document text, with the `{{path}}` marker left in place so
    *  the model sees exactly where the rendering will sit. */
   context: string;
@@ -167,7 +168,7 @@ export const adaptAiFields = async ({
       counters,
     );
     if (patched.changed) {
-      zip.file(part.name, patched.xml);
+      writeZipEntry(zip, part.name, patched.xml);
       anyChanged = true;
     }
   }

@@ -11,7 +11,7 @@ const isWorkflowsPreviewEnabledForDevState = (
 ): boolean =>
   env.VITE_WORKFLOWS_ENABLED || (betaFeaturesAvailable() && devPreviewEnabled);
 
-export const isWorkflowsPreviewEnabled = (): boolean =>
+const isWorkflowsPreviewEnabled = (): boolean =>
   isWorkflowsPreviewEnabledForDevState(useDevStore.getState().workflowsPreview);
 
 export const useWorkflowsPreviewEnabled = (): boolean => {

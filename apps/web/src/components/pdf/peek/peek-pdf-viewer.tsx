@@ -5,7 +5,6 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
 import type { ReactNode, RefObject } from "react";
 
@@ -19,7 +18,6 @@ import {
   AlertTriangleIcon,
   MonitorIcon,
   MoonIcon,
-  PrinterIcon,
   SunIcon,
 } from "@stll/ui/icons";
 import {
@@ -426,121 +424,6 @@ export const PeekPdfControls = ({
     )}
   </>
 );
-
-export const PeekPrintButton = () => {
-  const t = useTranslations();
-  const analytics = useAnalytics();
-  const pdfDocument = usePDFStore((s) => s.document);
-  const [isPrinting, setIsPrinting] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  useMountEffect(() => () => {
-    abortControllerRef.current?.abort();
-  });
-
-  const handlePrint = useCallback(async () => {
-    if (!pdfDocument) {
-      return;
-    }
-
-    abortControllerRef.current?.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsPrinting(true);
-    try {
-      const data = await pdfDocument.document.getData();
-      if (controller.signal.aborted) {
-        return;
-      }
-      printPdfBuffer(data.slice().buffer);
-    } catch (error: unknown) {
-      if (controller.signal.aborted) {
-        return;
-      }
-      analytics.captureError(error);
-    } finally {
-      if (!controller.signal.aborted) {
-        setIsPrinting(false);
-      }
-    }
-  }, [analytics, pdfDocument]);
-
-  return (
-    <Button
-      disabled={!pdfDocument || isPrinting}
-      onClick={() => {
-        detached(handlePrint(), "peek-pdf-viewer.print");
-      }}
-      size="icon-xs"
-      tooltip={t("common.print")}
-      variant="ghost"
-    >
-      <PrinterIcon className="size-3.5" />
-    </Button>
-  );
-};
-
-export const PreparedPdfPrintButton = ({
-  disabled = false,
-  fieldId,
-  workspaceId,
-}: {
-  disabled?: boolean | undefined;
-  fieldId: string;
-  workspaceId: string;
-}) => {
-  const t = useTranslations();
-  const analytics = useAnalytics();
-  const [isPrinting, setIsPrinting] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  useMountEffect(() => () => {
-    abortControllerRef.current?.abort();
-  });
-
-  const handlePrint = useCallback(async () => {
-    abortControllerRef.current?.abort();
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    setIsPrinting(true);
-    try {
-      const data = await fetchPrintPdf({
-        workspaceId,
-        fieldId,
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) {
-        return;
-      }
-      printPdfBuffer(data);
-    } catch (error: unknown) {
-      if (controller.signal.aborted) {
-        return;
-      }
-      analytics.captureError(error);
-    } finally {
-      if (!controller.signal.aborted) {
-        setIsPrinting(false);
-      }
-    }
-  }, [analytics, fieldId, workspaceId]);
-
-  return (
-    <Button
-      disabled={disabled || isPrinting || fieldId.length === 0}
-      onClick={() => {
-        detached(handlePrint(), "peek-pdf-viewer.print");
-      }}
-      size="icon-xs"
-      tooltip={t("common.print")}
-      variant="ghost"
-    >
-      <PrinterIcon className="size-3.5" />
-    </Button>
-  );
-};
 
 // ── DOCX peek viewer with zoom wiring ──────────────────
 

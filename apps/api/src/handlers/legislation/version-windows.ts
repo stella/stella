@@ -244,7 +244,7 @@ export const windowJunction = (
 };
 
 /** A junction is a connector defect when it is one of these. */
-export const isDefectiveJunction = (
+const isDefectiveJunction = (
   junction: WindowJunction,
 ): junction is Extract<WindowJunction, { type: "inclusive-end" | "overlap" }> =>
   junction.type === "inclusive-end" || junction.type === "overlap";

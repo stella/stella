@@ -6,14 +6,12 @@ export {
   AGENDA_ITEM_KINDS,
   AGENDA_ITEM_SOURCES,
   ENTITY_PRIORITIES,
-  ENTITY_PRIORITY,
   TASK_STATUS,
   TASK_STATUSES,
 } from "@stll/api-contract";
 export type {
   AgendaItemKind,
   AgendaItemSource,
-  EntityPriority,
   TaskStatus,
 } from "@stll/api-contract";
 
@@ -69,36 +67,6 @@ export const AGENDA_ITEM_SOURCE = {
   IMPORT: "import",
   API: "api",
 } as const satisfies ConstantMap<AgendaItemSource>;
-
-export const AGENDA_AVAILABILITY = {
-  FREE: "free",
-  TENTATIVE: "tentative",
-  BUSY: "busy",
-  OUT_OF_OFFICE: "out_of_office",
-  WORKING_ELSEWHERE: "working_elsewhere",
-  UNKNOWN: "unknown",
-} as const satisfies ConstantMap<AgendaAvailability>;
-
-export const AGENDA_SENSITIVITY = {
-  NORMAL: "normal",
-  PRIVATE: "private",
-  CONFIDENTIAL: "confidential",
-} as const satisfies ConstantMap<AgendaSensitivity>;
-
-export const AGENDA_ATTENDEE_TYPE = {
-  REQUIRED: "required",
-  OPTIONAL: "optional",
-  RESOURCE: "resource",
-} as const satisfies ConstantMap<AgendaAttendeeType>;
-
-const DOCUMENT_STATUS = {
-  DRAFT: "draft",
-  REVIEW: "review",
-  FINAL: "final",
-} as const;
-
-export type DocumentStatus =
-  (typeof DOCUMENT_STATUS)[keyof typeof DOCUMENT_STATUS];
 
 export const TASK_ASSIGNEE_ROLE = {
   ASSIGNEE: "assignee",

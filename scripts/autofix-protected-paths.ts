@@ -4,6 +4,7 @@ import { BASELINE_PATHS } from "./baseline-paths";
 export const AUTOFIX_PROTECTED_PATHS = [
   ...Object.values(BASELINE_PATHS),
   "scripts/ratchet-baseline.json",
+
   "scripts/ratchet-allowances/**",
   ".changeset/**",
   ".oxlint-plugins/require-audit-on-mutation-ledger.json",

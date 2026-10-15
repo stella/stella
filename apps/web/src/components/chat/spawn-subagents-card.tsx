@@ -14,12 +14,8 @@ import {
   AccordionPanel,
   AccordionTrigger,
 } from "@stll/ui/accordion";
-import {
-  CheckIcon,
-  CircleDashedIcon,
-  LoaderIcon,
-  SplitIcon,
-} from "@stll/ui/icons";
+import { CheckIcon, CircleDashedIcon, SplitIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 
 import { MessageResponse } from "@/components/ai-elements/message";
 import { assistantMessageFallbackText } from "@/components/chat/chat-thread-messages.logic";
@@ -277,7 +273,7 @@ const SubtaskStatus = ({ callStatus, status }: SubtaskStatusProps) => {
 
   return (
     <span className="bg-muted/40 text-muted-foreground text-2xs flex shrink-0 items-center gap-1 rounded px-1.5 py-0.5 font-medium">
-      <LoaderIcon className="size-3 animate-spin" />
+      <Loader className="size-3" size="sm" variant="decorative" />
       {t("tasks.statusValues.in_progress")}
     </span>
   );
@@ -293,7 +289,11 @@ const CallStatusIndicator = ({ status }: CallStatusIndicatorProps) => {
   switch (status) {
     case SPAWN_SUBAGENTS_CALL_STATUS.running:
       return (
-        <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
+        <Loader
+          className="ms-auto size-3.5 shrink-0"
+          label={t("tasks.statusValues.in_progress")}
+          size="sm"
+        />
       );
     case SPAWN_SUBAGENTS_CALL_STATUS.failed:
       return (

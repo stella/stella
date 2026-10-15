@@ -54,6 +54,7 @@ import {
   VERIFICATION_MODEL_ROLE,
 } from "@/api/lib/lists/verification/model-call";
 import type { VerificationModelDeps } from "@/api/lib/lists/verification/model-call";
+import { readRunEvidenceForGrading } from "@/api/lib/lists/verification/read-run";
 import {
   checkVerificationDispatchBudget,
   ListVerificationRunCapError,
@@ -72,6 +73,8 @@ import {
 } from "@/api/lib/queue-reconcile-scan";
 import type { ReconcileScanResult } from "@/api/lib/queue-reconcile-scan";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import { runBackgroundJob } from "@/api/lib/rate-limit/queued-action-admission";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { createRootRunActor } from "@/api/lib/root-scoped-db";
 import type { RootRunActor } from "@/api/lib/root-scoped-db";
@@ -412,7 +415,6 @@ type ClaimedRun = {
   fileFieldId: SafeId<"field">;
   entityVersionId: SafeId<"entityVersion">;
   contentSha256: string;
-  evidence: VerificationEvidence;
 };
 
 /** Conditional `queued -> running`: the loser of a double delivery updates
@@ -444,7 +446,6 @@ const claimRun = async ({
       fileFieldId: legalListVerificationRuns.fileFieldId,
       entityVersionId: legalListVerificationRuns.entityVersionId,
       contentSha256: legalListVerificationRuns.contentSha256,
-      evidence: legalListVerificationRuns.evidence,
     });
   return rows.at(0) ?? null;
 };
@@ -614,7 +615,8 @@ type VerificationExecutionBoundaries = {
 /** Null on success, else the code the run failed with. */
 type ExecuteRunArgs = {
   actor: RunActor;
-  run: ClaimedRun;
+  admission: ModelDispatchAdmission;
+  run: ClaimedRun & { evidence: VerificationEvidence };
   accessProof: ListVerificationAccessProof;
   grants?: FeatureAccessGrants | undefined;
   execution?: VerificationExecutionBoundaries;
@@ -622,6 +624,7 @@ type ExecuteRunArgs = {
 
 const executeRun = async ({
   actor,
+  admission,
   run,
   accessProof,
   grants,
@@ -669,7 +672,11 @@ const executeRun = async ({
         model: getTanStackTextModelInfoForRole(
           VERIFICATION_MODEL_ROLE,
           orgAIConfig,
-          { dataClass: "customer", organizationId: actor.organizationId },
+          {
+            dataClass: "customer",
+            organizationId: actor.organizationId,
+            modelTier: admission.modelTier,
+          },
         ),
         promptCachingEnabled,
       });
@@ -701,6 +708,7 @@ const executeRun = async ({
   );
 
   const deps: VerificationModelDeps = {
+    admission,
     accessProof,
     checkRunBudget: async () =>
       await actor.writeDb(
@@ -821,6 +829,7 @@ const executeRun = async ({
 
 type ProcessListVerificationRunArgs = {
   data: ListVerificationJobData;
+  admission: ModelDispatchAdmission;
   actor?: RunActor;
   grants?: FeatureAccessGrants | undefined;
   execute?: typeof executeRun;
@@ -829,12 +838,13 @@ type ProcessListVerificationRunArgs = {
 
 export const processListVerificationRun = async ({
   data,
+  admission,
   actor = brandActor(data),
   grants,
   execute = executeRun,
   execution,
 }: ProcessListVerificationRunArgs): Promise<void> => {
-  const admission = await actor.writeDb(async (tx) => {
+  const claim = await actor.writeDb(async (tx) => {
     const run = (
       await tx
         .select({ requestedBy: legalListVerificationRuns.requestedBy })
@@ -875,17 +885,32 @@ export const processListVerificationRun = async ({
       return null;
     }
     const claimed = await claimRun({ tx, actor, accessProof: decision.proof });
-    return claimed === null ? null : { run: claimed, proof: decision.proof };
+    if (claimed === null) {
+      return null;
+    }
+    const evidence = await readRunEvidenceForGrading({
+      tx,
+      workspaceId: actor.workspaceId,
+      runId: actor.runId,
+    });
+    return {
+      run: {
+        ...claimed,
+        evidence: evidence ?? panic("Claimed verification run is missing"),
+      },
+      proof: decision.proof,
+    };
   });
-  if (admission === null) {
+  if (claim === null) {
     return;
   }
   const outcome = await Result.tryPromise({
     try: async () =>
       await execute({
         actor,
-        run: admission.run,
-        accessProof: admission.proof,
+        admission,
+        run: claim.run,
+        accessProof: claim.proof,
         grants,
         ...(execution === undefined ? {} : { execution }),
       }),
@@ -915,7 +940,23 @@ export const initListVerificationRunWorker = () => {
   const worker = new BullMqWorker<ListVerificationJobData>(
     QUEUE_NAME,
     async (job) => {
-      await processListVerificationRun({ data: job.data });
+      const actor = brandActor(job.data);
+      // The run's period action was drawn when it was queued; the job takes
+      // a background slot. The run bounds its own time.
+      await runBackgroundJob({
+        actionKind: "list-verification.background",
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        organizationStateDb: actor.writeDb,
+        job,
+        signal: new AbortController().signal,
+        run: async (_signal, admission) =>
+          await processListVerificationRun({
+            data: job.data,
+            actor,
+            admission,
+          }),
+      });
     },
     {
       connection: createBullMqConnection({

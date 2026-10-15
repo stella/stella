@@ -1,4 +1,4 @@
-import type { FeatureAccessProof } from "@/api/lib/auth/feature-access/policy";
+import type { FeatureAccessProof } from "@/api/lib/feature-access/policy";
 
 export type ListVerificationAccessProof = FeatureAccessProof;
 

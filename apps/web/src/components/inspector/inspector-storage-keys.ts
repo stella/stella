@@ -1,4 +1,4 @@
-import { ownerStorageKey } from "@/lib/account/storage-key";
+import { ownerStorageKey } from "@stll/api-contract/browser-storage";
 
 /** Whose inspector this is: one user inside one organization. */
 export type InspectorStorageScope = {

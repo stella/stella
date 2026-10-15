@@ -1,48 +1,31 @@
 import ts from "typescript";
 
-const isFunctionScope = (node: ts.Node) =>
-  ts.isFunctionDeclaration(node) ||
-  ts.isFunctionExpression(node) ||
-  ts.isArrowFunction(node) ||
-  ts.isMethodDeclaration(node);
-
-const hasTemplateBinding = (access: ts.PropertyAccessExpression) => {
+const hasTemplateBinding = (
+  access: ts.PropertyAccessExpression,
+  checker: ts.TypeChecker,
+) => {
   const receiver = access.expression;
   if (!ts.isIdentifier(receiver)) {
     return false;
   }
-  let scope: ts.Node = access;
-  while (!isFunctionScope(scope) && !ts.isSourceFile(scope)) {
-    scope = scope.parent;
+  const declaration = checker.getSymbolAtLocation(receiver)?.valueDeclaration;
+  if (
+    !declaration ||
+    !ts.isVariableDeclaration(declaration) ||
+    !declaration.initializer ||
+    !ts.isCallExpression(declaration.initializer)
+  ) {
+    return false;
   }
-  let found = false;
-  const visit = (node: ts.Node) => {
-    if (node !== scope && isFunctionScope(node)) {
-      return;
-    }
-    if (
-      ts.isVariableDeclaration(node) &&
-      ts.isIdentifier(node.name) &&
-      node.name.text === receiver.text &&
-      node.initializer &&
-      ts.isCallExpression(node.initializer)
-    ) {
-      const call = node.initializer;
-      const tag = call.arguments.at(0);
-      if (
-        ts.isPropertyAccessExpression(call.expression) &&
-        call.expression.name.text === "createElement" &&
-        tag &&
-        ts.isStringLiteral(tag) &&
-        tag.text === "template"
-      ) {
-        found = true;
-      }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(scope);
-  return found;
+  const call = declaration.initializer;
+  const tag = call.arguments.at(0);
+  return (
+    ts.isPropertyAccessExpression(call.expression) &&
+    call.expression.name.text === "createElement" &&
+    tag !== undefined &&
+    ts.isStringLiteral(tag) &&
+    tag.text === "template"
+  );
 };
 
 export const inspectBrowserRuntimeSafety = (source: string) => {
@@ -53,9 +36,24 @@ export const inspectBrowserRuntimeSafety = (source: string) => {
     true,
     ts.ScriptKind.JS,
   );
+  // Bind this source alone so receiver lookup follows JavaScript lexical scopes.
+  const options = { allowJs: true, noLib: true, noResolve: true };
+  const host = ts.createCompilerHost(options);
+  host.getSourceFile = (file) => (file === ast.fileName ? ast : undefined);
+  const checker = ts
+    .createProgram([ast.fileName], options, host)
+    .getTypeChecker();
   const problems: string[] = [];
   let templateWrites = 0;
   const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === "fetch" &&
+      !checker.getSymbolAtLocation(node.expression)
+    ) {
+      problems.push("network is unavailable");
+    }
     if (
       ts.isIdentifier(node) &&
       (node.text === "eval" || node.text === "Function")
@@ -70,7 +68,7 @@ export const inspectBrowserRuntimeSafety = (source: string) => {
       problems.push("computed code or markup sink");
     }
     if (ts.isPropertyAccessExpression(node) && node.name.text === "innerHTML") {
-      if (!hasTemplateBinding(node)) {
+      if (!hasTemplateBinding(node, checker)) {
         problems.push("markup outside template parsing");
       }
       templateWrites++;

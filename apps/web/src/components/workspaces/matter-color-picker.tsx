@@ -177,8 +177,4 @@ const useMatterColorPicker = (matter: MatterColorIdentity) => {
   };
 };
 
-export {
-  MatterColorContextPicker,
-  MatterColorPicker,
-  MatterColorPickerContent,
-};
+export { MatterColorContextPicker, MatterColorPicker };

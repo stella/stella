@@ -1,10 +1,10 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   createFeatureAccessSnapshot,
   decideFeatureAccess,
-} from "@/api/lib/auth/feature-access/policy";
-import { toSafeId } from "@/api/lib/branded-types";
+} from "@/api/lib/feature-access/policy";
 import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

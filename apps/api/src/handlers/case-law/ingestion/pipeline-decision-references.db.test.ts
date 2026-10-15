@@ -42,7 +42,11 @@ import { planDecisionWrite } from "@/api/handlers/case-law/ingestion/pipeline/de
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
-import { POLARITY, RULE_SOURCE } from "@/api/handlers/case-law/polarity/consts";
+import {
+  CITATION_REVIEW_ORIGIN,
+  POLARITY,
+  RULE_SOURCE,
+} from "@/api/handlers/case-law/polarity/consts";
 import { SEED_RULES } from "@/api/handlers/case-law/polarity/seed-rules";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -666,6 +670,7 @@ const expectRowsFollowReferences = async (
     citationKey: reviewKey,
     polarity: POLARITY.NEGATIVE,
     reviewRef: "references-test",
+    origin: CITATION_REVIEW_ORIGIN.HUMAN_REVIEW,
   });
   const changed = withText(base, scenario.changed, "changed");
   await ingest(sourceId, changed);

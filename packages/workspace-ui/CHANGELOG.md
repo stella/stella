@@ -1,5 +1,26 @@
 # @stll/workspace-ui
 
+## 0.12.1
+
+### Patch Changes
+
+- [#5693](https://github.com/stella/stella/pull/5693) [`fec0951`](https://github.com/stella/stella/commit/fec0951abe78c4e626739c8323267b12d0a8e5cf) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update runtime dependencies.
+- Updated dependencies [[`9da3cbb`](https://github.com/stella/stella/commit/9da3cbb84db47b67b93fcd3b6f327ba3eb739baf), [`c7f973a`](https://github.com/stella/stella/commit/c7f973adced14ab6250f4a0edfa553303998bc27), [`3000990`](https://github.com/stella/stella/commit/3000990a7130ed52723e5fb1b4ece25bf5f42427), [`15e1b82`](https://github.com/stella/stella/commit/15e1b82218dd6447eaba4df106f7d3585e9b6775), [`a8c77be`](https://github.com/stella/stella/commit/a8c77be4ed683ad5d91d843220ddd1eb51486370), [`ebfe05e`](https://github.com/stella/stella/commit/ebfe05e6b528df99966f4a8e3ac1bec9be1eb778), [`4e86d4d`](https://github.com/stella/stella/commit/4e86d4deb48c5f0d9a2bcb6e454afdd34e78a788), [`70a05b2`](https://github.com/stella/stella/commit/70a05b2dabd5bc7bb2422b2d0ae21e1c718c6974), [`fb4de95`](https://github.com/stella/stella/commit/fb4de9573ae022e1c006c81fff9022aa97e45ec1), [`0c55af7`](https://github.com/stella/stella/commit/0c55af71de6f04e11217bad1706b149736a8639b), [`f01d3ab`](https://github.com/stella/stella/commit/f01d3ab91b22613acfd563e5df9ffa6129b19bd5)]:
+  - @stll/ui@0.45.0
+
+## 0.12.0
+
+### Minor Changes
+
+- [#5318](https://github.com/stella/stella/pull/5318) [`f5e1e2b`](https://github.com/stella/stella/commit/f5e1e2bf6a143f0556647d5ac6f5a5f71c1f931a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `@stll/ui/inline-reorder` and `@stll/ui/inline-drop-indicator` for reordering a horizontal row of items by closest edge. `@stll/workspace-ui` now uses them for view tabs and no longer exports `reorderWorkspaceViewIds`, `toWorkspaceViewDropPosition` or the `./view-switcher-logic` entry point.
+
+- [#5175](https://github.com/stella/stella/pull/5175) [`84d35ae`](https://github.com/stella/stella/commit/84d35ae3c652403524ea11ebba22e40d8949c929) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Use updated Pragmatic drag and drop dependencies and public entry points.
+
+### Patch Changes
+
+- Updated dependencies [[`2718337`](https://github.com/stella/stella/commit/2718337304469b3c4e0d0304a15b9864c70a2aa9), [`f5e1e2b`](https://github.com/stella/stella/commit/f5e1e2bf6a143f0556647d5ac6f5a5f71c1f931a), [`84d35ae`](https://github.com/stella/stella/commit/84d35ae3c652403524ea11ebba22e40d8949c929)]:
+  - @stll/ui@0.44.0
+
 ## 0.11.23
 
 ### Patch Changes
@@ -221,7 +242,7 @@
 ### Minor Changes
 
 - [#2967](https://github.com/stella/stella/pull/2967) [`5d79253`](https://github.com/stella/stella/commit/5d79253451d8227af942bf0c4883548977531490) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Converting between major and minor units asks the currency. `toMinorUnits({
-amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
+  amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
   currency's own exponent (100 for USD, 1 for JPY, 1000 for KWD), and
   `formatMoneyCents` takes an optional `fractionDigits` for a rounded summary.
 
@@ -232,7 +253,7 @@ amount, currency })` and `toMajorUnits({ amountCents, currency })` scale by the
   holding text nobody has vouched for yet.
 
   BREAKING: `cents()` now rejects an integer outside the safe range, where `x + 1
-=== x` and a running total silently stops moving. `@stll/workspace-ui` no
+  === x` and a running total silently stops moving. `@stll/workspace-ui` no
   longer re-exports `currencyMinorUnitDigits`, `formatMoneyCents`, or
   `FormatMoneyCentsParams`; import them from `@stll/money`.
 

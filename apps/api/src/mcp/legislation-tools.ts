@@ -15,6 +15,7 @@ import { publicCountryUnavailable } from "@stll/api-contract/public-country-capa
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
@@ -23,13 +24,16 @@ import type { LegislationProvisionVersion } from "@/api/handlers/legislation/pro
 import type { listStatuteVersionsHandler } from "@/api/handlers/legislation/versions";
 import {
   READ_PROVISION_HISTORY_PROJECTION,
-  READ_STATUTE_PROJECTION,
   READ_STATUTE_PROVISIONS_PROJECTION,
+} from "@/api/lib/chat/legislation-result-projections";
+import {
+  READ_STATUTE_PROJECTION,
   SEARCH_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
+import { isSearchIndexUnavailable } from "@/api/lib/legal-search/search-index-unavailable";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { projectionPayload } from "@/api/lib/projection-totality";
@@ -39,6 +43,10 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import {
+  isProvisionTextCursor,
+  windowProvisionText,
+} from "@/api/mcp/provision-text-window";
 import {
   isLegislationSearchSuccess,
   isStatuteDocument,
@@ -76,10 +84,12 @@ import {
   mapValibotIssues,
   notFoundResult,
   nullAsAbsent,
+  searchIndexUnavailableResult,
   toolDataResult,
   toPlainCorpusText,
   toPlainTextSnippet,
   validationErrorResult,
+  uuidInputSchema,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 import {
@@ -260,7 +270,16 @@ const provisionRequestSchema = v.strictObject({
   eli: eliInputSchema,
   anchor: anchorInputSchema,
   as_of: v.optional(asOfInputSchema),
+  document_id: v.optional(
+    uuidInputSchema(
+      "Exact consolidation handle returned as documentId by read_provision_history",
+    ),
+  ),
   language: v.optional(languageInputSchema),
+  text_cursor: cursorInput({
+    description: "Opaque nextTextCursor from this provision and consolidation",
+    issuedBy: isProvisionTextCursor,
+  }),
 });
 
 const PROVISION_BATCH_MIN_ITEMS = 1;
@@ -326,12 +345,17 @@ const readProvisionHistoryArgsSchema = nullAsAbsent(
       description:
         "Opaque cursor from a previous read_provision_history call to read the next page",
     }),
+    text_cursor: cursorInput({
+      description:
+        "Opaque nextTextCursor from one item in the requested history page",
+      issuedBy: isProvisionTextCursor,
+    }),
   }),
 );
 
 const LEGISLATION_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Search legislation",
       destructiveHint: false,
@@ -369,7 +393,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read statute",
       destructiveHint: false,
@@ -397,7 +421,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read statute provisions",
       destructiveHint: false,
@@ -405,18 +429,15 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read named provisions of one or more statutes in one call: each " +
-      "`items[]` entry is { eli, anchor } plus an optional as_of and " +
-      "language. An anchor is the publisher's own (par_1729, " +
-      "par_1729-odst_1) and read_statute's `outline` lists them. Every entry " +
-      "is answered separately, in input order, under `status`: `found` " +
-      "carries the provision's text, while `not_found` (no such ELI), " +
-      "`uncovered_date` (no consolidation applies that day, including where " +
-      "the publisher's own dates are inconsistent), " +
-      "`provision_not_found` (that consolidation has no such anchor) and " +
-      "`text_withheld` (the source bars AI use of its wording) each carry a " +
-      "message. Prefer one batched call over one call per provision. " +
-      "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
+      "Read statute provisions: items[] entries are { eli, anchor } with optional " +
+      "as_of and language, or document_id from read_provision_history for an exact " +
+      "consolidation. document_id and as_of are mutually exclusive. " +
+      "Use publisher anchors from read_statute's outline (par_1729, par_1729-odst_1). " +
+      "Entries return in input order: found carries text; invalid, not_found, " +
+      "uncovered_date (no applicable consolidation, including inconsistent publisher dates), " +
+      "provision_not_found and text_withheld (AI use barred) carry messages. " +
+      "Continue long text with nextTextCursor as text_cursor on the same entry until null. " +
+      "url opens the stella reader when served, otherwise the publisher; source_url is the publisher source.",
     inputSchema: readStatuteProvisionsArgsSchema,
     // Each entry is answered on its own, so an ELI no spelling rescues is that
     // entry's `not_found`, not a refusal of the whole batch.
@@ -434,7 +455,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
-    consumesServices: true,
+    consumesServices: false,
     annotations: {
       title: "Read provision history",
       destructiveHint: false,
@@ -447,7 +468,9 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       "compared without downloading whole statutes. Takes the work's `eli` and " +
       "an `anchor` from read_statute's outline. A consolidation that does " +
       "not carry the anchor is left out of `items`. Pass the returned " +
-      "nextCursor back as cursor for older windows. " +
+      "nextCursor back as cursor for older versions. Long wording returns " +
+      "nextTextCursor on its item; pass it back as text_cursor with the same " +
+      "eli, anchor, and version-page cursor until it is null. " +
       "Use `url` for the stella reader when served, otherwise the publisher; `source_url` is the publisher source.",
     inputSchema: readProvisionHistoryArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
@@ -455,6 +478,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
+    _meta: { ui: { resourceUri: STATUTE_TIMELINE_RESOURCE_URI } },
     name: "read_provision_history",
     scope: "stella:read",
   }),
@@ -520,12 +544,6 @@ const statuteResolutionError = (
 const invalidCursorError = (toolName: LegislationToolName, cursor: string) =>
   invalidCursorResult({ cursor, tool: toolName });
 
-/** Text cut to the provision budget, and whether the budget cut it. */
-const boundProvisionText = (text: string) => {
-  const bounded = text.slice(0, LIMITS.legislationProvisionTextChars);
-  return { text: bounded, truncated: bounded.length < text.length };
-};
-
 // --- search_legislation ---------------------------------------------------
 
 const handleSearchLegislationTool: TypedMcpToolHandler<
@@ -583,6 +601,9 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     legislationPublicReadDb,
     observer,
   );
+  if (isSearchIndexUnavailable(result)) {
+    return searchIndexUnavailableResult(result);
+  }
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);
     return failure?.message === "Invalid cursor"
@@ -801,9 +822,18 @@ type ProvisionItemResult = v.InferInput<
   typeof READ_STATUTE_PROVISIONS_PROJECTION
 >["items"][number];
 
-/** One (eli, language, as_of) address, spelled once so it resolves once. */
+/** One exact or date-based address, spelled once so it resolves once. */
 const provisionRequestKey = (item: ProvisionRequest): string =>
-  JSON.stringify([item.eli, item.language ?? null, item.as_of ?? null]);
+  JSON.stringify([
+    item.eli,
+    item.language ?? null,
+    item.as_of ?? null,
+    item.document_id ?? null,
+  ]);
+
+type ProvisionItemBuildResult =
+  | { type: "item"; item: ProvisionItemResult }
+  | { type: "invalid-cursor" };
 
 const provisionItemResult = ({
   blocksByDocumentId,
@@ -815,7 +845,7 @@ const provisionItemResult = ({
   item: ProvisionRequest;
   resolution: StatuteExpressionResolution;
   versionsByDocumentId: ReadonlyMap<string, LegislationProvisionVersion>;
-}): ProvisionItemResult => {
+}): ProvisionItemBuildResult => {
   const subject = { anchor: item.anchor, eli: item.eli };
   const unknownWork = {
     ...subject,
@@ -825,30 +855,47 @@ const provisionItemResult = ({
 
   switch (resolution.type) {
     case "unknown-work":
-      return unknownWork;
+      return { type: "item", item: unknownWork };
     case "uncovered-date":
       return {
-        ...subject,
-        message:
-          item.as_of === undefined
-            ? "No version of this legislation is in force today."
-            : `No version of this legislation was in force on ${item.as_of}.`,
-        status: PROVISION_STATUS.uncoveredDate,
+        type: "item",
+        item: {
+          ...subject,
+          message:
+            item.as_of === undefined
+              ? "No version of this legislation is in force today."
+              : `No version of this legislation was in force on ${item.as_of}.`,
+          status: PROVISION_STATUS.uncoveredDate,
+        },
       };
     // The same next step as an uncovered date (another date, or the
     // history), so the same status; the message says why.
     case LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT:
       return {
-        ...subject,
-        message: `${LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE}. ${describeInconsistentVersions(resolution.versions)}`,
-        status: PROVISION_STATUS.uncoveredDate,
+        type: "item",
+        item: {
+          ...subject,
+          message: `${LEGISLATION_PUBLISHER_WINDOW_INCONSISTENT_MESSAGE}. ${describeInconsistentVersions(resolution.versions)}`,
+          status: PROVISION_STATUS.uncoveredDate,
+        },
       };
     case "expression": {
       // Absent where the source was withdrawn between the resolution and
       // this read, which is the same answer as no such work.
       const version = versionsByDocumentId.get(String(resolution.id));
-      if (version === undefined) {
-        return unknownWork;
+      if (version === undefined || version.eli !== item.eli) {
+        return {
+          type: "item",
+          item:
+            item.document_id === undefined
+              ? unknownWork
+              : {
+                  ...subject,
+                  message:
+                    "This document_id does not belong to the requested eli.",
+                  status: PROVISION_STATUS.notFound,
+                },
+        };
       }
       const links = legalCitationLinkFields({
         appUrl: buildLegislationDocumentAppUrl({
@@ -863,10 +910,13 @@ const provisionItemResult = ({
       });
       if (!version.allowsDerivedAi) {
         return {
-          ...subject,
-          ...links,
-          message: WITHHELD_WORDING_MESSAGE,
-          status: PROVISION_STATUS.textWithheld,
+          type: "item",
+          item: {
+            ...subject,
+            ...links,
+            message: WITHHELD_WORDING_MESSAGE,
+            status: PROVISION_STATUS.textWithheld,
+          },
         };
       }
 
@@ -878,21 +928,38 @@ const provisionItemResult = ({
       const text = extractProvisionText(blocks, item.anchor);
       if (text === null) {
         return {
-          ...subject,
-          message: `This consolidation carries no such anchor. ${PICK_AN_ANCHOR_HINT}`,
-          status: PROVISION_STATUS.provisionNotFound,
+          type: "item",
+          item: {
+            ...subject,
+            message: `This consolidation carries no such anchor. ${PICK_AN_ANCHOR_HINT}`,
+            status: PROVISION_STATUS.provisionNotFound,
+          },
         };
       }
 
+      const window = windowProvisionText({
+        ...(item.text_cursor === undefined ? {} : { cursor: item.text_cursor }),
+        limit: LIMITS.legislationProvisionTextChars,
+        subject: JSON.stringify([item.eli, item.anchor, String(version.id)]),
+        text,
+      });
+      if (window.type === "invalid-cursor") {
+        return { type: "invalid-cursor" };
+      }
       return {
-        ...subject,
-        ...links,
-        ...boundProvisionText(text),
-        documentId: version.id,
-        resourceName: legislationResourceName(version.id),
-        status: PROVISION_STATUS.found,
-        versionValidFrom: version.versionValidFrom,
-        versionValidTo: version.versionValidTo,
+        type: "item",
+        item: {
+          ...subject,
+          ...links,
+          text: window.text,
+          truncated: window.truncated,
+          nextTextCursor: window.nextTextCursor,
+          documentId: version.id,
+          resourceName: legislationResourceName(version.id),
+          status: PROVISION_STATUS.found,
+          versionValidFrom: version.versionValidFrom,
+          versionValidTo: version.versionValidTo,
+        },
       };
     }
     default:
@@ -918,6 +985,25 @@ const parseProvisionEntries = (
   items.map((item, index) => {
     const entry = v.safeParse(provisionEntrySchema, item);
     if (entry.success) {
+      if (
+        entry.output.as_of !== undefined &&
+        entry.output.document_id !== undefined
+      ) {
+        return {
+          type: "invalid",
+          result: {
+            index,
+            issues: [
+              {
+                message: "Pass document_id or as_of, not both",
+                path: "items[].document_id",
+              },
+            ],
+            message: "Pass document_id or as_of, not both",
+            status: PROVISION_STATUS.invalid,
+          },
+        };
+      }
       return { type: "entry", request: entry.output };
     }
     const issues = mapValibotIssues(entry.issues);
@@ -967,6 +1053,12 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
     operation: async (key) => {
       const request =
         requestsByKey.get(key) ?? panic("Lost a provision request key");
+      if (request.document_id !== undefined) {
+        return {
+          type: "expression",
+          id: brandPersistedLegislationDocumentId(request.document_id),
+        } as const;
+      }
       return await resolve(
         {
           eli: request.eli,
@@ -993,17 +1085,36 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
       ),
     ),
   ];
-  const versions = await (
-    context.testDependencies?.readLegislationProvisionVersions ??
-    defaultReadLegislationProvisionVersions
-  )({ documentIds, legislationDb: legislationPublicReadDb });
+  const versions =
+    documentIds.length === 0
+      ? []
+      : await (
+          context.testDependencies?.readLegislationProvisionVersions ??
+          defaultReadLegislationProvisionVersions
+        )({ documentIds, legislationDb: legislationPublicReadDb });
   const versionsByDocumentId = new Map(
     versions.map((version) => [String(version.id), version]),
   );
 
   // Each AST is an object-storage hop, so the fan-out is bounded rather than
   // one read per requested item.
-  const readable = versions.filter((version) => version.allowsDerivedAi);
+  const requestedElisByDocumentId = new Map<string, Set<string>>();
+  for (const [key, resolution] of resolutionsByKey) {
+    if (resolution.type !== "expression") {
+      continue;
+    }
+    const request = requestsByKey.get(key) ?? panic("Lost a provision request");
+    const id = String(resolution.id);
+    const requestedElis = requestedElisByDocumentId.get(id) ?? new Set();
+    requestedElis.add(request.eli);
+    requestedElisByDocumentId.set(id, requestedElis);
+  }
+  const readable = versions.filter(
+    (version) =>
+      version.allowsDerivedAi &&
+      requestedElisByDocumentId.get(String(version.id))?.has(version.eli) ===
+        true,
+  );
   const readBlocks =
     context.testDependencies?.readVersionBlocks ?? readVersionBlocks;
   const blocksByDocumentId = new Map(
@@ -1023,20 +1134,39 @@ const handleReadStatuteProvisionsTool: TypedMcpToolHandler<
     }),
   );
 
+  const built = entries.map((entry) =>
+    entry.type === "invalid"
+      ? ({ type: "item", item: entry.result } as const)
+      : provisionItemResult({
+          blocksByDocumentId,
+          item: entry.request,
+          resolution:
+            resolutionsByKey.get(provisionRequestKey(entry.request)) ??
+            panic("Lost a provision resolution"),
+          versionsByDocumentId,
+        }),
+  );
   return toolDataResult(
     projectionPayload(READ_STATUTE_PROVISIONS_PROJECTION, {
-      items: entries.map((entry) =>
-        entry.type === "invalid"
-          ? entry.result
-          : provisionItemResult({
-              blocksByDocumentId,
-              item: entry.request,
-              resolution:
-                resolutionsByKey.get(provisionRequestKey(entry.request)) ??
-                panic("Lost a provision resolution"),
-              versionsByDocumentId,
-            }),
-      ),
+      items: built.map((result, index) => {
+        switch (result.type) {
+          case "item":
+            return result.item;
+          case "invalid-cursor": {
+            const message =
+              "Invalid text_cursor. Retry this entry without text_cursor to read its current wording.";
+            return {
+              index,
+              issues: [{ message, path: "items[].text_cursor" }],
+              message,
+              status: PROVISION_STATUS.invalid,
+            } satisfies ProvisionItemResult;
+          }
+          default:
+            result satisfies never;
+            return panic("Unhandled provision item result");
+        }
+      }),
     }),
   );
 };
@@ -1060,7 +1190,13 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const { anchor, cursor, eli, language } = parsed.output;
+  const {
+    anchor,
+    cursor,
+    eli,
+    language,
+    text_cursor: textCursor,
+  } = parsed.output;
   const limit = normalizeTenantPageLimit(
     parsed.output.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault,
   );
@@ -1103,47 +1239,72 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
       : notFoundResult("Legislation not found", FIND_THE_ELI_HINT);
   }
 
+  const items = page.items.map((item) => {
+    const version = {
+      ...legalCitationLinkFields({
+        appUrl: buildLegislationDocumentAppUrl({
+          country: item.country,
+          documentId: item.documentId,
+          eli,
+          slug: item.slug,
+          version: item.versionValidFrom,
+          anchor,
+        }),
+        sourceUrl: item.sourceUrl,
+      }),
+      documentId: item.documentId,
+      resourceName: legislationResourceName(item.documentId),
+      versionValidFrom: item.versionValidFrom,
+      versionValidTo: item.versionValidTo,
+      expressionKind: item.expressionKind,
+      windowDisposition: item.windowDisposition,
+      windowDispositionBasis: item.windowDispositionBasis,
+    };
+    if (!item.allowsDerivedAi) {
+      return {
+        type: "item" as const,
+        item: {
+          ...version,
+          message: WITHHELD_WORDING_MESSAGE,
+          status: PROVISION_STATUS.textWithheld,
+        },
+      };
+    }
+    const window = windowProvisionText({
+      ...(textCursor === undefined ? {} : { cursor: textCursor }),
+      limit: LIMITS.legislationProvisionTextChars,
+      subject: JSON.stringify([eli, anchor, String(item.documentId)]),
+      text: item.text,
+    });
+    return window.type === "invalid-cursor"
+      ? { type: "invalid-cursor" as const }
+      : {
+          type: "item" as const,
+          item: {
+            ...version,
+            text: window.text,
+            truncated: window.truncated,
+            nextTextCursor: window.nextTextCursor,
+            status: PROVISION_STATUS.found,
+          },
+        };
+  });
+  const readableItems = items.filter(
+    (item) => item.type === "item" && "text" in item.item,
+  );
+  if (textCursor !== undefined && readableItems.length === 0) {
+    return invalidCursorError("read_provision_history", textCursor);
+  }
+
   return toolDataResult(
     projectionPayload(READ_PROVISION_HISTORY_PROJECTION, {
       anchor,
       eli,
-      items: page.items.map((item) => {
-        const version = {
-          ...legalCitationLinkFields({
-            appUrl: buildLegislationDocumentAppUrl({
-              country: item.country,
-              documentId: item.documentId,
-              eli,
-              slug: item.slug,
-              version: item.versionValidFrom,
-              anchor,
-            }),
-            sourceUrl: item.sourceUrl,
-          }),
-          documentId: item.documentId,
-          resourceName: legislationResourceName(item.documentId),
-          versionValidFrom: item.versionValidFrom,
-          versionValidTo: item.versionValidTo,
-          expressionKind: item.expressionKind,
-          windowDisposition: item.windowDisposition,
-          windowDispositionBasis: item.windowDispositionBasis,
-        };
-        // The same publisher permission read_statute and
-        // read_statute_provisions apply, per consolidation: a Work may be
-        // re-licensed between versions, so the gate is per item and not per
-        // call.
-        return item.allowsDerivedAi
-          ? {
-              ...version,
-              ...boundProvisionText(item.text),
-              status: PROVISION_STATUS.found,
-            }
-          : {
-              ...version,
-              message: WITHHELD_WORDING_MESSAGE,
-              status: PROVISION_STATUS.textWithheld,
-            };
-      }),
+      items: (textCursor === undefined ? items : readableItems).map((item) =>
+        item.type === "item"
+          ? item.item
+          : panic("Invalid text cursor was not returned"),
+      ),
       nextCursor: page.nextCursor,
     }),
   );

@@ -77,7 +77,7 @@ const getServiceSigningKey = async (): Promise<ServiceSigningKey> => {
  * registration: a service-issued intermediate assertion the agent
  * re-presents at `/agent/token` to mint its access token.
  */
-export type IdJagRegistrationResult = {
+type IdJagRegistrationResult = {
   registrationId: string;
   registrationType: "identity_assertion";
   identityAssertion: string;

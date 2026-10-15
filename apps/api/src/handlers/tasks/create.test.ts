@@ -10,6 +10,14 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/feature-access/policy";
+import {
+  FEATURE_REGISTRY,
+  LEGAL_LISTS_FEATURE_ID,
+} from "@/api/lib/feature-access/registry";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
@@ -66,6 +74,28 @@ const createHandlerContext = ({
 }): CreateTaskCtx =>
   asTestRaw<CreateTaskCtx>({
     workspaceId,
+    featureAccessSnapshot: createFeatureAccessSnapshot({
+      organizationId: "org_test123",
+      userId,
+      decisions: new Map([
+        [
+          LEGAL_LISTS_FEATURE_ID,
+          decideFeatureAccess({
+            registry: FEATURE_REGISTRY,
+            featureId: LEGAL_LISTS_FEATURE_ID,
+            grants: {
+              [LEGAL_LISTS_FEATURE_ID]: [
+                { type: "organization", organizationId: "org_test123" },
+              ],
+            },
+            organizationId: "org_test123",
+            userId,
+            membership: true,
+            user: { email: "member@example.test", emailVerified: true },
+          }),
+        ],
+      ]),
+    }),
     user: { id: userId },
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test123"),
@@ -223,6 +253,7 @@ describe("createTaskHandler validation", () => {
   test("assigns legacy task creation to its workspace-member creator", async () => {
     const assigneeRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -304,6 +335,7 @@ describe("createTaskHandler validation", () => {
   test("creates unassigned work for an authorized caller without workspace membership", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -345,7 +377,7 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({ status: "ok" });
     expect(obligationRows).toEqual([
       expect.objectContaining({
         ownerUserId: null,
@@ -387,6 +419,7 @@ describe("createTaskHandler validation", () => {
   test("a non-task List row is created without governed work", async () => {
     const obligationRows: Record<string, unknown>[] = [];
     const { safeDb } = createScopedDbMock({
+      execute: async () => [{ id: workspaceId, enabled: true }],
       $count: async () => 0,
       select: () => ({
         from: (table: unknown) =>
@@ -421,7 +454,7 @@ describe("createTaskHandler validation", () => {
       }),
     );
 
-    expect(Result.isOk(result)).toBe(true);
+    expect(result).toMatchObject({ status: "ok" });
     expect(obligationRows).toEqual([]);
   });
 

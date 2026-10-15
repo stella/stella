@@ -21,6 +21,7 @@ import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import { serverBuiltFileEncryption } from "@/api/lib/files/detect-file-encryption";
 import { createTextPdf } from "@/api/lib/files/text-pdf";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import { inOrder } from "@/api/lib/review-organization/in-order";
 import {
   SAMPLE_CLAUSES,
@@ -535,6 +536,12 @@ const seedPlaybook = async (
   }
   const created = await Result.gen(() =>
     createPlaybookDefinitionHandler({
+      admitModelAction: createModelActionAdmitter({
+        organizationId: actor.organizationId,
+        userId: actor.userId,
+        organizationStateDb: actor.scopedDb,
+        actionKind: "playbooks.derive-ask",
+      }),
       safeDb: actor.safeDb,
       organizationId: actor.organizationId,
       accessibleWorkspaceIds: [],

@@ -2,7 +2,8 @@ import { Result } from "better-result";
 /* oxlint-disable typescript/promise-function-async -- fetch mock callbacks return Promise.resolve without being async */
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
-import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import { hasUsableAst } from "@stll/legal-ast/document-ast";
+
 import { encodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildListingQuery,

@@ -17,10 +17,13 @@
 //
 //   bun scripts/check-playwright-config-scope.ts
 
-import { panic } from "better-result";
-import { spawnSync } from "node:child_process";
+import { panic, Result, TaggedError } from "better-result";
+import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import * as v from "valibot";
+
+import { isPathInside, repoRelativePath } from "@stll/portable-path";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const PLAYWRIGHT_BIN = path.join(REPO_ROOT, "node_modules/.bin/playwright");
@@ -32,34 +35,69 @@ const REPORT_FILE_ENV = [
   "PLAYWRIGHT_JSON_OUTPUT_DIR",
 ] as const;
 
-type ListedSuite = { file?: string; suites?: ListedSuite[] };
-
-export type PlaywrightListing = {
-  config: {
-    rootDir: string;
-    projects: { name: string; testDir: string }[];
-  };
-  suites: ListedSuite[];
-  errors: { message?: string }[];
+type ListedSuite = {
+  file?: string | undefined;
+  suites?: ListedSuite[] | undefined;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
+const listedSuiteSchema = v.object({
+  file: v.optional(v.string()),
+  suites: v.optional(
+    v.array(v.lazy((): v.GenericSchema<ListedSuite> => listedSuiteSchema)),
+  ),
+});
 
-const isListing = (value: unknown): value is PlaywrightListing =>
-  isRecord(value) &&
-  isRecord(value["config"]) &&
-  typeof value["config"]["rootDir"] === "string" &&
-  Array.isArray(value["config"]["projects"]) &&
-  Array.isArray(value["suites"]) &&
-  Array.isArray(value["errors"]);
+// Keep consumed fields; the reporter's other metadata is deliberately stripped.
+const listingSchema = v.object({
+  config: v.object({
+    rootDir: v.string(),
+    projects: v.array(v.object({ name: v.string(), testDir: v.string() })),
+  }),
+  suites: v.array(listedSuiteSchema),
+  errors: v.array(v.object({ message: v.optional(v.string()) })),
+});
 
-const isInside = (root: string, target: string) => {
-  const relative = path.relative(root, target);
-  return (
-    relative === "" ||
-    (!relative.startsWith("..") && !path.isAbsolute(relative))
-  );
+export type PlaywrightListing = v.InferOutput<typeof listingSchema>;
+
+class PlaywrightReportError extends TaggedError("PlaywrightReportError")<{
+  message: string;
+  reason: "missing-report" | "invalid-json" | "invalid-shape";
+  cause?: unknown;
+}> {}
+
+export const parseListingReport = (stdout: string | null | undefined) => {
+  if (!stdout?.trim()) {
+    return Result.err(
+      new PlaywrightReportError({
+        message: "playwright --list printed no report",
+        reason: "missing-report",
+      }),
+    );
+  }
+  const jsonStart = stdout.indexOf("{");
+  const parsed = Result.try({
+    try: (): unknown =>
+      JSON.parse(jsonStart === -1 ? stdout : stdout.slice(jsonStart)),
+    catch: (cause) =>
+      new PlaywrightReportError({
+        message: "playwright --list printed invalid JSON",
+        reason: "invalid-json",
+        cause,
+      }),
+  });
+  if (parsed.isErr()) {
+    return parsed;
+  }
+  const validated = v.safeParse(listingSchema, parsed.value);
+  if (!validated.success) {
+    return Result.err(
+      new PlaywrightReportError({
+        message: "playwright --list printed an unexpected report shape",
+        reason: "invalid-shape",
+      }),
+    );
+  }
+  return Result.ok(validated.output);
 };
 
 const listedFiles = (rootDir: string, suites: ListedSuite[]): string[] =>
@@ -79,9 +117,9 @@ export const checkListing = (
       `${config}: failed to load: ${(error.message ?? "unknown error").split("\n", 1).join("")}`,
   );
   for (const project of listing.config.projects) {
-    if (!isInside(packageRoot, project.testDir)) {
+    if (!isPathInside(packageRoot, project.testDir)) {
       problems.push(
-        `${config}: project "${project.name}" testDir ${path.relative(REPO_ROOT, project.testDir)} is outside ${path.relative(REPO_ROOT, packageRoot)}`,
+        `${config}: project "${project.name}" testDir ${repoRelativePath(REPO_ROOT, project.testDir)} is outside ${repoRelativePath(REPO_ROOT, packageRoot)}`,
       );
     }
   }
@@ -89,9 +127,9 @@ export const checkListing = (
     ...new Set(listedFiles(listing.config.rootDir, listing.suites)),
   ];
   for (const file of files) {
-    if (!isInside(packageRoot, file)) {
+    if (!isPathInside(packageRoot, file)) {
       problems.push(
-        `${config}: collects ${path.relative(REPO_ROOT, file)}, outside ${path.relative(REPO_ROOT, packageRoot)}`,
+        `${config}: collects ${repoRelativePath(REPO_ROOT, file)}, outside ${repoRelativePath(REPO_ROOT, packageRoot)}`,
       );
     }
   }
@@ -101,17 +139,49 @@ export const checkListing = (
   return problems;
 };
 
-/** The nearest directory above `file` holding a package.json. */
-export const owningPackage = (file: string): string => {
-  let directory = path.dirname(file);
-  while (!existsSync(path.join(directory, "package.json"))) {
-    const parent = path.dirname(directory);
-    if (parent === directory) {
-      panic(`${file} has no owning package.json`);
+class PlaywrightPackageError extends TaggedError("PlaywrightPackageError")<{
+  message: string;
+  reason: "repository-root" | "missing-package" | "outside-repository";
+}> {}
+
+type OwningPackageOptions = { file: string; repositoryRoot?: string };
+
+/** The nearest workspace package above the config, within this repository. */
+export const owningPackage = ({
+  file,
+  repositoryRoot = REPO_ROOT,
+}: OwningPackageOptions) => {
+  const root = path.resolve(repositoryRoot);
+  let directory = path.dirname(path.resolve(file));
+  if (!isPathInside(root, directory)) {
+    return Result.err(
+      new PlaywrightPackageError({
+        message: `${file} is outside the repository`,
+        reason: "outside-repository",
+      }),
+    );
+  }
+  while (directory !== root) {
+    if (existsSync(path.join(directory, "package.json"))) {
+      return Result.ok(directory);
     }
+    const parent = path.dirname(directory);
     directory = parent;
   }
-  return directory;
+  if (existsSync(path.join(root, "package.json"))) {
+    return Result.err(
+      new PlaywrightPackageError({
+        message: `${file} is owned by the repository root; give it a workspace package`,
+        reason: "repository-root",
+      }),
+    );
+  }
+  return Result.err(
+    new PlaywrightPackageError({
+      message: `${file} has no owning package.json within the repository`,
+      reason: "missing-package",
+    }),
+  );
 };
 
 const trackedConfigs = (): string[] => {
@@ -129,9 +199,42 @@ const trackedConfigs = (): string[] => {
     .toSorted();
 };
 
+type ListRunProblemsOptions = {
+  config: string;
+  packageRoot: string;
+  run: Pick<SpawnSyncReturns<string>, "error" | "status" | "stdout" | "stderr">;
+};
+
+// A failed launch (ENOENT, EACCES) leaves stdout and stderr null despite
+// their `string` type, so it must return before either is read.
+export const listRunProblems = ({
+  config,
+  packageRoot,
+  run,
+}: ListRunProblemsOptions): string[] => {
+  if (run.error) {
+    return [`${config}: could not launch playwright: ${run.error.message}`];
+  }
+  const report = parseListingReport(run.stdout);
+  if (report.isErr()) {
+    return [
+      `${config}: ${report.error.message} (exit ${String(run.status)}): ${run.stderr.trim().split("\n").slice(0, 5).join(" | ")}`,
+    ];
+  }
+  const problems = checkListing(config, packageRoot, report.value);
+  if (problems.length === 0 && run.status !== 0) {
+    problems.push(`${config}: playwright --list exited ${String(run.status)}`);
+  }
+  return problems;
+};
+
 const listConfig = (config: string): string[] => {
   const absolute = path.join(REPO_ROOT, config);
-  const packageRoot = owningPackage(absolute);
+  const owner = owningPackage({ file: absolute });
+  if (owner.isErr()) {
+    return [`${config}: ${owner.error.message}`];
+  }
+  const packageRoot = owner.value;
   const env = Object.fromEntries(
     Object.entries(process.env).filter(
       ([key]) => !REPORT_FILE_ENV.some((name) => name === key),
@@ -142,23 +245,7 @@ const listConfig = (config: string): string[] => {
     ["test", "--config", absolute, "--list", "--reporter=json"],
     { cwd: packageRoot, encoding: "utf-8", env, maxBuffer: 64 * 1024 * 1024 },
   );
-  const jsonStart = result.stdout.indexOf("{");
-  if (jsonStart === -1) {
-    return [
-      `${config}: playwright --list printed no report (exit ${String(result.status)}): ${result.stderr.trim().split("\n").slice(0, 5).join(" | ")}`,
-    ];
-  }
-  const listing: unknown = JSON.parse(result.stdout.slice(jsonStart));
-  if (!isListing(listing)) {
-    return [`${config}: playwright --list printed an unexpected report shape`];
-  }
-  const problems = checkListing(config, packageRoot, listing);
-  if (problems.length === 0 && result.status !== 0) {
-    problems.push(
-      `${config}: playwright --list exited ${String(result.status)}`,
-    );
-  }
-  return problems;
+  return listRunProblems({ config, packageRoot, run: result });
 };
 
 const main = (): number => {

@@ -2,8 +2,9 @@
  * Organization member capacity and per-member AI access.
  *
  * The capacity is the `organization_member_capacity` database function: an
- * organization whose access state is not `self_managed_keys` and whose usage
- * entitlement's policy sets `maxMembers` is bounded by it and, for a
+ * organization whose access state is not `self_managed_keys` and whose
+ * effective policy (`organization_effective_policy`: a live entitlement's
+ * policy, or the free floor) sets `maxMembers` is bounded by it and, for a
  * per-seat policy, by its seat count. A policy without `maxMembers` (every
  * policy that predates the column) bounds nothing. The
  * `member_organization_capacity`
@@ -16,15 +17,13 @@
  */
 
 import { Result } from "better-result";
-import { and, count, eq, gt, isNotNull, ne, sql } from "drizzle-orm";
+import { and, count, eq, gt, ne, sql } from "drizzle-orm";
 
 import { invitation, member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
-  usageEntitlements,
-  usagePolicies,
   usageSeatAssignments,
 } from "@/api/db/schema";
 import type { USAGE_POLICY_PRICE_BASES } from "@/api/db/schema";
@@ -218,36 +217,28 @@ export const memberMayUseAI = async (
   }
   const rows = await db
     .select({ assignmentId: usageSeatAssignments.id })
-    .from(usageEntitlements)
-    .innerJoin(
-      usagePolicies,
-      eq(usagePolicies.id, usageEntitlements.usagePolicyId),
-    )
-    .innerJoin(
-      organizationAccessStates,
-      eq(
-        organizationAccessStates.organizationId,
-        usageEntitlements.organizationId,
-      ),
-    )
+    .from(organizationAccessStates)
     .leftJoin(
       usageSeatAssignments,
       and(
         eq(
           usageSeatAssignments.organizationId,
-          usageEntitlements.organizationId,
+          organizationAccessStates.organizationId,
         ),
         eq(usageSeatAssignments.userId, userId),
       ),
     )
     .where(
       and(
-        eq(usageEntitlements.organizationId, organizationId),
+        eq(organizationAccessStates.organizationId, organizationId),
         ne(
           organizationAccessStates.state,
           ORGANIZATION_ACCESS_STATE.selfManagedKeys,
         ),
-        isNotNull(usagePolicies.maxMembers),
+        // Seats are a paid-plan concept: the free floor bounds the
+        // organization's budget, not who may spend it, so members kept
+        // after a downgrade keep AI access.
+        sql`exists (select 1 from organization_effective_policy(${organizationAccessStates.organizationId}) ep where ep.max_members is not null and ep.policy_kind <> 'free')`,
       ),
     )
     .limit(1);

@@ -1,11 +1,13 @@
 import { Value } from "@sinclair/typebox/value";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 
 import {
   ACTION_ADMISSION_CODES,
   type ActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { assertProperty } from "@stll/property-testing";
 
 import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
 import {
@@ -13,12 +15,20 @@ import {
   reportExportConsumesServices,
 } from "@/api/handlers/reports/views/export-input";
 import { toSafeId } from "@/api/lib/branded-types";
-import type { OrganizationActionState } from "@/api/lib/usage/organization-action-budget";
+import type { ActionCostObservation } from "@/api/lib/usage/action-costs/context";
+import { FREE_TIER_OFF } from "@/api/lib/usage/organization-access";
+import type { OrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
+import {
+  FREE_WITHOUT_OWN_KEY,
+  ORGANIZATION_MODEL_CREDENTIALS,
+  type OrganizationActionState,
+} from "@/api/lib/usage/organization-action-budget";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 
-import { withActionAdmission } from "./action-admission";
+import { ActionAdmissionError, withActionAdmission } from "./action-admission";
 import {
   ACTION_KINDS,
+  ACTION_SERVICE_CREDENTIALS,
   type AdmittedActionIdentity,
   type PeriodActionKind,
 } from "./action-kinds";
@@ -29,6 +39,14 @@ import {
 
 const organizationId = toSafeId<"organization">("service_budget_org");
 const userId = toSafeId<"user">("service_budget_user");
+
+const actionState = (
+  snapshot: OrganizationAccessSnapshot | undefined,
+): OrganizationActionState => ({
+  snapshot,
+  freeTier: FREE_TIER_OFF,
+  modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+});
 const nowMs = Date.UTC(2026, 9, 1, 12, 30);
 const policy = {
   organizationConcurrency: 2,
@@ -69,6 +87,80 @@ const recordingRedis = () => {
 };
 
 describe("organization budgets at action admission", () => {
+  test("a period refusal names the reset of the budget it exhausted", async () => {
+    const hourMs = 3_600_000;
+    const weekMs = 7 * serviceBudgetConfig.periodMs;
+    const exhausted = {
+      send: async (_command: string, args: string[]) =>
+        args.at(1) === "3" ? -1 : 1,
+    };
+    const refusalReset = async ({
+      serviceBudgetsEnabled,
+      servicePeriodMs,
+      periodPolicy,
+    }: {
+      serviceBudgetsEnabled: boolean;
+      servicePeriodMs: number | undefined;
+      periodPolicy: { periodMs: number; limit: number } | undefined;
+    }) => {
+      const result = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        periodIdentity,
+        periodPolicy,
+        serviceBudgetsEnabled,
+        serviceBudgetConfig: {
+          ...serviceBudgetConfig,
+          periodMs: servicePeriodMs,
+        },
+        budgetNow: () => nowMs,
+        readOrganizationState: async () =>
+          actionState({
+            state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+            evaluationEndsAt: new Date(nowMs + weekMs),
+          }),
+        redis: exhausted,
+        run: async () => "completed",
+      });
+      expectRefusal(result, ACTION_ADMISSION_CODES.periodExhausted);
+      return Result.isError(result) && ActionAdmissionError.is(result.error)
+        ? result.error.retryAtMs
+        : undefined;
+    };
+    const windowEnd = (periodMs: number) =>
+      (Math.floor(nowMs / periodMs) + 1) * periodMs;
+    // The generic and service windows end apart, so a reset taken from the
+    // wrong one cannot match.
+    expect(windowEnd(weekMs)).not.toBe(windowEnd(hourMs));
+
+    // Only the organization's service period is configured.
+    expect(
+      await refusalReset({
+        serviceBudgetsEnabled: true,
+        servicePeriodMs: weekMs,
+        periodPolicy: undefined,
+      }),
+    ).toBe(windowEnd(weekMs));
+    // The generic and service periods differ: the service budget refused.
+    expect(
+      await refusalReset({
+        serviceBudgetsEnabled: true,
+        servicePeriodMs: weekMs,
+        periodPolicy: { periodMs: hourMs, limit: 3 },
+      }),
+    ).toBe(windowEnd(weekMs));
+    // Without service budgets the generic period refuses.
+    expect(
+      await refusalReset({
+        serviceBudgetsEnabled: false,
+        servicePeriodMs: weekMs,
+        periodPolicy: { periodMs: hourMs, limit: 3 },
+      }),
+    ).toBe(windowEnd(hourMs));
+  });
+
   test("queued reservations resolve organization budgets at acceptance on fresh and inherited leases", async () => {
     for (const ownership of ["fresh", "inherited"] as const) {
       for (const acceptance of ["capped", "accepted", "expired"] as const) {
@@ -93,10 +185,10 @@ describe("organization budgets at action admission", () => {
             budgetNow: () => now,
             readOrganizationState: async () => {
               reads += 1;
-              return {
+              return actionState({
                 state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
                 evaluationEndsAt: new Date(nowMs + 1000),
-              };
+              });
             },
             redis: redis.client,
             run: async (_signal, control) => {
@@ -181,10 +273,10 @@ describe("organization budgets at action admission", () => {
           budgetNow: () => nowMs,
           readOrganizationState: async () => {
             stateReads += 1;
-            return {
+            return actionState({
               state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
               evaluationEndsAt: new Date(nowMs - 1),
-            };
+            });
           },
           redis: redis.client,
           run: async () => {
@@ -226,10 +318,10 @@ describe("organization budgets at action admission", () => {
         budgetNow: () => nowMs,
         readOrganizationState: async () => {
           reads += 1;
-          return {
+          return actionState({
             state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
             evaluationEndsAt: new Date(nowMs + 1),
-          } satisfies OrganizationActionState;
+          });
         },
         redis: redis.client,
       };
@@ -273,10 +365,10 @@ describe("organization budgets at action admission", () => {
       budgetNow: () => now,
       readOrganizationState: async () => {
         reads += 1;
-        return {
+        return actionState({
           state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
           evaluationEndsAt: new Date(nowMs + 1),
-        } satisfies OrganizationActionState;
+        });
       },
       redis: redis.client,
     };
@@ -314,10 +406,11 @@ describe("organization budgets at action admission", () => {
         serviceBudgetConfig,
         periodIdentity,
         budgetNow: () => admissionTime,
-        readOrganizationState: async () => ({
-          state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
-          evaluationEndsAt: new Date(deadline),
-        }),
+        readOrganizationState: async () =>
+          actionState({
+            state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+            evaluationEndsAt: new Date(deadline),
+          }),
         redis: {
           send: async (_command, args) => {
             commands.push(args);
@@ -369,7 +462,7 @@ describe("organization budgets at action admission", () => {
         },
         limit: serviceBudgetConfig.selfManagedActions,
       },
-    ] satisfies { state: OrganizationActionState; limit: number }[];
+    ] satisfies { state: OrganizationAccessSnapshot; limit: number }[];
     const actionKinds = Object.keys(ACTION_KINDS).filter(
       (kind): kind is keyof typeof ACTION_KINDS =>
         Object.hasOwn(ACTION_KINDS, kind),
@@ -395,7 +488,7 @@ describe("organization budgets at action admission", () => {
           budgetNow: () => nowMs,
           readOrganizationState: async (scope) => {
             reads.push(scope);
-            return state;
+            return actionState(state);
           },
           redis: redis.client,
           run: async () => "completed",
@@ -425,7 +518,7 @@ describe("organization budgets at action admission", () => {
         state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
         evaluationEndsAt: new Date(nowMs + 1),
       },
-    ] satisfies OrganizationActionState[]) {
+    ] satisfies OrganizationAccessSnapshot[]) {
       const redis = recordingRedis();
       let ran = false;
       const result = await withActionAdmission({
@@ -437,7 +530,7 @@ describe("organization budgets at action admission", () => {
         serviceBudgetConfig,
         periodIdentity,
         budgetNow: () => nowMs,
-        readOrganizationState: async () => state,
+        readOrganizationState: async () => actionState(state),
         redis: redis.client,
         run: async () => {
           ran = true;
@@ -496,12 +589,12 @@ describe("organization budgets at action admission", () => {
             throw new Error("State store unavailable");
           }
           if (failure === "missing-state") {
-            return undefined;
+            return actionState(undefined);
           }
-          return {
+          return actionState({
             state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
             evaluationEndsAt: new Date(nowMs + 1),
-          };
+          });
         },
         redis: redis.client,
         run: async () => {
@@ -605,5 +698,471 @@ describe("organization budgets at action admission", () => {
     expect(readState).toBe(false);
     expect(opened).toBe(false);
     expect(clockRead).toBe(false);
+  });
+});
+
+// A period counter that refuses past the limit the admission passes, as the
+// acquisition script does: enough to observe which actions draw the budget.
+const countingRedis = () => {
+  const commands: string[][] = [];
+  let counted = 0;
+  return {
+    commands,
+    periodAcquisitions: () =>
+      commands.filter((args) => args.at(1) === "3").length,
+    client: {
+      send: async (_command: string, args: string[]) => {
+        commands.push(args);
+        if (args.at(1) !== "3") {
+          return 1;
+        }
+        counted += 1;
+        return counted > Number(args.at(11)) ? -1 : 1;
+      },
+    },
+  };
+};
+
+// Mirrors the acquisition script's period branch per KEYS[3]: a replayed
+// phase is admitted again, a new phase is counted up to ARGV[7].
+const periodStore = () => {
+  const hashes = new Map<string, { count: number; phases: Set<string> }>();
+  return {
+    counts: () => [...hashes.values()].map(({ count }) => count),
+    client: {
+      send: async (_command: string, args: string[]) => {
+        const key = args.at(4);
+        if (args.at(1) !== "3" || key === undefined) {
+          return 1;
+        }
+        const limit = Number(args.at(11));
+        const phase = args.at(12) ?? "";
+        const hash = hashes.get(key) ?? { count: 0, phases: new Set() };
+        if (hash.phases.has(phase)) {
+          return 1;
+        }
+        if (hash.count >= limit) {
+          return -1;
+        }
+        hash.phases.add(phase);
+        hash.count += 1;
+        hashes.set(key, hash);
+        return 1;
+      },
+    },
+  };
+};
+
+const SERVICE_PERIOD_KINDS = Object.keys(ACTION_KINDS)
+  .filter((kind): kind is keyof typeof ACTION_KINDS =>
+    Object.hasOwn(ACTION_KINDS, kind),
+  )
+  .filter(
+    (kind): kind is PeriodActionKind =>
+      ACTION_KINDS[kind].admission === "period",
+  )
+  .filter((kind) => ACTION_KINDS[kind].consumesServices);
+
+const FREE_ACTIONS = 3;
+const lapsedEvaluation = {
+  state: ORGANIZATION_ACCESS_STATE.evaluationEnded,
+  evaluationEndsAt: new Date(nowMs - 1),
+} as const satisfies OrganizationAccessSnapshot;
+const freeActionState = (
+  modelCredentials: OrganizationActionState["modelCredentials"],
+): OrganizationActionState => ({
+  snapshot: lapsedEvaluation,
+  freeTier: {
+    status: "on",
+    policy: { serviceActionsPerPeriod: FREE_ACTIONS },
+  },
+  modelCredentials,
+});
+
+describe("the free floor's service budget", () => {
+  const admitOnFree = async ({
+    actionKind,
+    modelCredentials,
+    redis,
+  }: {
+    actionKind: PeriodActionKind;
+    modelCredentials: OrganizationActionState["modelCredentials"];
+    redis: ReturnType<typeof countingRedis>;
+  }) =>
+    await withActionAdmission({
+      organizationId,
+      userId,
+      enabled: true,
+      policy,
+      serviceBudgetsEnabled: true,
+      serviceBudgetConfig,
+      periodIdentity: { actionKind, logicalPhaseId: Bun.randomUUIDv7() },
+      budgetNow: () => nowMs,
+      readOrganizationState: async () => freeActionState(modelCredentials),
+      redis: redis.client,
+      run: async () => "completed",
+    });
+
+  test("a chat send on the organization's own key is admitted past the free budget", async () => {
+    const redis = countingRedis();
+    for (let send = 0; send < FREE_ACTIONS + 5; send += 1) {
+      expect(
+        await admitOnFree({
+          actionKind: "chat.send",
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.organization,
+          redis,
+        }),
+      ).toEqual(Result.ok("completed"));
+    }
+    expect(redis.periodAcquisitions()).toBe(0);
+  });
+
+  test("a chat send on managed models is refused once the free budget is spent", async () => {
+    const redis = countingRedis();
+    for (let send = 0; send < FREE_ACTIONS; send += 1) {
+      expect(
+        await admitOnFree({
+          actionKind: "chat.send",
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+          redis,
+        }),
+      ).toEqual(Result.ok("completed"));
+    }
+    expectRefusal(
+      await admitOnFree({
+        actionKind: "chat.send",
+        modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+        redis,
+      }),
+      ACTION_ADMISSION_CODES.periodExhausted,
+    );
+    expect(redis.periodAcquisitions()).toBe(FREE_ACTIONS + 1);
+    expect(
+      redis.commands
+        .filter((args) => args.at(1) === "3")
+        .map((args) => args.at(11)),
+    ).toEqual(
+      Array.from({ length: FREE_ACTIONS + 1 }, () => String(FREE_ACTIONS)),
+    );
+  });
+
+  test("every model action kind draws the free budget on managed models and none on the organization's own key", async () => {
+    const registered = Object.keys(ACTION_KINDS).filter(
+      (kind): kind is keyof typeof ACTION_KINDS =>
+        Object.hasOwn(ACTION_KINDS, kind),
+    );
+    const modelKinds = registered.filter(
+      (kind): kind is PeriodActionKind =>
+        ACTION_KINDS[kind].admission === "period" &&
+        ACTION_KINDS[kind].serviceCredentials ===
+          ACTION_SERVICE_CREDENTIALS.organizationModel,
+    );
+    expect(modelKinds.length).toBeGreaterThan(0);
+    for (const actionKind of modelKinds) {
+      const own = countingRedis();
+      for (let action = 0; action <= FREE_ACTIONS; action += 1) {
+        expect(
+          await admitOnFree({
+            actionKind,
+            modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.organization,
+            redis: own,
+          }),
+        ).toEqual(Result.ok("completed"));
+      }
+      expect(own.periodAcquisitions()).toBe(0);
+
+      if (FREE_WITHOUT_OWN_KEY[actionKind] === "off") {
+        continue;
+      }
+      const managed = countingRedis();
+      for (let action = 0; action < FREE_ACTIONS; action += 1) {
+        expect(
+          await admitOnFree({
+            actionKind,
+            modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+            redis: managed,
+          }),
+        ).toEqual(Result.ok("completed"));
+      }
+      expectRefusal(
+        await admitOnFree({
+          actionKind,
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+          redis: managed,
+        }),
+        ACTION_ADMISSION_CODES.periodExhausted,
+      );
+    }
+  });
+
+  test("every helper the free floor does not offer refuses without a model key before any coordination or run", async () => {
+    const offKinds = SERVICE_PERIOD_KINDS.filter(
+      (kind) => FREE_WITHOUT_OWN_KEY[kind] === "off",
+    );
+    expect(offKinds.toSorted()).toEqual(
+      (
+        [
+          "chat.suggest-thread-title",
+          "chat.suggested-prompts",
+          "chat.thread-recap",
+          "editor.autocomplete",
+          "entities.suggest-placements",
+          "properties.suggest-prompt",
+          "templates.suggest-fields",
+        ] satisfies typeof offKinds
+      ).toSorted(),
+    );
+    for (const actionKind of offKinds) {
+      const redis = countingRedis();
+      let ran = false;
+      const result = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        serviceBudgetsEnabled: true,
+        serviceBudgetConfig,
+        periodIdentity: { actionKind, logicalPhaseId: Bun.randomUUIDv7() },
+        budgetNow: () => nowMs,
+        readOrganizationState: async () =>
+          freeActionState(ORGANIZATION_MODEL_CREDENTIALS.managed),
+        redis: redis.client,
+        run: async () => {
+          ran = true;
+          return "completed";
+        },
+      });
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBeInstanceOf(ActionAdmissionError);
+        expect(result.error).toMatchObject({
+          reason: "not_on_plan",
+          code: ACTION_ADMISSION_CODES.notEnabled,
+        });
+      }
+      expect(ran).toBe(false);
+      expect(redis.commands).toHaveLength(0);
+
+      // Outside the free floor the helper is offered and counted per kind.
+      const evaluation = countingRedis();
+      expect(
+        await withActionAdmission({
+          organizationId,
+          userId,
+          enabled: true,
+          policy,
+          serviceBudgetsEnabled: true,
+          serviceBudgetConfig,
+          periodIdentity: { actionKind, logicalPhaseId: Bun.randomUUIDv7() },
+          budgetNow: () => nowMs,
+          readOrganizationState: async () =>
+            actionState({
+              state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+              evaluationEndsAt: new Date(nowMs + 1),
+            }),
+          redis: evaluation.client,
+          run: async () => "completed",
+        }),
+      ).toEqual(Result.ok("completed"));
+      expect(evaluation.periodAcquisitions()).toBe(1);
+    }
+  });
+
+  test("managed services stay counted on the organization's own key", async () => {
+    const redis = countingRedis();
+    for (let call = 0; call < FREE_ACTIONS; call += 1) {
+      expect(
+        await admitOnFree({
+          actionKind: "mcp.services/call",
+          modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.organization,
+          redis,
+        }),
+      ).toEqual(Result.ok("completed"));
+    }
+    expectRefusal(
+      await admitOnFree({
+        actionKind: "mcp.services/call",
+        modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.organization,
+        redis,
+      }),
+      ACTION_ADMISSION_CODES.periodExhausted,
+    );
+  });
+
+  test("a queued workflow on the organization's own key takes the per-kind backlog cap, not the free budget", async () => {
+    const backlogCap = 2;
+    for (const periodReservation of [undefined, "on-acceptance"] as const) {
+      const store = periodStore();
+      const kickoff = async () => {
+        const identity = {
+          actionKind: "workflow.start",
+          logicalPhaseId: Bun.randomUUIDv7(),
+        } as const satisfies AdmittedActionIdentity;
+        return await withActionAdmission({
+          organizationId,
+          userId,
+          enabled: true,
+          policy,
+          execution: "queued-kickoff",
+          periodReservation,
+          periodIdentity: identity,
+          periodPolicy: {
+            periodMs: serviceBudgetConfig.periodMs,
+            limit: backlogCap,
+          },
+          serviceBudgetsEnabled: true,
+          serviceBudgetConfig,
+          budgetNow: () => nowMs,
+          readOrganizationState: async () =>
+            freeActionState(ORGANIZATION_MODEL_CREDENTIALS.organization),
+          redis: store.client,
+          run: async (_signal, control) => {
+            if (periodReservation === "on-acceptance") {
+              const reserved = await control.reservePeriod(identity);
+              if (Result.isError(reserved)) {
+                throw reserved.error;
+              }
+            }
+            return "queued";
+          },
+        });
+      };
+      for (let start = 0; start < backlogCap; start += 1) {
+        expect(await kickoff()).toEqual(Result.ok("queued"));
+      }
+      expectRefusal(await kickoff(), ACTION_ADMISSION_CODES.periodExhausted);
+      expect(store.counts()).toEqual([backlogCap]);
+      const managed = await withActionAdmission({
+        organizationId,
+        userId,
+        enabled: true,
+        policy,
+        serviceBudgetsEnabled: true,
+        serviceBudgetConfig,
+        periodIdentity: {
+          actionKind: "chat.send",
+          logicalPhaseId: Bun.randomUUIDv7(),
+        },
+        budgetNow: () => nowMs,
+        readOrganizationState: async () =>
+          freeActionState(ORGANIZATION_MODEL_CREDENTIALS.managed),
+        redis: store.client,
+        run: async () => "completed",
+      });
+      expect(managed).toEqual(Result.ok("completed"));
+      expect(store.counts()).toEqual([backlogCap, 1]);
+    }
+  });
+
+  test("a missing free policy refuses as unavailable, never as unlimited", async () => {
+    const redis = countingRedis();
+    const result = await withActionAdmission({
+      organizationId,
+      userId,
+      enabled: true,
+      policy,
+      serviceBudgetsEnabled: true,
+      serviceBudgetConfig,
+      periodIdentity,
+      budgetNow: () => nowMs,
+      readOrganizationState: async () => ({
+        snapshot: lapsedEvaluation,
+        freeTier: { status: "on", policy: undefined },
+        modelCredentials: ORGANIZATION_MODEL_CREDENTIALS.managed,
+      }),
+      redis: redis.client,
+      run: async () => "completed",
+    });
+    expectRefusal(result, ACTION_ADMISSION_CODES.admissionUnavailable);
+    expect(redis.commands).toHaveLength(0);
+  });
+
+  test("the free budget is one count across every kind, per period", async () => {
+    await assertProperty(
+      "the free budget is one count across every kind, per period",
+      fc.asyncProperty(
+        fc.array(
+          fc.record({
+            actionKind: fc.constantFrom(...SERVICE_PERIOD_KINDS),
+            modelCredentials: fc.constantFrom(
+              ...Object.values(ORGANIZATION_MODEL_CREDENTIALS),
+            ),
+            period: fc.integer({ min: 0, max: 1 }),
+          }),
+          { maxLength: 3 * FREE_ACTIONS },
+        ),
+        async (drawn) => {
+          const steps = drawn.toSorted(
+            (left, right) => left.period - right.period,
+          );
+          const store = periodStore();
+          const records: ActionCostObservation[] = [];
+          const counted = [0, 0];
+          for (const { actionKind, modelCredentials, period } of steps) {
+            const draws = !(
+              ACTION_KINDS[actionKind].serviceCredentials ===
+                ACTION_SERVICE_CREDENTIALS.organizationModel &&
+              modelCredentials === ORGANIZATION_MODEL_CREDENTIALS.organization
+            );
+            const offered = !(
+              FREE_WITHOUT_OWN_KEY[actionKind] === "off" &&
+              modelCredentials === ORGANIZATION_MODEL_CREDENTIALS.managed
+            );
+            const exhausted = draws && (counted[period] ?? 0) >= FREE_ACTIONS;
+            let ran = false;
+            const logicalPhaseId = Bun.randomUUIDv7();
+            const result = await withActionAdmission({
+              organizationId,
+              userId,
+              enabled: true,
+              policy,
+              serviceBudgetsEnabled: true,
+              serviceBudgetConfig,
+              periodIdentity: { actionKind, logicalPhaseId },
+              budgetNow: () => nowMs + period * serviceBudgetConfig.periodMs,
+              readOrganizationState: async () =>
+                freeActionState(modelCredentials),
+              redis: store.client,
+              costRecorder: {
+                enqueue: (observation) => {
+                  records.push(observation);
+                },
+                estimate: () => null,
+                callRate: () => null,
+              },
+              run: async () => {
+                ran = true;
+                return "completed";
+              },
+            });
+            if (!offered) {
+              expect(result).toMatchObject({
+                error: { reason: "not_on_plan" },
+              });
+              expect(ran).toBe(false);
+              continue;
+            }
+            if (exhausted) {
+              expectRefusal(result, ACTION_ADMISSION_CODES.periodExhausted);
+              expect(ran).toBe(false);
+              continue;
+            }
+            expect(result).toEqual(Result.ok("completed"));
+            expect(
+              records.findLast(
+                (observation) =>
+                  observation.type === "action" &&
+                  observation.record.logicalPhaseId === logicalPhaseId,
+              )?.record,
+            ).toMatchObject({ actionKind, logicalPhaseId });
+            if (draws) {
+              counted[period] = (counted[period] ?? 0) + 1;
+            }
+          }
+          // One pooled counter per period, never one per kind.
+          expect(store.counts()).toEqual(counted.filter((count) => count > 0));
+        },
+      ),
+    );
   });
 });

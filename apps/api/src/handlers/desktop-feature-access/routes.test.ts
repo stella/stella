@@ -11,6 +11,11 @@ import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  claimFixtureDeviceProof,
+  createDesktopDeviceSigner,
+} from "@/api/tests/helpers/desktop-device-proof";
+import { createTestState } from "@/api/tests/helpers/test-state";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDesktopFeatureAccessReadEndpoint } from "./read";
@@ -20,16 +25,27 @@ const ORGANIZATION_ID = "org_test";
 const GRANTED_EMAIL = "granted@example.test";
 
 type Caller = { email: string; emailVerified: boolean } | null;
+const testState = createTestState({ file: import.meta.path, config: env });
 
-const readAs = async (caller: Caller) => {
+const readAs = async (caller: Caller, organizationId = ORGANIZATION_ID) => {
   const { scopedDb } = createScopedDbMock(
     {},
     { featureAccess: { identity: caller } },
   );
+  const device = await createDesktopDeviceSigner();
   const endpoint = createDesktopFeatureAccessReadEndpoint({
-    authorizeAccount: async () =>
+    authorizeAccount: async (request) =>
       Result.ok({
-        organizationId: toSafeId<"organization">(ORGANIZATION_ID),
+        consumedProof: await claimFixtureDeviceProof({
+          request: await device.signRequest({
+            request,
+            credential: "fixture-credential",
+          }),
+          deviceJkt: device.deviceJkt,
+          keyId: "key_test",
+          credential: "fixture-credential",
+        }),
+        organizationId: toSafeId<"organization">(organizationId),
         userId: toSafeId<"user">("user_test"),
         keyId: "key_test",
         memberRole: sessionMemberRole("member"),
@@ -39,8 +55,7 @@ const readAs = async (caller: Caller) => {
   const app = new Elysia().get(DESKTOP_FEATURE_ACCESS_PATH, endpoint.handler, {
     response: endpoint.config.response,
   });
-  const previous = env.API_FEATURE_ACCESS_GRANTS;
-  env.API_FEATURE_ACCESS_GRANTS = {
+  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "activity-timeline": [
       {
         type: "member",
@@ -48,16 +63,12 @@ const readAs = async (caller: Caller) => {
         email: GRANTED_EMAIL,
       },
     ],
-  };
-  try {
-    const response = await app.handle(
-      new Request(`http://localhost${DESKTOP_FEATURE_ACCESS_PATH}`),
-    );
-    expect(response.status).toBe(200);
-    return await response.json();
-  } finally {
-    env.API_FEATURE_ACCESS_GRANTS = previous;
-  }
+  });
+  const response = await app.handle(
+    new Request(`http://localhost${DESKTOP_FEATURE_ACCESS_PATH}`),
+  );
+  expect(response.status).toBe(200);
+  return await response.json();
 };
 
 test("feature access requires the desktop account credential", async () => {
@@ -86,6 +97,16 @@ test("a granted member sees the feature enabled", async () => {
       "activity-timeline": { status: "enabled" },
       "time-billing": { status: "hidden" },
     },
+  });
+});
+
+test("a member grant does not cross the desktop account organization", async () => {
+  const caller = { email: GRANTED_EMAIL, emailVerified: true };
+  expect(await readAs(caller)).toMatchObject({
+    features: { "activity-timeline": { status: "enabled" } },
+  });
+  expect(await readAs(caller, "org_other")).toMatchObject({
+    features: { "activity-timeline": { status: "hidden" } },
   });
 });
 

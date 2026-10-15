@@ -119,6 +119,9 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "folio-collab": WAIVER_REASON.noTenantReadSurface,
   health: WAIVER_REASON.noTenantReadSurface,
   "hosted-usage-webhook": WAIVER_REASON.noTenantReadSurface,
+  // Admission reads only the authenticated organization's entitlement; the
+  // resolved response comes exclusively from the global public-law corpus.
+  "legal-resolve": WAIVER_REASON.noTenantReadSurface,
   // Fixed-CSP HTML shell with no database access or tenant-scoped input.
   "mcp-app-sandbox": WAIVER_REASON.noTenantReadSurface,
   // Fixed-CSP HTML shell with no database access or tenant-scoped input.
@@ -148,6 +151,52 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
   "well-known": WAIVER_REASON.noTenantReadSurface,
 };
 
+/** A test that stands in for the matrix while a dated waiver holds. */
+type SubstituteTest = {
+  /** Path relative to `apps/api/src`. */
+  readonly file: string;
+  /** Exact titles of the tests in `file` that prove the isolation. */
+  readonly titles: readonly string[];
+};
+
+type DatedWaiver = {
+  readonly reason: WaiverReason;
+  /** Last day (UTC, `YYYY-MM-DD`) the waiver holds; the guard fails after it. */
+  readonly expiresOn: `${number}-${number}-${number}`;
+  readonly substituteTests: readonly SubstituteTest[];
+};
+
+/**
+ * Waivers that must be replaced by a real matrix case. Each one expires, and
+ * until then names the dedicated tests that cover the domain; the guard checks
+ * those tests exist and fails once the date has passed.
+ */
+const DATED_CROSS_TENANT_WAIVERS: Record<string, DatedWaiver> = {
+  // Purpose-bound desktop credentials, not the session used by the matrix,
+  // bind the caller's organization. No request field selects another tenant.
+  "desktop-feature-access": {
+    reason: WAIVER_REASON.isolatedOutsideRlsHarness,
+    expiresOn: "2026-10-17",
+    substituteTests: [
+      {
+        file: "handlers/desktop-feature-access/routes.test.ts",
+        titles: [
+          "feature access requires the desktop account credential",
+          "a member grant does not cross the desktop account organization",
+        ],
+      },
+      { file: "handlers/desktop-registry/auth.test.ts", titles: [] },
+    ],
+  },
+};
+
+const waivedDomains = [
+  ...Object.keys(CROSS_TENANT_WAIVERS),
+  ...Object.keys(DATED_CROSS_TENANT_WAIVERS),
+];
+
+const apiSrcDir = path.resolve(import.meta.dir, "../..");
+
 /**
  * Domains whose coverage is checked handler by handler rather than by a
  * single import: every handler module their `routes.ts` mounts must be
@@ -155,6 +204,7 @@ const CROSS_TENANT_WAIVERS: Record<string, WaiverReason> = {
  * otherwise mark the whole domain covered and hide a new route beside it.
  */
 const PER_HANDLER_WAIVERS: Record<string, Record<string, WaiverReason>> = {
+  "desktop-time-entries": {},
   chat: {
     // The model catalog for the caller's own organization: no record id in,
     // nothing another tenant owns out.
@@ -192,33 +242,81 @@ const domainHandlerImports = (source: string, domain: string): string[] =>
     .map((match) => match[1])
     .filter((modulePath): modulePath is string => modulePath !== undefined);
 
-const mountedHandlers = (domain: string): string[] =>
-  domainHandlerImports(
-    readFileSync(path.join(handlersDir, domain, "routes.ts"), "utf-8"),
-    domain,
-  ).toSorted();
+const mountedHandlers = (domain: string): string[] => {
+  const source = readFileSync(
+    path.join(handlersDir, domain, "routes.ts"),
+    "utf-8",
+  );
+  const relativeImports = [
+    ...source.matchAll(/import \w+ from "\.\/([^"]+)"/gu),
+  ]
+    .map((match) => match[1])
+    .filter((modulePath): modulePath is string => modulePath !== undefined);
+  return [
+    ...domainHandlerImports(source, domain),
+    ...relativeImports,
+  ].toSorted();
+};
 
 describe("cross-tenant matrix coverage guard", () => {
   test("every handler domain is in the cross-tenant matrix or explicitly waived", () => {
     const uncovered = handlerDomains.filter(
       (domain) =>
-        !coveredDomains.has(domain) && !(domain in CROSS_TENANT_WAIVERS),
+        !coveredDomains.has(domain) && !waivedDomains.includes(domain),
     );
     expect(uncovered).toEqual([]);
   });
 
   test("no covered domain is still waived (adding a matrix case removes the waiver)", () => {
-    const shadowed = Object.keys(CROSS_TENANT_WAIVERS).filter((domain) =>
+    const shadowed = waivedDomains.filter((domain) =>
       coveredDomains.has(domain),
     );
     expect(shadowed).toEqual([]);
   });
 
   test("every waiver names a real handler domain", () => {
-    const staleWaivers = Object.keys(CROSS_TENANT_WAIVERS).filter(
+    const staleWaivers = waivedDomains.filter(
       (domain) => !handlerDomains.includes(domain),
     );
     expect(staleWaivers).toEqual([]);
+  });
+
+  test("no domain carries both a standing and a dated waiver", () => {
+    expect(
+      Object.keys(DATED_CROSS_TENANT_WAIVERS).filter(
+        (domain) => domain in CROSS_TENANT_WAIVERS,
+      ),
+    ).toEqual([]);
+  });
+
+  test("no dated waiver is past its expiry", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    const expired = Object.entries(DATED_CROSS_TENANT_WAIVERS)
+      .filter(([, { expiresOn }]) => expiresOn < today)
+      .map(([domain, { expiresOn }]) => `${domain} (expired ${expiresOn})`);
+    expect(expired).toEqual([]);
+  });
+
+  test("every dated waiver names substitute tests that exist", () => {
+    const missing = Object.entries(DATED_CROSS_TENANT_WAIVERS).flatMap(
+      ([domain, { substituteTests }]) => {
+        if (substituteTests.length === 0) {
+          return [`${domain}: no substitute tests`];
+        }
+        return substituteTests.flatMap(({ file, titles }) => {
+          let source: string;
+          try {
+            source = readFileSync(path.join(apiSrcDir, file), "utf-8");
+          } catch {
+            return [`${domain}: ${file} missing`];
+          }
+          return titles
+            .filter((title) => !source.includes(JSON.stringify(title)))
+            .map((title) => `${domain}: ${file} has no test "${title}"`);
+        });
+      },
+    );
+    expect(missing).toEqual([]);
   });
 
   test.each(Object.keys(PER_HANDLER_WAIVERS))(

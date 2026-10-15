@@ -3,15 +3,22 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "bun:test";
 import { IntlProvider } from "use-intl";
 
+import { MISSING_BODY_REASON } from "@stll/decision-reader/decision-body-state.logic";
+import type { MissingBodyReason } from "@stll/decision-reader/decision-body-state.logic";
+
+import { WebReaderPresentationProvider } from "@/components/legal-reader/web-reader-presentation";
 import { MissingDecisionBody } from "@/features/case-law/components/case-viewer/decision-body-state";
-import { MISSING_BODY_REASON } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
-import type { MissingBodyReason } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
+import { FormattingProvider } from "@/i18n/formatting-context";
 import messages from "@/i18n/langs/en.json";
 
 const renderPane = (reason: MissingBodyReason): string =>
   renderToStaticMarkup(
     <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <MissingDecisionBody onRetry={() => undefined} reason={reason} />
+      <FormattingProvider locale="en" timeZone="UTC">
+        <WebReaderPresentationProvider>
+          <MissingDecisionBody onRetry={() => undefined} reason={reason} />
+        </WebReaderPresentationProvider>
+      </FormattingProvider>
     </IntlProvider>,
   );
 

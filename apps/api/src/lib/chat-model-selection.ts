@@ -42,6 +42,7 @@ import {
 } from "@stll/ai-catalog/benchmarks";
 import type { ModelUnratedReason } from "@stll/ai-catalog/benchmarks";
 
+import { resolveOrgAIModelForRole } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -50,6 +51,7 @@ import {
   hasTanStackInstanceProvider,
   isAllowedBYOKModelForRole,
 } from "@/api/lib/tanstack-ai-models";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 const CHAT_MODEL_ROLE: ModelRole = "chat";
 
@@ -208,7 +210,10 @@ const hasResolvableModelForRole = ({
     return hasTanStackInstanceProvider();
   }
 
-  const selection = orgAIConfig.overrideModels[role];
+  const selection = resolveOrgAIModelForRole(orgAIConfig, role);
+  if (selection === null) {
+    return false;
+  }
   return (
     isBYOKProviderValue(selection.provider) &&
     orgAIConfig.providers.some(
@@ -286,9 +291,11 @@ export const getChatModelBenchmarkOptions = (
 export const getDefaultChatModelValue = ({
   orgAIConfig,
   organizationId,
+  modelTier,
 }: {
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization"> | null;
+  modelTier: ManagedModelTier;
 }): string | null => {
   if (!hasResolvableModelForRole({ orgAIConfig, role: CHAT_MODEL_ROLE })) {
     return null;
@@ -297,6 +304,7 @@ export const getDefaultChatModelValue = ({
   const info = getTanStackTextModelInfoForRole(CHAT_MODEL_ROLE, orgAIConfig, {
     dataClass: "customer",
     organizationId,
+    modelTier,
   });
   return encodeChatModelSelection({
     provider: info.provider,

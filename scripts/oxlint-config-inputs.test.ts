@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import { OXLINT_CONFIGURATION_CACHE_INPUTS } from "./code-check-affected";
@@ -21,10 +21,30 @@ const configImports = (): string[] =>
 
 const covers = (input: string, file: string): boolean => {
   const pattern = input.slice(ROOT_PREFIX.length);
-  return pattern.endsWith("/**")
-    ? file.startsWith(pattern.slice(0, -"**".length))
-    : pattern === file;
+  return new Bun.Glob(pattern).match(file);
 };
+
+test("every discovered ownership declaration invalidates lint caches", () => {
+  const sources = [
+    "scripts/ownership-loader.ts",
+    "scripts/ownership-types.ts",
+    ...readdirSync(path.join(REPO_ROOT, "scripts/ownership"))
+      .filter((file) => file.endsWith(".ts"))
+      .map((file) => `scripts/ownership/${file}`),
+  ];
+  expect(sources.length).toBeGreaterThan(2);
+  expect(
+    sources.filter(
+      (file) =>
+        !OXLINT_CONFIGURATION_CACHE_INPUTS.some((input) => covers(input, file)),
+    ),
+  ).toEqual([]);
+  expect(
+    OXLINT_CONFIGURATION_CACHE_INPUTS.some((input) =>
+      covers(input, "scripts/ownership/new-capability.ts"),
+    ),
+  ).toBe(true);
+});
 
 // A module the lint config imports is rule configuration: editing it changes
 // what every workspace lint reports, so it has to invalidate the cached lint

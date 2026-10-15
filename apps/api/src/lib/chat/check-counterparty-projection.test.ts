@@ -7,6 +7,7 @@ import type { CounterpartyCheckResult } from "@/api/lib/business-registries/enti
 import { CHECK_COUNTERPARTY_PROJECTION } from "@/api/lib/chat/projections";
 import {
   type SanctionsListOutcome,
+  signedInScreening,
   unavailableSanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { SANCTIONS_UNAVAILABLE_REASONS } from "@/api/lib/lists/sanctions/screening-vocabulary";
@@ -99,11 +100,13 @@ describe("check_counterparty projection", () => {
       const screening = {
         kind: "sanctions",
         subject: { type: "company-id", value: "26863154", country: "CZ" },
-        ...unavailableSanctionsScreening({
-          reason,
-          practiceJurisdictions: ["CZ"],
-          now: NOW,
-        }),
+        ...signedInScreening(
+          unavailableSanctionsScreening({
+            reason,
+            practiceJurisdictions: ["CZ"],
+            now: NOW,
+          }),
+        ),
       } satisfies CounterpartyCheckResult;
       expect(screening.status).toBe("unavailable");
       expect(

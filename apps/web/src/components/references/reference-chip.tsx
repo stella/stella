@@ -35,6 +35,7 @@ import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
 import { organizationOptions } from "@/lib/organization/queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { entityOptions } from "@/lib/workspaces/queries/entities";
 import { navigateToWorkspaceFolder } from "@/lib/workspaces/reveal-navigation";
@@ -112,6 +113,8 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
       reference.type === "entity" ? reference.entityId : null,
     ),
   );
+  const hintQueryView = useQueryView(hintQuery);
+  useQueryViewError(hintQueryView);
   // The navigation list is already in flight on every chat surface, so the
   // matter colour is a cache read rather than a fetch.
   const mattersQuery = useQuery({
@@ -143,8 +146,8 @@ const useReferenceFacts = (reference: ChatReference): ReferenceLiveFacts => {
       return { kind: data.kind, fileName: null, mimeType: null };
     }),
     hint:
-      reference.type === "entity" && hintQuery.data !== undefined
-        ? hintQuery.data
+      reference.type === "entity" && hintQueryView.type === "items"
+        ? hintQueryView.items
         : null,
     matter: toLiveFact(
       mattersQuery,
@@ -327,7 +330,9 @@ export const useReferenceActivation = (reference: ChatReference) => {
           openCaseLawDecision(
             reference.locator,
             openDecision,
-            reference.anchorId === null ? {} : { anchorId: reference.anchorId },
+            reference.paragraph === null
+              ? {}
+              : { anchorId: reference.paragraph.anchorId },
           ),
           "reference-chip.open-decision",
         );
@@ -418,6 +423,22 @@ export const ReferenceIcon = ({ reference }: { reference: ChatReference }) => {
     <ReferenceGlyphIcon glyph={visual.glyph} matter={visual.matter} />
   ) : null;
 };
+
+/**
+ * The glyph of a document known only by its file type (an inline citation
+ * into a Word file or a PDF), drawn by the same rule as a document reference,
+ * so a cited file looks like that file in the source tray. Decorative: the
+ * chip's label names the source.
+ */
+export const ReferenceFileTypeIcon = ({ mimeType }: { mimeType: string }) => (
+  <ReferenceGlyphIcon
+    glyph={{
+      type: "entity",
+      source: { type: "resolved", kind: "document", mimeType },
+    }}
+    matter={{ type: "none" }}
+  />
+);
 
 const isReactNodeArray = (node: ReactNode): node is readonly ReactNode[] =>
   Array.isArray(node);

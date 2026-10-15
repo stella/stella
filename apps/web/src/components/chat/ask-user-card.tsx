@@ -5,12 +5,8 @@ import { defaultRehypePlugins, Streamdown } from "streamdown";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
-import {
-  CheckIcon,
-  HelpCircleIcon,
-  LoaderIcon,
-  PencilIcon,
-} from "@stll/ui/icons";
+import { CheckIcon, HelpCircleIcon, PencilIcon } from "@stll/ui/icons";
+import { Loader } from "@stll/ui/loader";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
@@ -344,7 +340,11 @@ export const AskUserCard = ({
           <HelpCircleIcon className="text-muted-foreground size-4 shrink-0" />
           <span className="font-medium">{t("chat.tool.ask-user")}</span>
           {isLoading && (
-            <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
+            <Loader
+              className="ms-auto size-3.5 shrink-0"
+              label={t("common.loading")}
+              size="sm"
+            />
           )}
         </div>
       </div>

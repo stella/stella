@@ -11,6 +11,7 @@ import {
 } from "@/api/handlers/chat/tools/external-mcp-tool-definitions";
 import { normalizeExternalMcpToolsForChat } from "@/api/handlers/chat/tools/external-mcp-tools-normalization";
 import { captureError, detached } from "@/api/lib/analytics/capture";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
@@ -61,12 +62,14 @@ const defaultExternalMcpDiscoveryDependencies = {
 export const loadExternalMcpToolsForUser = async ({
   nullUnionStrategy,
   organizationId,
+  permit,
   safeDb,
   userId,
   dependencies = defaultExternalMcpDiscoveryDependencies,
 }: {
   nullUnionStrategy: NullUnionStrategy;
   organizationId: SafeId<"organization">;
+  permit: ThirdPartyOutboundPermit;
   safeDb: SafeDb;
   userId: SafeId<"user">;
   dependencies?: ExternalMcpDiscoveryDependencies | undefined;
@@ -94,6 +97,7 @@ export const loadExternalMcpToolsForUser = async ({
       await loadConnectorTools({
         nullUnionStrategy,
         organizationId,
+        permit,
         row,
         safeDb,
         userId,
@@ -246,6 +250,7 @@ type LoadedExternalMcpConnectorResult = {
 const loadConnectorTools = async ({
   nullUnionStrategy,
   organizationId,
+  permit,
   row,
   safeDb,
   userId,
@@ -253,6 +258,7 @@ const loadConnectorTools = async ({
 }: {
   nullUnionStrategy: NullUnionStrategy;
   organizationId: SafeId<"organization">;
+  permit: ThirdPartyOutboundPermit;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -277,6 +283,7 @@ const loadConnectorTools = async ({
     (async (): Promise<LoadedExternalMcpConnectorResult | null> => {
       const createdClient = await dependencies.createMcpClientForConnection({
         organizationId,
+        permit,
         row,
         safeDb,
         userId,

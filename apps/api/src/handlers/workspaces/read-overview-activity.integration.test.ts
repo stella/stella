@@ -217,6 +217,8 @@ describe("matter overview activity", () => {
     const options = {
       filters: toMatterActivityFilters({}),
       organizationId: ids.orgA,
+      userId: ids.userA1,
+      featureAccessSnapshot: undefined,
       safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       workspaceId: ids.wsA1,
     };

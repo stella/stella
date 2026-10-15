@@ -8,19 +8,27 @@ import { StellaMark } from "./stella-mark";
  * (`sm`) next to a control that is busy, `md` in a row, `lg` for a region.
  * Content with a known shape gets a `Skeleton` instead, never a loader.
  */
-const Loader = ({ label, size = "md", className, ...props }: LoaderProps) => (
+const Loader = ({
+  label,
+  variant = "status",
+  size = "md",
+  className,
+  ...props
+}: LoaderProps) => (
   <span
-    aria-busy="true"
-    aria-label={label}
     className={cn(
       "inline-flex shrink-0 items-center justify-center",
+      LOADER_SIZE[size],
       className,
     )}
     data-slot="loader"
-    role="status"
     {...props}
+    aria-busy={variant === "status" ? true : undefined}
+    aria-hidden={variant === "decorative" ? true : undefined}
+    aria-label={label}
+    role={variant === "status" ? "status" : undefined}
   >
-    <LoaderMark size={size} />
+    <LoaderMark />
   </span>
 );
 
@@ -39,7 +47,9 @@ const LoaderState = ({ label, detail, hint, className }: LoaderStateProps) => (
     data-slot="loader-state"
     role="status"
   >
-    <LoaderMark size="lg" />
+    <span className={LOADER_SIZE.lg}>
+      <LoaderMark />
+    </span>
     <div className="space-y-1">
       <p className="text-foreground text-sm font-medium">{label}</p>
       {detail !== undefined && (
@@ -62,20 +72,27 @@ const LOADER_SIZE = {
 
 type LoaderSize = keyof typeof LOADER_SIZE;
 
-const LoaderMark = ({ size }: { size: LoaderSize }) => (
-  <StellaMark
-    className={cn(
-      "animate-loader text-muted-foreground motion-reduce:animate-none motion-reduce:opacity-70",
-      LOADER_SIZE[size],
-    )}
-  />
+const LoaderMark = () => (
+  <StellaMark className="animate-loader text-muted-foreground size-full motion-reduce:animate-none motion-reduce:opacity-70" />
 );
 
-type LoaderProps = Omit<ComponentProps<"span">, "children"> & {
-  /** What is pending, for assistive technology ("Loading matters"). */
-  label: string;
+type LoaderProps = Omit<
+  ComponentProps<"span">,
+  "children" | "role" | "aria-label" | "aria-hidden" | "aria-busy"
+> & {
   size?: LoaderSize;
-};
+} & (
+    | {
+        variant?: "status";
+        /** What is pending, for assistive technology ("Loading matters"). */
+        label: string;
+      }
+    | {
+        /** The surrounding control or text announces the pending state. */
+        variant: "decorative";
+        label?: never;
+      }
+  );
 
 type LoaderStateProps = {
   /** What is happening, shown as the title and announced. */

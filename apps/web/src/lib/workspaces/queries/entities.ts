@@ -275,7 +275,7 @@ export const filesystemEntitiesOptions = (
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
-export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
+const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
   infiniteQueryOptions({
     queryKey: entitiesKeys.kanbanGroup(key),
     queryFn: async ({ signal, pageParam }) => {

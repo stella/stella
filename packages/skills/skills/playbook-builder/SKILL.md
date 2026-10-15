@@ -28,9 +28,10 @@ draft that a person approves in the editor; you never approve it.
   `matter_id`. A document's text comes from `read_content_across_matters`;
   `read_document` returns its metadata, not its text.
 - In the stella chat these reads are the `external_*` functions inside
-  `execute_typescript`, documented in full in your instructions while this
-  skill is active; write each call from the signature there. A script has
-  no imports and returns plain JSON. If a call is rejected, re-read the
+  `execute_typescript`, such as `external_list_playbooks`. Write each call
+  from its signature: your instructions document it in full when this skill
+  is active; otherwise call `discover_tools` for it first. A script has no
+  imports and returns plain JSON. If a call is rejected, re-read the
   signature and correct the call yourself.
 - `save_playbook` and `ask-user` are direct tool calls, never functions in a
   script. Read in a script, then save with a tool call.

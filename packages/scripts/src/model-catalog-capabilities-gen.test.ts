@@ -7,10 +7,10 @@ import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import { resolveTemperaturePolicy } from "./model-catalog-capabilities";
 import type { UpstreamCapabilities } from "./model-catalog-capabilities";
 import {
-  MODELS_DEV_KEY_BY_PROVIDER,
   buildCapabilityRows,
   renderCapabilitiesModule,
 } from "./model-catalog-capabilities-gen";
+import { MODELS_DEV_KEY_BY_PROVIDER } from "./model-catalog-snapshot";
 
 const offeredModelIds = TANSTACK_AI_PROVIDERS.flatMap((provider) =>
   BYOK_MODEL_OPTIONS[provider].map((modelId) => ({ provider, modelId })),

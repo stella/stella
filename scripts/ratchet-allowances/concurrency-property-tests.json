@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "Add fast-check as a development dependency of the private concurrency owner for deterministic chunk and backoff properties; no runtime dependency is added."
+}

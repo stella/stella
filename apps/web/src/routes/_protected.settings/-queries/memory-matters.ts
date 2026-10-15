@@ -4,14 +4,11 @@ import {
   fetchWorkspaceNavigationPage,
   WORKSPACE_NAVIGATION_STATUS_SCOPE,
 } from "@/lib/memory-api";
-import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import type { WorkspaceNavigationCaller } from "@/lib/workspaces/queries.logic";
-
-export type MemoryMatter = WorkspaceNavigationItem;
 
 const getInitialMemoryMatterCursor = (): string | undefined => undefined;
 
-export const memoryMatterKeys = {
+const memoryMatterKeys = {
   all: ({ organizationId, userId }: WorkspaceNavigationCaller) => [
     "memory-matters",
     organizationId,

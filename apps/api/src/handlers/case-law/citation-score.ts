@@ -94,7 +94,7 @@ export const recencyFactor = (
  * weighs the same as `unknown`, which is what keeps the score from moving as
  * classification coverage grows rather than as the case law changes.
  */
-export const polarityWeight = (polarity: Polarity | null): number =>
+const polarityWeight = (polarity: Polarity | null): number =>
   POLARITY_AUTHORITY_WEIGHT[polarity ?? POLARITY.UNKNOWN];
 
 /** One incoming citation, as the score reads it. */

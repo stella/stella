@@ -5,6 +5,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import JSZip from "jszip";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { writeZipEntry } from "@stll/docx-utils";
 
 import type { rootDb } from "@/api/db/root";
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -20,6 +21,7 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   executeNativeExtraction as executeNativeExtractionWithDependencies,
   persistNativeExtractionProjection as persistNativeExtractionProjectionWithDatabase,
+  pickExtractionSource,
   processExtraction as processExtractionWithDependencies,
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
@@ -63,7 +65,14 @@ const extractionEntity = {
 };
 let findFirstResult: typeof extractionEntity | null = null;
 const findFirstMock = mock(async () => findFirstResult);
-const executeMock = mock(async (_query: SQL) => [{ entityId }]);
+// Lock queries bind the locked id first; echo it so the parents read as live.
+const executeRows = async (query: SQL) => [
+  {
+    id: new PgDialect().sqlToQuery(query).params.at(0),
+    entityId,
+  },
+];
+const executeMock = mock(executeRows);
 const transactionMock = mock(
   async (
     runTransaction: (tx: { execute: typeof executeMock }) => Promise<unknown>,
@@ -223,7 +232,7 @@ type PersistedProjection = {
  * an id, a count or a hash.
  */
 const persistedProjection = async (): Promise<PersistedProjection> => {
-  const writeQuery = executeMock.mock.calls.at(1)?.[0];
+  const writeQuery = executeMock.mock.calls.at(3)?.[0];
   if (writeQuery === undefined) {
     throw new Error("no projection write statement was executed");
   }
@@ -247,7 +256,7 @@ beforeEach(() => {
   findFirstResult = null;
   findFirstMock.mockClear();
   executeMock.mockReset();
-  executeMock.mockImplementation(async (_query: SQL) => [{ entityId }]);
+  executeMock.mockImplementation(executeRows);
   transactionMock.mockClear();
   insertMock.mockClear();
   valuesMock.mockClear();
@@ -285,9 +294,11 @@ afterEach(() => {
 });
 
 describe("processExtraction", () => {
-  // Files with a pending PDF derivative wait for it so extraction reads the
-  // rendered PDF rather than the original bytes.
-  test("requires durable extraction only after any pending PDF derivative exists", () => {
+  // Direct parsers do not wait for the PDF preview: extraction reads the
+  // original bytes, and a failed preview must not leave the body unindexed.
+  // Formats with no parser still wait, because the rendered PDF is their
+  // only text layer.
+  test("extracts a directly parsed file before its PDF preview exists", () => {
     expect(requiresDurableNativeExtraction(fileContent)).toBe(true);
     expect(
       requiresDurableNativeExtraction({
@@ -302,15 +313,52 @@ describe("processExtraction", () => {
         fileName: "notes.txt",
         mimeType: "text/plain",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       requiresDurableNativeExtraction({
         ...fileContent,
         fileName: "notes.txt",
-        mimeType: "text/plain",
+        mimeType: "text/plain; charset=utf-8",
+      }),
+    ).toBe(true);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "sheet.xlsx",
+        mimeType:
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      }),
+    ).toBe(true);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "photo.png",
+        mimeType: "image/png",
+      }),
+    ).toBe(false);
+    expect(
+      requiresDurableNativeExtraction({
+        ...fileContent,
+        fileName: "photo.png",
+        mimeType: "image/png",
         pdfFileId: "derived_pdf_1",
       }),
     ).toBe(true);
+  });
+
+  // The run's unique source is the original file, so the preview finishing
+  // later reaches the run extracted at upload instead of starting another.
+  test("keeps a parsed file's extraction source when its PDF preview arrives", () => {
+    const notes = {
+      ...fileContent,
+      fileName: "notes.txt",
+      mimeType: "text/plain",
+    };
+
+    expect(
+      pickExtractionSource({ ...notes, pdfFileId: "derived_pdf_1" }),
+    ).toEqual(pickExtractionSource({ ...notes, pdfFileId: null }));
+    expect(pickExtractionSource(notes).fileId).toBe(fileContent.id);
   });
 
   test("orders the current version's fields by id, matching readEntityByIdHandler, so 'first file field' selection is deterministic", async () => {
@@ -368,7 +416,13 @@ describe("processExtraction", () => {
 
     expect(extractedContentFindFirstMock).toHaveBeenCalled();
     expect(updateSetMock).toHaveBeenCalledWith(
-      expect.objectContaining({ status: "queued", finishedAt: null }),
+      expect.objectContaining({
+        status: "queued",
+        finishedAt: null,
+        attemptCount: 0,
+        errorMessage: null,
+        nextDeliveryAt: null,
+      }),
     );
     expect(enqueueDocumentProcessingRunMock).toHaveBeenCalledWith(runId);
     expect(indexEntityMock).not.toHaveBeenCalled();
@@ -475,7 +529,7 @@ describe("processExtraction", () => {
     const projection = await persistedProjection();
     expect(projection.text).toBe("");
     expect(projection.iv.every((byte) => byte === 0)).toBe(false);
-    expect(executeMock).toHaveBeenCalledTimes(2);
+    expect(executeMock).toHaveBeenCalledTimes(4);
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
   });
@@ -660,8 +714,8 @@ describe("processExtraction", () => {
     });
 
     expect(persisted).toBe("persisted");
-    const lockQuery = executeMock.mock.calls.at(0)?.[0];
-    const writeQuery = executeMock.mock.calls.at(1)?.[0];
+    const lockQuery = executeMock.mock.calls.at(2)?.[0];
+    const writeQuery = executeMock.mock.calls.at(3)?.[0];
     expect(lockQuery).toBeDefined();
     expect(writeQuery).toBeDefined();
     if (!(lockQuery && writeQuery)) {
@@ -707,6 +761,8 @@ describe("processExtraction", () => {
   });
 
   test("does not overwrite a newer projection after its source is replaced", async () => {
+    executeMock.mockResolvedValueOnce([{ id: organizationId, entityId }]);
+    executeMock.mockResolvedValueOnce([{ id: workspaceId, entityId }]);
     executeMock.mockResolvedValueOnce([]);
 
     const persisted = await persistNativeExtractionProjection({
@@ -725,11 +781,15 @@ describe("processExtraction", () => {
     });
 
     expect(persisted).toBe("source_cancelled");
-    expect(executeMock).toHaveBeenCalledTimes(1);
+    expect(executeMock).toHaveBeenCalledTimes(3);
   });
 
   test("reports that the ownership-fenced native projection was not persisted", async () => {
-    executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
+    executeMock
+      .mockResolvedValueOnce([{ id: organizationId, entityId }])
+      .mockResolvedValueOnce([{ id: workspaceId, entityId }])
+      .mockResolvedValueOnce([{ id: entityId, entityId }])
+      .mockResolvedValueOnce([]);
 
     const persisted = await persistNativeExtractionProjection({
       charCount: 14,
@@ -747,11 +807,15 @@ describe("processExtraction", () => {
     });
 
     expect(persisted).toBe("preserved");
-    expect(executeMock).toHaveBeenCalledTimes(2);
+    expect(executeMock).toHaveBeenCalledTimes(4);
   });
 
   test("surfaces preserved manual OCR ownership and skips automatic fallback", async () => {
-    executeMock.mockResolvedValueOnce([{ entityId }]).mockResolvedValueOnce([]);
+    executeMock
+      .mockResolvedValueOnce([{ id: organizationId, entityId }])
+      .mockResolvedValueOnce([{ id: workspaceId, entityId }])
+      .mockResolvedValueOnce([{ id: entityId, entityId }])
+      .mockResolvedValueOnce([]);
     extractFileTextResultMock.mockImplementationOnce(async () =>
       Result.ok(null),
     );
@@ -825,11 +889,13 @@ describe("the extraction's database", () => {
 
   test("stamps a DOCX-declared language on the same connection", async () => {
     const zip = new JSZip();
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/document.xml",
       `<w:document xmlns:w="${WORD_NAMESPACE}"><w:body><w:p><w:r><w:t>Text</w:t></w:r></w:p></w:body></w:document>`,
     );
-    zip.file(
+    writeZipEntry(
+      zip,
       "word/styles.xml",
       `<w:styles xmlns:w="${WORD_NAMESPACE}"><w:docDefaults><w:rPrDefault><w:rPr><w:lang w:val="cs-CZ"/></w:rPr></w:rPrDefault></w:docDefaults></w:styles>`,
     );

@@ -24,6 +24,7 @@ import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
+import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
@@ -58,6 +59,7 @@ const updateWorkspaceBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Change a matter: its name, reference, billing reference, colour, or " +
     "lead (who must already be a member of it). Only the fields you pass are " +
@@ -190,6 +192,12 @@ export const updateWorkspaceHandler = async function* ({
     yield* checkDemoAccountOperation(userEmail);
   }
   const txResult = await safeDb(async (tx) => {
+    await withAggregateLock({
+      aggregate: "workspace",
+      id: { id: workspaceId, organizationId },
+      tx,
+      mode: "update",
+    });
     const workspaceRows = await tx
       .select({
         id: workspaces.id,
@@ -202,8 +210,12 @@ export const updateWorkspaceHandler = async function* ({
         leadUserId: workspaces.leadUserId,
       })
       .from(workspaces)
-      .where(eq(workspaces.id, workspaceId))
-      .for("update");
+      .where(
+        and(
+          eq(workspaces.id, workspaceId),
+          eq(workspaces.organizationId, organizationId),
+        ),
+      );
     const workspace = workspaceRows.at(0);
 
     if (!workspace) {
@@ -376,10 +388,12 @@ export const updateWorkspaceHandler = async function* ({
       body.billingNarrativeLanguage !== undefined &&
       body.billingNarrativeLanguage !== workspace.billingNarrativeLanguage
     ) {
-      changes["billingNarrativeLanguage"] = {
-        old: workspace.billingNarrativeLanguage,
-        new: body.billingNarrativeLanguage,
-      };
+      Object.assign(changes, {
+        billingNarrativeLanguage: {
+          old: workspace.billingNarrativeLanguage,
+          new: body.billingNarrativeLanguage,
+        },
+      });
     }
     if (
       body.billingReference !== undefined &&

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { aggregateRecorder } from "@/api/lib/db/aggregate-lock-order.fixture";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -36,18 +37,16 @@ describe("updateWorkspace", () => {
   test("rejects client changes to contacts outside the active organization", async () => {
     const workspaceSelect = {
       from: () => ({
-        where: () => ({
-          for: async () => [
-            {
-              id: "ws_test123",
-              name: "Workspace",
-              clientId: "contact_existing",
-              reference: null,
-              billingReference: null,
-              color: null,
-            },
-          ],
-        }),
+        where: async () => [
+          {
+            id: "ws_test123",
+            name: "Workspace",
+            clientId: "contact_existing",
+            reference: null,
+            billingReference: null,
+            color: null,
+          },
+        ],
       }),
     };
     const clientSelect = {
@@ -62,6 +61,7 @@ describe("updateWorkspace", () => {
     let selectCount = 0;
 
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
+      execute: aggregateRecorder().tx.execute,
       select: () => {
         selectCount++;
         return selectCount === 1 ? workspaceSelect : clientSelect;
@@ -88,22 +88,21 @@ describe("updateWorkspace", () => {
   test("rejects promote on an already-client workspace", async () => {
     const workspaceSelect = {
       from: () => ({
-        where: () => ({
-          for: async () => [
-            {
-              id: "ws_test123",
-              name: "Workspace",
-              clientId: "contact_existing",
-              reference: null,
-              billingReference: null,
-              color: null,
-            },
-          ],
-        }),
+        where: async () => [
+          {
+            id: "ws_test123",
+            name: "Workspace",
+            clientId: "contact_existing",
+            reference: null,
+            billingReference: null,
+            color: null,
+          },
+        ],
       }),
     };
 
     const { safeDb, scopedDb } = createScopedDbMock({
+      execute: aggregateRecorder().tx.execute,
       select: () => workspaceSelect,
     });
 
@@ -128,22 +127,21 @@ describe("updateWorkspace", () => {
   test("rejects clientId update on a personal workspace", async () => {
     const workspaceSelect = {
       from: () => ({
-        where: () => ({
-          for: async () => [
-            {
-              id: "ws_test123",
-              name: "Workspace",
-              clientId: null,
-              reference: null,
-              billingReference: null,
-              color: null,
-            },
-          ],
-        }),
+        where: async () => [
+          {
+            id: "ws_test123",
+            name: "Workspace",
+            clientId: null,
+            reference: null,
+            billingReference: null,
+            color: null,
+          },
+        ],
       }),
     };
 
     const { safeDb, scopedDb } = createScopedDbMock({
+      execute: aggregateRecorder().tx.execute,
       select: () => workspaceSelect,
     });
 

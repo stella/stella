@@ -1,4 +1,5 @@
 {
+  "nativeEvents": ["$exception", "desktop_timing", "desktopCrashed"],
   "windows": [
     "clipboard",
     "clipboardEditor",

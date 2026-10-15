@@ -1,4 +1,5 @@
 import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import { VERIFICATION_RUN_CAP_CODES } from "@stll/api-contract/verification-run-caps";
 
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 
@@ -12,6 +13,7 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  */
 export const MCP_ERROR_CODES = [
   ...Object.values(ACTION_ADMISSION_CODES),
+  ...Object.values(VERIFICATION_RUN_CAP_CODES),
   /** Input failed validation at the tool boundary (shape, type, range). */
   "validation_error",
   /** The read result needs a smaller selection or page. */

@@ -1,5 +1,10 @@
 name: Publish npm packages
 
+# release-chain-alert
+defaults:
+  run:
+    shell: bash
+
 # Keep this filename stable: npm trusted publishing authorizes the calling
 # repository workflow, even though the privileged release transaction is
 # implemented by stella/.github.
@@ -312,7 +317,6 @@ jobs:
 
       - name: Build and pack selected packages
         id: pack
-        shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           MANUAL_PACKAGE: ${{ inputs.package || 'all' }}
@@ -410,7 +414,6 @@ jobs:
 
       - name: Smoke-test the packed CLI under plain Node # zizmor: ignore[adhoc-packages] intentionally installs the locally packed artifact as a consumer
         if: contains(fromJSON(steps.pack.outputs.packages), 'cli')
-        shell: bash
         run: |
           set -euo pipefail
           tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
@@ -436,7 +439,6 @@ jobs:
         if: >-
           contains(fromJSON(steps.pack.outputs.packages), 'cli')
           && (github.event_name == 'workflow_run' || inputs.publish)
-        shell: bash
         run: |
           set -euo pipefail
           tarball="$(ls "${GITHUB_WORKSPACE}/release-artifacts/cli"/*.tgz)"
@@ -665,7 +667,7 @@ jobs:
       contents: write # Create immutable package tags and GitHub releases.
       id-token: write # Exchange a short-lived npm trusted-publishing credential.
     # The repository owner publishes this versioned shared contract.
-    uses: stella/.github/.github/workflows/npm-independent-release.yml@167fb396c6c0f4e07296ad2cd72e6ef15367c776 # release job environment input
+    uses: stella/.github/.github/workflows/npm-independent-release.yml@5764ab66e4df84cfd2e642c7d7e4678261e668f8 # release job environment input
     with:
       # The release App key is an environment secret; the shared job runs in
       # this environment so only main and release tags can mint the token.

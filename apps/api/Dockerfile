@@ -1,6 +1,12 @@
-# Pin to digest for supply-chain integrity (oven/bun:1.4.2-slim)
-FROM oven/bun:1.4.2-slim@sha256:cb3bbbb08e13a4a2ff400f24c7a2a1d5efa83f6ef8544d52d95a519631e2fc61 AS base
+# Pin to digest for supply-chain integrity (oven/bun:1.4.3-slim)
+FROM oven/bun:1.4.3-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS base
 WORKDIR /app
+# BEGIN GENERATED INSTALL TOOLING
+COPY packages/scripts/src/child-exit-status.ts packages/scripts/src/child-exit-status.ts
+COPY packages/sha256/src/bun.ts packages/sha256/src/bun.ts
+COPY scripts/ci-install-store.ts scripts/ci-install-store.ts
+COPY scripts/ci-install.ts scripts/ci-install.ts
+# END GENERATED INSTALL TOOLING
 
 FROM base AS install-inputs
 # Preserve Bun's committed root lockfile and full workspace manifest map.
@@ -20,7 +26,7 @@ RUN mkdir -p /json && \
 FROM base AS pruner
 COPY package.json .
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
+    bun scripts/ci-install.ts /tmp/pruner-install.log -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
 COPY . .
 RUN turbo prune @stll/api @stll/collab @stll/legal-atlas-runner --docker
 
@@ -30,7 +36,7 @@ COPY --from=install-inputs /json/ .
 # The cache mount is detached after this layer, so packages must be
 # materialized under /app instead of linked into the global virtual store.
 RUN --mount=type=cache,target=/root/.bun/install/cache \
-    BUN_INSTALL_GLOBAL_STORE=0 bun install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
+    BUN_INSTALL_GLOBAL_STORE=0 bun scripts/ci-install.ts /tmp/deps-install.log --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 # Copy source code and compile the API to a Bun binary.
 #
@@ -241,12 +247,22 @@ RUN bun build \
 # Reviewed citation polarities: stores them and applies them to the current
 # citation rows. Needs the API env (database) and runs inside the API task;
 # reports without writing until `--apply`:
-#   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json", "--apply"]
+#   ["bun", "/app/apply-reviewed-citation-labels.js", "--file", "/tmp/labels.json",
+#    "--results", "/tmp/results.jsonl", "--apply"]
 RUN bun build \
     --define __STELLA_RELEASE__=true \
     --target bun \
     --outfile /app/apply-reviewed-citation-labels.js \
     apps/api/src/scripts/apply-reviewed-citation-labels.ts
+# Corpus generation registry: status, register, and the serving flip, which
+# checks the target's indexes on the search endpoint first. Needs the API env
+# (database, search endpoint); reports without writing until `--apply`:
+#   ["bun", "/app/corpus-generation.js", "serve", "--family", "case_law", "--generation", "<generation>"]
+RUN bun build \
+    --define __STELLA_RELEASE__=true \
+    --target bun \
+    --outfile /app/corpus-generation.js \
+    apps/api/src/scripts/corpus-generation.ts
 # Read-only snippet comparison over the serving corpus index. Reads its query
 # set from a JSON file, so the committed sample ships next to the bundle:
 #   ["bun", "/app/corpus-snippet-compare.js",
@@ -402,6 +418,7 @@ COPY --chown=stella:stella --from=builder /app/repair-publisher-absent-text.js /
 COPY --chown=stella:stella --from=builder /app/repair-cz-ns-court.js /app/repair-cz-ns-court.js
 COPY --chown=stella:stella --from=builder /app/classify-citations.js /app/classify-citations.js
 COPY --chown=stella:stella --from=builder /app/apply-reviewed-citation-labels.js /app/apply-reviewed-citation-labels.js
+COPY --chown=stella:stella --from=builder /app/corpus-generation.js /app/corpus-generation.js
 COPY --chown=stella:stella --from=builder /app/corpus-snippet-compare.js /app/corpus-snippet-compare.js
 # The snippet report reads its query set from a file passed with `--queries`.
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json

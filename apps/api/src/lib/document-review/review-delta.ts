@@ -79,7 +79,7 @@ export const PARAMETER_DIRECTIONS = [
   "lower-favours-target-side",
   "unknown",
 ] as const;
-export type ParameterDirection = (typeof PARAMETER_DIRECTIONS)[number];
+type ParameterDirection = (typeof PARAMETER_DIRECTIONS)[number];
 
 type DeriveParameterImpactArgs = {
   direction: ParameterDirection;

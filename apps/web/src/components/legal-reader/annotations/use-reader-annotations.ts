@@ -3,7 +3,6 @@ import { useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
-import { v7 as uuidv7 } from "uuid";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 import { Temporal } from "@stll/time";
@@ -43,6 +42,8 @@ import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
+import { createUuid } from "@/lib/uuid";
 
 /** A mark not yet acknowledged by the server, keyed so it can be told apart. */
 const PENDING_ID_PREFIX = "pending:";
@@ -171,7 +172,10 @@ export const useReaderAnnotations = (
     ...targetKey,
   });
   const queryKey = annotationsQuery.queryKey;
-  const { data } = useQuery({ ...annotationsQuery, enabled: user !== null });
+  const dataQuery = useQuery({ ...annotationsQuery, enabled: user !== null });
+  const dataView = useQueryView(dataQuery);
+  useQueryViewError(dataView);
+  const data = dataView.type === "items" ? dataView.items : undefined;
 
   const patchCache = async (
     patch: (rows: readonly ReaderAnnotation[]) => ReaderAnnotation[],
@@ -388,7 +392,7 @@ export const useReaderAnnotations = (
         commit(
           createGuestAnnotation({
             input,
-            newId: uuidv7,
+            newId: createUuid,
             now: new Date(Temporal.Now.instant().epochMilliseconds),
             store: guestStore,
             target: targetKey,

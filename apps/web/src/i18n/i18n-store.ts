@@ -4,11 +4,7 @@ import { persist } from "zustand/middleware";
 
 import folioEn from "@stll/folio-react/messages/en";
 import type { FolioLocale } from "@stll/folio-react/messages/locales";
-import {
-  getUiLocaleDirection,
-  isUiLocale,
-  resolveUiLocale,
-} from "@stll/locales";
+import { getUiLocaleDirection, resolveUiLocale } from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
 
 import { getStorageKey } from "@/consts";
@@ -19,8 +15,6 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
-
-export type { TextDirection } from "@stll/locales";
 
 // UI presentation order for language pickers. The membership is enforced
 // against the shared `UiLocale` set (a stale entry fails typecheck); only the
@@ -114,9 +108,7 @@ export const LANG_ENDONYMS = {
 
 export const getLangDir = getUiLocaleDirection;
 
-export const isSupportedLanguage = isUiLocale;
-
-export const resolveSupportedLanguage = resolveUiLocale;
+const resolveSupportedLanguage = resolveUiLocale;
 
 const normalizeLocale = (value: string): string => value.replace("_", "-");
 
@@ -237,10 +229,10 @@ setTranslator(
 
 export { getTranslator } from "@/i18n/translator";
 
-export type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
-export type NumberingPreference = "auto" | "latn" | "arab";
+type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
+type NumberingPreference = "auto" | "latn" | "arab";
 export type RegionalFormatPreference = "auto" | "en-IN";
-export type WeekStartPreference = "auto" | "saturday" | "sunday" | "monday";
+type WeekStartPreference = "auto" | "saturday" | "sunday" | "monday";
 
 export const REGIONAL_FORMATS = ["en-IN"] as const satisfies readonly Exclude<
   RegionalFormatPreference,

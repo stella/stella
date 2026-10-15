@@ -25,8 +25,13 @@ import { useSettingsMutation } from "@/routes/_protected.settings/-hooks/use-set
 const billingDraftKeys = {
   all: () => ["billing-draft-configuration"] as const,
 };
-type BillingConfigurationUpdate = NonNullable<
-  Parameters<(typeof api)["organization-settings"]["billing-drafts"]["post"]>[0]
+type BillingConfigurationUpdate = Omit<
+  NonNullable<
+    Parameters<
+      (typeof api)["organization-settings"]["billing-drafts"]["post"]
+    >[0]
+  >,
+  "expectedUpdatedAt"
 >;
 type KnowledgeFile = Extract<
   NonNullable<
@@ -112,7 +117,12 @@ export const BillingDraftsCard = () => {
   const mutation = useSettingsMutation({
     mutationFn: async (body: BillingConfigurationUpdate) =>
       unwrapEden(
-        await api["organization-settings"]["billing-drafts"].post(body),
+        await api["organization-settings"]["billing-drafts"].post({
+          ...body,
+          expectedUpdatedAt:
+            config.data?.updatedAt ??
+            panic("Billing settings must be loaded before updating"),
+        }),
       ),
     invalidate: billingDraftKeys.all(),
     errorToast: { title: t("errors.actionFailed") },

@@ -37,10 +37,6 @@ import type {
   ReferencePassage,
 } from "@/api/lib/workflow/playbook-positions";
 
-/** Matches `referencePassageSchema`'s former inline bound; a quoted block
- *  longer than this is not one passage. */
-export const REFERENCE_PASSAGE_TEXT_MAX_LENGTH = 10_000;
-
 /** A passage together with its words, as the proposal pass and the grader
  *  hold it in memory. Never part of a persisted position. */
 export type QuotedReferencePassage = {
@@ -84,7 +80,7 @@ type PinReferencePassagesArgs = {
  * caller's scoped transaction: the insert policy refuses a passage from a
  * matter the caller cannot open.
  */
-export const pinReferencePassages = async (
+const pinReferencePassages = async (
   tx: Pick<Transaction, "insert">,
   { organizationId, passages }: PinReferencePassagesArgs,
 ): Promise<PinnedReferencePassage[]> => {

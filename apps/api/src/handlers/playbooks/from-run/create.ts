@@ -23,6 +23,7 @@ import {
   referenceWorkspacesByPosition,
 } from "@/api/lib/document-review/reference-visibility";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import type { PlaybookScope } from "@/api/lib/workflow/playbook-positions";
 
 const fromRunBodySchema = t.Object({
@@ -32,6 +33,7 @@ const fromRunBodySchema = t.Object({
 });
 
 const config = {
+  contract: "patch",
   description:
     "Save the position list a completed document review ran against as a new " +
     "draft playbook in the organization, taking the same create path a " +
@@ -99,7 +101,9 @@ const createPlaybookFromRun = createSafeRootHandler(
     promptCachingEnabled,
     recordAuditEvent,
     safeDb,
+    scopedDb,
     session,
+    user,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -200,6 +204,12 @@ const createPlaybookFromRun = createSafeRootHandler(
       Result.tryPromise(async () => await getActiveWorkspaceIds()),
     );
     const createdResult = yield* createPlaybookDefinitionHandler({
+      admitModelAction: createModelActionAdmitter({
+        organizationId,
+        userId: user.id,
+        organizationStateDb: scopedDb,
+        actionKind: "playbooks.derive-ask",
+      }),
       safeDb,
       organizationId,
       accessibleWorkspaceIds,

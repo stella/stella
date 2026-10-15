@@ -3,7 +3,9 @@
  *
  * `parseDocx` from `@stll/folio-core/server` returns a `Document` — a package
  * whose body is `BlockContent[]` of paragraphs and tables, whose runs carry
- * `TextFormatting`, and whose notes hang off `package.footnotes`. A court that
+ * `TextFormatting`, and whose notes hang off `package.footnotes`, anchored by
+ * paragraph-local `footnoteRef` run items. Source parsers resolve those anchors
+ * with `createParagraphFootnoteReader`, placing notes after their paragraph. A court that
  * publishes half its collection as RTF and half as DOCX otherwise needs two
  * parsers, one per encoding, and the second one is where the drift starts. So
  * this reads RTF into that same model and is named for the `parseRtf` it would
@@ -41,6 +43,7 @@ import type {
   TextFormatting,
 } from "@stll/docx-core/model";
 
+import { RTF_CONTROLS } from "./rtf-control-vocabulary";
 import {
   RTF_EMBEDDED_CONTAINERS,
   RTF_VISIBLE_BLOCK_DESTINATIONS,
@@ -54,7 +57,7 @@ import {
  * letter rather than a failure, so the mapping is explicit and a code page
  * outside it is reported instead of guessed at.
  */
-const ANSI_CODE_PAGES = [
+const RTF_CODE_PAGES = [
   [1250, "windows-1250"],
   [1251, "windows-1251"],
   [1252, "windows-1252"],
@@ -65,9 +68,10 @@ const ANSI_CODE_PAGES = [
 ] as const;
 
 /** The labels above, as the decoder's own vocabulary. */
-type CodePageLabel = (typeof ANSI_CODE_PAGES)[number][1];
+type RtfCodePage = (typeof RTF_CODE_PAGES)[number][0];
+type CodePageLabel = (typeof RTF_CODE_PAGES)[number][1];
 
-const CODE_PAGE_LABELS = new Map<number, CodePageLabel>(ANSI_CODE_PAGES);
+const CODE_PAGE_LABELS = new Map<number, CodePageLabel>(RTF_CODE_PAGES);
 
 const DEFAULT_CODE_PAGE_LABEL: CodePageLabel = "windows-1252";
 
@@ -295,6 +299,18 @@ const SKIPPED_DESTINATIONS = new Set([
   "revtbl",
 ]);
 
+/** Skipped tables establish font decoding and colours, never document content. */
+const METADATA_CONTROL_WORDS = new Set([
+  "fonttbl",
+  "colortbl",
+  "f",
+  "fcharset",
+  "deff",
+  "red",
+  "green",
+  "blue",
+]);
+
 /** The literal characters a symbol control word stands for. */
 const SYMBOL_CONTROL_WORDS = new Map<string, string>([
   ["emdash", "\u2014"],
@@ -341,7 +357,7 @@ type Destination =
   | { type: "footnote"; note: OpenFootnote }
   | { type: "embedded-container"; content: Paragraph[] }
   | { type: "embedded-text"; content: Paragraph[] }
-  | { type: "skipped"; reason: "metadata" | "unknown" };
+  | { type: "skipped"; reason: "metadata" | "pending" | "unknown" };
 
 const initialCharacterState = (): CharacterState => ({
   bold: false,
@@ -417,7 +433,7 @@ export type ReadRtfOptions = {
    * Code page to read `\'xx` bytes against when the document states none.
    * Defaults to windows-1252, which is what `\ansi` alone means.
    */
-  defaultCodePage?: number | undefined;
+  defaultCodePage?: RtfCodePage | undefined;
 };
 
 const decodeBytes = (bytes: readonly number[], label: CodePageLabel): string =>
@@ -429,7 +445,8 @@ const decodeBytes = (bytes: readonly number[], label: CodePageLabel): string =>
  * A run of bytes read as the ASCII it is: control words and the RTF signature
  * are ASCII by definition, so each byte is its own code point.
  */
-const asciiOf = (bytes: Uint8Array): string => String.fromCodePoint(...bytes);
+const asciiOf = (bytes: Uint8Array | Uint16Array): string =>
+  Array.from(bytes, (code) => String.fromCodePoint(code)).join("");
 
 const HEX_DIGITS = "0123456789abcdefABCDEF";
 
@@ -437,6 +454,103 @@ const isAsciiLetter = (code: number): boolean =>
   (code >= 0x41 && code <= 0x5a) || (code >= 0x61 && code <= 0x7a);
 
 const isAsciiDigit = (code: number): boolean => code >= 0x30 && code <= 0x39;
+
+type RtfSource = string | Uint8Array | Uint16Array;
+const unitAt = (source: RtfSource, index: number): number =>
+  typeof source === "string"
+    ? (source.codePointAt(index) ?? 0)
+    : (source[index] ?? 0);
+const asciiRange = (source: RtfSource, start: number, end: number): string =>
+  typeof source === "string"
+    ? source.slice(start, end)
+    : asciiOf(source.subarray(start, end));
+
+type RtfLexicalToken =
+  | {
+      type: "word";
+      word: string;
+      parameter: number | undefined;
+      next: number;
+      syntax: "valid" | "malformed";
+    }
+  | {
+      type: "symbol";
+      symbol: string;
+      byte: number | undefined;
+      next: number;
+      syntax: "valid" | "malformed";
+    };
+
+// RTF 1.9.1 lexical boundaries are shared by decoding and residue detection.
+// Decoder recovery is a separate policy; it cannot invent a residue token.
+const readRtfToken = (
+  source: RtfSource,
+  start: number,
+): RtfLexicalToken | null => {
+  const first = start + 1;
+  if (first >= source.length) {
+    return null;
+  }
+  if (!isAsciiLetter(unitAt(source, first))) {
+    const symbol = asciiRange(source, first, first + 1);
+    if (symbol !== "'") {
+      return {
+        type: "symbol",
+        symbol,
+        byte: undefined,
+        next: first + 1,
+        syntax: "valid",
+      };
+    }
+    const hex = asciiRange(source, first + 1, first + 3);
+    const valid =
+      hex.length === 2 &&
+      Array.from(hex).every((digit) => HEX_DIGITS.includes(digit));
+    return {
+      type: "symbol",
+      symbol,
+      byte: valid ? Number.parseInt(hex, 16) : undefined,
+      next: first + (valid ? 3 : 1),
+      syntax: valid ? "valid" : "malformed",
+    };
+  }
+  let lettersEnd = first;
+  while (
+    lettersEnd < source.length &&
+    isAsciiLetter(unitAt(source, lettersEnd))
+  ) {
+    lettersEnd += 1;
+  }
+  let parameterStart = lettersEnd;
+  const negative = unitAt(source, parameterStart) === 0x2d;
+  if (negative) {
+    parameterStart += 1;
+  }
+  let digitsEnd = parameterStart;
+  while (digitsEnd < source.length && isAsciiDigit(unitAt(source, digitsEnd))) {
+    digitsEnd += 1;
+  }
+  const parameter =
+    digitsEnd === parameterStart
+      ? undefined
+      : Number(asciiRange(source, parameterStart, digitsEnd)) *
+        (negative ? -1 : 1);
+  const delimiter = parameter === undefined ? lettersEnd : digitsEnd;
+  const code = unitAt(source, delimiter);
+  return {
+    type: "word",
+    word: asciiRange(source, first, lettersEnd),
+    parameter,
+    next: delimiter + (code === 0x20 ? 1 : 0),
+    syntax:
+      lettersEnd - first <= 32 &&
+      !isAsciiLetter(code) &&
+      !isAsciiDigit(code) &&
+      !(negative && digitsEnd === parameterStart)
+        ? "valid"
+        : "malformed",
+  };
+};
 
 /**
  * Words the court's writer runs straight into the text after it, longest
@@ -473,18 +587,22 @@ type ControlToken = {
  * remainder is returned as text — which recovers the name rather than losing
  * it, and is reported by the caller either way.
  */
-const readControlWord = (source: Uint8Array, start: number): ControlToken => {
-  let cursor = start;
-  while (cursor < source.length && isAsciiLetter(source[cursor] ?? 0)) {
-    cursor += 1;
-  }
-  const letters = asciiOf(source.subarray(start, cursor));
-  if (letters.length === 0) {
+const readControlWord = (
+  source: Uint8Array | Uint16Array,
+  start: number,
+): ControlToken => {
+  const lexical = readRtfToken(source, start - 1);
+  return decoderControlWord(lexical, start);
+};
+
+const decoderControlWord = (
+  lexical: RtfLexicalToken | null,
+  start: number,
+): ControlToken => {
+  if (lexical?.type !== "word") {
     return { word: null, parameter: undefined, next: start };
   }
-
-  const word = letters;
-  const consumed = cursor;
+  const letters = lexical.word.toLowerCase();
   if (!HANDLED_CONTROL_WORDS.has(letters)) {
     // Only the words that take no parameter and stand next to text are
     // recovered. A general longest-prefix search would read `\shpinst` as
@@ -503,27 +621,7 @@ const readControlWord = (source: Uint8Array, start: number): ControlToken => {
     }
   }
 
-  let parameterStart = consumed;
-  let negative = false;
-  if (source[parameterStart] === 0x2d) {
-    negative = true;
-    parameterStart += 1;
-  }
-  let digits = parameterStart;
-  while (digits < source.length && isAsciiDigit(source[digits] ?? 0)) {
-    digits += 1;
-  }
-  const parameter =
-    digits === parameterStart
-      ? undefined
-      : Number(asciiOf(source.subarray(parameterStart, digits))) *
-        (negative ? -1 : 1);
-  let next = parameter === undefined ? consumed : digits;
-  // One space after a control word is its delimiter and not text.
-  if (source[next] === 0x20) {
-    next += 1;
-  }
-  return { word, parameter, next };
+  return { word: letters, parameter: lexical.parameter, next: lexical.next };
 };
 
 /**
@@ -535,7 +633,7 @@ const readControlWord = (source: Uint8Array, start: number): ControlToken => {
  * a group) ends the replacement early and is left to the scanner.
  */
 const afterFallbackCharacters = (
-  source: Uint8Array,
+  source: Uint8Array | Uint16Array,
   start: number,
   count: number,
 ): number => {
@@ -553,21 +651,19 @@ const afterFallbackCharacters = (
       resume = cursor + 1;
       continue;
     }
-    const escaped = source[cursor + 1];
-    if (escaped === 0x7b || escaped === 0x7d || escaped === 0x5c) {
-      resume = cursor + 2;
-      continue;
-    }
-    const high = String.fromCodePoint(source[cursor + 2] ?? 0);
-    const low = String.fromCodePoint(source[cursor + 3] ?? 0);
+    const token = readRtfToken(source, cursor);
     if (
-      source[cursor + 1] !== 0x27 ||
-      !HEX_DIGITS.includes(high) ||
-      !HEX_DIGITS.includes(low)
+      token?.type !== "symbol" ||
+      !(
+        token.symbol === "{" ||
+        token.symbol === "}" ||
+        token.symbol === "\\" ||
+        token.byte !== undefined
+      )
     ) {
       return resume;
     }
-    resume = cursor + 4;
+    resume = token.next;
   }
   return resume;
 };
@@ -857,6 +953,39 @@ const readRtfInto = (
     }
   };
 
+  /** Destination controls establish content boundaries before formatting is read. */
+  const applyDestinationWord = (word: string): boolean => {
+    // Only known drawing wrappers may expose nested text; a font table or
+    // an unknown ignorable destination cannot turn its children into body text.
+    const parent = stack.at(-1)?.state.destination;
+    const mayReadEmbedded =
+      state.destination.type !== "skipped" ||
+      (state.destination.reason === "pending" && parent?.type !== "skipped");
+    if (mayReadEmbedded && RTF_EMBEDDED_CONTAINERS.has(word)) {
+      enterDestination({ type: "embedded-container", content: [] });
+      return true;
+    }
+    if (mayReadEmbedded && RTF_VISIBLE_BLOCK_DESTINATIONS.has(word)) {
+      enterDestination({ type: "embedded-text", content: [] });
+      state.paragraph = initialParagraphState();
+      return true;
+    }
+    if (
+      state.destination.type === "skipped" &&
+      state.destination.reason === "pending"
+    ) {
+      state.destination = { type: "skipped", reason: "unknown" };
+    }
+    if (SKIPPED_DESTINATIONS.has(word)) {
+      enterDestination({ type: "skipped", reason: "metadata" });
+      // Font/colour tables still establish decoding and formatting below.
+      if (word !== "fonttbl" && word !== "colortbl") {
+        return true;
+      }
+    }
+    return false;
+  };
+
   /**
    * Apply one control word.
    *
@@ -868,27 +997,8 @@ const readRtfInto = (
     word: string,
     parameter: number | undefined,
   ): void => {
-    // Only known drawing wrappers may expose nested text; a font table or
-    // an unknown ignorable destination cannot turn its children into body text.
-    const parent = stack.at(-1)?.state.destination;
-    const mayReadEmbedded =
-      state.destination.type !== "skipped" ||
-      (state.destination.reason === "unknown" && parent?.type !== "skipped");
-    if (mayReadEmbedded && RTF_EMBEDDED_CONTAINERS.has(word)) {
-      enterDestination({ type: "embedded-container", content: [] });
+    if (applyDestinationWord(word)) {
       return;
-    }
-    if (mayReadEmbedded && RTF_VISIBLE_BLOCK_DESTINATIONS.has(word)) {
-      enterDestination({ type: "embedded-text", content: [] });
-      state.paragraph = initialParagraphState();
-      return;
-    }
-    if (SKIPPED_DESTINATIONS.has(word)) {
-      enterDestination({ type: "skipped", reason: "metadata" });
-      // Font/colour tables still establish decoding and formatting below.
-      if (word !== "fonttbl" && word !== "colortbl") {
-        return;
-      }
     }
     if (!HANDLED_CONTROL_WORDS.has(word)) {
       if (
@@ -897,6 +1007,13 @@ const readRtfInto = (
       ) {
         unknownWords.add(word);
       }
+      return;
+    }
+
+    if (
+      state.destination.type === "skipped" &&
+      !METADATA_CONTROL_WORDS.has(word)
+    ) {
       return;
     }
 
@@ -936,6 +1053,11 @@ const readRtfInto = (
       case "green":
       case "blue":
         break;
+      // Source parsers classify headings per paragraph; all RTF line boundaries
+      // must finish a paragraph while retaining formatting for the next line.
+      case "line":
+      case "page":
+      case "sect":
       case "par":
         endParagraph();
         break;
@@ -980,26 +1102,14 @@ const readRtfInto = (
       case "tab":
         pushRunContent({ type: "tab" });
         break;
-      case "line":
-        pushRunContent({ type: "break", breakType: "textWrapping" });
-        break;
-      case "page":
-        pushRunContent({ type: "break", breakType: "page" });
-        break;
       case "u": {
-        // RTF writes a code point above 0x7fff as a negative 16-bit value, so
-        // the escape's own range is one 16-bit word. Anything outside it is a
-        // number `String.fromCodePoint` throws on, and a throw here would lose
-        // the whole document to one malformed escape.
+        // Invalid code points must fail the structured parse: adapters retain
+        // their source-text fallback instead of publishing a partial document.
         if (parameter === undefined) {
           unknownWords.add("u");
           break;
         }
         const codePoint = parameter < 0 ? parameter + 0x1_00_00 : parameter;
-        if (codePoint < 0 || codePoint > 0x10_ff_ff) {
-          unknownWords.add(`u${parameter}`);
-          break;
-        }
         appendText(String.fromCodePoint(codePoint));
         // The escape is followed by `\ucN` replacement characters for
         // readers that cannot decode it.
@@ -1058,7 +1168,7 @@ const readRtfInto = (
     ) {
       return;
     }
-    enterDestination({ type: "skipped", reason: "unknown" });
+    enterDestination({ type: "skipped", reason: "pending" });
   };
 
   const closeGroup = (): void => {
@@ -1082,6 +1192,12 @@ const readRtfInto = (
       state = frame.state;
       pendingFormatting = formattingOf(state.character, colors);
       hasPendingRun = false;
+    }
+  };
+
+  const closeOpenGroups = (): void => {
+    while (stack.length > 0) {
+      closeGroup();
     }
   };
 
@@ -1113,60 +1229,58 @@ const readRtfInto = (
       continue;
     }
 
-    const after = source[cursor + 1];
-    if (after === undefined) {
+    const lexical = readRtfToken(source, cursor);
+    if (lexical === null) {
       cursor += 1;
       continue;
     }
-
+    const after = source[cursor + 1] ?? 0;
     // Escaped literals and the `\'xx` byte.
     if (after === 0x5c || after === 0x7b || after === 0x7d) {
       appendByte(after);
-      cursor += 2;
+      cursor = lexical.next;
       continue;
     }
     if (after === 0x27) {
-      const high = String.fromCodePoint(source[cursor + 2] ?? 0);
-      const low = String.fromCodePoint(source[cursor + 3] ?? 0);
-      if (HEX_DIGITS.includes(high) && HEX_DIGITS.includes(low)) {
-        appendByte(Number.parseInt(`${high}${low}`, 16));
-        cursor += 4;
+      if (lexical.type === "symbol" && lexical.byte !== undefined) {
+        appendByte(lexical.byte);
+        cursor = lexical.next;
         continue;
       }
       unknownWords.add("'");
-      cursor += 2;
+      cursor = lexical.next;
       continue;
     }
     if (after === 0x0d || after === 0x0a) {
       // `\<newline>` is this writer's paragraph mark, same as `\par`.
       endParagraph();
-      cursor += 2;
+      cursor = lexical.next;
       continue;
     }
     if (after === 0x7e) {
       appendText("\u00a0");
-      cursor += 2;
+      cursor = lexical.next;
       continue;
     }
     if (after === 0x2d) {
       // Optional hyphen: contributes nothing to the text.
-      cursor += 2;
+      cursor = lexical.next;
       continue;
     }
     if (after === 0x5f) {
       appendText("\u2011");
-      cursor += 2;
+      cursor = lexical.next;
       continue;
     }
     if (after === 0x2a) {
       // Unsupported destinations warn outside metadata; a metadata subgroup
       // inherits its exclusion instead of becoming a new unknown destination.
       enterIgnorableDestination();
-      cursor += 2;
+      cursor = lexical.next;
       continue;
     }
 
-    const token = readControlWord(source, cursor + 1);
+    const token = decoderControlWord(lexical, cursor + 1);
     if (token.word === null) {
       unknownWords.add(String.fromCodePoint(after));
       cursor += 2;
@@ -1182,7 +1296,10 @@ const readRtfInto = (
     applyControlWord(word, parameter);
   }
 
-  // Whatever the writer left unterminated is still the document's text.
+  // EOF closes every open group. In particular, this restores the body
+  // paragraph held before an unterminated destination without promoting that
+  // destination's metadata or binary payload into it.
+  closeOpenGroups();
   const following = paragraph.following;
   const trailing = takeParagraph();
   if (trailing.content.length > 0) {
@@ -1219,14 +1336,299 @@ export const readRtf = (
   return {
     package: {
       document: { content: blocks },
-      ...(footnotes.length === 0 ? {} : { footnotes }),
+      footnotes,
     },
     ...(warnings.length === 0 ? {} : { warnings }),
   };
 };
+
+/**
+ * Read RTF exposed through a Unicode transport such as an HTML form field.
+ * The transport has already decoded literal non-ASCII characters, so encode
+ * them as RTF Unicode controls while leaving the source's byte escapes intact.
+ */
+const rtfBytesFromUnicodeTransport = (source: string): Uint8Array => {
+  const ascii: number[] = [];
+  const appendUnicodeUnit = (unit: number): void => {
+    const signed = unit > 0x7f_ff ? unit - 0x1_00_00 : unit;
+    // Scope `\uc1` with the escape: the surrounding document may select a
+    // different fallback width, but this transport-generated escape has one.
+    for (const escaped of `{\\uc1\\u${String(signed)}?}`) {
+      ascii.push(escaped.codePointAt(0) ?? 0);
+    }
+  };
+  // Split by UTF-16 unit: Unicode escapes and opaque counts include separate
+  // surrogate halves, even when the decoded transport contains astral text.
+  const units = Uint16Array.from(
+    source.split(""),
+    (unit) => unit.codePointAt(0) ?? 0,
+  );
+  const fallbackStack: number[] = [];
+  let fallbackCount = 1;
+  const copyOpaque = (start: number, end: number): void => {
+    for (let index = start; index < end; index += 1) {
+      const unit = units[index] ?? 0;
+      // These units are skipped by the reader. A decoded non-byte unit occupies
+      // one opaque byte slot; emitting Unicode syntax here would change the count.
+      ascii.push(unit <= 0xff ? unit : 0);
+    }
+  };
+  let cursor = 0;
+  while (cursor < units.length) {
+    const unit = units[cursor] ?? 0;
+    if (unit === 0x5c) {
+      const token = readControlWord(units, cursor + 1);
+      if (token.word !== null) {
+        copyOpaque(cursor, token.next);
+        cursor = token.next;
+        if (
+          token.word === "bin" &&
+          token.parameter !== undefined &&
+          token.parameter >= 0
+        ) {
+          const end = Math.min(units.length, cursor + token.parameter);
+          copyOpaque(cursor, end);
+          cursor = end;
+        } else if (token.word === "uc") {
+          fallbackCount = Math.max(token.parameter ?? 1, 0);
+        } else if (
+          token.word === "u" &&
+          token.parameter !== undefined &&
+          token.parameter >= -0x1_00_00 &&
+          token.parameter <= 0x10_ff_ff
+        ) {
+          const end = afterFallbackCharacters(units, cursor, fallbackCount);
+          copyOpaque(cursor, end);
+          cursor = end;
+        }
+        continue;
+      }
+      // Escaped backslashes and braces are symbols, not token/group boundaries.
+      if ([0x5c, 0x7b, 0x7d].includes(units[cursor + 1] ?? 0)) {
+        copyOpaque(cursor, cursor + 2);
+        cursor += 2;
+        continue;
+      }
+    }
+    if (unit === 0x7b) {
+      fallbackStack.push(fallbackCount);
+    } else if (unit === 0x7d) {
+      fallbackCount = fallbackStack.pop() ?? fallbackCount;
+    }
+    if (unit <= 0x7f) {
+      ascii.push(unit);
+    } else {
+      appendUnicodeUnit(unit);
+    }
+    cursor += 1;
+  }
+  return Uint8Array.from(ascii);
+};
+
+export const readRtfString = (
+  source: string,
+  options: ReadRtfOptions = {},
+): Document => readRtf(rtfBytesFromUnicodeTransport(source), options);
 
 /** Every RTF file opens with this; nothing else the publisher serves does. */
 const RTF_SIGNATURE = "{\\rtf";
 
 export const isRtf = (bytes: Uint8Array): boolean =>
   asciiOf(bytes.subarray(0, RTF_SIGNATURE.length)) === RTF_SIGNATURE;
+
+const KNOWN_RTF_CONTROLS = new Set<string>(RTF_CONTROLS);
+
+type LiteralSpan = { start: number; end: number };
+const LITERAL_QUOTE_CLOSERS = new Map([
+  ['"', '"'],
+  ["“", "”"],
+  ["‘", "’"],
+  ["'", "'"],
+  ["`", "`"],
+]);
+
+type LiteralPathEndOptions = { text: string; start: number; tokenEnd: number };
+
+const literalPathEnd = ({
+  text,
+  start,
+  tokenEnd,
+}: LiteralPathEndOptions): number => {
+  let end = start;
+  if (/^[a-zA-Z]:\\$/u.test(text.slice(start, start + 3))) {
+    end += 3;
+  } else if (text.slice(start, start + 2) === "\\\\") {
+    end += 2;
+  }
+  while (end < tokenEnd) {
+    const char = text.charAt(end);
+    if ("\"“”‘’'`<>|".includes(char)) {
+      break;
+    }
+    if (".,;:!?)]}".includes(char)) {
+      let punctuationEnd = end + 1;
+      while (
+        punctuationEnd < tokenEnd &&
+        ".,;:!?)]}".includes(text.charAt(punctuationEnd))
+      ) {
+        punctuationEnd += 1;
+      }
+      const nextToken =
+        text.charAt(punctuationEnd) === "\\"
+          ? readRtfToken(text, punctuationEnd)
+          : null;
+      const followedByControl =
+        nextToken?.type === "word" &&
+        nextToken.syntax === "valid" &&
+        KNOWN_RTF_CONTROLS.has(nextToken.word);
+      if (
+        punctuationEnd === tokenEnd ||
+        "\"“”‘’'`".includes(text.charAt(punctuationEnd)) ||
+        followedByControl
+      ) {
+        break;
+      }
+      end = punctuationEnd;
+      continue;
+    }
+    end += 1;
+  }
+  return end;
+};
+
+// Only complete path tokens and paired quotation/code spans are literal escapes.
+// All other backslashes reach the lexer, including those immediately after text.
+const rtfLiteralSpans = (text: string): LiteralSpan[] => {
+  const spans: LiteralSpan[] = [];
+  let cursor = 0;
+  while (cursor < text.length) {
+    const char = text.charAt(cursor);
+    if (char === "\\") {
+      cursor += 2;
+      continue;
+    }
+    const closing = LITERAL_QUOTE_CLOSERS.get(char);
+    if (
+      closing === undefined ||
+      (char === "'" &&
+        cursor > 0 &&
+        /[\p{L}\p{N}]/u.test(text.charAt(cursor - 1)))
+    ) {
+      cursor += 1;
+      continue;
+    }
+    const start = cursor;
+    let width = 1;
+    if (char === "`") {
+      while (text.charAt(cursor + width) === "`") {
+        width += 1;
+      }
+    }
+    cursor += width;
+    while (cursor < text.length) {
+      if (text.charAt(cursor) === "\\" && closing !== "`") {
+        cursor += 2;
+        continue;
+      }
+      if (text.charAt(cursor) !== closing) {
+        cursor += 1;
+        continue;
+      }
+      if (
+        closing === "'" &&
+        /[\p{L}\p{N}]/u.test(text.charAt(cursor - 1)) &&
+        /[\p{L}\p{N}]/u.test(text.charAt(cursor + 1))
+      ) {
+        cursor += 1;
+        continue;
+      }
+      let closingWidth = 1;
+      if (closing === "`") {
+        while (text.charAt(cursor + closingWidth) === "`") {
+          closingWidth += 1;
+        }
+      }
+      cursor += closingWidth;
+      if (closingWidth >= width) {
+        spans.push({ start, end: cursor });
+        break;
+      }
+    }
+  }
+  // Paths remain literal even after an unmatched quotation mark. Each token
+  // and each quote/code delimiter run is scanned only once.
+  const paths: LiteralSpan[] = [];
+  for (const match of text.matchAll(/\S+/gu)) {
+    const token = match[0];
+    const path =
+      /(?:(?<![\p{L}\p{N}])[a-zA-Z]:\\|\\\\[^\\\s]+\\[^\\\s]+)/u.exec(token);
+    if (path) {
+      const start = match.index + path.index;
+      const tokenEnd = match.index + token.length;
+      const end = literalPathEnd({ text, start, tokenEnd });
+      paths.push({
+        start,
+        end,
+      });
+    }
+  }
+  const ordered: LiteralSpan[] = [];
+  const pathIterator = paths.values();
+  let path = pathIterator.next();
+  for (const span of spans) {
+    while (!path.done && path.value.start < span.start) {
+      ordered.push(path.value);
+      path = pathIterator.next();
+    }
+    ordered.push(span);
+  }
+  while (!path.done) {
+    ordered.push(path.value);
+    path = pathIterator.next();
+  }
+  return ordered;
+};
+
+// parser-output-unchanged: [cz-us] Shared lexical scanning preserves the decoder's existing recovery policy.
+// parser-output-unchanged: [hu-bhgy] Shared lexical scanning preserves the decoder's existing recovery policy.
+/**
+ * Recognize known spec tokens without decoding or changing publisher text.
+ * @yields Recognized control spans outside literal path and quoted/code spans.
+ */
+export function* rtfControlResidueMatchesIn(
+  text: string,
+): Generator<{ index: number; matched: string }> {
+  const literalSpans = rtfLiteralSpans(text);
+  let literalIndex = 0;
+  let cursor = 0;
+  while (cursor < text.length) {
+    let literal = literalSpans.at(literalIndex);
+    while (literal && literal.end <= cursor) {
+      literalIndex += 1;
+      literal = literalSpans.at(literalIndex);
+    }
+    if (literal && literal.start <= cursor) {
+      cursor = literal.end;
+      continue;
+    }
+    if (text.charAt(cursor) !== "\\") {
+      cursor += 1;
+      continue;
+    }
+    const token = readRtfToken(text, cursor);
+    if (token === null) {
+      cursor += 1;
+      continue;
+    }
+    const control = token.type === "word" ? token.word : token.symbol;
+    if (token.syntax === "valid" && KNOWN_RTF_CONTROLS.has(control)) {
+      // The one consumed word-delimiting space is not part of the finding.
+      const end =
+        token.type === "word" && text.charAt(token.next - 1) === " "
+          ? token.next - 1
+          : token.next;
+      yield { index: cursor, matched: text.slice(cursor, end) };
+    }
+    cursor = token.next;
+  }
+}

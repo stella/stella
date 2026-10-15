@@ -24,6 +24,7 @@ import type {
  */
 export const MODEL_DOCUMENT_INPUT_OPTIONS = {
   google: [
+    "gemini-4-argon",
     "gemini-3.8-flash",
     "gemini-3.7-flash",
     "gemini-3.6-flash",
@@ -40,6 +41,7 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
     "openai/gpt-5.6-sol",
     "openai/gpt-5.6-terra",
     "openai/gpt-5.6-luna",
+    "google/gemini-4-argon",
     "google/gemini-3.8-flash",
     "google/gemini-3.7-flash",
     "google/gemini-3.6-flash",
@@ -47,6 +49,7 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
     "google/gemini-3.1-pro-preview",
     "google/gemini-3.5-flash",
     "google/gemini-3.1-flash-lite",
+    "anthropic/claude-haiku-5.5",
     "anthropic/claude-sonnet-5.5",
     "anthropic/claude-sonnet-5",
     "anthropic/claude-opus-5",
@@ -83,10 +86,12 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
     "claude-opus-4-7",
     "claude-sonnet-4-6",
     "claude-opus-4-6",
+    "claude-haiku-5-5",
     "claude-haiku-4-5-20251001",
   ],
   bedrock: [
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "us.anthropic.claude-haiku-5-5",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "us.amazon.nova-pro-v1:0",
     "us.amazon.nova-lite-v1:0",
@@ -99,6 +104,7 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
 /** Every offered provider/model pair has explicit image-input evidence. */
 export const MODEL_IMAGE_INPUT_CAPABILITIES = {
   google: {
+    "gemini-4-argon": "supported",
     "gemini-3.8-flash": "supported",
     "gemini-3.7-flash": "supported",
     "gemini-3.6-flash": "supported",
@@ -115,6 +121,7 @@ export const MODEL_IMAGE_INPUT_CAPABILITIES = {
     "openai/gpt-5.6-sol": "supported",
     "openai/gpt-5.6-terra": "supported",
     "openai/gpt-5.6-luna": "supported",
+    "google/gemini-4-argon": "supported",
     "google/gemini-3.8-flash": "supported",
     "google/gemini-3.7-flash": "supported",
     "google/gemini-3.6-flash": "supported",
@@ -122,6 +129,7 @@ export const MODEL_IMAGE_INPUT_CAPABILITIES = {
     "google/gemini-3.1-pro-preview": "supported",
     "google/gemini-3.5-flash": "supported",
     "google/gemini-3.1-flash-lite": "supported",
+    "anthropic/claude-haiku-5.5": "supported",
     "anthropic/claude-sonnet-5.5": "supported",
     "anthropic/claude-sonnet-5": "supported",
     "anthropic/claude-opus-5": "supported",
@@ -155,10 +163,12 @@ export const MODEL_IMAGE_INPUT_CAPABILITIES = {
     "claude-opus-4-7": "supported",
     "claude-sonnet-4-6": "supported",
     "claude-opus-4-6": "supported",
+    "claude-haiku-5-5": "supported",
     "claude-haiku-4-5-20251001": "supported",
   },
   bedrock: {
     "us.anthropic.claude-sonnet-4-5-20250929-v1:0": "supported",
+    "us.anthropic.claude-haiku-5-5": "supported",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "supported",
     "us.amazon.nova-pro-v1:0": "supported",
     "us.amazon.nova-lite-v1:0": "supported",
@@ -183,6 +193,7 @@ export const MODEL_IMAGE_INPUT_CAPABILITIES = {
  * through `resolveReasoningEffort`.
  */
 export const MODEL_REASONING_EFFORTS = {
+  "gemini-4-argon": ["low", "medium", "high"],
   "gemini-3.8-flash": ["low", "medium", "high"],
   "gemini-3.7-flash": ["low", "medium", "high"],
   "gemini-3.6-flash": ["minimal", "low", "medium", "high"],
@@ -197,6 +208,7 @@ export const MODEL_REASONING_EFFORTS = {
   "openai/gpt-5.6-sol": ["none", "low", "medium", "high", "xhigh", "max"],
   "openai/gpt-5.6-terra": ["none", "low", "medium", "high", "xhigh", "max"],
   "openai/gpt-5.6-luna": ["none", "low", "medium", "high", "xhigh", "max"],
+  "google/gemini-4-argon": ["low", "medium", "high"],
   "google/gemini-3.8-flash": ["low", "medium", "high"],
   "google/gemini-3.7-flash": ["low", "medium", "high"],
   "google/gemini-3.6-flash": ["minimal", "low", "medium", "high"],
@@ -204,6 +216,7 @@ export const MODEL_REASONING_EFFORTS = {
   "google/gemini-3.1-pro-preview": ["low", "medium", "high"],
   "google/gemini-3.5-flash": ["minimal", "low", "medium", "high"],
   "google/gemini-3.1-flash-lite": ["none", "minimal", "low", "medium", "high"],
+  "anthropic/claude-haiku-5.5": ["none", "low", "medium", "high", "xhigh", "max"],
   "anthropic/claude-sonnet-5.5": ["low", "medium", "high", "xhigh", "max"],
   "anthropic/claude-sonnet-5": ["none", "low", "medium", "high", "xhigh", "max"],
   "anthropic/claude-opus-5": ["none", "low", "medium", "high", "xhigh", "max"],
@@ -233,8 +246,10 @@ export const MODEL_REASONING_EFFORTS = {
   "claude-opus-4-7": ["low", "medium", "high", "xhigh", "max"],
   "claude-sonnet-4-6": ["low", "medium", "high", "max"],
   "claude-opus-4-6": ["low", "medium", "high", "max"],
+  "claude-haiku-5-5": ["none", "low", "medium", "high", "xhigh", "max"],
   "claude-haiku-4-5-20251001": null,
   "us.anthropic.claude-sonnet-4-5-20250929-v1:0": null,
+  "us.anthropic.claude-haiku-5-5": ["none", "low", "medium", "high", "xhigh", "max"],
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": null,
   "us.amazon.nova-pro-v1:0": null,
   "us.amazon.nova-lite-v1:0": null,
@@ -256,6 +271,7 @@ export const MODEL_REASONING_EFFORTS = {
  * a truthful named default, so clients must retain a separate Default choice.
  */
 export const MODEL_DEFAULT_REASONING_EFFORTS = {
+  "gemini-4-argon": null,
   "gemini-3.8-flash": null,
   "gemini-3.7-flash": null,
   "gemini-3.6-flash": null,
@@ -270,6 +286,7 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
   "openai/gpt-5.6-sol": "medium",
   "openai/gpt-5.6-terra": "medium",
   "openai/gpt-5.6-luna": "medium",
+  "google/gemini-4-argon": "medium",
   "google/gemini-3.8-flash": "medium",
   "google/gemini-3.7-flash": "medium",
   "google/gemini-3.6-flash": "medium",
@@ -277,6 +294,7 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
   "google/gemini-3.1-pro-preview": "medium",
   "google/gemini-3.5-flash": "medium",
   "google/gemini-3.1-flash-lite": "minimal",
+  "anthropic/claude-haiku-5.5": "medium",
   "anthropic/claude-sonnet-5.5": "high",
   "anthropic/claude-sonnet-5": "high",
   "anthropic/claude-opus-5": "high",
@@ -306,8 +324,10 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
   "claude-opus-4-7": null,
   "claude-sonnet-4-6": null,
   "claude-opus-4-6": null,
+  "claude-haiku-5-5": null,
   "claude-haiku-4-5-20251001": null,
   "us.anthropic.claude-sonnet-4-5-20250929-v1:0": null,
+  "us.anthropic.claude-haiku-5-5": null,
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": null,
   "us.amazon.nova-pro-v1:0": null,
   "us.amazon.nova-lite-v1:0": null,
@@ -329,6 +349,7 @@ export const MODEL_DEFAULT_REASONING_EFFORTS = {
  * parameters. Consumers must go through `shouldEmitTemperature`.
  */
 export const MODEL_TEMPERATURE_POLICIES = {
+  "gemini-4-argon": "omit",
   "gemini-3.8-flash": "omit",
   "gemini-3.7-flash": "omit",
   "gemini-3.6-flash": "omit",
@@ -343,6 +364,7 @@ export const MODEL_TEMPERATURE_POLICIES = {
   "openai/gpt-5.6-sol": "omit",
   "openai/gpt-5.6-terra": "omit",
   "openai/gpt-5.6-luna": "omit",
+  "google/gemini-4-argon": "omit",
   "google/gemini-3.8-flash": "omit",
   "google/gemini-3.7-flash": "omit",
   "google/gemini-3.6-flash": "omit",
@@ -350,10 +372,11 @@ export const MODEL_TEMPERATURE_POLICIES = {
   "google/gemini-3.1-pro-preview": "emit",
   "google/gemini-3.5-flash": "emit",
   "google/gemini-3.1-flash-lite": "emit",
-  "anthropic/claude-sonnet-5.5": "emit",
+  "anthropic/claude-haiku-5.5": "omit",
+  "anthropic/claude-sonnet-5.5": "omit",
   "anthropic/claude-sonnet-5": "omit",
-  "anthropic/claude-opus-5": "emit",
-  "anthropic/claude-opus-4.8": "emit",
+  "anthropic/claude-opus-5": "omit",
+  "anthropic/claude-opus-4.8": "omit",
   "anthropic/claude-sonnet-4.6": "emit",
   "openai/gpt-5.5": "omit",
   "openai/gpt-5.4-mini": "omit",
@@ -379,8 +402,10 @@ export const MODEL_TEMPERATURE_POLICIES = {
   "claude-opus-4-7": "omit",
   "claude-sonnet-4-6": "emit",
   "claude-opus-4-6": "emit",
+  "claude-haiku-5-5": "omit",
   "claude-haiku-4-5-20251001": "emit",
   "us.anthropic.claude-sonnet-4-5-20250929-v1:0": "emit",
+  "us.anthropic.claude-haiku-5-5": "omit",
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": "emit",
   "us.amazon.nova-pro-v1:0": "emit",
   "us.amazon.nova-lite-v1:0": "emit",
@@ -399,6 +424,7 @@ export const MODEL_TEMPERATURE_POLICIES = {
  * `getOutputTokenLimit`.
  */
 export const MODEL_OUTPUT_TOKEN_LIMITS = {
+  "gemini-4-argon": 32_768,
   "gemini-3.8-flash": 65_536,
   "gemini-3.7-flash": 65_536,
   "gemini-3.6-flash": 65_536,
@@ -413,6 +439,7 @@ export const MODEL_OUTPUT_TOKEN_LIMITS = {
   "openai/gpt-5.6-sol": 128_000,
   "openai/gpt-5.6-terra": 128_000,
   "openai/gpt-5.6-luna": 128_000,
+  "google/gemini-4-argon": 65_536,
   "google/gemini-3.8-flash": 65_536,
   "google/gemini-3.7-flash": 65_536,
   "google/gemini-3.6-flash": 65_536,
@@ -420,6 +447,7 @@ export const MODEL_OUTPUT_TOKEN_LIMITS = {
   "google/gemini-3.1-pro-preview": 65_536,
   "google/gemini-3.5-flash": 65_536,
   "google/gemini-3.1-flash-lite": 65_536,
+  "anthropic/claude-haiku-5.5": 128_000,
   "anthropic/claude-sonnet-5.5": 128_000,
   "anthropic/claude-sonnet-5": 128_000,
   "anthropic/claude-opus-5": 128_000,
@@ -449,8 +477,10 @@ export const MODEL_OUTPUT_TOKEN_LIMITS = {
   "claude-opus-4-7": 128_000,
   "claude-sonnet-4-6": 128_000,
   "claude-opus-4-6": 128_000,
+  "claude-haiku-5-5": 128_000,
   "claude-haiku-4-5-20251001": 64_000,
   "us.anthropic.claude-sonnet-4-5-20250929-v1:0": 64_000,
+  "us.anthropic.claude-haiku-5-5": 128_000,
   "us.anthropic.claude-haiku-4-5-20251001-v1:0": 64_000,
   "us.amazon.nova-pro-v1:0": 10_000,
   "us.amazon.nova-lite-v1:0": 10_000,

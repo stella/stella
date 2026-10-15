@@ -29,6 +29,7 @@ import { Textarea } from "@stll/ui/textarea";
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { QueryViewFeedback } from "@/components/query-view-feedback";
 import {
   REGISTRY_DEFAULT_FORMAT,
   REGISTRY_FIELD_EXAMPLES,
@@ -54,6 +55,7 @@ import { LANG_ENDONYMS } from "@/i18n/i18n-store";
 import type { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { bindingCatalogOptions } from "@/lib/knowledge/queries/binding-catalog";
+import { useQueryView } from "@/lib/use-query-view";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import type {
   EditableField,
@@ -107,7 +109,7 @@ const LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH = 2000;
 
 /** Canonical icon + name for a field's value type (shared with the matter
  *  table's property chips via the value-type registry). */
-export const ValueTypeLabel = ({
+const ValueTypeLabel = ({
   inputType,
 }: {
   inputType: InputType | "company";
@@ -865,7 +867,9 @@ const BindingSourceConfigControl = ({
   onUpdate: (patch: Partial<EditableField>) => void;
 }) => {
   const t = useTranslations();
-  const { data } = useQuery(bindingCatalogOptions());
+  const dataQuery = useQuery(bindingCatalogOptions());
+  const dataView = useQueryView(dataQuery);
+  const data = dataView.type === "items" ? dataView.items : undefined;
   const sources = optionalArray(data?.sources);
   const firstSource = sources.at(0);
 
@@ -892,6 +896,7 @@ const BindingSourceConfigControl = ({
   if (firstSource === undefined) {
     return (
       <Field>
+        <QueryViewFeedback view={dataView} />
         <div className="flex items-center gap-2">
           <Checkbox checked={field.source !== undefined} disabled />
           <FieldLabel>{t("templates.studio.sourceEnable")}</FieldLabel>
@@ -905,6 +910,7 @@ const BindingSourceConfigControl = ({
 
   return (
     <>
+      <QueryViewFeedback view={dataView} />
       <Field>
         <div className="flex items-center gap-2">
           <Checkbox

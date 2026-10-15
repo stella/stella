@@ -16,6 +16,8 @@ import type {
 } from "react";
 import { flushSync } from "react-dom";
 
+import { attachClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/attach-closest-edge";
+import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge/extract-closest-edge";
 import {
   draggable,
   dropTargetForElements,
@@ -46,6 +48,8 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
   Building2Icon,
   ChevronsUpDownIcon,
   ClipboardIcon,
@@ -72,7 +76,13 @@ import {
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
+import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
+import {
+  reorderInlineIds,
+  toInlineDropPosition,
+  type InlineDropPosition,
+} from "@stll/ui/inline-reorder";
 import {
   InputGroup,
   InputGroupAddon,
@@ -93,7 +103,6 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { StellaMark } from "@stll/ui/stella-mark";
-import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
 import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
@@ -109,15 +118,15 @@ import {
 } from "../telemetry/desktop-telemetry";
 import {
   adjacentClipboardIndex,
-  CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS,
+  CLIPBOARD_GROUP_DRAG_TYPE,
   CLIPBOARD_ITEM_DRAG_TYPE,
+  clipboardDraggedGroupId,
   clipboardDraggedItemId,
   clipboardItemLink,
   clipboardPointerMoved,
   clipboardRailScrollDelta,
   clipboardRailWheelDelta,
   clipboardRailWindow,
-  clipboardSearchPreviewText,
   clipboardSourceIdentity,
   clipboardSourceLabel,
   clipboardSourceTintIndex,
@@ -130,7 +139,6 @@ import {
   filterClipboardItems,
   formatClipboardAge,
   hasClipboardPrimaryModifier,
-  highlightClipboardText,
   isClipboardCopyShortcut,
   isClipboardNameInput,
   quickCopyIndex,
@@ -165,11 +173,11 @@ import type {
   ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
+import { ClipboardCardPreview } from "./ClipboardCardPreview";
 import {
   ClipboardGroupFields,
   nextClipboardGroupColor,
 } from "./ClipboardGroupFields";
-import { ClipboardImagePreview } from "./ClipboardImagePreview";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useRailViewport } from "./use-rail-viewport";
@@ -326,6 +334,13 @@ const revealCard = ({ rail, id, focus }: CardRevealOptions) => {
   });
 };
 
+type ClipboardOpenMenuOptions = {
+  anchor: "button" | "pointer";
+  event: ReactMouseEvent<HTMLElement>;
+  item: ClipboardItem;
+  index: number;
+};
+
 type ClipboardCardProps = {
   active: boolean;
   ageReferenceTime: number;
@@ -334,11 +349,8 @@ type ClipboardCardProps = {
   groupName: string | null;
   index: number;
   item: ClipboardItem;
-  onOpenMenu: (
-    event: ReactMouseEvent<HTMLElement>,
-    item: ClipboardItem,
-    index: number,
-  ) => void;
+  menuOpen: boolean;
+  onOpenMenu: (options: ClipboardOpenMenuOptions) => void;
   onCopy: (item: ClipboardItem, format?: ClipboardCopyFormat) => void;
   onRename: (id: string, name: string) => void;
   onSelect: (index: number) => void;
@@ -439,6 +451,7 @@ const ClipboardCard = ({
   groupName,
   index,
   item,
+  menuOpen,
   onOpenMenu,
   onCopy,
   onRename,
@@ -484,74 +497,12 @@ const ClipboardCard = ({
   const sourceStyle: ClipboardCardStyle | undefined = accent
     ? { "--clipboard-source-accent": accent }
     : undefined;
-  const rendersHtml = item.type === "formattedText" && !query;
   const link = clipboardItemLink(item);
   const fallbackName =
     item.type === "image" ? t("image") : (link?.host ?? t("unnamedClip"));
   // An unnamed browser copy is named after the page it came from.
   const untitledName =
     item.sourceApp?.page && sourceLabel ? sourceLabel : fallbackName;
-  const previewClassName = cn(
-    "text-foreground line-clamp-[8] text-sm leading-5 text-pretty wrap-break-word",
-    // HTML collapses its source whitespace; only plain text (and <pre>) keeps it.
-    rendersHtml
-      ? "clipboard-html [&_blockquote]:border-s-2 [&_blockquote]:ps-3 [&_code]:font-mono [&_li]:ms-4 [&_ol]:list-decimal [&_pre]:whitespace-pre-wrap [&_strong]:font-semibold [&_ul]:list-disc"
-      : "whitespace-pre-wrap tab-4",
-  );
-  let previewContent: ReactNode;
-  if (item.type === "image") {
-    previewContent = (
-      <div className="size-full" dir="auto">
-        <ClipboardImagePreview
-          alt={item.name ?? t("image")}
-          id={item.id}
-          onStatusChange={setImagePreviewStatus}
-          retryToken={imagePreviewRetryToken}
-          surface="timeline"
-        />
-      </div>
-    );
-  } else {
-    previewContent = (
-      <div className={previewClassName} dir="auto">
-        {item.plainText.slice(0, CLIPBOARD_CARD_PREVIEW_MAX_CHARACTERS)}
-      </div>
-    );
-    if (rendersHtml) {
-      previewContent = (
-        <div
-          className={previewClassName}
-          dangerouslySetInnerHTML={{
-            // safe-html: Rust ammonia::Builder removes active content and permits only the semantic formatting tags declared in clipboard.rs before IPC.
-            __html: item.html,
-          }}
-          dir="auto"
-        />
-      );
-    }
-    if (query) {
-      const searchPreview = clipboardSearchPreviewText(item, query);
-      const highlightedText = highlightClipboardText(searchPreview.text, query);
-      previewContent = (
-        <div className={previewClassName} dir="auto">
-          {searchPreview.truncated ? (
-            <span aria-hidden="true" className="text-muted-foreground">
-              {"… "}
-            </span>
-          ) : null}
-          {highlightedText.map((segment) =>
-            segment.match ? (
-              <TextMark {...SEARCH_HIT_MARK} key={segment.start}>
-                {segment.text}
-              </TextMark>
-            ) : (
-              <span key={segment.start}>{segment.text}</span>
-            ),
-          )}
-        </div>
-      );
-    }
-  }
   let metadataIcon: ReactNode = (
     <FileTextIcon aria-hidden="true" className="text-muted-foreground size-6" />
   );
@@ -631,12 +582,19 @@ const ClipboardCard = ({
         className="flex min-h-0 flex-1 flex-col self-stretch text-start focus-visible:outline-none"
         data-clipboard-card-trigger=""
         onClick={() => onCopy(item, "original")}
-        onContextMenu={(event) => onOpenMenu(event, item, index)}
+        onContextMenu={(event) =>
+          onOpenMenu({ anchor: "pointer", event, item, index })
+        }
         onFocus={() => onSelect(index)}
         type="button"
       >
         <div className="relative min-h-0 flex-1 self-stretch overflow-hidden p-5">
-          {previewContent}
+          <ClipboardCardPreview
+            imagePreviewRetryToken={imagePreviewRetryToken}
+            item={item}
+            onImagePreviewStatusChange={setImagePreviewStatus}
+            query={query}
+          />
           {/* Renaming takes both keys for itself: Enter commits the name and
               Shift+Enter is swallowed with it, so the hints would lie. */}
           {active && !editingName && item.type === "formattedText" ? (
@@ -657,6 +615,27 @@ const ClipboardCard = ({
           ) : null}
         </div>
       </button>
+
+      <Button
+        aria-expanded={menuOpen}
+        aria-haspopup="menu"
+        aria-label={t("moreItemActions", { number: index + 1 })}
+        className={cn(
+          "bg-background/90 text-muted-foreground hover:text-foreground focus-visible:ring-ring absolute end-2 top-2 flex size-6 items-center justify-center rounded-md opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:ring-2 focus-visible:outline-none motion-safe:transition-opacity motion-safe:duration-150 pointer-coarse:opacity-100",
+          (active || menuOpen) && "opacity-100",
+        )}
+        data-clipboard-more-trigger=""
+        onClick={(event) =>
+          onOpenMenu({ anchor: "button", event, item, index })
+        }
+        onFocus={() => onSelect(index)}
+        size="icon-xs"
+        tooltip={t("moreItemActions", { number: index + 1 })}
+        type="button"
+        variant="ghost"
+      >
+        <EllipsisVerticalIcon aria-hidden="true" className="size-3.5" />
+      </Button>
 
       <footer className="clipboard-card-footer flex h-12 shrink-0 items-center gap-2 px-4">
         {editingName ? null : (
@@ -1007,7 +986,11 @@ const ClipboardDialog = ({
 
 type ClipboardContextMenuState =
   | { type: "closed" }
-  | { item: ClipboardItem; type: "open"; x: number; y: number };
+  | {
+      anchor: HTMLElement | { getBoundingClientRect: () => DOMRect };
+      item: ClipboardItem;
+      type: "open";
+    };
 
 type ClipboardDragState =
   | { type: "idle" }
@@ -1015,6 +998,11 @@ type ClipboardDragState =
       itemId: string;
       target: { type: "none" } | { groupId: string | null; type: "group" };
       type: "dragging";
+    }
+  | {
+      groupId: string;
+      over: { groupId: string; position: InlineDropPosition } | null;
+      type: "reordering";
     };
 
 type ClipboardContextMenuProps = {
@@ -1049,9 +1037,6 @@ const ClipboardContextMenu = ({
   sourceAppExclusions,
 }: ClipboardContextMenuProps) => {
   const t = useTranslations("clipboard");
-  const anchor = {
-    getBoundingClientRect: () => new DOMRect(menu.x, menu.y, 0, 0),
-  };
   const sourceApp = menu.item.sourceApp;
   const sourceAppCanBeExcluded =
     sourceApp !== null &&
@@ -1071,7 +1056,7 @@ const ClipboardContextMenu = ({
       open
     >
       <MenuTrigger nativeButton={false} render={<span className="sr-only" />} />
-      <MenuPopup anchor={anchor} className="w-56" finalFocus={false}>
+      <MenuPopup anchor={menu.anchor} className="w-56" finalFocus={false}>
         {menu.item.type === "formattedText" ? (
           <MenuSub>
             <MenuSubTrigger className="min-h-11 rounded-xl">
@@ -1423,9 +1408,16 @@ const ClipboardWelcomeDialog = ({
           </span>
         </DialogHeader>
         <DialogPanel className="px-5 pt-2 pb-1" scrollFade={false}>
-          {connectionStatus === "disconnected" ? (
+          {connectionStatus === "disconnected" ||
+          connectionStatus === "expired" ||
+          connectionStatus === "reconnectRequired" ? (
             <p className="text-muted-foreground mb-3 text-sm leading-relaxed">
-              {settingsT("connectToStellaDescription")}
+              {settingsT(
+                connectionStatus === "expired" ||
+                  connectionStatus === "reconnectRequired"
+                  ? "connectionExpiredDescription"
+                  : "connectToStellaDescription",
+              )}
             </p>
           ) : null}
           {connectionError ? (
@@ -1490,7 +1482,11 @@ const ClipboardWelcomeDialog = ({
           </Label>
         </DialogPanel>
         <DialogFooter className="px-5 pb-5" variant="bare">
-          {connectionStatus === "disconnected" ? connectControl : null}
+          {connectionStatus === "disconnected" ||
+          connectionStatus === "expired" ||
+          connectionStatus === "reconnectRequired"
+            ? connectControl
+            : null}
           {connectionStatus === "unavailable" ? (
             <Button
               className="min-h-11 rounded-xl"
@@ -1506,7 +1502,11 @@ const ClipboardWelcomeDialog = ({
             onClick={completeWelcome}
             type="button"
             variant={
-              connectionStatus === "disconnected" ? "outline" : "default"
+              connectionStatus === "disconnected" ||
+              connectionStatus === "expired" ||
+              connectionStatus === "reconnectRequired"
+                ? "outline"
+                : "default"
             }
           >
             {t("welcomeStart")}
@@ -1908,19 +1908,26 @@ const ClipboardApp = () => {
     });
   };
 
-  const openContextMenu = (
-    event: ReactMouseEvent<HTMLElement>,
-    item: ClipboardItem,
-    index: number,
-  ) => {
+  const openContextMenu = ({
+    anchor,
+    event,
+    item,
+    index,
+  }: ClipboardOpenMenuOptions) => {
     event.preventDefault();
+    event.stopPropagation();
+    const { clientX, clientY } = event;
     contextMenuTriggerRef.current = event.currentTarget;
     setSelectedIndex(index);
     setContextMenu({
       item,
       type: "open",
-      x: event.clientX,
-      y: event.clientY,
+      anchor:
+        anchor === "button"
+          ? event.currentTarget
+          : {
+              getBoundingClientRect: () => new DOMRect(clientX, clientY, 0, 0),
+            },
     });
   };
 
@@ -1990,12 +1997,67 @@ const ClipboardApp = () => {
       ) {
         continue;
       }
+      if (groupId !== null) {
+        // Chips reorder like workspace view tabs: the closest edge of the
+        // chip under the pointer says whether the dragged one lands before
+        // or after it.
+        cleanups.push(
+          draggable({
+            element,
+            getInitialData: () => ({
+              groupId,
+              type: CLIPBOARD_GROUP_DRAG_TYPE,
+            }),
+            onDragStart: () => {
+              setDragState({ groupId, over: null, type: "reordering" });
+            },
+            onDrop: () => setDragState({ type: "idle" }),
+          }),
+        );
+      }
       cleanups.push(
         dropTargetForElements({
           canDrop: ({ source }) =>
-            clipboardDraggedItemId(source.data, itemIds) !== null,
+            clipboardDraggedItemId(source.data, itemIds) !== null ||
+            (groupId !== null &&
+              clipboardDraggedGroupId(source.data, groupIds) !== null),
           element,
+          getData: ({ input }) =>
+            attachClosestEdge(
+              {},
+              { allowedEdges: ["left", "right"], element, input },
+            ),
+          onDrag: ({ self, source }) => {
+            const draggedGroupId = clipboardDraggedGroupId(
+              source.data,
+              groupIds,
+            );
+            if (!draggedGroupId || groupId === null) {
+              return;
+            }
+            const position = toInlineDropPosition(
+              extractClosestEdge(self.data),
+              clipboardElementDirection(element),
+            );
+            const over =
+              position === null || draggedGroupId === groupId
+                ? null
+                : { groupId, position };
+            // onDrag fires on every pointer move; keep the state identity
+            // unless the indicator actually moves.
+            setDragState((current) =>
+              current.type === "reordering" &&
+              current.groupId === draggedGroupId &&
+              current.over?.groupId === over?.groupId &&
+              current.over?.position === over?.position
+                ? current
+                : { groupId: draggedGroupId, over, type: "reordering" },
+            );
+          },
           onDragEnter: ({ source }) => {
+            if (clipboardDraggedGroupId(source.data, groupIds)) {
+              return;
+            }
             const itemId = clipboardDraggedItemId(source.data, itemIds);
             if (!itemId) {
               return;
@@ -2007,6 +2069,18 @@ const ClipboardApp = () => {
             });
           },
           onDragLeave: ({ source }) => {
+            const draggedGroupId = clipboardDraggedGroupId(
+              source.data,
+              groupIds,
+            );
+            if (draggedGroupId) {
+              setDragState({
+                groupId: draggedGroupId,
+                over: null,
+                type: "reordering",
+              });
+              return;
+            }
             const itemId = clipboardDraggedItemId(source.data, itemIds);
             if (!itemId) {
               return;
@@ -2017,9 +2091,35 @@ const ClipboardApp = () => {
               type: "dragging",
             });
           },
-          onDrop: ({ source }) => {
-            const itemId = clipboardDraggedItemId(source.data, itemIds);
+          onDrop: ({ self, source }) => {
             setDragState({ type: "idle" });
+            const draggedGroupId = clipboardDraggedGroupId(
+              source.data,
+              groupIds,
+            );
+            if (draggedGroupId) {
+              const position = toInlineDropPosition(
+                extractClosestEdge(self.data),
+                clipboardElementDirection(element),
+              );
+              const reordered =
+                groupId === null || position === null
+                  ? null
+                  : reorderInlineIds({
+                      draggedId: draggedGroupId,
+                      ids: snapshot.groups.map((group) => group.id),
+                      position,
+                      targetId: groupId,
+                    });
+              if (reordered) {
+                applySnapshotCommand("clipboard_move_group", {
+                  id: draggedGroupId,
+                  index: reordered.indexOf(draggedGroupId),
+                });
+              }
+              return;
+            }
+            const itemId = clipboardDraggedItemId(source.data, itemIds);
             if (!itemId) {
               return;
             }
@@ -2047,6 +2147,12 @@ const ClipboardApp = () => {
     dragState.type === "dragging" &&
     dragState.target.type === "group" &&
     dragState.target.groupId === groupId;
+  const reorderPosition = (groupId: string) =>
+    dragState.type === "reordering" && dragState.over?.groupId === groupId
+      ? dragState.over.position
+      : null;
+  const moveGroup = (groupId: string, index: number) =>
+    applySnapshotCommand("clipboard_move_group", { id: groupId, index });
 
   const selectIndex = (index: number) => {
     // Mount a virtualized target before focusing it. Deferring focus to a
@@ -2594,6 +2700,10 @@ const ClipboardApp = () => {
                             index={index}
                             item={item}
                             key={item.id}
+                            menuOpen={
+                              contextMenu.type === "open" &&
+                              contextMenu.item.id === item.id
+                            }
                             onOpenMenu={openContextMenu}
                             onCopy={copyItem}
                             onRename={(id, name) =>
@@ -2790,7 +2900,7 @@ const ClipboardApp = () => {
                   >
                     <FolderPlusIcon aria-hidden="true" className="size-4" />
                   </Button>
-                  {snapshot.groups.map((group) => {
+                  {snapshot.groups.map((group, groupIndex) => {
                     const groupStyle: ClipboardGroupStyle = {
                       "--clipboard-group-accent": group.color,
                     };
@@ -2807,6 +2917,29 @@ const ClipboardApp = () => {
                                 name: group.name,
                                 type: "editGroup",
                               }),
+                          },
+                          {
+                            disabled: groupIndex === 0,
+                            icon: (
+                              <ArrowLeftIcon
+                                aria-hidden="true"
+                                className="rtl:rotate-180"
+                              />
+                            ),
+                            label: t("moveGroupEarlier"),
+                            onClick: () => moveGroup(group.id, groupIndex - 1),
+                            separatorBefore: true,
+                          },
+                          {
+                            disabled: groupIndex === snapshot.groups.length - 1,
+                            icon: (
+                              <ArrowRightIcon
+                                aria-hidden="true"
+                                className="rtl:rotate-180"
+                              />
+                            ),
+                            label: t("moveGroupLater"),
+                            onClick: () => moveGroup(group.id, groupIndex + 1),
                           },
                           {
                             icon: <Trash2Icon aria-hidden="true" />,
@@ -2826,8 +2959,14 @@ const ClipboardApp = () => {
                       >
                         <Button
                           aria-pressed={activeGroupId === group.id}
-                          className="clipboard-group-chip h-11 shrink-0 rounded-full px-3 text-xs"
+                          className="clipboard-group-chip relative h-11 shrink-0 rounded-full px-3 text-xs"
                           data-clipboard-group-id={group.id}
+                          data-dragging={
+                            dragState.type === "reordering" &&
+                            dragState.groupId === group.id
+                              ? ""
+                              : undefined
+                          }
                           data-drop-target={
                             isDropTarget(group.id) ? "" : undefined
                           }
@@ -2844,6 +2983,9 @@ const ClipboardApp = () => {
                             className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
                           />
                           {group.name}
+                          <InlineDropIndicator
+                            position={reorderPosition(group.id)}
+                          />
                         </Button>
                       </ContextMenu>
                     );

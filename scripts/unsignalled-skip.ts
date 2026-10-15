@@ -27,7 +27,7 @@ export const isExcludedSkipSource = (file: string): boolean =>
   /\/(?:__fixtures__|fixtures|scripts|generated|specs|parsers|morphology)\//u.test(
     file,
   ) ||
-  file.startsWith("apps/api/src/mcp/apps/") ||
+  file.startsWith("packages/mcp-apps/src/") ||
   file.endsWith("/health-check.ts") ||
   file.endsWith("fixtures.ts") ||
   file.endsWith(".tsx") ||
@@ -65,6 +65,7 @@ const callName = (expression: ts.Expression): string => {
 const SIGNAL_CALLS = new Set([
   "panic",
   "observeFailure",
+  "logDocumentParseFailure",
   "captureException",
   "captureMessage",
   "captureError",
@@ -107,7 +108,8 @@ const METRIC_METHODS = new Set([
 
 // A discriminant counts only when it names a failure: success payloads use the
 // same keys (`kind: "windowed-text"`). A record collected into a failure list
-// (`issues.push({ code: "unknown_source_id" })`) is a failure by its container.
+// (`issues.push({ code: "unknown_source_id" })`, `failures.push({ reason })`)
+// is a failure by its container.
 const FAILURE_DISCRIMINANT =
   /fail|err|invalid|reject|skip|unavailable|missing|denied/iu;
 const FAILURE_COLLECTION =
@@ -132,7 +134,7 @@ const isTypedRecord = (
     const value = unwrap(property.initializer);
     return (
       (name === "ok" && value.kind === ts.SyntaxKind.FalseKeyword) ||
-      (["type", "status", "kind", "code"].includes(name) &&
+      (["type", "status", "kind", "code", "reason"].includes(name) &&
         (ts.isStringLiteral(value) || ts.isPropertyAccessExpression(value)) &&
         (failureCollection || FAILURE_DISCRIMINANT.test(value.getText()))) ||
       (name.endsWith("Failures") && ts.isObjectLiteralExpression(value))

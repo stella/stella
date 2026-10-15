@@ -1,7 +1,8 @@
 {
-  "entry": 1474,
+  "entry": 1289,
   "largest-route": 568513,
   "routes": 9507822,
+  "scan-engine-wasm": 51602,
   "total": 10539913,
   "vendor-anonymize-data": 0,
   "vendor-base-ui": 105586,
@@ -9,7 +10,14 @@
   "vendor-graphs": 189512,
   "vendor-icons": 17720,
   "vendor-react": 56524,
-  "vendor-tanstack": 544020,
+  "vendor-tanstack": 525083,
   "vendor-tanstack-server-fn": 1538,
-  "wasm-vendor": 0
+  "wasm-vendor": 0,
+  "mcpApps": {
+    "document-upload": 484391,
+    "file-comparison": 483993,
+    "case-law-results": 796140,
+    "decision-reader": 696470,
+    "statute-timeline": 562890
+  }
 }

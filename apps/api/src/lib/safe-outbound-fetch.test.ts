@@ -1,8 +1,13 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import { createServer } from "node:http";
 import type { RequestListener } from "node:http";
 
+import { assertProperty } from "@stll/property-testing";
+import { rejectionOf } from "@stll/property-testing/rejection";
+
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { fetchStreamFollowingRedirects } from "@/api/lib/redirect-fetch";
 import {
   fetchStreamWithResolvedAddress,
@@ -11,6 +16,7 @@ import {
   parseSafeOutboundUrl,
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
+import { outboundPermitContract } from "@/api/lib/safe-outbound-fetch.type-test";
 
 describe("fetchWithResolvedAddress", () => {
   test("connects to the pre-resolved address while preserving the URL host", async () => {
@@ -20,6 +26,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           timeoutMs: 1000,
@@ -45,6 +52,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [
             { address: "::1", family: 6 },
             { address: "127.0.0.1", family: 4 },
@@ -70,6 +78,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 4,
           timeoutMs: 1000,
@@ -89,6 +98,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           timeoutMs: 1000,
@@ -108,6 +118,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           redirect: "manual",
@@ -135,6 +146,7 @@ describe("fetchWithResolvedAddress", () => {
       async (port) => {
         const controller = new AbortController();
         const pending = fetchWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           signal: controller.signal,
@@ -164,6 +176,7 @@ describe("fetchWithResolvedAddress", () => {
           fetchStreamWithResolvedAddress,
         ]) {
           const result = await fetch({
+            permit: grantThirdPartyOutboundPermit(),
             addresses: [{ address: "127.0.0.1", family: 4 }],
             maxBytes: 1024,
             signal: controller.signal,
@@ -187,6 +200,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const options = {
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           timeoutMs: 1000,
@@ -239,6 +253,7 @@ describe("fetchWithResolvedAddress", () => {
               transportUrl.protocol = "http:";
               transportUrl.port = String(port);
               return await fetchStreamWithResolvedAddress({
+                permit: grantThirdPartyOutboundPermit(),
                 addresses: [{ address: "127.0.0.1", family: 4 }],
                 maxBytes: 1024,
                 redirect: "manual",
@@ -276,6 +291,7 @@ describe("fetchWithResolvedAddress", () => {
           maxHops: 4,
           fetchStream: async (target) =>
             await fetchStreamWithResolvedAddress({
+              permit: grantThirdPartyOutboundPermit(),
               addresses: [{ address: "127.0.0.1", family: 4 }],
               maxBytes: 1024,
               redirect: "manual",
@@ -303,6 +319,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchStreamWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [{ address: "127.0.0.1", family: 4 }],
           maxBytes: 1024,
           timeoutMs: 1000,
@@ -334,6 +351,7 @@ describe("fetchWithResolvedAddress", () => {
       },
       async (port) => {
         const result = await fetchStreamWithResolvedAddress({
+          permit: grantThirdPartyOutboundPermit(),
           addresses: [
             { address: "::1", family: 6 },
             { address: "127.0.0.1", family: 4 },
@@ -730,3 +748,57 @@ const withHttpServer = async (
     });
   }
 };
+
+describe("outbound request authority", () => {
+  const requests = Object.values(outboundPermitContract);
+
+  test("checks issued identities before request preparation", async () => {
+    for (const request of requests) {
+      for (const permit of [
+        undefined,
+        null,
+        {},
+        { ...grantThirdPartyOutboundPermit() },
+      ]) {
+        expect(
+          await rejectionOf(Reflect.apply(request, undefined, [{ permit }])),
+        ).toMatchObject({
+          message: "An issued third-party outbound permit is required",
+        });
+      }
+    }
+  });
+
+  test("issued identities reach request validation", async () => {
+    for (const request of requests) {
+      const result = await request({
+        addresses: [],
+        maxBytes: 1024,
+        permit: grantThirdPartyOutboundPermit(),
+        timeoutMs: 1000,
+        url: new URL("file:///fixture"),
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toMatch(
+          /No resolved address available|URL must use HTTPS/u,
+        );
+      }
+    }
+  });
+
+  test("outbound authority accepts only issued identities", async () => {
+    await assertProperty(
+      "outbound authority accepts only issued identities",
+      fc.asyncProperty(fc.jsonValue(), async (permit) => {
+        for (const request of requests) {
+          expect(
+            await rejectionOf(Reflect.apply(request, undefined, [{ permit }])),
+          ).toMatchObject({
+            message: "An issued third-party outbound permit is required",
+          });
+        }
+      }),
+    );
+  });
+});

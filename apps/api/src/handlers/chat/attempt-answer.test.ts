@@ -3,7 +3,10 @@ import type { StreamChunk, UIMessage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
+import {
+  chunkCarriesAnswer,
+  snapshotMessageAddsAnswer,
+} from "@/api/handlers/chat/attempt-answer";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
@@ -168,4 +171,46 @@ describe("what the engine pipes through the attempt middleware", () => {
 
     expect(chunks.some(chunkCarriesAnswer)).toBe(true);
   });
+});
+
+test("explicit snapshots count new answer content without counting continuation history", () => {
+  const initial = CONTINUED_HISTORY.at(-1);
+  if (initial === undefined) {
+    expect.unreachable(
+      "The continuation fixture contains an assistant message",
+    );
+  }
+  const cases = [
+    {
+      parts: [
+        { type: "text", content: "One question" },
+        { type: "text", content: " first." },
+        ANSWERED_QUESTION,
+      ],
+      answers: false,
+    },
+    {
+      parts: [{ type: "text", content: "One question first. Answer complete" }],
+      answers: true,
+    },
+    { parts: [{ type: "text", content: "  " }], answers: false },
+    { parts: [{ type: "thinking", content: "Reason" }], answers: false },
+    { parts: [ANSWERED_QUESTION], answers: false },
+    { parts: [{ ...ANSWERED_QUESTION, id: "new-question" }], answers: true },
+  ] satisfies { parts: UIMessage["parts"]; answers: boolean }[];
+  for (const { parts, answers } of cases) {
+    expect(
+      snapshotMessageAddsAnswer({ message: { ...initial, parts }, initial }),
+    ).toBe(answers);
+  }
+  expect(
+    snapshotMessageAddsAnswer({
+      message: {
+        id: "fresh",
+        role: "assistant",
+        parts: [{ type: "text", content: "Answer" }],
+      },
+      initial: undefined,
+    }),
+  ).toBe(true);
 });

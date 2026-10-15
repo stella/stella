@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { VERIFIED_OAUTH_CLIENT_BRANDS } from "@stll/api-contract";
+
 const OAUTH_SIGNATURE_PARAM = "sig";
 const OAUTH_QUERY_HASH_PARAM = "oauth_query";
 
@@ -77,6 +79,11 @@ export const oauthConsentInfoSchema = v.object({
   redirectHosts: v.array(v.string()),
   clientIdHost: v.nullable(v.string()),
   unverified: v.boolean(),
+  // An omitted brand reads as "no verified brand", never as an error.
+  verifiedBrand: v.optional(
+    v.nullable(v.picklist(VERIFIED_OAUTH_CLIENT_BRANDS)),
+    null,
+  ),
 });
 
 export type OAuthConsentInfo = v.InferOutput<typeof oauthConsentInfoSchema>;

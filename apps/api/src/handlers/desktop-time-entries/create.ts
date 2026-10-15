@@ -16,6 +16,7 @@ import { createTimeEntryBodySchema } from "@/api/lib/billing/time-entry-body";
 import { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
@@ -54,13 +55,14 @@ export const createDesktopTimeEntryEndpoint = (
 ) =>
   createSafeBoundedPublicHandler(
     {
+      contract: "patch",
       accountAccess: ACCOUNT_ACCESS.sandbox,
       mcp: { type: "internal", reason: "auth_plumbing" },
       cache: { kind: "none" },
       params: t.Object({ workspaceId: tSafeId("workspace") }),
       body: strictDesktopTimeEntryBodySchema,
       response: safePublicHandlerResponseSchemasWithStatusText(
-        t.Object({ id: t.String() }, { additionalProperties: false }),
+        t.Object({ id: tSafeId("timeEntry") }, { additionalProperties: false }),
       ),
     },
     async function* ({ request, params: { workspaceId }, body }) {
@@ -92,7 +94,7 @@ export const createDesktopTimeEntryEndpoint = (
           new HandlerError({ status: 404, message: "Matter not found" }),
         );
       }
-      const result = yield* createTimeEntryHandler({
+      return yield* createTimeEntryHandler({
         safeDb: account.safeDb,
         organizationId: account.organizationId,
         userId: account.userId,
@@ -108,8 +110,17 @@ export const createDesktopTimeEntryEndpoint = (
           server: null,
         }),
       });
-      return result.map(({ id }) => ({ id: String(id) }));
     },
   );
 
-export default createDesktopTimeEntryEndpoint();
+const desktopTimeEntryEndpoint = createDesktopTimeEntryEndpoint();
+
+// Inserts one entry through the shared time-entry insert, which takes no
+// aggregate lock and maintains no invariant across rows.
+declareAggregateMutation(desktopTimeEntryEndpoint.handler, {
+  type: "independent",
+  reason:
+    "Inserts one time entry for an authorized matter; no cross-row invariant.",
+});
+
+export default desktopTimeEntryEndpoint;

@@ -22,6 +22,7 @@ import {
   Text,
 } from "domhandler";
 
+// parser-output-unchanged: imports the document AST from its package owner
 import {
   type Block,
   hasInlineChildren,
@@ -30,7 +31,8 @@ import {
   plainTextOf,
   projectPlainText,
   type TableCell,
-} from "@/api/handlers/case-law/document-ast";
+} from "@stll/legal-ast/document-ast";
+
 import {
   appendTextInline,
   isExcludedHtmlTag,
@@ -435,6 +437,8 @@ export const createUnitBuilder = ({
 
 /** What a format's elements mean at the block level. */
 export type BodyVocabulary = {
+  /** Positively identified page furniture; excluded from the source snapshot. */
+  readonly excluded?: (element: Element) => boolean;
   /** Elements that are one paragraph each, by role. */
   readonly paragraphs: Readonly<Record<string, DraftRole>>;
   /**
@@ -589,7 +593,11 @@ export const sourceTextOf = (
       current += textOf(node);
       return;
     }
-    if (!isTag(node) || isExcludedHtmlTag(nameOf(node))) {
+    if (
+      !isTag(node) ||
+      isExcludedHtmlTag(nameOf(node)) ||
+      vocabulary.excluded?.(node)
+    ) {
       return;
     }
     const anchor = vocabulary.pageAnchor(node);

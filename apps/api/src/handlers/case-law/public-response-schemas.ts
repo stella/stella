@@ -188,9 +188,9 @@ const courtStatus = t.Union([
   ),
   t.Object(
     {
-      type: t.Literal("unlisted"),
+      type: t.Literal("other-courts"),
       tier: t.Literal("other"),
-      listed: t.Number(),
+      courts: t.Union([t.Number(), t.Null()]),
       decisions: t.Number(),
     },
     { additionalProperties: false },
@@ -211,6 +211,8 @@ export const corpusStatusResponseSchema = t.Object(
 const relatedDecision = t.Object(
   {
     ...decision,
+    courtAbbreviation: nullableBoundedString(2048),
+    sourceUrl: nullableBoundedString(8192),
     caseNumberType: t.UnionEnum(DECISION_PRIMARY_REFERENCE_TYPES),
     citationAuthority: t.Number(),
   } satisfies Record<
@@ -268,10 +270,19 @@ export const citationSummaryResponseSchema = t.Object(
   {
     incoming: t.Object(treatmentCounts, { additionalProperties: false }),
     outgoing: t.Object(treatmentCounts, { additionalProperties: false }),
-    capped: t.Object(
-      { incoming: t.Boolean(), outgoing: t.Boolean() },
-      { additionalProperties: false },
-    ),
+    precision: t.Union([
+      t.Object({ status: t.Literal("exact") }, { additionalProperties: false }),
+      t.Object(
+        {
+          status: t.Literal("bounded"),
+          capped: t.Object(
+            { incoming: t.Boolean(), outgoing: t.Boolean() },
+            { additionalProperties: false },
+          ),
+        },
+        { additionalProperties: false },
+      ),
+    ]),
     incomingByYear: t.Array(
       t.Object(
         { ...treatmentCounts, year: t.Number() },
@@ -382,6 +393,37 @@ const countryCoverage = {
         publicHomeUrl: boundedString(8192),
         health: t.Enum(CASE_LAW_COVERAGE_HEALTH),
         lastSyncAt: date,
+        decisionYearFrom: numberOrNull,
+        decisionYearTo: numberOrNull,
+        pendingTextCount: t.Number(),
+        knownGaps: t.Union([
+          t.Object(
+            { type: t.Literal("unknown") },
+            { additionalProperties: false },
+          ),
+          t.Object(
+            { type: t.Literal("none-recorded") },
+            { additionalProperties: false },
+          ),
+          t.Object(
+            {
+              type: t.Literal("known"),
+              gaps: t.Array(
+                t.Object(
+                  {
+                    from: boundedString(128),
+                    to: boundedString(128),
+                    reason: boundedString(2048),
+                    evidenceRef: boundedString(8192),
+                  },
+                  { additionalProperties: false },
+                ),
+                { maxItems: 100 },
+              ),
+            },
+            { additionalProperties: false },
+          ),
+        ]),
         completeness: sourceCompleteness,
         addedLastWeek: numberOrNull,
       },

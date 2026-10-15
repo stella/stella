@@ -49,6 +49,7 @@ import { UsageFallbackNotice } from "@/components/usage/usage-fallback-notice";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
 import { env } from "@/env";
+import { ChatActiveSkillLabel } from "@/features/chat/components/chat-active-skill-label";
 import { SuggestedFollowupChips } from "@/features/chat/components/suggested-followup-chips";
 import { useChatSession } from "@/features/chat/hooks/use-chat-session";
 import { useChatThreadRuntime } from "@/features/chat/hooks/use-chat-thread-runtime";
@@ -62,6 +63,10 @@ import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
+import {
+  resolveThreadActiveSkill,
+  useThreadActiveSkill,
+} from "@/features/chat/thread-active-skill-store";
 import { GuideNudge } from "@/features/guides/guide-nudge";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -90,11 +95,12 @@ import { useSuggestedSkills } from "@/lib/prompts/use-suggested-skills";
 import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { usageEntitlementOptions } from "@/lib/usage-queries";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { ChatThreadFilesButton } from "@/routes/_protected.chat/-components/chat-file-stack";
 import { ChatForkedFromBanner } from "@/routes/_protected.chat/-components/chat-forked-from-banner";
+import { ChatHistoryLink } from "@/routes/_protected.chat/-components/chat-history-link";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatTurnNavigator } from "@/routes/_protected.chat/-components/chat-turn-navigator";
-import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 
 // The composer block publishes its live height on this element, the
 // transcript's nearest shared ancestor (see `observeComposerBlock`).
@@ -129,10 +135,17 @@ export const ChatThreadPage = ({
   // Entitlement state is manager-only on the server. Skip the query
   // for non-managers so the chat shell doesn't fire a request they
   // can't read; the limit modal's "Manage" CTA is admin-only anyway.
-  const { data: currentUserRole } = useQuery({
+  const currentUserRoleQuery = useQuery({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
+  const currentUserRoleView = useQueryView(currentUserRoleQuery);
+  useQueryViewError(currentUserRoleView);
+  const currentUserRole =
+    currentUserRoleView.type === "items" &&
+    currentUserRoleView.refetchError === undefined
+      ? currentUserRoleView.items
+      : undefined;
   const canManageOrganization =
     hasOrganizationManagementAccess(currentUserRole);
 
@@ -161,23 +174,29 @@ export const ChatThreadPage = ({
     ),
   );
   const getSendMode = useLatestCallback(() => getChatSendMode(threadRef));
+  const cachedSkill = useThreadActiveSkill(threadRef);
 
   // A thread can be opened (e.g. via "Move to main" from the inspector)
   // before its first message has reached the server, so the row may not
   // exist yet. The fetch handles missing threads gracefully; the row is
   // created on first send.
+  const threadQueryOptions = chatThreadOptions({
+    activeOrganizationId,
+    key: threadRef,
+    context: { allowMissingThread: true },
+  });
+  const { data } = useSuspenseQuery(threadQueryOptions);
+  const activeSkill = resolveThreadActiveSkill(data, cachedSkill);
+  const getActiveSkill = useLatestCallback(() => activeSkill);
+  // The skill is known only after the read above, and the cache key never
+  // depends on it, so this context addresses the same entry the page reads.
   const chatThreadContext = {
     allowMissingThread: true,
     getUserContext,
     getContextMatterIds,
     getSendMode,
+    ...(activeSkill ? { getActiveSkill } : {}),
   };
-  const threadQueryOptions = chatThreadOptions({
-    activeOrganizationId,
-    key: threadRef,
-    context: chatThreadContext,
-  });
-  const { data } = useSuspenseQuery(threadQueryOptions);
   const chat = useChatThreadRuntime({
     activeOrganizationId,
     context: chatThreadContext,
@@ -204,18 +223,27 @@ export const ChatThreadPage = ({
   // chat handler as a usage-state modal instead of an inline
   // stack trace. `useQuery` (not Suspense) keeps the chat shell
   // rendering while the entitlement state loads.
-  const { data: usageEntitlementData } = useQuery({
+  const usageEntitlementDataQuery = useQuery({
     ...usageEntitlementOptions({ organizationId: activeOrganizationId }),
     enabled: env.VITE_FEATURE_USAGE && canManageOrganization,
   });
+  const usageEntitlementDataView = useQueryView(usageEntitlementDataQuery);
+  useQueryViewError(usageEntitlementDataView);
+  const usageEntitlementData =
+    usageEntitlementDataView.type === "items"
+      ? usageEntitlementDataView.items
+      : undefined;
   const usageLimit = useUsageLimit({
     hasHostedEntitlement:
+      canManageOrganization &&
       usageEntitlementData?.entitlement?.source === "hosted",
   });
 
   const {
+    activitySession,
     error,
     messages,
+    refreshAnswers,
     loadOlder,
     olderCursor,
     isLoadingOlder,
@@ -228,18 +256,24 @@ export const ChatThreadPage = ({
     stop,
     leave,
     isGenerating,
+    reconnecting,
     turnAbandoned,
     alwaysApprovedTools,
     conversationApprovedTools,
     handleApprove,
     handleAllowInConversation,
     handleDeny,
+    handleRequestSecret,
+    continueRequestSecret,
+    resolveSecretTarget,
+    secretAvailabilityKey,
     handleAskUserSubmit,
     handleAskUserEditAndRerun,
     handleAlwaysAllow,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
     handleOpenCreatedDocument,
+    handleOpenPlaybook,
     createDocumentMattersView,
     streamdownComponents,
     approvalPendingMessageId,
@@ -249,6 +283,7 @@ export const ChatThreadPage = ({
     getContextMatterIds,
     getSendMode,
     initialOlderCursor: data.olderCursor,
+    playbookPane: "auto-open",
     onError: (nextError) => {
       usageLimit.handle(nextError);
     },
@@ -571,6 +606,10 @@ export const ChatThreadPage = ({
             handleAlwaysAllow,
             handleApprove,
             handleDeny,
+            handleRequestSecret,
+            continueRequestSecret,
+            resolveSecretTarget,
+            secretAvailabilityKey,
           }}
         >
           <div className="relative flex w-full flex-1 flex-col overflow-hidden">
@@ -584,7 +623,7 @@ export const ChatThreadPage = ({
                   </Button>
                 }
               />
-              <ThreadsSheet />
+              <ChatHistoryLink />
               <NewChatButton
                 hasMessages={messages.length > 0}
                 threadRef={threadRef}
@@ -623,7 +662,20 @@ export const ChatThreadPage = ({
                     </div>
                   ) : (
                     <>
+                      {reconnecting && (
+                        <p
+                          role="status"
+                          className="text-muted-foreground px-4 text-sm"
+                        >
+                          {t("common.reconnecting")}
+                        </p>
+                      )}
                       <ChatThreadMessages
+                        activitySession={activitySession}
+                        onAnswerEdited={refreshAnswers}
+                        answerRewriteAvailability={
+                          data.usedAnonymization ? "anonymized" : "available"
+                        }
                         approvalPendingMessageId={approvalPendingMessageId}
                         branchSource={{
                           contextMatterIds: selectedContextMatterIds,
@@ -644,6 +696,7 @@ export const ChatThreadPage = ({
                           handleOpenCreateDocumentDraft
                         }
                         onOpenCreatedDocument={handleOpenCreatedDocument}
+                        onOpenPlaybook={handleOpenPlaybook}
                         onResend={resendLatestMessage}
                         onSendWithoutAnonymization={sendWithoutAnonymization}
                         queuedMessageActions={{
@@ -776,17 +829,22 @@ export const ChatThreadPage = ({
                           selectModel: modelSelection.selectModel,
                         }}
                         leadingContext={
-                          <ChatMatterPicker
-                            matterIds={selectedContextMatterIds}
-                            onChange={(matterIds) =>
-                              setContextMatterIds(
-                                resolveChatContextMatterIds(
-                                  threadRef,
-                                  matterIds,
-                                ),
-                              )
-                            }
-                          />
+                          <>
+                            {activeSkill && (
+                              <ChatActiveSkillLabel skill={activeSkill} />
+                            )}
+                            <ChatMatterPicker
+                              matterIds={selectedContextMatterIds}
+                              onChange={(matterIds) =>
+                                setContextMatterIds(
+                                  resolveChatContextMatterIds(
+                                    threadRef,
+                                    matterIds,
+                                  ),
+                                )
+                              }
+                            />
+                          </>
                         }
                         onNewThread={
                           messages.length > 0 ? startNewThread : null

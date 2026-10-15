@@ -659,7 +659,7 @@ export const lookupValueFromRendered = (text: string): RichPatchValue => {
 
 // ── Resolution over manifest fields ──────────────────────
 
-export type LookupFieldError = {
+type LookupFieldError = {
   /** Manifest path of the lookup field. */
   path: string;
   message: string;
@@ -836,7 +836,7 @@ const resolveLookupValue = async ({
       : lookupValueFromRendered(text);
   };
 
-  // The formats list is non-empty (isFieldLookup invariant). EVERY format is a
+  // The formats list is non-empty (lookup schema invariant). EVERY format is a
   // keyed `{{company.<key>}}` rendering of the SAME hit, so a template can
   // address the whole set by key and never write a bare marker; duplicate keys
   // keep the last template. The first format is additionally the default the

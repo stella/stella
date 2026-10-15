@@ -18,9 +18,6 @@ const noopAnalytics: ServerAnalytics = {
 
 let analytics: ServerAnalytics | null = null;
 
-export const isLocalPostHogDebugEnabled = (): boolean =>
-  isLocalDevOpen() && envBase.POSTHOG_LOCAL_DEBUG;
-
 export const getServerAnalytics = (): ServerAnalytics => {
   if (analytics) {
     return analytics;

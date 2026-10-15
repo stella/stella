@@ -102,7 +102,7 @@ test("nightly rehearsal checks main and reports failures with isolated write per
     }),
     nightly["migration-exact-base-upgrade"],
   );
-  expect(job.permissions).toEqual({ contents: "read" });
+  expect(job.permissions).toEqual({ contents: "read", packages: "read" });
   expect(
     job.steps.find(({ name }) => name === "Checkout")?.with,
   ).not.toHaveProperty("ref");

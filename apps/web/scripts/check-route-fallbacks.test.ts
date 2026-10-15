@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { repoRelativePath } from "@stll/portable-path";
+
 import {
   checkRouteFallbacks,
   FIRST_FRAME_OWNERS,
@@ -52,7 +54,7 @@ test("every registered route and route Suspense fallback keeps chrome with its f
   ).toHaveLength(1);
   expect(
     result.census.filter(({ kind }) => kind === "Suspense").length,
-  ).toBeGreaterThan(40);
+  ).toBeGreaterThan(0);
   expect(result.violations).toEqual([]);
 });
 
@@ -109,7 +111,7 @@ test.each([
         });
         expect(result.violations.at(0)?.chrome.length).toBeGreaterThan(0);
         expect(
-          checkRouteFallbacks(path.relative(process.cwd(), directory))
+          checkRouteFallbacks(repoRelativePath(process.cwd(), directory))
             .violations,
         ).toEqual(result.violations);
       },

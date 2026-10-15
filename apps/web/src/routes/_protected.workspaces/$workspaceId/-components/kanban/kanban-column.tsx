@@ -169,8 +169,8 @@ export const KanbanColumn = ({
       return undefined;
     }
     const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) {
+      (entries) => {
+        if (entries.at(-1)?.isIntersecting) {
           onLoadMore();
         }
       },

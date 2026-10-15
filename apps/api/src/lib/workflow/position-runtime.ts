@@ -2,7 +2,6 @@ import type { PropertyContent } from "@/api/db/schema-validators";
 import type {
   Position,
   PositionRule,
-  ReferencePassage,
   Tiers,
 } from "@/api/lib/workflow/playbook-positions";
 
@@ -28,15 +27,6 @@ export const isTierStandard = (
 ): position is TierStandardPosition =>
   position.mode === "graded" && position.standard.source === "tiers";
 
-/** The reference passages a position is graded against, or `null` when its
- *  standard is an authored ladder. */
-export const positionPassages = (
-  position: Position,
-): readonly ReferencePassage[] | null =>
-  position.mode === "graded" && position.standard.source === "reference"
-    ? position.standard.passages
-    : null;
-
 // Materialize/grade only enabled positions: a disabled position is skipped by
 // run, review, and auto-run. Centralizing the filter keeps the call sites from
 // drifting on the skip semantics.
@@ -45,7 +35,7 @@ export const selectEnabledPositions = (
 ): Position[] => positions.filter((position) => position.enabled);
 
 // The flat `{ question, content }` a position is extracted with. Extract-only
-// positions carry a manual ask; graded positions resolve their `AskConfig`:
+// positions carry a manual ask; graded positions resolve their ask configuration:
 // a manual ask, a stored `derived` auto ask (consumed exactly like a manual
 // one), or — until derivation populates `derived` — a generic text ask over the
 // issue so run/review never block on a missing derivation.

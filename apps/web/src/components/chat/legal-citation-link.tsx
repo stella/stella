@@ -5,31 +5,36 @@ import type {
   ReactNode,
 } from "react";
 
-import { panic, Result } from "better-result";
+import { Result, panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
-import { ExternalLinkIcon, FileTextIcon, ScrollTextIcon } from "@stll/ui/icons";
+import { ExternalLinkIcon, ScrollTextIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import { openCaseLawDecision } from "@/components/chat/case-law-open";
 import { classifyChatHttpLink } from "@/components/chat/chat-app-link.logic";
+import {
+  ChatDecisionCitation,
+  ChatRouteDecisionCitation,
+} from "@/components/chat/chat-decision-citation";
 import type { ExternalSourceReference } from "@/components/chat/external-source-store";
 import { useOpenStatuteLink } from "@/components/chat/statute-open";
 import { InlinePill } from "@/components/inline-pill";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
-import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { detached } from "@/lib/detached";
-import { sanitizeHref } from "@/lib/sanitize-href";
 
 type LegalCitationLinks = ReturnType<typeof resolveLegalCitationLinks>;
-type InternalLegalCitationLinks = Exclude<
+type DisplayedLegalCitationLinks = Exclude<
   LegalCitationLinks,
-  { type: "external" }
+  { type: "decision" }
 >;
+type StatuteCitationLinks = Extract<LegalCitationLinks, { type: "statute" }>;
 
 type LegalCitationLinkProps = {
   source: ExternalSourceReference;
@@ -45,14 +50,12 @@ type LegalCitationLinkProps = {
 };
 
 const legalCitationIcon = (
-  citation: LegalCitationLinks,
+  citation: DisplayedLegalCitationLinks,
   externalIcon: ReactElement | undefined,
 ) => {
   switch (citation.type) {
     case "statute":
       return <ScrollTextIcon className="size-3 shrink-0" />;
-    case "decision":
-      return <FileTextIcon className="size-3 shrink-0" />;
     case "external":
       return externalIcon ?? <ExternalLinkIcon className="size-3 shrink-0" />;
     default:
@@ -65,7 +68,7 @@ type LegalCitationLabelProps = Pick<
   LegalCitationLinkProps,
   "appearance" | "children"
 > & {
-  citation: LegalCitationLinks;
+  citation: DisplayedLegalCitationLinks;
   icon: ReactNode;
 };
 
@@ -109,7 +112,7 @@ const LegalCitationView = ({
   onFocus,
   onMouseEnter,
 }: LegalCitationLinkProps & {
-  citation: LegalCitationLinks;
+  citation: DisplayedLegalCitationLinks;
   onClick?: MouseEventHandler<HTMLAnchorElement> | undefined;
 }) => {
   const t = useTranslations();
@@ -163,11 +166,10 @@ const InteractiveLegalCitation = ({
   appOrigins,
   ...props
 }: LegalCitationLinkProps & {
-  citation: InternalLegalCitationLinks;
+  citation: StatuteCitationLinks;
   appOrigins: ReadonlySet<string>;
 }) => {
   const openStatute = useOpenStatuteLink();
-  const { open: openDecision } = useOpenDecisionTab();
   const onClick: MouseEventHandler<HTMLAnchorElement> = (event) => {
     if (!isPlainPrimaryClick(event) || event.defaultPrevented) {
       return undefined;
@@ -179,23 +181,8 @@ const InteractiveLegalCitation = ({
       case "statute":
         detached(openStatute(link.link), "legal-citation.open-statute");
         return undefined;
-      case "decision": {
-        const anchorId =
-          url.hash === ""
-            ? null
-            : Result.try(() => decodeURIComponent(url.hash.slice(1))).unwrapOr(
-                null,
-              );
-        detached(
-          openCaseLawDecision(
-            { type: "route", params: link.params },
-            openDecision,
-            anchorId === null ? {} : { anchorId },
-          ),
-          "legal-citation.open-decision",
-        );
-        return undefined;
-      }
+      case "decision":
+        return panic("A statute citation must resolve to a statute route");
       case "external":
         return panic(
           "Resolved legal citation must name an internal legal route",
@@ -208,6 +195,24 @@ const InteractiveLegalCitation = ({
   return <LegalCitationView {...props} citation={citation} onClick={onClick} />;
 };
 
+// A publisher alias can carry its paragraph anchor only in the stored app URL.
+const readUrlAnchor = (href: string): string | undefined => {
+  const { hash } = new URL(href);
+  if (hash === "") {
+    return undefined;
+  }
+  return Result.try(() => decodeURIComponent(hash.slice(1))).unwrapOr(
+    undefined,
+  );
+};
+
+// A source URL's fragment names a block, never the court's number for it:
+// only a passage link the server stamped carries that.
+const uncountedParagraph = (anchorId: string): CitedDecisionParagraph => ({
+  anchorId,
+  courtParagraphNumber: null,
+});
+
 export const LegalCitationLink = (props: LegalCitationLinkProps) => {
   const appOrigins = new Set([
     new URL(env.VITE_PUBLIC_APP_URL).origin,
@@ -218,6 +223,27 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     sourceUrl: props.source.sourceUrl ?? props.source.url,
     appOrigins,
   });
+  const passage =
+    props.appearance === "inline"
+      ? props.children
+      : (props.source.snippet ?? props.source.text ?? props.children);
+  if (
+    citation.type === "external" &&
+    props.source.caseLawDecision !== undefined
+  ) {
+    return (
+      <ChatDecisionCitation
+        decisionId={props.source.caseLawDecision.decisionId}
+        passage={passage}
+        {...(props.anchorId === undefined
+          ? {}
+          : { paragraph: uncountedParagraph(props.anchorId) })}
+        {...(citation.url === null ? {} : { originalUrl: citation.url })}
+        interactive={props.interactive}
+        renderPassage={props.appearance === "inline"}
+      />
+    );
+  }
   if (
     citation.type === "external" &&
     citation.url === null &&
@@ -229,6 +255,29 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     const url = new URL(citation.url);
     url.hash = props.anchorId;
     citation.url = url.href;
+  }
+  if (citation.type === "decision") {
+    const decisionId =
+      props.source.caseLawDecision?.decisionId ??
+      extractCaseLawDecisionIdFromIdRouteParam(citation.params.slug);
+    const anchorId = props.anchorId ?? readUrlAnchor(citation.url);
+    const decisionProps = {
+      passage,
+      ...(anchorId === undefined
+        ? {}
+        : { paragraph: uncountedParagraph(anchorId) }),
+      readerUrl: citation.url,
+      ...(citation.source_url === undefined
+        ? {}
+        : { originalUrl: citation.source_url }),
+      interactive: props.interactive,
+      renderPassage: props.appearance === "inline",
+    };
+    return decisionId === null ? (
+      <ChatRouteDecisionCitation {...decisionProps} params={citation.params} />
+    ) : (
+      <ChatDecisionCitation {...decisionProps} decisionId={decisionId} />
+    );
   }
   if (citation.type !== "external" && props.interactive) {
     return (

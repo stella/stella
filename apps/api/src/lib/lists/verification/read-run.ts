@@ -7,7 +7,7 @@
  */
 
 import { panic } from "better-result";
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -24,7 +24,10 @@ import type {
 } from "@/api/lib/lists/verification/contract";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type { ClaimReview } from "@/api/lib/lists/verification/review-fold";
-import { foldClaimReview } from "@/api/lib/lists/verification/review-fold";
+import {
+  contestedFactIds,
+  foldClaimReview,
+} from "@/api/lib/lists/verification/review-fold";
 
 export const serializeClaimReview = (review: ClaimReview) => ({
   ...review,
@@ -154,6 +157,38 @@ type ReadVerificationRunArgs = {
   runId: SafeId<"legalListVerificationRun">;
 };
 
+/** The list identity a run summary projects from its stored evidence. */
+export const verificationRunListIdColumn = sql<
+  SafeId<"legalList">
+>`(${legalListVerificationRuns.evidence} ->> 'listId')`;
+
+/** `null` when the workspace holds no such run. */
+export const readRunEvidenceForGrading = async ({
+  tx,
+  workspaceId,
+  runId,
+}: ReadVerificationRunArgs) => {
+  const run = (
+    await tx
+      .select({ evidence: legalListVerificationRuns.evidence })
+      .from(legalListVerificationRuns)
+      .where(
+        and(
+          eq(legalListVerificationRuns.id, runId),
+          eq(legalListVerificationRuns.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+  ).at(0);
+  return run === undefined ? null : run.evidence;
+};
+
+/** Only the fact identities needed to decide which claims need attention. */
+export const readContestedFactIds = async (args: ReadVerificationRunArgs) => {
+  const evidence = await readRunEvidenceForGrading(args);
+  return evidence === null ? null : contestedFactIds(evidence);
+};
+
 /** `null` when the workspace holds no such run. */
 export const readVerificationRun = async ({
   tx,
@@ -237,3 +272,70 @@ export const readVerificationRun = async ({
     })),
   };
 };
+
+type ReadClaimForReviewArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"legalListVerificationRun">;
+  claimId: SafeId<"legalListClaim">;
+};
+
+export const readClaimForReview = async ({
+  tx,
+  workspaceId,
+  runId,
+  claimId,
+}: ReadClaimForReviewArgs) =>
+  // Locking the claim serializes reviewers on it, so the fold the event
+  // is validated against is the one it will be appended to.
+  (
+    await tx
+      .select({
+        state: legalListClaims.state,
+        recordConflict: legalListClaims.recordConflict,
+      })
+      .from(legalListClaims)
+      .where(
+        and(
+          eq(legalListClaims.id, claimId),
+          eq(legalListClaims.runId, runId),
+          eq(legalListClaims.workspaceId, workspaceId),
+        ),
+      )
+      .limit(1)
+      .for("update")
+  ).at(0);
+
+type ReadClaimsForBulkReviewArgs = {
+  tx: Pick<Transaction, "select">;
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"legalListVerificationRun">;
+  claimIds: SafeId<"legalListClaim">[];
+};
+
+export const readClaimsForBulkReview = ({
+  tx,
+  workspaceId,
+  runId,
+  claimIds,
+}: ReadClaimsForBulkReviewArgs) =>
+  // Id order is the lock order every caller shares, so two overlapping
+  // bulk accepts cannot deadlock.
+  tx
+    .select({
+      id: legalListClaims.id,
+      state: legalListClaims.state,
+      refs: legalListClaims.refs,
+      recordConflict: legalListClaims.recordConflict,
+    })
+    .from(legalListClaims)
+    .where(
+      and(
+        eq(legalListClaims.workspaceId, workspaceId),
+        eq(legalListClaims.runId, runId),
+        inArray(legalListClaims.id, claimIds),
+      ),
+    )
+    .orderBy(asc(legalListClaims.id))
+    .limit(claimIds.length)
+    .for("update");

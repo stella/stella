@@ -56,6 +56,7 @@ export const translateTaggedSegments = async ({
     feature: "document_translation.translate",
     modelRole: TRANSLATION_ROLE,
     orgAIConfig: context.orgAIConfig,
+    modelTier: context.admission.modelTier,
     properties: {
       organization_id: context.organizationId,
       workspace_id: context.workspaceId,
@@ -69,6 +70,7 @@ export const translateTaggedSegments = async ({
     orgAIConfig: context.orgAIConfig,
     managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
+    admission: context.admission,
     analytics,
     caching: resolveCaching({
       promptCachingEnabled: context.promptCachingEnabled,

@@ -24,6 +24,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { FieldSuggestion } from "@/api/lib/docx/apply-field-suggestions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const SUGGEST_TIMEOUT_MS = 45_000;
@@ -100,6 +101,7 @@ export const suggestTemplateFields = async ({
   orgAIConfig,
   managedAIResidency,
   organizationId,
+  admission,
   aiAnalytics,
   generateObjectForRole,
 }: {
@@ -108,6 +110,7 @@ export const suggestTemplateFields = async ({
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   /** External model-dispatch boundary; supplied by focused integration tests. */
   generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
@@ -124,6 +127,7 @@ export const suggestTemplateFields = async ({
     orgAIConfig,
     managedAIResidency,
     organizationId,
+    admission,
     // No workspace id is threaded through this helper's options.
     tenantWorkspaceIds: [],
     analytics: aiAnalytics,

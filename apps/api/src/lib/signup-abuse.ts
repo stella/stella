@@ -2,11 +2,9 @@ import { disposableEmailBlocklistSet } from "disposable-email-domains-js";
 
 import { env } from "@/api/env";
 import { normalizeRateLimitClientAddress } from "@/api/lib/client-ip";
-import {
-  EXISTING_ACCOUNT_OTP_EMAIL_MAX,
-  NEW_ACCOUNT_OTP_RATE_LIMITS,
-} from "@/api/lib/limits";
-import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { NEW_ACCOUNT_OTP_RATE_LIMITS } from "@/api/lib/limits";
+import { OTP_DELIVERY_RATE_LIMITS } from "@/api/lib/rate-limit/budget-config";
+import type { RateLimitContext } from "@/api/lib/rate-limit/contracts";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
 const DISPOSABLE_EMAIL_DOMAINS = disposableEmailBlocklistSet();
@@ -21,7 +19,7 @@ const getSharedRateLimitContext = (): RedisRateLimitContext => {
   return sharedRateLimitContext;
 };
 
-export const normalizeAuthEmail = (email: string): string =>
+const normalizeAuthEmail = (email: string): string =>
   email.trim().toLowerCase();
 
 const domainFromEmail = (email: string): string | null => {
@@ -135,7 +133,8 @@ export const evaluateNewAccountOtpPolicy = async ({
   // An address that already has an account gets a higher ceiling on the same
   // email counter; new-account capacity (and the IP counter) does not apply.
   if (await accountExists(normalizedEmail)) {
-    return emailRateLimitResult.count > EXISTING_ACCOUNT_OTP_EMAIL_MAX
+    return emailRateLimitResult.count >
+      OTP_DELIVERY_RATE_LIMITS.existingAccountEmailMax
       ? { status: "rate_limited", reason: "email" }
       : { status: "allowed", reason: "existing_account" };
   }

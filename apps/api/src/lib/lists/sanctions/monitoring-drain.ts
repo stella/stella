@@ -129,6 +129,7 @@ const processSanctionsContactMarks = async (
     };
     signal.throwIfAborted();
     const prepared = await prepareMonitoringContacts({
+      sourceSelection: { type: "all" },
       db: async (run) => await run(tx),
       contactRows: claimed.contactRows,
       now,

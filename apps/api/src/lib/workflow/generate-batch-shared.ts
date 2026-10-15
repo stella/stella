@@ -14,6 +14,7 @@ import {
   WorkflowValidationError,
 } from "@/api/lib/errors/tagged-errors";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import type {
   BatchProperty,
   PropertyBatch,
@@ -46,6 +47,7 @@ export type AIJustification = {
 export type GenerateBatchProps = {
   abortSignal: AbortSignal;
   organizationId: SafeId<"organization">;
+  admission: ModelDispatchAdmission;
   workspaceId: SafeId<"workspace">;
   scopedDb: ScopedDb;
   batch: PropertyBatch;

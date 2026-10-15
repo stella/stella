@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads, chatTurns } from "@/api/db/schema";
@@ -136,18 +136,18 @@ describe("a turn's run", () => {
       await client.sendUserMessage(Bun.randomUUIDv7(), "Draft the NDA");
       await client.settle();
       client.dispose();
-      const [running] = await testDb
-        .select({ executionId: chatTurns.executionId })
-        .from(chatTurns)
-        .where(
-          and(
-            eq(chatTurns.threadId, threadId),
-            eq(chatTurns.status, "running"),
-          ),
-        );
+      // The durable page settles only once the dead owner's turn is reaped.
+      expect(
+        await testDb
+          .select({ status: chatTurns.status })
+          .from(chatTurns)
+          .where(eq(chatTurns.threadId, threadId)),
+      ).toEqual([{ status: "interrupted" }]);
       executionId =
-        running?.executionId ?? panic("Expected the crashed request's turn");
-      // The crashed process's run lives on in this one, stalled on its model.
+        harness.crashedExecutionOf(threadId) ??
+        panic("Expected the crashed request's turn");
+      // The reaper settles the row, but the crashed process's run lives on in
+      // this one, stalled on its model, until the harness closes.
       expect(processChatTurnOwnership.run(executionId)).toBeDefined();
     } finally {
       await harness.close();

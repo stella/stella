@@ -13,6 +13,7 @@ import {
   oauthAccessToken,
   oauthConsent,
   oauthRefreshToken,
+  session,
 } from "@/api/db/auth-schema";
 import { meRoute } from "@/api/handlers/me/routes";
 import { getAuth } from "@/api/lib/auth";
@@ -165,6 +166,10 @@ describe("resource-bound OAuth refresh", () => {
           await response.json(),
         );
         expect(tokens.scope.split(" ")).toContain("offline_access");
+        // The resource scopes granted at consent survive alongside it.
+        expect(tokens.scope.split(" ").toSorted()).toEqual(
+          requestedScope.split(" ").toSorted(),
+        );
         grant = {
           accessToken: tokens.access_token,
           refreshToken: tokens.refresh_token,
@@ -173,6 +178,42 @@ describe("resource-bound OAuth refresh", () => {
       }
     },
   );
+
+  test("keeps refreshing after the browser session that granted it ends", async () => {
+    const browser = await signInHuman(
+      `refresh-signout-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const organization = await getAuth().api.createOrganization({
+      body: { name: "Refresh", slug: `refresh-${Bun.randomUUIDv7()}` },
+      headers: browser.headers(),
+    });
+    await browser.setActiveOrganization(organization.id);
+    const client = await registerOAuthClient();
+    const granted = await grantOAuthClient(browser, client);
+
+    await getAuth().api.signOut({ headers: browser.headers() });
+
+    // The browser session is gone; the offline refresh token must outlive it,
+    // so a connected app keeps working without a new sign-in.
+    expect(
+      await testDb.$count(session, eq(session.userId, browser.userId)),
+    ).toBe(0);
+    let refreshToken = granted.refreshToken;
+    for (let rotation = 0; rotation < 2; rotation += 1) {
+      const response = await refreshOAuthGrant({ client, refreshToken });
+      expect(response.status, await response.clone().text()).toBe(200);
+      const tokens = v.parse(
+        v.looseObject({
+          access_token: v.pipe(v.string(), v.minLength(1)),
+          refresh_token: v.pipe(v.string(), v.minLength(1)),
+          scope: v.string(),
+        }),
+        await response.json(),
+      );
+      expect(tokens.scope.split(" ")).toContain("offline_access");
+      refreshToken = tokens.refresh_token;
+    }
+  });
 });
 
 describe("disconnecting a connected app", () => {

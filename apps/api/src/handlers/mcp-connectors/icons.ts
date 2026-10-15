@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as cheerio from "cheerio";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   parseSafeOutboundUrl,
   safeOutboundFetchBytes,
@@ -12,6 +13,7 @@ const ICON_HTML_MAX_BYTES = 300_000;
 
 export const discoverMcpIconUrl = async (
   rawUrl: string,
+  permit: ThirdPartyOutboundPermit,
 ): Promise<string | null> => {
   const parsed = parseSafeOutboundUrl(rawUrl);
   if (Result.isError(parsed)) {
@@ -22,6 +24,7 @@ export const discoverMcpIconUrl = async (
   const htmlResult = await Result.tryPromise({
     try: async () => {
       const response = await safeOutboundFetchBytes({
+        permit,
         headers: { Accept: "text/html" },
         maxBytes: ICON_HTML_MAX_BYTES,
         timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,

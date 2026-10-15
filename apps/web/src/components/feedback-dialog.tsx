@@ -11,6 +11,7 @@ import {
   FEEDBACK_LIMITS,
 } from "@stll/api-contract/feedback";
 import { copyToClipboard } from "@stll/clipboard";
+import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -63,7 +64,6 @@ import { detached } from "@/lib/detached";
 import { APIError, unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import { notifyUserError } from "@/lib/errors/user-toast";
-import { sanitizeHref } from "@/lib/sanitize-href";
 import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 const RATE_LIMITED_STATUS = 429;

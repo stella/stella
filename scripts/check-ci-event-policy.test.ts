@@ -21,8 +21,162 @@ const policy = JSON.parse(
   ),
 );
 
+test("compiler parity and seeded probes require dispatch-only policy in every workflow", () => {
+  for (const command of [
+    "bun run check:typecheck-parity",
+    "bun scripts/typecheck-parity.ts",
+    "bunx --no-install stll-typecheck-parity --project=tsconfig.json",
+    "bash scripts/typecheck-command-probe.sh",
+    "probe=packages/sha256/src/typecheck-command-probe.ts",
+  ]) {
+    const workflow = {
+      on: { workflow_dispatch: {} },
+      jobs: { proof: { steps: [{ run: command }] } },
+    };
+    expect(
+      checkCiEventPolicies({
+        workflows: { "fixture.yml": workflow },
+        policy: { jobs: { "fixture.yml/proof": "main" } },
+      }),
+    ).toContain(
+      "fixture.yml/proof: compiler parity and probes require dispatch-only policy",
+    );
+    expect(
+      checkCiEventPolicies({
+        workflows: {
+          "fixture.yml": {
+            ...workflow,
+            jobs: { proof: { steps: [{ parallel: [{ run: command }] }] } },
+          },
+        },
+        policy: { jobs: { "fixture.yml/proof": "main" } },
+      }),
+    ).toContain(
+      "fixture.yml/proof: compiler parity and probes require dispatch-only policy",
+    );
+    const declared = { jobs: { "fixture.yml/proof": "dispatch-only" } };
+    expect(
+      checkCiEventPolicies({
+        workflows: { "fixture.yml": workflow },
+        policy: declared,
+      }),
+    ).toEqual([]);
+    for (const event of [
+      "schedule",
+      "push",
+      "pull_request",
+      "pull_request_target",
+      "merge_group",
+      "workflow_call",
+      "workflow_run",
+      "repository_dispatch",
+    ]) {
+      expect(
+        checkCiEventPolicies({
+          workflows: {
+            "fixture.yml": { ...workflow, on: { ...workflow.on, [event]: {} } },
+          },
+          policy: declared,
+        }),
+      ).toContain(
+        "fixture.yml/proof: dispatch-only jobs require workflow_dispatch as the only trigger",
+      );
+    }
+  }
+});
+
+test("moving compiler proofs into an automatic workflow fails the real policy census", () => {
+  for (const file of ["ci.yml", "nightly-typecheck.yml"]) {
+    const workflow = v.parse(workflowSchema, structuredClone(workflows[file]));
+    const job = Object.values(workflow.jobs).find(
+      (candidate) => candidate.steps,
+    );
+    if (!job?.steps) {
+      panic("Missing workflow steps fixture");
+    }
+    for (const command of [
+      "bun run check:typecheck-parity",
+      "bash scripts/typecheck-command-probe.sh",
+    ]) {
+      job.steps.push({ run: command });
+      expect(
+        checkCiEventPolicies({
+          workflows: { ...workflows, [file]: workflow },
+          policy,
+        }),
+      ).toContainEqual(
+        expect.stringContaining(
+          "compiler parity and probes require dispatch-only policy",
+        ),
+      );
+      job.steps.pop();
+    }
+  }
+});
+
 test("every real workflow job has an event policy and the fast gate follows it", () => {
   expect(checkCiEventPolicies({ workflows, policy })).toEqual([]);
+});
+
+test("Postgres-only PR suites cannot lose their disabled-by-default switch", () => {
+  const workflow = v.parse(
+    workflowSchema,
+    structuredClone(workflows["ci.yml"]),
+  );
+  const service = workflow.jobs["service-suites"];
+  if (service === undefined || typeof service.if !== "string") {
+    panic("Missing service-suite switch fixture");
+  }
+  const original = service.if;
+  expect(original).toContain("vars.CI_POSTGRES_PR_SELECTION == 'on'");
+  for (const replacement of [
+    "true",
+    "vars.CI_POSTGRES_PR_SELECTION != 'off'",
+  ]) {
+    service.if = original.replace(
+      "vars.CI_POSTGRES_PR_SELECTION == 'on'",
+      () => replacement,
+    );
+    expect(service.if).not.toBe(original);
+    expect(
+      checkCiEventPolicies({
+        workflows: { ...workflows, "ci.yml": workflow },
+        policy,
+      }),
+    ).toContain(
+      "ci.yml/service-suites: Postgres PR suites must require the disabled-by-default switch",
+    );
+  }
+});
+
+test("Postgres shard eligibility cannot bypass the disabled-by-default PR switch", () => {
+  for (const replacement of [
+    "true",
+    "vars.CI_POSTGRES_PR_SELECTION != 'off'",
+  ]) {
+    const workflow = v.parse(
+      workflowSchema,
+      structuredClone(workflows["ci.yml"]),
+    );
+    const outputs = workflow.jobs["ci-plan"]?.outputs;
+    const original = outputs?.["postgres_service_suites_required"];
+    if (!outputs || !original) {
+      panic("Missing Postgres eligibility fixture");
+    }
+    outputs["postgres_service_suites_required"] = original.replace(
+      "vars.CI_POSTGRES_PR_SELECTION == 'on'",
+      () => replacement,
+    );
+    expect(outputs["postgres_service_suites_required"]).not.toBe(original);
+    expect(
+      checkCiEventPolicies({
+        workflows: { ...workflows, "ci.yml": workflow },
+        policy,
+      }),
+    ).toContain(
+      "ci.yml/postgres-service-suites: Postgres PR suites must require the disabled-by-default switch",
+    );
+  }
 });
 
 test("repeating a fast check cannot replace another declared check", () => {
@@ -178,6 +332,29 @@ test("analysis cancellation is pinned to main and tag-only workflows do not cons
       policy: { jobs: { "fixture.yml/publish": "main" } },
     }),
   ).toEqual([]);
+});
+
+test("main push cancellation is evaluated for an ordinary commit, so a release-commit exemption keeps the policy true", () => {
+  const workflow = {
+    on: { push: { branches: ["main"] } },
+    jobs: { analyze: {} },
+    concurrency: {
+      group: `\${{ github.workflow }}-\${{ github.ref }}`,
+      "cancel-in-progress": `\${{ (github.event_name != 'workflow_dispatch' || !inputs.sha) && !startsWith(github.event.head_commit.message, 'chore: release v') }}`,
+    },
+  };
+  const check = (cancelInProgress: boolean) =>
+    checkCiEventPolicies({
+      workflows: { "fixture.yml": workflow },
+      policy: {
+        jobs: { "fixture.yml/analyze": "main" },
+        pushMain: { "fixture.yml": { role: "analysis", cancelInProgress } },
+      },
+    });
+  expect(check(true)).toEqual([]);
+  expect(check(false)).toEqual([
+    "fixture.yml: main push cancellation differs from its policy",
+  ]);
 });
 
 test("reusable CI main calls coalesce without cancelling their parent workflow", () => {

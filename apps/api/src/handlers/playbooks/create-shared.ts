@@ -19,6 +19,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import type { ModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
 import type {
   PlaybookPositions,
   PlaybookScope,
@@ -49,6 +50,8 @@ export type CreatePlaybookDefinitionOrigin =
   | { type: "starter"; starterId: StarterPlaybookId };
 
 type CreatePlaybookDefinitionArgs = {
+  /** Admits the save's ask derivations; see `deriveAutoAsks`. */
+  admitModelAction: ModelActionAdmitter;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   /** Matters the caller can access; a newly added source must be in one. */
@@ -63,6 +66,7 @@ type CreatePlaybookDefinitionArgs = {
 };
 
 export const createPlaybookDefinitionHandler = async function* ({
+  admitModelAction,
   safeDb,
   organizationId,
   accessibleWorkspaceIds,
@@ -105,6 +109,7 @@ export const createPlaybookDefinitionHandler = async function* ({
   // consume `derived` like a manual ask. A failed derivation never blocks the
   // save (it persists with `derived` absent).
   const positions = await deriveAutoAsks(body.positions, {
+    admitModelAction,
     organizationId,
     orgAIConfig,
     managedAIResidency,

@@ -27,8 +27,8 @@ const fixture = () => {
       { matterId: "candidate", ledesEnabled: true },
     ],
     earlierEntries: [
-      { id: "earlier", matterId: "matter" },
-      { id: "other-matter", matterId: "candidate" },
+      { id: "earlier", matterId: "matter", dateWorked: "2026-10-01" },
+      { id: "other-matter", matterId: "candidate", dateWorked: "2026-10-01" },
     ],
     guidelines: [
       { fileId: "rules", fileName: "Billing rules", sections: ["Narratives"] },
@@ -106,6 +106,23 @@ describe("Billing draft authorization and operation invariants", () => {
       const { context, result } = fixture();
       draftAt(result, 0).matchedEarlierEntryIds = [id];
       expect(validateBillingDraftResult(result, context).isErr()).toBe(true);
+    }
+  });
+
+  test("history matches never cite work dated after the selected entry", () => {
+    for (const dateWorked of [
+      "2026-10-08",
+      "2026-10-09",
+      "2026-10-10",
+      "2027-01-01",
+    ]) {
+      const { context, result } = fixture();
+      context.earlierEntries = [
+        { id: "earlier", matterId: "matter", dateWorked },
+      ];
+      expect(validateBillingDraftResult(result, context).isOk()).toBe(
+        dateWorked <= "2026-10-09",
+      );
     }
   });
 

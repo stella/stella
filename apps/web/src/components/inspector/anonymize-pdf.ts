@@ -25,6 +25,7 @@ import type {
   EntityOverlay,
   FileAnonymization,
 } from "@/lib/pdf/anonymization-types";
+import { useQueryView, useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
 
@@ -79,12 +80,14 @@ export const useFileAnonymizationPipeline = ({
   mimeType,
   workspaceId,
   entityId,
+  runPipeline = anonymizePdf,
 }: {
   enabled: boolean;
   fieldId: string;
   mimeType?: string | undefined;
   workspaceId: string;
   entityId: string | null;
+  runPipeline?: typeof anonymizePdf;
 }): void => {
   const retry = useInspectorAnonymizationStore(
     (state) => state.anonymizationRetryByFieldId[fieldId] ?? 0,
@@ -97,18 +100,22 @@ export const useFileAnonymizationPipeline = ({
     ...anonymizationTermsOptions(workspaceId),
     enabled,
   });
+  const vocabularyQueryView = useQueryView(vocabularyQuery);
+  useQueryViewError(vocabularyQueryView);
   const allowlistQuery = useQuery({
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled,
   });
+  const allowlistQueryView = useQueryView(allowlistQuery);
+  useQueryViewError(allowlistQueryView);
   useQuery({
     enabled:
       enabled &&
       pipelineStatus !== "error" &&
-      !vocabularyQuery.isPending &&
-      !allowlistQuery.isPending,
+      vocabularyQuery.status === "success" &&
+      allowlistQuery.status === "success",
     queryFn: async ({ client: queryClient }) => {
-      const result = await anonymizePdf({
+      const result = await runPipeline({
         workspaceId,
         fieldId,
         entityId,

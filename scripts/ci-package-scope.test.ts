@@ -77,9 +77,8 @@ test("ordinary markdown and changesets skip package checks while source content 
   repository((root) => {
     for (const changed of [
       [],
-      ["provenance/attestation.json"],
       ["docs/guide.md", ".changeset/fresh.md"],
-      ["notes/guide.mdx", ".provenance.yml"],
+      ["notes/guide.mdx"],
       ["apps/example/README.md", "packages/example/README.md"],
       ["apps/api/src/prompt.md"],
     ]) {
@@ -103,6 +102,30 @@ test("ordinary markdown and changesets skip package checks while source content 
         requiresPackageChecks({ root, changed: ["docs/guide.md", file] }),
         file,
       ).toBe(true);
+    }
+  });
+});
+
+test("provenance artifacts and configuration always retain package checks", () => {
+  repository((root) => {
+    for (const file of [
+      ".provenance.yml",
+      "provenance/report.json",
+      "provenance/projects/root/sbom.cdx.json",
+      "provenance/projects/desktop-tauri/THIRD-PARTY-NOTICES.txt",
+      "provenance/README.md",
+      "provenance/unknown/input.ts",
+    ]) {
+      for (const changed of [
+        [file],
+        ["README.md", file],
+        [file, "README.md"],
+      ]) {
+        expect(
+          requiresPackageChecks({ root, changed }),
+          changed.join(", "),
+        ).toBe(true);
+      }
     }
   });
 });
@@ -162,11 +185,12 @@ test("the exact README change derives its genuine readers without package jobs",
   const changed = ["README.md", "apps/desktop/README.md"];
   expect(requiresPackageChecks({ changed })).toBe(false);
   const checks = markdownChecks({ changed });
-  expect(checks).toHaveLength(5);
+  expect(checks).toHaveLength(6);
   expect(checks).toContainEqual([
     "bun",
     "scripts/check-railway-template-shape.ts",
   ]);
+  expect(checks).toContainEqual(["bun", "scripts/check-marketing-content.ts"]);
   expect(checks).toContainEqual([
     "bun",
     "test",

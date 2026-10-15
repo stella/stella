@@ -22,6 +22,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   borme_get_summary: "research",
   business_registry_lookup: "research",
   counterparty_check: "research",
+  request_secret: "user-input",
   review_folder_consistency: "research",
   "create-current-skill-resource": "mutation",
   "create-document": "user-input",
@@ -80,6 +81,7 @@ const BUILT_IN_CHAT_TOOL_ACTIVITY_CATEGORIES = {
   "update-current-skill-resource": "mutation",
   "update-entity-fields": "mutation",
   update_reader_annotation: "mutation",
+  use_connector_secret: "mutation",
   "use-browser": "research",
   web_search: "research",
 } as const satisfies Record<keyof ChatUITools, ChatToolActivityCategory>;

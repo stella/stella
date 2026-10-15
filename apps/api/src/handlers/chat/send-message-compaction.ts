@@ -22,6 +22,8 @@ import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import { markChatThreadCompactionDue } from "@/api/lib/chat/thread-compaction";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
+import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
 type ChatCompactionModelProps = {
   /** Effective chat model override for this turn; see `resolveEffectiveChatModelSelection`. */
@@ -35,6 +37,8 @@ type ChatCompactionModelProps = {
 
 type CompactMessagesForContextProps = ChatCompactionModelProps & {
   abortSignal: AbortSignal;
+  /** The turn's admission: compaction is a step of the turn. */
+  admission: ModelDispatchAdmission;
   boundary: ChatThirdPartyBoundary;
   messages: ChatMessage[];
   safeDb: SafeDb;
@@ -91,6 +95,7 @@ export const compactMessagesForContext = async ({
   chatModelOverride,
   messages,
   organizationId,
+  admission,
   orgAIConfig,
   managedAIResidency,
   reasoningEffort,
@@ -119,6 +124,7 @@ export const compactMessagesForContext = async ({
     feature: "chat.context_compaction",
     modelRole: "chat",
     orgAIConfig,
+    modelTier: admission.modelTier,
     properties: {
       organization_id: organizationId,
       ...(workspaceId ? { workspace_id: workspaceId } : {}),
@@ -131,6 +137,7 @@ export const compactMessagesForContext = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier: admission.modelTier,
   });
 
   return await compactChatMessagesForModel({
@@ -147,6 +154,7 @@ export const compactMessagesForContext = async ({
       });
     },
     organizationId,
+    admission,
     orgAIConfig,
     managedAIResidency,
     reasoningEffort,
@@ -160,6 +168,8 @@ type MarkChatCompactionDueProps = Omit<
   "managedAIResidency"
 > & {
   messages: ChatMessage[];
+  /** The turn's managed model tier, so the trigger matches its model. */
+  modelTier: ManagedModelTier;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
 };
@@ -180,6 +190,7 @@ type MarkChatCompactionDueProps = Omit<
 export const markChatCompactionDue = async ({
   chatModelOverride,
   messages,
+  modelTier,
   organizationId,
   orgAIConfig,
   safeDb,
@@ -189,6 +200,7 @@ export const markChatCompactionDue = async ({
     chatModelOverride,
     orgAIConfig,
     organizationId,
+    modelTier,
   });
 
   if (!chatThreadNeedsCompaction({ messages, triggerTokens })) {

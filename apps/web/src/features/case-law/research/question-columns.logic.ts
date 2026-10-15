@@ -10,6 +10,7 @@ import type {
   CaseLawResearchAnswerState,
   CaseLawResearchAnswerType,
 } from "@stll/api-contract";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { PermissionInput } from "@stll/permissions";
 
 import type { Decision } from "@/features/case-law/components/decision-cells";
@@ -243,19 +244,8 @@ export const questionRunSet = ({
  */
 export const researchRunBatches = (
   decisionIds: readonly string[],
-): readonly string[][] => {
-  const batches: string[][] = [];
-  for (
-    let start = 0;
-    start < decisionIds.length;
-    start += CASE_LAW_RESEARCH_RUN_DECISIONS_MAX
-  ) {
-    batches.push(
-      decisionIds.slice(start, start + CASE_LAW_RESEARCH_RUN_DECISIONS_MAX),
-    );
-  }
-  return batches;
-};
+): readonly string[][] =>
+  chunkItems(decisionIds, CASE_LAW_RESEARCH_RUN_DECISIONS_MAX);
 
 /**
  * One content document as a string that depends on nothing but its values.

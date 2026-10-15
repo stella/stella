@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * Pass two: check each factual claim against the pinned facts.
  *
@@ -9,11 +10,10 @@
  * claim still unanswered after that fails the run: an ungraded claim shown as
  * "no coverage" would read as a finding nobody made.
  */
-
-import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { mapWithConcurrency } from "@stll/concurrency";
+import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
@@ -275,10 +275,7 @@ export const gradeClaims = async ({
   const keyByPromptId = new Map(
     prompted.map(({ promptId, claim }) => [promptId, claim.key]),
   );
-  const batches: (typeof prompted)[] = [];
-  for (let start = 0; start < prompted.length; start += BATCH_SIZE) {
-    batches.push(prompted.slice(start, start + BATCH_SIZE));
-  }
+  const batches = chunkItems(prompted, BATCH_SIZE);
 
   return Result.flatten(
     await Result.tryPromise({

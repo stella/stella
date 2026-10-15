@@ -9,6 +9,7 @@ import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legis
 import { LEGISLATION_DOCUMENT_STATUSES } from "@stll/api-contract/legislation-status";
 import { STATUTE_SLUG_PATTERN } from "@stll/api-contract/statute-route";
 
+import { redistributableLegislationSourceFor } from "@/api/lib/legal-search/legislation-redistribution-sql";
 import {
   legislationVersionRef,
   notWithdrawn,
@@ -26,6 +27,7 @@ import {
   publicLawReaderPolicies,
   safeUuid,
   sql,
+  stellaPublicLawReader,
   tsvector,
   timestamptz,
 } from "./common";
@@ -573,6 +575,70 @@ export const statuteSitemapShards = p.pgTable(
       to: "public",
       using: sql`true`,
       withCheck: sql`true`,
+    }),
+    ...publicLawReaderPolicies(),
+  ],
+);
+
+/**
+ * Works per kind of act, per jurisdiction and source, replaced as one snapshot
+ * by the scheduler. Counted per source so a public read applies the live
+ * redistribution policy instead of a policy frozen into the count.
+ */
+export const legislationFacetCounts = p.pgTable(
+  "legislation_facet_counts",
+  {
+    country: p.varchar({ length: 3 }).notNull(),
+    sourceId: safeUuid<"legislationSource">("source_id")
+      .notNull()
+      .references(() => legislationSources.id, { onDelete: "cascade" }),
+    documentType: p.varchar("document_type", { length: 128 }).notNull(),
+    works: p.integer().notNull(),
+  },
+  (t) => [
+    p.primaryKey({
+      name: "legislation_facet_counts_pkey",
+      columns: [t.country, t.sourceId, t.documentType],
+    }),
+    p.check("legislation_facet_counts_works_positive", sql`${t.works} > 0`),
+    p.pgPolicy("legislation_facet_count_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_counts'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_counts'::regclass)`,
+    }),
+    p.pgPolicy("public_law_reader_access", {
+      for: "select",
+      to: stellaPublicLawReader,
+      using: sql`EXISTS (
+        SELECT 1
+        FROM ${legislationSources} AS facet_source
+        WHERE facet_source.id = ${t.sourceId}
+          AND ${redistributableLegislationSourceFor(sql`facet_source.descriptor`)}
+      )`,
+    }),
+  ],
+);
+
+/**
+ * When the statute facet snapshot last completed: one row, no source data.
+ * Its presence, not the visibility of any bucket, is what tells a reader the
+ * snapshot exists, so a source the reader may not see never sends it back to
+ * the live aggregation.
+ */
+export const legislationFacetRefreshes = p.pgTable(
+  "legislation_facet_refreshes",
+  {
+    singleton: p.boolean().primaryKey().default(true),
+    refreshedAt: timestamptz("refreshed_at").notNull(),
+  },
+  (t) => [
+    p.check("legislation_facet_refreshes_singleton", sql`${t.singleton}`),
+    p.pgPolicy("legislation_facet_refresh_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_refreshes'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.legislation_facet_refreshes'::regclass)`,
     }),
     ...publicLawReaderPolicies(),
   ],

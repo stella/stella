@@ -1,4 +1,6 @@
 import {
+  MCP_ADVANCED_HTTP_PATH,
+  MCP_ADVANCED_RESOURCE_SCOPES,
   MCP_ANONYMIZED_HTTP_PATH,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -7,6 +9,8 @@ import {
   MCP_LAW_HTTP_PATH,
   MCP_OAUTH_PROTOCOL_SCOPES,
 } from "@stll/api-contract";
+
+import type { ToolScope } from "@/api/mcp/tool-types";
 
 /**
  * Least-privilege remote-host surface for document workflows. Hosted clients
@@ -18,7 +22,7 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
   "stella:documents_write",
   // The canonical presigned-upload lifecycle currently owns one scope across
   // entity-create and entity-version purposes. The documents MCP audience
-  // restricts invoke_capability to the three lifecycle IDs, so this grant does
+  // restricts write_capability to the three lifecycle IDs, so this grant does
   // not expose unrelated matter mutations through that endpoint.
   "stella:matters_write",
 ] as const;
@@ -30,15 +34,42 @@ export const MCP_DOCUMENTS_RESOURCE_SCOPES = [
  * `registry.test.ts` pins this list to the scopes its projected tools actually
  * carry, so a tool added to that surface cannot widen the grant silently.
  */
-export const MCP_LAW_RESOURCE_SCOPES = [
+const LAW_PROJECTED_TOOL_SCOPES = [
   "stella:search",
   "stella:read",
-] as const;
+  "stella:law_read",
+] as const satisfies readonly ToolScope[];
+
+export const LEGAL_RESOLVE_RESOURCE_ROUTES = {
+  decision: {
+    path: "/case/:country/decisions/resolve",
+    requiredScope: "stella:law_read",
+  },
+  law: {
+    path: "/law/:country/citations/resolve",
+    requiredScope: "stella:law_read",
+  },
+} as const satisfies Record<
+  "decision" | "law",
+  { path: string; requiredScope: ToolScope }
+>;
+
+// One entry per scope: a tool and a REST route may consume the same one.
+export const MCP_LAW_RESOURCE_SCOPES = [
+  ...new Set([
+    ...LAW_PROJECTED_TOOL_SCOPES,
+    ...Object.values(LEGAL_RESOLVE_RESOURCE_ROUTES).map(
+      ({ requiredScope }) => requiredScope,
+    ),
+  ]),
+];
 
 export const ROOT_MCP_DISCOVERY_PATH =
   "/.well-known/oauth-protected-resource" as const;
 export const MCP_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_HTTP_PATH}` as const;
+export const MCP_ADVANCED_DISCOVERY_PATH =
+  `/.well-known/oauth-protected-resource${MCP_ADVANCED_HTTP_PATH}` as const;
 export const MCP_DOCUMENTS_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_DOCUMENTS_HTTP_PATH}` as const;
 export const MCP_ANONYMIZED_DISCOVERY_PATH =
@@ -47,6 +78,12 @@ export const MCP_LAW_DISCOVERY_PATH =
   `/.well-known/oauth-protected-resource${MCP_LAW_HTTP_PATH}` as const;
 
 export const MCP_RESOURCE_MODE_CONFIG = {
+  advanced: {
+    discoveryPath: MCP_ADVANCED_DISCOVERY_PATH,
+    httpPath: MCP_ADVANCED_HTTP_PATH,
+    resourceName: "Stella MCP advanced",
+    resourceScopes: MCP_ADVANCED_RESOURCE_SCOPES,
+  },
   default: {
     discoveryPath: MCP_DISCOVERY_PATH,
     httpPath: MCP_HTTP_PATH,
@@ -76,6 +113,7 @@ export const MCP_RESOURCE_MODE_CONFIG = {
 export type McpMode = keyof typeof MCP_RESOURCE_MODE_CONFIG;
 
 export const MCP_MODES = [
+  "advanced",
   "default",
   "documents",
   "anonymized",
@@ -106,7 +144,8 @@ export const getMcpResourceScopes = (mode: McpMode) =>
  * (`db/better-auth-oauth-resource-repair.ts`, registered in
  * `db/online-migrations.ts`) runs on the migrate entrypoint before the API
  * rolls, inserts any resource this set names and the table lacks, and links
- * every existing client registration to it.
+ * every existing client registration to it. It also upgrades the exact
+ * predecessor policy that omitted protocol scopes from token issuance.
  * `better-auth-oauth-policy-census.db.test.ts` pins that, the idempotence, and
  * the refusal to overwrite a conflicting definition.
  */
@@ -131,14 +170,9 @@ export const buildBetterAuthOAuthResources = (baseUrl: string) =>
  * joined the issuance policy: the configured set minus
  * `MCP_OAUTH_PROTOCOL_SCOPES`.
  *
- * Expand step of an expand/contract rollout. The previous API release's boot
- * census compares `oauth_resource.allowed_scopes` exactly against this
- * predecessor set, so rewriting the rows in the same release as the policy
- * change would stop any previous-release task (an autoscaled task mid-rollout,
- * or a rollback) from booting. This release therefore accepts both the
- * predecessor set and the configured set and rewrites nothing; the next
- * release upgrades predecessor rows in the deploy repair and drops this
- * acceptance, once no running task requires the predecessor set.
+ * Databases seeded before then still hold this set. The deploy repair
+ * reconciles it to the configured set like any earlier configured scope set,
+ * and the boot census accepts only the configured set.
  */
 export const predecessorOAuthResourceScopes = (
   allowedScopes: readonly string[],

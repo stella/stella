@@ -27,7 +27,7 @@ import {
 const POSITION_TITLE_MAX_LENGTH = 256;
 
 /** One position this run will grade, with the title its finding row carries. */
-export type PlannedPosition = {
+type PlannedPosition = {
   positionId: string;
   title: string;
   position: Position;

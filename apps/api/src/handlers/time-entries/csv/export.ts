@@ -3,8 +3,8 @@ import { and } from "drizzle-orm";
 
 import { timeEntryAmount } from "@stll/money";
 
+import { entityContextId } from "@/api/db/entity-feature-policies";
 import { timeEntries } from "@/api/db/schema";
-import { exportAmountText } from "@/api/handlers/time-entries/export-amount";
 import {
   loadTimekeeperNames,
   timeEntryExportConditions,
@@ -13,6 +13,7 @@ import {
 import type { TimeEntryExportHandlerProps } from "@/api/handlers/time-entries/export-query";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
+import { exportAmountText } from "@/api/lib/billing/export-amount";
 import { escapeCSV } from "@/api/lib/csv";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -30,7 +31,7 @@ export const exportCsvHandler = async ({
         id: timeEntries.id,
         activityGroup: timeEntries.activityGroup,
         userId: timeEntries.userId,
-        workItemId: timeEntries.workItemId,
+        workItemId: entityContextId(timeEntries.workItemId),
         dateWorked: timeEntries.dateWorked,
         durationMinutes: timeEntries.durationMinutes,
         billedMinutes: timeEntries.billedMinutes,
@@ -105,6 +106,7 @@ export const exportCsvHandler = async ({
 };
 
 const config = {
+  contract: "patch",
   accountAccess: ACCOUNT_ACCESS.standard,
   featureAccess: { featureId: "time-billing", type: "required" },
   description:

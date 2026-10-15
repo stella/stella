@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { sha256Hex as hashContent } from "@stll/sha256/node";
+import { normalizeUnicode } from "@stll/text-normalize";
+
 import {
-  hashContent,
   normalizeMetadataValues,
   parseCeDate,
   stripHtml,
@@ -67,7 +69,7 @@ describe("parseCeDate", () => {
 describe("derived metadata lists", () => {
   test("normalization is a stable fixed point and preserves first occurrence order", () => {
     const composed = "Občianske právo";
-    const decomposed = composed.normalize("NFD");
+    const decomposed = normalizeUnicode(composed, "NFD");
     expect(decomposed).not.toBe(composed);
     const stated = [
       `  ${composed}`,

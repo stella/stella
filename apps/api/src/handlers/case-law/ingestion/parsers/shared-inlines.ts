@@ -1,3 +1,4 @@
+// parser-output-unchanged: visible text walks the same nodes in the same order and skips the same script/style subtrees; inline and visible text output is unchanged.
 // parser-output-unchanged: [cz-regional] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
 // parser-output-unchanged: [sk-courts] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
 // parser-output-unchanged: [sk-us] The new legacy quarantine projection is unused by this source; existing inline and visible text output is unchanged.
@@ -31,23 +32,49 @@
  */
 
 import type * as cheerio from "cheerio";
-import { type AnyNode, type Element, isTag, isText } from "domhandler";
+import {
+  type AnyNode,
+  type Element,
+  hasChildren,
+  isTag,
+  isText,
+} from "domhandler";
 
-import type { Inline } from "@/api/handlers/case-law/document-ast";
-import { hasInlineChildren } from "@/api/handlers/case-law/document-ast";
+// parser-output-unchanged: imports the document AST from its package owner
+import type { Inline } from "@stll/legal-ast/document-ast";
+import { hasInlineChildren } from "@stll/legal-ast/document-ast";
+// parser-output-unchanged: the inline-line helpers moved unchanged to their package owner so library parsers can import them.
+import { stripInlinePrefix } from "@stll/legal-ast/inline-line";
 
 const EXCLUDED_HTML_TAGS = ["script", "style"];
-const EXCLUDED_HTML_SELECTOR = EXCLUDED_HTML_TAGS.join(", ");
 
 /** Content outside the decision text axis. */
 export const isExcludedHtmlTag = (tag: string): boolean =>
   EXCLUDED_HTML_TAGS.includes(tag);
 
-/** Read text without mutating the source DOM or retaining non-content tags. */
+/**
+ * Read text without mutating the source DOM or retaining non-content tags.
+ *
+ * A walk rather than clone-and-remove: cheerio's `.find()` dedupes its
+ * context of N children pairwise, which is quadratic on a wrapper holding
+ * tens of thousands of paragraphs.
+ */
 export const visibleHtmlText = (el: cheerio.Cheerio<AnyNode>): string => {
-  const copy = el.clone();
-  copy.find(EXCLUDED_HTML_SELECTOR).remove();
-  return copy.not(EXCLUDED_HTML_SELECTOR).text();
+  let text = "";
+  const pending = el.toArray().toReversed();
+  for (let node = pending.pop(); node !== undefined; node = pending.pop()) {
+    if (isText(node)) {
+      text += node.data;
+      continue;
+    }
+    if (!hasChildren(node) || (isTag(node) && isExcludedHtmlTag(node.name))) {
+      continue;
+    }
+    for (const child of node.children.toReversed()) {
+      pending.push(child);
+    }
+  }
+  return text;
 };
 
 /** Repair-only projection for quarantine identities stored before visible text. */
@@ -330,127 +357,6 @@ export const inlinesToPlainText = (inlines: readonly Inline[]): string => {
     }
   }
   return text;
-};
-
-/**
- * Drop the whitespace a prefix cut exposed at the start of an inline
- * list, descending through emphasis wrappers to reach it.
- *
- * Trimming only a top-level text node made a paragraph's plain text
- * depend on where the publisher happened to open a `<b>`: `[1] Text`
- * written flat lost the space after the marker, and the same sentence
- * written as `[1]` plus a bold ` Text` kept it.
- *
- * A leading `line-break` is dropped too. The break was a separator
- * between the marker and the body; once the marker is gone it would open
- * the paragraph with an empty line, and no court paragraph begins with
- * one. The alternative — keeping it as content — would leave the same
- * markup-shape dependence this function exists to remove, since the same
- * document with the break written as `\n` inside a text node loses it.
- */
-const trimLeadingWhitespace = (nodes: Inline[]): Inline[] => {
-  const result = [...nodes];
-  // Page anchors passed on the way in: zero-width on the text axis, so
-  // neither whitespace to drop nor content that ends the trim.
-  const kept: Inline[] = [];
-
-  while (result.length > 0) {
-    const first = result[0];
-    if (first === undefined) {
-      break;
-    }
-
-    if (first.type === "line-break") {
-      result.shift();
-      continue;
-    }
-
-    if (first.type === "page-anchor") {
-      kept.push(first);
-      result.shift();
-      continue;
-    }
-
-    if (first.type === "text") {
-      const trimmed = first.text.trimStart();
-      if (trimmed.length > 0) {
-        result[0] = { ...first, text: trimmed };
-        break;
-      }
-      result.shift();
-      continue;
-    }
-
-    // bold | italic | link — trim inside, and drop the wrapper entirely
-    // when nothing but whitespace was in it.
-    const children = trimLeadingWhitespace(first.children);
-    if (children.length > 0) {
-      result[0] = { ...first, children };
-      break;
-    }
-    result.shift();
-  }
-
-  kept.push(...result);
-  return kept;
-};
-
-export const stripInlinePrefix = (
-  inlines: readonly Inline[],
-  charCount: number,
-): Inline[] => {
-  if (charCount <= 0) {
-    return [...inlines];
-  }
-
-  const result: Inline[] = [];
-  let remaining = charCount;
-
-  for (const node of inlines) {
-    if (remaining <= 0) {
-      result.push(node);
-      continue;
-    }
-
-    if (node.type === "text") {
-      if (node.text.length <= remaining) {
-        remaining -= node.text.length;
-      } else {
-        const rest = node.text.slice(remaining);
-        remaining = 0;
-        if (rest) {
-          result.push({ ...node, text: rest });
-        }
-      }
-      continue;
-    }
-
-    if (node.type === "line-break") {
-      remaining -= 1;
-      continue;
-    }
-
-    if (!hasInlineChildren(node)) {
-      // Zero characters on the text axis; passes through untouched.
-      result.push(node);
-      continue;
-    }
-
-    const nodeTextLen = inlinesToPlainText(node.children).length;
-    if (nodeTextLen <= remaining) {
-      // Entire node consumed by prefix
-      remaining -= nodeTextLen;
-    } else {
-      // Partial strip inside the node
-      const stripped = stripInlinePrefix(node.children, remaining);
-      remaining = 0;
-      if (stripped.length > 0) {
-        result.push({ ...node, children: stripped });
-      }
-    }
-  }
-
-  return trimLeadingWhitespace(result);
 };
 
 /**

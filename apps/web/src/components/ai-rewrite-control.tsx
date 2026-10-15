@@ -4,8 +4,9 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { DialogFormState } from "@stll/ui/dialog";
-import { Loader2Icon, AiActionIcon } from "@stll/ui/icons";
+import { AiActionIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
+import { Loader } from "@stll/ui/loader";
 import { PopoverPopup } from "@stll/ui/popover";
 import { SplitButton } from "@stll/ui/split-button";
 import { Textarea } from "@stll/ui/textarea";
@@ -62,6 +63,7 @@ export const AiRewriteControl = ({
   onRewrite,
 }: AiRewriteControlProps) => {
   const t = useTranslations("ai");
+  const tCommon = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [customInstruction, setCustomInstruction] = useState("");
   const customInstructionId = useId();
@@ -158,7 +160,7 @@ export const AiRewriteControl = ({
         }
       >
         {isPending ? (
-          <Loader2Icon aria-hidden className="size-3.5 animate-spin" />
+          <Loader className="size-3.5" label={tCommon("loading")} size="sm" />
         ) : (
           <AiActionIcon aria-hidden className="size-3.5" />
         )}
