@@ -5,6 +5,7 @@ import { sleep } from "@stll/concurrency/sleep";
 
 import type { DecisionCitationSummary } from "@/features/case-law/citation-treatment";
 import { toSafeId } from "@/lib/safe-id";
+import { unregisterDomEnvironment } from "@/test-dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 const { act, cleanup, fireEvent, render, screen, waitFor } =
@@ -41,7 +42,7 @@ afterAll(async () => {
   await act(async () => {
     await sleep(0);
   });
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const summary = {
