@@ -1,5 +1,7 @@
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 const MIB = 1024 * 1024;
 // Past 32 MiB: more than an in-memory scan of the whole content would hold,
 // while keeping the generated fixtures cheap for the test batch.
@@ -42,8 +44,9 @@ export const largeDocx = async ({
   trailer?: string;
 } = {}): Promise<Uint8Array> => {
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", CONTENT_TYPES);
-  zip.file(
+  writeZipEntry(zip, "[Content_Types].xml", CONTENT_TYPES);
+  writeZipEntry(
+    zip,
     "word/document.xml",
     Buffer.concat([
       Buffer.from("<w:document><w:body><w:p><w:r><w:t>"),
@@ -57,9 +60,9 @@ export const largeDocx = async ({
 /** A DOCX carrying a large stored image, as scanned documents do. */
 export const mediaHeavyDocx = async (): Promise<Uint8Array> => {
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", CONTENT_TYPES);
-  zip.file("word/document.xml", "<w:document><w:body/></w:document>");
-  zip.file("word/media/image1.jpeg", pseudoRandom(LARGE_BYTES), {
+  writeZipEntry(zip, "[Content_Types].xml", CONTENT_TYPES);
+  writeZipEntry(zip, "word/document.xml", "<w:document><w:body/></w:document>");
+  writeZipEntry(zip, "word/media/image1.jpeg", pseudoRandom(LARGE_BYTES), {
     compression: "STORE",
   });
   return await generate(zip);
@@ -77,8 +80,9 @@ export const largeXlsx = async (): Promise<Uint8Array> => {
     bytes += xml.length;
   }
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", CONTENT_TYPES);
-  zip.file(
+  writeZipEntry(zip, "[Content_Types].xml", CONTENT_TYPES);
+  writeZipEntry(
+    zip,
     "xl/worksheets/sheet1.xml",
     `<worksheet><sheetData>${rows.join("")}</sheetData></worksheet>`,
   );
@@ -88,9 +92,9 @@ export const largeXlsx = async (): Promise<Uint8Array> => {
 /** A PPTX carrying a large stored video. */
 export const mediaHeavyPptx = async (): Promise<Uint8Array> => {
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", CONTENT_TYPES);
-  zip.file("ppt/slides/slide1.xml", "<p:sld><p:cSld/></p:sld>");
-  zip.file("ppt/media/media1.mp4", pseudoRandom(LARGE_BYTES), {
+  writeZipEntry(zip, "[Content_Types].xml", CONTENT_TYPES);
+  writeZipEntry(zip, "ppt/slides/slide1.xml", "<p:sld><p:cSld/></p:sld>");
+  writeZipEntry(zip, "ppt/media/media1.mp4", pseudoRandom(LARGE_BYTES), {
     compression: "STORE",
   });
   return await generate(zip);
