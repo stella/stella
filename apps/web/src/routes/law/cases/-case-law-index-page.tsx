@@ -264,6 +264,10 @@ export function PublicCaseLawIndex({
   const shownQuestionIds = Route.useSearch({
     select: ({ questions }) => questions ?? NO_SHOWN_QUESTIONS,
   });
+  // Also read apart: which words a rewrite replaced does not change the rows.
+  const rewriteState = Route.useSearch({
+    select: ({ rewrite, rewrittenFrom }) => ({ rewrite, rewrittenFrom }),
+  });
   const navigate = Route.useNavigate();
   const routerNavigate = useNavigate();
 
@@ -648,7 +652,7 @@ export function PublicCaseLawIndex({
     query: queryInput,
     resultCount: decisions.length,
     rowsAnswerQuery: rows === "rows",
-    search,
+    search: { ...search, ...rewriteState },
     searchNavigation,
     searchRefinedQuery,
     setQuery: (next) => {
@@ -756,11 +760,11 @@ export function PublicCaseLawIndex({
                 page={pager.currentPage}
                 total={searchTotal}
               />
-              {search.rewrittenFrom === undefined ||
+              {rewriteState.rewrittenFrom === undefined ||
               isSearchUnavailable ? null : (
                 <RewrittenSearchLine
                   onSearchOriginal={searchOriginalWords}
-                  original={search.rewrittenFrom}
+                  original={rewriteState.rewrittenFrom}
                   rewritten={search.q ?? ""}
                 />
               )}
