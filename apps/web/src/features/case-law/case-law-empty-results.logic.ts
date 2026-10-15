@@ -84,6 +84,12 @@ type AutoRewriteInput = {
   /** The reader went back to their own words: leave them there. */
   rewriteOff: boolean;
   /**
+   * The page already tried this search, whatever came of it. A rewrite that
+   * failed or said the same words is not asked for again because the reader
+   * typed and deleted a character.
+   */
+  alreadyAttempted: boolean;
+  /**
    * The reader asked for every word: an empty answer to that is the answer,
    * not a cue to search different, looser words.
    */
@@ -104,6 +110,7 @@ export const shouldAutoRewrite = ({
   rowsAnswerQuery,
   rewrittenFrom,
   rewriteOff,
+  alreadyAttempted,
   strict,
 }: AutoRewriteInput): boolean =>
   isTextSearch &&
@@ -113,5 +120,6 @@ export const shouldAutoRewrite = ({
   resultCount === 0 &&
   rewrittenFrom === undefined &&
   !rewriteOff &&
+  !alreadyAttempted &&
   !strict &&
   isQuestionLike(query);

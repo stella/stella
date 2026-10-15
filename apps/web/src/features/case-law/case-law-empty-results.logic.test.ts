@@ -43,6 +43,7 @@ describe("rewriting a search by itself", () => {
     rowsAnswerQuery: true,
     rewrittenFrom: undefined,
     rewriteOff: false,
+    alreadyAttempted: false,
     strict: false,
   };
 
@@ -58,6 +59,7 @@ describe("rewriting a search by itself", () => {
     ["it is already a rewrite", { rewrittenFrom: "the original words" }],
     ["the reader went back to their own words", { rewriteOff: true }],
     ["the reader asked for every word", { strict: true }],
+    ["the page already tried this search", { alreadyAttempted: true }],
     ["the reader typed on since the search", { typedQuery: "výpověď" }],
     ["it is not a question", { query: "okamžité zrušení" }],
   ])("not when %s", (_reason, change) => {

@@ -646,7 +646,13 @@ export function PublicCaseLawIndex({
       "cases.refine-navigate",
     );
   };
-  const { autoRewrite, refine, searchOriginalWords } = useCaseLawRewriteFlow({
+  const {
+    autoRewrite,
+    autoRewriteKey,
+    onAutoRefine,
+    refine,
+    searchOriginalWords,
+  } = useCaseLawRewriteFlow({
     country: countryParam,
     isTextSearch: intent.type === "text",
     query: queryInput,
@@ -693,10 +699,7 @@ export function PublicCaseLawIndex({
         refine={refine}
       />
       {autoRewrite && (
-        <CaseLawAutoRewrite
-          key={`${countryParam}:${search.q ?? ""}`}
-          onAutoRefine={refine.onAutoRefine}
-        />
+        <CaseLawAutoRewrite key={autoRewriteKey} onAutoRefine={onAutoRefine} />
       )}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3" ref={paneRef}>
@@ -920,6 +923,15 @@ const useCaseLawRewriteFlow = ({
       "cases.original-words-navigate",
     );
   };
+  // Held here, not in the component that runs the rewrite: that unmounts
+  // whenever the box stops matching the search, and must not try again when
+  // it mounts back for the same search.
+  const searchKey = `${country}:${search.q ?? ""}`;
+  const [attemptedSearch, setAttemptedSearch] = useState<string | null>(null);
+  const onAutoRefine = () => {
+    setAttemptedSearch(searchKey);
+    refine.onAutoRefine();
+  };
   const autoRewrite = shouldAutoRewrite({
     isTextSearch,
     query: search.q ?? "",
@@ -929,9 +941,16 @@ const useCaseLawRewriteFlow = ({
     rowsAnswerQuery,
     rewrittenFrom: search.rewrittenFrom,
     rewriteOff: search.rewrite === "off",
+    alreadyAttempted: attemptedSearch === searchKey,
     strict: isStrictSearch(search.strict),
   });
-  return { autoRewrite, refine, searchOriginalWords };
+  return {
+    autoRewrite,
+    autoRewriteKey: searchKey,
+    onAutoRefine,
+    refine,
+    searchOriginalWords,
+  };
 };
 
 type SearchUnavailableProps = {
