@@ -222,13 +222,16 @@ const declarationName = (node: ts.Node): string | undefined => {
 /** `outer.inner` names of the declarations enclosing a node. */
 const enclosingSymbol = (node: ts.Node): string => {
   const names: string[] = [];
-  // The source file's parent is undefined at runtime despite its type.
-  for (let current: ts.Node | undefined = node.parent; current !== undefined;) {
+  // Sites are nodes inside a file, so the walk ends at its source file.
+  for (
+    let current = node.parent;
+    !ts.isSourceFile(current);
+    current = current.parent
+  ) {
     const name = declarationName(current);
     if (name !== undefined) {
       names.unshift(name);
     }
-    current = current.parent;
   }
   return names.length === 0 ? "<module>" : names.join(".");
 };
