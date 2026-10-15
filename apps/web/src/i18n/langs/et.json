@@ -4515,6 +4515,25 @@
     "tokenHelp": "Kuidas hankida pääsutõend",
     "viewOnGithub": "Vaata GitHubis"
   },
+  "readerAnswers": {
+    "budgetError": "Vastuste eelarve on ammendatud.",
+    "citation": "¶{paragraph}",
+    "expand": "Laienda vastust",
+    "explain": "Selgita",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Esita täpsustav küsimus",
+    "invalidCitations": "{count, plural, one {# viidet ei õnnestunud kontrollida.} other {# viidet ei õnnestunud kontrollida.}}",
+    "loading": "Vastuse loomine…",
+    "minimise": "Ahenda vastust",
+    "modelError": "Mudel ei suutnud seda vastust lõpetada.",
+    "networkError": "Ühendus katkes. Proovi uuesti.",
+    "regenerate": "Loo vastus uuesti",
+    "selectionError": "Vali tekst ühe lõigu piires (kuni 2000 märki).",
+    "send": "Saada täpsustav küsimus",
+    "share": "Jaga meeskonnaga",
+    "timeoutError": "Vastuse loomise aeg sai otsa. Proovi uuesti.",
+    "title": "Vastus valitud teksti kohta"
+  },
   "routeError": {
     "backToMatters": "Naase toimikute juurde",
     "copyReference": "Kopeeri vea viide",

@@ -4515,6 +4515,25 @@
     "tokenHelp": "Comment obtenir un jeton",
     "viewOnGithub": "Voir sur GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "Le budget consacré aux réponses est épuisé.",
+    "citation": "¶{paragraph}",
+    "expand": "Développer la réponse",
+    "explain": "Expliquer",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Poser une question complémentaire",
+    "invalidCitations": "{count, plural, one {# référence n’a pas pu être vérifiée.} many {# références n’ont pas pu être vérifiées.} other {# références n’ont pas pu être vérifiées.}}",
+    "loading": "Génération de la réponse…",
+    "minimise": "Réduire la réponse",
+    "modelError": "Le modèle n’a pas pu terminer cette réponse.",
+    "networkError": "La connexion a été interrompue. Réessayez.",
+    "regenerate": "Régénérer la réponse",
+    "selectionError": "Sélectionnez du texte dans un seul paragraphe (2 000 caractères maximum).",
+    "send": "Envoyer la question complémentaire",
+    "share": "Partager avec l’équipe",
+    "timeoutError": "Le délai de génération de la réponse a expiré. Réessayez.",
+    "title": "Réponse sur le texte sélectionné"
+  },
   "routeError": {
     "backToMatters": "Retourner aux dossiers",
     "copyReference": "Copier la référence de l’erreur",

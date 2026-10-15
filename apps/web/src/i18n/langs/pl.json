@@ -4515,6 +4515,25 @@
     "tokenHelp": "Jak uzyskać token",
     "viewOnGithub": "Zobacz na GitHubie"
   },
+  "readerAnswers": {
+    "budgetError": "Budżet na odpowiedzi został wyczerpany.",
+    "citation": "¶{paragraph}",
+    "expand": "Rozwiń odpowiedź",
+    "explain": "Wyjaśnij",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Zadaj dodatkowe pytanie",
+    "invalidCitations": "{count, plural, one {Nie udało się zweryfikować # cytowania.} few {Nie udało się zweryfikować # cytowań.} many {Nie udało się zweryfikować # cytowań.} other {Nie udało się zweryfikować # cytowania.}}",
+    "loading": "Generowanie odpowiedzi…",
+    "minimise": "Zwiń odpowiedź",
+    "modelError": "Model nie zdołał dokończyć tej odpowiedzi.",
+    "networkError": "Połączenie zostało przerwane. Spróbuj ponownie.",
+    "regenerate": "Wygeneruj odpowiedź ponownie",
+    "selectionError": "Zaznacz tekst w obrębie jednego akapitu (do 2000 znaków).",
+    "send": "Wyślij dodatkowe pytanie",
+    "share": "Udostępnij zespołowi",
+    "timeoutError": "Upłynął limit czasu na odpowiedź. Spróbuj ponownie.",
+    "title": "Odpowiedź dotycząca zaznaczonego tekstu"
+  },
   "routeError": {
     "backToMatters": "Wróć do spraw",
     "copyReference": "Kopiuj identyfikator błędu",

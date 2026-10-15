@@ -4515,6 +4515,25 @@
     "tokenHelp": "How to get a token",
     "viewOnGithub": "View on GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "The answer budget is exhausted.",
+    "citation": "¶{paragraph}",
+    "expand": "Expand answer",
+    "explain": "Explain",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Ask a follow-up",
+    "invalidCitations": "{count, plural, one {# citation could not be verified.} other {# citations could not be verified.}}",
+    "loading": "Generating answer…",
+    "minimise": "Minimise answer",
+    "modelError": "The model could not finish this answer.",
+    "networkError": "The connection was interrupted. Try again.",
+    "regenerate": "Regenerate answer",
+    "selectionError": "Select text within a single paragraph (up to 2,000 characters).",
+    "send": "Send follow-up",
+    "share": "Share with team",
+    "timeoutError": "The answer timed out. Try again.",
+    "title": "Answer about selected text"
+  },
   "routeError": {
     "backToMatters": "Return to matters",
     "copyReference": "Copy error reference",

@@ -4515,6 +4515,25 @@
     "tokenHelp": "Kā iegūt tokenu",
     "viewOnGithub": "Skatīt vietnē GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "Atbilžu budžets ir izsmelts.",
+    "citation": "¶{paragraph}",
+    "expand": "Izvērst atbildi",
+    "explain": "Izskaidrot",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Uzdot papildjautājumu",
+    "invalidCitations": "{count, plural, zero {Neizdevās pārbaudīt # atsauču.} one {Neizdevās pārbaudīt # atsauci.} other {Neizdevās pārbaudīt # atsauces.}}",
+    "loading": "Tiek ģenerēta atbilde…",
+    "minimise": "Sakļaut atbildi",
+    "modelError": "Modelis nevarēja pabeigt šo atbildi.",
+    "networkError": "Savienojums tika pārtraukts. Mēģiniet vēlreiz.",
+    "regenerate": "Ģenerēt atbildi atkārtoti",
+    "selectionError": "Atlasiet tekstu vienā rindkopā (līdz 2000 rakstzīmēm).",
+    "send": "Nosūtīt papildjautājumu",
+    "share": "Kopīgot ar komandu",
+    "timeoutError": "Atbildes saņemšanas laiks ir beidzies. Mēģiniet vēlreiz.",
+    "title": "Atbilde par atlasīto tekstu"
+  },
   "routeError": {
     "backToMatters": "Atgriezties pie lietām",
     "copyReference": "Kopēt kļūdas atsauci",

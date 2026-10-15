@@ -4515,6 +4515,25 @@
     "tokenHelp": "Jak získat token",
     "viewOnGithub": "Zobrazit na GitHubu"
   },
+  "readerAnswers": {
+    "budgetError": "Rozpočet na odpovědi je vyčerpán.",
+    "citation": "¶{paragraph}",
+    "expand": "Rozbalit odpověď",
+    "explain": "Vysvětlit",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Položit doplňující otázku",
+    "invalidCitations": "{count, plural, one {# citaci se nepodařilo ověřit.} few {# citace se nepodařilo ověřit.} other {# citací se nepodařilo ověřit.}}",
+    "loading": "Generování odpovědi…",
+    "minimise": "Sbalit odpověď",
+    "modelError": "Model nedokázal tuto odpověď dokončit.",
+    "networkError": "Spojení bylo přerušeno. Zkuste to znovu.",
+    "regenerate": "Vygenerovat odpověď znovu",
+    "selectionError": "Vyberte text v rámci jednoho odstavce (nejvýše 2 000 znaků).",
+    "send": "Odeslat doplňující otázku",
+    "share": "Sdílet s týmem",
+    "timeoutError": "Vypršel časový limit pro odpověď. Zkuste to znovu.",
+    "title": "Odpověď k vybranému textu"
+  },
   "routeError": {
     "backToMatters": "Zpět na spisy",
     "copyReference": "Kopírovat referenci chyby",

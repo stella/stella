@@ -4515,6 +4515,25 @@
     "tokenHelp": "Como obter um token",
     "viewOnGithub": "Ver no GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "O orçamento para respostas foi esgotado.",
+    "citation": "¶{paragraph}",
+    "expand": "Expandir resposta",
+    "explain": "Explicar",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Fazer uma pergunta de acompanhamento",
+    "invalidCitations": "{count, plural, one {Não foi possível verificar # citação.} many {Não foi possível verificar # citações.} other {Não foi possível verificar # citações.}}",
+    "loading": "Gerando resposta…",
+    "minimise": "Recolher resposta",
+    "modelError": "O modelo não conseguiu concluir esta resposta.",
+    "networkError": "A conexão foi interrompida. Tente novamente.",
+    "regenerate": "Gerar resposta novamente",
+    "selectionError": "Selecione texto dentro de um único parágrafo (até 2.000 caracteres).",
+    "send": "Enviar pergunta de acompanhamento",
+    "share": "Compartilhar com a equipe",
+    "timeoutError": "O tempo limite para a resposta foi excedido. Tente novamente.",
+    "title": "Resposta sobre o texto selecionado"
+  },
   "routeError": {
     "backToMatters": "Voltar aos casos",
     "copyReference": "Copiar referência do erro",

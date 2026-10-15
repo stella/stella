@@ -4515,6 +4515,25 @@
     "tokenHelp": "Kaip gauti žetoną",
     "viewOnGithub": "Peržiūrėti GitHub platformoje"
   },
+  "readerAnswers": {
+    "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
+    "citation": "¶{paragraph}",
+    "expand": "Išskleisti atsakymą",
+    "explain": "Paaiškinti",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Užduoti papildomą klausimą",
+    "invalidCitations": "{count, plural, one {Nepavyko patikrinti # nuorodos.} few {Nepavyko patikrinti # nuorodų.} many {Nepavyko patikrinti # nuorodos.} other {Nepavyko patikrinti # nuorodų.}}",
+    "loading": "Generuojamas atsakymas…",
+    "minimise": "Suskleisti atsakymą",
+    "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
+    "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
+    "regenerate": "Generuoti atsakymą iš naujo",
+    "selectionError": "Pasirinkite tekstą vienoje pastraipoje (iki 2000 ženklų).",
+    "send": "Siųsti papildomą klausimą",
+    "share": "Bendrinti su komanda",
+    "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
+    "title": "Atsakymas apie pasirinktą tekstą"
+  },
   "routeError": {
     "backToMatters": "Grįžti į bylas",
     "copyReference": "Kopijuoti klaidos nuorodą",

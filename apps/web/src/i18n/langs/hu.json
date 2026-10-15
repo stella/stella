@@ -4515,6 +4515,25 @@
     "tokenHelp": "Token beszerzése",
     "viewOnGithub": "Megtekintés GitHubon"
   },
+  "readerAnswers": {
+    "budgetError": "A válaszokra szánt keret kimerült.",
+    "citation": "¶{paragraph}",
+    "expand": "Válasz kibontása",
+    "explain": "Magyarázat",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Kiegészítő kérdés feltevése",
+    "invalidCitations": "{count, plural, one {# hivatkozást nem sikerült ellenőrizni.} other {# hivatkozást nem sikerült ellenőrizni.}}",
+    "loading": "Válasz generálása…",
+    "minimise": "Válasz összecsukása",
+    "modelError": "A modell nem tudta befejezni ezt a választ.",
+    "networkError": "A kapcsolat megszakadt. Próbálja újra.",
+    "regenerate": "Válasz újragenerálása",
+    "selectionError": "Jelöljön ki szöveget egyetlen bekezdésen belül (legfeljebb 2000 karaktert).",
+    "send": "Kiegészítő kérdés küldése",
+    "share": "Megosztás a csapattal",
+    "timeoutError": "Lejárt a válaszadás időkorlátja. Próbálja újra.",
+    "title": "Válasz a kijelölt szövegről"
+  },
   "routeError": {
     "backToMatters": "Vissza az ügyekhez",
     "copyReference": "Hibahivatkozás másolása",

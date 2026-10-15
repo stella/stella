@@ -4515,6 +4515,25 @@
     "tokenHelp": "Cómo obtener un token",
     "viewOnGithub": "Ver en GitHub"
   },
+  "readerAnswers": {
+    "budgetError": "Se ha agotado el presupuesto para respuestas.",
+    "citation": "¶{paragraph}",
+    "expand": "Expandir respuesta",
+    "explain": "Explicar",
+    "externalCitation": "{decision} · ¶{paragraph}",
+    "followUp": "Hacer una pregunta de seguimiento",
+    "invalidCitations": "{count, plural, one {No se pudo verificar # cita.} many {No se pudieron verificar # citas.} other {No se pudieron verificar # citas.}}",
+    "loading": "Generando respuesta…",
+    "minimise": "Contraer respuesta",
+    "modelError": "El modelo no pudo completar esta respuesta.",
+    "networkError": "La conexión se ha interrumpido. Inténtalo de nuevo.",
+    "regenerate": "Regenerar respuesta",
+    "selectionError": "Selecciona texto dentro de un solo párrafo (hasta 2000 caracteres).",
+    "send": "Enviar pregunta de seguimiento",
+    "share": "Compartir con el equipo",
+    "timeoutError": "Se agotó el tiempo de espera de la respuesta. Inténtalo de nuevo.",
+    "title": "Respuesta sobre el texto seleccionado"
+  },
   "routeError": {
     "backToMatters": "Volver a los asuntos",
     "copyReference": "Copiar referencia del error",
