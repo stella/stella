@@ -61,7 +61,7 @@
       "type": "merge_queue",
       "parameters": {
         "merge_method": "SQUASH",
-        "grouping_strategy": "ALLGREEN",
+        "grouping_strategy": "HEADGREEN",
         "max_entries_to_build": 6,
         "max_entries_to_merge": 10,
         "min_entries_to_merge": 1,
