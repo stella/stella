@@ -82,6 +82,7 @@
     "Workflow lint": ["**"],
     "Workflow YAML": ["**"],
     "Module ownership": ["**"],
+    "External service contracts": ["**"],
     "Outbound transport ownership": ["**"],
     "Document identity ownership": ["**"],
     "Module ownership invariants": ["**"],
