@@ -173,6 +173,7 @@
       "heldDescription": "Le sens de ces extractions est <strong>réellement incertain</strong> — leur contenu est provisoire ou non confirmé, et pas simplement manuscrit. Elles sont exclues du scoring jusqu’à ce qu’un relecteur les confirme, les modifie ou les requalifie. Une source lisible n’est jamais mise en attente pour son seul support.",
       "heldForReview": "En attente de relecture",
       "holdOutOfScoring": "Exclure de la notation",
+      "inScoring": "Pris en compte",
       "includeInScoring": "Inclure dans la notation",
       "interpretationNote": "Note d’interprétation",
       "interpretationNotePlaceholder": "Si le sens de cette preuve est contesté, précisez comment. Laissez vide sinon.",

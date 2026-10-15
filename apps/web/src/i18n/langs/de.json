@@ -173,6 +173,7 @@
       "heldDescription": "Diese Extraktionen sind <strong>inhaltlich tatsächlich unsicher</strong> – ihr Inhalt ist vorläufig oder unbestätigt, nicht lediglich handschriftlich. Sie fließen erst in die Bewertung ein, wenn ein Prüfer sie bestätigt, bearbeitet oder neu eingibt. Eine lesbare Quelle wird nie allein wegen ihres Mediums zurückgestellt.",
       "heldForReview": "Zur Prüfung zurückgestellt",
       "holdOutOfScoring": "Aus der Bewertung ausschließen",
+      "inScoring": "In der Bewertung",
       "includeInScoring": "In die Bewertung einbeziehen",
       "interpretationNote": "Notiz zur Auslegung",
       "interpretationNotePlaceholder": "Ist die Bedeutung dieses Belegs strittig, beschreiben Sie, wie. Andernfalls lassen Sie das Feld leer.",

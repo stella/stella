@@ -173,6 +173,7 @@
       "heldDescription": "Nende väljavõtete <strong>tähendus on tõepoolest ebaselge</strong>: sisu on esialgne või kinnitamata, mitte lihtsalt käsitsi kirjutatud. Neid ei hinnata enne, kui kontrollija need kinnitab, muudab või uuesti sisestab. Loetavat allikat ei suunata kunagi kontrolli üksnes selle kandja tõttu.",
       "heldForReview": "Kontrolli ootel",
       "holdOutOfScoring": "Jäta hindamisest välja",
+      "inScoring": "Hindamises",
       "includeInScoring": "Kaasa hindamisse",
       "interpretationNote": "Tõlgendusmärkus",
       "interpretationNotePlaceholder": "Kui selle tõendi tähendus on vaidlustatud, kirjeldage, kuidas. Kui ei ole, jätke väli tühjaks.",

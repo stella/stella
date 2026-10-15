@@ -173,6 +173,7 @@
       "heldDescription": "Estas extrações são <strong>genuinamente incertas quanto ao significado</strong> — o conteúdo é provisório ou não confirmado, e não apenas escrito à mão. Elas ficam fora da pontuação até que um revisor as confirme, edite ou redigite. Uma fonte legível nunca é colocada em espera apenas por causa do seu meio.",
       "heldForReview": "Em espera para revisão",
       "holdOutOfScoring": "Excluir da pontuação",
+      "inScoring": "Na pontuação",
       "includeInScoring": "Incluir na pontuação",
       "interpretationNote": "Nota de interpretação",
       "interpretationNotePlaceholder": "Se o significado desta evidência é contestado, explique como. Deixe em branco se não for.",

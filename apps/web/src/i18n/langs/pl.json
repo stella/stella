@@ -173,6 +173,7 @@
       "heldDescription": "Znaczenie tych wyodrębnionych danych jest <strong>rzeczywiście niepewne</strong> — treść ma charakter wstępny lub niepotwierdzony, a nie tylko odręczny. Dane nie są uwzględniane w ocenie, dopóki osoba weryfikująca ich nie potwierdzi, nie poprawi lub nie przepisze. Czytelne źródło nigdy nie trafia do kolejki wyłącznie ze względu na swój nośnik.",
       "heldForReview": "Wstrzymane do weryfikacji",
       "holdOutOfScoring": "Wyklucz z oceny",
+      "inScoring": "Uwzględnione w ocenie",
       "includeInScoring": "Uwzględnij w ocenie",
       "interpretationNote": "Uwaga do interpretacji",
       "interpretationNotePlaceholder": "Jeśli znaczenie tego dowodu jest sporne, opisz jak. Jeśli nie jest, zostaw pole puste.",
