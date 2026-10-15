@@ -23,6 +23,7 @@
     "./fallback-legal-anchors": "./src/fallback-legal-anchors.ts",
     "./headnote-block": "./src/headnote-block.tsx",
     "./provision-anchors": "./src/provision-anchors.ts",
+    "./provision-card.logic": "./src/provision-card.logic.ts",
     "./query-marks": "./src/query-marks.ts",
     "./reader-adapters": "./src/reader-adapters.tsx",
     "./reader-inset-box": "./src/reader-inset-box.tsx",

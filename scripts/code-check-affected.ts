@@ -358,6 +358,8 @@ type Options = {
   leg?: CodeCheckLeg;
   scope: CheckScope;
   dryRun: boolean;
+  /** Pre-push leaves a change that needs the full check to CI. */
+  skipFullFallback: boolean;
 };
 
 const parseArgs = (args: readonly string[]): Options => {
@@ -365,11 +367,16 @@ const parseArgs = (args: readonly string[]): Options => {
   let base: string | null = null;
   let all = false;
   let dryRun = false;
+  let skipFullFallback = false;
 
   const argv = args.values();
   for (const argument of argv) {
     if (argument === "--dry-run") {
       dryRun = true;
+      continue;
+    }
+    if (argument === "--skip-full-fallback") {
+      skipFullFallback = true;
       continue;
     }
     if (argument === "--all") {
@@ -404,6 +411,7 @@ const parseArgs = (args: readonly string[]): Options => {
       ? { type: "all" }
       : { type: "affected", base: base ?? DEFAULT_BASE },
     dryRun,
+    skipFullFallback,
   };
 };
 
@@ -857,8 +865,27 @@ const parseAffectedWorkspacePaths = (output: string): string[] => {
 };
 
 const THREE_TASK_MEMORY_BYTES = 12 * 1024 ** 3;
-export const codeCheckConcurrency = (memoryBytes = totalmem()): number =>
-  memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
+/** Memory-based task count; a valid request may only lower it. */
+export const codeCheckConcurrency = (
+  memoryBytes: number,
+  requested?: string,
+): number => {
+  const memoryDefault = memoryBytes >= THREE_TASK_MEMORY_BYTES ? 3 : 2;
+  const override = Number(requested);
+  if (
+    requested !== undefined &&
+    Number.isSafeInteger(override) &&
+    override > 0
+  ) {
+    return Math.min(override, memoryDefault);
+  }
+  return memoryDefault;
+};
+
+// CODE_CHECK_CONCURRENCY lowers the task count on a busy host (pre-push runs
+// one task at a time); child Turbo runs inherit it.
+export const configuredCodeCheckConcurrency = (): number =>
+  codeCheckConcurrency(totalmem(), process.env["CODE_CHECK_CONCURRENCY"]);
 
 const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "bun",
@@ -866,7 +893,7 @@ const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "turbo",
   "run",
   ...tasks,
-  `--concurrency=${codeCheckConcurrency()}`,
+  `--concurrency=${configuredCodeCheckConcurrency()}`,
   "--summarize",
   "--remote-cache-timeout=20",
   "--log-order=stream",
@@ -1057,7 +1084,7 @@ export const scopedCommands = (
       "turbo",
       "run",
       "typecheck:repo",
-      `--concurrency=${codeCheckConcurrency()}`,
+      `--concurrency=${configuredCodeCheckConcurrency()}`,
       "--summarize",
       "--remote-cache-timeout=20",
       "--log-order=stream",
@@ -1232,6 +1259,18 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
     commands.push(resultBoundaryCommand);
   }
 
+  if (plan.type === "fallback" && options.skipFullFallback) {
+    process.stdout.write(
+      `code-check: skipped; ${plan.changedPath} requires the full repository check, which CI runs\n`,
+    );
+    return Result.ok(
+      await executeCheckCommands({
+        commands,
+        dryRun: options.dryRun,
+        budgetDeadlineMs,
+      }),
+    );
+  }
   if (plan.type === "fallback") {
     process.stdout.write(
       `code-check: full repository (${plan.changedPath} requires fallback)\n`,
