@@ -75,11 +75,13 @@ import type {
   MemoryPressureGate,
   PressurePause,
 } from "@/api/lib/memory-pressure";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   derivativeDeferRssBytes,
   readProcessMemoryLimit,
-} from "@/api/lib/process-memory-limit";
+} from "@/api/lib/observability/process-memory-limit";
 import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
 import { createBullMqConnection } from "@/api/lib/redis-client";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
@@ -101,6 +103,10 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "file-derivatives";
+const CONSUMPTION_TOGGLE_FAILED_SINK = failureSink({
+  event: "file_derivative.consumption_toggle_failed",
+  expected: [],
+});
 const GENERATE_PDF_JOB_NAME = "generate-pdf";
 const GENERATE_THUMBNAIL_JOB_NAME = "generate-thumbnail";
 /**
@@ -423,12 +429,18 @@ export const initFileDerivativeWorker = () => {
     // which must still finish the job in hand.
     pause: () => {
       worker.pause(true).catch((error: unknown) => {
-        captureError(error, { source: "file-derivative-pause" });
+        observeFailure(error, {
+          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+          ctx: { queue: QUEUE_NAME },
+        });
       });
     },
     resume: () => {
       worker.resume().catch((error: unknown) => {
-        captureError(error, { source: "file-derivative-resume" });
+        observeFailure(error, {
+          sink: CONSUMPTION_TOGGLE_FAILED_SINK,
+          ctx: { queue: QUEUE_NAME },
+        });
       });
     },
   };

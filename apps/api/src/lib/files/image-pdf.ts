@@ -8,7 +8,7 @@ import type {
 import { savePdfRewrite } from "@/api/lib/files/pdf-signatures";
 
 /** Image formats embedded into a PDF directly, without a converter. */
-export const EMBEDDABLE_IMAGE_MIME_TYPES = {
+const EMBEDDABLE_IMAGE_MIME_TYPES = {
   "image/jpeg": null,
   "image/png": null,
 } as const satisfies Record<string, null>;
@@ -34,7 +34,7 @@ type Matrix = readonly [number, number, number, number, number, number];
  * EXIF `orientation` says they should be displayed. `width`/`height` are the
  * stored image's size in points; orientations 5-8 swap the page's sides.
  */
-export const orientationMatrix = (
+const orientationMatrix = (
   orientation: ImageOrientation,
   width: number,
   height: number,

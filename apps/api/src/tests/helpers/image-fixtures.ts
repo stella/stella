@@ -2,8 +2,8 @@ import { deflateSync } from "node:zlib";
 
 import type { ImageOrientation } from "@/api/lib/files/image-header";
 
-export const RED = [255, 0, 0] as const;
-export const BLUE = [0, 0, 255] as const;
+const RED = [255, 0, 0] as const;
+const BLUE = [0, 0, 255] as const;
 
 const pngChunk = (type: string, data: Uint8Array): Uint8Array => {
   const typeBytes = new TextEncoder().encode(type);

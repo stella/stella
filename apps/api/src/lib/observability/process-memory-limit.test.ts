@@ -4,8 +4,8 @@ import { LIMITS } from "@/api/lib/limits";
 import {
   derivativeDeferRssBytes,
   readProcessMemoryLimit,
-} from "@/api/lib/process-memory-limit";
-import type { LimitFileReader } from "@/api/lib/process-memory-limit";
+} from "@/api/lib/observability/process-memory-limit";
+import type { LimitFileReader } from "@/api/lib/observability/process-memory-limit";
 
 const GIB = 1024 * 1024 * 1024;
 const MEMBERSHIP = "/proc/self/cgroup";

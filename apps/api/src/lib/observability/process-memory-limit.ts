@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { readFileSync } from "node:fs";
 
 import { LIMITS } from "@/api/lib/limits";
@@ -22,13 +23,9 @@ const HIERARCHICAL_LIMIT_PATTERN =
 /** Returns a file's text, or `null` when it cannot be read. */
 export type LimitFileReader = (path: string) => string | null;
 
-const readLimitFile: LimitFileReader = (path) => {
-  try {
-    return readFileSync(path, "utf-8");
-  } catch {
-    return null;
-  }
-};
+/** An absent or unreadable file is an expected answer here, not a failure. */
+const readLimitFile: LimitFileReader = (path) =>
+  Result.try(() => readFileSync(path, "utf-8")).unwrapOr(null);
 
 /**
  * The memory limit that applies to this process. `unlimited` means at least
