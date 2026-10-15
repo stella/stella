@@ -113,22 +113,31 @@ type SampleCaseResult = {
 
 type SampleFileProperty = { name: string; recordAuditEvent: AuditRecorder };
 
-const readLockedSample = async (
+/**
+ * The workspace lock every sample read takes before the sample fence. The
+ * buffer writer already holds it; preflight takes it first too, preserving the
+ * creation owner's lock order.
+ */
+const lockSampleWorkspace = async (
   tx: Transaction,
   workspaceId: SafeId<"workspace">,
-  fileProperty: SampleFileProperty | undefined,
 ) => {
-  // The buffer writer already holds the workspace lock. Preflight takes it
-  // first too, preserving the creation owner's lock order before this fence.
   const status = await lockWorkspaceForEntityCreate(tx, workspaceId);
   if (status !== "active") {
-    return abortTransaction(
+    abortTransaction(
       documentWriteRefusal(
         status === undefined ? "workspace-not-found" : "workspace-not-active",
       ),
     );
   }
-  await withAggregateLock({ tx, aggregate: "sampleCase", id: { workspaceId } });
+};
+
+/** The stored sample, read under the workspace lock and the sample fence. */
+const readLockedSample = async (
+  tx: Transaction,
+  workspaceId: SafeId<"workspace">,
+  fileProperty: SampleFileProperty | undefined,
+) => {
   const list = (
     await tx
       .select({ id: legalLists.id, sampleCase: legalLists.sampleCase })
@@ -160,9 +169,15 @@ const readSampleReceipt = async (
   workspaceId: SafeId<"workspace">,
   fileProperty: SampleFileProperty,
 ) => {
-  const result = await safeDbFromScoped(scopedDb)(
-    async (tx) => await readLockedSample(tx, workspaceId, fileProperty),
-  );
+  const result = await safeDbFromScoped(scopedDb)(async (tx) => {
+    await lockSampleWorkspace(tx, workspaceId);
+    await withAggregateLock({
+      tx,
+      aggregate: "sampleCase",
+      id: { workspaceId },
+    });
+    return await readLockedSample(tx, workspaceId, fileProperty);
+  });
   return result.mapError((error) =>
     DocumentWriteRefusedError.is(error.cause)
       ? documentWriteRefusalHandlerError(error.cause)
@@ -368,6 +383,12 @@ export const loadSampleCase = async ({
           encryption: serverBuiltFileEncryption(),
           afterCreate: async (tx, document) => {
             // The property already exists by now; only the sample is read.
+            await lockSampleWorkspace(tx, workspaceId);
+            await withAggregateLock({
+              tx,
+              aggregate: "sampleCase",
+              id: { workspaceId },
+            });
             const winner = await readLockedSample(tx, workspaceId, undefined);
             if (winner !== undefined) {
               concurrent.receipt = winner;
