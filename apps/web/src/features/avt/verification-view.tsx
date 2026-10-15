@@ -28,7 +28,10 @@ import type { TextMarkState } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
 
 import { ClaimDetailPanel } from "@/features/avt/claim-detail-panel";
-import type { OriginalClaimMark } from "@/features/avt/original-docx-view";
+import type {
+  OriginalClaimMark,
+  OriginalScrollTarget,
+} from "@/features/avt/original-docx-view";
 import type { MatchStepperState } from "@/features/avt/state-chip";
 import {
   MatchStepper,
@@ -64,8 +67,6 @@ import {
 import type { ClaimPresentation } from "@/features/avt/verification-view.logic";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
-import type { FolioScrollEventDetail } from "@/lib/folio-scroll-event";
 
 // Folio and the file viewer load only when someone opens the original.
 const OriginalDocxView = React.lazy(async () => {
@@ -115,6 +116,11 @@ export const VerificationView = ({
   const [filter, setFilter] = React.useState<VerdictFilter>("all");
   const [documentView, setDocumentView] =
     React.useState<DocumentView>("reading");
+  // Where the original should bring the reader next. It is held, not fired,
+  // so a step taken while the original is still loading lands once the
+  // viewer has the document.
+  const [originalScroll, setOriginalScroll] =
+    React.useState<OriginalScrollTarget | null>(null);
   // Only a DOCX read through Folio has an original to lay the claims over
   // here; a PDF's page text has no block ids.
   const hasOriginal =
@@ -154,9 +160,11 @@ export const VerificationView = ({
   const goToMatch = (id: VerificationClaim["id"]) => {
     setSelected(id);
     if (view === "original") {
-      const claim = claimById.get(id);
-      if (claim !== undefined) {
-        scrollOriginalToClaim(run, claim);
+      const anchor = claimById.get(id)?.anchor;
+      if (anchor?.type === "docx-block") {
+        // A new target for every step, so stepping back onto the same block
+        // scrolls again.
+        setOriginalScroll({ blockId: anchor.blockId });
       }
       return;
     }
@@ -326,7 +334,15 @@ export const VerificationView = ({
               )}
             >
               {hasOriginal && (
-                <Tabs onValueChange={setDocumentView} value={view}>
+                <Tabs
+                  onValueChange={(next: DocumentView) => {
+                    // A step taken in an earlier visit is not replayed when
+                    // the original mounts again.
+                    setOriginalScroll(null);
+                    setDocumentView(next);
+                  }}
+                  value={view}
+                >
                   <TabsList
                     aria-label={t("avt.verification.documentView.label")}
                   >
@@ -350,6 +366,7 @@ export const VerificationView = ({
                   markOf={originalMark}
                   onSelect={setSelected}
                   run={run}
+                  scrollTarget={originalScroll}
                   selected={selected}
                   workspaceId={workspaceId}
                 />
@@ -413,22 +430,6 @@ const READER_STYLE = {
 } as const;
 
 const claimDomId = (claimId: string): string => `avt-claim-${claimId}`;
-
-/** Bring the original to a claim's block; the viewer retries while the
- *  document is still loading. */
-const scrollOriginalToClaim = (
-  run: VerificationRun,
-  claim: VerificationClaim,
-): void => {
-  if (claim.anchor.type !== "docx-block") {
-    return;
-  }
-  window.dispatchEvent(
-    new CustomEvent<FolioScrollEventDetail>(FOLIO_SCROLL_EVENT, {
-      detail: { blockId: claim.anchor.blockId, fieldId: run.fileFieldId },
-    }),
-  );
-};
 
 type ReadingDocumentProps = {
   presentation: ClaimPresentation;
