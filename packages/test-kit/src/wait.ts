@@ -93,13 +93,13 @@ const guard = async <T>(
 };
 
 /** Waits for a promise to settle, failing with `description` if it hangs. */
-export const settledWithin = <T>(
+export const settledWithin = async <T>(
   promise: Promise<T>,
   options: HangGuard,
 ): Promise<T> => guard(promise, options);
 
 /** Resolves with the next `type` event on `target`. */
-export const waitForEvent = <E extends Event = Event>(
+export const waitForEvent = async <E extends Event = Event>(
   target: EventTarget,
   type: string,
   options: Partial<HangGuard> = {},
@@ -114,7 +114,7 @@ export const waitForEvent = <E extends Event = Event>(
 };
 
 /** Resolves with the signal's reason once it aborts. */
-export const waitForAbort = (
+export const waitForAbort = async (
   signal: AbortSignal,
   options: Partial<HangGuard> = {},
 ): Promise<unknown> => {

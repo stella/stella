@@ -38,7 +38,7 @@ const assertDuration = (milliseconds: number, what: string) => {
   }
 };
 
-const abortableTimeout = (
+const abortableTimeout = async (
   milliseconds: number,
   { signal }: SleepOptions = {},
 ): Promise<void> => {
@@ -65,7 +65,7 @@ export const systemClock: Clock = {
   now: () => Temporal.Now.instant().epochMilliseconds,
   // kit-allow: the system clock is the one owner of ambient time.
   monotonic: () => performance.now(),
-  sleep: (milliseconds, options) => {
+  sleep: async (milliseconds, options) => {
     assertDuration(milliseconds, "sleep");
     return abortableTimeout(milliseconds, options);
   },
@@ -84,7 +84,7 @@ type Sleeper = {
 
 // A macrotask turn: lets the promise chain a woken sleeper resumes run to its
 // next await (often a new sleep) before the clock moves again. No time passes.
-const settle = () =>
+const settle = async () =>
   new Promise<undefined>((resolve) => {
     setImmediate(() => resolve(undefined));
   });
@@ -144,7 +144,7 @@ export const createTestClock = ({
   return {
     now: () => wall,
     monotonic: () => mono,
-    sleep: (milliseconds, { signal } = {}) => {
+    sleep: async (milliseconds, { signal } = {}) => {
       assertDuration(milliseconds, "sleep");
       if (signal?.aborted) {
         return Promise.reject(signal.reason);
@@ -166,7 +166,7 @@ export const createTestClock = ({
       signal?.addEventListener("abort", onAbort, { once: true });
       return promise;
     },
-    advance: (milliseconds) => {
+    advance: async (milliseconds) => {
       assertDuration(milliseconds, "advance");
       return advanceTo(mono + milliseconds);
     },

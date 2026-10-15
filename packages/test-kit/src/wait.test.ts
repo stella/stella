@@ -136,7 +136,7 @@ describe("waitFor", () => {
     const stuck = deferred<string | undefined>();
     let probes = 0;
     const waiting = waitFor(
-      () => {
+      async () => {
         probes += 1;
         return stuck.promise;
       },
@@ -155,7 +155,7 @@ describe("waitFor", () => {
   test("a probe failing after the deadline is not reported again", async () => {
     const clock = createTestClock();
     const stuck = deferred<string | undefined>();
-    const waiting = waitFor(() => stuck.promise, {
+    const waiting = waitFor(async () => stuck.promise, {
       clock,
       description: "a late failure",
       timeoutMs: 100,

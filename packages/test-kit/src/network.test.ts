@@ -61,7 +61,7 @@ describe("network guard", () => {
     const realFetch = globalThis.fetch;
     const reached: string[] = [];
     // A fake underneath the guard: nothing leaves the process.
-    Reflect.set(globalThis, "fetch", (input: unknown) => {
+    Reflect.set(globalThis, "fetch", async (input: unknown) => {
       reached.push(input instanceof Request ? input.url : String(input));
       return Promise.resolve(new Response("ok"));
     });
@@ -165,7 +165,7 @@ describe("network guard", () => {
         Reflect.set(
           globalThis,
           "fetch",
-          (input: unknown, init?: RequestInit) => {
+          async (input: unknown, init?: RequestInit) => {
             const call = {
               init,
               url: input instanceof Request ? input.url : String(input),
@@ -338,7 +338,7 @@ describe("network guard", () => {
 
   test("Bun.connect to a remote host throws", () => {
     uninstall = installNetworkGuard();
-    expect(() =>
+    expect(async () =>
       Bun.connect({
         hostname: "example.com",
         port: 443,

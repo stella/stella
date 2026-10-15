@@ -11,7 +11,7 @@ const render = (fragment: SQL) => new PgDialect().sqlToQuery(fragment);
 // An in-process Postgres: the offsets must run on the real engine, since a
 // rendering test cannot see a cast that overflows at execution time.
 const engine = new PGlite();
-afterAll(() => engine.close());
+afterAll(async () => engine.close());
 
 const offsetSeconds = async (fragment: SQL): Promise<number> => {
   const query = render(

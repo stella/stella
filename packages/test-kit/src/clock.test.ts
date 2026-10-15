@@ -32,7 +32,7 @@ describe("test clock", () => {
   test("sleepers wake in deadline order, ties in the order they slept", async () => {
     const clock = createTestClock();
     const order: string[] = [];
-    const sleep = (name: string, ms: number) =>
+    const sleep = async (name: string, ms: number) =>
       clock.sleep(ms).then(() => order.push(`${name}@${clock.monotonic()}`));
     const all = Promise.all([
       sleep("c", 30),
@@ -95,8 +95,8 @@ describe("test clock", () => {
 
   test("refuses negative and non-finite durations", () => {
     const clock = createTestClock();
-    expect(() => clock.sleep(-1)).toThrow("non-negative");
-    expect(() => clock.advance(Number.NaN)).toThrow("non-negative");
+    expect(async () => clock.sleep(-1)).toThrow("non-negative");
+    expect(async () => clock.advance(Number.NaN)).toThrow("non-negative");
     expect(() => clock.setTime(Number.POSITIVE_INFINITY)).toThrow("finite");
   });
 
