@@ -17,8 +17,13 @@ const MAX_ORIGIN_CONCURRENCY = 2;
 const HOSTNAME_PATTERN =
   /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?$/u;
 
-export const isCanonicalIconHostname = (hostname: string): boolean =>
-  hostname.length <= 253 && HOSTNAME_PATTERN.test(hostname);
+export const isCanonicalIconHostname = (hostname: string): boolean => {
+  if (hostname.length > 253 || !HOSTNAME_PATTERN.test(hostname)) {
+    return false;
+  }
+  const parsed = parseSafeOutboundUrl(`https://${hostname}/favicon.ico`);
+  return Result.isOk(parsed) && parsed.value.hostname === hostname;
+};
 
 export type LinkIcon = {
   bytes: Uint8Array;

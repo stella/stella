@@ -5,7 +5,6 @@ import { useTranslations } from "use-intl";
 
 import { extractCaseLawDecisionIdFromIdRouteParam } from "@stll/api-contract/case-law-decision-route";
 import { resolveLegalCitationLinks } from "@stll/api-contract/legal-citation-links";
-import { ChatLink } from "@stll/chat/link";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { BidiText } from "@stll/ui/bidi-text";
 import { ScrollTextIcon } from "@stll/ui/icons";
@@ -22,6 +21,7 @@ import { InlinePill } from "@/components/inline-pill";
 import { isPlainPrimaryClick } from "@/components/inspector/case-decision-view";
 import type { CitedDecisionParagraph } from "@/components/references/reference.logic";
 import { env } from "@/env";
+import { ProxyChatLink } from "@/features/chat/components/proxy-chat-link";
 import { detached } from "@/lib/detached";
 
 type LegalCitationLinks = ReturnType<typeof resolveLegalCitationLinks>;
@@ -97,12 +97,12 @@ const LegalCitationView = ({
         {label}
       </a>
       {citation.source_url !== undefined && (
-        <ChatLink
+        <ProxyChatLink
           href={citation.source_url}
           newTabLabel={t("common.openInNewTab")}
         >
           {t("common.source")}
-        </ChatLink>
+        </ProxyChatLink>
       )}
     </span>
   );
@@ -231,12 +231,12 @@ export const LegalCitationLink = (props: LegalCitationLinkProps) => {
     return citation.url === null ? (
       <span>{props.children}</span>
     ) : (
-      <ChatLink
+      <ProxyChatLink
         href={props.externalHref ?? citation.url}
         newTabLabel={t("common.openInNewTab")}
       >
         {props.children}
-      </ChatLink>
+      </ProxyChatLink>
     );
   }
   if (props.interactive) {

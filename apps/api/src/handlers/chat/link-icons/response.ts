@@ -1,18 +1,21 @@
-import type { LinkIcon } from "@/api/handlers/chat/link-icons/origin";
-import {
-  CACHE_CONTROL_HEADER,
-  PRIVATE_CACHE_CONTROL,
-} from "@/api/lib/security-headers";
+import type { Context } from "elysia";
 
-export const linkIconResponse = (icon: LinkIcon | null) => {
-  const headers = {
-    [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
+import type { LinkIcon } from "@/api/handlers/chat/link-icons/origin";
+import { applyResponseCachePolicy } from "@/api/lib/security-headers";
+
+const BROWSER_CACHE_SECONDS = 3600;
+
+export const linkIconBody = (icon: LinkIcon | null, set: Context["set"]) => {
+  Object.assign(set.headers, {
     "X-Content-Type-Options": "nosniff",
-  };
-  if (!icon) {
-    return Response.json({ type: "no-icon" } as const, { headers });
-  }
-  return new Response(new Uint8Array(icon.bytes), {
-    headers: { ...headers, "Content-Type": icon.mime },
   });
+  const response = icon
+    ? new Blob([new Uint8Array(icon.bytes)], { type: icon.mime })
+    : ({ type: "no-icon" } as const);
+  applyResponseCachePolicy({
+    cache: { kind: "private", maxAge: BROWSER_CACHE_SECONDS },
+    response,
+    set,
+  });
+  return response;
 };

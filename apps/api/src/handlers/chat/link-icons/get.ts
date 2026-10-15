@@ -6,7 +6,7 @@ import {
   createLinkIconOrigin,
   isCanonicalIconHostname,
 } from "@/api/handlers/chat/link-icons/origin";
-import { linkIconResponse } from "@/api/handlers/chat/link-icons/response";
+import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -36,9 +36,9 @@ const readOrigin = createLinkIconOrigin();
 const getLinkIcon = createSafeRootHandler(
   config,
   // oxlint-disable-next-line require-yield -- safe handlers use generators for Result error capture.
-  async function* ({ params: { hostname }, user, request }) {
+  async function* ({ params: { hostname }, user, request, set }) {
     if (!isCanonicalIconHostname(hostname)) {
-      return Result.ok(linkIconResponse(null));
+      return Result.ok(linkIconBody(null, set));
     }
     const cache = getLinkIconCache();
     const cached = await cache.readOrLease({
@@ -48,9 +48,9 @@ const getLinkIcon = createSafeRootHandler(
     });
     switch (cached.type) {
       case "hit":
-        return Result.ok(linkIconResponse(cached.icon));
+        return Result.ok(linkIconBody(cached.icon, set));
       case "no-icon":
-        return Result.ok(linkIconResponse(null));
+        return Result.ok(linkIconBody(null, set));
       case "lease": {
         const fetched = await readOrigin(
           hostname,
@@ -59,7 +59,7 @@ const getLinkIcon = createSafeRootHandler(
         // Capacity does not establish that this host has no icon. Let its short
         // lease expire instead of keeping a negative entry for an hour.
         if (fetched.type === "capacity") {
-          return Result.ok(linkIconResponse(null));
+          return Result.ok(linkIconBody(null, set));
         }
         const icon = fetched.type === "icon" ? fetched.icon : null;
         const stored = await cache.store({
@@ -67,7 +67,7 @@ const getLinkIcon = createSafeRootHandler(
           token: cached.token,
           icon,
         });
-        return Result.ok(linkIconResponse(stored ? icon : null));
+        return Result.ok(linkIconBody(stored ? icon : null, set));
       }
       default: {
         cached satisfies never;

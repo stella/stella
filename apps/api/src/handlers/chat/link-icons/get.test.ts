@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import Elysia from "elysia";
 
 import getLinkIcon from "@/api/handlers/chat/link-icons/get";
-import { linkIconResponse } from "@/api/handlers/chat/link-icons/response";
+import { linkIconBody } from "@/api/handlers/chat/link-icons/response";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
 test("favicon bytes require an authenticated chat principal", async () => {
@@ -21,7 +21,9 @@ test("favicon bytes require an authenticated chat principal", async () => {
 });
 
 test("missing icons have a typed fallback and private nosniff headers", async () => {
-  const response = linkIconResponse(null);
+  const response = await new Elysia()
+    .get("/", ({ set }) => linkIconBody(null, set))
+    .handle(new Request("http://localhost/"));
   expect(await response.json()).toEqual({ type: "no-icon" });
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");
   expect(response.headers.get("cache-control")).toContain("private");
@@ -29,7 +31,9 @@ test("missing icons have a typed fallback and private nosniff headers", async ()
 
 test("verified bytes retain their MIME and never expose the origin URL", async () => {
   const bytes = new Uint8Array([1, 2, 3]);
-  const response = linkIconResponse({ bytes, mime: "image/png" });
+  const response = await new Elysia()
+    .get("/", ({ set }) => linkIconBody({ bytes, mime: "image/png" }, set))
+    .handle(new Request("http://localhost/"));
   expect(new Uint8Array(await response.arrayBuffer())).toEqual(bytes);
   expect(response.headers.get("content-type")).toBe("image/png");
   expect(response.headers.get("x-content-type-options")).toBe("nosniff");

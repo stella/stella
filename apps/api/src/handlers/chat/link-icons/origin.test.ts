@@ -41,6 +41,28 @@ test("accepts canonical ASCII hostnames and refuses IP-shaped input", () => {
   expect(isCanonicalIconHostname("Example.com")).toBe(false);
 });
 
+test("invalid ASCII IDN labels cannot consume origin capacity", async () => {
+  let calls = 0;
+  const origin = createLinkIconOrigin({
+    fetchBytes: async () => {
+      calls += 1;
+      return Result.ok({
+        status: 404,
+        ok: false,
+        body: new ArrayBuffer(0),
+        headers: new Headers(),
+      });
+    },
+  });
+  expect(isCanonicalIconHostname("xn--a.com")).toBe(false);
+  expect(await origin("xn--a.com", grantThirdPartyOutboundPermit())).toEqual({
+    type: "no-icon",
+  });
+  expect(calls).toBe(0);
+  await origin("example.com", grantThirdPartyOutboundPermit());
+  expect(calls).toBe(1);
+});
+
 test("refuses a redirect to a non-HTTPS destination before another fetch", async () => {
   let calls = 0;
   const origin = createLinkIconOrigin({

@@ -45,6 +45,22 @@ const ProxyIcon = ({ src }: { src: string }) => {
   );
 };
 
+const GITHUB_LINK_ICON = (
+  <GitHubLogoIcon aria-hidden="true" className="size-[1em]" />
+);
+const X_LINK_ICON = <XLogoIcon aria-hidden="true" className="size-[1em]" />;
+const BUNDLED_ICONS = new Map([
+  ["github.com", GITHUB_LINK_ICON],
+  ["www.github.com", GITHUB_LINK_ICON],
+  ["x.com", X_LINK_ICON],
+  ["www.x.com", X_LINK_ICON],
+  ["twitter.com", X_LINK_ICON],
+  ["www.twitter.com", X_LINK_ICON],
+]);
+
+export const hasBundledChatLinkIcon = (hostname: string): boolean =>
+  BUNDLED_ICONS.has(hostname);
+
 export type ChatLinkIconSource = { type: "proxy"; src: string };
 
 type ChatLinkProps = Omit<
@@ -92,19 +108,11 @@ export const ChatLink = ({
       ? children
       : target.hostname.replace(/^www\./u, "");
   let icon = <GlobeIcon aria-hidden="true" className="size-[1em]" />;
+  const bundledIcon = BUNDLED_ICONS.get(target.hostname);
   if (iconSource) {
     icon = <ProxyIcon key={iconSource.src} src={iconSource.src} />;
-  } else if (
-    target.hostname === "github.com" ||
-    target.hostname === "www.github.com"
-  ) {
-    icon = <GitHubLogoIcon aria-hidden="true" className="size-[1em]" />;
-  } else if (
-    ["x.com", "www.x.com", "twitter.com", "www.twitter.com"].includes(
-      target.hostname,
-    )
-  ) {
-    icon = <XLogoIcon aria-hidden="true" className="size-[1em]" />;
+  } else if (bundledIcon) {
+    icon = bundledIcon;
   }
   return (
     <a
