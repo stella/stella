@@ -2074,6 +2074,7 @@
     "versionLabel": "{version} versija",
     "viewSource": "Žiūrėti šaltinį",
     "website": "Svetainė",
+    "whenToUse": "Kada naudoti",
     "workflow": "Darbo eiga",
     "workflows": "Darbo eigos",
     "zoomIn": "Priartinti",
@@ -3648,6 +3649,10 @@
       "importTitle": "Importuoti įgūdį",
       "importedSkills": "{count, plural, one {Importuotas # įgūdis} few {Importuoti # įgūdžiai} other {Importuota # įgūdžių}}",
       "invalidPath": "Kelyje galima naudoti tik mažąsias raides, skaitmenis, taškus, brūkšnelius arba pabraukimus",
+      "invocationAuto": "Automatiškai",
+      "invocationAutoHelp": "DI gali pats naudoti šį įgūdį, kai jis tinka užklausai.",
+      "invocationManual": "Tik iškvietus",
+      "invocationManualHelp": "Naudojamas tik tada, kai iškviečiate jį su / arba pridedate prie savo žinutės.",
       "license": "Licencija: {license}",
       "newFile": "Naujas failas",
       "newFileFilenamePlaceholder": "notes.md",
@@ -5556,7 +5561,6 @@
     "viewVersion": "Peržiūrėti",
     "whenNotToUse": "Kada nenaudoti",
     "whenNotToUsePlaceholder": "Kada šio šablono vengti?",
-    "whenToUse": "Kada naudoti",
     "whenToUsePlaceholder": "Kada turėtų būti naudojamas šis šablonas? (padeda DI pasirinkti šabloną)"
   },
   "timesheets": {
