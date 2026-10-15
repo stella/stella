@@ -80,6 +80,13 @@ type ValidatedImportRow = {
   dedupeTaxId: string | null;
 };
 
+/**
+ * A row cleared for writing. One that matches a stored contact by ref
+ * updates it under the stored id; every other row is new and keeps the
+ * caller's id.
+ */
+type PlannedImportRow = ValidatedImportRow & { updatesStoredContact: boolean };
+
 type ImportBody = Static<typeof importContactsBodySchema>;
 
 const TAX_ID_ISSUE_CODES: ReadonlySet<ContactImportIssue["code"]> = new Set([
@@ -185,7 +192,7 @@ const planImportWrites = async ({
   organizationId,
   validatedRows,
   resultByIndex,
-}: PlanImportWritesOptions): Promise<ValidatedImportRow[]> => {
+}: PlanImportWritesOptions): Promise<PlannedImportRow[]> => {
   const existingIdByRef = await readExternalRefIds({
     tx,
     table: contacts,
@@ -268,7 +275,7 @@ const planImportWrites = async ({
     return null;
   };
 
-  const rowsToWrite: ValidatedImportRow[] = [];
+  const rowsToWrite: PlannedImportRow[] = [];
   for (const candidate of validatedRows) {
     const reason = skipReasonFor(candidate);
     if (reason === null) {
@@ -280,7 +287,9 @@ const planImportWrites = async ({
           ? null
           : (existingIdByRef.get(externalRefKey(candidate.external)) ?? null);
       rowsToWrite.push(
-        existingId === null ? candidate : { ...candidate, id: existingId },
+        existingId === null
+          ? { ...candidate, updatesStoredContact: false }
+          : { ...candidate, id: existingId, updatesStoredContact: true },
       );
       continue;
     }
@@ -322,7 +331,7 @@ type WriteImportRowsOptions = {
   userId: SafeId<"user">;
   importRequestId: SafeId<"contactImportRequest">;
   recordAuditEvent: AuditRecorder;
-  rowsToWrite: readonly ValidatedImportRow[];
+  rowsToWrite: readonly PlannedImportRow[];
   resultByIndex: Map<number, ImportResultRow>;
 };
 
@@ -333,9 +342,12 @@ type WrittenContact = {
 };
 
 /**
- * Insert rows without a ref; upsert rows with one, so a ref an earlier import
- * wrote updates that contact. Every field the import models takes the
- * incoming value, so a re-run mirrors the source; what it does not model
+ * Insert new rows, with or without a ref; upsert rows whose ref an earlier
+ * import wrote, so that contact is updated. A new row's caller id may already
+ * belong to a contact this organization cannot see, so new rows skip any
+ * conflict instead of aborting the batch, as rows without a ref always did.
+ * Every field the import models takes the incoming value, so a re-run
+ * mirrors the source; what it does not model
  * (attorneys, billing details, colour, monitoring) keeps its stella value,
  * and stored metadata keys the row does not carry survive the merge.
  */
@@ -379,8 +391,12 @@ const writeImportRows = async ({
     nationalityCodes: contact.nationalityCodes,
     metadata: normalizeContactMetadata(contact.metadata),
   });
-  const plainRows = rowsToWrite.filter(({ external }) => external === null);
-  const refRows = rowsToWrite.filter(({ external }) => external !== null);
+  const newRows = rowsToWrite.filter(
+    ({ updatesStoredContact }) => !updatesStoredContact,
+  );
+  const updateRows = rowsToWrite.filter(
+    ({ updatesStoredContact }) => updatesStoredContact,
+  );
   const written = {
     id: contacts.id,
     type: contacts.type,
@@ -388,20 +404,20 @@ const writeImportRows = async ({
   };
 
   const inserted =
-    plainRows.length === 0
+    newRows.length === 0
       ? []
       : await tx
           .insert(contacts)
-          .values(plainRows.map(toContactValues))
+          .values(newRows.map(toContactValues))
           .onConflictDoNothing()
           .returning(written);
   const conflict = externalRefConflict(contacts);
   const upserted =
-    refRows.length === 0
+    updateRows.length === 0
       ? []
       : await tx
           .insert(contacts)
-          .values(refRows.map(toContactValues))
+          .values(updateRows.map(toContactValues))
           .onConflictDoUpdate({
             target: conflict.target,
             targetWhere: conflict.targetWhere,
@@ -448,7 +464,7 @@ const writeImportRows = async ({
     ]),
   );
   for (const candidate of rowsToWrite) {
-    if (candidate.external === null) {
+    if (!candidate.updatesStoredContact) {
       resultByIndex.set(
         candidate.index,
         insertedIds.has(candidate.id)
@@ -466,8 +482,12 @@ const writeImportRows = async ({
       continue;
     }
     const row =
-      upsertedByRef.get(externalRefKey(candidate.external)) ??
-      panic("An external-ref upsert dropped a row");
+      upsertedByRef.get(
+        externalRefKey(
+          candidate.external ??
+            panic("A stored-contact update carries no external ref"),
+        ),
+      ) ?? panic("An external-ref upsert dropped a row");
     resultByIndex.set(candidate.index, {
       index: candidate.index,
       status: row.outcome,
