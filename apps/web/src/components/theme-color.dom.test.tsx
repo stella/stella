@@ -2,6 +2,8 @@ import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { panic } from "better-result";
 import { afterAll, expect, test } from "bun:test";
 
+import { unregisterDomEnvironment } from "@/test-dom-environment";
+
 import { THEME_STORAGE_KEY } from "../consts";
 import { deviceStorage } from "../lib/account/browser-storage";
 import { createRootHead, THEME_COLOR } from "../routes/-root-head";
@@ -42,7 +44,7 @@ afterAll(async () => {
     "getContext",
     canvasContextDescriptor,
   );
-  await GlobalRegistrator.unregister();
+  await unregisterDomEnvironment();
 });
 
 const ThemeControls = () => {
