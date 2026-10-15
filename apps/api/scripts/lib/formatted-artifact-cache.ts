@@ -11,21 +11,32 @@ type FormatBatch = (
  * exports in one process spawn the formatter only for what changed. Entries
  * not requested by the latest call are dropped, which bounds the cache to one
  * export's artifacts.
+ *
+ * Calls may overlap. Each call resolves its reused outputs before awaiting the
+ * formatter, so another call replacing the cache cannot change them, and it
+ * publishes only while its configuration is still the latest one requested.
+ * Every published entry pairs a source with its own formatted output under that
+ * configuration, so whichever overlapping call publishes last leaves a valid
+ * cache.
  */
 export const createFormattedArtifactCache = (formatBatch: FormatBatch) => {
-  let cachedConfiguration: string | undefined;
+  let latestConfiguration: string | undefined;
   let cache = new Map<string, { raw: string; formatted: string }>();
   return async (
     artifacts: ReadonlyMap<string, string>,
     configuration: string,
   ): Promise<Map<string, string>> => {
-    if (configuration !== cachedConfiguration) {
+    if (configuration !== latestConfiguration) {
       cache = new Map();
-      cachedConfiguration = configuration;
+      latestConfiguration = configuration;
     }
+    const reused = new Map<string, string>();
     const pending = new Map<string, string>();
     for (const [fileName, raw] of artifacts) {
-      if (cache.get(fileName)?.raw !== raw) {
+      const entry = cache.get(fileName);
+      if (entry?.raw === raw) {
+        reused.set(fileName, entry.formatted);
+      } else {
         pending.set(fileName, raw);
       }
     }
@@ -36,14 +47,16 @@ export const createFormattedArtifactCache = (formatBatch: FormatBatch) => {
     for (const [fileName, raw] of artifacts) {
       const output = pending.has(fileName)
         ? fresh.get(fileName)
-        : cache.get(fileName)?.formatted;
+        : reused.get(fileName);
       if (output === undefined) {
         return panic(`Formatter returned no output for ${fileName}`);
       }
       next.set(fileName, { raw, formatted: output });
       formatted.set(fileName, output);
     }
-    cache = next;
+    if (configuration === latestConfiguration) {
+      cache = next;
+    }
     return formatted;
   };
 };
