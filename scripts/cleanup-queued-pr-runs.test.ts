@@ -379,6 +379,7 @@ type DeferredPull = {
   fork?: boolean;
   run?: { id: number; status: string; conclusion: string | null };
 };
+const LIFECYCLE = ["requested", "waiting", "pending", "queued", "in_progress"];
 const resume = async ({
   waiting = false,
   pages,
@@ -388,7 +389,7 @@ const resume = async ({
   waiting?: boolean;
   pages: DeferredPull[][];
   rerunFailure?: boolean;
-  inFlight?: { status: string; run_attempt: number }[];
+  inFlight?: { status: string; run_attempt: number; advances?: boolean }[];
 }) => {
   const reruns: number[] = [];
   const routes: string[] = [];
@@ -416,10 +417,20 @@ const resume = async ({
         paginate: async (
           method: unknown,
           { status }: { status?: string } = {},
-        ) =>
-          method === listWorkflowRuns
-            ? inFlight.filter((run) => run.status === status)
-            : [],
+        ) => {
+          if (method !== listWorkflowRuns) {
+            return [];
+          }
+          const page = inFlight.filter((run) => run.status === status);
+          // A run that advances moves one lifecycle state after every read.
+          for (const run of inFlight) {
+            const next = LIFECYCLE[LIFECYCLE.indexOf(run.status) + 1];
+            if (run.advances && next !== undefined) {
+              run.status = next;
+            }
+          }
+          return page.map((run) => ({ ...run }));
+        },
         graphql: async (
           _query: string,
           { after }: { after: string | null },
@@ -542,6 +553,18 @@ test.each(["in_progress", "queued", "pending", "waiting", "requested"])(
     });
     expect(result.reruns).toEqual([]);
     expect(result.statuses).toEqual([]);
+  },
+);
+
+test.each(LIFECYCLE)(
+  "a resumed run that starts %s and changes state between reads still holds back a resume",
+  async (status) => {
+    const result = await resume({
+      waiting: true,
+      inFlight: [{ status, run_attempt: 2, advances: true }],
+      pages: [deferred(2)],
+    });
+    expect(result.reruns).toEqual([]);
   },
 );
 
