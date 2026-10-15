@@ -746,7 +746,7 @@ describe("publication verification", () => {
       base: "main",
       draft: true,
     });
-    expect(result.outputs.result).toBe("published");
+    expect(result.outputs["result"]).toBe("published");
   });
   const prepare = executable(
     "publish",
@@ -811,7 +811,7 @@ describe("publication verification", () => {
   ) => {
     const selected = await prepareFor(state);
     input.target = "new-pr";
-    input.publication = String(selected.result);
+    input.publication = String(selected["result"]);
     const predicate = v.parse(
       v.string(),
       stepsOf(publishWorkflow, "publish").find(
@@ -821,7 +821,7 @@ describe("publication verification", () => {
     const shouldCommit = new Script(`Boolean(${predicate})`).runInNewContext({
       steps: {
         changes: { outputs: { result: input.result } },
-        publication: { outputs: { result: selected.result } },
+        publication: { outputs: { result: selected["result"] } },
       },
     });
     if (shouldCommit) {
@@ -852,7 +852,7 @@ describe("publication verification", () => {
     const state = publicationState();
     state.branchHead = HEAD;
     const result = await publishCycle(state, scenario());
-    expect(result.outputs.result).toBe("published");
+    expect(result.outputs["result"]).toBe("published");
     expect(state.creations).toBe(0);
     expect(state.commits).toBe(1);
   });
@@ -860,7 +860,7 @@ describe("publication verification", () => {
     const state = publicationState();
     state.branchHead = PUBLISHED;
     const result = await publishCycle(state, scenario());
-    expect(result.outputs.result).toBe("published");
+    expect(result.outputs["result"]).toBe("published");
     expect(result.reviews).toHaveLength(1);
     expect(state.creations).toBe(0);
     expect(state.commits).toBe(0);
@@ -941,7 +941,7 @@ describe("publication verification", () => {
     input.pulls.push(pull);
     const result = await verifyFor(input);
     expect(result.reviews).toEqual([]);
-    expect(result.outputs.result).toBe("published");
+    expect(result.outputs["result"]).toBe("published");
   });
   const reviewConflicts = [
     {

@@ -136,6 +136,10 @@ export const DecisionCitationChip = ({
   if (links.type !== "decision") {
     return panic("Decision citation must resolve to its internal reader");
   }
+  const readerUrl = new URL(links.url);
+  // The resolver validates a served reader route; native navigation stays on
+  // this deployment even when source metadata names the public app origin.
+  const readerHref = `${readerUrl.pathname}${readerUrl.search}${readerUrl.hash}`;
   const originalUrl = sanitizeHref(links.source_url ?? "");
 
   return (
@@ -151,16 +155,21 @@ export const DecisionCitationChip = ({
             setOpen(true);
           }
         }}
+        onClick={containedEventHandler((event) => {
+          // Focus or hover may already have opened the preview. A primary
+          // press opens it explicitly instead of toggling it closed.
+          event.preventBaseUIHandler();
+          if (!isPlainPrimaryClick(event)) {
+            return;
+          }
+          event.preventDefault();
+          setOpen(true);
+        })}
         render={
           <a
             className="focus-visible:ring-ring inline-flex rounded align-baseline focus-visible:ring-2 focus-visible:outline-none"
-            href={sanitizeHref(links.url)}
+            href={sanitizeHref(readerHref)}
             ref={triggerRef}
-            onClick={containedEventHandler((event) => {
-              if (isPlainPrimaryClick(event)) {
-                event.preventDefault();
-              }
-            })}
           />
         }
         tooltip={false}
@@ -208,7 +217,7 @@ export const DecisionCitationChip = ({
         )}
         <div className="flex flex-wrap gap-2">
           <Button
-            render={<a href={sanitizeHref(links.url)} />}
+            render={<a href={sanitizeHref(readerHref)} />}
             onClick={(event) => {
               if (onOpen !== undefined && isPlainPrimaryClick(event)) {
                 event.preventDefault();

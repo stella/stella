@@ -42,7 +42,8 @@ pre-commit:
 # would cost a full CI round trip. Lint, typecheck, format, i18n, and the
 # query-cache type check run in CI only (pre-commit already formats staged
 # files and syncs i18n); run `bun run verify` locally when you want them
-# earlier.
+# earlier. Every push skips compiler work, including documentation-only pushes
+# and low-memory hosts. scripts/pre-push-policy.test.ts guards this boundary.
 pre-push:
   parallel: false
   commands:

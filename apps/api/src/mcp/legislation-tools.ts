@@ -15,6 +15,7 @@ import { publicCountryUnavailable } from "@stll/api-contract/public-country-capa
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block } from "@stll/legal-ast/document-ast";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
+import { STATUTE_TIMELINE_RESOURCE_URI } from "@stll/mcp-apps/resource-uri";
 
 import type { StatuteExpressionResolution } from "@/api/handlers/legislation/by-eli";
 import type { readProvisionHistoryHandler } from "@/api/handlers/legislation/provision-history";
@@ -95,8 +96,6 @@ import {
   defineChatProjectionMcpToolOutput,
   defineValibotMcpTool,
 } from "@/api/mcp/valibot-tool-definition";
-
-import { STATUTE_TIMELINE_RESOURCE_URI } from "./apps/resource-uri";
 
 /**
  * The stella legislation corpus as agent-facing tools: find a statute, read

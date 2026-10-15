@@ -15,7 +15,6 @@ import {
   stringArray,
   trackedRepoFiles,
 } from "./oxlint-config-scopes.ts";
-import { customLintTestCommand } from "./run-custom-lint-tests";
 
 export type CoverageProblem = {
   ruleId: string;
@@ -167,18 +166,31 @@ export const repositoryRules = async () => {
   return { ruleIds: ruleIds.toSorted(), registeredRuleIds };
 };
 
+type SpawnTests = (
+  command: string[],
+  options: {
+    cwd: string;
+    env: Record<string, string | undefined>;
+    stdout: "inherit";
+    stderr: "inherit";
+  },
+) => { success: boolean };
+
 export const checkRuleCoverage = async (
-  spawnTests = Bun.spawnSync,
+  spawnTests: SpawnTests = Bun.spawnSync,
 ): Promise<number> => {
   const directory = mkdtempSync(path.join(tmpdir(), "oxlint-rule-coverage-"));
   const coveragePath = path.join(directory, "coverage.jsonl");
   try {
-    const tests = spawnTests(customLintTestCommand(), {
-      cwd: repoRoot,
-      env: { ...process.env, OXLINT_RULE_COVERAGE_PATH: coveragePath },
-      stdout: "inherit",
-      stderr: "inherit",
-    });
+    const tests = spawnTests(
+      [process.execPath, "scripts/run-custom-lint-tests.ts"],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, OXLINT_RULE_COVERAGE_PATH: coveragePath },
+        stdout: "inherit",
+        stderr: "inherit",
+      },
+    );
     if (!tests.success) {
       return 1;
     }

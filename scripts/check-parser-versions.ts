@@ -520,6 +520,7 @@ const withoutOutputUnchangedMarkers = (source: string): string =>
     .join("\n");
 
 const LOCATION_DEPENDENT = /\bimport\.meta\b|\b__dirname\b|\b__filename\b/u;
+const SOURCE_MODULE = /\.[cm]?[jt]sx?$/u;
 
 const movedParserSources = (
   baseTree: StaticTree,
@@ -529,7 +530,7 @@ const movedParserSources = (
   const head = headTree.files;
   const addedBySource = new Map<string, string[]>();
   for (const [file, source] of head) {
-    if (base.has(file)) {
+    if (base.has(file) || !SOURCE_MODULE.test(file)) {
       continue;
     }
     const comparable = withoutOutputUnchangedMarkers(source);
@@ -542,7 +543,11 @@ const movedParserSources = (
   for (const [file, source] of base) {
     // Code that reads its own location can change output when moved, so it
     // never qualifies as a verbatim move.
-    if (head.has(file) || LOCATION_DEPENDENT.test(source)) {
+    if (
+      head.has(file) ||
+      !SOURCE_MODULE.test(file) ||
+      LOCATION_DEPENDENT.test(source)
+    ) {
       continue;
     }
     const destinations = addedBySource.get(
