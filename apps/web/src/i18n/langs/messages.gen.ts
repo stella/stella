@@ -36,6 +36,7 @@ type Messages = {
     "description": "Ask Claude or ChatGPT about your matters and documents. Choose your assistant for a short guide; it takes about a minute.";
     "instructions": "Connect me to stella, my legal workspace. Follow the “Instructions for AI agents” at {guideUrl} and use this server address: {mcpUrl}";
     "openGuide": "Open the guide for {assistant}";
+    "pasteHint": "Paste them into a chat with your assistant.";
     "selfSetupHint": "Using Claude Code or Codex?";
     "title": "Use stella in your AI assistant";
   };

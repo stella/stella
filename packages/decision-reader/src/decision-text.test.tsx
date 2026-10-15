@@ -23,6 +23,7 @@ export const fakeReaderAdapters = {
     "statutes.diffRemoved": "Removed",
     "statutes.diffInserted": "Inserted",
     "common.copyLink": "Copy link",
+    "common.copied": "Copied",
     "common.back": "Back",
     "caseLaw.viewer.legalSentence": "Legal sentence",
     "caseLaw.viewer.abstract": "Abstract",
@@ -62,7 +63,7 @@ export const fakeReaderAdapters = {
     }
   },
   renderBodyUnavailable: ({ reason }) => <p>{reason}</p>,
-  copyPermalink: () => undefined,
+  copyPermalink: () => Promise.resolve(true),
   openProvision: () => undefined,
   loadProvisionPreview: async () => ({
     documentId: "act",

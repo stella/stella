@@ -81,6 +81,7 @@ export const AssistantSetup = ({
           text={instructions}
           variant="link"
         />
+        <span>{t("agentSetup.pasteHint")}</span>
       </div>
     </div>
   );

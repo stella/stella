@@ -7,6 +7,7 @@
 // comment lines directly above it. An owned entry carries
 // `// ownedBy: <Component> (<repo path>)`.
 
+import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -15,6 +16,9 @@ export const ICON_MODULE_PATH = "packages/ui/src/icons.ts";
 const SEMANTIC_EXPORT =
   /^export \{ (?<glyph>\w+) as (?<name>\w+) \} from "lucide-react";$/u;
 const OWNED_BY = /^ownedBy: (?<component>\w+) \((?<owner>[^)\s]+)\)$/u;
+// Any comment that looks like an ownership line. One that does not parse as
+// OWNED_BY fails loudly, so a typo cannot silently unown an icon.
+const OWNERSHIP_LIKE = /^owned/iu;
 
 export type IconEntry = {
   readonly name: string;
@@ -44,7 +48,14 @@ export const parseIconEntries = (source: string): IconEntry[] => {
       });
       comments = [];
     } else if (line.startsWith("//")) {
-      comments.push(line.replace(/^\/\/\s?/u, ""));
+      const comment = line.replace(/^\/\/\s?/u, "");
+      if (OWNERSHIP_LIKE.test(comment) && !OWNED_BY.test(comment)) {
+        panic(
+          `${ICON_MODULE_PATH}: malformed ownership line "${comment}"; ` +
+            "write `ownedBy: <Component> (<repo path>)`.",
+        );
+      }
+      comments.push(comment);
     } else {
       comments = [];
     }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
+import ts from "typescript";
 
 import {
   ICON_MODULE_PATH,
@@ -22,6 +23,45 @@ const owned = readIconEntries().flatMap((entry) =>
 const plainBlock = ICON_SOURCE.slice(
   ICON_SOURCE.indexOf("// @generated-start"),
 );
+// Whether `source` (the file at repo path `file`) has a value import of
+// `name` from the icon module, read from its import declarations so a
+// comment or a string that mentions the name does not count.
+const importsFromIconModule = (
+  file: string,
+  source: string,
+  name: string,
+): boolean => {
+  const iconModule = ICON_MODULE_PATH.replace(/\.ts$/u, "");
+  const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest);
+  return sourceFile.statements.some((statement) => {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      statement.importClause?.isTypeOnly === true
+    ) {
+      return false;
+    }
+    const specifier = statement.moduleSpecifier.text;
+    const fromIconModule =
+      specifier === "@stll/ui/icons" ||
+      (specifier.startsWith(".") &&
+        path.posix
+          .join(path.posix.dirname(file), specifier)
+          .replace(/\.ts$/u, "") === iconModule);
+    const bindings = statement.importClause?.namedBindings;
+    return (
+      fromIconModule &&
+      bindings !== undefined &&
+      ts.isNamedImports(bindings) &&
+      bindings.elements.some(
+        (element) =>
+          !element.isTypeOnly &&
+          (element.propertyName ?? element.name).text === name,
+      )
+    );
+  });
+};
+
 const glyphBase = (glyph: string): string =>
   glyph.replace(/^Lucide/u, "").replace(/Icon$/u, "");
 
@@ -37,7 +77,9 @@ describe("icon ownership in packages/ui/src/icons.ts", () => {
       const ownerFile = path.join(REPOSITORY_ROOT, entry.owner.path);
       expect(existsSync(ownerFile)).toBe(true);
       const ownerSource = readFileSync(ownerFile, "utf-8");
-      expect(ownerSource).toMatch(new RegExp(`\\b${entry.name}\\b`, "u"));
+      expect(
+        importsFromIconModule(entry.owner.path, ownerSource, entry.name),
+      ).toBe(true);
       expect(ownerSource).toMatch(
         new RegExp(`export const ${entry.owner.component}\\b`, "u"),
       );
@@ -85,6 +127,19 @@ describe("icon ownership in packages/ui/src/icons.ts", () => {
     ).toEqual([2, 3, 4]);
   });
 
+  test("reports a renamed import and a star re-export outside the owner", async () => {
+    expect(
+      await lintSingleRule(
+        "no-unowned-icon",
+        [
+          'import { CopyToClipboardIcon as Glyph } from "@stll/ui/icons";',
+          'export * from "@stll/ui/icons";',
+          "export const Used = Glyph;",
+        ].join("\n"),
+      ),
+    ).toEqual([1, 2]);
+  });
+
   test("allows the other entries that share the glyph", async () => {
     expect(
       await lintSingleRule(
@@ -117,5 +172,40 @@ describe("parseIconEntries", () => {
       },
       { name: "DuplicateIcon", glyph: "CopyIcon", owner: null },
     ]);
+  });
+
+  test("fails on an ownership line that does not parse, so a typo cannot unown an icon", () => {
+    for (const typo of [
+      "// ownedby: CopyButton (packages/ui/src/components/copy-button.tsx)",
+      "// ownedBy: CopyButton packages/ui/src/components/copy-button.tsx",
+      "// Owned by CopyButton.",
+    ]) {
+      const source = [
+        "// Copying from a button.",
+        typo,
+        'export { CopyIcon as CopyToClipboardIcon } from "lucide-react";',
+      ].join("\n");
+      expect(() => parseIconEntries(source)).toThrow(
+        /malformed ownership line/u,
+      );
+    }
+  });
+
+  test("finds the owner's import by its declarations, not by a mention", () => {
+    const file = "packages/ui/src/components/copy-button.tsx";
+    expect(
+      importsFromIconModule(
+        file,
+        'import { CheckIcon, CopyToClipboardIcon } from "../icons";',
+        "CopyToClipboardIcon",
+      ),
+    ).toBe(true);
+    expect(
+      importsFromIconModule(
+        file,
+        '// CopyToClipboardIcon\nimport { CheckIcon } from "../icons";',
+        "CopyToClipboardIcon",
+      ),
+    ).toBe(false);
   });
 });

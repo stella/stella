@@ -17,6 +17,8 @@ import type {
   ParagraphBlock,
   ParagraphListDepth,
 } from "@stll/legal-ast/document-ast";
+import { useCopyConfirmation } from "@stll/ui/copy-button";
+import { CheckIcon } from "@stll/ui/icons";
 import {
   ReviewDiffDeletion,
   ReviewDiffInsertion,
@@ -904,13 +906,16 @@ const BlockPermalink = ({
   const messages = useReaderMessages();
 
   const { copyPermalink } = useReaderPresentation();
+  const { copied, copy } = useCopyConfirmation(
+    () => copyPermalink?.(anchorId) ?? Promise.resolve(false),
+  );
   if (copyPermalink === undefined) {
     return null;
   }
 
   return (
     <a
-      aria-label={messages["common.copyLink"]}
+      aria-label={messages[copied ? "common.copied" : "common.copyLink"]}
       className={cn(
         "text-foreground-disabled hover:text-foreground focus-visible:ring-ring rounded-sm px-1 leading-[inherit] no-underline focus-visible:ring-2 focus-visible:outline-none print:hidden",
         READER_BLOCK_CHROME_REVEAL_CLASS,
@@ -923,10 +928,15 @@ const BlockPermalink = ({
           return;
         }
         event.preventDefault();
-        copyPermalink(anchorId);
+        copy().catch(reportError);
       }}
     >
-      ¶
+      {/* The mark turns into a check where the reader clicked; no toast. */}
+      {copied ? (
+        <CheckIcon aria-hidden="true" className="inline size-[0.8em]" />
+      ) : (
+        "¶"
+      )}
     </a>
   );
 };
