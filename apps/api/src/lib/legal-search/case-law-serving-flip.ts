@@ -280,7 +280,9 @@ const hasUnseededDecisionTx = async (
     .from(caseLawDecisions)
     .where(
       and(
-        eq(caseLawDecisions.country, jurisdiction),
+        // The routing reads a decision's country case-insensitively, so the
+        // gate does too: a lower-case row is the jurisdiction's as well.
+        sql`upper(${caseLawDecisions.country}) = ${jurisdiction}`,
         notExists(
           tx
             .select({ one: sql`1` })
@@ -579,7 +581,8 @@ export const purgeFlippedJurisdictionBatchTx = async (
     .from(caseLawDecisions)
     .where(
       and(
-        eq(caseLawDecisions.country, upper),
+        // Case-insensitive, as the routing reads a decision's country.
+        sql`upper(${caseLawDecisions.country}) = ${upper}`,
         afterEntityId === null
           ? undefined
           : gt(caseLawDecisions.id, afterEntityId),

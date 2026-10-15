@@ -419,6 +419,27 @@ test("the flip is refused while the group is not attested, not complete, or not 
   expect((await read("CZE")).route.indexId).toBe("case_law_v8_cs_sk");
 });
 
+test("a lower-case country row of the jurisdiction holds the flip until it is seeded", async () => {
+  const engine = await buildV9();
+  // The routing reads `cze` as CZE, so the gate must count it.
+  const lowerCaseId = toSafeId<"caseLawDecision">(
+    "0198e331-e578-7000-8000-0000000005f2",
+  );
+  await db.insert(caseLawDecisions).values({
+    id: lowerCaseId,
+    sourceId: SOURCE_ID,
+    caseNumber: "5 As 4/2008",
+    court: "Nejvyšší správní soud",
+    country: "cze",
+    language: "cs",
+    contentHash: "c".repeat(64),
+  });
+  expect(
+    (await flip(engine)).match({ ok: () => "ok", err: (error) => error._tag }),
+  ).toBe("CaseLawServingFlipIncompleteError");
+  expect(await pointerRows()).toEqual([]);
+});
+
 test("the flip is refused for an index the engine does not hold or one that drifted", async () => {
   const engine = await buildV9();
   const missing = { ...engine, documents: new Map<string, number>() };
