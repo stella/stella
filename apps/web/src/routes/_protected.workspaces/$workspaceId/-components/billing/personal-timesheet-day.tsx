@@ -28,6 +28,7 @@ import {
   type ManualTimeEntryValues,
 } from "@/components/billing/manual-time-entry-form";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
@@ -103,6 +104,7 @@ export const PersonalTimesheetDay = ({
       : undefined;
 
   const createEntry = useCreateTimeEntry();
+  const submitGuard = useSingleFlight();
   const updateEntry = useUpdateTimeEntry();
   const deleteEntry = useDeleteTimeEntry();
   const decideSuggestion = useDecideTimeSuggestion();
@@ -187,6 +189,10 @@ export const PersonalTimesheetDay = ({
     } catch (error) {
       reportFailure(error);
     }
+  };
+
+  const submitOnce = async (values: Parameters<typeof submit>[0]) => {
+    await submitGuard.run(async () => await submit(values));
   };
 
   const pending =
@@ -379,7 +385,7 @@ export const PersonalTimesheetDay = ({
               dateLocked={dialog.type === "accept"}
               defaultValues={formDefaults}
               onCancel={() => setDialog({ type: "closed" })}
-              onSubmit={submit}
+              onSubmit={submitOnce}
               pending={pending}
               workspaceId={workspaceId}
             />

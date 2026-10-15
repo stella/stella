@@ -2926,6 +2926,7 @@ type Messages = {
     "checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.";
     "checkingDocxEditTitle": "Checking document";
     "chooseEvidence": "Choose a file to insert a numbered evidence reference.";
+    "collaborationSnapshotRecovered": "The stored collaboration copy could not be reopened. The room was restored from the last saved document; changes that were not saved may have been lost.";
     "comment": "Comment";
     "comments": {
       "addPlaceholder": "Add a comment...";
@@ -4973,17 +4974,22 @@ type Messages = {
     "provisionAskSummarize": "Summarize how courts apply this provision";
     "provisionAskSummarizePrompt": "Summarize how courts apply {subject}, citing the decisions you rely on.";
     "provisionDetailsFor": "Details of {provision}";
+    "provisionEffectiveFrom": "in force since {date}";
     "provisionHistoryEarliest": "Earliest wording on record.";
     "provisionHistoryEmpty": "No wording of this provision is on record.";
     "provisionHistoryLoadOlder": "Load older versions to compare wordings.";
     "provisionHistoryUnavailable": "This provision's history could not be loaded.";
+    "provisionPartTextUnavailable": "Text of {provisionLabel} is not available";
     "provisionPromptSubject": "{provision} of {statute} ({eli}), in the wording in force since {date}";
     "provisionPromptSubjectUndated": "{provision} of {statute} ({eli})";
+    "provisionTextUnavailable": "Text not available for this version";
     "publisherWindowInconsistent": "No in-force reading for this date: the publisher's data is inconsistent.";
     "resolvedAlias": "Recognized as {label}";
     "searchAskPrompt": "{query} (legislation of {country})";
     "searchLabel": "Search statutes";
     "searchPlaceholder": "Number, name or title, e.g. 89/2012 Sb.";
+    "showCitedPartOnly": "Show cited part only";
+    "showFullProvision": "Show full provision";
     "showInText": "Show in the text";
     "statedWindow": "Dates stated by the publisher: {range}";
     "status": {
@@ -4999,7 +5005,6 @@ type Messages = {
     "title": "Statutes";
     "validity": "Valid from {from} to {to}";
     "versionAppliedInDecision": "Version applied in <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}";
-    "wordingValidFrom": "Wording in force since {date}";
     "wordingVersionUnknown": "Wording version date unavailable";
   };
   "styleSets": {

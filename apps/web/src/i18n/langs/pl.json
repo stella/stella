@@ -2923,6 +2923,7 @@
     "checkingDocxEditDescription": "stella nadal sprawdza, czy ten DOCX można bezpiecznie edytować. Spróbuj ponownie, gdy dokument się załaduje.",
     "checkingDocxEditTitle": "Sprawdzanie dokumentu",
     "chooseEvidence": "Wybierz plik, aby wstawić numerowane odniesienie do dowodu.",
+    "collaborationSnapshotRecovered": "Nie udało się ponownie otworzyć zapisanej kopii współpracy. Pokój został odtworzony z ostatniego zapisanego dokumentu; niezapisane zmiany mogły zostać utracone.",
     "comment": "Komentarz",
     "comments": {
       "addPlaceholder": "Dodaj komentarz...",
@@ -4970,17 +4971,22 @@
     "provisionAskSummarize": "Podsumuj, jak sądy stosują ten przepis",
     "provisionAskSummarizePrompt": "Podsumuj, jak sądy stosują {subject}, i przywołaj orzeczenia, na których się opierasz.",
     "provisionDetailsFor": "Szczegóły: {provision}",
+    "provisionEffectiveFrom": "obowiązuje od {date}",
     "provisionHistoryEarliest": "Najstarsza dostępna wersja.",
     "provisionHistoryEmpty": "Brak zapisanych wersji tego przepisu.",
     "provisionHistoryLoadOlder": "Wczytaj starsze wersje, aby je porównać.",
     "provisionHistoryUnavailable": "Nie udało się wczytać historii tego przepisu.",
+    "provisionPartTextUnavailable": "Treść {provisionLabel} jest niedostępna",
     "provisionPromptSubject": "{provision} aktu {statute} ({eli}) w brzmieniu obowiązującym od {date}",
     "provisionPromptSubjectUndated": "{provision} aktu {statute} ({eli})",
+    "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",
     "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
     "resolvedAlias": "Rozpoznano jako {label}",
     "searchAskPrompt": "{query} (ustawodawstwo: {country})",
     "searchLabel": "Szukaj w aktach prawnych",
     "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
+    "showCitedPartOnly": "Pokaż tylko cytowaną część",
+    "showFullProvision": "Pokaż cały przepis",
     "showInText": "Pokaż w tekście",
     "statedWindow": "Daty podane przez wydawcę: {range}",
     "status": {
@@ -4996,7 +5002,6 @@
     "title": "Akty prawne",
     "validity": "Obowiązuje od {from} do {to}",
     "versionAppliedInDecision": "Wersja zastosowana w orzeczeniu <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
-    "wordingValidFrom": "Brzmienie obowiązuje od {date}",
     "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
   },
   "styleSets": {
