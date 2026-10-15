@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { writeZipEntry } from "@stll/docx-utils";
+
 import { DOCX_MIME } from "@/lib/consts";
 
 import { prepareAttachedTemplateFile } from "./attached-template-upload";
@@ -28,10 +30,10 @@ const makeDocxFile = async ({
   settings: string;
 }): Promise<File> => {
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", "<Types/>");
-  zip.file("word/document.xml", "<w:document/>");
-  zip.file("word/settings.xml", settings);
-  zip.file("word/_rels/settings.xml.rels", relationships);
+  writeZipEntry(zip, "[Content_Types].xml", "<Types/>");
+  writeZipEntry(zip, "word/document.xml", "<w:document/>");
+  writeZipEntry(zip, "word/settings.xml", settings);
+  writeZipEntry(zip, "word/_rels/settings.xml.rels", relationships);
   return new File(
     [await zip.generateAsync({ type: "arraybuffer" })],
     "case.docx",

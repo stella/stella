@@ -235,6 +235,11 @@ if (!databaseUrl || !enabled) {
                 role: "owner",
                 createdAt: new Date(),
               });
+              await tx.insert(workspaceMembers).values({
+                id: createSafeId<"workspaceMember">(),
+                workspaceId: scope.workspaceId,
+                userId: scope.userId,
+              });
               await tx.insert(mcpUserConnections).values({
                 id: createSafeId<"mcpUserConnection">(),
                 organizationId: scope.organizationId,
