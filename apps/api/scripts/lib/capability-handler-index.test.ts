@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { buildCapabilityHandlerIndex } from "./capability-handler-index";
@@ -27,10 +28,7 @@ test("dispatch follows default, named and re-exported handler source exports", a
       "matters.get.alias",
     ]);
     expect(
-      [...handlers].toSorted(([left], [right]) =>
-        // oxlint-disable-next-line require-cached-collator/require-cached-collator -- capability ids are non-linguistic keys
-        left.localeCompare(right),
-      ),
+      [...handlers].toSorted(([left], [right]) => compareCodeUnit(left, right)),
     ).toEqual([
       [
         "matters.get",
