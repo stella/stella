@@ -20,6 +20,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -44,7 +45,7 @@ type Fixture = {
   outsiderId: SafeId<"user">;
 };
 
-type Database = Parameters<typeof markRlsDatabase>[0];
+type Database = GatedTestDb;
 
 const seed = async (db: Database): Promise<Fixture> => {
   const fixture: Fixture = {

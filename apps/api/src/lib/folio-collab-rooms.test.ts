@@ -320,8 +320,7 @@ describe("authorizeFolioCollabRoom", () => {
         organizationRole: "owner",
         tokenCanEdit: false,
         tokenGeneration: 3,
-        workspaceClientId: "client_1",
-        workspaceMemberId: null,
+        reachesMatter: true,
         workspaceStatus: "active",
       }),
     ).toEqual({ status: "authorized", canEdit: false });

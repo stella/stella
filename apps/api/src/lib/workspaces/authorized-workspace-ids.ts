@@ -124,10 +124,11 @@ type MemberScope = {
  * rule (`stella_workspace_access`) instead of computed in app code. Unlike
  * the reads above it names the member explicitly, so it also answers for a
  * credential's user or a member being offboarded. Select it as a column next
- * to the rows the caller already reads.
+ * to the rows the caller already reads. Like the authorization view, the
+ * function resolves through the connection's search path.
  */
 export const memberReachesMatterSql = (
   { organizationId, userId }: MemberScope,
   workspaceId: SqlValue,
 ): SQL<boolean> =>
-  sql<boolean>`public.stella_workspace_access(${organizationId}, ${userId}, ${workspaceId}::uuid)`;
+  sql<boolean>`stella_workspace_access(${organizationId}, ${userId}, ${workspaceId}::uuid)`;

@@ -40,7 +40,6 @@ AS $$
 $$;--> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.stella_authorized_workspace_ids(text, text) FROM PUBLIC;--> statement-breakpoint
--- stella-migration-safety: reviewed grant-privileges - the application role may ask which matters a member reaches; the function only reads
 GRANT EXECUTE ON FUNCTION public.stella_authorized_workspace_ids(text, text) TO stella;--> statement-breakpoint
 
 -- One matter, derived from the set above so the rule is written once.
@@ -62,7 +61,6 @@ AS $$
 $$;--> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.stella_workspace_access(text, text, uuid) FROM PUBLIC;--> statement-breakpoint
--- stella-migration-safety: reviewed grant-privileges - the application role may ask whether a member reaches one matter; the function only reads
 GRANT EXECUTE ON FUNCTION public.stella_workspace_access(text, text, uuid) TO stella;--> statement-breakpoint
 
 -- Creating a matter: inserts the matter in the transaction's organization and,
@@ -160,5 +158,4 @@ END;
 $$;--> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text) FROM PUBLIC;--> statement-breakpoint
--- stella-migration-safety: reviewed grant-privileges - the application role creates matters through this function; it binds organization and user to the transaction settings
 GRANT EXECUTE ON FUNCTION public.stella_create_workspace(uuid, uuid, text, text, text, text, text) TO stella;
